@@ -1,0 +1,21 @@
+{
+    "warp_class_single": {
+        "nx": 1000,
+        "ny": 1000,
+        "n_cells_total": 1000000,
+        "n_cases": 48,
+        "device": "cuda:0",
+        "update_mode": "full",
+        "solver_module": "DARCY_WARP_PACKAGE.warped_darcy",
+        "solver_variant": "warp_kcycle_default",
+        "update_diag_preconditioner": false,
+        "warmup": 1,
+        "total_wall_seconds": 36.236092273000395,
+        "mean_case_seconds": 0.7549142373130356,
+        "mean_update_seconds": 0.13689983270766484,
+        "mean_solve_seconds": 0.6180143599576695,
+        "min_case_seconds": 0.7485741580021568,
+        "max_case_seconds": 0.7676693329995032,
+        "throughput_cases_per_second": 1.324646146675284
+    }
+}

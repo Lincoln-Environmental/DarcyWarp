@@ -1,0 +1,72 @@
+{
+    "fd_persistent_T_workers_2": {
+        "component": "fd_persistent_T",
+        "nx": 1000,
+        "ny": 1000,
+        "n_cells_total": 1000000,
+        "n_cases": 48,
+        "n_workers": 2,
+        "total_wall_seconds": 389.4438456929993,
+        "throughput_cases_per_second": 0.12325268592853478,
+        "mean_case_seconds": 16.108758728166663,
+        "p50_case_seconds": 16.15110442600053,
+        "p95_case_seconds": 16.34185503400022,
+        "max_case_seconds": 16.367741110999305
+    },
+    "fd_persistent_T_workers_4": {
+        "component": "fd_persistent_T",
+        "nx": 1000,
+        "ny": 1000,
+        "n_cells_total": 1000000,
+        "n_cases": 48,
+        "n_workers": 4,
+        "total_wall_seconds": 206.00293352799963,
+        "throughput_cases_per_second": 0.23300639062732525,
+        "mean_case_seconds": 17.098872257895874,
+        "p50_case_seconds": 17.09266014500008,
+        "p95_case_seconds": 17.20342008499938,
+        "max_case_seconds": 17.30873820099987
+    },
+    "fd_persistent_T_workers_8": {
+        "component": "fd_persistent_T",
+        "nx": 1000,
+        "ny": 1000,
+        "n_cells_total": 1000000,
+        "n_cases": 48,
+        "n_workers": 8,
+        "total_wall_seconds": 116.15733017000002,
+        "throughput_cases_per_second": 0.4132326382652773,
+        "mean_case_seconds": 19.179405512479093,
+        "p50_case_seconds": 19.12887490599951,
+        "p95_case_seconds": 19.456341855000574,
+        "max_case_seconds": 19.5752635609997
+    },
+    "fd_persistent_T_workers_16": {
+        "component": "fd_persistent_T",
+        "nx": 1000,
+        "ny": 1000,
+        "n_cells_total": 1000000,
+        "n_cases": 48,
+        "n_workers": 16,
+        "total_wall_seconds": 98.6930789019998,
+        "throughput_cases_per_second": 0.4863562930047305,
+        "mean_case_seconds": 29.553455084708332,
+        "p50_case_seconds": 28.210287681999944,
+        "p95_case_seconds": 38.27447998000025,
+        "max_case_seconds": 38.33907779400033
+    },
+    "fd_persistent_T_workers_24": {
+        "component": "fd_persistent_T",
+        "nx": 1000,
+        "ny": 1000,
+        "n_cells_total": 1000000,
+        "n_cases": 48,
+        "n_workers": 24,
+        "total_wall_seconds": 101.91632369600029,
+        "throughput_cases_per_second": 0.4709746020978557,
+        "mean_case_seconds": 44.7924341526458,
+        "p50_case_seconds": 41.73431193000033,
+        "p95_case_seconds": 61.88584958499996,
+        "max_case_seconds": 63.618417853999745
+    }
+}

@@ -1,0 +1,17 @@
+{
+    "mf6_persistent_workers_1": {
+        "nx": 30,
+        "ny": 30,
+        "n_cells_total": 900,
+        "n_cases": 1,
+        "n_workers": 1,
+        "total_wall_seconds": 0.5747252819992354,
+        "template_build_total_seconds": 0.05782332299986592,
+        "mean_update_seconds": 4.17159999415162e-05,
+        "mean_write_seconds": 0.000825738999992609,
+        "mean_run_seconds": 0.030981078999502643,
+        "mean_extract_seconds": 0.001546657000289997,
+        "mean_total_seconds": 0.033396763000382634,
+        "throughput_cases_per_second": 1.7399617370605427
+    }
+}

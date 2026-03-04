@@ -1,0 +1,62 @@
+{
+    "mf6_T_persistent_workers_2": {
+        "nx": 1000,
+        "ny": 1000,
+        "n_cells_total": 1000000,
+        "n_cases": 48,
+        "n_workers": 2,
+        "total_wall_seconds": 636.674466381,
+        "template_build_total_seconds": 21.427321929999835,
+        "mean_update_seconds": 7.244247915612807e-05,
+        "mean_write_seconds": 2.6861299119375133,
+        "mean_run_seconds": 23.342357623916683,
+        "mean_extract_seconds": 0.003989565729170863,
+        "mean_total_seconds": 26.03255415491667,
+        "throughput_cases_per_second": 0.07539174654332022
+    },
+    "mf6_T_persistent_workers_4": {
+        "nx": 1000,
+        "ny": 1000,
+        "n_cells_total": 1000000,
+        "n_cases": 48,
+        "n_workers": 4,
+        "total_wall_seconds": 540.63610642,
+        "template_build_total_seconds": 44.423200765000274,
+        "mean_update_seconds": 7.804543749519628e-05,
+        "mean_write_seconds": 2.7803853062292205,
+        "mean_run_seconds": 41.14669922922914,
+        "mean_extract_seconds": 0.004737223062543687,
+        "mean_total_seconds": 43.931905402687505,
+        "throughput_cases_per_second": 0.08878430321246542
+    },
+    "mf6_T_persistent_workers_8": {
+        "nx": 1000,
+        "ny": 1000,
+        "n_cells_total": 1000000,
+        "n_cases": 48,
+        "n_workers": 8,
+        "total_wall_seconds": 512.7687517569998,
+        "template_build_total_seconds": 97.92612131400028,
+        "mean_update_seconds": 0.00010831227088677527,
+        "mean_write_seconds": 3.0098426960416496,
+        "mean_run_seconds": 79.4797258457292,
+        "mean_extract_seconds": 0.007686769562582185,
+        "mean_total_seconds": 82.49737359241674,
+        "throughput_cases_per_second": 0.09360944838297618
+    },
+    "mf6_T_persistent_workers_16": {
+        "nx": 1000,
+        "ny": 1000,
+        "n_cells_total": 1000000,
+        "n_cases": 48,
+        "n_workers": 16,
+        "total_wall_seconds": 550.6546344230001,
+        "template_build_total_seconds": 377.33649112499916,
+        "mean_update_seconds": 0.0001863123957643135,
+        "mean_write_seconds": 5.769338292812431,
+        "mean_run_seconds": 168.95188842668753,
+        "mean_extract_seconds": 0.010830434062484073,
+        "mean_total_seconds": 174.73225576483324,
+        "throughput_cases_per_second": 0.08716897488803757
+    }
+}

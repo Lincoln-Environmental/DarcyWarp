@@ -1,0 +1,15 @@
+{
+  "nx": 1000,
+  "ny": 1000,
+  "n_cells_total": 1000000,
+  "n_cases": 48,
+  "n_workers": 16,
+  "total_wall_seconds": 550.6546344230001,
+  "template_build_total_seconds": 377.33649112499916,
+  "mean_update_seconds": 0.0001863123957643135,
+  "mean_write_seconds": 5.769338292812431,
+  "mean_run_seconds": 168.95188842668753,
+  "mean_extract_seconds": 0.010830434062484073,
+  "mean_total_seconds": 174.73225576483324,
+  "throughput_cases_per_second": 0.08716897488803757
+}

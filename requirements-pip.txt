@@ -1,0 +1,4 @@
+warp-lang==1.10.0
+warp
+nvtx
+flopy

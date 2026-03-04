@@ -1,0 +1,722 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DarcyWarp Paper Companion</title>
+  <style>
+    :root {
+      --bg: #f6f1e8;
+      --ink: #1d1b19;
+      --muted: #4d4a45;
+      --accent: #1f5e63;
+      --accent-strong: #123b3f;
+      --accent-warm: #d46b3d;
+      --card: #ffffff;
+      --surface: #fcfaf5;
+      --border: #e1d6c7;
+      --shadow: 0 22px 50px rgba(20, 32, 36, 0.12);
+      --shadow-soft: 0 12px 26px rgba(20, 32, 36, 0.1);
+      --radius: 14px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Alegreya Sans", "Trebuchet MS", "Gill Sans", sans-serif;
+      color: var(--ink);
+      background-color: var(--bg);
+      background-image:
+        radial-gradient(circle at 12% 10%, rgba(255, 255, 255, 0.75), transparent 55%),
+        radial-gradient(circle at 88% 0%, rgba(235, 242, 240, 0.9), transparent 45%),
+        linear-gradient(120deg, rgba(31, 94, 99, 0.08), rgba(212, 107, 61, 0.08));
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+
+    h1, h2, h3 {
+      font-family: "Cormorant Garamond", "Garamond", "Times New Roman", serif;
+      margin: 0 0 12px;
+      letter-spacing: 0.3px;
+    }
+
+    p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    main {
+      max-width: 1160px;
+      margin: 0 auto;
+      padding: 28px 18px 52px;
+      display: grid;
+      gap: 20px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--shadow);
+    }
+
+    .surface {
+      background: var(--surface);
+      box-shadow: var(--shadow-soft);
+    }
+
+    .nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .brand {
+      font-size: 20px;
+      font-weight: 600;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .nav-links a {
+      font-weight: 600;
+      color: var(--muted);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: #f2ebe0;
+      border: 1px solid var(--border);
+      color: var(--accent-strong);
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+    }
+
+    .hero {
+      display: grid;
+      gap: 20px;
+    }
+
+    .hero-text {
+      display: grid;
+      gap: 12px;
+    }
+
+    .hero h1 {
+      font-size: 32px;
+      max-width: 720px;
+    }
+
+    .meta {
+      display: grid;
+      gap: 4px;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .cta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 6px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px 16px;
+      border-radius: 999px;
+      border: 1px solid var(--accent-strong);
+      background: var(--accent);
+      color: #fff;
+      font-weight: 600;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 20px rgba(20, 32, 36, 0.12);
+      background: #237078;
+    }
+
+    .btn.secondary {
+      background: #ffffff;
+      color: var(--accent-strong);
+    }
+
+    .btn.secondary:hover {
+      background: #f4efe6;
+    }
+
+    .btn.ghost {
+      background: #f4efe6;
+      color: var(--accent-strong);
+      border-color: var(--border);
+    }
+
+    .btn.ghost:hover {
+      background: #ece4d7;
+    }
+
+    .hero-figure {
+      margin: 0;
+      display: grid;
+      gap: 8px;
+    }
+
+    .hero-figure img {
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-soft);
+    }
+
+    .hero-figure figcaption {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .note {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .highlight-list {
+      margin: 0;
+      padding-left: 18px;
+      display: grid;
+      gap: 8px;
+      color: var(--muted);
+    }
+
+    .stats {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    }
+
+    .stat {
+      padding: 16px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      box-shadow: var(--shadow-soft);
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--accent-strong);
+      margin-bottom: 4px;
+    }
+
+    .stat-label {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .section-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .tab-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .tab {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--accent-strong);
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .tab.active {
+      background: var(--accent);
+      border-color: var(--accent-strong);
+      color: #fff;
+    }
+
+    .figure-grid {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    }
+
+    .figure-card {
+      margin: 0;
+      display: grid;
+      gap: 8px;
+      padding: 14px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      box-shadow: var(--shadow-soft);
+    }
+
+    .figure-card img {
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+    }
+
+    .figure-card figcaption {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .figure-link {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent-strong);
+    }
+
+    .case-grid {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      align-items: start;
+    }
+
+    .link-grid {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      margin-top: 12px;
+    }
+
+    .link-card {
+      display: inline-flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      font-weight: 600;
+      color: var(--accent-strong);
+    }
+
+    .code-grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    }
+
+    .code-card {
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: #101418;
+      color: #d7f8e0;
+      padding: 14px;
+      position: relative;
+      min-height: 150px;
+    }
+
+    .code-card pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: "IBM Plex Mono", "Fira Mono", Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .code-card .copy-btn {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: #1f2a30;
+      color: #d7f8e0;
+      border: 1px solid #2b3a43;
+      border-radius: 8px;
+      padding: 4px 10px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .citation {
+      background: #101418;
+      color: #d7f8e0;
+      border-radius: 12px;
+      padding: 16px;
+      font-family: "IBM Plex Mono", "Fira Mono", Consolas, monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .footer {
+      text-align: center;
+      font-size: 12px;
+      color: var(--muted);
+      padding-bottom: 8px;
+    }
+
+    .reveal {
+      opacity: 0;
+      transform: translateY(8px);
+      animation: rise 0.6s ease forwards;
+    }
+
+    main > .reveal:nth-child(1) { animation-delay: 0.05s; }
+    main > .reveal:nth-child(2) { animation-delay: 0.1s; }
+    main > .reveal:nth-child(3) { animation-delay: 0.15s; }
+    main > .reveal:nth-child(4) { animation-delay: 0.2s; }
+    main > .reveal:nth-child(5) { animation-delay: 0.25s; }
+    main > .reveal:nth-child(6) { animation-delay: 0.3s; }
+    main > .reveal:nth-child(7) { animation-delay: 0.35s; }
+    main > .reveal:nth-child(8) { animation-delay: 0.4s; }
+    main > .reveal:nth-child(9) { animation-delay: 0.45s; }
+
+    @keyframes rise {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .reveal {
+        animation: none;
+        opacity: 1;
+        transform: none;
+      }
+    }
+
+    @media (min-width: 960px) {
+      .hero {
+        grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+        align-items: center;
+      }
+    }
+
+    @media (max-width: 720px) {
+      main {
+        padding: 20px 14px 40px;
+      }
+
+      .hero h1 {
+        font-size: 26px;
+      }
+
+      .nav-links {
+        width: 100%;
+        justify-content: flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <nav class="nav card reveal">
+    <div class="brand">DarcyWarp</div>
+    <div class="nav-links">
+      <a href="#results">Results</a>
+      <a href="#benchmarks">Benchmarks</a>
+      <a href="#canterbury">Canterbury</a>
+      <a href="#repro">Repro</a>
+      <a href="#artifacts">Artifacts</a>
+      <a href="#cite">Cite</a>
+      <a class="btn ghost" href="/dashboard">Local Dashboard</a>
+    </div>
+  </nav>
+
+  <header class="hero card reveal" id="paper">
+    <div class="hero-text">
+      <span class="badge">DOI pending</span>
+      <h1>DarcyWarp: Verified GPU-accelerated multigrid for repeated-solve groundwater workflows in 2D transmissivity form</h1>
+      <div class="meta">
+        <div>Patrick Durney, Jaco Fourie</div>
+        <div>Lincoln Agritech Ltd, Lincoln University, New Zealand</div>
+      </div>
+      <p>Repeated steady-state groundwater solves often bottleneck calibration and uncertainty workflows. DarcyWarp provides a verified GPU multigrid backend that matches MODFLOW 6 heads and residuals while delivering large speedups for repeated-solve ensembles.</p>
+      <div class="cta-row">
+        <a class="btn" href="/paper/manuscript.tex">Manuscript (LaTeX)</a>
+        <a class="btn secondary" href="/docs/repo">Repository README</a>
+        <a class="btn ghost" href="/docs/dashboard">Dashboard README</a>
+      </div>
+      <div class="note">Local dashboard runs only when the server is running on your machine.</div>
+    </div>
+    <figure class="hero-figure">
+      <img src="/assets/graphical-abstract.png" alt="Graphical abstract">
+      <figcaption>Graphical abstract from the paper.</figcaption>
+    </figure>
+  </header>
+
+  <section class="card reveal" id="highlights">
+    <h2>Highlights</h2>
+    <ul class="highlight-list">
+      <li>Verified GPU multigrid solver for repeated-solve 2D transmissivity workflows.</li>
+      <li>Matches MODFLOW 6 heads, residuals, and mass-balance under matched stresses.</li>
+      <li>Supports recharge, prescribed head, no-flow, and general-head exchange.</li>
+      <li>Delivers 2 to 72x end-to-end speedups for 10^5 to 9x10^6 active cells.</li>
+      <li>Reproducible benchmarking harness with fixed ensembles and plotting workflow.</li>
+    </ul>
+  </section>
+
+  <section class="card reveal" id="results">
+    <h2>Results at a glance</h2>
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-value">2 to 72x</div>
+        <div class="stat-label">End-to-end speedup vs MF6</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">10^5 to 9x10^6</div>
+        <div class="stat-label">Active cell range verified</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">GPU K-cycle</div>
+        <div class="stat-label">Repeated-solve multigrid workflow</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">Warp + MF6</div>
+        <div class="stat-label">Cross-verified heads and residuals</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card reveal" id="benchmarks">
+    <div class="section-head">
+      <h2>Benchmarks</h2>
+      <div class="tab-row">
+        <button class="tab active" type="button" data-benchmark="recharge">Recharge change</button>
+        <button class="tab" type="button" data-benchmark="transmissivity">Transmissivity change</button>
+      </div>
+    </div>
+    <p class="muted">Fixed ensembles benchmark Warp, MF6, and optional CPU FD under matched grids and stresses.</p>
+    <div class="figure-grid">
+      <figure class="figure-card">
+        <img id="benchmark-throughput" src="/assets/recharge-throughput.png" alt="Throughput vs workers">
+        <figcaption id="benchmark-throughput-caption">Throughput vs workers (recharge change).</figcaption>
+        <a id="benchmark-throughput-link" class="figure-link" href="/assets/recharge-throughput.png" download>Download throughput plot</a>
+      </figure>
+      <figure class="figure-card">
+        <img id="benchmark-walltime" src="/assets/recharge-walltime.png" alt="Wall time vs workers">
+        <figcaption id="benchmark-walltime-caption">Wall time vs workers (recharge change).</figcaption>
+        <a id="benchmark-walltime-link" class="figure-link" href="/assets/recharge-walltime.png" download>Download wall time plot</a>
+      </figure>
+    </div>
+  </section>
+
+  <section class="card reveal" id="canterbury">
+    <div class="section-head">
+      <h2>Case study: Canterbury</h2>
+      <a class="btn ghost" href="/artifacts/canterbury-results-summary.json" download>Download results summary</a>
+    </div>
+    <div class="case-grid">
+      <div>
+        <p>Regional calibration case study using prepared inputs and GPU-accelerated repeated solves.</p>
+        <div class="link-grid">
+          <a class="link-card" href="/code/canterbury_case_study.py">Canterbury case script</a>
+          <a class="link-card" href="/artifacts/canterbury-results.pt" download>Results (pt)</a>
+          <a class="link-card" href="/assets/canterbury-side-by-side.png" download>Side-by-side figure</a>
+        </div>
+      </div>
+      <figure class="figure-card">
+        <img src="/assets/canterbury-side-by-side.png" alt="Canterbury heads and contours">
+        <figcaption>Heads map and contours for the Canterbury case study.</figcaption>
+      </figure>
+    </div>
+    <div class="figure-grid" style="margin-top: 16px;">
+      <figure class="figure-card">
+        <img src="/assets/canterbury-obs-sim.png" alt="Observed vs simulated scatter">
+        <figcaption>Observed vs simulated head scatter.</figcaption>
+      </figure>
+      <figure class="figure-card">
+        <img src="/assets/canterbury-transmissivity.png" alt="Canterbury transmissivity map">
+        <figcaption>Transmissivity map (Canterbury).</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="card reveal" id="repro">
+    <div class="section-head">
+      <h2>Reproducibility quickstart</h2>
+      <a class="btn secondary" href="/code/bench_and_plot.py">Bench and plot script</a>
+    </div>
+    <div class="code-grid">
+      <div class="code-card">
+        <button class="copy-btn" type="button" data-copy-target="cmd-bench">Copy</button>
+        <pre><code id="cmd-bench">python -m DARCY_WARP_PACKAGE.bench_and_plot \
+  --nx 1000 \
+  --ny 1000 \
+  --dx 100.0 \
+  --n_cases 48 \
+  --workers 2,4,8,16,24 \
+  --seed 42 \
+  --device cuda:0 \
+  --out_dir &lt;repo_root&gt;/paper/tables_figures</code></pre>
+      </div>
+      <div class="code-card">
+        <button class="copy-btn" type="button" data-copy-target="cmd-ghb">Copy</button>
+        <pre><code id="cmd-ghb">python -m DARCY_WARP_PACKAGE.bench_and_plot \
+  --ghb \
+  --nx 1000 \
+  --ny 1000 \
+  --dx 100.0 \
+  --n_cases 48 \
+  --workers 2,4,8,16,24 \
+  --seed 42 \
+  --device cuda:0 \
+  --out_dir &lt;repo_root&gt;/paper/tables_figures</code></pre>
+      </div>
+      <div class="code-card">
+        <button class="copy-btn" type="button" data-copy-target="cmd-canterbury">Copy</button>
+        <pre><code id="cmd-canterbury">python -m DARCY_WARP_PACKAGE.canterbury_case_study.Canterbury_case_study</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <section class="card reveal" id="artifacts">
+    <h2>Scripts and artifacts</h2>
+    <div class="link-grid">
+      <a class="link-card" href="/code/model_benchmarking_recharge_change.py">Recharge benchmark script</a>
+      <a class="link-card" href="/code/model_benchmarking_T_change.py">Transmissivity benchmark script</a>
+      <a class="link-card" href="/code/benchmark_plots.py">Plotting script</a>
+      <a class="link-card" href="/assets/graphical-abstract.png" download>Graphical abstract</a>
+      <a class="link-card" href="/assets/recharge-throughput.png" download>Recharge throughput plot</a>
+      <a class="link-card" href="/assets/t-throughput.png" download>Transmissivity throughput plot</a>
+      <a class="link-card" href="/artifacts/canterbury-results-summary.json" download>Canterbury results summary</a>
+      <a class="link-card" href="/artifacts/canterbury-results.pt" download>Canterbury results pt</a>
+    </div>
+  </section>
+
+  <section class="card reveal" id="cite">
+    <h2>Citation</h2>
+    <div class="citation">@article{darcywarp2025,
+  title = {DarcyWarp: Verified GPU-accelerated multigrid for repeated-solve groundwater workflows in 2D transmissivity form},
+  author = {Durney, Patrick and Fourie, Jaco},
+  year = {2025},
+  note = {Manuscript in preparation}
+}</div>
+  </section>
+
+  <footer class="footer reveal">
+    For released DOI and final PDF, update the citation block and manuscript link.
+  </footer>
+</main>
+
+<script>
+  const benchmarkSets = {
+    recharge: {
+      throughput: "/assets/recharge-throughput.png",
+      walltime: "/assets/recharge-walltime.png",
+      label: "recharge change"
+    },
+    transmissivity: {
+      throughput: "/assets/t-throughput.png",
+      walltime: "/assets/t-walltime.png",
+      label: "transmissivity change"
+    }
+  };
+
+  const throughputImg = document.getElementById("benchmark-throughput");
+  const walltimeImg = document.getElementById("benchmark-walltime");
+  const throughputCaption = document.getElementById("benchmark-throughput-caption");
+  const walltimeCaption = document.getElementById("benchmark-walltime-caption");
+  const throughputLink = document.getElementById("benchmark-throughput-link");
+  const walltimeLink = document.getElementById("benchmark-walltime-link");
+  const tabs = document.querySelectorAll("[data-benchmark]");
+
+  function setBenchmark(key) {
+    const set = benchmarkSets[key];
+    if (!set) return;
+    throughputImg.src = set.throughput;
+    walltimeImg.src = set.walltime;
+    throughputImg.alt = `Throughput vs workers (${set.label})`;
+    walltimeImg.alt = `Wall time vs workers (${set.label})`;
+    throughputCaption.textContent = `Throughput vs workers (${set.label}).`;
+    walltimeCaption.textContent = `Wall time vs workers (${set.label}).`;
+    throughputLink.href = set.throughput;
+    walltimeLink.href = set.walltime;
+    tabs.forEach((tab) => {
+      const isActive = tab.dataset.benchmark === key;
+      tab.classList.toggle("active", isActive);
+      tab.setAttribute("aria-pressed", isActive ? "true" : "false");
+    });
+  }
+
+  tabs.forEach((tab) => {
+    tab.addEventListener("click", () => setBenchmark(tab.dataset.benchmark));
+  });
+
+  setBenchmark("recharge");
+
+  async function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.position = "fixed";
+    textArea.style.opacity = "0";
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    try {
+      document.execCommand("copy");
+    } finally {
+      document.body.removeChild(textArea);
+    }
+  }
+
+  document.querySelectorAll("[data-copy-target]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const targetId = btn.getAttribute("data-copy-target");
+      const target = document.getElementById(targetId);
+      if (!target) return;
+      const text = target.textContent.trim();
+      try {
+        await copyText(text);
+        const original = btn.textContent;
+        btn.textContent = "Copied";
+        setTimeout(() => {
+          btn.textContent = original;
+        }, 1200);
+      } catch (err) {
+        btn.textContent = "Copy failed";
+      }
+    });
+  });
+</script>
+</body>
+</html>

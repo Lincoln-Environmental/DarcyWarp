@@ -1,0 +1,14 @@
+{
+    "warp_class_single": {
+        "nx": 1000,
+        "ny": 1000,
+        "n_cells_total": 1000000,
+        "n_cases": 48,
+        "device": "cuda:0",
+        "total_wall_seconds": 51.28815883499999,
+        "mean_case_seconds": 1.067491982729165,
+        "min_case_seconds": 1.0146211109999967,
+        "max_case_seconds": 2.718933060999973,
+        "throughput_cases_per_second": 0.9358885382183755
+    }
+}

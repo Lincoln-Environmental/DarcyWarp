@@ -1,0 +1,19 @@
+{
+    "warp_class_single": {
+        "nx": 120,
+        "ny": 120,
+        "n_cells_total": 14400,
+        "n_cases": 4,
+        "device": "cuda:0",
+        "update_mode": "full",
+        "update_diag_preconditioner": false,
+        "warmup": 1,
+        "total_wall_seconds": 0.6218566440074937,
+        "mean_case_seconds": 0.15546073874793365,
+        "mean_update_seconds": 0.002336995501536876,
+        "mean_solve_seconds": 0.15312368649392738,
+        "min_case_seconds": 0.15005322400247678,
+        "max_case_seconds": 0.17044953299046028,
+        "throughput_cases_per_second": 6.432350668833246
+    }
+}

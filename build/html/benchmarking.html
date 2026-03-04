@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Benchmarking Workflows &#8212; DarcyWarp 0.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <script src="_static/documentation_options.js?v=2709fde1"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Documentation Build" href="docs_build.html" />
+    <link rel="prev" title="Quickstart" href="quickstart.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="benchmarking-workflows">
+<h1>Benchmarking Workflows<a class="headerlink" href="#benchmarking-workflows" title="Link to this heading">¶</a></h1>
+<section id="wrapper-cli-benchmarks-plots">
+<h2>Wrapper CLI (benchmarks + plots)<a class="headerlink" href="#wrapper-cli-benchmarks-plots" title="Link to this heading">¶</a></h2>
+<p>The main wrapper CLI runs benchmark suites and then generates plots from the
+resulting summary JSON files:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-m<span class="w"> </span>DARCY_WARP_PACKAGE.bench_and_plot<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--nx<span class="w"> </span><span class="m">1000</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--ny<span class="w"> </span><span class="m">1000</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--dx<span class="w"> </span><span class="m">100</span>.0<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--n_cases<span class="w"> </span><span class="m">48</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--workers<span class="w"> </span><span class="m">2</span>,4,8,16,24<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--seed<span class="w"> </span><span class="m">42</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--device<span class="w"> </span>cuda:0<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--out_dir<span class="w"> </span>paper/tables_figures
+</pre></div>
+</div>
+</section>
+<section id="behavior-notes-current-implementation">
+<h2>Behavior notes (current implementation)<a class="headerlink" href="#behavior-notes-current-implementation" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>If none of <code class="docutils literal notranslate"><span class="pre">--run_warp</span></code>, <code class="docutils literal notranslate"><span class="pre">--run_mf6</span></code>, or <code class="docutils literal notranslate"><span class="pre">--run_fd</span></code> are provided, the
+wrapper runs all three.</p></li>
+<li><p>If neither <code class="docutils literal notranslate"><span class="pre">--run_recharge</span></code> nor <code class="docutils literal notranslate"><span class="pre">--run_t</span></code> is provided, the wrapper runs
+both suites.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--plots_only</span></code> skips benchmark execution and only generates plots from
+existing summary JSONs.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--write_metadata</span></code> writes optional metadata JSON files for each suite.</p></li>
+</ul>
+</section>
+<section id="common-examples">
+<h2>Common examples<a class="headerlink" href="#common-examples" title="Link to this heading">¶</a></h2>
+<p>Enable GHB boundaries:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-m<span class="w"> </span>DARCY_WARP_PACKAGE.bench_and_plot<span class="w"> </span>--ghb<span class="w"> </span>--out_dir<span class="w"> </span>paper/tables_figures
+</pre></div>
+</div>
+<p>Run only Warp:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-m<span class="w"> </span>DARCY_WARP_PACKAGE.bench_and_plot<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--run_warp<span class="w"> </span>--run_recharge<span class="w"> </span>--run_t<span class="w"> </span>--device<span class="w"> </span>cuda:0
+</pre></div>
+</div>
+<p>Generate plots only from existing summaries:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-m<span class="w"> </span>DARCY_WARP_PACKAGE.bench_and_plot<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--plots_only<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--nx<span class="w"> </span><span class="m">1000</span><span class="w"> </span>--ny<span class="w"> </span><span class="m">1000</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--out_dir<span class="w"> </span>paper/tables_figures
+</pre></div>
+</div>
+</section>
+<section id="direct-benchmark-clis">
+<h2>Direct benchmark CLIs<a class="headerlink" href="#direct-benchmark-clis" title="Link to this heading">¶</a></h2>
+<p>Use these when you want to run benchmark suites without invoking plotting:</p>
+<p>Recharge-change suite:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-m<span class="w"> </span>DARCY_WARP_PACKAGE.model_benchmarking_recharge_change<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--run_warp<span class="w"> </span>--run_mf6<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--nx<span class="w"> </span><span class="m">1000</span><span class="w"> </span>--ny<span class="w"> </span><span class="m">1000</span><span class="w"> </span>--dx<span class="w"> </span><span class="m">100</span>.0<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--n_cases<span class="w"> </span><span class="m">48</span><span class="w"> </span>--workers<span class="w"> </span><span class="m">2</span>,4,8,16,24<span class="w"> </span>--seed<span class="w"> </span><span class="m">42</span><span class="w"> </span>--device<span class="w"> </span>cuda:0
+</pre></div>
+</div>
+<p>Transmissivity-change suite:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-m<span class="w"> </span>DARCY_WARP_PACKAGE.model_benchmarking_T_change<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--run_warp<span class="w"> </span>--run_mf6<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--nx<span class="w"> </span><span class="m">1000</span><span class="w"> </span>--ny<span class="w"> </span><span class="m">1000</span><span class="w"> </span>--dx<span class="w"> </span><span class="m">100</span>.0<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--n_cases<span class="w"> </span><span class="m">48</span><span class="w"> </span>--workers<span class="w"> </span><span class="m">2</span>,4,8,16,24<span class="w"> </span>--seed<span class="w"> </span><span class="m">42</span><span class="w"> </span>--device<span class="w"> </span>cuda:0
+</pre></div>
+</div>
+</section>
+<section id="plotting-existing-summaries">
+<h2>Plotting existing summaries<a class="headerlink" href="#plotting-existing-summaries" title="Link to this heading">¶</a></h2>
+<p>Generate plots directly from summary JSONs:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-m<span class="w"> </span>DARCY_WARP_PACKAGE.benchmark_plots<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--mf6_summary<span class="w"> </span>/path/to/mf6_ensemble_benchmark_results_recharge1000000.json<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--warp_summary<span class="w"> </span>/path/to/warp_class_ensemble_benchmark_results_recharge_1000000.json<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--out_dir<span class="w"> </span>paper/tables_figures<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--title_prefix<span class="w"> </span><span class="s2">&quot;1000x1000, N=48: &quot;</span>
+</pre></div>
+</div>
+</section>
+<section id="typical-outputs">
+<h2>Typical outputs<a class="headerlink" href="#typical-outputs" title="Link to this heading">¶</a></h2>
+<p>Benchmark summaries are written to the package data store (<code class="docutils literal notranslate"><span class="pre">DARCY_WARP_PACKAGE/data</span></code>
+via <code class="docutils literal notranslate"><span class="pre">project_base.data_store</span></code>) and plots are written to the <code class="docutils literal notranslate"><span class="pre">--out_dir</span></code>
+you pass to the CLI.</p>
+<p>Common summary filename patterns include:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">mf6_ensemble_benchmark_results_recharge{cells}.json</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">warp_class_ensemble_benchmark_results_recharge_{cells}.json</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">fd_ensemble_benchmark_results_recharge{cells}.json</span></code> (if CPU FD enabled)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">mf6_T_ensemble_benchmark_results_{cells}.json</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">warp_class_T_ensemble_benchmark_results_{cells}.json</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">fd_T_ensemble_benchmark_results_{cells}.json</span></code> (if CPU FD enabled)</p></li>
+</ul>
+</section>
+<section id="recharge-consistency">
+<h2>Recharge consistency<a class="headerlink" href="#recharge-consistency" title="Link to this heading">¶</a></h2>
+<p>The recharge benchmark workflow generates a single recharge stack and reuses it
+across all enabled solvers for the same run, so each solver sees the same input
+arrays for each case index.</p>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">DarcyWarp</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Benchmarking Workflows</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#wrapper-cli-benchmarks-plots">Wrapper CLI (benchmarks + plots)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#behavior-notes-current-implementation">Behavior notes (current implementation)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#common-examples">Common examples</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#direct-benchmark-clis">Direct benchmark CLIs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#plotting-existing-summaries">Plotting existing summaries</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#typical-outputs">Typical outputs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#recharge-consistency">Recharge consistency</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="docs_build.html">Documentation Build</a></li>
+<li class="toctree-l1"><a class="reference internal" href="license.html">License</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="quickstart.html" title="previous chapter">Quickstart</a></li>
+      <li>Next: <a href="docs_build.html" title="next chapter">Documentation Build</a></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2026, Patrick Durney and Jaco Fourie.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/benchmarking.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

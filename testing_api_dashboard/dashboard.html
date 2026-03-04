@@ -1,0 +1,658 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DarcyWarp Runner</title>
+  <style>
+    :root {
+      --bg: #f3f2ed;
+      --card: #ffffff;
+      --surface: #fbfaf6;
+      --text: #121212;
+      --muted: #4a4a4a;
+      --accent: #1f6f78;
+      --accent-strong: #145961;
+      --border: #d6d1c7;
+      --ok: #1f7a4d;
+      --warn: #9f5f00;
+      --err: #b42318;
+      --shadow: 0 16px 40px rgba(26, 38, 42, 0.08);
+      --shadow-soft: 0 10px 24px rgba(26, 38, 42, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Palatino Linotype", "Book Antiqua", Palatino, "Times New Roman", serif;
+      color: var(--text);
+      background: radial-gradient(circle at 12% 8%, #eef2ef, var(--bg) 45%);
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 28px 18px 48px;
+      display: grid;
+      gap: 20px;
+    }
+
+    h1, h2 {
+      margin: 0 0 8px;
+    }
+
+    p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px;
+      box-shadow: var(--shadow);
+    }
+
+    .cards {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      align-items: stretch;
+    }
+
+    .hero {
+      display: grid;
+      gap: 12px;
+      align-items: start;
+    }
+
+    .hero-text {
+      display: grid;
+      gap: 8px;
+    }
+
+    .hero h1 {
+      font-size: 28px;
+      letter-spacing: 0.4px;
+    }
+
+    .hero p {
+      max-width: 640px;
+    }
+
+    .hero-graphic {
+      width: min(100%, 840px);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      margin-top: 12px;
+    }
+
+    .link-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .link-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: #f0f2ef;
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-weight: 600;
+      text-decoration: none;
+    }
+
+    .card .card {
+      background: var(--surface);
+      border-color: #e4dfd2;
+      box-shadow: var(--shadow-soft);
+      padding: 14px;
+    }
+
+    .command-card {
+      display: grid;
+      gap: 10px;
+    }
+
+    .base-cmd {
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 12px;
+      background: #f2f2ee;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px;
+      overflow-wrap: anywhere;
+      color: #222;
+    }
+
+    .row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    input[type="text"] {
+      flex: 1 1 220px;
+      min-width: 0;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px;
+      font-size: 14px;
+    }
+
+    button {
+      border: 1px solid var(--accent-strong);
+      background: var(--accent);
+      color: #fff;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.2s ease, border-color 0.2s ease;
+    }
+
+    button:hover:not(:disabled) {
+      background: #24808a;
+      border-color: #0f4e55;
+    }
+
+    button:disabled {
+      cursor: default;
+      opacity: 0.5;
+    }
+
+    button.secondary {
+      border-color: #666;
+      background: #fff;
+      color: #333;
+    }
+
+    button.secondary:hover:not(:disabled) {
+      background: #f4f2ee;
+      border-color: #4c4c4c;
+    }
+
+    button.ghost {
+      border-color: var(--border);
+      background: #f3f2ed;
+      color: #1b2b2d;
+    }
+
+    button.ghost:hover:not(:disabled) {
+      background: #e7e3da;
+      border-color: #c5c0b6;
+    }
+
+    .note {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    #status-line {
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    #status-line.ok {
+      color: var(--ok);
+    }
+
+    #status-line.warn {
+      color: var(--warn);
+    }
+
+    #status-line.err {
+      color: var(--err);
+    }
+
+    pre {
+      margin: 8px 0 0;
+      background: #101418;
+      color: #d7f8e0;
+      border-radius: 10px;
+      min-height: 240px;
+      max-height: 520px;
+      overflow: auto;
+      padding: 12px;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    ul {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+    }
+
+    li + li {
+      margin-top: 6px;
+    }
+
+    main > section {
+      opacity: 0;
+      transform: translateY(8px);
+      animation: float-in 0.6s ease forwards;
+    }
+
+    main > section:nth-child(1) { animation-delay: 0.05s; }
+    main > section:nth-child(2) { animation-delay: 0.1s; }
+    main > section:nth-child(3) { animation-delay: 0.15s; }
+    main > section:nth-child(4) { animation-delay: 0.2s; }
+    main > section:nth-child(5) { animation-delay: 0.25s; }
+
+    @keyframes float-in {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      main > section {
+        animation: none;
+        opacity: 1;
+        transform: none;
+      }
+    }
+
+    @media (min-width: 960px) {
+      .hero {
+        grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+        align-items: center;
+      }
+
+      .hero-graphic {
+        margin-top: 0;
+        justify-self: end;
+      }
+    }
+
+    @media (max-width: 720px) {
+      main {
+        padding: 22px 14px 36px;
+      }
+
+      pre {
+        max-height: 420px;
+      }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <section class="card hero">
+    <div class="hero-text">
+      <h1>DarcyWarp Test + Benchmark Runner</h1>
+      <p>Local dashboard for running allowlisted commands from the repository root. Keep an eye on logs and recent runs.</p>
+      <div class="link-row">
+        <a class="link-pill" href="/docs/dashboard" target="_blank" rel="noreferrer">Dashboard README</a>
+        <a class="link-pill" href="/docs/repo" target="_blank" rel="noreferrer">Repository README</a>
+      </div>
+    </div>
+    <img class="hero-graphic" src="/assets/graphical-abstract.png" alt="Graphical abstract">
+  </section>
+
+  <section class="card">
+    <h2>Commands</h2>
+    <div id="commands" class="cards"></div>
+  </section>
+
+  <section class="card">
+    <h2>Quick Actions</h2>
+    <div class="cards">
+      <div class="command-card card">
+        <div><strong>Benchmarks</strong></div>
+        <div>Runs all benchmarks in order.</div>
+        <div class="row">
+          <input id="benchmarks-args" type="text" placeholder="Extra args for benchmarks">
+          <button id="run-benchmarks-btn" type="button">Run All Benchmarks</button>
+        </div>
+      </div>
+      <div class="command-card card">
+        <div><strong>Tests + Benchmarks</strong></div>
+        <div>Runs tests, then benchmarks.</div>
+        <div class="row">
+          <input id="tests-benchmarks-args" type="text" placeholder="Extra args for all steps">
+          <button id="run-tests-benchmarks-btn" type="button" class="secondary">Run Tests + Benchmarks</button>
+        </div>
+      </div>
+      <div class="command-card card">
+        <div><strong>Everything</strong></div>
+        <div>Runs all allowlisted commands in order.</div>
+        <div class="row">
+          <input id="everything-args" type="text" placeholder="Extra args for all steps">
+          <button id="run-everything-btn" type="button" class="ghost">Run Everything</button>
+        </div>
+      </div>
+      <div class="command-card card">
+        <div><strong>Canterbury Case Study</strong></div>
+        <div>Runs the Canterbury calibration workflow.</div>
+        <div class="row">
+          <button id="run-canterbury-btn" type="button">Run Canterbury Case Study</button>
+        </div>
+      </div>
+    </div>
+    <p style="margin-top: 8px;">Runs allowlisted commands in order. Queue is cleared if you cancel.</p>
+  </section>
+
+  <section class="card">
+    <div class="row" style="justify-content: space-between;">
+      <h2>Latest Run</h2>
+      <button id="cancel-btn" class="secondary" disabled>Cancel Active Job</button>
+    </div>
+    <div id="status-line">No job selected.</div>
+    <pre id="output">(run a command to see logs)</pre>
+  </section>
+
+  <section class="card">
+    <h2>Recent Jobs</h2>
+    <ul id="job-history"></ul>
+  </section>
+</main>
+
+<script>
+  const commandsEl = document.getElementById("commands");
+  const outputEl = document.getElementById("output");
+  const statusEl = document.getElementById("status-line");
+  const historyEl = document.getElementById("job-history");
+  const cancelBtn = document.getElementById("cancel-btn");
+  const runBenchmarksBtn = document.getElementById("run-benchmarks-btn");
+  const runTestsBenchmarksBtn = document.getElementById("run-tests-benchmarks-btn");
+  const runEverythingBtn = document.getElementById("run-everything-btn");
+  const runCanterburyBtn = document.getElementById("run-canterbury-btn");
+  const benchmarksArgsInput = document.getElementById("benchmarks-args");
+  const testsBenchmarksArgsInput = document.getElementById("tests-benchmarks-args");
+  const everythingArgsInput = document.getElementById("everything-args");
+
+  let activeJobId = null;
+  let activeJobStatus = null;
+  let pollHandle = null;
+  const commandInputs = new Map();
+  const runQueue = [];
+
+  function setStatus(message, level = "") {
+    statusEl.textContent = message;
+    statusEl.className = level;
+  }
+
+  async function api(path, options = {}) {
+    const response = await fetch(path, options);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const detail = data.error ? `: ${data.error}` : "";
+      throw new Error(`HTTP ${response.status}${detail}`);
+    }
+    return data;
+  }
+
+  function formatDate(epochSeconds) {
+    if (!epochSeconds) return "-";
+    return new Date(epochSeconds * 1000).toLocaleString();
+  }
+
+  function renderCommands(commands) {
+    commandsEl.innerHTML = "";
+    commands.forEach((cmd) => {
+      const card = document.createElement("article");
+      card.className = "command-card card";
+      const label = document.createElement("div");
+      const labelStrong = document.createElement("strong");
+      labelStrong.textContent = cmd.label;
+      label.appendChild(labelStrong);
+      const description = document.createElement("div");
+      description.textContent = cmd.description;
+      const baseCmd = document.createElement("div");
+      baseCmd.className = "base-cmd";
+      baseCmd.textContent = cmd.base_command;
+      card.appendChild(label);
+      card.appendChild(description);
+      card.appendChild(baseCmd);
+
+      const row = document.createElement("div");
+      row.className = "row";
+      const input = document.createElement("input");
+      input.type = "text";
+      input.placeholder = "Optional extra args (example: --run_mf6 --workers 2,4)";
+      commandInputs.set(cmd.key, input);
+
+      if (cmd.key.startsWith("bench_")) {
+        const note = document.createElement("div");
+        note.className = "note";
+        note.textContent = "Default: auto-selects --run_warp, then --run_mf6, then --run_fd (unless you pass a --run_* flag).";
+        card.appendChild(note);
+      }
+
+      const runBtn = document.createElement("button");
+      runBtn.type = "button";
+      runBtn.textContent = cmd.key.startsWith("bench_") ? "Run Custom" : "Run";
+      runBtn.addEventListener("click", () => runCommand(cmd.key));
+
+      row.appendChild(input);
+      row.appendChild(runBtn);
+      card.appendChild(row);
+
+      if (cmd.key.startsWith("bench_")) {
+        const quickRow = document.createElement("div");
+        quickRow.className = "row";
+        const runWarpBtn = document.createElement("button");
+        runWarpBtn.type = "button";
+        runWarpBtn.textContent = "Run Warp";
+        runWarpBtn.addEventListener("click", () => runCommand(cmd.key, "--run_warp"));
+        const runMf6Btn = document.createElement("button");
+        runMf6Btn.type = "button";
+        runMf6Btn.textContent = "Run MF6";
+        runMf6Btn.className = "secondary";
+        runMf6Btn.addEventListener("click", () => runCommand(cmd.key, "--run_mf6"));
+        const runBothBtn = document.createElement("button");
+        runBothBtn.type = "button";
+        runBothBtn.textContent = "Run Both";
+        runBothBtn.addEventListener("click", () => runCommand(cmd.key, "--run_warp --run_mf6"));
+        quickRow.appendChild(runWarpBtn);
+        quickRow.appendChild(runMf6Btn);
+        quickRow.appendChild(runBothBtn);
+        card.appendChild(quickRow);
+      }
+      commandsEl.appendChild(card);
+    });
+  }
+
+  function renderOutput(job) {
+    const content = job.output && job.output.length ? job.output : "(no output yet)";
+    outputEl.textContent = content;
+    outputEl.scrollTop = outputEl.scrollHeight;
+  }
+
+  function renderJobHistory(jobs) {
+    historyEl.innerHTML = "";
+    if (!jobs.length) {
+      const item = document.createElement("li");
+      item.textContent = "No jobs yet.";
+      historyEl.appendChild(item);
+      return;
+    }
+    jobs.forEach((job) => {
+      const item = document.createElement("li");
+      item.textContent = `${job.id} | ${job.command_key} | ${job.status} | started ${formatDate(job.started_at)}`;
+      historyEl.appendChild(item);
+    });
+  }
+
+  async function refreshHistory() {
+    try {
+      const data = await api("/api/jobs");
+      renderJobHistory(data.jobs || []);
+    } catch (err) {
+      setStatus(`Failed to refresh job history: ${err.message}`, "err");
+    }
+  }
+
+  function stopPolling() {
+    if (pollHandle) {
+      clearInterval(pollHandle);
+      pollHandle = null;
+    }
+  }
+
+  function startPolling(jobId) {
+    stopPolling();
+    pollHandle = setInterval(() => pollJob(jobId), 1000);
+  }
+
+  async function pollJob(jobId) {
+    try {
+      const job = await api(`/api/jobs/${jobId}?tail=80000`);
+      renderOutput(job);
+      activeJobStatus = job.status;
+      cancelBtn.disabled = !(job.status === "running" || job.status === "cancelling");
+      if (job.status === "running") {
+        setStatus(`Running ${job.command_key} (${job.id})...`, "warn");
+      } else if (job.status === "succeeded") {
+        setStatus(`Succeeded (${job.id})`, "ok");
+        stopPolling();
+        await refreshHistory();
+        startNextQueued();
+      } else if (job.status === "cancelled") {
+        setStatus(`Cancelled (${job.id})`, "warn");
+        stopPolling();
+        await refreshHistory();
+        startNextQueued();
+      } else if (job.status === "failed") {
+        setStatus(`Failed (${job.id}) return code=${job.return_code}`, "err");
+        stopPolling();
+        await refreshHistory();
+        startNextQueued();
+      } else {
+        setStatus(`Status ${job.status} (${job.id})`, "warn");
+      }
+    } catch (err) {
+      setStatus(`Failed polling job ${jobId}: ${err.message}`, "err");
+      stopPolling();
+      cancelBtn.disabled = true;
+    }
+  }
+
+  async function runCommand(commandKey, extraArgsOverride = null) {
+    const input = commandInputs.get(commandKey);
+    const extraArgs = extraArgsOverride !== null ? extraArgsOverride : (input ? input.value.trim() : "");
+    try {
+      const job = await api("/api/run", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          command_key: commandKey,
+          extra_args: extraArgs
+        })
+      });
+      activeJobId = job.id;
+      activeJobStatus = job.status;
+      renderOutput(job);
+      setStatus(`Queued ${job.command_key} (${job.id})`, "warn");
+      cancelBtn.disabled = false;
+      await refreshHistory();
+      startPolling(activeJobId);
+    } catch (err) {
+      setStatus(`Failed to start command: ${err.message}`, "err");
+      cancelBtn.disabled = true;
+    }
+  }
+
+  function enqueueCommands(commandKeys, extraArgs = "") {
+    commandKeys.forEach((key) => runQueue.push({key, extraArgs}));
+    if (!activeJobId || (activeJobStatus !== "running" && activeJobStatus !== "cancelling")) {
+      startNextQueued();
+      return;
+    }
+    setStatus(`Queued ${commandKeys.length} command(s) after active job.`, "warn");
+  }
+
+  function startNextQueued() {
+    if (!runQueue.length) {
+      return;
+    }
+    const next = runQueue.shift();
+    runCommand(next.key, next.extraArgs);
+  }
+
+  async function cancelActiveJob() {
+    if (!activeJobId) {
+      return;
+    }
+    try {
+      runQueue.length = 0;
+      await api(`/api/jobs/${activeJobId}/cancel`, {method: "POST"});
+      setStatus(`Cancellation requested for ${activeJobId}. Queue cleared.`, "warn");
+    } catch (err) {
+      setStatus(`Failed to cancel job ${activeJobId}: ${err.message}`, "err");
+    }
+  }
+
+  cancelBtn.addEventListener("click", cancelActiveJob);
+
+  async function bootstrap() {
+    try {
+      const data = await api("/api/commands");
+      renderCommands(data.commands || []);
+      const commands = data.commands || [];
+      const allKeys = commands.map((cmd) => cmd.key);
+      const benchmarkKeys = commands
+        .map((cmd) => cmd.key)
+        .filter((key) => key.startsWith("bench_"));
+      if (benchmarkKeys.length) {
+        runBenchmarksBtn.addEventListener("click", () => {
+          const extraArgs = benchmarksArgsInput.value.trim();
+          enqueueCommands(benchmarkKeys, extraArgs);
+        });
+      } else {
+        runBenchmarksBtn.disabled = true;
+        benchmarksArgsInput.disabled = true;
+      }
+      const testsKey = commands.find((cmd) => cmd.key === "tests")?.key;
+      if (testsKey && benchmarkKeys.length) {
+        runTestsBenchmarksBtn.addEventListener("click", () => {
+          const extraArgs = testsBenchmarksArgsInput.value.trim();
+          enqueueCommands([testsKey, ...benchmarkKeys], extraArgs);
+        });
+      } else {
+        runTestsBenchmarksBtn.disabled = true;
+        testsBenchmarksArgsInput.disabled = true;
+      }
+      if (allKeys.length) {
+        runEverythingBtn.addEventListener("click", () => {
+          const extraArgs = everythingArgsInput.value.trim();
+          enqueueCommands(allKeys, extraArgs);
+        });
+      } else {
+        runEverythingBtn.disabled = true;
+        everythingArgsInput.disabled = true;
+      }
+      const canterburyKey = commands.find((cmd) => cmd.key === "canterbury_case_study")?.key;
+      if (canterburyKey) {
+        runCanterburyBtn.addEventListener("click", () => enqueueCommands([canterburyKey]));
+      } else {
+        runCanterburyBtn.disabled = true;
+      }
+      await refreshHistory();
+      setStatus("Ready.", "ok");
+    } catch (err) {
+      setStatus(`Startup failed: ${err.message}`, "err");
+    }
+  }
+
+  bootstrap();
+</script>
+</body>
+</html>

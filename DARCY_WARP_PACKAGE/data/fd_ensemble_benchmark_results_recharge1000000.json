@@ -1,0 +1,62 @@
+{
+    "fd_workers_2": {
+        "nx": 1000,
+        "ny": 1000,
+        "n_cells_total": 1000000,
+        "n_cases": 48,
+        "n_workers": 2,
+        "total_wall_seconds": 388.09635903000026,
+        "mean_case_seconds": 16.12119591497917,
+        "min_case_seconds": 15.901064571000006,
+        "max_case_seconds": 16.345824915999856,
+        "throughput_cases_per_second": 0.12368062436857222
+    },
+    "fd_workers_4": {
+        "nx": 1000,
+        "ny": 1000,
+        "n_cells_total": 1000000,
+        "n_cases": 48,
+        "n_workers": 4,
+        "total_wall_seconds": 207.70970633200022,
+        "mean_case_seconds": 17.211163662416663,
+        "min_case_seconds": 17.02360138699987,
+        "max_case_seconds": 17.913163481000083,
+        "throughput_cases_per_second": 0.2310917522712082
+    },
+    "fd_workers_8": {
+        "nx": 1000,
+        "ny": 1000,
+        "n_cells_total": 1000000,
+        "n_cases": 48,
+        "n_workers": 8,
+        "total_wall_seconds": 116.89167434599995,
+        "mean_case_seconds": 19.27007237383329,
+        "min_case_seconds": 18.976592626999718,
+        "max_case_seconds": 19.52065043199991,
+        "throughput_cases_per_second": 0.41063660238042066
+    },
+    "fd_workers_16": {
+        "nx": 1000,
+        "ny": 1000,
+        "n_cells_total": 1000000,
+        "n_cases": 48,
+        "n_workers": 16,
+        "total_wall_seconds": 99.24723599700019,
+        "mean_case_seconds": 29.836986369270846,
+        "min_case_seconds": 23.11576041499984,
+        "max_case_seconds": 39.216291601000194,
+        "throughput_cases_per_second": 0.4836406728893773
+    },
+    "fd_workers_24": {
+        "nx": 1000,
+        "ny": 1000,
+        "n_cells_total": 1000000,
+        "n_cases": 48,
+        "n_workers": 24,
+        "total_wall_seconds": 101.74837948699997,
+        "mean_case_seconds": 44.590733238208315,
+        "min_case_seconds": 30.702585330000147,
+        "max_case_seconds": 63.58544479600005,
+        "throughput_cases_per_second": 0.4717519850636323
+    }
+}

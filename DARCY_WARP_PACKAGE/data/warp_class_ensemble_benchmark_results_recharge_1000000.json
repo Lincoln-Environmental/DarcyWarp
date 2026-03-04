@@ -1,0 +1,38 @@
+{
+    "warp_class_single_host_only": {
+        "nx": 1000,
+        "ny": 1000,
+        "n_cells_total": 1000000,
+        "n_cases": 48,
+        "device": "cuda:0",
+        "update_mode": "host_only",
+        "solver_module": "DARCY_WARP_PACKAGE.warped_darcy",
+        "solver_variant": "warp_kcycle_default",
+        "warmup": 1,
+        "total_wall_seconds": 24.427517933000672,
+        "mean_case_seconds": 0.5089015865625394,
+        "mean_update_seconds": 0.0005872491874470143,
+        "mean_solve_seconds": 0.508314282208346,
+        "min_case_seconds": 0.5067807709992849,
+        "max_case_seconds": 0.5365966690005735,
+        "throughput_cases_per_second": 1.9649970222784598
+    },
+    "warp_class_single_in_place": {
+        "nx": 1000,
+        "ny": 1000,
+        "n_cells_total": 1000000,
+        "n_cases": 48,
+        "device": "cuda:0",
+        "update_mode": "in_place",
+        "solver_module": "DARCY_WARP_PACKAGE.warped_darcy",
+        "solver_variant": "warp_kcycle_default",
+        "warmup": 1,
+        "total_wall_seconds": 24.446270766999987,
+        "mean_case_seconds": 0.5092920755834408,
+        "mean_update_seconds": 0.0014553895207806515,
+        "mean_solve_seconds": 0.5078366275001258,
+        "min_case_seconds": 0.5077527260000352,
+        "max_case_seconds": 0.5109998120005912,
+        "throughput_cases_per_second": 1.9634896650492468
+    }
+}
