@@ -5,6 +5,7 @@ from typing import Optional
 import gc
 import numpy as np
 import os
+import warnings
 
 from DARCY_WARP_PACKAGE.model_builder import (
     _build_domain,
@@ -58,7 +59,7 @@ except ImportError:
 
 
 
-_float_env = os.environ.get("DARCY_FLOAT", "float32")
+_float_env = os.environ.get("DARCY_FLOAT", "float64")
 
 if _float_env == "float64":
     WP_FLOAT = wp.float64
@@ -73,6 +74,98 @@ import numpy as np
 import pandas as pd
 
 
+def _normalize_scalar_or_grid_to_shape(
+    value: float | np.ndarray,
+    *,
+    shape: tuple[int, int],
+    name: str,
+) -> tuple[np.ndarray, str]:
+    """
+    Normalize scalar-or-grid input to a (ny, nx) float64 array.
+    """
+    arr = np.asarray(value, dtype=np.float64)
+    if arr.ndim == 0:
+        val = float(arr)
+        if not np.isfinite(val):
+            raise ValueError(f"{name} scalar must be finite.")
+        return np.full(shape, val, dtype=np.float64), "scalar"
+
+    if arr.ndim == 2 and arr.shape == shape:
+        return arr.astype(np.float64, copy=False), "grid"
+    if arr.ndim == 3 and arr.shape[0] == 1 and tuple(arr.shape[1:]) == shape:
+        return np.asarray(arr[0], dtype=np.float64), "grid"
+
+    raise ValueError(f"{name} must be a scalar or shape {shape}. Got {arr.shape}.")
+
+
+def _compute_ghb_factor_from_raw_fields(
+    *,
+    gh_mask: np.ndarray,
+    gh_width: np.ndarray,
+    gh_alpha: float | np.ndarray,
+    aq_thickness: float | np.ndarray,
+    dx: float,
+    active: np.ndarray | None = None,
+    bc_mask: np.ndarray | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict[str, str]]:
+    """
+    Compute ghb_factor = gh_alpha * gh_width * dx / aq_thickness on valid GHB cells.
+    Returns (ghb_factor, gh_alpha_grid, aq_thickness_grid, mode_summary).
+    """
+    gh_mask_i = np.asarray(gh_mask, dtype=np.int32)
+    gh_width_f = np.asarray(gh_width, dtype=np.float64)
+    shape = tuple(gh_mask_i.shape)
+    if gh_width_f.shape != shape:
+        raise ValueError(f"gh_width shape {gh_width_f.shape} must match gh_mask shape {shape}.")
+
+    gh_alpha_grid, gh_alpha_mode = _normalize_scalar_or_grid_to_shape(
+        gh_alpha,
+        shape=shape,
+        name="gh_alpha",
+    )
+    aq_thickness_grid, aq_mode = _normalize_scalar_or_grid_to_shape(
+        aq_thickness,
+        shape=shape,
+        name="aq_thickness",
+    )
+
+    gh_on = gh_mask_i != 0
+    if active is not None:
+        gh_on &= np.asarray(active, dtype=np.int32) != 0
+    if bc_mask is not None:
+        gh_on &= np.asarray(bc_mask, dtype=np.int32) == 0
+    gh_on &= np.isfinite(gh_width_f) & (gh_width_f > 0.0)
+
+    if np.any(gh_on):
+        thick_used = np.asarray(aq_thickness_grid[gh_on], dtype=np.float64)
+        alpha_used = np.asarray(gh_alpha_grid[gh_on], dtype=np.float64)
+        bad_thick = (~np.isfinite(thick_used)) | (thick_used <= 0.0)
+        # `gh_alpha` may be either a direct scaling factor or an "effective alpha"
+        # derived from a blend coefficient. The effective form can exceed 1.0, so
+        # only finite positive values are valid here.
+        bad_alpha = (~np.isfinite(alpha_used)) | (alpha_used <= 0.0)
+        if np.any(bad_thick):
+            raise ValueError("aq_thickness must be finite and > 0 on active GHB cells.")
+        if np.any(bad_alpha):
+            raise ValueError("gh_alpha must be finite and > 0 on active GHB cells.")
+
+    ghb_factor = np.zeros(shape, dtype=np.float64)
+    if np.any(gh_on):
+        ghb_factor[gh_on] = (
+            gh_alpha_grid[gh_on]
+            * gh_width_f[gh_on]
+            * float(dx)
+            / aq_thickness_grid[gh_on]
+        )
+
+    return (
+        ghb_factor,
+        gh_alpha_grid,
+        aq_thickness_grid,
+        {"gh_alpha": gh_alpha_mode, "aq_thickness": aq_mode},
+    )
+
+
 def compute_mass_balance_budget(
     T_field: np.ndarray,
     R_field: np.ndarray,
@@ -84,6 +177,7 @@ def compute_mass_balance_budget(
     gh_mask: np.ndarray | None = None,
     gh_head: np.ndarray | None = None,
     gh_width: np.ndarray | None = None,
+    ghb_factor: np.ndarray | None = None,
     gh_alpha: float = 1.0,
     aq_thickness: float = 1.0,
     case: str | None = None,
@@ -208,23 +302,31 @@ def compute_mass_balance_budget(
     ghb_out = 0.0
     ghb_net_out_positive = 0.0
 
-    if (gh_mask is not None) and (gh_head is not None) and (gh_width is not None):
+    if (gh_mask is not None) and (gh_head is not None) and ((gh_width is not None) or (ghb_factor is not None)):
         ghm = np.asarray(gh_mask, dtype=np.int32) != 0
         ghe = np.asarray(gh_head, dtype=np.float64)
-        ghw = np.asarray(gh_width, dtype=np.float64)
+        if ghe.shape != (ny, nx):
+            raise ValueError("gh_head shape mismatch")
 
-        if ghe.shape != (ny, nx) or ghw.shape != (ny, nx):
-            raise ValueError("gh_head/gh_width shape mismatch")
-        if float(aq_thickness) <= 0.0:
-            raise ValueError("aq_thickness must be positive")
-
-        Cgh = (float(gh_alpha) * T / float(aq_thickness) * ghw * dx_f).astype(np.float64)
+        if ghb_factor is not None:
+            ghbf = np.asarray(ghb_factor, dtype=np.float64)
+            if ghbf.shape != (ny, nx):
+                raise ValueError("ghb_factor shape mismatch")
+            Cgh = (T * ghbf).astype(np.float64, copy=False)
+            gh_ok = np.isfinite(ghbf) & (ghbf > 0.0)
+        else:
+            ghw = np.asarray(gh_width, dtype=np.float64)
+            if ghw.shape != (ny, nx):
+                raise ValueError("gh_width shape mismatch")
+            if float(aq_thickness) <= 0.0:
+                raise ValueError("aq_thickness must be positive")
+            Cgh = (float(gh_alpha) * T / float(aq_thickness) * ghw * dx_f).astype(np.float64)
+            gh_ok = np.isfinite(ghw) & (ghw > 0.0)
 
         mask_gh = (
             ghm
             & cell_is_interior
-            & np.isfinite(ghw)
-            & (ghw > 0.0)
+            & gh_ok
             & np.isfinite(ghe)
             & np.isfinite(h_use)
         )
@@ -278,68 +380,216 @@ def build_coarse_level_from_fine(
     gh_mask_f: np.ndarray,
     gh_head_f: np.ndarray,
     gh_width_f: np.ndarray,
+    ghb_factor_f: np.ndarray | None = None,
 ):
-    ny_f, nx_f = T_f.shape
-    nx_c = (nx_f + 1) // 2
-    ny_c = (ny_f + 1) // 2
+    return _coarsen_level_host_2x2(
+        T_f=T_f,
+        R_f=R_f,
+        active_f=active_f,
+        bc_mask_f=bc_mask_f,
+        bc_values_f=bc_values_f,
+        gh_mask_f=gh_mask_f,
+        gh_head_f=gh_head_f,
+        gh_width_f=gh_width_f,
+        ghb_factor_f=ghb_factor_f,
+    )
+
+
+def _pad_to_coarse_block_shape(
+    arr: np.ndarray,
+    *,
+    pad_y: int,
+    pad_x: int,
+    dtype,
+    fill_value,
+) -> np.ndarray:
+    return np.pad(
+        np.asarray(arr, dtype=dtype),
+        ((0, int(pad_y)), (0, int(pad_x))),
+        mode="constant",
+        constant_values=fill_value,
+    )
+
+
+def _harmonic_mean_2x2_coarsen(T_pad: np.ndarray, active_pad: np.ndarray) -> np.ndarray:
+    ny_c = int(T_pad.shape[0] // 2)
+    nx_c = int(T_pad.shape[1] // 2)
+
+    T_blk = np.asarray(T_pad, dtype=np.float64).reshape(ny_c, 2, nx_c, 2)
+    a_blk = np.asarray(active_pad, dtype=np.int32).reshape(ny_c, 2, nx_c, 2)
+
+    use = (a_blk != 0) & np.isfinite(T_blk) & (T_blk > 0.0)
+    inv_blk = np.zeros_like(T_blk, dtype=np.float64)
+    inv_blk[use] = 1.0 / T_blk[use]
+
+    denom = inv_blk.sum(axis=(1, 3), dtype=np.float64)
+    count = use.sum(axis=(1, 3), dtype=np.int32)
+
+    T_c = np.zeros((ny_c, nx_c), dtype=np.float64)
+    ok = (count > 0) & (denom > 0.0)
+    T_c[ok] = count[ok] / denom[ok]
+    return T_c.astype(NP_FLOAT, copy=False)
+
+
+def _mean_2x2_with_mask(values_pad: np.ndarray, mask_pad: np.ndarray) -> np.ndarray:
+    ny_c = int(values_pad.shape[0] // 2)
+    nx_c = int(values_pad.shape[1] // 2)
+
+    v_blk = np.asarray(values_pad, dtype=np.float64).reshape(ny_c, 2, nx_c, 2)
+    m_blk = np.asarray(mask_pad, dtype=np.float64).reshape(ny_c, 2, nx_c, 2)
+
+    wsum = (v_blk * m_blk).sum(axis=(1, 3), dtype=np.float64)
+    msum = m_blk.sum(axis=(1, 3), dtype=np.float64)
+
+    out = np.zeros((ny_c, nx_c), dtype=np.float64)
+    on = msum > 0.0
+    out[on] = wsum[on] / msum[on]
+    return out.astype(NP_FLOAT, copy=False)
+
+
+def _coarsen_active_mask_2x2(active_pad: np.ndarray, valid_pad: np.ndarray) -> np.ndarray:
+    ny_c = int(active_pad.shape[0] // 2)
+    nx_c = int(active_pad.shape[1] // 2)
+
+    a_blk = np.asarray(active_pad, dtype=np.int32).reshape(ny_c, 2, nx_c, 2)
+    v_blk = np.asarray(valid_pad, dtype=np.int32).reshape(ny_c, 2, nx_c, 2)
+
+    active_count = a_blk.sum(axis=(1, 3), dtype=np.int32)
+    valid_count = v_blk.sum(axis=(1, 3), dtype=np.int32)
+
+    active_c = np.zeros((ny_c, nx_c), dtype=np.int32)
+    on = valid_count > 0
+    active_c[on] = ((2 * active_count[on]) >= valid_count[on]).astype(np.int32, copy=False)
+    return active_c
+
+
+def _coarsen_level_host_2x2(
+    T_f: np.ndarray,
+    R_f: np.ndarray,
+    active_f: np.ndarray,
+    bc_mask_f: np.ndarray,
+    bc_values_f: np.ndarray,
+    gh_mask_f: np.ndarray | None,
+    gh_head_f: np.ndarray | None,
+    gh_width_f: np.ndarray | None,
+    ghb_factor_f: np.ndarray | None = None,
+):
+    del bc_values_f, gh_head_f
+
+    ny_f, nx_f = np.asarray(T_f).shape
+    nx_c = (int(nx_f) + 1) // 2
+    ny_c = (int(ny_f) + 1) // 2
 
     pad_y = int(2 * ny_c - ny_f)
     pad_x = int(2 * nx_c - nx_f)
 
-    def _pad(arr, fill_value=0):
-        return np.pad(
-            np.asarray(arr),
-            ((0, pad_y), (0, pad_x)),
-            mode="constant",
-            constant_values=fill_value,
-        )
-
-    # Block counts for correct means on odd-sized grids
-    valid = np.ones((ny_f, nx_f), dtype=np.float64)
-    count = _pad(valid, fill_value=0.0).reshape(ny_c, 2, nx_c, 2).sum(axis=(1, 3))
-    count_safe = np.maximum(count, 1.0)
-
-    # Masks: any in 2x2 block
-    active_c = (
-        _pad(active_f, fill_value=0)
-        .reshape(ny_c, 2, nx_c, 2)
-        .max(axis=(1, 3))
-        .astype(np.int32, copy=False)
+    valid_pad = _pad_to_coarse_block_shape(
+        np.ones((ny_f, nx_f), dtype=np.int32),
+        pad_y=pad_y,
+        pad_x=pad_x,
+        dtype=np.int32,
+        fill_value=0,
     )
-    bc_mask_c = (
-        _pad(bc_mask_f, fill_value=0)
-        .reshape(ny_c, 2, nx_c, 2)
-        .max(axis=(1, 3))
-        .astype(np.int32, copy=False)
+    active_pad = _pad_to_coarse_block_shape(
+        active_f,
+        pad_y=pad_y,
+        pad_x=pad_x,
+        dtype=np.int32,
+        fill_value=0,
     )
-    gh_mask_c = (
-        _pad(gh_mask_f, fill_value=0)
-        .reshape(ny_c, 2, nx_c, 2)
-        .max(axis=(1, 3))
-        .astype(np.int32, copy=False)
+    bc_mask_pad = _pad_to_coarse_block_shape(
+        bc_mask_f,
+        pad_y=pad_y,
+        pad_x=pad_x,
+        dtype=np.int32,
+        fill_value=0,
     )
 
-    # Means over valid cells in the block (not just active)
-    T_sum = _pad(T_f, fill_value=0.0).astype(np.float64, copy=False).reshape(ny_c, 2, nx_c, 2).sum(axis=(1, 3))
-    R_sum = _pad(R_f, fill_value=0.0).astype(np.float64, copy=False).reshape(ny_c, 2, nx_c, 2).sum(axis=(1, 3))
-    T_c = (T_sum / count_safe).astype(np.float32, copy=False)
-    R_c = (R_sum / count_safe).astype(np.float32, copy=False)
+    T_pad = _pad_to_coarse_block_shape(
+        T_f,
+        pad_y=pad_y,
+        pad_x=pad_x,
+        dtype=NP_FLOAT,
+        fill_value=0.0,
+    )
+    R_pad = _pad_to_coarse_block_shape(
+        R_f,
+        pad_y=pad_y,
+        pad_x=pad_x,
+        dtype=NP_FLOAT,
+        fill_value=0.0,
+    )
 
-    # Zero out inactive coarse cells (matches loop behavior)
+    active_c = _coarsen_active_mask_2x2(active_pad, valid_pad)
+
+    m_blk = bc_mask_pad.reshape(ny_c, 2, nx_c, 2)
+    bc_mask_c_raw = m_blk.max(axis=(1, 3)).astype(np.int32, copy=False)
+    bc_mask_c = ((bc_mask_c_raw != 0) & (active_c != 0)).astype(np.int32, copy=False)
+
+    T_c = _harmonic_mean_2x2_coarsen(T_pad=T_pad, active_pad=active_pad)
+    R_c = _mean_2x2_with_mask(values_pad=R_pad, mask_pad=valid_pad)
+
     inactive = active_c == 0
     if np.any(inactive):
-        T_c[inactive] = np.float32(0.0)
-        R_c[inactive] = np.float32(0.0)
+        T_c = np.asarray(T_c, dtype=NP_FLOAT).copy()
+        R_c = np.asarray(R_c, dtype=NP_FLOAT).copy()
+        T_c[inactive] = NP_FLOAT(0.0)
+        R_c[inactive] = NP_FLOAT(0.0)
 
-    # GHB width: mean over block if any GHB present, else 0
-    gh_width_sum = (
-        _pad(gh_width_f, fill_value=0.0).astype(np.float64, copy=False).reshape(ny_c, 2, nx_c, 2).sum(axis=(1, 3))
+    if gh_mask_f is None:
+        gh_mask_f = np.zeros((ny_f, nx_f), dtype=np.int32)
+    if gh_width_f is None:
+        gh_width_f = np.zeros((ny_f, nx_f), dtype=NP_FLOAT)
+    if ghb_factor_f is None:
+        ghb_factor_f = np.zeros((ny_f, nx_f), dtype=NP_FLOAT)
+
+    gh_mask_pad = _pad_to_coarse_block_shape(
+        gh_mask_f,
+        pad_y=pad_y,
+        pad_x=pad_x,
+        dtype=np.int32,
+        fill_value=0,
     )
-    gh_width_c = (gh_width_sum / count_safe).astype(np.float32, copy=False)
-    gh_width_c[gh_mask_c == 0] = np.float32(0.0)
+    gh_width_pad = _pad_to_coarse_block_shape(
+        gh_width_f,
+        pad_y=pad_y,
+        pad_x=pad_x,
+        dtype=NP_FLOAT,
+        fill_value=0.0,
+    )
+    ghb_factor_pad = _pad_to_coarse_block_shape(
+        ghb_factor_f,
+        pad_y=pad_y,
+        pad_x=pad_x,
+        dtype=NP_FLOAT,
+        fill_value=0.0,
+    )
 
-    bc_values_c = np.zeros((ny_c, nx_c), dtype=np.float32)
-    gh_head_c = np.zeros((ny_c, nx_c), dtype=np.float32)
+    ghm_blk = gh_mask_pad.reshape(ny_c, 2, nx_c, 2)
+    gh_mask_c_raw = ghm_blk.max(axis=(1, 3)).astype(np.int32, copy=False)
+    gh_mask_c = (
+        (gh_mask_c_raw != 0)
+        & (active_c != 0)
+        & (bc_mask_c == 0)
+    ).astype(np.int32, copy=False)
+
+    gh_width_c = _mean_2x2_with_mask(values_pad=gh_width_pad, mask_pad=gh_mask_pad)
+    gh_width_c = np.asarray(gh_width_c, dtype=NP_FLOAT)
+    gh_width_c[gh_mask_c == 0] = NP_FLOAT(0.0)
+
+    ghb_blk = np.asarray(ghb_factor_pad, dtype=np.float64).reshape(ny_c, 2, nx_c, 2)
+    ghm_blk = np.asarray(gh_mask_pad, dtype=np.int32).reshape(ny_c, 2, nx_c, 2)
+    valid_blk = (ghm_blk != 0) & np.isfinite(ghb_blk) & (ghb_blk > 0.0)
+    valid_f = valid_blk.astype(np.float64, copy=False)
+    ghb_sum = (ghb_blk * valid_f).sum(axis=(1, 3), dtype=np.float64)
+    ghb_cnt = valid_f.sum(axis=(1, 3), dtype=np.float64)
+    ghb_factor_c = np.zeros((ny_c, nx_c), dtype=NP_FLOAT)
+    on = ghb_cnt > 0.0
+    ghb_factor_c[on] = (ghb_sum[on] / ghb_cnt[on]).astype(NP_FLOAT, copy=False)
+    ghb_factor_c[gh_mask_c == 0] = NP_FLOAT(0.0)
+
+    bc_values_c = np.zeros((ny_c, nx_c), dtype=NP_FLOAT)
+    gh_head_c = np.zeros((ny_c, nx_c), dtype=NP_FLOAT)
 
     return (
         T_c,
@@ -350,6 +600,7 @@ def build_coarse_level_from_fine(
         gh_mask_c,
         gh_head_c,
         gh_width_c,
+        ghb_factor_c,
     )
 
 @wp.kernel
@@ -358,7 +609,7 @@ def jacobi_applyA_fused_kernel(
     active: wp.array(dtype=wp.int32, ndim=2),
     bc_mask: wp.array(dtype=wp.int32, ndim=2),
     gh_mask: wp.array(dtype=wp.int32, ndim=2),
-    gh_width: wp.array(dtype=WP_FLOAT, ndim=2),
+    ghb_factor: wp.array(dtype=WP_FLOAT, ndim=2),
     b: wp.array(dtype=WP_FLOAT, ndim=2),
     x_in: wp.array(dtype=WP_FLOAT, ndim=2),
     M_inv: wp.array(dtype=WP_FLOAT, ndim=2),
@@ -366,9 +617,6 @@ def jacobi_applyA_fused_kernel(
     omega: float,
     nx: int,
     ny: int,
-    dx: float,
-    gh_alpha: float,
-    aq_thickness: float,
     x_out: wp.array(dtype=WP_FLOAT, ndim=2),
 ):
     j, i = wp.tid()
@@ -415,16 +663,10 @@ def jacobi_applyA_fused_kernel(
             T_s = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
 
     C_gh = wp.float64(0.0)
-    if gh_mask[j, i] != 0 and aq_thickness > 0.0:
-        width = wp.float64(gh_width[j, i])
-        if width > wp.float64(0.0) and not wp.isnan(width):
-            C_gh = (
-                wp.float64(gh_alpha)
-                * T_c
-                / wp.float64(aq_thickness)
-                * width
-                * wp.float64(dx)
-            )
+    if gh_mask[j, i] != 0:
+        ghbf = wp.float64(ghb_factor[j, i])
+        if ghbf > wp.float64(0.0) and not wp.isnan(ghbf):
+            C_gh = T_c * ghbf
 
     sum_T = T_e + T_w + T_n + T_s +C_gh
 
@@ -594,14 +836,11 @@ def compute_head_residual_kernel(
     active: wp.array(dtype=wp.int32, ndim=2),
     bc_mask: wp.array(dtype=wp.int32, ndim=2),
     gh_mask: wp.array(dtype=wp.int32, ndim=2),
-    gh_width: wp.array(dtype=WP_FLOAT, ndim=2),
+    ghb_factor: wp.array(dtype=WP_FLOAT, ndim=2),
     r: wp.array(dtype=WP_FLOAT, ndim=2),
     rTr_buf: wp.array(dtype=wp.float64, ndim=1),
     nx: int,
     ny: int,
-    dx: float,
-    gh_alpha: float,
-    aq_thickness: float,
 ):
     j, i = wp.tid()
     if j >= ny or i >= nx:
@@ -651,16 +890,10 @@ def compute_head_residual_kernel(
             T_s = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
 
     C_gh = wp.float64(0.0)
-    if gh_mask[j, i] != 0 and aq_thickness > 0.0:
-        width = wp.float64(gh_width[j, i])
-        if width > wp.float64(0.0) and not wp.isnan(width):
-            C_gh = (
-                wp.float64(gh_alpha)
-                * T_c
-                / wp.float64(aq_thickness)
-                * width
-                * wp.float64(dx)
-            )
+    if gh_mask[j, i] != 0:
+        ghbf = wp.float64(ghb_factor[j, i])
+        if ghbf > wp.float64(0.0) and not wp.isnan(ghbf):
+            C_gh = T_c * ghbf
 
     diagA = T_e + T_w + T_n + T_s + C_gh
 
@@ -696,14 +929,11 @@ def compute_residual_kernel(
     active: wp.array(dtype=wp.int32, ndim=2),
     bc_mask: wp.array(dtype=wp.int32, ndim=2),
     gh_mask: wp.array(dtype=wp.int32, ndim=2),
-    gh_width: wp.array(dtype=WP_FLOAT, ndim=2),
+    ghb_factor: wp.array(dtype=WP_FLOAT, ndim=2),
     r: wp.array(dtype=WP_FLOAT, ndim=2),
     rTr_buf: wp.array(dtype=wp.float64, ndim=1),
     nx: int,
     ny: int,
-    dx: float,
-    gh_alpha: float,
-    aq_thickness: float,
 ):
     j, i = wp.tid()
     if j >= ny or i >= nx:
@@ -753,16 +983,10 @@ def compute_residual_kernel(
             T_s = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
 
     C_gh = wp.float64(0.0)
-    if gh_mask[j, i] != 0 and aq_thickness > 0.0:
-        width = wp.float64(gh_width[j, i])
-        if width > wp.float64(0.0) and not wp.isnan(width):
-            C_gh = (
-                wp.float64(gh_alpha)
-                * T_c
-                / wp.float64(aq_thickness)
-                * width
-                * wp.float64(dx)
-            )
+    if gh_mask[j, i] != 0:
+        ghbf = wp.float64(ghb_factor[j, i])
+        if ghbf > wp.float64(0.0) and not wp.isnan(ghbf):
+            C_gh = T_c * ghbf
 
     sum_T = T_e + T_w + T_n + T_s + C_gh
 
@@ -794,15 +1018,12 @@ def kcycle_check_dh_and_residual_kernel(
     active: wp.array(dtype=wp.int32, ndim=2),
     bc_mask: wp.array(dtype=wp.int32, ndim=2),
     gh_mask: wp.array(dtype=wp.int32, ndim=2),
-    gh_width: wp.array(dtype=WP_FLOAT, ndim=2),
+    ghb_factor: wp.array(dtype=WP_FLOAT, ndim=2),
     dh2_buf: wp.array(dtype=wp.float64, ndim=1),
     dh_max_buf: wp.array(dtype=wp.float64, ndim=1),
     rTr_buf: wp.array(dtype=wp.float64, ndim=1),
     nx: int,
     ny: int,
-    dx: float,
-    gh_alpha: float,
-    aq_thickness: float,
 ):
     j, i = wp.tid()
     if j >= ny or i >= nx:
@@ -861,16 +1082,10 @@ def kcycle_check_dh_and_residual_kernel(
             T_s = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
 
     C_gh = wp.float64(0.0)
-    if gh_mask[j, i] != 0 and aq_thickness > 0.0:
-        width = wp.float64(gh_width[j, i])
-        if width > wp.float64(0.0) and not wp.isnan(width):
-            C_gh = (
-                wp.float64(gh_alpha)
-                * T_c
-                / wp.float64(aq_thickness)
-                * width
-                * wp.float64(dx)
-            )
+    if gh_mask[j, i] != 0:
+        ghbf = wp.float64(ghb_factor[j, i])
+        if ghbf > wp.float64(0.0) and not wp.isnan(ghbf):
+            C_gh = T_c * ghbf
 
     sum_T = T_e + T_w + T_n + T_s + C_gh
 
@@ -902,6 +1117,7 @@ def build_rhs_fd_like(
         gh_mask: np.ndarray | None = None,
         gh_head: np.ndarray | None = None,
         gh_width: np.ndarray | None = None,
+        ghb_factor: np.ndarray | None = None,
         gh_alpha: NP_FLOAT = 1.0,
         head_scale: NP_FLOAT = 1.0,
         aq_thickness: NP_FLOAT = 1.0,
@@ -934,32 +1150,34 @@ def build_rhs_fd_like(
 
     if head_scale <= 0.0:
         raise ValueError("head_scale must be positive.")
-    if aq_thickness <= 0.0:
+    if (ghb_factor is None) and (aq_thickness <= 0.0):
         raise ValueError("aq_thickness must be positive.")
 
     # Interior RHS: b_phys = R * dx^2, then scale by head_scale
     b = (R_field * dx2 / head_scale).astype(NP_FLOAT)
 
     # Optional GHB contribution: b += C_gh * h_ext / head_scale
-    if gh_mask is not None and gh_head is not None and gh_width is not None:
+    if gh_mask is not None and gh_head is not None and ((ghb_factor is not None) or (gh_width is not None)):
         gh_mask_arr = np.asarray(gh_mask, dtype=np.int32)
         gh_head_arr = np.asarray(gh_head, dtype=NP_FLOAT)
-        gh_width_arr = np.asarray(gh_width, dtype=NP_FLOAT)
-
-        # Same C_gh as in Warp kernels:
-        # C_gh = gh_alpha * T_c / aq_thickness * width * dx
-        C_gh = (
-            gh_alpha
-            * T_field / float(aq_thickness)
-            * gh_width_arr
-            * dx
-        ).astype(NP_FLOAT)
+        if ghb_factor is not None:
+            ghb_factor_arr = np.asarray(ghb_factor, dtype=NP_FLOAT)
+            C_gh = (T_field * ghb_factor_arr).astype(NP_FLOAT, copy=False)
+            gh_ok = np.isfinite(ghb_factor_arr) & (ghb_factor_arr > NP_FLOAT(0.0))
+        else:
+            gh_width_arr = np.asarray(gh_width, dtype=NP_FLOAT)
+            C_gh = (
+                gh_alpha
+                * T_field / float(aq_thickness)
+                * gh_width_arr
+                * dx
+            ).astype(NP_FLOAT)
+            gh_ok = np.isfinite(gh_width_arr) & (gh_width_arr > NP_FLOAT(0.0))
 
         mask_gh = (
             (gh_mask_arr != 0)
             & (active != 0)
-            & np.isfinite(gh_width_arr)
-            & (gh_width_arr > 0.0)
+            & gh_ok
         )
 
         if np.any(mask_gh):
@@ -986,13 +1204,11 @@ def build_rhs_kernel(
     bc_values: wp.array(dtype=WP_FLOAT, ndim=2),
     gh_mask: wp.array(dtype=wp.int32, ndim=2),
     gh_head: wp.array(dtype=WP_FLOAT, ndim=2),
-    gh_width: wp.array(dtype=WP_FLOAT, ndim=2),
+    ghb_factor: wp.array(dtype=WP_FLOAT, ndim=2),
     nx: int,
     ny: int,
     dx: float,
-    gh_alpha: float,
     head_scale: float,
-    aq_thickness: float,
     b_out: wp.array(dtype=WP_FLOAT, ndim=2),
 ):
     """
@@ -1012,17 +1228,11 @@ def build_rhs_kernel(
 
     rhs = wp.float64(R_field[j, i]) * wp.float64(dx) * wp.float64(dx) / wp.float64(head_scale)
 
-    if gh_mask[j, i] != 0 and aq_thickness > 0.0:
+    if gh_mask[j, i] != 0:
         T_c = wp.float64(T_field[j, i])
-        width = wp.float64(gh_width[j, i])
-        if T_c > wp.float64(0.0) and width > wp.float64(0.0) and not wp.isnan(width):
-            C_gh = (
-                wp.float64(gh_alpha)
-                * T_c
-                / wp.float64(aq_thickness)
-                * width
-                * wp.float64(dx)
-            )
+        ghbf = wp.float64(ghb_factor[j, i])
+        if T_c > wp.float64(0.0) and ghbf > wp.float64(0.0) and not wp.isnan(ghbf):
+            C_gh = T_c * ghbf
             rhs = rhs + C_gh * (wp.float64(gh_head[j, i]) / wp.float64(head_scale))
 
     b_out[j, i] = WP_FLOAT(rhs)
@@ -1034,6 +1244,7 @@ def build_diag_preconditioner(
     bc_mask: np.ndarray,
     gh_mask: np.ndarray | None = None,
     gh_width: np.ndarray | None = None,
+    ghb_factor: np.ndarray | None = None,
     dx: float | None = None,
     gh_alpha: float = 1.0,
     aq_thickness: float = 1.0,
@@ -1053,21 +1264,29 @@ def build_diag_preconditioner(
     active = np.asarray(active, dtype=np.int32)
     bc_mask = np.asarray(bc_mask, dtype=np.int32)
 
-    use_ghb = (gh_mask is not None) and (gh_width is not None)
+    use_ghb = (gh_mask is not None) and ((ghb_factor is not None) or (gh_width is not None))
     if use_ghb and dx is None:
-        raise ValueError("dx must be provided when gh_mask/gh_width are provided.")
+        raise ValueError("dx must be provided when gh_mask is provided.")
 
     if use_ghb:
         gh_mask_arr = np.asarray(gh_mask, dtype=np.int32)
-        gh_width_arr = np.asarray(gh_width, dtype=NP_FLOAT)
         dx_f = float(dx)
-        gh_alpha_f = float(gh_alpha)
-        thickness_f = float(aq_thickness)
-        if thickness_f <= 0.0:
+        if ghb_factor is not None:
+            ghb_factor_arr = np.asarray(ghb_factor, dtype=NP_FLOAT)
+            gh_width_arr = None
+            gh_alpha_f = 1.0
             thickness_f = 1.0
+        else:
+            ghb_factor_arr = None
+            gh_width_arr = np.asarray(gh_width, dtype=NP_FLOAT)
+            gh_alpha_f = float(gh_alpha)
+            thickness_f = float(aq_thickness)
+            if thickness_f <= 0.0:
+                thickness_f = 1.0
     else:
         gh_mask_arr = None
         gh_width_arr = None
+        ghb_factor_arr = None
         dx_f = 1.0
         gh_alpha_f = 1.0
         thickness_f = 1.0
@@ -1118,17 +1337,24 @@ def build_diag_preconditioner(
 
     # GHB diagonal contribution (same form as Warp kernels)
     if use_ghb:
-        width_ok = np.isfinite(gh_width_arr) & (gh_width_arr > NP_FLOAT(0.0))
-        gh_on = (gh_mask_arr != 0) & width_ok & T_pos
-        if np.any(gh_on):
-            C_gh = (
-                np.float64(gh_alpha_f)
-                * T_field.astype(np.float64, copy=False)
-                / np.float64(thickness_f)
-                * gh_width_arr.astype(np.float64, copy=False)
-                * np.float64(dx_f)
-            )
-            sum_T[gh_on] += C_gh[gh_on]
+        if ghb_factor_arr is not None:
+            ghb_ok = np.isfinite(ghb_factor_arr) & (ghb_factor_arr > NP_FLOAT(0.0))
+            gh_on = (gh_mask_arr != 0) & ghb_ok & T_pos
+            if np.any(gh_on):
+                C_gh = T_field.astype(np.float64, copy=False) * ghb_factor_arr.astype(np.float64, copy=False)
+                sum_T[gh_on] += C_gh[gh_on]
+        else:
+            width_ok = np.isfinite(gh_width_arr) & (gh_width_arr > NP_FLOAT(0.0))
+            gh_on = (gh_mask_arr != 0) & width_ok & T_pos
+            if np.any(gh_on):
+                C_gh = (
+                    np.float64(gh_alpha_f)
+                    * T_field.astype(np.float64, copy=False)
+                    / np.float64(thickness_f)
+                    * gh_width_arr.astype(np.float64, copy=False)
+                    * np.float64(dx_f)
+                )
+                sum_T[gh_on] += C_gh[gh_on]
 
     M_inv = np.ones((ny, nx), dtype=np.float64)
     valid_sum = np.isfinite(sum_T) & (sum_T > tiny)
@@ -1148,14 +1374,11 @@ def apply_A_kernel(
     active: wp.array(dtype=wp.int32, ndim=2),
     bc_mask: wp.array(dtype=wp.int32, ndim=2),
     gh_mask: wp.array(dtype=wp.int32, ndim=2),
-    gh_width: wp.array(dtype=WP_FLOAT, ndim=2),
+    ghb_factor: wp.array(dtype=WP_FLOAT, ndim=2),
     h: wp.array(dtype=WP_FLOAT, ndim=2),
     Ah: wp.array(dtype=WP_FLOAT, ndim=2),
     nx: int,
     ny: int,
-    dx: float,
-    gh_alpha: float,
-    aq_thickness: float,
 ):
     """
     Apply the same discrete operator A as solve_darcy_fd_2d_matrix.
@@ -1212,16 +1435,10 @@ def apply_A_kernel(
             T_s = WP_FLOAT(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
 
     C_gh = WP_FLOAT(0.0)
-    if gh_mask[j, i] != 0 and aq_thickness > 0.0:
-        width = gh_width[j, i]
-        if width > WP_FLOAT(0.0) and not wp.isnan(width):
-            C_gh = (
-                WP_FLOAT(gh_alpha)
-                * T_c
-                / WP_FLOAT(aq_thickness)
-                * width
-                * WP_FLOAT(dx)
-            )
+    if gh_mask[j, i] != 0:
+        ghbf = ghb_factor[j, i]
+        if ghbf > WP_FLOAT(0.0) and not wp.isnan(ghbf):
+            C_gh = T_c * ghbf
 
     sum_T = wp.float64(T_e) + wp.float64(T_w) + wp.float64(T_n) + wp.float64(T_s) + wp.float64(C_gh)
 
@@ -1251,15 +1468,12 @@ def apply_A_and_pAp_kernel(
     active: wp.array(dtype=wp.int32, ndim=2),
     bc_mask: wp.array(dtype=wp.int32, ndim=2),
     gh_mask: wp.array(dtype=wp.int32, ndim=2),
-    gh_width: wp.array(dtype=WP_FLOAT, ndim=2),
+    ghb_factor: wp.array(dtype=WP_FLOAT, ndim=2),
     p: wp.array(dtype=WP_FLOAT, ndim=2),
     Ap: wp.array(dtype=WP_FLOAT, ndim=2),
     pAp_buf: wp.array(dtype=wp.float64, ndim=1),
     nx: int,
     ny: int,
-    dx: float,
-    gh_alpha: float,
-    aq_thickness: float,
 ):
     j, i = wp.tid()
     if j >= ny or i >= nx:
@@ -1309,16 +1523,10 @@ def apply_A_and_pAp_kernel(
             T_s = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
 
     C_gh = wp.float64(0.0)
-    if gh_mask[j, i] != 0 and aq_thickness > 0.0:
-        width = wp.float64(gh_width[j, i])
-        if width > wp.float64(0.0) and not wp.isnan(width):
-            C_gh = (
-                wp.float64(gh_alpha)
-                * T_c
-                / wp.float64(aq_thickness)
-                * width
-                * wp.float64(dx)
-            )
+    if gh_mask[j, i] != 0:
+        ghbf = wp.float64(ghb_factor[j, i])
+        if ghbf > wp.float64(0.0) and not wp.isnan(ghbf):
+            C_gh = T_c * ghbf
 
     sum_T = T_e + T_w + T_n + T_s + C_gh
 
@@ -1390,7 +1598,7 @@ def init_pcg_with_A_kernel(
     active: wp.array(dtype=wp.int32, ndim=2),
     bc_mask: wp.array(dtype=wp.int32, ndim=2),
     gh_mask: wp.array(dtype=wp.int32, ndim=2),
-    gh_width: wp.array(dtype=WP_FLOAT, ndim=2),
+    ghb_factor: wp.array(dtype=WP_FLOAT, ndim=2),
     M_inv: wp.array(dtype=WP_FLOAT, ndim=2),
     Ap: wp.array(dtype=WP_FLOAT, ndim=2),
     r: wp.array(dtype=WP_FLOAT, ndim=2),
@@ -1400,9 +1608,6 @@ def init_pcg_with_A_kernel(
     rTr_buf: wp.array(dtype=wp.float64, ndim=1),
     nx: int,
     ny: int,
-    dx: float,
-    gh_alpha: float,
-    aq_thickness: float,
 ):
     j, i = wp.tid()
 
@@ -1456,16 +1661,10 @@ def init_pcg_with_A_kernel(
             T_s = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
 
     C_gh = wp.float64(0.0)
-    if gh_mask[j, i] != 0 and aq_thickness > 0.0:
-        width = wp.float64(gh_width[j, i])
-        if width > wp.float64(0.0) and not wp.isnan(width):
-            C_gh = (
-                wp.float64(gh_alpha)
-                * T_c
-                / wp.float64(aq_thickness)
-                * width
-                * wp.float64(dx)
-            )
+    if gh_mask[j, i] != 0:
+        ghbf = wp.float64(ghb_factor[j, i])
+        if ghbf > wp.float64(0.0) and not wp.isnan(ghbf):
+            C_gh = T_c * ghbf
 
     sum_T = T_e + T_w + T_n + T_s + C_gh
 
@@ -1843,6 +2042,7 @@ class MGLevel:
     gh_mask_host: Optional[np.ndarray]
     gh_head_host: Optional[np.ndarray]
     gh_width_host: Optional[np.ndarray]
+    ghb_factor_host: Optional[np.ndarray]
 
     # Device fields (always 2D)
     T_wp: wp.array
@@ -1853,6 +2053,7 @@ class MGLevel:
     gh_mask_wp: Optional[wp.array]
     gh_head_wp: Optional[wp.array]
     gh_width_wp: Optional[wp.array]
+    ghb_factor_wp: Optional[wp.array]
 
     # Diagonal preconditioner for this level
     M_inv_wp: wp.array
@@ -1896,6 +2097,7 @@ class WarpDarcySolver:
             "bc_mask_wp",
             "gh_mask_wp",
             "gh_width_wp",
+            "ghb_factor_wp",
             "M_inv_wp",
             "nx",
             "ny",
@@ -1909,6 +2111,7 @@ class WarpDarcySolver:
             bc_mask_wp,
             gh_mask_wp,
             gh_width_wp,
+            ghb_factor_wp,
             M_inv_wp,
             nx: int,
             ny: int,
@@ -1919,6 +2122,7 @@ class WarpDarcySolver:
             self.bc_mask_wp = bc_mask_wp
             self.gh_mask_wp = gh_mask_wp
             self.gh_width_wp = gh_width_wp
+            self.ghb_factor_wp = ghb_factor_wp
             self.M_inv_wp = M_inv_wp
             self.nx = int(nx)
             self.ny = int(ny)
@@ -1944,6 +2148,7 @@ class WarpDarcySolver:
             "gh_mask_host",
             "gh_head_host",
             "gh_width_host",
+            "ghb_factor_host",
             # device fields
             "T_wp",
             "R_wp",
@@ -1953,6 +2158,7 @@ class WarpDarcySolver:
             "gh_mask_wp",
             "gh_head_wp",
             "gh_width_wp",
+            "ghb_factor_wp",
             "M_inv_wp",
             # persistent work buffers (MG + PCG)
             "x_wp",
@@ -1989,6 +2195,7 @@ class WarpDarcySolver:
             gh_mask_host,
             gh_head_host,
             gh_width_host,
+            ghb_factor_host,
             T_wp,
             R_wp,
             active_wp,
@@ -1997,6 +2204,7 @@ class WarpDarcySolver:
             gh_mask_wp,
             gh_head_wp,
             gh_width_wp,
+            ghb_factor_wp,
             M_inv_wp,
             x_wp,
             b_wp,
@@ -2030,6 +2238,7 @@ class WarpDarcySolver:
             self.gh_mask_host = gh_mask_host
             self.gh_head_host = gh_head_host
             self.gh_width_host = gh_width_host
+            self.ghb_factor_host = ghb_factor_host
 
             self.T_wp = T_wp
             self.R_wp = R_wp
@@ -2039,6 +2248,7 @@ class WarpDarcySolver:
             self.gh_mask_wp = gh_mask_wp
             self.gh_head_wp = gh_head_wp
             self.gh_width_wp = gh_width_wp
+            self.ghb_factor_wp = ghb_factor_wp
             self.M_inv_wp = M_inv_wp
 
             self.x_wp = x_wp
@@ -2070,7 +2280,8 @@ class WarpDarcySolver:
         use_ghb: bool = False,
         solver_type: str = "pcg",
         head_scale: float = 1.0,
-        aq_thickness: float = 1.0,
+        aq_thickness: float | np.ndarray = 1.0,
+        trust_ghb_params_for_graph: bool = False,
     ):
         """
         :param nx: number of columns
@@ -2080,7 +2291,8 @@ class WarpDarcySolver:
         :param use_ghb: if True, include GHB terms in operator and RHS assembly
         :param solver_type: "pcg" or "jacobi" (future)
         :param head_scale: characteristic head scale, h_scaled = h / head_scale
-        :param aq_thickness: aquifer thickness used in GHB conductance scaling
+        :param aq_thickness: aquifer thickness (scalar or grid) used in GHB conductance scaling
+        :param trust_ghb_params_for_graph: if True, do not rebuild CUDA graph when gh_alpha or aq_thickness change.
         """
         self.nx = int(nx)
         self.ny = int(ny)
@@ -2088,15 +2300,17 @@ class WarpDarcySolver:
         self.device_str = str(device)
         self.use_ghb = bool(use_ghb)
         self.solver_type = str(solver_type)
+        self.trust_ghb_params_for_graph = bool(trust_ghb_params_for_graph)
 
         if head_scale != 1.0:
             raise ValueError("head_scale has been removed. Use physical heads everywhere and set head_scale=1.0.")
         self.head_scale = 1.0
 
-
-        if aq_thickness <= 0.0:
+        if np.asarray(aq_thickness).ndim == 0 and float(aq_thickness) <= 0.0:
             raise ValueError("aq_thickness must be positive.")
-        self.aq_thickness = float(aq_thickness)
+        self._aq_thickness_input = aq_thickness
+        self.aq_thickness = float(aq_thickness) if np.asarray(aq_thickness).ndim == 0 else 1.0
+        self.aq_thickness_host = None
 
         # Host side storage for fields
         self.T_field_host = None
@@ -2107,7 +2321,10 @@ class WarpDarcySolver:
         self.gh_mask_host = None
         self.gh_head_host = None
         self.gh_width_host = None
+        self._gh_alpha_input = 1.0
         self.gh_alpha = 1.0
+        self.gh_alpha_host = None
+        self.ghb_factor_host = None
 
         # Device side Warp arrays (set in build_from_truth_inputs)
         self.T_wp = None
@@ -2118,6 +2335,7 @@ class WarpDarcySolver:
         self.gh_mask_wp = None
         self.gh_head_wp = None
         self.gh_width_wp = None
+        self.ghb_factor_wp = None
 
         # Fine-level diagonal preconditioner
         self.M_inv_wp = None
@@ -2159,6 +2377,7 @@ class WarpDarcySolver:
         self.gh_mask_c_host = None
         self.gh_head_c_host = None
         self.gh_width_c_host = None
+        self.ghb_factor_c_host = None
 
         # Coarse device arrays
         self.T_c_wp = None
@@ -2169,6 +2388,7 @@ class WarpDarcySolver:
         self.gh_mask_c_wp = None
         self.gh_head_c_wp = None
         self.gh_width_c_wp = None
+        self.ghb_factor_c_wp = None
         self.M_inv_c_wp = None
 
         # Internal level objects (built after uploads)
@@ -2190,9 +2410,13 @@ class WarpDarcySolver:
 
         self._stage_Tc_2lvl = None
         self._stage_Mc_2lvl = None
+        self._stage_G0_host = None
+        self._stage_G0 = None
+        self._stage_Gc_2lvl = None
 
         self._stage_T_levels = None
         self._stage_M_levels = None
+        self._stage_G_levels = None
 
         self.T_field_host = None
         self._T_field_wp_host = None
@@ -2202,6 +2426,8 @@ class WarpDarcySolver:
 
         # Hierarchy storage (for K cycle later)
         self.mg_levels = None
+        self._mg_coarsening_diagnostics = []
+        self._two_level_coarsening_diag = None
         # ---------------- CUDA graph cache (K-cycle path) ----------------
         self._kcycle_graph = None
         self._kcycle_graph_shape = None
@@ -2209,6 +2435,56 @@ class WarpDarcySolver:
     def _invalidate_kcycle_graph(self) -> None:
         self._kcycle_graph = None
         self._kcycle_graph_shape = None
+
+    def _coarsening_diag_entry(
+        self,
+        *,
+        level_id: int,
+        active_f: np.ndarray,
+        active_c: np.ndarray,
+        bc_mask_c: np.ndarray,
+    ) -> dict[str, float | int]:
+        n_active_fine = int(np.count_nonzero(active_f))
+        n_active_coarse = int(np.count_nonzero(active_c))
+        n_bc_coarse = int(np.count_nonzero(bc_mask_c))
+        n_bc_off_active = int(np.count_nonzero((np.asarray(bc_mask_c, dtype=np.int32) != 0) & (np.asarray(active_c, dtype=np.int32) == 0)))
+
+        if n_active_coarse <= 0:
+            coarsening_ratio = float("inf") if n_active_fine > 0 else 1.0
+        else:
+            coarsening_ratio = float(n_active_fine) / float(n_active_coarse * 4)
+
+        diag = {
+            "level_id": int(level_id),
+            "n_active_fine": int(n_active_fine),
+            "n_active_coarse": int(n_active_coarse),
+            "n_bc_coarse": int(n_bc_coarse),
+            "n_bc_off_active": int(n_bc_off_active),
+            "coarsening_ratio": float(coarsening_ratio),
+        }
+
+        ratio_ok = np.isfinite(coarsening_ratio) and abs(coarsening_ratio - 1.0) <= 0.3
+        if not ratio_ok:
+            warnings.warn(
+                (
+                    f"MG level {int(level_id)} coarsening ratio {coarsening_ratio:.2f} "
+                    "is outside [0.7, 1.3]; coarse-grid geometry may be inconsistent."
+                ),
+                RuntimeWarning,
+                stacklevel=2,
+            )
+
+        if n_bc_off_active != 0:
+            warnings.warn(
+                (
+                    f"MG level {int(level_id)} has {n_bc_off_active} coarse boundary cells "
+                    "outside the active mask after coarsening."
+                ),
+                RuntimeWarning,
+                stacklevel=2,
+            )
+
+        return diag
 
     # -------------------------------------------------------------------------
     # Hierarchy (ready for K cycle, not used by 2-level solve yet)
@@ -2260,6 +2536,7 @@ class WarpDarcySolver:
         device = self.device_str
 
         levels = []
+        self._mg_coarsening_diagnostics = []
 
         lvl0 = self._mg_make_level_from_existing_fine(device=device)
         levels.append(lvl0)
@@ -2286,6 +2563,7 @@ class WarpDarcySolver:
                 gh_mask_c,
                 gh_head_c,
                 gh_width_c,
+                ghb_factor_c,
             ) = self._mg_coarsen_host_any(
                 T_f=fine.T_host,
                 R_f=fine.R_host,
@@ -2295,6 +2573,7 @@ class WarpDarcySolver:
                 gh_mask_f=fine.gh_mask_host,
                 gh_head_f=fine.gh_head_host,
                 gh_width_f=fine.gh_width_host,
+                ghb_factor_f=fine.ghb_factor_host,
                 dx_c=float(dx_c),
             )
 
@@ -2304,6 +2583,14 @@ class WarpDarcySolver:
                 gh_head_c.fill(0.0)
 
             n_active_c = int(np.count_nonzero(active_c))
+            self._mg_coarsening_diagnostics.append(
+                self._coarsening_diag_entry(
+                    level_id=int(level_id),
+                    active_f=fine.active_host,
+                    active_c=active_c,
+                    bc_mask_c=bc_mask_c,
+                )
+            )
 
             # Upload coarse fields
             T_c_wp = wp.array(T_c, dtype=WP_FLOAT, device=device)
@@ -2316,10 +2603,12 @@ class WarpDarcySolver:
                 gh_mask_c_wp = wp.array(gh_mask_c, dtype=wp.int32, device=device)
                 gh_head_c_wp = wp.array(gh_head_c, dtype=WP_FLOAT, device=device)
                 gh_width_c_wp = wp.array(gh_width_c, dtype=WP_FLOAT, device=device)
+                ghb_factor_c_wp = wp.array(ghb_factor_c, dtype=WP_FLOAT, device=device)
             else:
                 gh_mask_c_wp = None
                 gh_head_c_wp = None
                 gh_width_c_wp = None
+                ghb_factor_c_wp = None
 
             # Diagonal preconditioner on coarse level
             M_inv_c_host = build_diag_preconditioner(
@@ -2327,10 +2616,8 @@ class WarpDarcySolver:
                 active=active_c,
                 bc_mask=bc_mask_c,
                 gh_mask=gh_mask_c if self.use_ghb else None,
-                gh_width=gh_width_c if self.use_ghb else None,
+                ghb_factor=ghb_factor_c if self.use_ghb else None,
                 dx=float(dx_c) if self.use_ghb else None,
-                gh_alpha=float(self.gh_alpha),
-                aq_thickness=float(self.aq_thickness),
             )
             M_inv_c_wp = wp.array(M_inv_c_host, dtype=WP_FLOAT, device=device)
 
@@ -2371,6 +2658,7 @@ class WarpDarcySolver:
                 gh_mask_host=gh_mask_c if self.use_ghb else None,
                 gh_head_host=gh_head_c if self.use_ghb else None,
                 gh_width_host=gh_width_c if self.use_ghb else None,
+                ghb_factor_host=ghb_factor_c if self.use_ghb else None,
                 T_wp=T_c_wp,
                 R_wp=R_c_wp,
                 active_wp=active_c_wp,
@@ -2379,6 +2667,7 @@ class WarpDarcySolver:
                 gh_mask_wp=gh_mask_c_wp,
                 gh_head_wp=gh_head_c_wp,
                 gh_width_wp=gh_width_c_wp,
+                ghb_factor_wp=ghb_factor_c_wp,
                 M_inv_wp=M_inv_c_wp,
                 x_wp=x_wp,
                 b_wp=b_wp,
@@ -2420,10 +2709,12 @@ class WarpDarcySolver:
             gh_mask0 = np.asarray(self.gh_mask_host, dtype=np.int32)
             gh_head0 = np.asarray(self.gh_head_host, dtype=np.float32)
             gh_width0 = np.asarray(self.gh_width_host, dtype=np.float32)
+            ghb_factor0 = np.asarray(self.ghb_factor_host, dtype=np.float32)
         else:
             gh_mask0 = None
             gh_head0 = None
             gh_width0 = None
+            ghb_factor0 = None
 
         n_active0 = int(np.count_nonzero(active0))
 
@@ -2436,6 +2727,7 @@ class WarpDarcySolver:
         gh_mask0_wp = self.gh_mask_wp if self.use_ghb else None
         gh_head0_wp = self.gh_head_wp if self.use_ghb else None
         gh_width0_wp = self.gh_width_wp if self.use_ghb else None
+        ghb_factor0_wp = self.ghb_factor_wp if self.use_ghb else None
 
         if self.M_inv_wp is None:
             M_inv0_host = build_diag_preconditioner(
@@ -2443,10 +2735,8 @@ class WarpDarcySolver:
                 active=active0,
                 bc_mask=bc_mask0,
                 gh_mask=gh_mask0 if self.use_ghb else None,
-                gh_width=gh_width0 if self.use_ghb else None,
+                ghb_factor=ghb_factor0 if self.use_ghb else None,
                 dx=float(self.dx) if self.use_ghb else None,
-                gh_alpha=float(self.gh_alpha),
-                aq_thickness=float(self.aq_thickness),
             )
             M_inv0_wp = wp.array(M_inv0_host, dtype=WP_FLOAT, device=device)
             self.M_inv_wp = M_inv0_wp
@@ -2488,6 +2778,7 @@ class WarpDarcySolver:
             gh_mask_host=gh_mask0,
             gh_head_host=gh_head0,
             gh_width_host=gh_width0,
+            ghb_factor_host=ghb_factor0,
             T_wp=T0_wp,
             R_wp=R0_wp,
             active_wp=active0_wp,
@@ -2496,6 +2787,7 @@ class WarpDarcySolver:
             gh_mask_wp=gh_mask0_wp,
             gh_head_wp=gh_head0_wp,
             gh_width_wp=gh_width0_wp,
+            ghb_factor_wp=ghb_factor0_wp,
             M_inv_wp=M_inv0_wp,
             x_wp=x_wp,
             b_wp=b_wp,
@@ -2526,62 +2818,39 @@ class WarpDarcySolver:
         gh_mask_f,
         gh_head_f,
         gh_width_f,
+        ghb_factor_f,
         dx_c: float,
     ):
         """
         Odd-safe 2:1 coarsening via padding to even and block operations.
-        Uses numpy vectorization, no lambdas.
+        Uses conservative mask coarsening and harmonic transmissivity aggregation
+        so coarse levels stay closer to fine-grid conductance.
 
         Returns host arrays for the coarse level.
         """
-        ny_f, nx_f = T_f.shape
-        pad_y = int(ny_f & 1)
-        pad_x = int(nx_f & 1)
+        (
+            T_c,
+            R_c,
+            active_c,
+            bc_mask_c,
+            bc_values_c,
+            gh_mask_c,
+            gh_head_c,
+            gh_width_c,
+            ghb_factor_c,
+        ) = _coarsen_level_host_2x2(
+            T_f=T_f,
+            R_f=R_f,
+            active_f=active_f,
+            bc_mask_f=bc_mask_f,
+            bc_values_f=bc_values_f,
+            gh_mask_f=gh_mask_f,
+            gh_head_f=gh_head_f,
+            gh_width_f=gh_width_f,
+            ghb_factor_f=ghb_factor_f,
+        )
 
-        pad_spec = ((0, pad_y), (0, pad_x))
-
-        T_pad = np.pad(np.asarray(T_f, dtype=np.float32), pad_spec, mode="edge")
-        R_pad = np.pad(np.asarray(R_f, dtype=np.float32), pad_spec, mode="edge")
-        active_pad = np.pad(np.asarray(active_f, dtype=np.int32), pad_spec, mode="edge")
-        bc_mask_pad = np.pad(np.asarray(bc_mask_f, dtype=np.int32), pad_spec, mode="edge")
-        bc_values_pad = np.pad(np.asarray(bc_values_f, dtype=np.float32), pad_spec, mode="edge")
-
-        ny_p, nx_p = T_pad.shape
-        ny_c = ny_p // 2
-        nx_c = nx_p // 2
-
-        T_blk = T_pad.reshape(ny_c, 2, nx_c, 2)
-        R_blk = R_pad.reshape(ny_c, 2, nx_c, 2)
-        T_c = T_blk.mean(axis=(1, 3), dtype=np.float64).astype(np.float32, copy=False)
-        R_c = R_blk.mean(axis=(1, 3), dtype=np.float64).astype(np.float32, copy=False)
-
-        a_blk = active_pad.reshape(ny_c, 2, nx_c, 2)
-        m_blk = bc_mask_pad.reshape(ny_c, 2, nx_c, 2)
-        active_c = a_blk.max(axis=(1, 3)).astype(np.int32, copy=False)
-        bc_mask_c = m_blk.max(axis=(1, 3)).astype(np.int32, copy=False)
-
-        bc_values_c = np.zeros((ny_c, nx_c), dtype=np.float32)
-
-        if self.use_ghb and (gh_mask_f is not None) and (gh_width_f is not None) and (gh_head_f is not None):
-            gh_mask_pad = np.pad(np.asarray(gh_mask_f, dtype=np.int32), pad_spec, mode="edge")
-            gh_width_pad = np.pad(np.asarray(gh_width_f, dtype=np.float32), pad_spec, mode="edge")
-            gh_head_pad = np.pad(np.asarray(gh_head_f, dtype=np.float32), pad_spec, mode="edge")
-
-            ghm_blk = gh_mask_pad.reshape(ny_c, 2, nx_c, 2)
-            gh_mask_c = ghm_blk.max(axis=(1, 3)).astype(np.int32, copy=False)
-
-            ghm_f = ghm_blk.astype(np.float32, copy=False)
-            ghw_blk = gh_width_pad.reshape(ny_c, 2, nx_c, 2)
-
-            wsum = (ghw_blk * ghm_f).sum(axis=(1, 3), dtype=np.float64)
-            msum = ghm_f.sum(axis=(1, 3), dtype=np.float64)
-
-            gh_width_c = np.full((ny_c, nx_c), np.float32(dx_c), dtype=np.float32)
-            on = msum > 0.0
-            gh_width_c[on] = (wsum[on] / msum[on]).astype(np.float32, copy=False)
-
-            gh_head_c = np.zeros((ny_c, nx_c), dtype=np.float32)
-
+        if self.use_ghb:
             gh_mask_c, gh_width_c, gh_head_c = self._mg_sanitize_ghb_level_host(
                 active=active_c,
                 bc_mask=bc_mask_c,
@@ -2590,12 +2859,16 @@ class WarpDarcySolver:
                 gh_head=gh_head_c,
                 dx=float(dx_c),
             )
+            if ghb_factor_c is not None:
+                ghb_factor_c = np.asarray(ghb_factor_c, dtype=NP_FLOAT)
+                ghb_factor_c[np.asarray(gh_mask_c, dtype=np.int32) == 0] = NP_FLOAT(0.0)
         else:
             gh_mask_c = None
             gh_head_c = None
             gh_width_c = None
+            ghb_factor_c = None
 
-        return T_c, R_c, active_c, bc_mask_c, bc_values_c, gh_mask_c, gh_head_c, gh_width_c
+        return T_c, R_c, active_c, bc_mask_c, bc_values_c, gh_mask_c, gh_head_c, gh_width_c, ghb_factor_c
 
     def _mg_sanitize_ghb_level_host(
         self,
@@ -2687,6 +2960,101 @@ class WarpDarcySolver:
                 gh_head[bad_h] = np.float32(0.0)
             self.gh_head_host = gh_head
 
+    def _summarize_grid_to_scalar_for_reporting(self, grid: np.ndarray, mask: np.ndarray) -> float:
+        vals = np.asarray(grid, dtype=np.float64)[np.asarray(mask, dtype=bool)]
+        if vals.size == 0:
+            vals = np.asarray(grid, dtype=np.float64).reshape(-1)
+        vals = vals[np.isfinite(vals)]
+        if vals.size == 0:
+            return 1.0
+        return float(np.median(vals))
+
+    def _recompute_ghb_factor_host(
+        self,
+        *,
+        gh_alpha: float | np.ndarray | None = None,
+        aq_thickness: float | np.ndarray | None = None,
+    ) -> None:
+        """
+        Refresh ghb_factor_host from raw gh_width and scalar-or-grid gh_alpha/aq_thickness.
+        """
+        if gh_alpha is not None:
+            self._gh_alpha_input = gh_alpha
+        if aq_thickness is not None:
+            self._aq_thickness_input = aq_thickness
+
+        shape = (int(self.ny), int(self.nx))
+        gh_alpha_grid, _ = _normalize_scalar_or_grid_to_shape(
+            self._gh_alpha_input,
+            shape=shape,
+            name="gh_alpha",
+        )
+        aq_thickness_grid, _ = _normalize_scalar_or_grid_to_shape(
+            self._aq_thickness_input,
+            shape=shape,
+            name="aq_thickness",
+        )
+        self.gh_alpha_host = gh_alpha_grid.astype(NP_FLOAT, copy=False)
+        self.aq_thickness_host = aq_thickness_grid.astype(NP_FLOAT, copy=False)
+
+        if (
+            (not self.use_ghb)
+            or self.gh_mask_host is None
+            or self.gh_width_host is None
+            or self.active_host is None
+            or self.bc_mask_host is None
+        ):
+            self.ghb_factor_host = np.zeros(shape, dtype=NP_FLOAT)
+            self.gh_alpha = float(
+                self._summarize_grid_to_scalar_for_reporting(self.gh_alpha_host, np.ones(shape, dtype=bool))
+            )
+            self.aq_thickness = float(
+                self._summarize_grid_to_scalar_for_reporting(self.aq_thickness_host, np.ones(shape, dtype=bool))
+            )
+            return
+
+        ghb_factor, gh_alpha_full, aq_thickness_full, _ = _compute_ghb_factor_from_raw_fields(
+            gh_mask=self.gh_mask_host,
+            gh_width=self.gh_width_host,
+            gh_alpha=self.gh_alpha_host,
+            aq_thickness=self.aq_thickness_host,
+            dx=float(self.dx),
+            active=self.active_host,
+            bc_mask=self.bc_mask_host,
+        )
+        self.ghb_factor_host = np.asarray(ghb_factor, dtype=NP_FLOAT)
+        self.gh_alpha_host = np.asarray(gh_alpha_full, dtype=NP_FLOAT)
+        self.aq_thickness_host = np.asarray(aq_thickness_full, dtype=NP_FLOAT)
+
+        gh_on = (
+            (np.asarray(self.gh_mask_host, dtype=np.int32) != 0)
+            & (np.asarray(self.active_host, dtype=np.int32) != 0)
+            & (np.asarray(self.bc_mask_host, dtype=np.int32) == 0)
+            & np.isfinite(np.asarray(self.gh_width_host, dtype=np.float64))
+            & (np.asarray(self.gh_width_host, dtype=np.float64) > 0.0)
+        )
+        self.gh_alpha = float(self._summarize_grid_to_scalar_for_reporting(self.gh_alpha_host, gh_on))
+        self.aq_thickness = float(self._summarize_grid_to_scalar_for_reporting(self.aq_thickness_host, gh_on))
+
+    def _upload_ghb_factor_to_device(self, device: str) -> None:
+        """
+        Upload current ghb_factor_host to ghb_factor_wp in-place.
+        """
+        if self.ghb_factor_host is None:
+            self.ghb_factor_host = np.zeros((int(self.ny), int(self.nx)), dtype=NP_FLOAT)
+
+        shape = (int(self.ny), int(self.nx))
+        if self.ghb_factor_wp is None or tuple(self.ghb_factor_wp.shape) != shape:
+            self.ghb_factor_wp = wp.array(self.ghb_factor_host, dtype=WP_FLOAT, device=device)
+            self._stage_G0_host = self.ghb_factor_host
+            self._stage_G0 = wp.array(self._stage_G0_host, dtype=WP_FLOAT, device="cpu")
+            return
+
+        if self._stage_G0 is None or tuple(self._stage_G0.shape) != shape:
+            self._stage_G0 = wp.zeros(shape, dtype=WP_FLOAT, device="cpu")
+        self._stage_G0.numpy()[:, :] = np.asarray(self.ghb_factor_host, dtype=NP_FLOAT)
+        wp.copy(self.ghb_factor_wp, self._stage_G0)
+
 
     def _prune_isolated_active_host_cells(self) -> None:
         """
@@ -2731,19 +3099,13 @@ class WarpDarcySolver:
             sum_T[:-1, :] += cond_S
             sum_T[1:, :] += cond_S
 
-        if self.use_ghb and self.gh_mask_host is not None and self.gh_width_host is not None:
+        if self.use_ghb and self.gh_mask_host is not None and self.ghb_factor_host is not None:
             gh_mask = np.asarray(self.gh_mask_host, dtype=np.int32)
-            gh_width = np.asarray(self.gh_width_host, dtype=np.float64)
-            width_ok = np.isfinite(gh_width) & (gh_width > 0.0)
-            gh_on = (gh_mask != 0) & width_ok & T_pos & act
+            ghb_factor = np.asarray(self.ghb_factor_host, dtype=np.float64)
+            ghb_ok = np.isfinite(ghb_factor) & (ghb_factor > 0.0)
+            gh_on = (gh_mask != 0) & ghb_ok & T_pos & act
             if np.any(gh_on):
-                C_gh = (
-                    np.float64(self.gh_alpha)
-                    * T
-                    / np.float64(self.aq_thickness)
-                    * gh_width
-                    * np.float64(self.dx)
-                )
+                C_gh = T * ghb_factor
                 sum_T[gh_on] += C_gh[gh_on]
 
         isolated = act & (bc_mask == 0) & (sum_T <= tiny)
@@ -2783,6 +3145,10 @@ class WarpDarcySolver:
             gh_width = np.asarray(self.gh_width_host, dtype=NP_FLOAT).copy()
             gh_width[isolated] = NP_FLOAT(0.0)
             self.gh_width_host = gh_width
+        if self.ghb_factor_host is not None:
+            ghb_factor = np.asarray(self.ghb_factor_host, dtype=NP_FLOAT).copy()
+            ghb_factor[isolated] = NP_FLOAT(0.0)
+            self.ghb_factor_host = ghb_factor
 
         self._n_isolated_pruned = int(np.count_nonzero(isolated))
 
@@ -2793,7 +3159,8 @@ class WarpDarcySolver:
         self,
         T_truth,
         R_truth,
-        gh_alpha: float = 1.0,
+        gh_alpha: float | np.ndarray = 1.0,
+        aq_thickness: float | np.ndarray | None = None,
         width: float = None,
     ):
         """
@@ -2801,11 +3168,14 @@ class WarpDarcySolver:
 
         :param T_truth: scalar or array transmissivity
         :param R_truth: scalar or array recharge
-        :param gh_alpha: GHB scaling factor
+        :param gh_alpha: GHB scaling factor (scalar or grid)
+        :param aq_thickness: aquifer thickness (scalar or grid). Uses solver default when None.
         """
         if width is None:
             width = float(self.dx)
-        self.gh_alpha = float(gh_alpha)
+        self._gh_alpha_input = gh_alpha
+        if aq_thickness is not None:
+            self._aq_thickness_input = aq_thickness
 
         (
             T_field,
@@ -2837,12 +3207,13 @@ class WarpDarcySolver:
         self.gh_head_host = np.asarray(gh_head, dtype=NP_FLOAT)
         self.gh_width_host = np.asarray(gh_width, dtype=NP_FLOAT)
 
+        self._sanitize_ghb_host_fields()
+        self._recompute_ghb_factor_host(gh_alpha=self._gh_alpha_input, aq_thickness=aq_thickness)
         self._prune_isolated_active_host_cells()
+        self._recompute_ghb_factor_host()
         self.n_active = int(np.count_nonzero(self.active_host))
 
         device = self.device_str
-
-        self._sanitize_ghb_host_fields()
 
         self.T_wp = wp.array(self.T_field_host, dtype=WP_FLOAT, device=device)
         self.R_wp = wp.array(self.R_field_host, dtype=WP_FLOAT, device=device)
@@ -2854,6 +3225,7 @@ class WarpDarcySolver:
         self.gh_mask_wp = wp.array(self.gh_mask_host, dtype=wp.int32, device=device)
         self.gh_head_wp = wp.array(self.gh_head_host, dtype=WP_FLOAT, device=device)
         self.gh_width_wp = wp.array(self.gh_width_host, dtype=WP_FLOAT, device=device)
+        self._upload_ghb_factor_to_device(device=device)
 
         # Create CPU-stage warp views that wrap the numpy host arrays. These
         # are reused by update_T_in_place to avoid allocating a new wp.array
@@ -2871,10 +3243,8 @@ class WarpDarcySolver:
             active=self.active_host,
             bc_mask=self.bc_mask_host,
             gh_mask=self.gh_mask_host if self.use_ghb else None,
-            gh_width=self.gh_width_host if self.use_ghb else None,
+            ghb_factor=self.ghb_factor_host if self.use_ghb else None,
             dx=float(self.dx) if self.use_ghb else None,
-            gh_alpha=float(self.gh_alpha),
-            aq_thickness=float(self.aq_thickness),
         )
         self.M_inv_wp = wp.array(M_inv_host, dtype=WP_FLOAT, device=device)
 
@@ -2892,6 +3262,7 @@ class WarpDarcySolver:
             bc_mask_wp=self.bc_mask_wp,
             gh_mask_wp=self.gh_mask_wp,
             gh_width_wp=self.gh_width_wp,
+            ghb_factor_wp=self.ghb_factor_wp,
             M_inv_wp=self.M_inv_wp,
             nx=self.nx,
             ny=self.ny,
@@ -2904,6 +3275,7 @@ class WarpDarcySolver:
                 bc_mask_wp=self.bc_mask_c_wp,
                 gh_mask_wp=self.gh_mask_c_wp,
                 gh_width_wp=self.gh_width_c_wp,
+                ghb_factor_wp=self.ghb_factor_c_wp,
                 M_inv_wp=self.M_inv_c_wp,
                 nx=self.nx_c,
                 ny=self.ny_c,
@@ -2924,12 +3296,15 @@ class WarpDarcySolver:
         gh_mask: np.ndarray | None = None,
         gh_head: np.ndarray | None = None,
         gh_width: np.ndarray | None = None,
-        gh_alpha: float = 1.0,
+        gh_alpha: float | np.ndarray = 1.0,
+        aq_thickness: float | np.ndarray | None = None,
     ) -> None:
         """
         Build solver state from explicitly provided fields (no synthetic builder).
         """
-        self.gh_alpha = float(gh_alpha)
+        self._gh_alpha_input = gh_alpha
+        if aq_thickness is not None:
+            self._aq_thickness_input = aq_thickness
 
         T_field = np.asarray(T_field, dtype=NP_FLOAT)
         R_field = np.asarray(R_field, dtype=NP_FLOAT)
@@ -2974,12 +3349,13 @@ class WarpDarcySolver:
         self.gh_head_host = gh_head
         self.gh_width_host = gh_width
 
+        self._sanitize_ghb_host_fields()
+        self._recompute_ghb_factor_host(gh_alpha=self._gh_alpha_input, aq_thickness=aq_thickness)
         self._prune_isolated_active_host_cells()
+        self._recompute_ghb_factor_host()
         self.n_active = int(np.count_nonzero(self.active_host))
 
         device = self.device_str
-
-        self._sanitize_ghb_host_fields()
 
         self.T_wp = wp.array(self.T_field_host, dtype=WP_FLOAT, device=device)
         self.R_wp = wp.array(self.R_field_host, dtype=WP_FLOAT, device=device)
@@ -2990,6 +3366,7 @@ class WarpDarcySolver:
         self.gh_mask_wp = wp.array(self.gh_mask_host, dtype=wp.int32, device=device)
         self.gh_head_wp = wp.array(self.gh_head_host, dtype=WP_FLOAT, device=device)
         self.gh_width_wp = wp.array(self.gh_width_host, dtype=WP_FLOAT, device=device)
+        self._upload_ghb_factor_to_device(device=device)
 
         self._stage_T0_host = self.T_field_host
         self._stage_T0 = wp.array(self._stage_T0_host, dtype=WP_FLOAT, device="cpu")
@@ -3004,10 +3381,8 @@ class WarpDarcySolver:
             active=self.active_host,
             bc_mask=self.bc_mask_host,
             gh_mask=self.gh_mask_host if self.use_ghb else None,
-            gh_width=self.gh_width_host if self.use_ghb else None,
+            ghb_factor=self.ghb_factor_host if self.use_ghb else None,
             dx=float(self.dx) if self.use_ghb else None,
-            gh_alpha=float(self.gh_alpha),
-            aq_thickness=float(self.aq_thickness),
         )
         self.M_inv_wp = wp.array(M_inv_host, dtype=WP_FLOAT, device=device)
 
@@ -3024,6 +3399,7 @@ class WarpDarcySolver:
             bc_mask_wp=self.bc_mask_wp,
             gh_mask_wp=self.gh_mask_wp,
             gh_width_wp=self.gh_width_wp,
+            ghb_factor_wp=self.ghb_factor_wp,
             M_inv_wp=self.M_inv_wp,
             nx=self.nx,
             ny=self.ny,
@@ -3036,6 +3412,7 @@ class WarpDarcySolver:
                 bc_mask_wp=self.bc_mask_c_wp,
                 gh_mask_wp=self.gh_mask_c_wp,
                 gh_width_wp=self.gh_width_c_wp,
+                ghb_factor_wp=self.ghb_factor_c_wp,
                 M_inv_wp=self.M_inv_c_wp,
                 nx=self.nx_c,
                 ny=self.ny_c,
@@ -3101,6 +3478,7 @@ class WarpDarcySolver:
             gh_mask_c_host,
             gh_head_c_host,
             gh_width_c_host,
+            ghb_factor_c_host,
         ) = build_coarse_level_from_fine(
             T_f=self.T_field_host,
             R_f=self.R_field_host,
@@ -3110,6 +3488,7 @@ class WarpDarcySolver:
             gh_mask_f=self.gh_mask_host,
             gh_head_f=self.gh_head_host,
             gh_width_f=self.gh_width_host,
+            ghb_factor_f=self.ghb_factor_host,
         )
 
         bc_values_c_host[...] = 0.0
@@ -3121,6 +3500,12 @@ class WarpDarcySolver:
         self.ny_c = int(ny_c)
         self.dx_c = 2.0 * float(self.dx)
         self.n_active_c = int(np.count_nonzero(active_c_host))
+        self._two_level_coarsening_diag = self._coarsening_diag_entry(
+            level_id=1,
+            active_f=self.active_host,
+            active_c=active_c_host,
+            bc_mask_c=bc_mask_c_host,
+        )
 
         self.T_c_host = T_c_host
         self.R_c_host = R_c_host
@@ -3130,6 +3515,7 @@ class WarpDarcySolver:
         self.gh_mask_c_host = gh_mask_c_host
         self.gh_head_c_host = gh_head_c_host
         self.gh_width_c_host = gh_width_c_host
+        self.ghb_factor_c_host = ghb_factor_c_host
 
         self.T_c_wp = wp.array(T_c_host, dtype=WP_FLOAT, device=device)
         self.R_c_wp = wp.array(R_c_host, dtype=WP_FLOAT, device=device)
@@ -3139,16 +3525,15 @@ class WarpDarcySolver:
         self.gh_mask_c_wp = wp.array(gh_mask_c_host, dtype=wp.int32, device=device)
         self.gh_head_c_wp = wp.array(gh_head_c_host, dtype=WP_FLOAT, device=device)
         self.gh_width_c_wp = wp.array(gh_width_c_host, dtype=WP_FLOAT, device=device)
+        self.ghb_factor_c_wp = wp.array(ghb_factor_c_host, dtype=WP_FLOAT, device=device)
 
         M_inv_c_host = build_diag_preconditioner(
             T_field=T_c_host,
             active=active_c_host,
             bc_mask=bc_mask_c_host,
             gh_mask=gh_mask_c_host if self.use_ghb else None,
-            gh_width=gh_width_c_host if self.use_ghb else None,
+            ghb_factor=ghb_factor_c_host if self.use_ghb else None,
             dx=float(self.dx_c) if self.use_ghb else None,
-            gh_alpha=float(self.gh_alpha),
-            aq_thickness=float(self.aq_thickness),
         )
         self.M_inv_c_wp = wp.array(M_inv_c_host, dtype=WP_FLOAT, device=device)
 
@@ -3182,7 +3567,7 @@ class WarpDarcySolver:
         n_cells = int(self.nx) * int(self.ny)
         return "device" if n_cells >= min_cells else "host"
 
-    def _build_rhs_fine_host(self, b_out_wp, aq_thickness: float) -> None:
+    def _build_rhs_fine_host(self, b_out_wp) -> None:
         """
         Assemble fine-grid RHS on host and upload via reusable CPU staging.
         """
@@ -3209,10 +3594,8 @@ class WarpDarcySolver:
             dx=float(self.dx),
             gh_mask=self.gh_mask_host,
             gh_head=self.gh_head_host,
-            gh_width=self.gh_width_host,
-            gh_alpha=float(self.gh_alpha),
+            ghb_factor=self.ghb_factor_host,
             head_scale=self.head_scale,
-            aq_thickness=float(aq_thickness),
         ).reshape(ny, nx).astype(NP_FLOAT, copy=False)
 
         if (
@@ -3226,7 +3609,7 @@ class WarpDarcySolver:
         stage_b_np[...] = b_host
         wp.copy(b_out_wp, self._kcycle_stage_b)
 
-    def _build_rhs_fine_device(self, b_out_wp, aq_thickness: float) -> None:
+    def _build_rhs_fine_device(self, b_out_wp) -> None:
         """
         Assemble fine-grid RHS directly on device, avoiding host staging.
         """
@@ -3238,7 +3621,7 @@ class WarpDarcySolver:
             or self.bc_values_wp is None
             or self.gh_mask_wp is None
             or self.gh_head_wp is None
-            or self.gh_width_wp is None
+            or self.ghb_factor_wp is None
         ):
             raise RuntimeError("Field/device arrays are not initialized. Call build_from_truth_inputs() first.")
 
@@ -3258,34 +3641,32 @@ class WarpDarcySolver:
                 self.bc_values_wp,
                 self.gh_mask_wp,
                 self.gh_head_wp,
-                self.gh_width_wp,
+                self.ghb_factor_wp,
                 nx,
                 ny,
                 float(self.dx),
-                float(self.gh_alpha),
                 float(self.head_scale),
-                float(aq_thickness),
                 b_out_wp,
             ],
             device=self.device_str,
         )
 
-    def _build_rhs_fine(self, b_out_wp, aq_thickness: float) -> None:
+    def _build_rhs_fine(self, b_out_wp) -> None:
         """
         Assemble fine-grid RHS using configured backend.
         """
         backend = self._select_rhs_backend()
         if backend == "device":
-            self._build_rhs_fine_device(b_out_wp, aq_thickness=float(aq_thickness))
+            self._build_rhs_fine_device(b_out_wp)
         else:
-            self._build_rhs_fine_host(b_out_wp, aq_thickness=float(aq_thickness))
+            self._build_rhs_fine_host(b_out_wp)
 
-    def _pcg_build_rhs_and_upload(self, aq_thickness: float) -> None:
+    def _pcg_build_rhs_and_upload(self) -> None:
         """
         Build RHS for PCG backend.
         """
         self._ensure_pcg_buffers_fine(device=self.device_str)
-        self._build_rhs_fine(self.b_wp, aq_thickness=float(aq_thickness))
+        self._build_rhs_fine(self.b_wp)
 
     def _pcg_initialize_guess_and_upload(self, initial_head: np.ndarray | None) -> None:
         """
@@ -3332,7 +3713,7 @@ class WarpDarcySolver:
         rel_tol: float,
         abs_tol_min: float,
         initial_head: np.ndarray | None,
-        aq_thickness: float,
+        history_every: int | None = None,
     ):
         """
         Internal PCG solve. Residuals and norms computed on GPU.
@@ -3344,9 +3725,8 @@ class WarpDarcySolver:
         device = self.device_str
         nx = int(self.nx)
         ny = int(self.ny)
-        dx = float(self.dx)
 
-        self._pcg_build_rhs_and_upload(aq_thickness=aq_thickness)
+        self._pcg_build_rhs_and_upload()
         self._pcg_initialize_guess_and_upload(initial_head=initial_head)
         self._pcg_reset_work_vectors()
 
@@ -3365,7 +3745,7 @@ class WarpDarcySolver:
                 self.active_wp,
                 self.bc_mask_wp,
                 self.gh_mask_wp,
-                self.gh_width_wp,
+                self.ghb_factor_wp,
                 self.M_inv_wp,
                 self.Ap_wp,
                 self.r_wp,
@@ -3375,9 +3755,6 @@ class WarpDarcySolver:
                 self.rTr_buf,
                 nx,
                 ny,
-                float(dx),
-                float(self.gh_alpha),
-                float(aq_thickness),
             ],
             device=device,
         )
@@ -3406,6 +3783,18 @@ class WarpDarcySolver:
 
         n_iter_used = 0
         converged = False
+        history_every_i = None if history_every is None else int(history_every)
+        if history_every_i is not None and history_every_i <= 0:
+            history_every_i = None
+        history: list[dict[str, float | int | bool]] = []
+        if history_every_i is not None:
+            history.append(
+                {
+                    "iter": 0,
+                    "rms_res_phys": float(r_rms0_phys),
+                    "tol_abs_phys": float(tol_abs_scaled * float(self.head_scale)),
+                }
+            )
 
         for it in range(int(max_iter)):
             n_iter_used = it + 1
@@ -3419,15 +3808,12 @@ class WarpDarcySolver:
                     self.active_wp,
                     self.bc_mask_wp,
                     self.gh_mask_wp,
-                    self.gh_width_wp,
+                    self.ghb_factor_wp,
                     self.p_wp,
                     self.Ap_wp,
                     self.pAp_buf,
                     nx,
                     ny,
-                    float(dx),
-                    float(self.gh_alpha),
-                    float(aq_thickness),
                 ],
                 device=device,
             )
@@ -3474,6 +3860,22 @@ class WarpDarcySolver:
                 ],
                 device=device,
             )
+
+            if history_every_i is not None and (
+                (n_iter_used % history_every_i) == 0 or n_iter_used == int(max_iter)
+            ):
+                rTr_now = float(self.rTr_buf.numpy()[0]) if self.n_active > 0 else 0.0
+                if self.n_active > 0 and rTr_now >= 0.0:
+                    r_rms_now_scaled = float(np.sqrt(rTr_now / float(self.n_active)))
+                else:
+                    r_rms_now_scaled = 0.0
+                history.append(
+                    {
+                        "iter": int(n_iter_used),
+                        "rms_res_phys": float(r_rms_now_scaled * float(self.head_scale)),
+                        "tol_abs_phys": float(tol_abs_scaled * float(self.head_scale)),
+                    }
+                )
 
             if int(self.converged_flag.numpy()[0]) == 1:
                 converged = True
@@ -3530,6 +3932,17 @@ class WarpDarcySolver:
             "rms_res_initial_phys": float(r_rms0_phys),
             "rms_res_final_phys": float(r_rms_final_phys),
         }
+        if history_every_i is not None:
+            if (not history) or int(history[-1]["iter"]) != int(n_iter_used):
+                history.append(
+                    {
+                        "iter": int(n_iter_used),
+                        "rms_res_phys": float(r_rms_final_phys),
+                        "tol_abs_phys": float(tol_abs_phys),
+                    }
+                )
+            info["history_every"] = int(history_every_i)
+            info["history"] = history
 
         return head, info
 
@@ -3553,6 +3966,7 @@ class WarpDarcySolver:
                 bc_mask_wp=self.bc_mask_wp,
                 gh_mask_wp=self.gh_mask_wp,
                 gh_width_wp=self.gh_width_wp,
+                ghb_factor_wp=self.ghb_factor_wp,
                 M_inv_wp=self.M_inv_wp,
                 nx=self.nx,
                 ny=self.ny,
@@ -3566,6 +3980,7 @@ class WarpDarcySolver:
                 bc_mask_wp=self.bc_mask_c_wp,
                 gh_mask_wp=self.gh_mask_c_wp,
                 gh_width_wp=self.gh_width_c_wp,
+                ghb_factor_wp=self.ghb_factor_c_wp,
                 M_inv_wp=self.M_inv_c_wp,
                 nx=self.nx_c,
                 ny=self.ny_c,
@@ -3653,10 +4068,8 @@ class WarpDarcySolver:
             active=self.active_host,
             bc_mask=self.bc_mask_host,
             gh_mask=self.gh_mask_host if self.use_ghb else None,
-            gh_width=self.gh_width_host if self.use_ghb else None,
+            ghb_factor=self.ghb_factor_host if self.use_ghb else None,
             dx=float(self.dx) if self.use_ghb else None,
-            gh_alpha=float(self.gh_alpha),
-            aq_thickness=float(self.aq_thickness),
         ).astype(NP_FLOAT, copy=False)
 
         if self.M_inv_wp is None:
@@ -3701,6 +4114,7 @@ class WarpDarcySolver:
                 gh_mask_c_new,
                 gh_head_c_new,
                 gh_width_c_new,
+                ghb_factor_c_new,
             ) = build_coarse_level_from_fine(
                 T_f=self.T_field_host,
                 R_f=self.R_field_host,
@@ -3710,12 +4124,19 @@ class WarpDarcySolver:
                 gh_mask_f=self.gh_mask_host,
                 gh_head_f=self.gh_head_host,
                 gh_width_f=self.gh_width_host,
+                ghb_factor_f=self.ghb_factor_host,
             )
 
             # correction scheme conventions
             bc_values_c_new[...] = NP_FLOAT(0.0)
             if gh_head_c_new is not None:
                 gh_head_c_new[...] = NP_FLOAT(0.0)
+            self._two_level_coarsening_diag = self._coarsening_diag_entry(
+                level_id=1,
+                active_f=self.active_host,
+                active_c=active_c_new,
+                bc_mask_c=bc_mask_c_new,
+            )
 
             # copy into existing coarse host arrays (no realloc)
             np.copyto(self.T_c_host, np.asarray(T_c_new, dtype=NP_FLOAT, order="C"))
@@ -3726,6 +4147,7 @@ class WarpDarcySolver:
             np.copyto(self.gh_mask_c_host, np.asarray(gh_mask_c_new, dtype=np.int32, order="C"))
             np.copyto(self.gh_width_c_host, np.asarray(gh_width_c_new, dtype=NP_FLOAT, order="C"))
             np.copyto(self.gh_head_c_host, np.asarray(gh_head_c_new, dtype=NP_FLOAT, order="C"))
+            np.copyto(self.ghb_factor_c_host, np.asarray(ghb_factor_c_new, dtype=NP_FLOAT, order="C"))
 
             nyc = int(self.ny_c)
             nxc = int(self.nx_c)
@@ -3734,19 +4156,21 @@ class WarpDarcySolver:
                 self._stage_Tc_2lvl = wp.zeros((nyc, nxc), dtype=WP_FLOAT, device="cpu")
             if self._stage_Mc_2lvl is None or tuple(self._stage_Mc_2lvl.shape) != (nyc, nxc):
                 self._stage_Mc_2lvl = wp.zeros((nyc, nxc), dtype=WP_FLOAT, device="cpu")
+            if self._stage_Gc_2lvl is None or tuple(self._stage_Gc_2lvl.shape) != (nyc, nxc):
+                self._stage_Gc_2lvl = wp.zeros((nyc, nxc), dtype=WP_FLOAT, device="cpu")
 
             self._stage_Tc_2lvl.numpy()[:, :] = self.T_c_host
             wp.copy(self.T_c_wp, self._stage_Tc_2lvl)
+            self._stage_Gc_2lvl.numpy()[:, :] = self.ghb_factor_c_host
+            wp.copy(self.ghb_factor_c_wp, self._stage_Gc_2lvl)
 
             M_inv_c_host = build_diag_preconditioner(
                 T_field=self.T_c_host,
                 active=self.active_c_host,
                 bc_mask=self.bc_mask_c_host,
                 gh_mask=self.gh_mask_c_host if self.use_ghb else None,
-                gh_width=self.gh_width_c_host if self.use_ghb else None,
+                ghb_factor=self.ghb_factor_c_host if self.use_ghb else None,
                 dx=float(self.dx_c) if self.use_ghb else None,
-                gh_alpha=float(self.gh_alpha),
-                aq_thickness=float(self.aq_thickness),
             ).astype(NP_FLOAT, copy=False)
 
             self._stage_Mc_2lvl.numpy()[:, :] = M_inv_c_host
@@ -3754,19 +4178,28 @@ class WarpDarcySolver:
 
             if self._coarse_level is not None:
                 self._coarse_level.T_wp = self.T_c_wp
+                self._coarse_level.ghb_factor_wp = self.ghb_factor_c_wp
                 self._coarse_level.M_inv_wp = self.M_inv_c_wp
 
         # -------- update full MG hierarchy (K-cycle) if it exists --------
         if self.mg_levels is not None:
             levels = self.mg_levels
             nL = int(len(levels))
+            updated_diags = []
 
-            if self._stage_T_levels is None or self._stage_M_levels is None or len(self._stage_T_levels) != nL:
+            if (
+                self._stage_T_levels is None
+                or self._stage_M_levels is None
+                or self._stage_G_levels is None
+                or len(self._stage_T_levels) != nL
+            ):
                 self._stage_T_levels = []
                 self._stage_M_levels = []
+                self._stage_G_levels = []
                 for lvl in levels:
                     self._stage_T_levels.append(wp.zeros((int(lvl.ny), int(lvl.nx)), dtype=WP_FLOAT, device="cpu"))
                     self._stage_M_levels.append(wp.zeros((int(lvl.ny), int(lvl.nx)), dtype=WP_FLOAT, device="cpu"))
+                    self._stage_G_levels.append(wp.zeros((int(lvl.ny), int(lvl.nx)), dtype=WP_FLOAT, device="cpu"))
 
             # Level 0: make sure level 0 host matches solver host
             lvl0 = levels[0]
@@ -3777,16 +4210,17 @@ class WarpDarcySolver:
 
             self._stage_T_levels[0].numpy()[:, :] = lvl0.T_host
             wp.copy(lvl0.T_wp, self._stage_T_levels[0])
+            if getattr(lvl0, "ghb_factor_host", None) is not None and getattr(lvl0, "ghb_factor_wp", None) is not None:
+                self._stage_G_levels[0].numpy()[:, :] = lvl0.ghb_factor_host
+                wp.copy(lvl0.ghb_factor_wp, self._stage_G_levels[0])
 
             M0 = build_diag_preconditioner(
                 T_field=lvl0.T_host,
                 active=lvl0.active_host,
                 bc_mask=lvl0.bc_mask_host,
                 gh_mask=lvl0.gh_mask_host if self.use_ghb else None,
-                gh_width=lvl0.gh_width_host if self.use_ghb else None,
+                ghb_factor=lvl0.ghb_factor_host if self.use_ghb else None,
                 dx=float(lvl0.dx) if self.use_ghb else None,
-                gh_alpha=float(self.gh_alpha),
-                aq_thickness=float(self.aq_thickness),
             ).astype(NP_FLOAT, copy=False)
 
             self._stage_M_levels[0].numpy()[:, :] = M0
@@ -3806,6 +4240,7 @@ class WarpDarcySolver:
                     gh_mask_c,
                     gh_head_c,
                     gh_width_c,
+                    ghb_factor_c,
                 ) = self._mg_coarsen_host_any(
                     T_f=fine.T_host,
                     R_f=fine.R_host,
@@ -3815,36 +4250,198 @@ class WarpDarcySolver:
                     gh_mask_f=fine.gh_mask_host,
                     gh_head_f=fine.gh_head_host,
                     gh_width_f=fine.gh_width_host,
+                    ghb_factor_f=fine.ghb_factor_host,
                     dx_c=float(coarse.dx),
                 )
 
                 bc_values_c.fill(NP_FLOAT(0.0))
                 if gh_head_c is not None:
                     gh_head_c.fill(NP_FLOAT(0.0))
+                updated_diags.append(
+                    self._coarsening_diag_entry(
+                        level_id=int(lid),
+                        active_f=fine.active_host,
+                        active_c=active_c,
+                        bc_mask_c=bc_mask_c,
+                    )
+                )
 
                 if T_c.shape != coarse.T_host.shape:
                     raise RuntimeError(f"Level {lid} shape mismatch. Rebuild hierarchy.")
 
                 np.copyto(coarse.T_host, T_c)
+                if coarse.ghb_factor_host is not None and ghb_factor_c is not None:
+                    np.copyto(coarse.ghb_factor_host, ghb_factor_c)
 
                 self._stage_T_levels[lid].numpy()[:, :] = coarse.T_host
                 wp.copy(coarse.T_wp, self._stage_T_levels[lid])
+                if coarse.ghb_factor_wp is not None and coarse.ghb_factor_host is not None:
+                    self._stage_G_levels[lid].numpy()[:, :] = coarse.ghb_factor_host
+                    wp.copy(coarse.ghb_factor_wp, self._stage_G_levels[lid])
 
                 Mc = build_diag_preconditioner(
                     T_field=coarse.T_host,
                     active=coarse.active_host,
                     bc_mask=coarse.bc_mask_host,
                     gh_mask=coarse.gh_mask_host if self.use_ghb else None,
-                    gh_width=coarse.gh_width_host if self.use_ghb else None,
+                    ghb_factor=coarse.ghb_factor_host if self.use_ghb else None,
                     dx=float(coarse.dx) if self.use_ghb else None,
-                    gh_alpha=float(self.gh_alpha),
-                    aq_thickness=float(self.aq_thickness),
                 ).astype(NP_FLOAT, copy=False)
 
                 self._stage_M_levels[lid].numpy()[:, :] = Mc
                 wp.copy(coarse.M_inv_wp, self._stage_M_levels[lid])
 
+            self._mg_coarsening_diagnostics = updated_diags
+
         # Operator changed
+        self._operator_dirty = True
+
+    def update_ghb_factor_in_place(
+        self,
+        *,
+        gh_alpha: float | np.ndarray | None = None,
+        aq_thickness: float | np.ndarray | None = None,
+    ) -> None:
+        """
+        Recompute and upload ghb_factor from raw gh_width, then refresh diagonal preconditioners.
+        """
+        if self.T_field_host is None:
+            raise RuntimeError("Call build_from_truth_inputs() once before update_ghb_factor_in_place().")
+
+        device = self.device_str
+        self._sanitize_ghb_host_fields()
+        self._recompute_ghb_factor_host(gh_alpha=gh_alpha, aq_thickness=aq_thickness)
+        self._upload_ghb_factor_to_device(device=device)
+
+        if self._fine_level is not None:
+            self._fine_level.ghb_factor_wp = self.ghb_factor_wp
+
+        self._update_fine_diag_preconditioner()
+
+        if self.mg_cache_built and (self.ghb_factor_c_host is not None) and (self.ghb_factor_c_wp is not None):
+            (
+                _T_c_new,
+                _R_c_new,
+                _active_c_new,
+                _bc_mask_c_new,
+                _bc_values_c_new,
+                _gh_mask_c_new,
+                _gh_head_c_new,
+                _gh_width_c_new,
+                ghb_factor_c_new,
+            ) = build_coarse_level_from_fine(
+                T_f=self.T_field_host,
+                R_f=self.R_field_host,
+                active_f=self.active_host,
+                bc_mask_f=self.bc_mask_host,
+                bc_values_f=self.bc_values_host,
+                gh_mask_f=self.gh_mask_host,
+                gh_head_f=self.gh_head_host,
+                gh_width_f=self.gh_width_host,
+                ghb_factor_f=self.ghb_factor_host,
+            )
+
+            np.copyto(self.ghb_factor_c_host, np.asarray(ghb_factor_c_new, dtype=NP_FLOAT, order="C"))
+            nyc = int(self.ny_c)
+            nxc = int(self.nx_c)
+            if self._stage_Gc_2lvl is None or tuple(self._stage_Gc_2lvl.shape) != (nyc, nxc):
+                self._stage_Gc_2lvl = wp.zeros((nyc, nxc), dtype=WP_FLOAT, device="cpu")
+            if self._stage_Mc_2lvl is None or tuple(self._stage_Mc_2lvl.shape) != (nyc, nxc):
+                self._stage_Mc_2lvl = wp.zeros((nyc, nxc), dtype=WP_FLOAT, device="cpu")
+
+            self._stage_Gc_2lvl.numpy()[:, :] = self.ghb_factor_c_host
+            wp.copy(self.ghb_factor_c_wp, self._stage_Gc_2lvl)
+
+            M_inv_c_host = build_diag_preconditioner(
+                T_field=self.T_c_host,
+                active=self.active_c_host,
+                bc_mask=self.bc_mask_c_host,
+                gh_mask=self.gh_mask_c_host if self.use_ghb else None,
+                ghb_factor=self.ghb_factor_c_host if self.use_ghb else None,
+                dx=float(self.dx_c) if self.use_ghb else None,
+            ).astype(NP_FLOAT, copy=False)
+
+            self._stage_Mc_2lvl.numpy()[:, :] = M_inv_c_host
+            wp.copy(self.M_inv_c_wp, self._stage_Mc_2lvl)
+
+            if self._coarse_level is not None:
+                self._coarse_level.ghb_factor_wp = self.ghb_factor_c_wp
+                self._coarse_level.M_inv_wp = self.M_inv_c_wp
+
+        if self.mg_levels is not None:
+            levels = self.mg_levels
+            nL = int(len(levels))
+            if (
+                self._stage_M_levels is None
+                or self._stage_G_levels is None
+                or len(self._stage_M_levels) != nL
+            ):
+                self._stage_M_levels = []
+                self._stage_G_levels = []
+                for lvl in levels:
+                    self._stage_M_levels.append(wp.zeros((int(lvl.ny), int(lvl.nx)), dtype=WP_FLOAT, device="cpu"))
+                    self._stage_G_levels.append(wp.zeros((int(lvl.ny), int(lvl.nx)), dtype=WP_FLOAT, device="cpu"))
+
+            lvl0 = levels[0]
+            if lvl0.ghb_factor_host is not None:
+                np.copyto(lvl0.ghb_factor_host, self.ghb_factor_host)
+                self._stage_G_levels[0].numpy()[:, :] = lvl0.ghb_factor_host
+                wp.copy(lvl0.ghb_factor_wp, self._stage_G_levels[0])
+
+            M0 = build_diag_preconditioner(
+                T_field=lvl0.T_host,
+                active=lvl0.active_host,
+                bc_mask=lvl0.bc_mask_host,
+                gh_mask=lvl0.gh_mask_host if self.use_ghb else None,
+                ghb_factor=lvl0.ghb_factor_host if self.use_ghb else None,
+                dx=float(lvl0.dx) if self.use_ghb else None,
+            ).astype(NP_FLOAT, copy=False)
+            self._stage_M_levels[0].numpy()[:, :] = M0
+            wp.copy(lvl0.M_inv_wp, self._stage_M_levels[0])
+
+            for lid in range(1, nL):
+                fine = levels[lid - 1]
+                coarse = levels[lid]
+
+                (
+                    _T_c,
+                    _R_c,
+                    _active_c,
+                    _bc_mask_c,
+                    _bc_values_c,
+                    _gh_mask_c,
+                    _gh_head_c,
+                    _gh_width_c,
+                    ghb_factor_c,
+                ) = self._mg_coarsen_host_any(
+                    T_f=fine.T_host,
+                    R_f=fine.R_host,
+                    active_f=fine.active_host,
+                    bc_mask_f=fine.bc_mask_host,
+                    bc_values_f=fine.bc_values_host,
+                    gh_mask_f=fine.gh_mask_host,
+                    gh_head_f=fine.gh_head_host,
+                    gh_width_f=fine.gh_width_host,
+                    ghb_factor_f=fine.ghb_factor_host,
+                    dx_c=float(coarse.dx),
+                )
+
+                if coarse.ghb_factor_host is not None and ghb_factor_c is not None:
+                    np.copyto(coarse.ghb_factor_host, ghb_factor_c)
+                    self._stage_G_levels[lid].numpy()[:, :] = coarse.ghb_factor_host
+                    wp.copy(coarse.ghb_factor_wp, self._stage_G_levels[lid])
+
+                Mc = build_diag_preconditioner(
+                    T_field=coarse.T_host,
+                    active=coarse.active_host,
+                    bc_mask=coarse.bc_mask_host,
+                    gh_mask=coarse.gh_mask_host if self.use_ghb else None,
+                    ghb_factor=coarse.ghb_factor_host if self.use_ghb else None,
+                    dx=float(coarse.dx) if self.use_ghb else None,
+                ).astype(NP_FLOAT, copy=False)
+                self._stage_M_levels[lid].numpy()[:, :] = Mc
+                wp.copy(coarse.M_inv_wp, self._stage_M_levels[lid])
+
         self._operator_dirty = True
 
 
@@ -3945,7 +4542,8 @@ class WarpDarcySolver:
             rel_tol: float = 5.0e-7,
             abs_tol_min: float = 5.0e-7,
             initial_head: np.ndarray | None = None,
-            aq_thickness: float | None = None,
+            aq_thickness: float | np.ndarray | None = None,
+            gh_alpha: float | np.ndarray | None = None,
             max_levels: int = 5,
             return_info: bool = True,
             check_every_no: int = 10,
@@ -3953,6 +4551,11 @@ class WarpDarcySolver:
             dh_max_tol: float | None = None,
             dh_max_factor: float = 5.0,
             min_coarse_cells: int | None = 500,
+            fallback_to_pcg: bool = True,
+            divergence_cycle_start: int = 100,
+            divergence_residual_factor: float = 3.0,
+            fallback_pcg_max_iter: int | None = None,
+            fallback_pcg_history_every: int | None = None,
     ):
         """
         K-cycle multigrid using your existing hierarchy (self.mg_levels).
@@ -3966,6 +4569,10 @@ class WarpDarcySolver:
 
         Optional hierarchy control:
           - min_coarse_cells: stop geometric coarsening before nx*ny drops below this.
+
+        Optional robustness control:
+          - fall back to fine-grid PCG if the checked residual grows well above the
+            initial residual after a configurable number of K-cycles.
         """
 
         # Normalize tolerances (treat None as disabled)
@@ -3982,10 +4589,11 @@ class WarpDarcySolver:
                 "Set head_scale=1.0 for K-cycle, or use PCG / 2-level MG if you want scaling."
             )
 
-        if aq_thickness is None:
-            aq_thickness_f = float(self.aq_thickness)
-        else:
-            aq_thickness_f = float(aq_thickness)
+        if (aq_thickness is not None) or (gh_alpha is not None):
+            self.update_ghb_factor_in_place(
+                aq_thickness=aq_thickness,
+                gh_alpha=gh_alpha,
+            )
 
         if not hasattr(self, "_kcycle_graph"):
             self._kcycle_graph = None
@@ -4002,15 +4610,33 @@ class WarpDarcySolver:
         if levels is None or len(levels) < 1:
             raise RuntimeError("No multigrid levels available. build_hierarchy() failed.")
 
+        max_cycles_i = int(max_cycles)
+        fallback_to_pcg_b = bool(fallback_to_pcg)
+        divergence_cycle_start_i = max(1, int(divergence_cycle_start))
+        divergence_residual_factor_f = float(divergence_residual_factor)
+        if divergence_residual_factor_f <= 0.0:
+            raise ValueError("divergence_residual_factor must be positive.")
+
+        if fallback_pcg_max_iter is None:
+            fallback_pcg_max_iter_i = max(5000, 50 * max_cycles_i)
+        else:
+            fallback_pcg_max_iter_i = int(fallback_pcg_max_iter)
+            if fallback_pcg_max_iter_i < 1:
+                raise ValueError("fallback_pcg_max_iter must be >= 1 when provided.")
+
+        fallback_pcg_history_every_i = None if fallback_pcg_history_every is None else int(fallback_pcg_history_every)
+        if fallback_pcg_history_every_i is not None and fallback_pcg_history_every_i <= 0:
+            fallback_pcg_history_every_i = None
+
         device = self.device_str
 
-        # Ensure every level has gh_mask_wp and gh_width_wp (allocate once if missing).
+        # Ensure every level has gh_mask_wp and ghb_factor_wp (allocate once if missing).
         for lvl in levels:
             shape = (int(lvl.ny), int(lvl.nx))
             if getattr(lvl, "gh_mask_wp", None) is None:
                 lvl.gh_mask_wp = wp.zeros(shape, dtype=wp.int32, device=device)
-            if getattr(lvl, "gh_width_wp", None) is None:
-                lvl.gh_width_wp = wp.zeros(shape, dtype=WP_FLOAT, device=device)
+            if getattr(lvl, "ghb_factor_wp", None) is None:
+                lvl.ghb_factor_wp = wp.zeros(shape, dtype=WP_FLOAT, device=device)
 
         lvl0 = levels[0]
         ny0 = int(lvl0.ny)
@@ -4048,7 +4674,7 @@ class WarpDarcySolver:
             self._kcycle_stage_x = wp.zeros((ny0, nx0), dtype=WP_FLOAT, device="cpu")
 
         # Finest RHS assembled via selected backend.
-        self._build_rhs_fine(lvl0.b_wp, aq_thickness=float(aq_thickness_f))
+        self._build_rhs_fine(lvl0.b_wp)
 
         # Initial guess (host), then copy into persistent lvl0.x_wp
         x0 = np.zeros((ny0, nx0), dtype=NP_FLOAT)
@@ -4119,14 +4745,11 @@ class WarpDarcySolver:
                 lvl0.active_wp,
                 lvl0.bc_mask_wp,
                 lvl0.gh_mask_wp,
-                lvl0.gh_width_wp,
+                lvl0.ghb_factor_wp,
                 lvl0.r_wp,
                 lvl0.rTr_buf,
                 nx0,
                 ny0,
-                float(lvl0.dx),
-                float(self.gh_alpha),
-                float(aq_thickness_f),
             ],
             device=device,
         )
@@ -4153,7 +4776,7 @@ class WarpDarcySolver:
                     level.active_wp,
                     level.bc_mask_wp,
                     level.gh_mask_wp,
-                    level.gh_width_wp,
+                    level.ghb_factor_wp,
                     level.M_inv_wp,
                     level.Ap_wp,
                     level.r_wp,
@@ -4163,9 +4786,6 @@ class WarpDarcySolver:
                     level.rTr_buf,
                     nxL,
                     nyL,
-                    float(level.dx),
-                    float(self.gh_alpha),
-                    float(aq_thickness_f),
                 ],
                 device=device,
             )
@@ -4180,15 +4800,12 @@ class WarpDarcySolver:
                         level.active_wp,
                         level.bc_mask_wp,
                         level.gh_mask_wp,
-                        level.gh_width_wp,
+                        level.ghb_factor_wp,
                         level.p_wp,
                         level.Ap_wp,
                         level.pAp_buf,
                         nxL,
                         nyL,
-                        float(level.dx),
-                        float(self.gh_alpha),
-                        float(aq_thickness_f),
                     ],
                     device=device,
                 )
@@ -4252,9 +4869,6 @@ class WarpDarcySolver:
             nyL = int(level.ny)
             dimL = (nyL, nxL)
 
-            dxL = float(level.dx)
-            gh_alpha_f = float(self.gh_alpha)
-            aq_thick_f = float(aq_thickness_f)
             omega_f = float(omega)
 
             x_tmp_wp = level.Ax_wp
@@ -4270,7 +4884,7 @@ class WarpDarcySolver:
                         level.active_wp,
                         level.bc_mask_wp,
                         level.gh_mask_wp,
-                        level.gh_width_wp,
+                        level.ghb_factor_wp,
                         level.b_wp,
                         x_in,
                         level.M_inv_wp,
@@ -4278,9 +4892,6 @@ class WarpDarcySolver:
                         omega_f,
                         nxL,
                         nyL,
-                        dxL,
-                        gh_alpha_f,
-                        aq_thick_f,
                         x_out,
                     ],
                     device=device,
@@ -4303,14 +4914,11 @@ class WarpDarcySolver:
                     level.active_wp,
                     level.bc_mask_wp,
                     level.gh_mask_wp,
-                    level.gh_width_wp,
+                    level.ghb_factor_wp,
                     level.r_wp,
                     level.rTr_buf,
                     nxL,
                     nyL,
-                    dxL,
-                    gh_alpha_f,
-                    aq_thick_f,
                 ],
                 device=device,
             )
@@ -4323,7 +4931,6 @@ class WarpDarcySolver:
             nxC = int(coarse.nx)
             nyC = int(coarse.ny)
             dimC = (nyC, nxC)
-            dxC = float(coarse.dx)
 
             wp.launch(
                 kernel=restrict_blockavg_kernel,
@@ -4358,14 +4965,11 @@ class WarpDarcySolver:
                     coarse.active_wp,
                     coarse.bc_mask_wp,
                     coarse.gh_mask_wp,
-                    coarse.gh_width_wp,
+                    coarse.ghb_factor_wp,
                     coarse.r_wp,
                     coarse.rTr_buf,
                     nxC,
                     nyC,
-                    dxC,
-                    gh_alpha_f,
-                    aq_thick_f,
                 ],
                 device=device,
             )
@@ -4393,15 +4997,12 @@ class WarpDarcySolver:
                     coarse.active_wp,
                     coarse.bc_mask_wp,
                     coarse.gh_mask_wp,
-                    coarse.gh_width_wp,
+                    coarse.ghb_factor_wp,
                     coarse.x_wp,
                     coarse.Ax_wp,
                     coarse.pAp_buf,
                     nxC,
                     nyC,
-                    dxC,
-                    gh_alpha_f,
-                    aq_thick_f,
                 ],
                 device=device,
             )
@@ -4455,7 +5056,7 @@ class WarpDarcySolver:
                         level.active_wp,
                         level.bc_mask_wp,
                         level.gh_mask_wp,
-                        level.gh_width_wp,
+                        level.ghb_factor_wp,
                         level.b_wp,
                         x_in,
                         level.M_inv_wp,
@@ -4463,9 +5064,6 @@ class WarpDarcySolver:
                         omega_f,
                         nxL,
                         nyL,
-                        dxL,
-                        gh_alpha_f,
-                        aq_thick_f,
                         x_out,
                     ],
                     device=device,
@@ -4483,7 +5081,7 @@ class WarpDarcySolver:
 
         check_every = check_every_no  # reduce sync frequency; set to 1 for debugging
 
-        graph_key = (
+        graph_key = [
             "kcycle",
             int(len(levels)),
             tuple((int(l.ny), int(l.nx)) for l in levels),
@@ -4491,16 +5089,30 @@ class WarpDarcySolver:
             int(nu_post),
             int(nu_coarse),
             float(omega),
-            float(self.gh_alpha),
-            float(aq_thickness_f),
-        )
+        ]
+        if not self.trust_ghb_params_for_graph:
+            graph_key.append(float(self.gh_alpha))
+            graph_key.append(float(self.aq_thickness))
+
+        graph_key = tuple(graph_key)
 
         graph_built_this_call = False
 
         dh_rms_lastcheck = float("nan")
         dh_max_lastcheck = float("nan")
+        history: list[dict[str, float | int | bool | None]] = [
+            {
+                "cycle": 0,
+                "r_rms": float(r_rms0),
+                "tol_abs": float(tol_abs),
+                "dh_rms": None,
+                "dh_max": None,
+                "res_ok": None,
+                "dh_ok": None,
+            }
+        ]
 
-        for cyc in range(int(max_cycles)):
+        for cyc in range(max_cycles_i):
             n_cycles_used = cyc + 1
 
             if self._kcycle_graph is None or self._kcycle_graph_shape != graph_key:
@@ -4533,15 +5145,12 @@ class WarpDarcySolver:
                     lvl0.active_wp,
                     lvl0.bc_mask_wp,
                     lvl0.gh_mask_wp,
-                    lvl0.gh_width_wp,
+                    lvl0.ghb_factor_wp,
                     lvl0.rho_buf,  # dh2_buf
                     lvl0.dh_max_buf,
                     lvl0.rTr_buf,  # residual norm
                     nx0,
                     ny0,
-                    float(lvl0.dx),
-                    float(self.gh_alpha),
-                    float(aq_thickness_f),
                 ],
                 device=device,
             )
@@ -4561,10 +5170,46 @@ class WarpDarcySolver:
                 dh_ok = dh_max_lastcheck <= float(dh_max_tol) and dh_rms_lastcheck <= float(dh_rms_tol)
 
             res_ok = int(lvl0.converged_flag.numpy()[0]) != 0
+            rTr_check = float(lvl0.rTr_buf.numpy()[0])
+            r_rms_check = float(np.sqrt(max(rTr_check, 0.0) / float(n_free0)))
+            history.append(
+                {
+                    "cycle": int(n_cycles_used),
+                    "r_rms": float(r_rms_check),
+                    "tol_abs": float(tol_abs),
+                    "dh_rms": float(dh_rms_lastcheck),
+                    "dh_max": float(dh_max_lastcheck),
+                    "res_ok": bool(res_ok),
+                    "dh_ok": bool(dh_ok),
+                }
+            )
 
             if res_ok and dh_ok:
                 converged = True
                 break
+
+            if (
+                fallback_to_pcg_b
+                and n_cycles_used >= divergence_cycle_start_i
+                and r_rms_check > (divergence_residual_factor_f * r_rms0)
+            ):
+                fallback_head0 = np.asarray(lvl0.x_wp.numpy(), dtype=NP_FLOAT)
+                head_pcg, info_pcg = self._solve_pcg_device_loop(
+                    max_iter=int(fallback_pcg_max_iter_i),
+                    rel_tol=float(rel_tol),
+                    abs_tol_min=float(abs_tol_min),
+                    initial_head=fallback_head0,
+                    history_every=fallback_pcg_history_every_i,
+                )
+                info_pcg = dict(info_pcg)
+                info_pcg["fallback_from"] = "kcycle"
+                info_pcg["fallback_reason"] = "diverging_residual"
+                info_pcg["fallback_trigger_cycle"] = int(n_cycles_used)
+                info_pcg["fallback_trigger_r_rms"] = float(r_rms_check)
+                info_pcg["fallback_trigger_threshold"] = float(divergence_residual_factor_f * r_rms0)
+                info_pcg["kcycle_history_before_fallback"] = list(history)
+                info_pcg["kcycle_coarsening_diagnostics"] = [dict(item) for item in self._mg_coarsening_diagnostics]
+                return (head_pcg, info_pcg) if return_info else head_pcg
 
         # Final head pullback
         head_out = lvl0.x_wp.numpy()
@@ -4581,14 +5226,11 @@ class WarpDarcySolver:
                 lvl0.active_wp,
                 lvl0.bc_mask_wp,
                 lvl0.gh_mask_wp,
-                lvl0.gh_width_wp,
+                lvl0.ghb_factor_wp,
                 lvl0.r_wp,
                 lvl0.rTr_buf,
                 nx0,
                 ny0,
-                float(lvl0.dx),
-                float(self.gh_alpha),
-                float(aq_thickness_f),
             ],
             device=device,
         )
@@ -4607,14 +5249,11 @@ class WarpDarcySolver:
                 lvl0.active_wp,
                 lvl0.bc_mask_wp,
                 lvl0.gh_mask_wp,
-                lvl0.gh_width_wp,
+                lvl0.ghb_factor_wp,
                 lvl0.r_wp,  # stores r_h [m]
                 lvl0.rTr_buf,  # sum(r_h^2)
                 nx0,
                 ny0,
-                float(lvl0.dx),
-                float(self.gh_alpha),
-                float(aq_thickness_f),
             ],
             device=device,
         )
@@ -4645,13 +5284,36 @@ class WarpDarcySolver:
             "dh_rms_end": float(dh_rms_end),
             "dh_max_end": float(dh_max_end),
             "converged": bool(converged),
-            "aq_thickness": float(aq_thickness_f),
+            "aq_thickness": float(self.aq_thickness),
             "use_ghb": bool(self.use_ghb),
             "cuda_graph_reused": bool((not graph_built_this_call) and (self._kcycle_graph is not None)),
             "cuda_graph_built_this_call": bool(graph_built_this_call),
             "check_every": int(check_every),
             "min_coarse_cells": None if min_coarse_cells is None else int(min_coarse_cells),
+            "coarsening_diagnostics": [dict(item) for item in self._mg_coarsening_diagnostics],
         }
+        if (not history) or int(history[-1]["cycle"]) != int(n_cycles_used):
+            history.append(
+                {
+                    "cycle": int(n_cycles_used),
+                    "r_rms": float(r_rms_end),
+                    "tol_abs": float(tol_abs),
+                    "dh_rms": float(dh_rms_end) if np.isfinite(dh_rms_end) else None,
+                    "dh_max": float(dh_max_end) if np.isfinite(dh_max_end) else None,
+                    "res_ok": bool(r_rms_end <= float(tol_abs)),
+                    "dh_ok": (
+                        None
+                        if (dh_rms_tol_f is None or dh_max_tol is None)
+                        else bool(
+                            np.isfinite(dh_rms_end)
+                            and np.isfinite(dh_max_end)
+                            and dh_rms_end <= float(dh_rms_tol_f)
+                            and dh_max_end <= float(dh_max_tol)
+                        )
+                    ),
+                }
+            )
+        info["history"] = history
 
         return (head_out, info) if return_info else head_out
 
@@ -4685,6 +5347,14 @@ class WarpDarcySolver:
             self._stage_R0 = None
         if hasattr(self, "_stage_R0_host"):
             self._stage_R0_host = None
+        if hasattr(self, "_stage_G0"):
+            self._stage_G0 = None
+        if hasattr(self, "_stage_G0_host"):
+            self._stage_G0_host = None
+        if hasattr(self, "_stage_Gc_2lvl"):
+            self._stage_Gc_2lvl = None
+        if hasattr(self, "_stage_G_levels"):
+            self._stage_G_levels = None
 
         # 3) Drop multigrid hierarchy objects (these contain many Warp arrays).
         if self.mg_levels is not None:
@@ -4708,6 +5378,8 @@ class WarpDarcySolver:
                 pass
         self._mg_work = None
         self._mg_work_built = False
+        self._mg_coarsening_diagnostics = []
+        self._two_level_coarsening_diag = None
 
         # 6) Drop all device arrays on the solver itself
         self.T_wp = None
@@ -4744,6 +5416,7 @@ class WarpDarcySolver:
         self.gh_mask_c_wp = None
         self.gh_head_c_wp = None
         self.gh_width_c_wp = None
+        self.ghb_factor_c_wp = None
         self.M_inv_c_wp = None
 
         # 7) Optionally keep host arrays for reuse, but if you want to drop everything:

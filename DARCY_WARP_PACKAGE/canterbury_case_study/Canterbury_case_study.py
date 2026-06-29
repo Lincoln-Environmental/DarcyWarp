@@ -582,7 +582,7 @@ def dual_annealing_calibration(
             device=device,
             use_ghb=use_ghb,
             solver_type="pcg",
-            aq_thickness=float(aq_thickness),
+            aq_thickness=aq_thickness,
         ) as solver:
         solver.build_from_fields(
             T_field=T_init,
@@ -593,7 +593,7 @@ def dual_annealing_calibration(
             gh_mask=case.gh_mask,
             gh_head=case.gh_head,
             gh_width=case.gh_width,
-            gh_alpha=float(gh_alpha),
+            gh_alpha=gh_alpha,
         )
         solver.build_hierarchy(max_levels=6, min_coarse_n=4)
         nfev_counter = {"n": 0}
@@ -961,7 +961,7 @@ def lbfgsb_calibration(
             device=device,
             use_ghb=use_ghb,
             solver_type="pcg",
-            aq_thickness=float(aq_thickness),
+            aq_thickness=aq_thickness,
     ) as solver:
         solver.build_from_fields(
             T_field=T_init,
@@ -972,7 +972,7 @@ def lbfgsb_calibration(
             gh_mask=case.gh_mask,
             gh_head=case.gh_head,
             gh_width=case.gh_width,
-            gh_alpha=float(gh_alpha),
+            gh_alpha=gh_alpha,
         )
         solver.build_hierarchy(max_levels=6, min_coarse_n=4)
 
@@ -1559,7 +1559,7 @@ def run_best_solution_and_save_outputs(
             device=device,
             use_ghb=use_ghb,
             solver_type="pcg",
-            aq_thickness=float(aq_thickness),
+            aq_thickness=aq_thickness,
     ) as solver:
         solver.build_from_fields(
             T_field=T_field,
@@ -1570,7 +1570,7 @@ def run_best_solution_and_save_outputs(
             gh_mask=case.gh_mask,
             gh_head=case.gh_head,
             gh_width=case.gh_width,
-            gh_alpha=float(gh_alpha),
+            gh_alpha=gh_alpha,
         )
         solver.build_hierarchy(max_levels=int(max_levels), min_coarse_n=4)
         head, info = solver.solve_multigrid_kcycle(
