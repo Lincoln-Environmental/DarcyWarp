@@ -98,6 +98,62 @@ def _normalize_scalar_or_grid_to_shape(
     raise ValueError(f"{name} must be a scalar or shape {shape}. Got {arr.shape}.")
 
 
+def _chebyshev_update_weights(
+    order: int,
+    lambda_min_fraction: float,
+) -> tuple[float, ...]:
+    """
+    Build bounded Chebyshev-style weights for nonlinear Picard update damping.
+    """
+    m = int(order)
+    if m <= 0:
+        return tuple()
+
+    lam_hi = 1.0
+    lam_lo = max(1.0e-12, min(float(lambda_min_fraction), 0.999999 * lam_hi))
+    c = 0.5 * (lam_hi + lam_lo)
+    d = 0.5 * (lam_hi - lam_lo)
+
+    out: list[float] = []
+    for k in range(1, m + 1):
+        theta_k = np.pi * (2.0 * float(k) - 1.0) / (2.0 * float(m))
+        denom = c - d * float(np.cos(theta_k))
+        if denom <= 1.0e-12:
+            denom = 1.0e-12
+        out.append(float(1.0 / denom))
+    return tuple(out)
+
+
+def _chebyshev_relaxation_sequence(
+    order: int,
+    lambda_min: float,
+    lambda_max: float,
+) -> tuple[float, ...]:
+    """
+    Build Chebyshev semi-iteration relaxation factors for weighted Jacobi updates.
+    """
+    m = int(order)
+    if m <= 0:
+        return tuple()
+
+    lam_hi = max(float(lambda_max), 1.0e-12)
+    lam_lo = max(1.0e-12, min(float(lambda_min), 0.999999 * lam_hi))
+    c = 0.5 * (lam_hi + lam_lo)
+    d = 0.5 * (lam_hi - lam_lo)
+
+    if d <= 0.0:
+        return tuple(float(1.0 / c) for _ in range(m))
+
+    out: list[float] = []
+    for k in range(1, m + 1):
+        theta_k = np.pi * (2.0 * float(k) - 1.0) / (2.0 * float(m))
+        denom = c - d * float(np.cos(theta_k))
+        if denom <= 1.0e-12:
+            denom = 1.0e-12
+        out.append(float(1.0 / denom))
+    return tuple(out)
+
+
 def _compute_ghb_factor_from_raw_fields(
     *,
     gh_mask: np.ndarray,
@@ -4556,6 +4612,30 @@ class WarpDarcySolver:
             divergence_residual_factor: float = 3.0,
             fallback_pcg_max_iter: int | None = None,
             fallback_pcg_history_every: int | None = None,
+            smoother: str = "chebyshev",
+            cheby_lambda_min: float = 0.05,
+            cheby_lambda_max: float = 1.95,
+            unconfined: bool = False,
+            K_field: np.ndarray | None = None,
+            zbot_field: np.ndarray | None = None,
+            ztop_field: np.ndarray | None = None,
+            max_outer_iterations: int | None = None,
+            omega_min: float = 0.1,
+            omega_max: float = 0.9,
+            chebyshev_enabled: bool = True,
+            chebyshev_order: int = 3,
+            chebyshev_lambda_min_fraction: float = 0.1,
+            chebyshev_reset_on_residual_increase: bool = True,
+            chebyshev_rejection_factor: float = 1.2,
+            min_saturated_thickness: float | None = None,
+            initial_saturated_thickness: float = 10.0,
+            max_head_change_per_outer_iteration: float = 5.0,
+            hclose: float | None = None,
+            dry_cell_flag_threshold: float = 0.1,
+            unconfined_min_sat: float | None = None,
+            unconfined_max_picard_iter: int | None = None,
+            unconfined_relax: float | None = None,
+            unconfined_head_tol: float | None = None,
     ):
         """
         K-cycle multigrid using your existing hierarchy (self.mg_levels).
@@ -4594,6 +4674,341 @@ class WarpDarcySolver:
                 aq_thickness=aq_thickness,
                 gh_alpha=gh_alpha,
             )
+
+        smoother_mode = str(smoother).strip().lower()
+        if smoother_mode not in {"chebyshev", "jacobi"}:
+            raise ValueError("smoother must be 'chebyshev' or 'jacobi'.")
+        if smoother_mode == "chebyshev":
+            pre_omegas = _chebyshev_relaxation_sequence(
+                order=int(nu_pre),
+                lambda_min=float(cheby_lambda_min),
+                lambda_max=float(cheby_lambda_max),
+            )
+            post_omegas = _chebyshev_relaxation_sequence(
+                order=int(nu_post),
+                lambda_min=float(cheby_lambda_min),
+                lambda_max=float(cheby_lambda_max),
+            )
+        else:
+            omega_f = float(omega)
+            pre_omegas = tuple(omega_f for _ in range(int(nu_pre)))
+            post_omegas = tuple(omega_f for _ in range(int(nu_post)))
+        if len(pre_omegas) == 0:
+            pre_omegas = (float(omega),)
+        if len(post_omegas) == 0:
+            post_omegas = (float(omega),)
+
+        if bool(unconfined):
+            if K_field is None or zbot_field is None:
+                raise ValueError("unconfined=True requires K_field and zbot_field.")
+            if self.active_host is None or self.bc_mask_host is None or self.bc_values_host is None:
+                raise RuntimeError("build_from_truth_inputs or build_from_fields must be called before solve.")
+
+            ny0 = int(self.ny)
+            nx0 = int(self.nx)
+            shape0 = (ny0, nx0)
+
+            K_arr = np.asarray(K_field, dtype=np.float64)
+            zbot_arr = np.asarray(zbot_field, dtype=np.float64)
+            if K_arr.shape != shape0:
+                raise ValueError(f"K_field shape {K_arr.shape} expected {shape0}.")
+            if zbot_arr.shape != shape0:
+                raise ValueError(f"zbot_field shape {zbot_arr.shape} expected {shape0}.")
+            if not np.all(np.isfinite(K_arr)) or np.any(K_arr < 0.0):
+                raise ValueError("K_field must be finite and non-negative.")
+            if not np.all(np.isfinite(zbot_arr)):
+                raise ValueError("zbot_field must be finite.")
+
+            ztop_arr = None
+            if ztop_field is not None:
+                ztop_arr = np.asarray(ztop_field, dtype=np.float64)
+                if ztop_arr.shape != shape0:
+                    raise ValueError(f"ztop_field shape {ztop_arr.shape} expected {shape0}.")
+                if not np.all(np.isfinite(ztop_arr)):
+                    raise ValueError("ztop_field must be finite.")
+
+            min_sat = float(
+                unconfined_min_sat
+                if unconfined_min_sat is not None
+                else (0.1 if min_saturated_thickness is None else min_saturated_thickness)
+            )
+            if min_sat <= 0.0 or not np.isfinite(min_sat):
+                raise ValueError("min_saturated_thickness must be positive and finite.")
+
+            max_outer = int(
+                unconfined_max_picard_iter
+                if unconfined_max_picard_iter is not None
+                else (100 if max_outer_iterations is None else max_outer_iterations)
+            )
+            if max_outer < 1:
+                raise ValueError("max_outer_iterations must be >= 1.")
+
+            omega_current = float(unconfined_relax if unconfined_relax is not None else omega)
+            omega_min_f = float(omega_min)
+            omega_max_f = float(omega_max)
+            if not (0.0 < omega_min_f <= omega_max_f):
+                raise ValueError("omega_min and omega_max must satisfy 0 < omega_min <= omega_max.")
+            omega_current = min(max(omega_current, omega_min_f), omega_max_f)
+
+            hclose_f = float(
+                unconfined_head_tol
+                if unconfined_head_tol is not None
+                else (1.0e-4 if hclose is None else hclose)
+            )
+            if hclose_f < 0.0 or not np.isfinite(hclose_f):
+                raise ValueError("hclose must be non-negative and finite.")
+
+            max_update_f = float(max_head_change_per_outer_iteration)
+            if max_update_f <= 0.0 or not np.isfinite(max_update_f):
+                raise ValueError("max_head_change_per_outer_iteration must be positive and finite.")
+
+            initial_sat_f = float(initial_saturated_thickness)
+            if initial_sat_f <= 0.0 or not np.isfinite(initial_sat_f):
+                raise ValueError("initial_saturated_thickness must be positive and finite.")
+
+            rejection_factor_f = float(chebyshev_rejection_factor)
+            if rejection_factor_f <= 1.0 or not np.isfinite(rejection_factor_f):
+                raise ValueError("chebyshev_rejection_factor must be finite and > 1.")
+
+            active_mask = np.asarray(self.active_host, dtype=np.int32) != 0
+            bc_mask0 = np.asarray(self.bc_mask_host, dtype=np.int32) != 0
+            free_mask0 = active_mask & (~bc_mask0)
+            bc_values0 = np.asarray(self.bc_values_host, dtype=NP_FLOAT)
+
+            if initial_head is None:
+                h_iter = (zbot_arr + max(initial_sat_f, min_sat)).astype(NP_FLOAT, copy=False)
+            else:
+                h_iter = np.asarray(initial_head, dtype=NP_FLOAT).copy()
+                if h_iter.shape != shape0:
+                    raise ValueError(f"initial_head must have shape {shape0}, got {h_iter.shape}.")
+            h_iter[bc_mask0] = bc_values0[bc_mask0]
+            h_iter[~active_mask] = NP_FLOAT(0.0)
+            if not np.all(np.isfinite(h_iter)):
+                raise ValueError("initial head for unconfined solve must be finite.")
+
+            cheb_weights = _chebyshev_update_weights(
+                order=int(chebyshev_order),
+                lambda_min_fraction=float(chebyshev_lambda_min_fraction),
+            )
+            previous_update = np.zeros(shape0, dtype=np.float64)
+            previous_measure = float("inf")
+            chebyshev_rejections = 0
+            chebyshev_resets = 0
+            inner_solve_failures = 0
+            improvement_streak = 0
+            final_residual = None
+            final_max_abs_head_change = float("nan")
+            last_linear_info: dict = {}
+            outer_history: list[dict] = []
+            converged_nonlinear = False
+
+            for outer_idx in range(max_outer):
+                sat = h_iter.astype(np.float64, copy=False) - zbot_arr
+                sat = np.maximum(sat, min_sat)
+                if ztop_arr is not None:
+                    sat_cap = np.maximum(ztop_arr - zbot_arr, min_sat)
+                    sat = np.minimum(sat, sat_cap)
+                if not np.all(np.isfinite(sat)) or np.any(sat <= 0.0):
+                    raise FloatingPointError("unconfined saturated thickness became invalid.")
+
+                T_pic = (K_arr * sat).astype(NP_FLOAT, copy=False)
+                T_pic[~active_mask] = NP_FLOAT(0.0)
+                if not np.all(np.isfinite(T_pic)):
+                    raise FloatingPointError("unconfined transmissivity became non-finite.")
+
+                self.update_T_in_place(T_pic)
+
+                head_lin, info_lin = self.solve_multigrid_kcycle(
+                    max_cycles=int(max_cycles),
+                    nu_pre=int(nu_pre),
+                    nu_post=int(nu_post),
+                    nu_coarse=int(nu_coarse),
+                    omega=float(omega),
+                    rel_tol=float(rel_tol),
+                    abs_tol_min=float(abs_tol_min),
+                    initial_head=h_iter,
+                    aq_thickness=aq_thickness,
+                    gh_alpha=gh_alpha,
+                    max_levels=int(max_levels),
+                    return_info=True,
+                    check_every_no=int(check_every_no),
+                    dh_rms_tol=dh_rms_tol,
+                    dh_max_tol=dh_max_tol,
+                    dh_max_factor=float(dh_max_factor),
+                    min_coarse_cells=min_coarse_cells,
+                    fallback_to_pcg=bool(fallback_to_pcg),
+                    divergence_cycle_start=int(divergence_cycle_start),
+                    divergence_residual_factor=float(divergence_residual_factor),
+                    fallback_pcg_max_iter=fallback_pcg_max_iter,
+                    fallback_pcg_history_every=fallback_pcg_history_every,
+                    smoother=str(smoother_mode),
+                    cheby_lambda_min=float(cheby_lambda_min),
+                    cheby_lambda_max=float(cheby_lambda_max),
+                    unconfined=False,
+                )
+                last_linear_info = dict(info_lin) if isinstance(info_lin, dict) else {}
+                inner_converged = bool(last_linear_info.get("converged", False))
+                if not inner_converged:
+                    inner_solve_failures += 1
+                    chebyshev_resets += 1
+                    previous_update.fill(0.0)
+
+                h_lin = np.asarray(head_lin, dtype=np.float64)
+                if h_lin.shape != shape0:
+                    raise RuntimeError(f"inner linear solve returned shape {h_lin.shape}, expected {shape0}.")
+
+                picard_update = h_lin - h_iter.astype(np.float64, copy=False)
+                picard_update[bc_mask0] = 0.0
+                picard_update[~active_mask] = 0.0
+
+                chebyshev_used = False
+                chebyshev_rejected = False
+                chebyshev_reset = False
+                clipped_update = False
+
+                use_cheb = bool(chebyshev_enabled) and outer_idx > 0 and len(cheb_weights) > 0 and inner_converged
+                if use_cheb:
+                    weight = float(cheb_weights[(outer_idx - 1) % len(cheb_weights)])
+                    alpha = min(max(omega_current * weight, omega_min_f), omega_max_f)
+                    beta = 0.2 * max(0.0, alpha - omega_current)
+                    proposed_update = alpha * picard_update + beta * previous_update
+                    chebyshev_used = True
+                else:
+                    proposed_update = omega_current * picard_update
+
+                clipped = np.clip(proposed_update, -max_update_f, max_update_f)
+                clipped_update = bool(np.any(clipped != proposed_update))
+                h_trial = h_iter.astype(np.float64, copy=False) + clipped
+                h_trial[bc_mask0] = bc_values0[bc_mask0]
+                h_trial[~active_mask] = 0.0
+
+                if np.any(free_mask0):
+                    trial_dh = (h_trial - h_iter.astype(np.float64, copy=False))[free_mask0]
+                    trial_measure = float(np.max(np.abs(trial_dh)))
+                else:
+                    trial_measure = 0.0
+
+                reject_cheb = False
+                if chebyshev_used:
+                    if clipped_update or not np.all(np.isfinite(h_trial)):
+                        reject_cheb = True
+                    elif np.isfinite(previous_measure) and trial_measure > rejection_factor_f * previous_measure:
+                        reject_cheb = True
+
+                if reject_cheb:
+                    chebyshev_rejected = True
+                    chebyshev_used = False
+                    chebyshev_rejections += 1
+                    chebyshev_resets += 1
+                    chebyshev_reset = True
+                    previous_update.fill(0.0)
+                    fallback_update = omega_current * picard_update
+                    clipped = np.clip(fallback_update, -max_update_f, max_update_f)
+                    clipped_update = bool(np.any(clipped != fallback_update))
+                    h_trial = h_iter.astype(np.float64, copy=False) + clipped
+                    h_trial[bc_mask0] = bc_values0[bc_mask0]
+                    h_trial[~active_mask] = 0.0
+                    if np.any(free_mask0):
+                        trial_dh = (h_trial - h_iter.astype(np.float64, copy=False))[free_mask0]
+                        trial_measure = float(np.max(np.abs(trial_dh)))
+                    else:
+                        trial_measure = 0.0
+
+                if not np.all(np.isfinite(h_trial)):
+                    chebyshev_resets += 1
+                    raise FloatingPointError("unconfined nonlinear update produced non-finite heads.")
+
+                if np.isfinite(previous_measure) and trial_measure > rejection_factor_f * previous_measure:
+                    omega_current = max(omega_min_f, 0.5 * omega_current)
+                    improvement_streak = 0
+                else:
+                    improvement_streak += 1
+                    if improvement_streak >= 3:
+                        omega_current = min(omega_max_f, 1.1 * omega_current)
+                        improvement_streak = 0
+
+                previous_update[:, :] = clipped
+                h_iter = h_trial.astype(NP_FLOAT, copy=False)
+                final_max_abs_head_change = float(trial_measure)
+                final_residual = last_linear_info.get("r_rms_end")
+
+                if clipped_update:
+                    chebyshev_resets += 1
+                    chebyshev_reset = True
+                    previous_update.fill(0.0)
+
+                if bool(chebyshev_reset_on_residual_increase) and np.isfinite(previous_measure):
+                    if trial_measure > previous_measure:
+                        chebyshev_resets += 1
+                        chebyshev_reset = True
+                        previous_update.fill(0.0)
+
+                previous_measure = trial_measure
+
+                outer_history.append(
+                    {
+                        "outer_iteration": int(outer_idx + 1),
+                        "max_abs_head_change": float(final_max_abs_head_change),
+                        "min_head": float(np.nanmin(h_iter[active_mask])) if np.any(active_mask) else float("nan"),
+                        "max_head": float(np.nanmax(h_iter[active_mask])) if np.any(active_mask) else float("nan"),
+                        "min_saturated_thickness": float(np.nanmin(sat[active_mask])) if np.any(active_mask) else float("nan"),
+                        "max_saturated_thickness": float(np.nanmax(sat[active_mask])) if np.any(active_mask) else float("nan"),
+                        "min_transmissivity": float(np.nanmin(T_pic[active_mask])) if np.any(active_mask) else float("nan"),
+                        "max_transmissivity": float(np.nanmax(T_pic[active_mask])) if np.any(active_mask) else float("nan"),
+                        "omega": float(omega_current),
+                        "chebyshev_used": bool(chebyshev_used),
+                        "chebyshev_rejected": bool(chebyshev_rejected),
+                        "chebyshev_reset": bool(chebyshev_reset),
+                        "inner_converged": bool(inner_converged),
+                        "inner_iterations": int(last_linear_info.get("n_cycles_used", 0)),
+                        "inner_residual": None if final_residual is None else float(final_residual),
+                    }
+                )
+
+                if final_max_abs_head_change < hclose_f and inner_converged:
+                    converged_nonlinear = True
+                    break
+
+            final_sat = h_iter.astype(np.float64, copy=False) - zbot_arr
+            final_sat = np.maximum(final_sat, min_sat)
+            if ztop_arr is not None:
+                final_sat = np.minimum(final_sat, np.maximum(ztop_arr - zbot_arr, min_sat))
+            final_T = (K_arr * final_sat).astype(NP_FLOAT, copy=False)
+            final_T[~active_mask] = NP_FLOAT(0.0)
+            self.update_T_in_place(final_T)
+
+            effectively_dry = active_mask & (h_iter.astype(np.float64, copy=False) <= zbot_arr + float(dry_cell_flag_threshold))
+            info_out = dict(last_linear_info) if isinstance(last_linear_info, dict) else {}
+            info_out.update(
+                {
+                    "solver_type": "kcycle_unconfined_picard_chebyshev",
+                    "linear_solver_type": str(last_linear_info.get("solver_type", "kcycle")),
+                    "unconfined": True,
+                    "converged": bool(converged_nonlinear),
+                    "outer_iterations": int(len(outer_history)),
+                    "chebyshev_enabled": bool(chebyshev_enabled),
+                    "chebyshev_order": int(chebyshev_order),
+                    "chebyshev_rejections": int(chebyshev_rejections),
+                    "chebyshev_resets": int(chebyshev_resets),
+                    "omega_final": float(omega_current),
+                    "min_saturated_thickness": float(min_sat),
+                    "max_head_change_per_outer_iteration": float(max_update_f),
+                    "final_max_abs_head_change": float(final_max_abs_head_change),
+                    "final_residual": None if final_residual is None else float(final_residual),
+                    "inner_solve_failures": int(inner_solve_failures),
+                    "effectively_dry_cell_count": int(np.count_nonzero(effectively_dry)),
+                    "nonlinear_convergence_basis": "head_change_and_inner_linear_convergence",
+                    "outer_history": outer_history,
+                    "picard_converged": bool(converged_nonlinear),
+                    "picard_n_iter_used": int(len(outer_history)),
+                    "picard_max_iter": int(max_outer),
+                    "picard_relax": float(omega_current),
+                    "picard_head_tol": float(hclose_f),
+                    "picard_dh_max_end": float(final_max_abs_head_change),
+                    "unconfined_min_sat": float(min_sat),
+                }
+            )
+            return (h_iter, info_out) if return_info else h_iter
 
         if not hasattr(self, "_kcycle_graph"):
             self._kcycle_graph = None
@@ -4869,13 +5284,11 @@ class WarpDarcySolver:
             nyL = int(level.ny)
             dimL = (nyL, nxL)
 
-            omega_f = float(omega)
-
             x_tmp_wp = level.Ax_wp
             x_in = level.x_wp
             x_out = x_tmp_wp
 
-            for _ in range(int(nu_pre)):
+            for omega_step in pre_omegas:
                 wp.launch(
                     kernel=jacobi_applyA_fused_kernel,
                     dim=dimL,
@@ -4889,7 +5302,7 @@ class WarpDarcySolver:
                         x_in,
                         level.M_inv_wp,
                         level.bc_values_wp,
-                        omega_f,
+                        float(omega_step),
                         nxL,
                         nyL,
                         x_out,
@@ -5047,7 +5460,7 @@ class WarpDarcySolver:
             x_in = level.x_wp
             x_out = x_tmp_wp
 
-            for _ in range(int(nu_post)):
+            for omega_step in post_omegas:
                 wp.launch(
                     kernel=jacobi_applyA_fused_kernel,
                     dim=dimL,
@@ -5061,7 +5474,7 @@ class WarpDarcySolver:
                         x_in,
                         level.M_inv_wp,
                         level.bc_values_wp,
-                        omega_f,
+                        float(omega_step),
                         nxL,
                         nyL,
                         x_out,
@@ -5088,6 +5501,9 @@ class WarpDarcySolver:
             int(nu_pre),
             int(nu_post),
             int(nu_coarse),
+            str(smoother_mode),
+            tuple(float(v) for v in pre_omegas),
+            tuple(float(v) for v in post_omegas),
             float(omega),
         ]
         if not self.trust_ghb_params_for_graph:
@@ -5097,6 +5513,7 @@ class WarpDarcySolver:
         graph_key = tuple(graph_key)
 
         graph_built_this_call = False
+        use_cuda_graph = str(device).startswith("cuda")
 
         dh_rms_lastcheck = float("nan")
         dh_max_lastcheck = float("nan")
@@ -5115,7 +5532,9 @@ class WarpDarcySolver:
         for cyc in range(max_cycles_i):
             n_cycles_used = cyc + 1
 
-            if self._kcycle_graph is None or self._kcycle_graph_shape != graph_key:
+            if not use_cuda_graph:
+                kcycle(0)
+            elif self._kcycle_graph is None or self._kcycle_graph_shape != graph_key:
                 with wp.ScopedCapture() as cap:
                     kcycle(0)
                 self._kcycle_graph = cap.graph
@@ -5272,7 +5691,12 @@ class WarpDarcySolver:
             "nu_pre": int(nu_pre),
             "nu_post": int(nu_post),
             "nu_coarse": int(nu_coarse),
+            "smoother": str(smoother_mode),
             "omega": float(omega),
+            "cheby_lambda_min": float(cheby_lambda_min) if smoother_mode == "chebyshev" else float("nan"),
+            "cheby_lambda_max": float(cheby_lambda_max) if smoother_mode == "chebyshev" else float("nan"),
+            "cheby_pre_omegas": [float(v) for v in pre_omegas],
+            "cheby_post_omegas": [float(v) for v in post_omegas],
             "rel_tol": float(rel_tol),
             "abs_tol_min": float(abs_tol_min),
             "tol_abs": float(tol_abs),
@@ -5316,6 +5740,74 @@ class WarpDarcySolver:
         info["history"] = history
 
         return (head_out, info) if return_info else head_out
+
+    def solve(
+        self,
+        formulation: str = "confined",
+        solver: str | None = None,
+        initial_head: np.ndarray | None = None,
+        K_field: np.ndarray | None = None,
+        zbot_field: np.ndarray | None = None,
+        ztop_field: np.ndarray | None = None,
+        return_info: bool = True,
+        **kwargs,
+    ):
+        """
+        Public solve wrapper for the main 2D solver.
+
+        :param formulation: "confined" or "unconfined".
+        :param solver: optional solver selector; currently "pcg" or "kcycle".
+        :param initial_head: optional starting head field.
+        :param K_field: hydraulic conductivity field for unconfined solves.
+        :param zbot_field: aquifer bottom field for unconfined solves.
+        :param ztop_field: optional aquifer top field for unconfined saturated-thickness cap.
+        :param return_info: if True, return ``(head, info)``.
+        :param kwargs: additional solver controls forwarded to the selected backend.
+        """
+        form_mode = str(formulation).strip().lower()
+        if form_mode not in {"confined", "unconfined"}:
+            raise ValueError("formulation must be 'confined' or 'unconfined'.")
+
+        solver_mode = self.solver_type if solver is None else str(solver)
+        solver_mode = str(solver_mode).strip().lower()
+        if solver_mode in {"multigrid", "mg"}:
+            solver_mode = "kcycle"
+        if solver_mode not in {"pcg", "kcycle"}:
+            raise ValueError("solver must be 'pcg' or 'kcycle'.")
+        if form_mode == "unconfined" and solver_mode != "kcycle":
+            raise ValueError("2D unconfined solves currently require solver='kcycle'.")
+
+        if solver_mode == "pcg":
+            head, info = self._solve_pcg_device_loop(
+                max_iter=int(kwargs.pop("pcg_max_iter", kwargs.pop("max_iter", 250))),
+                rel_tol=float(kwargs.pop("rel_tol", 5.0e-7)),
+                abs_tol_min=float(kwargs.pop("abs_tol_min", 5.0e-7)),
+                initial_head=initial_head,
+                history_every=kwargs.pop("history_every", None),
+            )
+            if kwargs:
+                raise TypeError(f"unused solve kwargs for solver='pcg': {sorted(kwargs.keys())}")
+            if return_info:
+                info_out = dict(info) if isinstance(info, dict) else {}
+                info_out["formulation"] = "confined"
+                return head, info_out
+            return head
+
+        head_info = self.solve_multigrid_kcycle(
+            initial_head=initial_head,
+            return_info=return_info,
+            unconfined=(form_mode == "unconfined"),
+            K_field=K_field,
+            zbot_field=zbot_field,
+            ztop_field=ztop_field,
+            **kwargs,
+        )
+        if return_info:
+            head, info = head_info
+            info_out = dict(info) if isinstance(info, dict) else {}
+            info_out["formulation"] = form_mode
+            return head, info_out
+        return head_info
 
     def __enter__(self):
         return self
