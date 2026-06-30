@@ -26,7 +26,7 @@ from DARCY_WARP_PACKAGE.project_base import data_store  # noqa: E402
 from DARCY_WARP_PACKAGE.warped_darcy_3d import WarpDarcySolver3D  # noqa: E402
 
 
-BENCHMARK_LAYERS = [15]
+BENCHMARK_LAYERS = [1,2,3,4,5]
 BENCHMARK_SMOOTHERS = ["chebyshev", "chebyshev_vertical_line"]
 DEFAULT_DH_TOL = 1.0e-4
 DEFAULT_RESIDUAL_FLOOR_TOL = 1.0e-4
@@ -685,14 +685,40 @@ def run_layer_benchmark(
                 residual_floor_tol=DEFAULT_RESIDUAL_FLOOR_TOL,
                 mf6_agreement_tol=DEFAULT_MF6_AGREEMENT_TOL,
             )
+            solve2_r_rms_end = _finite_float(warp_info_solve2.get("r_rms_end"))
+            solve2_tol_abs = _finite_float(warp_info_solve2.get("tol_abs"))
+            solve2_dh_rms_lastcheck = _finite_float(warp_info_solve2.get("dh_rms_lastcheck"))
+            solve2_dh_max_lastcheck = _finite_float(warp_info_solve2.get("dh_max_lastcheck"))
 
             row = {
                 "nlay": int(nlay),
                 "smoother": str(smoother_name),
+                "line_omega": warp_info.get("line_omega"),
+                "line_sweeps_pre": warp_info.get("line_sweeps_pre"),
+                "line_sweeps_post": warp_info.get("line_sweeps_post"),
+                "line_sweeps_coarse": warp_info.get("line_sweeps_coarse"),
+                "check_every_no": warp_info.get("check_every_no"),
                 "nx": int(nx),
                 "ny": int(ny),
                 "n_cells": int(nx * ny * nlay),
                 "workspace": str(case_workspace),
+                "solve2_r_rms_end": solve2_r_rms_end,
+                "solve2_tol_abs": solve2_tol_abs,
+                "solve2_dh_rms_lastcheck": solve2_dh_rms_lastcheck,
+                "solve2_dh_max_lastcheck": solve2_dh_max_lastcheck,
+                "solve2_n_cycles_used": (
+                    int(warp_info_solve2["n_cycles_used"])
+                    if "n_cycles_used" in warp_info_solve2
+                    else None
+                ),
+                "solve2_converged": (
+                    bool(warp_info_solve2.get("converged", False))
+                    if warp_info_solve2
+                    else None
+                ),
+                "solve2_residual_converged": solve2_report.get("residual_converged"),
+                "solve2_head_change_converged": solve2_report.get("head_change_converged"),
+                "solve2_practically_converged": solve2_report.get("practically_converged"),
                 "timing": {
                     "mf6_engine_time": _load_npz_scalar(mf6_path, "engine_time"),
                     "mf6_total_time": _load_npz_scalar(mf6_path, "total_time"),

@@ -14,6 +14,7 @@ __all__ = [
     "axpy_active_scalar_3d_kernel",
     "copy_field_3d_kernel",
     "compute_residual_7point_kernel",
+    "dh_change_reduce_3d_kernel",
     "dot_active_3d_kernel",
     "jacobi_applyA_fused_7point_kernel",
     "prolong_trilinear_any_3d_kernel",
@@ -484,6 +485,35 @@ def copy_field_3d_kernel(
     if k >= nz or j >= ny or i >= nx:
         return
     dst[k, j, i] = src[k, j, i]
+
+
+@wp.kernel
+def dh_change_reduce_3d_kernel(
+    x: wp.array(dtype=WP_FLOAT, ndim=3),
+    x_prev: wp.array(dtype=WP_FLOAT, ndim=3),
+    active: wp.array(dtype=wp.int32, ndim=3),
+    bc_mask: wp.array(dtype=wp.int32, ndim=3),
+    dh2_buf: wp.array(dtype=wp.float64, ndim=1),
+    dh_max_buf: wp.array(dtype=wp.float64, ndim=1),
+    nx: int,
+    ny: int,
+    nz: int,
+):
+    k, j, i = wp.tid()
+    if k >= nz or j >= ny or i >= nx:
+        return
+
+    x_new = wp.float64(x[k, j, i])
+    x_old = wp.float64(x_prev[k, j, i])
+    x_prev[k, j, i] = x[k, j, i]
+
+    if active[k, j, i] == 0 or bc_mask[k, j, i] != 0:
+        return
+
+    dh = x_new - x_old
+    abs_dh = wp.abs(dh)
+    wp.atomic_add(dh2_buf, 0, dh * dh)
+    wp.atomic_max(dh_max_buf, 0, abs_dh)
 
 
 @wp.kernel

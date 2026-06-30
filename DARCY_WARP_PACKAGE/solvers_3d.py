@@ -11,6 +11,7 @@ from DARCY_WARP_PACKAGE.kernels_3d import (
     axpy_active_scalar_3d_kernel,
     copy_field_3d_kernel,
     compute_residual_7point_kernel,
+    dh_change_reduce_3d_kernel,
     dot_active_3d_kernel,
     jacobi_applyA_fused_7point_kernel,
     prolong_bilinear_xy_3d_kernel,
@@ -1048,6 +1049,7 @@ def solve_multigrid_kcycle_7point_3d(
             "rTr_buf": wp.zeros(1, dtype=wp.float64, device=device),
             "dot_buf": wp.zeros(1, dtype=wp.float64, device=device),
             "pAp_buf": wp.zeros(1, dtype=wp.float64, device=device),
+            "dh_max_buf": wp.zeros(1, dtype=wp.float64, device=device),
         }
         if uses_vertical_line:
             lvl["c_prime_wp"] = wp.zeros(shapeL, dtype=WP_FLOAT, device=device)
@@ -1056,7 +1058,7 @@ def solve_multigrid_kcycle_7point_3d(
 
     lvl0 = levels[0]
     lvl0["x_wp"] = wp.array(x0, dtype=WP_FLOAT, device=device)
-    x_prev_check = np.asarray(x0, dtype=np.float64).copy()
+    lvl0["x_prev_check_wp"] = wp.array(x0, dtype=WP_FLOAT, device=device)
 
     for lid in range(1, len(levels)):
         levels[lid]["x_wp"].fill_(WP_FLOAT(0.0))
@@ -1194,7 +1196,7 @@ def solve_multigrid_kcycle_7point_3d(
         if smooth_mode == "chebyshev_vertical_line":
             for _ in range(int(nu_coarse)):
                 smooth_point_level(level, point_pre_omegas)
-            smooth_vertical_line_level(level, line_sweeps_coarse_i)
+                smooth_vertical_line_level(level, line_sweeps_coarse_i)
         else:
             for _ in range(int(nu_coarse)):
                 smooth_level(level, pre_omegas, len(pre_omegas))
@@ -1372,16 +1374,27 @@ def solve_multigrid_kcycle_7point_3d(
         rTr_now = compute_residual_norm(lvl0, lvl0["x_wp"], lvl0["r_wp"], lvl0["rTr_buf"])
         r_rms_now = float(np.sqrt(max(rTr_now, 0.0) / float(n_free0)))
 
-        # TODO: Replace this full head copy with a device-side dh_rms/dh_max reduction.
-        x_now = np.asarray(lvl0["x_wp"].numpy(), dtype=np.float64)
-        dh = (x_now - x_prev_check)[free0]
-        if dh.size > 0:
-            dh_rms_lastcheck = float(np.sqrt(np.mean(dh * dh)))
-            dh_max_lastcheck = float(np.max(np.abs(dh)))
-        else:
-            dh_rms_lastcheck = 0.0
-            dh_max_lastcheck = 0.0
-        x_prev_check = x_now
+        wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[lvl0["dot_buf"]], device=device)
+        wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[lvl0["dh_max_buf"]], device=device)
+        wp.launch(
+            kernel=dh_change_reduce_3d_kernel,
+            dim=lvl0["dim"],
+            inputs=[
+                lvl0["x_wp"],
+                lvl0["x_prev_check_wp"],
+                lvl0["active_wp"],
+                lvl0["bc_mask_wp"],
+                lvl0["dot_buf"],
+                lvl0["dh_max_buf"],
+                lvl0["nx"],
+                lvl0["ny"],
+                lvl0["nz"],
+            ],
+            device=device,
+        )
+        dh2 = float(lvl0["dot_buf"].numpy()[0])
+        dh_rms_lastcheck = float(np.sqrt(max(dh2, 0.0) / float(n_free0)))
+        dh_max_lastcheck = float(lvl0["dh_max_buf"].numpy()[0])
 
         dh_ok = True
         if dh_rms_tol_f is not None:
