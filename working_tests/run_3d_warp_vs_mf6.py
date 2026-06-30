@@ -26,6 +26,13 @@ from DARCY_WARP_PACKAGE.project_base import data_store  # noqa: E402
 from DARCY_WARP_PACKAGE.warped_darcy_3d import WarpDarcySolver3D  # noqa: E402
 
 
+BENCHMARK_LAYERS = [15]
+BENCHMARK_SMOOTHERS = ["chebyshev", "chebyshev_vertical_line"]
+DEFAULT_DH_TOL = 1.0e-4
+DEFAULT_RESIDUAL_FLOOR_TOL = 1.0e-4
+DEFAULT_MF6_AGREEMENT_TOL = 5.0e-5
+
+
 @dataclass(frozen=True)
 class Case3D:
     nx: int
@@ -165,22 +172,60 @@ def run_warp(
     device: str = "auto",
     solver: str = "kcycle",
     smoother: str = "chebyshev",
+    adaptive_kcycle: bool = True,
+    line_omega: float = 0.8,
+    line_sweeps_pre: int = 1,
+    line_sweeps_post: int = 1,
+    line_sweeps_coarse: int = 1,
 ) -> Path:
     """
     Run the same multi-layer problem in Warp and save heads to NPZ.
     """
+    def _is_converged(info: object) -> bool:
+        return isinstance(info, dict) and bool(info.get("converged", False))
+
+    def _solve_summary(info: object, elapsed: float, mode: str, settings: dict) -> dict:
+        summary = {
+            "mode": str(mode),
+            "time": float(elapsed),
+            "settings": dict(settings),
+            "converged": False,
+            "n_cycles_used": None,
+            "r_rms_start": None,
+            "r_rms_end": None,
+            "tol_abs": None,
+            "dh_rms_lastcheck": None,
+            "dh_tol": settings.get("dh_rms_tol"),
+        }
+        if isinstance(info, dict):
+            summary["converged"] = bool(info.get("converged", False))
+            if info.get("n_cycles_used") is not None:
+                summary["n_cycles_used"] = int(info["n_cycles_used"])
+            if info.get("r_rms_start") is not None:
+                summary["r_rms_start"] = float(info["r_rms_start"])
+            if info.get("r_rms0") is not None:
+                summary["r_rms_start"] = float(info["r_rms0"])
+            if info.get("r_rms_end") is not None:
+                summary["r_rms_end"] = float(info["r_rms_end"])
+            if info.get("tol_abs") is not None:
+                summary["tol_abs"] = float(info["tol_abs"])
+            if info.get("dh_rms_lastcheck") is not None:
+                summary["dh_rms_lastcheck"] = float(info["dh_rms_lastcheck"])
+        return summary
+
     out_path = Path(out_path) if out_path is not None else case.workspace.joinpath("warp_heads.npz")
     device = _warp_device(device)
     solver = str(solver).lower()
     if solver not in {"kcycle", "chebyshev"}:
         raise ValueError("solver must be 'kcycle' or 'chebyshev'.")
     smoother = str(smoother).lower()
-    if smoother not in {"chebyshev", "jacobi"}:
-        raise ValueError("smoother must be 'chebyshev' or 'jacobi'.")
+    if smoother not in {"chebyshev", "jacobi", "vertical_line", "chebyshev_vertical_line"}:
+        raise ValueError("smoother must be 'chebyshev', 'jacobi', 'vertical_line', or 'chebyshev_vertical_line'.")
     if solver == "chebyshev":
         print("Using standalone Chebyshev debug path. Use solver='kcycle' for the MF6 comparison benchmark.")
 
     hk_3d = np.repeat(case.hk_2d[np.newaxis, :, :], case.nlay, axis=0)
+    initial_head = np.asarray(case.initial_head_3d, dtype=np.float64)
 
     t0 = time.perf_counter()
     with WarpDarcySolver3D(
@@ -204,32 +249,93 @@ def run_warp(
             initial_head=case.initial_head_3d,
         )
         if solver == "kcycle":
-            solve_kwargs = {
+            simple_kwargs = {
                 "max_cycles": 200,
                 "rel_tol": 5.0e-7,
                 "abs_tol_min": 5.0e-7,
                 "check_every_no": 1,
                 "max_levels": 6,
                 "smoother": smoother,
-                "nu_pre": 10,
-                "nu_post": 10,
-                "nu_coarse": 3,
-                "omega": 0.75,
+                "nu_pre": 6,
+                "nu_post": 6,
+                "nu_coarse": 2,
+                "omega": 0.8,
+                "dh_rms_tol": DEFAULT_DH_TOL,
+                "line_omega": float(line_omega),
+                "line_sweeps_pre": int(line_sweeps_pre),
+                "line_sweeps_post": int(line_sweeps_post),
+                "line_sweeps_coarse": int(line_sweeps_coarse),
             }
+            robust_kwargs = dict(simple_kwargs)
+            robust_kwargs.update(
+                {
+                    "nu_pre": 13,
+                    "nu_post": 13,
+                    "nu_coarse": 3,
+                    "omega": 0.7,
+                }
+            )
         else:
-            solve_kwargs = {
+            simple_kwargs = {
                 "max_iter": 400,
                 "rel_tol": 5.0e-7,
                 "abs_tol_min": 5.0e-7,
             }
-        heads, info = warp_solver.solve(**solve_kwargs)
+            robust_kwargs = dict(simple_kwargs)
+
+        solve1_mode = "simple"
+        solve1_kwargs = dict(simple_kwargs)
+        solve1_call_kwargs = dict(solve1_kwargs)
+        solve1_call_kwargs["initial_head"] = initial_head.copy()
+        t_solve1 = time.perf_counter()
+        heads1, info1 = warp_solver.solve(**solve1_call_kwargs)
+        solve1_time = time.perf_counter() - t_solve1
+
+        if solver == "kcycle" and adaptive_kcycle and not _is_converged(info1):
+            solve2_mode = "robust"
+            solve2_kwargs = dict(robust_kwargs)
+            print("Warp solve1 did not converge with simple settings; solve2 will use robust settings.")
+        else:
+            solve2_mode = "simple"
+            solve2_kwargs = dict(simple_kwargs)
+
+        solve2_call_kwargs = dict(solve2_kwargs)
+        solve2_call_kwargs["initial_head"] = initial_head.copy()
+        t_solve2 = time.perf_counter()
+        heads, info = warp_solver.solve(**solve2_call_kwargs)
+        solve2_time = time.perf_counter() - t_solve2
+
+    if heads1 is None or info1 is None:
+        raise RuntimeError("Warp solve1 did not return heads and convergence information.")
+    if heads is None or info is None:
+        raise RuntimeError("Warp solve2 did not return heads and convergence information.")
+
     total_time = time.perf_counter() - t0
+    _ = heads1
+
+    solve1_summary = _solve_summary(info1, solve1_time, solve1_mode, solve1_kwargs)
+    solve2_summary = _solve_summary(info, solve2_time, solve2_mode, solve2_kwargs)
+    adaptive_settings = {
+        "adaptive_kcycle": bool(adaptive_kcycle),
+        "rule": "solve1_simple_then_solve2_robust_only_if_solve1_failed",
+    }
 
     np.savez_compressed(
         out_path,
         heads=np.asarray(heads, dtype=np.float64),
         total_time=np.asarray(total_time, dtype=np.float64),
+        solve1_time=np.asarray(solve1_time, dtype=np.float64),
+        solve2_time=np.asarray(solve2_time, dtype=np.float64),
         info=np.asarray(json.dumps(info, default=str)),
+        info_solve1=np.asarray(json.dumps(info1, default=str)),
+        info_solve2=np.asarray(json.dumps(info, default=str)),
+        summary_solve1=np.asarray(json.dumps(solve1_summary, default=str)),
+        summary_solve2=np.asarray(json.dumps(solve2_summary, default=str)),
+        adaptive_settings=np.asarray(json.dumps(adaptive_settings, default=str)),
+        solve1_mode=np.asarray(solve1_mode),
+        solve2_mode=np.asarray(solve2_mode),
+        solve1_settings=np.asarray(json.dumps(solve1_kwargs, default=str)),
+        solve2_settings=np.asarray(json.dumps(solve2_kwargs, default=str)),
         nx=np.asarray(case.nx, dtype=np.int32),
         ny=np.asarray(case.ny, dtype=np.int32),
         nlay=np.asarray(case.nlay, dtype=np.int32),
@@ -240,16 +346,19 @@ def run_warp(
         smoother=np.asarray(smoother),
     )
     print(f"Warp heads saved to {out_path}")
-    print(f"Warp metrics - Total time: {total_time:.4f}s")
+    print(
+        f"Warp metrics - Total time: {total_time:.4f}s, "
+        f"solve1({solve1_mode}): {solve1_time:.4f}s, "
+        f"solve2({solve2_mode}): {solve2_time:.4f}s"
+    )
     if isinstance(info, dict):
-        print("Warp Convergence Info:")
+        print("Warp Convergence Info (solve 2):")
         for k, v in info.items():
             print(f"  {k}: {v}")
     else:
         print(f"Warp Convergence Info: {info}")
     print()
     return out_path
-
 
 def load_results(
     mf6_path: str | Path,
@@ -303,6 +412,106 @@ def compare_results(
     return metrics
 
 
+def _load_npz_scalar(npz_path: Path, name: str, default: float | None = None) -> float | None:
+    if not npz_path.exists():
+        return default
+    with np.load(npz_path, allow_pickle=False) as data:
+        if name not in data:
+            return default
+        return float(np.asarray(data[name]).reshape(()))
+
+
+def _load_npz_json(npz_path: Path, name: str) -> dict | list:
+    if not npz_path.exists():
+        return {}
+    with np.load(npz_path, allow_pickle=False) as data:
+        if name not in data:
+            return {}
+        raw = str(np.asarray(data[name]).reshape(()))
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return {"raw_info": raw}
+
+
+def _load_npz_string(npz_path: Path, name: str, default: str | None = None) -> str | None:
+    if not npz_path.exists():
+        return default
+    with np.load(npz_path, allow_pickle=False) as data:
+        if name not in data:
+            return default
+        return str(np.asarray(data[name]).reshape(()))
+
+
+def _load_warp_info(npz_path: Path) -> dict:
+    return _load_npz_json(npz_path, "info")
+
+
+def _finite_float(value: object) -> float | None:
+    if value is None:
+        return None
+    try:
+        out = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not np.isfinite(out):
+        return None
+    return out
+
+
+def _convergence_report(
+    info: dict,
+    comparison: dict[str, float] | None = None,
+    dh_tol: float = DEFAULT_DH_TOL,
+    residual_floor_tol: float = DEFAULT_RESIDUAL_FLOOR_TOL,
+    mf6_agreement_tol: float = DEFAULT_MF6_AGREEMENT_TOL,
+) -> dict:
+    r_rms_end = _finite_float(info.get("r_rms_end"))
+    tol_abs = _finite_float(info.get("tol_abs"))
+    dh_rms_lastcheck = _finite_float(info.get("dh_rms_lastcheck"))
+    max_abs_diff = _finite_float((comparison or {}).get("max_abs_diff"))
+
+    residual_converged = None
+    if r_rms_end is not None and tol_abs is not None:
+        residual_converged = bool(r_rms_end <= tol_abs)
+
+    head_change_converged = None
+    if dh_rms_lastcheck is not None:
+        head_change_converged = bool(dh_rms_lastcheck <= float(dh_tol))
+
+    practically_converged = None
+    if head_change_converged is not None and r_rms_end is not None:
+        practically_converged = bool(head_change_converged and r_rms_end <= float(residual_floor_tol))
+
+    agrees_with_mf6 = None
+    if max_abs_diff is not None:
+        agrees_with_mf6 = bool(max_abs_diff < float(mf6_agreement_tol))
+
+    if residual_converged:
+        status = "Residual tolerance met."
+    elif practically_converged and agrees_with_mf6:
+        status = "Residual tolerance not met, but the solution is stationary and agrees with MF6 to < 5e-5 m."
+    elif practically_converged:
+        status = "Residual tolerance not met, but practical convergence criteria are met."
+    else:
+        status = "Convergence criteria not met."
+
+    return {
+        "residual_converged": residual_converged,
+        "head_change_converged": head_change_converged,
+        "practically_converged": practically_converged,
+        "agrees_with_mf6": agrees_with_mf6,
+        "status": status,
+        "r_rms_end": r_rms_end,
+        "tol_abs": tol_abs,
+        "dh_rms_lastcheck": dh_rms_lastcheck,
+        "dh_tol": float(dh_tol),
+        "residual_floor_tol": float(residual_floor_tol),
+        "mf6_agreement_tol": float(mf6_agreement_tol),
+        "max_abs_diff": max_abs_diff,
+    }
+
+
 def run_case(
     nx: int = 1000,
     ny: int = 200,
@@ -319,6 +528,11 @@ def run_case(
     smoother: str = "chebyshev",
     do_run_mf6: bool = True,
     do_run_warp: bool = True,
+    adaptive_kcycle: bool = True,
+    line_omega: float = 0.8,
+    line_sweeps_pre: int = 1,
+    line_sweeps_post: int = 1,
+    line_sweeps_coarse: int = 1,
 ) -> dict[str, float]:
     case = build_simple_multilayer_case(
         nx=nx,
@@ -342,25 +556,239 @@ def run_case(
     if do_run_mf6:
         run_mf6(case, out_path=mf6_path)
     if do_run_warp:
-        run_warp(case, out_path=warp_path, device=device, solver=solver, smoother=smoother)
+        run_warp(
+            case,
+            out_path=warp_path,
+            device=device,
+            solver=solver,
+            smoother=smoother,
+            adaptive_kcycle=adaptive_kcycle,
+            line_omega=line_omega,
+            line_sweeps_pre=line_sweeps_pre,
+            line_sweeps_post=line_sweeps_post,
+            line_sweeps_coarse=line_sweeps_coarse,
+        )
 
     if mf6_path.exists() and warp_path.exists():
         metrics = compare_results(mf6_path, warp_path, active_3d=case.active_3d)
-        metrics_path = case.workspace.joinpath("comparison_metrics.json")
-        with metrics_path.open("w") as f:
-            json.dump(metrics, f, indent=4)
-        print(f"Comparison metrics saved to {metrics_path}")
         return metrics
     else:
         print("Skipping comparison because both MF6 and Warp heads were not generated or found.")
         return {}
 
 
+def run_layer_benchmark(
+    nx: int = 1000,
+    ny: int = 1000,
+    layers: list[int] | tuple[int, ...] = tuple(BENCHMARK_LAYERS),
+    dx: float = 100.0,
+    layer_thickness: float = 50.0,
+    transmissivity: float = 3000.0,
+    recharge: float = 1.0e-4,
+    heterogeneous_t: bool = False,
+    seed: int = 123,
+    workspace: str | Path | None = None,
+    device: str = "auto",
+    solver: str = "kcycle",
+    smoother: str | list[str] | tuple[str, ...] = "chebyshev",
+    do_run_mf6: bool = True,
+    do_run_warp: bool = True,
+    adaptive_kcycle: bool = True,
+    line_omega: float = 0.8,
+    line_sweeps_pre: int = 1,
+    line_sweeps_post: int = 1,
+    line_sweeps_coarse: int = 1,
+) -> list[dict]:
+    if workspace is None:
+        workspace = data_store.joinpath("working_tests", "mf6_vs_warp_3d_layer_benchmark")
+    workspace = Path(workspace)
+    workspace.mkdir(parents=True, exist_ok=True)
+
+    layer_values = [int(v) for v in layers]
+    if isinstance(smoother, str):
+        smoother_values = [str(smoother)]
+    else:
+        smoother_values = [str(v) for v in smoother]
+    print("\n" + "=" * 72)
+    print("3D Warp vs MF6 layer benchmark")
+    print(f"grid: nx={nx}, ny={ny}, dx={dx}")
+    print(f"layers: {layer_values}")
+    print(f"smoothers: {smoother_values}")
+    print(f"workspace: {workspace}")
+    print("=" * 72)
+
+    results_dict: dict[tuple[str, int], dict] = {}
+    summary_path = workspace.joinpath("layer_benchmark_summary.json")
+    if summary_path.exists():
+        try:
+            with summary_path.open("r") as f:
+                existing_results = json.load(f)
+            for r in existing_results:
+                key_smoother = str(r.get("smoother", r.get("warp_solver", {}).get("smoother", "")))
+                results_dict[(key_smoother, int(r["nlay"]))] = r
+        except Exception:
+            pass
+
+    for smoother_name in smoother_values:
+        for nlay in layer_values:
+            print("\n" + "-" * 72)
+            print(f"Benchmark layer count: {nlay}, smoother: {smoother_name}")
+            print("-" * 72)
+
+            case_workspace = workspace.joinpath(f"layers_{nlay:02d}_{smoother_name}")
+            metrics = run_case(
+                nx=nx,
+                ny=ny,
+                nlay=nlay,
+                dx=dx,
+                layer_thickness=layer_thickness,
+                transmissivity=transmissivity,
+                recharge=recharge,
+                heterogeneous_t=heterogeneous_t,
+                seed=seed,
+                workspace=case_workspace,
+                device=device,
+                solver=solver,
+                smoother=smoother_name,
+                do_run_mf6=do_run_mf6,
+                do_run_warp=do_run_warp,
+                adaptive_kcycle=adaptive_kcycle,
+                line_omega=line_omega,
+                line_sweeps_pre=line_sweeps_pre,
+                line_sweeps_post=line_sweeps_post,
+                line_sweeps_coarse=line_sweeps_coarse,
+            )
+
+            mf6_path = case_workspace.joinpath("mf6_heads.npz")
+            warp_path = case_workspace.joinpath("warp_heads.npz")
+            warp_info = _load_warp_info(warp_path)
+            warp_info_solve1 = _load_npz_json(warp_path, "info_solve1")
+            warp_info_solve2 = _load_npz_json(warp_path, "info_solve2")
+            warp_summary_solve1 = _load_npz_json(warp_path, "summary_solve1")
+            warp_summary_solve2 = _load_npz_json(warp_path, "summary_solve2")
+            warp_adaptive_settings = _load_npz_json(warp_path, "adaptive_settings")
+            solve1_mode = _load_npz_string(warp_path, "solve1_mode")
+            solve2_mode = _load_npz_string(warp_path, "solve2_mode")
+            solve1_settings = _load_npz_json(warp_path, "solve1_settings")
+            solve2_settings = _load_npz_json(warp_path, "solve2_settings")
+            solve1_report = _convergence_report(
+                warp_info_solve1,
+                comparison=metrics,
+                dh_tol=float(solve1_settings.get("dh_rms_tol", DEFAULT_DH_TOL)),
+                residual_floor_tol=DEFAULT_RESIDUAL_FLOOR_TOL,
+                mf6_agreement_tol=DEFAULT_MF6_AGREEMENT_TOL,
+            )
+            solve2_report = _convergence_report(
+                warp_info_solve2,
+                comparison=metrics,
+                dh_tol=float(solve2_settings.get("dh_rms_tol", DEFAULT_DH_TOL)),
+                residual_floor_tol=DEFAULT_RESIDUAL_FLOOR_TOL,
+                mf6_agreement_tol=DEFAULT_MF6_AGREEMENT_TOL,
+            )
+
+            row = {
+                "nlay": int(nlay),
+                "smoother": str(smoother_name),
+                "nx": int(nx),
+                "ny": int(ny),
+                "n_cells": int(nx * ny * nlay),
+                "workspace": str(case_workspace),
+                "timing": {
+                    "mf6_engine_time": _load_npz_scalar(mf6_path, "engine_time"),
+                    "mf6_total_time": _load_npz_scalar(mf6_path, "total_time"),
+                    "warp_total_time": _load_npz_scalar(warp_path, "total_time"),
+                    "warp_solve1_time": _load_npz_scalar(warp_path, "solve1_time"),
+                    "warp_solve2_time": _load_npz_scalar(warp_path, "solve2_time"),
+                    "warp_benchmark_time": _load_npz_scalar(warp_path, "solve2_time"),
+                },
+                "convergence": {
+                    "solve1": {
+                        "mode": solve1_mode,
+                        "converged": bool(warp_info_solve1.get("converged", False)) if warp_info_solve1 else None,
+                        "n_cycles_used": (
+                            int(warp_info_solve1["n_cycles_used"])
+                            if "n_cycles_used" in warp_info_solve1
+                            else None
+                        ),
+                        "r_rms_end": (
+                            float(warp_info_solve1["r_rms_end"])
+                            if "r_rms_end" in warp_info_solve1
+                            else None
+                        ),
+                        "settings": solve1_settings,
+                        "summary": warp_summary_solve1,
+                        "report": solve1_report,
+                    },
+                    "solve2": {
+                        "mode": solve2_mode,
+                        "converged": bool(warp_info_solve2.get("converged", False)) if warp_info_solve2 else None,
+                        "n_cycles_used": (
+                            int(warp_info_solve2["n_cycles_used"])
+                            if "n_cycles_used" in warp_info_solve2
+                            else None
+                        ),
+                        "r_rms_end": (
+                            float(warp_info_solve2["r_rms_end"])
+                            if "r_rms_end" in warp_info_solve2
+                            else None
+                        ),
+                        "settings": solve2_settings,
+                        "summary": warp_summary_solve2,
+                        "report": solve2_report,
+                    },
+                    "benchmark_solve": "solve2",
+                    "adaptive": {
+                        "settings": warp_adaptive_settings,
+                    },
+                },
+                "warp_solver": {
+                    "solver_type": warp_info.get("solver_type"),
+                    "smoother": warp_info.get("smoother"),
+                    "line_omega": warp_info.get("line_omega"),
+                    "line_sweeps_pre": warp_info.get("line_sweeps_pre"),
+                    "line_sweeps_post": warp_info.get("line_sweeps_post"),
+                    "line_sweeps_coarse": warp_info.get("line_sweeps_coarse"),
+                    "check_every_no": warp_info.get("check_every_no"),
+                    "n_levels": int(warp_info["n_levels"]) if "n_levels" in warp_info else None,
+                    "level_shapes": warp_info.get("level_shapes"),
+                },
+                "comparison": metrics,
+            }
+
+            # Merge with existing row to preserve data from tools that weren't run this time
+            result_key = (str(smoother_name), int(nlay))
+            if result_key in results_dict:
+                old_row = results_dict[result_key]
+                if not do_run_mf6:
+                    row["timing"]["mf6_engine_time"] = old_row.get("timing", {}).get("mf6_engine_time")
+                    row["timing"]["mf6_total_time"] = old_row.get("timing", {}).get("mf6_total_time")
+                if not do_run_warp:
+                    row["timing"]["warp_total_time"] = old_row.get("timing", {}).get("warp_total_time")
+                    row["timing"]["warp_solve1_time"] = old_row.get("timing", {}).get("warp_solve1_time")
+                    row["timing"]["warp_solve2_time"] = old_row.get("timing", {}).get("warp_solve2_time")
+                    row["timing"]["warp_benchmark_time"] = old_row.get("timing", {}).get("warp_benchmark_time")
+                    row["convergence"] = old_row.get("convergence", {})
+                    row["warp_solver"] = old_row.get("warp_solver", {})
+                if not (do_run_mf6 and do_run_warp) and not metrics:
+                    row["comparison"] = old_row.get("comparison", {})
+
+            results_dict[result_key] = row
+
+            results = [results_dict[k] for k in sorted(results_dict.keys())]
+            with summary_path.open("w") as f:
+                json.dump(results, f, indent=4)
+            print(f"Updated benchmark summary: {summary_path}")
+            print(f"Solve 2 convergence report: {solve2_report['status']}")
+
+    print("\nLayer benchmark complete.")
+    return [results_dict[k] for k in sorted(results_dict.keys())]
+
+
 if __name__ == "__main__":
     # Configuration parameters
-    nx = 500
-    ny = 500
-    nlay = 20
+    nx = 1000
+    ny = 1000
+    layers = BENCHMARK_LAYERS
     dx = 100.0
     layer_thickness = 50.0
     transmissivity = 3000.0
@@ -370,14 +798,19 @@ if __name__ == "__main__":
     workspace = None
     device = "auto"
     solver = "kcycle"
-    smoother = "chebyshev"
+    smoother = 'chebyshev_vertical_line'
     do_run_mf6 = True
     do_run_warp = True
+    adaptive_kcycle = True
+    line_omega = 0.8
+    line_sweeps_pre = 1
+    line_sweeps_post = 1
+    line_sweeps_coarse = 1
 
-    run_case(
+    run_layer_benchmark(
         nx=nx,
         ny=ny,
-        nlay=nlay,
+        layers=layers,
         dx=dx,
         layer_thickness=layer_thickness,
         transmissivity=transmissivity,
@@ -390,4 +823,9 @@ if __name__ == "__main__":
         smoother=smoother,
         do_run_mf6=do_run_mf6,
         do_run_warp=do_run_warp,
+        adaptive_kcycle=adaptive_kcycle,
+        line_omega=line_omega,
+        line_sweeps_pre=line_sweeps_pre,
+        line_sweeps_post=line_sweeps_post,
+        line_sweeps_coarse=line_sweeps_coarse,
     )

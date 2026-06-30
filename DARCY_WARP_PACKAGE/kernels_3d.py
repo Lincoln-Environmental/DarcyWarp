@@ -20,6 +20,7 @@ __all__ = [
     "prolong_bilinear_xy_3d_kernel",
     "restrict_blockavg_3d_kernel",
     "restrict_blockavg_xy_3d_kernel",
+    "vertical_line_relaxation_7point_kernel",
     "zero_scalar_kernel",
 ]
 
@@ -108,6 +109,182 @@ def apply_A_7point_kernel(
         val = val - czm * wp.float64(h[k - 1, j, i])
 
     Ah[k, j, i] = WP_FLOAT(val)
+
+
+@wp.kernel
+def vertical_line_relaxation_7point_kernel(
+    tx_p: wp.array(dtype=WP_FLOAT, ndim=3),
+    tx_m: wp.array(dtype=WP_FLOAT, ndim=3),
+    ty_p: wp.array(dtype=WP_FLOAT, ndim=3),
+    ty_m: wp.array(dtype=WP_FLOAT, ndim=3),
+    tz_p: wp.array(dtype=WP_FLOAT, ndim=3),
+    tz_m: wp.array(dtype=WP_FLOAT, ndim=3),
+    active: wp.array(dtype=wp.int32, ndim=3),
+    bc_mask: wp.array(dtype=wp.int32, ndim=3),
+    storage_diag: wp.array(dtype=WP_FLOAT, ndim=3),
+    rhs: wp.array(dtype=WP_FLOAT, ndim=3),
+    x_old: wp.array(dtype=WP_FLOAT, ndim=3),
+    bc_values: wp.array(dtype=WP_FLOAT, ndim=3),
+    omega: float,
+    c_prime: wp.array(dtype=WP_FLOAT, ndim=3),
+    d_prime: wp.array(dtype=WP_FLOAT, ndim=3),
+    nx: int,
+    ny: int,
+    nz: int,
+    x_new: wp.array(dtype=WP_FLOAT, ndim=3),
+):
+    xy_idx = wp.tid()
+    i = xy_idx % nx
+    j = xy_idx // nx
+
+    # Forward sweep
+    for k in range(nz):
+        act = active[k, j, i]
+        bcm = bc_mask[k, j, i]
+
+        if act > 0 and bcm == 0:
+            diag = wp.float64(storage_diag[k, j, i])
+            if diag < wp.float64(0.0):
+                diag = wp.float64(0.0)
+            v = wp.float64(rhs[k, j, i])
+
+            # x+
+            cxp = wp.float64(tx_p[k, j, i])
+            if cxp < wp.float64(0.0):
+                cxp = wp.float64(0.0)
+            if i + 1 >= nx or active[k, j, i + 1] == 0:
+                cxp = wp.float64(0.0)
+            if cxp > wp.float64(0.0):
+                diag += cxp
+                if bc_mask[k, j, i + 1] > 0:
+                    v += cxp * wp.float64(bc_values[k, j, i + 1])
+                else:
+                    v += cxp * wp.float64(x_old[k, j, i + 1])
+
+            # x-
+            cxm = wp.float64(tx_m[k, j, i])
+            if cxm < wp.float64(0.0):
+                cxm = wp.float64(0.0)
+            if i - 1 < 0 or active[k, j, i - 1] == 0:
+                cxm = wp.float64(0.0)
+            if cxm > wp.float64(0.0):
+                diag += cxm
+                if bc_mask[k, j, i - 1] > 0:
+                    v += cxm * wp.float64(bc_values[k, j, i - 1])
+                else:
+                    v += cxm * wp.float64(x_old[k, j, i - 1])
+
+            # y+
+            cyp = wp.float64(ty_p[k, j, i])
+            if cyp < wp.float64(0.0):
+                cyp = wp.float64(0.0)
+            if j + 1 >= ny or active[k, j + 1, i] == 0:
+                cyp = wp.float64(0.0)
+            if cyp > wp.float64(0.0):
+                diag += cyp
+                if bc_mask[k, j + 1, i] > 0:
+                    v += cyp * wp.float64(bc_values[k, j + 1, i])
+                else:
+                    v += cyp * wp.float64(x_old[k, j + 1, i])
+
+            # y-
+            cym = wp.float64(ty_m[k, j, i])
+            if cym < wp.float64(0.0):
+                cym = wp.float64(0.0)
+            if j - 1 < 0 or active[k, j - 1, i] == 0:
+                cym = wp.float64(0.0)
+            if cym > wp.float64(0.0):
+                diag += cym
+                if bc_mask[k, j - 1, i] > 0:
+                    v += cym * wp.float64(bc_values[k, j - 1, i])
+                else:
+                    v += cym * wp.float64(x_old[k, j - 1, i])
+
+            a_k = wp.float64(0.0)
+            c_k = wp.float64(0.0)
+
+            # z- (a_k)
+            czm = wp.float64(tz_m[k, j, i])
+            if czm < wp.float64(0.0):
+                czm = wp.float64(0.0)
+            if k - 1 < 0 or active[k - 1, j, i] == 0:
+                czm = wp.float64(0.0)
+            if czm > wp.float64(0.0):
+                diag += czm
+                if bc_mask[k - 1, j, i] > 0:
+                    v += czm * wp.float64(bc_values[k - 1, j, i])
+                else:
+                    a_k = -czm
+
+            # z+ (c_k)
+            czp = wp.float64(tz_p[k, j, i])
+            if czp < wp.float64(0.0):
+                czp = wp.float64(0.0)
+            if k + 1 >= nz or active[k + 1, j, i] == 0:
+                czp = wp.float64(0.0)
+            if czp > wp.float64(0.0):
+                diag += czp
+                if bc_mask[k + 1, j, i] > 0:
+                    v += czp * wp.float64(bc_values[k + 1, j, i])
+                else:
+                    c_k = -czp
+
+            if diag < wp.float64(1.0e-12):
+                b_k = wp.float64(1.0)
+                d_k = v
+            else:
+                b_k = diag
+                d_k = v
+
+        elif act > 0 and bcm > 0:
+            a_k = wp.float64(0.0)
+            b_k = wp.float64(1.0)
+            c_k = wp.float64(0.0)
+            d_k = wp.float64(bc_values[k, j, i])
+        else:
+            a_k = wp.float64(0.0)
+            b_k = wp.float64(1.0)
+            c_k = wp.float64(0.0)
+            d_k = wp.float64(x_old[k, j, i])
+
+        if k == 0:
+            c_prime[k, j, i] = WP_FLOAT(c_k / b_k)
+            d_prime[k, j, i] = WP_FLOAT(d_k / b_k)
+        else:
+            c_prev = wp.float64(c_prime[k - 1, j, i])
+            d_prev = wp.float64(d_prime[k - 1, j, i])
+            denom = b_k - a_k * c_prev
+            if wp.abs(denom) > wp.float64(1e-30):
+                c_prime[k, j, i] = WP_FLOAT(c_k / denom)
+                d_prime[k, j, i] = WP_FLOAT((d_k - a_k * d_prev) / denom)
+            else:
+                c_prime[k, j, i] = WP_FLOAT(0.0)
+                d_prime[k, j, i] = WP_FLOAT(0.0)
+
+    # Backward sweep
+    x_new_val_prev = wp.float64(0.0)
+    for k_inv in range(nz):
+        k = nz - 1 - k_inv
+        
+        c_p = wp.float64(c_prime[k, j, i])
+        d_p = wp.float64(d_prime[k, j, i])
+        
+        if k == nz - 1:
+            x_new_val = d_p
+        else:
+            x_new_val = d_p - c_p * x_new_val_prev
+            
+        x_new_val_prev = x_new_val
+        
+        act = active[k, j, i]
+        bcm = bc_mask[k, j, i]
+        if act > 0 and bcm == 0:
+            x_old_val = wp.float64(x_old[k, j, i])
+            x_new[k, j, i] = WP_FLOAT(x_old_val + wp.float64(omega) * (x_new_val - x_old_val))
+        elif act > 0 and bcm > 0:
+            x_new[k, j, i] = bc_values[k, j, i]
+        else:
+            x_new[k, j, i] = WP_FLOAT(0.0)
 
 
 @wp.kernel
@@ -664,4 +841,3 @@ def apply_A_and_pAp_7point_kernel(
 
     Ap[k, j, i] = WP_FLOAT(val64)
     wp.atomic_add(pAp_buf, 0, pC * val64)
-

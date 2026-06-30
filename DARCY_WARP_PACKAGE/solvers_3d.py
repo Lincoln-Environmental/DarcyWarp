@@ -600,6 +600,11 @@ def solve_multigrid_kcycle_7point_3d(
     min_coarse_n: int = 2,
     smoother: str = "chebyshev",
     omega: float = 0.8,
+    line_omega: float = 0.8,
+    line_sweeps_pre: int = 1,
+    line_sweeps_post: int = 1,
+    line_sweeps_coarse: int = 1,
+    vertical_line_max_nz: int = 64,
     cheby_lambda_min: float = 0.05,
     cheby_lambda_max: float = 1.95,
     rel_tol: float = 5.0e-7,
@@ -769,6 +774,11 @@ def solve_multigrid_kcycle_7point_3d(
                 min_coarse_n=int(min_coarse_n),
                 smoother=str(smoother),
                 omega=float(omega),
+                line_omega=float(line_omega),
+                line_sweeps_pre=int(line_sweeps_pre),
+                line_sweeps_post=int(line_sweeps_post),
+                line_sweeps_coarse=int(line_sweeps_coarse),
+                vertical_line_max_nz=int(vertical_line_max_nz),
                 cheby_lambda_min=float(cheby_lambda_min),
                 cheby_lambda_max=float(cheby_lambda_max),
                 rel_tol=float(rel_tol),
@@ -887,9 +897,25 @@ def solve_multigrid_kcycle_7point_3d(
         dh_max_tol_f = float(dh_max_tol)
 
     smooth_mode = str(smoother).strip().lower()
-    if smooth_mode not in {"chebyshev", "jacobi"}:
-        raise ValueError("smoother must be 'chebyshev' or 'jacobi'.")
-    if smooth_mode == "chebyshev":
+    if smooth_mode not in {"chebyshev", "jacobi", "vertical_line", "chebyshev_vertical_line"}:
+        raise ValueError("smoother must be 'chebyshev', 'jacobi', 'vertical_line', or 'chebyshev_vertical_line'.")
+    uses_vertical_line = smooth_mode in {"vertical_line", "chebyshev_vertical_line"}
+    if uses_vertical_line:
+        if int(shape0[0]) > int(vertical_line_max_nz):
+            raise ValueError(f"vertical_line smoother currently supports nz <= {vertical_line_max_nz}")
+    line_sweeps_pre_i = int(line_sweeps_pre)
+    line_sweeps_post_i = int(line_sweeps_post)
+    line_sweeps_coarse_i = int(line_sweeps_coarse)
+    if line_sweeps_pre_i < 0 or line_sweeps_post_i < 0 or line_sweeps_coarse_i < 0:
+        raise ValueError("line_sweeps_pre, line_sweeps_post, and line_sweeps_coarse must be >= 0.")
+
+    if smooth_mode == "vertical_line":
+        omg = float(line_omega)
+        pre_omegas = tuple(omg for _ in range(int(nu_pre)))
+        post_omegas = tuple(omg for _ in range(int(nu_post)))
+        point_pre_omegas: tuple[float, ...] = ()
+        point_post_omegas: tuple[float, ...] = ()
+    elif smooth_mode in {"chebyshev", "chebyshev_vertical_line"}:
         pre_omegas = _chebyshev_relaxation_sequence(
             order=int(nu_pre),
             lambda_min=float(cheby_lambda_min),
@@ -900,14 +926,21 @@ def solve_multigrid_kcycle_7point_3d(
             lambda_min=float(cheby_lambda_min),
             lambda_max=float(cheby_lambda_max),
         )
+        point_pre_omegas = pre_omegas
+        point_post_omegas = post_omegas
     else:
         omg = float(omega)
         pre_omegas = tuple(omg for _ in range(int(nu_pre)))
         post_omegas = tuple(omg for _ in range(int(nu_post)))
+        point_pre_omegas = pre_omegas
+        point_post_omegas = post_omegas
     if len(pre_omegas) == 0:
         pre_omegas = (1.0,)
     if len(post_omegas) == 0:
         post_omegas = (1.0,)
+    if smooth_mode != "vertical_line":
+        point_pre_omegas = pre_omegas
+        point_post_omegas = post_omegas
 
     max_cycles_i = int(max_cycles)
     if max_cycles_i < 1:
@@ -1016,6 +1049,9 @@ def solve_multigrid_kcycle_7point_3d(
             "dot_buf": wp.zeros(1, dtype=wp.float64, device=device),
             "pAp_buf": wp.zeros(1, dtype=wp.float64, device=device),
         }
+        if uses_vertical_line:
+            lvl["c_prime_wp"] = wp.zeros(shapeL, dtype=WP_FLOAT, device=device)
+            lvl["d_prime_wp"] = wp.zeros(shapeL, dtype=WP_FLOAT, device=device)
         levels.append(lvl)
 
     lvl0 = levels[0]
@@ -1031,7 +1067,7 @@ def solve_multigrid_kcycle_7point_3d(
         levels[lid]["z1_wp"].fill_(WP_FLOAT(0.0))
         levels[lid]["r1_wp"].fill_(WP_FLOAT(0.0))
 
-    def smooth_level(level: dict, omegas: tuple[float, ...]) -> None:
+    def smooth_point_level(level: dict, omegas: tuple[float, ...]) -> None:
         x_in = level["x_wp"]
         x_out = level["Ax_wp"]
         for om in omegas:
@@ -1072,6 +1108,61 @@ def solve_multigrid_kcycle_7point_3d(
                 device=device,
             )
 
+    def smooth_vertical_line_level(level: dict, n_sweeps: int) -> None:
+        if int(n_sweeps) <= 0:
+            return
+        from DARCY_WARP_PACKAGE.kernels_3d import vertical_line_relaxation_7point_kernel
+
+        x_in = level["x_wp"]
+        x_out = level["Ax_wp"]
+        for _ in range(int(n_sweeps)):
+            wp.launch(
+                kernel=vertical_line_relaxation_7point_kernel,
+                dim=(level["ny"] * level["nx"],),
+                inputs=[
+                    level["tx_p_wp"],
+                    level["tx_m_wp"],
+                    level["ty_p_wp"],
+                    level["ty_m_wp"],
+                    level["tz_p_wp"],
+                    level["tz_m_wp"],
+                    level["active_wp"],
+                    level["bc_mask_wp"],
+                    level["storage_wp"],
+                    level["b_wp"],
+                    x_in,
+                    level["bc_values_wp"],
+                    float(line_omega),
+                    level["c_prime_wp"],
+                    level["d_prime_wp"],
+                    int(level["nx"]),
+                    int(level["ny"]),
+                    int(level["nz"]),
+                    x_out,
+                ],
+                device=device,
+            )
+            tmp = x_in
+            x_in = x_out
+            x_out = tmp
+
+        if x_in is not level["x_wp"]:
+            wp.launch(
+                kernel=copy_field_3d_kernel,
+                dim=level["dim"],
+                inputs=[x_in, level["x_wp"], int(level["nx"]), int(level["ny"]), int(level["nz"])],
+                device=device,
+            )
+
+    def smooth_level(level: dict, point_omegas: tuple[float, ...], line_sweeps: int) -> None:
+        if smooth_mode == "vertical_line":
+            smooth_vertical_line_level(level, len(point_omegas))
+        elif smooth_mode == "chebyshev_vertical_line":
+            smooth_point_level(level, point_omegas)
+            smooth_vertical_line_level(level, line_sweeps)
+        else:
+            smooth_point_level(level, point_omegas)
+
     def compute_residual_norm(level: dict, x_in_wp, r_out_wp, rtr_buf) -> float:
         wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[rtr_buf], device=device)
         wp.launch(
@@ -1100,12 +1191,17 @@ def solve_multigrid_kcycle_7point_3d(
         return float(rtr_buf.numpy()[0])
 
     def coarsest_relax(level: dict) -> None:
-        for _ in range(int(nu_coarse)):
-            smooth_level(level, pre_omegas)
+        if smooth_mode == "chebyshev_vertical_line":
+            for _ in range(int(nu_coarse)):
+                smooth_point_level(level, point_pre_omegas)
+            smooth_vertical_line_level(level, line_sweeps_coarse_i)
+        else:
+            for _ in range(int(nu_coarse)):
+                smooth_level(level, pre_omegas, len(pre_omegas))
 
     def kcycle(level_id: int) -> None:
         level = levels[level_id]
-        smooth_level(level, pre_omegas)
+        smooth_level(level, point_pre_omegas if smooth_mode != "vertical_line" else pre_omegas, line_sweeps_pre_i)
         compute_residual_norm(level, level["x_wp"], level["r_wp"], level["rTr_buf"])
 
         if level_id == (len(levels) - 1):
@@ -1252,7 +1348,7 @@ def solve_multigrid_kcycle_7point_3d(
             device=device,
         )
 
-        smooth_level(level, post_omegas)
+        smooth_level(level, point_post_omegas if smooth_mode != "vertical_line" else post_omegas, line_sweeps_post_i)
 
     rTr0 = compute_residual_norm(lvl0, lvl0["x_wp"], lvl0["r_wp"], lvl0["rTr_buf"])
     r_rms0 = float(np.sqrt(max(rTr0, 0.0) / float(n_free0)))
@@ -1276,6 +1372,7 @@ def solve_multigrid_kcycle_7point_3d(
         rTr_now = compute_residual_norm(lvl0, lvl0["x_wp"], lvl0["r_wp"], lvl0["rTr_buf"])
         r_rms_now = float(np.sqrt(max(rTr_now, 0.0) / float(n_free0)))
 
+        # TODO: Replace this full head copy with a device-side dh_rms/dh_max reduction.
         x_now = np.asarray(lvl0["x_wp"].numpy(), dtype=np.float64)
         dh = (x_now - x_prev_check)[free0]
         if dh.size > 0:
@@ -1312,8 +1409,12 @@ def solve_multigrid_kcycle_7point_3d(
         "nu_coarse": int(nu_coarse),
         "smoother": str(smooth_mode),
         "omega": float(omega),
-        "cheby_lambda_min": float(cheby_lambda_min) if smooth_mode == "chebyshev" else float("nan"),
-        "cheby_lambda_max": float(cheby_lambda_max) if smooth_mode == "chebyshev" else float("nan"),
+        "cheby_lambda_min": (
+            float(cheby_lambda_min) if smooth_mode in {"chebyshev", "chebyshev_vertical_line"} else float("nan")
+        ),
+        "cheby_lambda_max": (
+            float(cheby_lambda_max) if smooth_mode in {"chebyshev", "chebyshev_vertical_line"} else float("nan")
+        ),
         "cheby_pre_omegas": [float(v) for v in pre_omegas],
         "cheby_post_omegas": [float(v) for v in post_omegas],
         "rel_tol": float(rel_tol),
@@ -1328,6 +1429,12 @@ def solve_multigrid_kcycle_7point_3d(
         "transient_formulation": "confined" if bool(transient) else "steady",
         "dt": float(dt_used) if bool(transient) else float("nan"),
         "unconfined": False,
+        "line_omega": float(line_omega),
+        "line_sweeps_pre": int(line_sweeps_pre_i),
+        "line_sweeps_post": int(line_sweeps_post_i),
+        "line_sweeps_coarse": int(line_sweeps_coarse_i),
+        "check_every_no": int(check_every),
+        "vertical_line_max_nz": int(vertical_line_max_nz),
     }
 
     return (head_out, info) if return_info else head_out
