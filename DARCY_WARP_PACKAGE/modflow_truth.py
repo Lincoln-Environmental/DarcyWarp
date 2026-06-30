@@ -96,6 +96,116 @@ def _make_ghb_spd(
     return {0: ghb_records}
 
 
+def _normalize_2d_field(
+    value: float | np.ndarray | None,
+    shape: tuple[int, int],
+    default: float,
+    name: str,
+) -> np.ndarray:
+    """
+    Normalize a scalar or 2D field to a float array of shape (nrow, ncol).
+    """
+    if value is None:
+        return np.full(shape, float(default), dtype=float)
+
+    arr = np.asarray(value, dtype=float)
+    if arr.ndim == 0:
+        return np.full(shape, float(arr), dtype=float)
+    if arr.shape != shape:
+        raise ValueError(f"{name} has shape {arr.shape}, expected {shape}.")
+    return arr.astype(float, copy=True)
+
+
+def _normalize_layer_field(
+    value: float | np.ndarray,
+    nlay: int,
+    shape: tuple[int, int],
+    name: str,
+) -> np.ndarray:
+    """
+    Normalize a scalar, 2D field, or 3D layer field to (nlay, nrow, ncol).
+    """
+    arr = np.asarray(value, dtype=float)
+    if arr.ndim == 0:
+        return np.full((nlay, *shape), float(arr), dtype=float)
+    if arr.shape == shape:
+        return np.repeat(arr[np.newaxis, :, :], nlay, axis=0).astype(float, copy=True)
+    if arr.shape == (nlay, *shape):
+        return arr.astype(float, copy=True)
+    raise ValueError(f"{name} has shape {arr.shape}, expected {shape} or {(nlay, *shape)}.")
+
+
+def _create_chd_single_period_multilayer(
+    boundary_heads: np.ndarray,
+    active: np.ndarray,
+    nlay: int,
+):
+    """
+    Build CHD stress period data by applying the same 2D boundary heads to every layer.
+    """
+    heads = np.asarray(boundary_heads, dtype=float)
+    act = np.asarray(active)
+
+    if heads.shape != act.shape:
+        raise ValueError("boundary_heads and active must have the same shape")
+
+    mask = np.isfinite(heads) & (act > 0)
+    i_idx, j_idx = np.where(mask)
+    if i_idx.size == 0:
+        return {0: []}
+
+    vals = heads[i_idx, j_idx].astype(float)
+    chd_records = []
+    for layer in range(int(nlay)):
+        for idx in range(i_idx.size):
+            chd_records.append(
+                ((layer, int(i_idx[idx]), int(j_idx[idx])), float(vals[idx]))
+            )
+
+    return {0: chd_records}
+
+
+def _make_ghb_spd_multilayer(
+    domain: np.ndarray,
+    ghb_mask: np.ndarray,
+    dem: np.ndarray,
+    hk: np.ndarray,
+    grid_size: float,
+    kriv_factor: float,
+    width: float = None,
+):
+    """
+    Build GHB stress period data for every layer using the same 2D GHB mask.
+    """
+    if width is None:
+        width = grid_size
+
+    hk_arr = np.asarray(hk, dtype=float)
+    if hk_arr.ndim != 3:
+        raise ValueError("hk must be a 3D array with shape (nlay, nrow, ncol).")
+
+    mask = (domain == 1) & ghb_mask & np.isfinite(dem)
+    i_idx, j_idx = np.where(mask)
+    if i_idx.size == 0:
+        return {0: []}
+
+    stage = dem[i_idx, j_idx].astype(float)
+    ghb_records = []
+    for layer in range(hk_arr.shape[0]):
+        k_riv = kriv_factor * hk_arr[layer, i_idx, j_idx]
+        cond = k_riv * grid_size * width
+        for idx in range(i_idx.size):
+            ghb_records.append(
+                (
+                    (int(layer), int(i_idx[idx]), int(j_idx[idx])),
+                    float(stage[idx]),
+                    float(cond[idx]),
+                )
+            )
+
+    return {0: ghb_records}
+
+
 def make_mf_model(
     nx: int = 1000,
     ny: int = 250,
@@ -314,6 +424,247 @@ def make_mf_model(
 
     return heads2d, float(engine_time)
 
+
+def make_mf_model_multilayer(
+    nx: int = 1000,
+    ny: int = 200,
+    nlay: int = 2,
+    grid_size: float = 100.0,
+    nper: int = 1,
+    workspace=None,
+    hk: float | np.ndarray = 10.0,
+    vertical_k: float | np.ndarray | None = None,
+    recharge: float | np.ndarray | None = None,
+    layer_thickness: float | tuple[float, ...] | list[float] | np.ndarray = 150.0,
+    run: bool = True,
+    use_ghb: bool = False,
+    kriv_factor: float = 1.0,
+    record_full_time: bool = False,
+):
+    """
+    Build a simple multi-layer steady MF6 truth model using the shared model-builder tools.
+
+    :param nx: number of columns
+    :param ny: number of rows
+    :param nlay: number of layers
+    :param grid_size: horizontal cell size [m]
+    :param nper: number of stress periods
+    :param workspace: path to output folder
+    :param hk: horizontal K [m/d], as scalar, 2D (nrow, ncol), or 3D (nlay, nrow, ncol)
+    :param vertical_k: vertical K [m/d], same accepted shapes as hk. If None, uses hk.
+    :param recharge: recharge [m/d], scalar or 2D (nrow, ncol). If None, uses 1e-4.
+    :param layer_thickness: scalar layer thickness for every layer, or nlay positive layer thicknesses
+    :param run: if True, run MF6 and return heads
+    :param use_ghb: if True, add GHB boundaries along the model center line on both layers
+    :param kriv_factor: factor for riverbed K relative to hk for GHB
+    :param record_full_time: if True, return total time including write + run + extract
+    :return: (heads3d, engine_time) if record_full_time is False, else (heads3d, total_time)
+    """
+    if workspace is None:
+        workspace = data_store.joinpath("mf6_truth_multilayer")
+    workspace = Path(workspace)
+    workspace.mkdir(parents=True, exist_ok=True)
+
+    name = "model_ml_truth"
+
+    domain = _build_domain(nx=nx, ny=ny)
+    dem = _build_dem(domain=domain)
+    dirichlet_mask = _build_dirichlet_boundary_mask(domain)
+    ghb_mask = _build_ghb_boundary_masks(domain)
+
+    nrow, ncol = domain.shape
+    nlay = int(nlay)
+    shape2d = (nrow, ncol)
+
+    thickness = np.asarray(layer_thickness, dtype=float)
+    if thickness.ndim == 0:
+        layer_thicknesses = np.full(nlay, float(thickness), dtype=float)
+    elif thickness.shape == (nlay,):
+        layer_thicknesses = thickness.astype(float, copy=True)
+    else:
+        raise ValueError(f"layer_thickness has shape {thickness.shape}, expected scalar or {(nlay,)}.")
+
+    if not np.all(np.isfinite(layer_thicknesses)) or np.any(layer_thicknesses <= 0.0):
+        raise ValueError("layer_thickness values must be positive finite numbers.")
+
+    model_top = fill_nan_with_nearest(dem).astype(float)
+    cumulative_thickness = np.cumsum(layer_thicknesses)
+    botm = np.empty((nlay, nrow, ncol), dtype=float)
+    for layer in range(nlay):
+        botm[layer, :, :] = model_top - cumulative_thickness[layer]
+
+    idomain = np.repeat(domain[np.newaxis, :, :], nlay, axis=0).astype(int)
+    strt = np.repeat(model_top[np.newaxis, :, :], nlay, axis=0).astype(float)
+    perioddata = [(1.0, 1, 1.0) for _ in range(int(nper))]
+
+    hk_use = _normalize_layer_field(hk, nlay=nlay, shape=shape2d, name="hk")
+    if not np.all(np.isfinite(hk_use)) or np.any(hk_use <= 0.0):
+        raise ValueError("hk values must be positive finite numbers.")
+
+    if vertical_k is None:
+        k33_use = hk_use.copy()
+    else:
+        k33_use = _normalize_layer_field(vertical_k, nlay=nlay, shape=shape2d, name="vertical_k")
+        if not np.all(np.isfinite(k33_use)) or np.any(k33_use <= 0.0):
+            raise ValueError("vertical_k values must be positive finite numbers.")
+
+    sim = flopy.mf6.MFSimulation(
+        sim_name=name,
+        exe_name=str(require_mf6()),
+        version="mf6",
+        sim_ws=str(workspace),
+    )
+
+    flopy.mf6.ModflowTdis(
+        sim,
+        pname="tdis",
+        time_units="DAYS",
+        nper=int(nper),
+        perioddata=perioddata,
+    )
+
+    gwf = flopy.mf6.ModflowGwf(
+        sim,
+        modelname=name,
+        model_nam_file=f"{name}.nam",
+    )
+
+    hclose = 1.0e-4
+    rclose = 1.0e-6
+    nouter = 10
+    ninner = 2000
+
+    ims = flopy.mf6.ModflowIms(
+        sim,
+        pname="ims",
+        print_option="SUMMARY",
+        complexity="SIMPLE",
+        linear_acceleration="CG",
+        outer_maximum=nouter,
+        outer_dvclose=hclose,
+        inner_maximum=ninner,
+        inner_dvclose=hclose,
+        rcloserecord=[rclose, "RELATIVE_RCLOSE"],
+        scaling_method="DIAGONAL",
+    )
+    sim.register_ims_package(ims, [gwf.name])
+
+    delr = float(grid_size)
+    delc = float(grid_size)
+
+    flopy.mf6.ModflowGwfdis(
+        gwf,
+        pname="dis",
+        nlay=nlay,
+        nrow=nrow,
+        ncol=ncol,
+        delr=delr,
+        delc=delc,
+        top=model_top,
+        botm=botm,
+        idomain=idomain,
+    )
+
+    flopy.mf6.ModflowGwfic(
+        gwf,
+        pname="ic",
+        strt=strt,
+    )
+
+    flopy.mf6.ModflowGwfnpf(
+        gwf,
+        pname="npf",
+        icelltype=[0 for _ in range(nlay)],
+        k=hk_use,
+        k33=k33_use,
+        k33overk=False,
+        save_specific_discharge=True,
+        save_saturation=True,
+    )
+
+    fixed_head_cells = dirichlet_mask.astype(float)
+    fixed_head_cells[fixed_head_cells == 0.0] = np.nan
+    fixed_head_cells = fixed_head_cells * model_top
+
+    chd_spd = _create_chd_single_period_multilayer(
+        boundary_heads=fixed_head_cells,
+        active=domain,
+        nlay=nlay,
+    )
+
+    flopy.mf6.ModflowGwfchd(
+        gwf,
+        pname="chd",
+        stress_period_data=chd_spd,
+        save_flows=True,
+    )
+
+    recharge_grid = _normalize_2d_field(
+        recharge,
+        shape=shape2d,
+        default=1.0e-4,
+        name="recharge",
+    )
+    recharge_grid[domain == 0] = 0.0
+
+    flopy.mf6.ModflowGwfrcha(
+        gwf,
+        pname="recharge",
+        recharge=recharge_grid,
+    )
+
+    if use_ghb:
+        ghb_spd = _make_ghb_spd_multilayer(
+            domain=domain,
+            ghb_mask=ghb_mask,
+            dem=dem,
+            hk=hk_use,
+            grid_size=grid_size,
+            kriv_factor=kriv_factor,
+        )
+        if ghb_spd[0]:
+            flopy.mf6.ModflowGwfghb(
+                gwf,
+                pname="ghb",
+                stress_period_data=ghb_spd,
+                save_flows=True,
+            )
+
+    flopy.mf6.ModflowGwfoc(
+        gwf,
+        pname="oc",
+        saverecord=[("HEAD", "ALL"), ("BUDGET", "LAST")],
+        head_filerecord=[f"{name}.hds"],
+        budget_filerecord=[f"{name}.cbb"],
+        printrecord=[],
+    )
+
+    t_total_start = time.perf_counter()
+
+    sim.write_simulation(silent=True)
+
+    if not run:
+        return None
+
+    t_engine_start = time.perf_counter()
+    ok, _ = sim.run_simulation(silent=True, report=False)
+    t_engine_end = time.perf_counter()
+    engine_time = t_engine_end - t_engine_start
+
+    if not ok:
+        warnings.warn("MF6 multilayer run failed")
+
+    heads3d = _extract_heads_3d(workspace.joinpath(f"{name}.hds"))
+
+    t_total_end = time.perf_counter()
+    total_time = t_total_end - t_total_start
+
+    if record_full_time:
+        return heads3d, float(total_time)
+
+    return heads3d, float(engine_time)
+
+
 def _extract_heads(hds_path: Path, totim: float = 1.0, plot=False):
     """
     Extract 2D head array from MF6 head file at specified time.
@@ -342,6 +693,19 @@ def _extract_heads(hds_path: Path, totim: float = 1.0, plot=False):
         plt.close()
 
     return heads2d
+
+
+def _extract_heads_3d(hds_path: Path, totim: float = 1.0):
+    """
+    Extract a 3D head array from an MF6 head file at a specified time.
+    """
+    hdobj = flopy.utils.HeadFile(str(hds_path))
+    heads = hdobj.get_data(totim=totim)
+
+    heads = np.asarray(heads, dtype=float)
+    heads[heads > 1.0e6] = np.nan
+
+    return heads
 
 
 def run_mf6_persistent_worker_batch_shm(
