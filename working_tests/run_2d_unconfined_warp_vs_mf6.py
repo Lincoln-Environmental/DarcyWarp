@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import json
 import os
 import sys
@@ -32,7 +33,7 @@ from DARCY_WARP_PACKAGE.warped_darcy import WarpDarcySolver  # noqa: E402
 DEFAULT_DH_TOL = 1.0e-4
 DEFAULT_RESIDUAL_FLOOR_TOL = 1.0e-4
 DEFAULT_MF6_AGREEMENT_TOL = 5.0e-4
-BENCHMARK_GRID_SIZES = [(50, 50), (100, 100), (250, 250), (500, 500), (1000, 1000)]
+BENCHMARK_GRID_SIZES = [(1000, 1000)] #(50, 50), (100, 100), (250, 250), (500, 500),
 
 
 @dataclass(frozen=True)
@@ -94,6 +95,13 @@ def _load_npz_scalar(npz_path: Path, name: str, default: float | None = None) ->
         if name not in data:
             return default
         return float(np.asarray(data[name]).reshape(()))
+
+
+def _format_optional_float(value: object, spec: str, missing: str = "n/a") -> str:
+    value = _finite_float(value)
+    if value is None:
+        return missing
+    return format(value, spec)
 
 
 def build_simple_unconfined_case(
@@ -270,6 +278,49 @@ def run_mf6_unconfined(case: Unconfined2DCase, out_path: str | Path | None = Non
     return out_path
 
 
+def _save_outer_history_first25(info: dict, out_path: Path) -> None:
+    """
+    Save the first 25 Picard outer iterations as a CSV for debugging early-phase behaviour.
+
+    :param info: solver info dictionary containing ``outer_history``.
+    :param out_path: path to write the CSV file.
+    """
+    history = info.get("outer_history", []) if isinstance(info, dict) else []
+    if not isinstance(history, list) or not history:
+        return
+
+    rows = history[:25]
+    columns = [
+        "outer_iteration",
+        "inner_max_cycles_used",
+        "inner_converged",
+        "inner_head_change_converged",
+        "inner_usable_for_picard",
+        "h_rms_end",
+        "inner_head_residual_tol_used",
+        "picard_update_max",
+        "picard_update_rms",
+        "picard_scale",
+        "omega",
+        "chebyshev_ready",
+        "chebyshev_used",
+        "chebyshev_reset",
+        "chebyshev_rejected",
+        "trial_measure",
+        "previous_measure",
+        "clipped_update",
+    ]
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with out_path.open("w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=columns, extrasaction="ignore")
+        writer.writeheader()
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            writer.writerow({key: row.get(key) for key in columns})
+
+
 def _solve_summary(info: object, elapsed: float, settings: dict) -> dict:
     summary = {
         "time": float(elapsed),
@@ -279,6 +330,13 @@ def _solve_summary(info: object, elapsed: float, settings: dict) -> dict:
         "final_max_abs_head_change": None,
         "final_residual": None,
         "inner_solve_failures": None,
+        "strict_inner_nonconvergence_count": None,
+        "unusable_inner_solve_count": None,
+        "practical_inner_acceptance_count": None,
+        "accepted_picard_update_count": None,
+        "outer_chebyshev_ready_count": None,
+        "outer_chebyshev_used_count": None,
+        "outer_chebyshev_reset_count": None,
         "chebyshev_rejections": None,
         "chebyshev_resets": None,
     }
@@ -289,6 +347,13 @@ def _solve_summary(info: object, elapsed: float, settings: dict) -> dict:
             "final_max_abs_head_change",
             "final_residual",
             "inner_solve_failures",
+            "strict_inner_nonconvergence_count",
+            "unusable_inner_solve_count",
+            "practical_inner_acceptance_count",
+            "accepted_picard_update_count",
+            "outer_chebyshev_ready_count",
+            "outer_chebyshev_used_count",
+            "outer_chebyshev_reset_count",
             "chebyshev_rejections",
             "chebyshev_resets",
             "effectively_dry_cell_count",
@@ -307,6 +372,11 @@ def run_warp_unconfined(
     inner_smoother: str = "chebyshev",
     cheby_lambda_min: float = 0.05,
     cheby_lambda_max: float = 1.95,
+    inner_forcing_eta: float = 0.10,
+    inner_head_residual_tol_max: float = 1.0e-2,
+    chebyshev_reset_factor: float = 1.2,
+    transmissivity_relaxation_enabled: bool = False,
+    unconfined_startup_mode: str = "initial_head",
 ) -> Path:
     """
     Run the same unconfined problem in the main 2D Warp solver and save heads to NPZ.
@@ -346,6 +416,12 @@ def run_warp_unconfined(
             "rel_tol": 5.0e-7,
             "abs_tol_min": 5.0e-7,
             "dh_rms_tol": DEFAULT_DH_TOL,
+            "residual_floor_tol": DEFAULT_RESIDUAL_FLOOR_TOL,
+            "inner_forcing_eta": float(inner_forcing_eta),
+            "inner_head_residual_tol_max": float(inner_head_residual_tol_max),
+            "chebyshev_reset_factor": float(chebyshev_reset_factor),
+            "transmissivity_relaxation_enabled": bool(transmissivity_relaxation_enabled),
+            "unconfined_startup_mode": str(unconfined_startup_mode),
             "smoother": str(inner_smoother),
             "cheby_lambda_min": float(cheby_lambda_min),
             "cheby_lambda_max": float(cheby_lambda_max),
@@ -376,6 +452,9 @@ def run_warp_unconfined(
     total_time = time.perf_counter() - t0
     solve1_summary = _solve_summary(info1, solve1_time, solve1_kwargs)
     solve2_summary = _solve_summary(info, solve2_time, solve2_kwargs)
+
+    first25_path = Path(out_path).parent.joinpath("outer_history_first25.csv")
+    _save_outer_history_first25(info, first25_path)
 
     np.savez_compressed(
         out_path,
@@ -409,12 +488,26 @@ def run_warp_unconfined(
             "smoother",
             "final_max_abs_head_change",
             "final_residual",
+            "final_h_rms_inner_residual",
             "chebyshev_rejections",
             "chebyshev_resets",
+            "accepted_picard_update_count",
+            "strict_inner_nonconvergence_count",
+            "unusable_inner_solve_count",
+            "practical_inner_acceptance_count",
+            "outer_chebyshev_ready_count",
+            "outer_chebyshev_used_count",
+            "outer_chebyshev_reset_count",
+            "inner_forcing_eta",
+            "inner_head_residual_tol_min",
+            "inner_head_residual_tol_max",
             "inner_solve_failures",
             "effectively_dry_cell_count",
         ):
-            print(f"  {key}: {info.get(key)}")
+            if key == "final_h_rms_inner_residual":
+                print(f"  {key}: {info.get('inner_h_rms_end')}")
+            else:
+                print(f"  {key}: {info.get(key)}")
     print()
     return out_path
 
@@ -473,9 +566,18 @@ def _convergence_report(
     max_abs_diff = _finite_float((comparison or {}).get("max_abs_diff"))
 
     head_change_converged = None if final_dh is None or hclose is None else bool(final_dh <= hclose)
+    inner_residual_converged = bool(info.get("inner_residual_converged", False))
+    inner_head_change_converged = bool(info.get("inner_head_change_converged", False))
+    inner_practically_converged = bool(info.get("inner_practically_converged", False))
     agrees_with_mf6 = None if max_abs_diff is None else bool(max_abs_diff < float(mf6_agreement_tol))
+
     if bool(info.get("converged", False)):
-        status = "Nonlinear head-change tolerance met."
+        if inner_residual_converged:
+            status = "Nonlinear head-change and inner residual tolerances met."
+        elif inner_practically_converged:
+            status = "Nonlinear head-change tolerance met via practical inner convergence."
+        else:
+            status = "Nonlinear head-change tolerance met."
     elif head_change_converged and agrees_with_mf6:
         status = "Reported nonlinear convergence is false, but head change and MF6 agreement are acceptable."
     else:
@@ -483,10 +585,14 @@ def _convergence_report(
 
     return {
         "head_change_converged": head_change_converged,
+        "inner_residual_converged": inner_residual_converged,
+        "inner_head_change_converged": inner_head_change_converged,
+        "inner_practically_converged": inner_practically_converged,
         "agrees_with_mf6": agrees_with_mf6,
         "status": status,
         "final_max_abs_head_change": final_dh,
         "hclose": hclose,
+        "residual_floor_tol": _finite_float(info.get("residual_floor_tol")),
         "max_abs_diff": max_abs_diff,
         "mf6_agreement_tol": float(mf6_agreement_tol),
     }
@@ -505,6 +611,11 @@ def run_case(
     inner_smoother: str = "chebyshev",
     cheby_lambda_min: float = 0.05,
     cheby_lambda_max: float = 1.95,
+    inner_forcing_eta: float = 0.10,
+    inner_head_residual_tol_max: float = 1.0e-2,
+    chebyshev_reset_factor: float = 1.2,
+    transmissivity_relaxation_enabled: bool = False,
+    unconfined_startup_mode: str = "initial_head",
     do_run_mf6: bool = True,
     do_run_warp: bool = True,
 ) -> dict:
@@ -535,6 +646,11 @@ def run_case(
             inner_smoother=inner_smoother,
             cheby_lambda_min=cheby_lambda_min,
             cheby_lambda_max=cheby_lambda_max,
+            inner_forcing_eta=inner_forcing_eta,
+            inner_head_residual_tol_max=inner_head_residual_tol_max,
+            chebyshev_reset_factor=chebyshev_reset_factor,
+            transmissivity_relaxation_enabled=transmissivity_relaxation_enabled,
+            unconfined_startup_mode=unconfined_startup_mode,
         )
 
     metrics = {}
@@ -568,8 +684,19 @@ def run_case(
         "solve2_outer_iterations": warp_info.get("outer_iterations"),
         "solve2_final_max_abs_head_change": _finite_float(warp_info.get("final_max_abs_head_change")),
         "solve2_final_residual": _finite_float(warp_info.get("final_residual")),
+        "solve2_final_h_rms_inner_residual": _finite_float(warp_info.get("inner_h_rms_end")),
         "solve2_chebyshev_rejections": warp_info.get("chebyshev_rejections"),
         "solve2_chebyshev_resets": warp_info.get("chebyshev_resets"),
+        "solve2_strict_inner_nonconvergence_count": warp_info.get("strict_inner_nonconvergence_count"),
+        "solve2_unusable_inner_solve_count": warp_info.get("unusable_inner_solve_count"),
+        "solve2_practical_inner_acceptance_count": warp_info.get("practical_inner_acceptance_count"),
+        "solve2_accepted_picard_update_count": warp_info.get("accepted_picard_update_count"),
+        "solve2_outer_chebyshev_ready_count": warp_info.get("outer_chebyshev_ready_count"),
+        "solve2_outer_chebyshev_used_count": warp_info.get("outer_chebyshev_used_count"),
+        "solve2_outer_chebyshev_reset_count": warp_info.get("outer_chebyshev_reset_count"),
+        "solve2_inner_forcing_eta": warp_info.get("inner_forcing_eta"),
+        "solve2_inner_head_residual_tol_min": warp_info.get("inner_head_residual_tol_min"),
+        "solve2_inner_head_residual_tol_max": warp_info.get("inner_head_residual_tol_max"),
         "solve2_inner_solve_failures": warp_info.get("inner_solve_failures"),
         "solve2_effectively_dry_cell_count": warp_info.get("effectively_dry_cell_count"),
         "convergence_report": solve2_report,
@@ -596,6 +723,11 @@ def run_grid_benchmark(
     inner_smoother: str = "chebyshev",
     cheby_lambda_min: float = 0.05,
     cheby_lambda_max: float = 1.95,
+    inner_forcing_eta: float = 0.10,
+    inner_head_residual_tol_max: float = 1.0e-2,
+    chebyshev_reset_factor: float = 1.2,
+    transmissivity_relaxation_enabled: bool = False,
+    unconfined_startup_mode: str = "initial_head",
     do_run_mf6: bool = True,
     do_run_warp: bool = True,
 ) -> list[dict]:
@@ -654,6 +786,11 @@ def run_grid_benchmark(
             inner_smoother=inner_smoother,
             cheby_lambda_min=cheby_lambda_min,
             cheby_lambda_max=cheby_lambda_max,
+            inner_forcing_eta=inner_forcing_eta,
+            inner_head_residual_tol_max=inner_head_residual_tol_max,
+            chebyshev_reset_factor=chebyshev_reset_factor,
+            transmissivity_relaxation_enabled=transmissivity_relaxation_enabled,
+            unconfined_startup_mode=unconfined_startup_mode,
             do_run_mf6=do_run_mf6,
             do_run_warp=do_run_warp,
         )
@@ -696,6 +833,153 @@ def run_grid_benchmark(
     return [results_dict[k] for k in sorted(results_dict.keys())]
 
 
+def run_chebyshev_lambda_sweep(
+    nx: int = 500,
+    ny: int = 500,
+    dx: float = 100.0,
+    hydraulic_conductivity: float = 10.0,
+    recharge: float = 1.0e-4,
+    initial_saturated_thickness: float = 100.0,
+    cheby_lambda_min_values: list[float] | tuple[float, ...] = (0.05, 0.1, 0.15, 0.2, 0.25, 0.5),
+    cheby_lambda_max_values: list[float] | tuple[float, ...] = (1.7, 1.8, 1.95, 2.0, 2.1, 2.2, 2.5),
+    workspace: str | Path | None = None,
+    device: str = "auto",
+    do_run_mf6: bool = True,
+    inner_forcing_eta: float = 0.10,
+    inner_head_residual_tol_max: float = 1.0e-2,
+    chebyshev_reset_factor: float = 1.2,
+    transmissivity_relaxation_enabled: bool = False,
+    unconfined_startup_mode: str = "initial_head",
+) -> list[dict]:
+    """
+    Run a single 2D unconfined case across a range of Chebyshev lambda bounds.
+
+    MF6 is run once and reused for comparison. A CSV summary of the sweep is
+    written to the workspace root.
+
+    :param nx: number of columns.
+    :param ny: number of rows.
+    :param dx: cell size.
+    :param hydraulic_conductivity: uniform K value.
+    :param recharge: recharge rate.
+    :param initial_saturated_thickness: initial saturated thickness.
+    :param cheby_lambda_min_values: iterable of lower Chebyshev bounds to test.
+    :param cheby_lambda_max_values: iterable of upper Chebyshev bounds to test.
+    :param workspace: root directory for the sweep outputs.
+    :param device: Warp device.
+    :param do_run_mf6: whether to run the MF6 truth model.
+    :param inner_forcing_eta: dynamic inner tolerance fraction.
+    :param inner_head_residual_tol_max: dynamic inner tolerance ceiling.
+    :param chebyshev_reset_factor: residual-increase reset threshold.
+    :param transmissivity_relaxation_enabled: optional T-relaxation flag.
+    :param unconfined_startup_mode: "initial_head" or "confined_pre_solve".
+    :return: list of per-combination result dictionaries.
+    """
+    if workspace is None:
+        workspace = data_store.joinpath(
+            "working_tests",
+            "mf6_vs_warp_2d_unconfined_lambda_sweep",
+        )
+    workspace = Path(workspace)
+    workspace.mkdir(parents=True, exist_ok=True)
+
+    base_case = build_simple_unconfined_case(
+        nx=int(nx),
+        ny=int(ny),
+        dx=float(dx),
+        hydraulic_conductivity=float(hydraulic_conductivity),
+        recharge=float(recharge),
+        initial_saturated_thickness=float(initial_saturated_thickness),
+        workspace=workspace,
+    )
+
+    mf6_path = workspace.joinpath("mf6_heads.npz")
+    if do_run_mf6:
+        run_mf6_unconfined(base_case, out_path=mf6_path)
+
+    results: list[dict] = []
+    for lambda_min in cheby_lambda_min_values:
+        for lambda_max in cheby_lambda_max_values:
+            if float(lambda_min) >= float(lambda_max):
+                print(f"Skipping invalid lambda pair: min={lambda_min}, max={lambda_max}")
+                continue
+
+            combo_workspace = workspace.joinpath(f"lambda_min_{float(lambda_min):.4f}_max_{float(lambda_max):.4f}")
+            combo_workspace.mkdir(parents=True, exist_ok=True)
+            combo_case = build_simple_unconfined_case(
+                nx=int(nx),
+                ny=int(ny),
+                dx=float(dx),
+                hydraulic_conductivity=float(hydraulic_conductivity),
+                recharge=float(recharge),
+                initial_saturated_thickness=float(initial_saturated_thickness),
+                workspace=combo_workspace,
+            )
+
+            warp_path = combo_workspace.joinpath("warp_heads.npz")
+            run_warp_unconfined(
+                combo_case,
+                out_path=warp_path,
+                device=device,
+                chebyshev_enabled=True,
+                inner_smoother="chebyshev",
+                cheby_lambda_min=float(lambda_min),
+                cheby_lambda_max=float(lambda_max),
+                inner_forcing_eta=float(inner_forcing_eta),
+                inner_head_residual_tol_max=float(inner_head_residual_tol_max),
+                chebyshev_reset_factor=float(chebyshev_reset_factor),
+                transmissivity_relaxation_enabled=bool(transmissivity_relaxation_enabled),
+                unconfined_startup_mode=str(unconfined_startup_mode),
+            )
+
+            metrics = {}
+            if mf6_path.exists() and warp_path.exists():
+                metrics = compare_results(mf6_path, warp_path, active=combo_case.active)
+
+            warp_info = _load_npz_json(warp_path, "info_solve2")
+            row = {
+                "nx": int(nx),
+                "ny": int(ny),
+                "dx": float(dx),
+                "cheby_lambda_min": float(lambda_min),
+                "cheby_lambda_max": float(lambda_max),
+                "converged": bool(warp_info.get("converged", False)) if warp_info else None,
+                "outer_iterations": warp_info.get("outer_iterations"),
+                "final_max_abs_head_change": _finite_float(warp_info.get("final_max_abs_head_change")),
+                "final_residual": _finite_float(warp_info.get("final_residual")),
+                "inner_h_rms_end": _finite_float(warp_info.get("inner_h_rms_end")),
+                "unusable_inner_solve_count": warp_info.get("unusable_inner_solve_count"),
+                "practical_inner_acceptance_count": warp_info.get("practical_inner_acceptance_count"),
+                "accepted_picard_update_count": warp_info.get("accepted_picard_update_count"),
+                "outer_chebyshev_ready_count": warp_info.get("outer_chebyshev_ready_count"),
+                "outer_chebyshev_used_count": warp_info.get("outer_chebyshev_used_count"),
+                "outer_chebyshev_reset_count": warp_info.get("outer_chebyshev_reset_count"),
+                "solve2_time": _load_npz_scalar(warp_path, "solve2_time"),
+                "rmse": metrics.get("rmse"),
+                "max_abs_diff": metrics.get("max_abs_diff"),
+                "workspace": str(combo_workspace),
+            }
+            results.append(row)
+            print(
+                f"lambda_min={lambda_min:.4f} lambda_max={lambda_max:.4f} -> "
+                f"converged={row['converged']} outer_iter={row['outer_iterations']} "
+                f"time={_format_optional_float(row['solve2_time'], '.4f')}s "
+                f"rmse={_format_optional_float(row['rmse'], '.6g')} "
+                f"max_abs_diff={_format_optional_float(row['max_abs_diff'], '.6g')}"
+            )
+
+    summary_path = workspace.joinpath("lambda_sweep_summary.csv")
+    if results:
+        columns = list(results[0].keys())
+        with summary_path.open("w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=columns)
+            writer.writeheader()
+            writer.writerows(results)
+        print(f"\nLambda sweep summary saved to {summary_path}")
+
+    return results
+
+
 if __name__ == "__main__":
     # Configuration parameters
     grid_sizes = BENCHMARK_GRID_SIZES
@@ -707,24 +991,55 @@ if __name__ == "__main__":
     device = "auto"
     chebyshev_enabled = True
     inner_smoother = "chebyshev"
-    cheby_lambda_min = 0.05
-    cheby_lambda_max = 1.95
-    do_run_mf6 = True
+    cheby_lambda_min = 0.1
+    cheby_lambda_max = 1.2
+    inner_forcing_eta = 0.10
+    inner_head_residual_tol_max = 1.0e-2
+    chebyshev_reset_factor = 1.2
+    transmissivity_relaxation_enabled = False
+    unconfined_startup_mode = "confined_pre_solve"  # or "initial_head"
+    do_run_mf6 = False
     do_run_warp = True
+    run_lambda_sweep = False
 
-    results = run_grid_benchmark(
-        grid_sizes=grid_sizes,
-        dx=dx,
-        hydraulic_conductivity=hydraulic_conductivity,
-        recharge=recharge,
-        initial_saturated_thickness=initial_saturated_thickness,
-        workspace=workspace,
-        device=device,
-        chebyshev_enabled=chebyshev_enabled,
-        inner_smoother=inner_smoother,
-        cheby_lambda_min=cheby_lambda_min,
-        cheby_lambda_max=cheby_lambda_max,
-        do_run_mf6=do_run_mf6,
-        do_run_warp=do_run_warp,
-    )
+    if run_lambda_sweep:
+        results = run_chebyshev_lambda_sweep(
+            nx=500,
+            ny=500,
+            dx=dx,
+            hydraulic_conductivity=hydraulic_conductivity,
+            recharge=recharge,
+            initial_saturated_thickness=initial_saturated_thickness,
+            cheby_lambda_min_values=(0.05, 0.1, 0.15, 0.2, 0.25, 0.5),
+            cheby_lambda_max_values=(1.7, 1.8, 1.95, 2.0, 2.1, 2.2, 2.5),
+            workspace=None,
+            device=device,
+            do_run_mf6=do_run_mf6,
+            inner_forcing_eta=inner_forcing_eta,
+            inner_head_residual_tol_max=inner_head_residual_tol_max,
+            chebyshev_reset_factor=chebyshev_reset_factor,
+            transmissivity_relaxation_enabled=transmissivity_relaxation_enabled,
+            unconfined_startup_mode=unconfined_startup_mode,
+        )
+    else:
+        results = run_grid_benchmark(
+            grid_sizes=grid_sizes,
+            dx=dx,
+            hydraulic_conductivity=hydraulic_conductivity,
+            recharge=recharge,
+            initial_saturated_thickness=initial_saturated_thickness,
+            workspace=workspace,
+            device=device,
+            chebyshev_enabled=chebyshev_enabled,
+            inner_smoother=inner_smoother,
+            cheby_lambda_min=cheby_lambda_min,
+            cheby_lambda_max=cheby_lambda_max,
+            inner_forcing_eta=inner_forcing_eta,
+            inner_head_residual_tol_max=inner_head_residual_tol_max,
+            chebyshev_reset_factor=chebyshev_reset_factor,
+            transmissivity_relaxation_enabled=transmissivity_relaxation_enabled,
+            unconfined_startup_mode=unconfined_startup_mode,
+            do_run_mf6=do_run_mf6,
+            do_run_warp=do_run_warp,
+        )
     print(json.dumps(results, indent=4))

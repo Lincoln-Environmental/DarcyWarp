@@ -4620,8 +4620,8 @@ class WarpDarcySolver:
             zbot_field: np.ndarray | None = None,
             ztop_field: np.ndarray | None = None,
             max_outer_iterations: int | None = None,
-            omega_min: float = 0.1,
-            omega_max: float = 0.9,
+            omega_min: float = 0.05,
+            omega_max: float = 0.75,
             chebyshev_enabled: bool = True,
             chebyshev_order: int = 3,
             chebyshev_lambda_min_fraction: float = 0.1,
@@ -4636,6 +4636,26 @@ class WarpDarcySolver:
             unconfined_max_picard_iter: int | None = None,
             unconfined_relax: float | None = None,
             unconfined_head_tol: float | None = None,
+            residual_floor_tol: float | None = 1.0e-4,
+            inner_head_residual_tol: float | None = None,
+            unconfined_inner_max_cycles_early: int = 10,
+            unconfined_inner_max_cycles_middle: int = 25,
+            unconfined_inner_max_cycles_late: int = 60,
+            unconfined_inner_late_dh: float = 1.0e-2,
+            unconfined_inner_middle_dh: float = 1.0,
+            inner_forcing_eta: float = 0.10,
+            inner_head_residual_tol_min: float | None = None,
+            inner_head_residual_tol_max: float = 1.0e-2,
+            inner_picard_scale_max_fraction: float = 0.10,
+            chebyshev_reset_factor: float = 1.2,
+            chebyshev_minor_increase_patience: int = 2,
+            transmissivity_relaxation_enabled: bool = False,
+            transmissivity_relaxation_early: float = 0.25,
+            transmissivity_relaxation_middle: float = 0.50,
+            transmissivity_relaxation_late: float = 1.00,
+            transmissivity_relaxation_middle_iteration: int = 5,
+            transmissivity_relaxation_late_iteration: int = 15,
+            unconfined_startup_mode: str = "initial_head",
     ):
         """
         K-cycle multigrid using your existing hierarchy (self.mg_levels).
@@ -4653,6 +4673,34 @@ class WarpDarcySolver:
         Optional robustness control:
           - fall back to fine-grid PCG if the checked residual grows well above the
             initial residual after a configurable number of K-cycles.
+
+        Optional unconfined Picard controls:
+          - residual_floor_tol: for unconfined solves, the inner linear residual
+            threshold below which an outer Picard iteration may be accepted when
+            the outer head change is small, even if the strict inner residual
+            tolerance was not met. Set to None to disable practical convergence.
+          - inner_head_residual_tol: head-equivalent residual tolerance for
+            deciding whether an inner solve is usable for a Picard update.
+            Defaults to the Picard head tolerance (hclose) for unconfined solves.
+          - unconfined_inner_max_cycles_early/middle/late: adaptive K-cycle
+            limits for early, middle, and late Picard outer iterations, selected
+            based on the previous accepted nonlinear head-change measure.
+          - unconfined_inner_late_dh/middle_dh: thresholds (meters) that select
+            the adaptive inner-cycle limit.
+          - inner_forcing_eta: fraction of the current Picard update scale used
+            as a dynamic, inexact inner head-equivalent residual tolerance.
+          - inner_head_residual_tol_min/max: bounds for the dynamic inner
+            tolerance. Defaults to hclose and 1e-2 m respectively.
+          - inner_picard_scale_max_fraction: fraction of the max Picard update
+            included in the update-scale estimate.
+          - chebyshev_reset_factor: multiplier on previous_measure that triggers
+            a Chebyshev reset (was effectively 1.0).
+          - chebyshev_minor_increase_patience: number of minor outer residual
+            increases tolerated before resetting Chebyshev state.
+          - transmissivity_relaxation_enabled and *_early/middle/late: optional
+            under-relaxation of T(h) updates during early Picard iterations.
+          - unconfined_startup_mode: "initial_head" keeps current behaviour;
+            "confined_pre_solve" runs one fixed-T confined solve to warm-start.
         """
 
         # Normalize tolerances (treat None as disabled)
@@ -4758,6 +4806,69 @@ class WarpDarcySolver:
             if hclose_f < 0.0 or not np.isfinite(hclose_f):
                 raise ValueError("hclose must be non-negative and finite.")
 
+            residual_floor_tol_f = float(residual_floor_tol) if residual_floor_tol is not None else None
+            if residual_floor_tol_f is not None and residual_floor_tol_f < 0.0:
+                raise ValueError("residual_floor_tol must be non-negative.")
+
+            inner_head_residual_tol_f = float(
+                inner_head_residual_tol if inner_head_residual_tol is not None else hclose_f
+            )
+            if inner_head_residual_tol_f < 0.0 or not np.isfinite(inner_head_residual_tol_f):
+                raise ValueError("inner_head_residual_tol must be non-negative and finite.")
+
+            inner_max_cycles_early = int(unconfined_inner_max_cycles_early)
+            inner_max_cycles_middle = int(unconfined_inner_max_cycles_middle)
+            inner_max_cycles_late = int(unconfined_inner_max_cycles_late)
+            if min(inner_max_cycles_early, inner_max_cycles_middle, inner_max_cycles_late) < 1:
+                raise ValueError("unconfined inner max cycles must be >= 1.")
+
+            inner_late_dh_f = float(unconfined_inner_late_dh)
+            inner_middle_dh_f = float(unconfined_inner_middle_dh)
+            if inner_late_dh_f < 0.0 or inner_middle_dh_f < 0.0:
+                raise ValueError("unconfined inner dh thresholds must be non-negative.")
+
+            inner_forcing_eta_f = float(inner_forcing_eta)
+            if inner_forcing_eta_f < 0.0 or inner_forcing_eta_f > 1.0:
+                raise ValueError("inner_forcing_eta must be in [0, 1].")
+
+            inner_head_residual_tol_min_f = float(
+                inner_head_residual_tol_min if inner_head_residual_tol_min is not None else hclose_f
+            )
+            if inner_head_residual_tol_min_f < 0.0 or not np.isfinite(inner_head_residual_tol_min_f):
+                raise ValueError("inner_head_residual_tol_min must be non-negative and finite.")
+
+            inner_head_residual_tol_max_f = float(inner_head_residual_tol_max)
+            if inner_head_residual_tol_max_f < inner_head_residual_tol_min_f:
+                raise ValueError("inner_head_residual_tol_max must be >= inner_head_residual_tol_min.")
+
+            inner_picard_scale_max_fraction_f = float(inner_picard_scale_max_fraction)
+            if inner_picard_scale_max_fraction_f < 0.0 or inner_picard_scale_max_fraction_f > 1.0:
+                raise ValueError("inner_picard_scale_max_fraction must be in [0, 1].")
+
+            chebyshev_reset_factor_f = float(chebyshev_reset_factor)
+            if chebyshev_reset_factor_f <= 1.0 or not np.isfinite(chebyshev_reset_factor_f):
+                raise ValueError("chebyshev_reset_factor must be finite and > 1.")
+
+            chebyshev_minor_increase_patience_i = int(chebyshev_minor_increase_patience)
+            if chebyshev_minor_increase_patience_i < 0:
+                raise ValueError("chebyshev_minor_increase_patience must be >= 0.")
+
+            transmissivity_relaxation_enabled_b = bool(transmissivity_relaxation_enabled)
+            T_relax_early_f = float(transmissivity_relaxation_early)
+            T_relax_middle_f = float(transmissivity_relaxation_middle)
+            T_relax_late_f = float(transmissivity_relaxation_late)
+            if not all(0.0 <= v <= 1.0 for v in (T_relax_early_f, T_relax_middle_f, T_relax_late_f)):
+                raise ValueError("transmissivity relaxation factors must be in [0, 1].")
+
+            T_relax_middle_iter = int(transmissivity_relaxation_middle_iteration)
+            T_relax_late_iter = int(transmissivity_relaxation_late_iteration)
+            if T_relax_middle_iter < 1 or T_relax_late_iter < T_relax_middle_iter:
+                raise ValueError("transmissivity relaxation iterations must satisfy 1 <= middle <= late.")
+
+            startup_mode = str(unconfined_startup_mode).strip().lower()
+            if startup_mode not in {"initial_head", "confined_pre_solve"}:
+                raise ValueError("unconfined_startup_mode must be 'initial_head' or 'confined_pre_solve'.")
+
             max_update_f = float(max_head_change_per_outer_iteration)
             if max_update_f <= 0.0 or not np.isfinite(max_update_f):
                 raise ValueError("max_head_change_per_outer_iteration must be positive and finite.")
@@ -4786,6 +4897,58 @@ class WarpDarcySolver:
             if not np.all(np.isfinite(h_iter)):
                 raise ValueError("initial head for unconfined solve must be finite.")
 
+            kc_base_kwargs = {
+                "nu_pre": int(nu_pre),
+                "nu_post": int(nu_post),
+                "nu_coarse": int(nu_coarse),
+                "omega": float(omega),
+                "rel_tol": float(rel_tol),
+                "abs_tol_min": float(abs_tol_min),
+                "aq_thickness": aq_thickness,
+                "gh_alpha": gh_alpha,
+                "max_levels": int(max_levels),
+                "check_every_no": int(check_every_no),
+                "dh_rms_tol": dh_rms_tol,
+                "dh_max_tol": dh_max_tol,
+                "dh_max_factor": float(dh_max_factor),
+                "min_coarse_cells": min_coarse_cells,
+                "fallback_to_pcg": bool(fallback_to_pcg),
+                "divergence_cycle_start": int(divergence_cycle_start),
+                "divergence_residual_factor": float(divergence_residual_factor),
+                "fallback_pcg_max_iter": fallback_pcg_max_iter,
+                "fallback_pcg_history_every": fallback_pcg_history_every,
+                "smoother": str(smoother_mode),
+                "cheby_lambda_min": float(cheby_lambda_min),
+                "cheby_lambda_max": float(cheby_lambda_max),
+            }
+
+            if startup_mode == "confined_pre_solve":
+                sat_startup = h_iter.astype(np.float64, copy=False) - zbot_arr
+                sat_startup = np.maximum(sat_startup, min_sat)
+                if ztop_arr is not None:
+                    sat_cap = np.maximum(ztop_arr - zbot_arr, min_sat)
+                    sat_startup = np.minimum(sat_startup, sat_cap)
+                T_startup = (K_arr * sat_startup).astype(NP_FLOAT, copy=False)
+                T_startup[~active_mask] = NP_FLOAT(0.0)
+                self.update_T_in_place(T_startup)
+
+                h_startup = self.solve_multigrid_kcycle(
+                    max_cycles=int(max_cycles),
+                    initial_head=h_iter,
+                    return_info=False,
+                    unconfined=False,
+                    **kc_base_kwargs,
+                )
+                h_startup = np.asarray(h_startup, dtype=np.float64)
+                h_startup = np.maximum(h_startup, zbot_arr + min_sat)
+                if ztop_arr is not None:
+                    h_startup = np.minimum(h_startup, ztop_arr)
+                h_startup[~active_mask] = 0.0
+                h_startup[bc_mask0] = bc_values0[bc_mask0]
+                if not np.all(np.isfinite(h_startup)):
+                    raise FloatingPointError("confined pre-solve produced non-finite heads.")
+                h_iter = h_startup.astype(NP_FLOAT, copy=False)
+
             cheb_weights = _chebyshev_update_weights(
                 order=int(chebyshev_order),
                 lambda_min_fraction=float(chebyshev_lambda_min_fraction),
@@ -4795,14 +4958,42 @@ class WarpDarcySolver:
             chebyshev_rejections = 0
             chebyshev_resets = 0
             inner_solve_failures = 0
+            strict_inner_nonconvergence_count = 0
+            unusable_inner_solve_count = 0
+            practical_inner_acceptances = 0
+            accepted_picard_update_count = 0
+            outer_chebyshev_ready_count = 0
+            outer_chebyshev_used_count = 0
+            outer_chebyshev_reset_count = 0
             improvement_streak = 0
+            minor_increase_count = 0
             final_residual = None
+            final_h_rms_end = float("nan")
+            final_inner_max_cycles = 0
             final_max_abs_head_change = float("nan")
             last_linear_info: dict = {}
             outer_history: list[dict] = []
             converged_nonlinear = False
+            T_previous: np.ndarray | None = None
+            T_relax = float("nan")
+
+            def _to_finite(value):
+                try:
+                    f = float(value)
+                    return f if np.isfinite(f) else None
+                except Exception:
+                    return None
 
             for outer_idx in range(max_outer):
+                if not np.isfinite(previous_measure):
+                    inner_max_cycles = inner_max_cycles_early
+                elif previous_measure > inner_middle_dh_f:
+                    inner_max_cycles = inner_max_cycles_early
+                elif previous_measure > inner_late_dh_f:
+                    inner_max_cycles = inner_max_cycles_middle
+                else:
+                    inner_max_cycles = inner_max_cycles_late
+
                 sat = h_iter.astype(np.float64, copy=False) - zbot_arr
                 sat = np.maximum(sat, min_sat)
                 if ztop_arr is not None:
@@ -4811,53 +5002,101 @@ class WarpDarcySolver:
                 if not np.all(np.isfinite(sat)) or np.any(sat <= 0.0):
                     raise FloatingPointError("unconfined saturated thickness became invalid.")
 
-                T_pic = (K_arr * sat).astype(NP_FLOAT, copy=False)
+                T_candidate = (K_arr * sat).astype(NP_FLOAT, copy=False)
+                T_candidate[~active_mask] = NP_FLOAT(0.0)
+                if not np.all(np.isfinite(T_candidate)):
+                    raise FloatingPointError("unconfined transmissivity became non-finite.")
+
+                if transmissivity_relaxation_enabled_b and outer_idx > 0 and T_previous is not None:
+                    if outer_idx < T_relax_middle_iter:
+                        T_relax = T_relax_early_f
+                    elif outer_idx < T_relax_late_iter:
+                        T_relax = T_relax_middle_f
+                    else:
+                        T_relax = T_relax_late_f
+                    T_pic = (1.0 - T_relax) * T_previous + T_relax * T_candidate
+                else:
+                    T_pic = T_candidate
+                    T_relax = float("nan")
+
                 T_pic[~active_mask] = NP_FLOAT(0.0)
                 if not np.all(np.isfinite(T_pic)):
                     raise FloatingPointError("unconfined transmissivity became non-finite.")
 
                 self.update_T_in_place(T_pic)
+                T_previous = T_pic.copy()
 
                 head_lin, info_lin = self.solve_multigrid_kcycle(
-                    max_cycles=int(max_cycles),
-                    nu_pre=int(nu_pre),
-                    nu_post=int(nu_post),
-                    nu_coarse=int(nu_coarse),
-                    omega=float(omega),
-                    rel_tol=float(rel_tol),
-                    abs_tol_min=float(abs_tol_min),
+                    max_cycles=int(inner_max_cycles),
                     initial_head=h_iter,
-                    aq_thickness=aq_thickness,
-                    gh_alpha=gh_alpha,
-                    max_levels=int(max_levels),
                     return_info=True,
-                    check_every_no=int(check_every_no),
-                    dh_rms_tol=dh_rms_tol,
-                    dh_max_tol=dh_max_tol,
-                    dh_max_factor=float(dh_max_factor),
-                    min_coarse_cells=min_coarse_cells,
-                    fallback_to_pcg=bool(fallback_to_pcg),
-                    divergence_cycle_start=int(divergence_cycle_start),
-                    divergence_residual_factor=float(divergence_residual_factor),
-                    fallback_pcg_max_iter=fallback_pcg_max_iter,
-                    fallback_pcg_history_every=fallback_pcg_history_every,
-                    smoother=str(smoother_mode),
-                    cheby_lambda_min=float(cheby_lambda_min),
-                    cheby_lambda_max=float(cheby_lambda_max),
                     unconfined=False,
+                    **kc_base_kwargs,
                 )
                 last_linear_info = dict(info_lin) if isinstance(info_lin, dict) else {}
                 inner_converged = bool(last_linear_info.get("converged", False))
-                if not inner_converged:
-                    inner_solve_failures += 1
-                    chebyshev_resets += 1
-                    previous_update.fill(0.0)
 
                 h_lin = np.asarray(head_lin, dtype=np.float64)
                 if h_lin.shape != shape0:
                     raise RuntimeError(f"inner linear solve returned shape {h_lin.shape}, expected {shape0}.")
 
                 picard_update = h_lin - h_iter.astype(np.float64, copy=False)
+
+                # Dynamic inexact inner tolerance based on the Picard update scale.
+                if np.any(free_mask0):
+                    picard_update_free_raw = picard_update[free_mask0]
+                else:
+                    picard_update_free_raw = np.array([], dtype=np.float64)
+                if picard_update_free_raw.size > 0 and np.all(np.isfinite(picard_update_free_raw)):
+                    picard_update_abs = np.abs(picard_update_free_raw)
+                    picard_update_max = float(np.max(picard_update_abs))
+                    picard_update_rms = float(np.sqrt(np.mean(picard_update_free_raw * picard_update_free_raw)))
+                    picard_scale = max(
+                        picard_update_rms,
+                        inner_picard_scale_max_fraction_f * picard_update_max,
+                    )
+                    inner_head_residual_tol_used = min(
+                        inner_head_residual_tol_max_f,
+                        max(inner_head_residual_tol_min_f, inner_forcing_eta_f * picard_scale),
+                    )
+                    inner_usable_fallback = False
+                else:
+                    picard_update_max = 0.0
+                    picard_update_rms = 0.0
+                    picard_scale = 0.0
+                    inner_head_residual_tol_used = float(inner_head_residual_tol_min_f)
+                    inner_usable_fallback = True
+
+                r_rms_end = _to_finite(last_linear_info.get("r_rms_end"))
+                h_rms_end = _to_finite(last_linear_info.get("h_rms_end"))
+                tol_abs_inner = _to_finite(last_linear_info.get("tol_abs"))
+                dh_rms_lastcheck = _to_finite(last_linear_info.get("dh_rms_lastcheck"))
+                inner_residual_converged = (
+                    r_rms_end is not None and tol_abs_inner is not None and r_rms_end <= tol_abs_inner
+                )
+                inner_head_change_converged = (
+                    dh_rms_lastcheck is not None and dh_rms_tol_f is not None and dh_rms_lastcheck <= dh_rms_tol_f
+                )
+                inner_practically_converged = (
+                    inner_head_change_converged
+                    and residual_floor_tol_f is not None
+                    and r_rms_end is not None
+                    and r_rms_end <= residual_floor_tol_f
+                )
+                inner_usable_for_picard = (
+                    inner_converged
+                    or inner_head_change_converged
+                    or (
+                        not inner_usable_fallback
+                        and h_rms_end is not None
+                        and np.isfinite(float(h_rms_end))
+                        and float(h_rms_end) <= inner_head_residual_tol_used
+                    )
+                )
+
+                if not inner_converged:
+                    strict_inner_nonconvergence_count += 1
+
                 picard_update[bc_mask0] = 0.0
                 picard_update[~active_mask] = 0.0
 
@@ -4866,7 +5105,26 @@ class WarpDarcySolver:
                 chebyshev_reset = False
                 clipped_update = False
 
-                use_cheb = bool(chebyshev_enabled) and outer_idx > 0 and len(cheb_weights) > 0 and inner_converged
+                if not inner_usable_for_picard:
+                    unusable_inner_solve_count += 1
+                    inner_solve_failures += 1
+                    chebyshev_resets += 1
+                    chebyshev_reset = True
+                    previous_update.fill(0.0)
+                else:
+                    if not inner_converged:
+                        practical_inner_acceptances += 1
+                    accepted_picard_update_count += 1
+
+                outer_chebyshev_ready = (
+                    bool(chebyshev_enabled)
+                    and accepted_picard_update_count >= 2
+                    and len(cheb_weights) > 0
+                    and inner_usable_for_picard
+                )
+                use_cheb = outer_chebyshev_ready
+                if outer_chebyshev_ready:
+                    outer_chebyshev_ready_count += 1
                 if use_cheb:
                     weight = float(cheb_weights[(outer_idx - 1) % len(cheb_weights)])
                     alpha = min(max(omega_current * weight, omega_min_f), omega_max_f)
@@ -4931,6 +5189,8 @@ class WarpDarcySolver:
                 h_iter = h_trial.astype(NP_FLOAT, copy=False)
                 final_max_abs_head_change = float(trial_measure)
                 final_residual = last_linear_info.get("r_rms_end")
+                final_h_rms_end = h_rms_end if h_rms_end is not None else float("nan")
+                final_inner_max_cycles = int(inner_max_cycles)
 
                 if clipped_update:
                     chebyshev_resets += 1
@@ -4938,16 +5198,50 @@ class WarpDarcySolver:
                     previous_update.fill(0.0)
 
                 if bool(chebyshev_reset_on_residual_increase) and np.isfinite(previous_measure):
-                    if trial_measure > previous_measure:
+                    if trial_measure > chebyshev_reset_factor_f * previous_measure:
                         chebyshev_resets += 1
                         chebyshev_reset = True
                         previous_update.fill(0.0)
+                        minor_increase_count = 0
+                    elif trial_measure > previous_measure:
+                        minor_increase_count += 1
+                        if minor_increase_count > chebyshev_minor_increase_patience_i:
+                            chebyshev_resets += 1
+                            chebyshev_reset = True
+                            previous_update.fill(0.0)
+                            minor_increase_count = 0
+                    else:
+                        minor_increase_count = 0
 
                 previous_measure = trial_measure
+
+                if chebyshev_used:
+                    outer_chebyshev_used_count += 1
+                if chebyshev_reset:
+                    outer_chebyshev_reset_count += 1
 
                 outer_history.append(
                     {
                         "outer_iteration": int(outer_idx + 1),
+                        "inner_max_cycles_used": int(inner_max_cycles),
+                        "inner_converged": bool(inner_converged),
+                        "inner_head_change_converged": bool(inner_head_change_converged),
+                        "inner_usable_for_picard": bool(inner_usable_for_picard),
+                        "h_rms_end": float(h_rms_end) if h_rms_end is not None else None,
+                        "inner_head_residual_tol_used": float(inner_head_residual_tol_used),
+                        "picard_update_max": float(picard_update_max),
+                        "picard_update_rms": float(picard_update_rms),
+                        "picard_scale": float(picard_scale),
+                        "accepted_picard_update_count": int(accepted_picard_update_count),
+                        "omega": float(omega_current),
+                        "chebyshev_used": bool(chebyshev_used),
+                        "chebyshev_ready": bool(outer_chebyshev_ready),
+                        "chebyshev_rejected": bool(chebyshev_rejected),
+                        "chebyshev_reset": bool(chebyshev_reset),
+                        "trial_measure": float(trial_measure),
+                        "previous_measure": float(previous_measure) if np.isfinite(previous_measure) else None,
+                        "clipped_update": bool(clipped_update),
+                        "transmissivity_relaxation_used": None if np.isnan(T_relax) else float(T_relax),
                         "max_abs_head_change": float(final_max_abs_head_change),
                         "min_head": float(np.nanmin(h_iter[active_mask])) if np.any(active_mask) else float("nan"),
                         "max_head": float(np.nanmax(h_iter[active_mask])) if np.any(active_mask) else float("nan"),
@@ -4955,17 +5249,13 @@ class WarpDarcySolver:
                         "max_saturated_thickness": float(np.nanmax(sat[active_mask])) if np.any(active_mask) else float("nan"),
                         "min_transmissivity": float(np.nanmin(T_pic[active_mask])) if np.any(active_mask) else float("nan"),
                         "max_transmissivity": float(np.nanmax(T_pic[active_mask])) if np.any(active_mask) else float("nan"),
-                        "omega": float(omega_current),
-                        "chebyshev_used": bool(chebyshev_used),
-                        "chebyshev_rejected": bool(chebyshev_rejected),
-                        "chebyshev_reset": bool(chebyshev_reset),
-                        "inner_converged": bool(inner_converged),
                         "inner_iterations": int(last_linear_info.get("n_cycles_used", 0)),
                         "inner_residual": None if final_residual is None else float(final_residual),
                     }
                 )
 
-                if final_max_abs_head_change < hclose_f and inner_converged:
+                head_change_converged = final_max_abs_head_change < hclose_f
+                if head_change_converged and inner_usable_for_picard:
                     converged_nonlinear = True
                     break
 
@@ -4996,8 +5286,26 @@ class WarpDarcySolver:
                     "final_max_abs_head_change": float(final_max_abs_head_change),
                     "final_residual": None if final_residual is None else float(final_residual),
                     "inner_solve_failures": int(inner_solve_failures),
+                    "strict_inner_nonconvergence_count": int(strict_inner_nonconvergence_count),
+                    "unusable_inner_solve_count": int(unusable_inner_solve_count),
+                    "practical_inner_acceptance_count": int(practical_inner_acceptances),
+                    "accepted_picard_update_count": int(accepted_picard_update_count),
+                    "outer_chebyshev_ready_count": int(outer_chebyshev_ready_count),
+                    "outer_chebyshev_used_count": int(outer_chebyshev_used_count),
+                    "outer_chebyshev_reset_count": int(outer_chebyshev_reset_count),
                     "effectively_dry_cell_count": int(np.count_nonzero(effectively_dry)),
-                    "nonlinear_convergence_basis": "head_change_and_inner_linear_convergence",
+                    "inner_forcing_eta": float(inner_forcing_eta_f),
+                    "inner_head_residual_tol_min": float(inner_head_residual_tol_min_f),
+                    "inner_head_residual_tol_max": float(inner_head_residual_tol_max_f),
+                    "nonlinear_convergence_basis": "head_change_and_inner_usable_for_picard",
+                    "residual_floor_tol": None if residual_floor_tol_f is None else float(residual_floor_tol_f),
+                    "inner_head_residual_tol": float(inner_head_residual_tol_f),
+                    "inner_residual_converged": bool(inner_residual_converged),
+                    "inner_head_change_converged": bool(inner_head_change_converged),
+                    "inner_practically_converged": bool(inner_practically_converged),
+                    "inner_usable_for_picard": bool(inner_usable_for_picard),
+                    "inner_h_rms_end": float(final_h_rms_end) if np.isfinite(final_h_rms_end) else None,
+                    "inner_max_cycles_used": int(final_inner_max_cycles),
                     "outer_history": outer_history,
                     "picard_converged": bool(converged_nonlinear),
                     "picard_n_iter_used": int(len(outer_history)),
