@@ -992,7 +992,7 @@ if __name__ == "__main__":
     chebyshev_enabled = True
     inner_smoother = "chebyshev"
     cheby_lambda_min = 0.1
-    cheby_lambda_max = 1.2
+    cheby_lambda_max = 2.0
     inner_forcing_eta = 0.10
     inner_head_residual_tol_max = 1.0e-2
     chebyshev_reset_factor = 1.2
