@@ -5,6 +5,7 @@ from typing import Optional
 import gc
 import numpy as np
 import os
+import time
 import warnings
 
 from DARCY_WARP_PACKAGE.model_builder import (
@@ -592,57 +593,63 @@ def _coarsen_level_host_2x2(
         T_c[inactive] = NP_FLOAT(0.0)
         R_c[inactive] = NP_FLOAT(0.0)
 
-    if gh_mask_f is None:
-        gh_mask_f = np.zeros((ny_f, nx_f), dtype=np.int32)
-    if gh_width_f is None:
-        gh_width_f = np.zeros((ny_f, nx_f), dtype=NP_FLOAT)
-    if ghb_factor_f is None:
-        ghb_factor_f = np.zeros((ny_f, nx_f), dtype=NP_FLOAT)
-
-    gh_mask_pad = _pad_to_coarse_block_shape(
-        gh_mask_f,
-        pad_y=pad_y,
-        pad_x=pad_x,
-        dtype=np.int32,
-        fill_value=0,
-    )
-    gh_width_pad = _pad_to_coarse_block_shape(
-        gh_width_f,
-        pad_y=pad_y,
-        pad_x=pad_x,
-        dtype=NP_FLOAT,
-        fill_value=0.0,
-    )
-    ghb_factor_pad = _pad_to_coarse_block_shape(
-        ghb_factor_f,
-        pad_y=pad_y,
-        pad_x=pad_x,
-        dtype=NP_FLOAT,
-        fill_value=0.0,
+    ghb_enabled = (
+        gh_mask_f is not None
+        and (
+            ghb_factor_f is not None
+            or gh_width_f is not None
+        )
     )
 
-    ghm_blk = gh_mask_pad.reshape(ny_c, 2, nx_c, 2)
-    gh_mask_c_raw = ghm_blk.max(axis=(1, 3)).astype(np.int32, copy=False)
-    gh_mask_c = (
-        (gh_mask_c_raw != 0)
-        & (active_c != 0)
-        & (bc_mask_c == 0)
-    ).astype(np.int32, copy=False)
+    if ghb_enabled:
+        gh_mask_pad = _pad_to_coarse_block_shape(
+            gh_mask_f,
+            pad_y=pad_y,
+            pad_x=pad_x,
+            dtype=np.int32,
+            fill_value=0,
+        )
+        gh_width_pad = _pad_to_coarse_block_shape(
+            gh_width_f,
+            pad_y=pad_y,
+            pad_x=pad_x,
+            dtype=NP_FLOAT,
+            fill_value=0.0,
+        )
+        ghb_factor_pad = _pad_to_coarse_block_shape(
+            ghb_factor_f,
+            pad_y=pad_y,
+            pad_x=pad_x,
+            dtype=NP_FLOAT,
+            fill_value=0.0,
+        )
 
-    gh_width_c = _mean_2x2_with_mask(values_pad=gh_width_pad, mask_pad=gh_mask_pad)
-    gh_width_c = np.asarray(gh_width_c, dtype=NP_FLOAT)
-    gh_width_c[gh_mask_c == 0] = NP_FLOAT(0.0)
+        ghm_blk = gh_mask_pad.reshape(ny_c, 2, nx_c, 2)
+        gh_mask_c_raw = ghm_blk.max(axis=(1, 3)).astype(np.int32, copy=False)
+        gh_mask_c = (
+            (gh_mask_c_raw != 0)
+            & (active_c != 0)
+            & (bc_mask_c == 0)
+        ).astype(np.int32, copy=False)
 
-    ghb_blk = np.asarray(ghb_factor_pad, dtype=np.float64).reshape(ny_c, 2, nx_c, 2)
-    ghm_blk = np.asarray(gh_mask_pad, dtype=np.int32).reshape(ny_c, 2, nx_c, 2)
-    valid_blk = (ghm_blk != 0) & np.isfinite(ghb_blk) & (ghb_blk > 0.0)
-    valid_f = valid_blk.astype(np.float64, copy=False)
-    ghb_sum = (ghb_blk * valid_f).sum(axis=(1, 3), dtype=np.float64)
-    ghb_cnt = valid_f.sum(axis=(1, 3), dtype=np.float64)
-    ghb_factor_c = np.zeros((ny_c, nx_c), dtype=NP_FLOAT)
-    on = ghb_cnt > 0.0
-    ghb_factor_c[on] = (ghb_sum[on] / ghb_cnt[on]).astype(NP_FLOAT, copy=False)
-    ghb_factor_c[gh_mask_c == 0] = NP_FLOAT(0.0)
+        gh_width_c = _mean_2x2_with_mask(values_pad=gh_width_pad, mask_pad=gh_mask_pad)
+        gh_width_c = np.asarray(gh_width_c, dtype=NP_FLOAT)
+        gh_width_c[gh_mask_c == 0] = NP_FLOAT(0.0)
+
+        ghb_blk = np.asarray(ghb_factor_pad, dtype=np.float64).reshape(ny_c, 2, nx_c, 2)
+        ghm_blk = np.asarray(gh_mask_pad, dtype=np.int32).reshape(ny_c, 2, nx_c, 2)
+        valid_blk = (ghm_blk != 0) & np.isfinite(ghb_blk) & (ghb_blk > 0.0)
+        valid_f = valid_blk.astype(np.float64, copy=False)
+        ghb_sum = (ghb_blk * valid_f).sum(axis=(1, 3), dtype=np.float64)
+        ghb_cnt = valid_f.sum(axis=(1, 3), dtype=np.float64)
+        ghb_factor_c = np.zeros((ny_c, nx_c), dtype=NP_FLOAT)
+        on = ghb_cnt > 0.0
+        ghb_factor_c[on] = (ghb_sum[on] / ghb_cnt[on]).astype(NP_FLOAT, copy=False)
+        ghb_factor_c[gh_mask_c == 0] = NP_FLOAT(0.0)
+    else:
+        gh_mask_c = np.zeros((ny_c, nx_c), dtype=np.int32)
+        gh_width_c = np.zeros((ny_c, nx_c), dtype=NP_FLOAT)
+        ghb_factor_c = np.zeros((ny_c, nx_c), dtype=NP_FLOAT)
 
     bc_values_c = np.zeros((ny_c, nx_c), dtype=NP_FLOAT)
     gh_head_c = np.zeros((ny_c, nx_c), dtype=NP_FLOAT)
@@ -1294,6 +1301,62 @@ def build_rhs_kernel(
     b_out[j, i] = WP_FLOAT(rhs)
 
 
+@wp.kernel
+def build_diag_preconditioner_kernel(
+    T_field: wp.array(dtype=WP_FLOAT, ndim=2),
+    active: wp.array(dtype=wp.int32, ndim=2),
+    bc_mask: wp.array(dtype=wp.int32, ndim=2),
+    gh_mask: wp.array(dtype=wp.int32, ndim=2),
+    ghb_factor: wp.array(dtype=WP_FLOAT, ndim=2),
+    use_ghb: int,
+    nx: int,
+    ny: int,
+    M_inv_out: wp.array(dtype=WP_FLOAT, ndim=2),
+):
+    j, i = wp.tid()
+
+    if j >= ny or i >= nx:
+        return
+
+    if active[j, i] == 0 or bc_mask[j, i] != 0:
+        M_inv_out[j, i] = WP_FLOAT(1.0)
+        return
+
+    tiny = wp.float64(1.0e-12)
+    T_c = wp.float64(T_field[j, i])
+    diagonal = wp.float64(0.0)
+
+    if i + 1 < nx and active[j, i + 1] != 0:
+        T_nb = wp.float64(T_field[j, i + 1])
+        if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
+            diagonal = diagonal + wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+
+    if i - 1 >= 0 and active[j, i - 1] != 0:
+        T_nb = wp.float64(T_field[j, i - 1])
+        if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
+            diagonal = diagonal + wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+
+    if j - 1 >= 0 and active[j - 1, i] != 0:
+        T_nb = wp.float64(T_field[j - 1, i])
+        if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
+            diagonal = diagonal + wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+
+    if j + 1 < ny and active[j + 1, i] != 0:
+        T_nb = wp.float64(T_field[j + 1, i])
+        if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
+            diagonal = diagonal + wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+
+    if use_ghb != 0 and gh_mask[j, i] != 0:
+        ghbf = wp.float64(ghb_factor[j, i])
+        if T_c > wp.float64(0.0) and ghbf > wp.float64(0.0) and not wp.isnan(ghbf):
+            diagonal = diagonal + T_c * ghbf
+
+    if diagonal > tiny:
+        M_inv_out[j, i] = WP_FLOAT(wp.float64(1.0) / diagonal)
+    else:
+        M_inv_out[j, i] = WP_FLOAT(1.0)
+
+
 def build_diag_preconditioner(
     T_field: np.ndarray,
     active: np.ndarray,
@@ -1304,6 +1367,7 @@ def build_diag_preconditioner(
     dx: float | None = None,
     gh_alpha: float = 1.0,
     aq_thickness: float = 1.0,
+    assume_finite_T: bool = False,
 ) -> np.ndarray:
     """
     :param T_field: transmissivity field
@@ -1350,7 +1414,10 @@ def build_diag_preconditioner(
     ny, nx = T_field.shape
     tiny = np.float64(1.0e-12)
 
-    T_pos = np.isfinite(T_field) & (T_field > NP_FLOAT(0.0))
+    if assume_finite_T:
+        T_pos = T_field > NP_FLOAT(0.0)
+    else:
+        T_pos = np.isfinite(T_field) & (T_field > NP_FLOAT(0.0))
     free = (active != 0) & (bc_mask == 0)
 
     sum_T = np.zeros((ny, nx), dtype=np.float64)
@@ -2338,6 +2405,7 @@ class WarpDarcySolver:
         head_scale: float = 1.0,
         aq_thickness: float | np.ndarray = 1.0,
         trust_ghb_params_for_graph: bool = False,
+        diag_preconditioner_backend: str = "auto",
     ):
         """
         :param nx: number of columns
@@ -2357,6 +2425,10 @@ class WarpDarcySolver:
         self.use_ghb = bool(use_ghb)
         self.solver_type = str(solver_type)
         self.trust_ghb_params_for_graph = bool(trust_ghb_params_for_graph)
+        backend_mode = str(diag_preconditioner_backend).strip().lower()
+        if backend_mode not in {"auto", "host", "device"}:
+            raise ValueError("diag_preconditioner_backend must be 'auto', 'host', or 'device'.")
+        self.diag_preconditioner_backend = backend_mode
 
         if head_scale != 1.0:
             raise ValueError("head_scale has been removed. Use physical heads everywhere and set head_scale=1.0.")
@@ -2484,6 +2556,9 @@ class WarpDarcySolver:
         self.mg_levels = None
         self._mg_coarsening_diagnostics = []
         self._two_level_coarsening_diag = None
+        self._last_device_m_inv_validation = []
+        self._last_update_T_profile = None
+        self._update_T_profile_totals = None
         # ---------------- CUDA graph cache (K-cycle path) ----------------
         self._kcycle_graph = None
         self._kcycle_graph_shape = None
@@ -2491,6 +2566,49 @@ class WarpDarcySolver:
     def _invalidate_kcycle_graph(self) -> None:
         self._kcycle_graph = None
         self._kcycle_graph_shape = None
+
+    def _diag_backend_env_or_default(self) -> str:
+        if self.diag_preconditioner_backend != "auto":
+            return self.diag_preconditioner_backend
+        mode = str(os.environ.get("DARCY_M_INV_BACKEND", "auto")).strip().lower()
+        if mode not in {"auto", "host", "device"}:
+            mode = "auto"
+        return mode
+
+    def _select_diag_preconditioner_backend(
+        self,
+        *,
+        T_wp,
+        active_wp,
+        bc_mask_wp,
+        gh_mask_wp,
+        ghb_factor_wp,
+    ) -> str:
+        mode = self._diag_backend_env_or_default()
+        if mode == "host":
+            return "host"
+
+        device_ready = (
+            T_wp is not None
+            and active_wp is not None
+            and bc_mask_wp is not None
+            and gh_mask_wp is not None
+            and ghb_factor_wp is not None
+        )
+        if mode == "device":
+            return "device" if device_ready else "host"
+
+        if (not str(self.device_str).startswith("cuda")) or (not device_ready):
+            return "host"
+        return "device"
+
+    def _profile_update_T_enabled(self) -> bool:
+        raw = str(os.environ.get("DARCY_PROFILE_UPDATE_T", "")).strip().lower()
+        return raw in {"1", "true", "yes", "on"}
+
+    def _validate_device_m_inv_enabled(self) -> bool:
+        raw = str(os.environ.get("DARCY_VALIDATE_DEVICE_M_INV", "")).strip().lower()
+        return raw in {"1", "true", "yes", "on"}
 
     def _coarsening_diag_entry(
         self,
@@ -2626,10 +2744,10 @@ class WarpDarcySolver:
                 active_f=fine.active_host,
                 bc_mask_f=fine.bc_mask_host,
                 bc_values_f=fine.bc_values_host,
-                gh_mask_f=fine.gh_mask_host,
-                gh_head_f=fine.gh_head_host,
-                gh_width_f=fine.gh_width_host,
-                ghb_factor_f=fine.ghb_factor_host,
+                gh_mask_f=fine.gh_mask_host if self.use_ghb else None,
+                gh_head_f=fine.gh_head_host if self.use_ghb else None,
+                gh_width_f=fine.gh_width_host if self.use_ghb else None,
+                ghb_factor_f=fine.ghb_factor_host if self.use_ghb else None,
                 dx_c=float(dx_c),
             )
 
@@ -2661,21 +2779,51 @@ class WarpDarcySolver:
                 gh_width_c_wp = wp.array(gh_width_c, dtype=WP_FLOAT, device=device)
                 ghb_factor_c_wp = wp.array(ghb_factor_c, dtype=WP_FLOAT, device=device)
             else:
-                gh_mask_c_wp = None
-                gh_head_c_wp = None
-                gh_width_c_wp = None
-                ghb_factor_c_wp = None
+                gh_mask_c_wp, gh_head_c_wp, gh_width_c_wp, ghb_factor_c_wp = self._zero_ghb_device_arrays(
+                    (int(ny_c), int(nx_c)),
+                    device,
+                )
 
-            # Diagonal preconditioner on coarse level
-            M_inv_c_host = build_diag_preconditioner(
-                T_field=T_c,
-                active=active_c,
-                bc_mask=bc_mask_c,
-                gh_mask=gh_mask_c if self.use_ghb else None,
-                ghb_factor=ghb_factor_c if self.use_ghb else None,
-                dx=float(dx_c) if self.use_ghb else None,
+            diag_backend = self._select_diag_preconditioner_backend(
+                T_wp=T_c_wp,
+                active_wp=active_c_wp,
+                bc_mask_wp=bc_mask_c_wp,
+                gh_mask_wp=gh_mask_c_wp,
+                ghb_factor_wp=ghb_factor_c_wp,
             )
-            M_inv_c_wp = wp.array(M_inv_c_host, dtype=WP_FLOAT, device=device)
+            if diag_backend == "device":
+                M_inv_c_wp = wp.empty((int(ny_c), int(nx_c)), dtype=WP_FLOAT, device=device)
+                self._update_diag_preconditioner_device(
+                    T_wp=T_c_wp,
+                    active_wp=active_c_wp,
+                    bc_mask_wp=bc_mask_c_wp,
+                    gh_mask_wp=gh_mask_c_wp,
+                    ghb_factor_wp=ghb_factor_c_wp,
+                    M_inv_wp=M_inv_c_wp,
+                    nx=int(nx_c),
+                    ny=int(ny_c),
+                    use_ghb=bool(self.use_ghb),
+                )
+                self._validate_device_diag_preconditioner(
+                    level_name=f"hierarchy_level_{int(level_id)}",
+                    T_field=T_c,
+                    active=active_c,
+                    bc_mask=bc_mask_c,
+                    gh_mask=gh_mask_c if self.use_ghb else None,
+                    ghb_factor=ghb_factor_c if self.use_ghb else None,
+                    dx=float(dx_c) if self.use_ghb else None,
+                    M_inv_wp=M_inv_c_wp,
+                )
+            else:
+                M_inv_c_host = build_diag_preconditioner(
+                    T_field=T_c,
+                    active=active_c,
+                    bc_mask=bc_mask_c,
+                    gh_mask=gh_mask_c if self.use_ghb else None,
+                    ghb_factor=ghb_factor_c if self.use_ghb else None,
+                    dx=float(dx_c) if self.use_ghb else None,
+                )
+                M_inv_c_wp = wp.array(M_inv_c_host, dtype=WP_FLOAT, device=device)
 
             # Persistent work buffers for this level
             shape_c = (int(ny_c), int(nx_c))
@@ -2780,21 +2928,58 @@ class WarpDarcySolver:
         bc_mask0_wp = self.bc_mask_wp
         bc_values0_wp = self.bc_values_wp
 
-        gh_mask0_wp = self.gh_mask_wp if self.use_ghb else None
-        gh_head0_wp = self.gh_head_wp if self.use_ghb else None
-        gh_width0_wp = self.gh_width_wp if self.use_ghb else None
-        ghb_factor0_wp = self.ghb_factor_wp if self.use_ghb else None
+        if self.use_ghb:
+            gh_mask0_wp = self.gh_mask_wp
+            gh_head0_wp = self.gh_head_wp
+            gh_width0_wp = self.gh_width_wp
+            ghb_factor0_wp = self.ghb_factor_wp
+        else:
+            gh_mask0_wp, gh_head0_wp, gh_width0_wp, ghb_factor0_wp = self._zero_ghb_device_arrays(
+                (int(ny), int(nx)),
+                device,
+            )
 
         if self.M_inv_wp is None:
-            M_inv0_host = build_diag_preconditioner(
-                T_field=T0,
-                active=active0,
-                bc_mask=bc_mask0,
-                gh_mask=gh_mask0 if self.use_ghb else None,
-                ghb_factor=ghb_factor0 if self.use_ghb else None,
-                dx=float(self.dx) if self.use_ghb else None,
+            diag_backend = self._select_diag_preconditioner_backend(
+                T_wp=T0_wp,
+                active_wp=active0_wp,
+                bc_mask_wp=bc_mask0_wp,
+                gh_mask_wp=gh_mask0_wp,
+                ghb_factor_wp=ghb_factor0_wp,
             )
-            M_inv0_wp = wp.array(M_inv0_host, dtype=WP_FLOAT, device=device)
+            if diag_backend == "device":
+                M_inv0_wp = wp.empty((int(ny), int(nx)), dtype=WP_FLOAT, device=device)
+                self._update_diag_preconditioner_device(
+                    T_wp=T0_wp,
+                    active_wp=active0_wp,
+                    bc_mask_wp=bc_mask0_wp,
+                    gh_mask_wp=gh_mask0_wp,
+                    ghb_factor_wp=ghb_factor0_wp,
+                    M_inv_wp=M_inv0_wp,
+                    nx=int(nx),
+                    ny=int(ny),
+                    use_ghb=bool(self.use_ghb),
+                )
+                self._validate_device_diag_preconditioner(
+                    level_name="hierarchy_level_0",
+                    T_field=T0,
+                    active=active0,
+                    bc_mask=bc_mask0,
+                    gh_mask=gh_mask0 if self.use_ghb else None,
+                    ghb_factor=ghb_factor0 if self.use_ghb else None,
+                    dx=float(self.dx) if self.use_ghb else None,
+                    M_inv_wp=M_inv0_wp,
+                )
+            else:
+                M_inv0_host = build_diag_preconditioner(
+                    T_field=T0,
+                    active=active0,
+                    bc_mask=bc_mask0,
+                    gh_mask=gh_mask0 if self.use_ghb else None,
+                    ghb_factor=ghb_factor0 if self.use_ghb else None,
+                    dx=float(self.dx) if self.use_ghb else None,
+                )
+                M_inv0_wp = wp.array(M_inv0_host, dtype=WP_FLOAT, device=device)
             self.M_inv_wp = M_inv0_wp
         else:
             M_inv0_wp = self.M_inv_wp
@@ -3302,7 +3487,38 @@ class WarpDarcySolver:
             ghb_factor=self.ghb_factor_host if self.use_ghb else None,
             dx=float(self.dx) if self.use_ghb else None,
         )
-        self.M_inv_wp = wp.array(M_inv_host, dtype=WP_FLOAT, device=device)
+        self.M_inv_wp = wp.empty((int(self.ny), int(self.nx)), dtype=WP_FLOAT, device=device)
+        fine_backend = self._select_diag_preconditioner_backend(
+            T_wp=self.T_wp,
+            active_wp=self.active_wp,
+            bc_mask_wp=self.bc_mask_wp,
+            gh_mask_wp=self.gh_mask_wp,
+            ghb_factor_wp=self.ghb_factor_wp,
+        )
+        if fine_backend == "device":
+            self._update_diag_preconditioner_device(
+                T_wp=self.T_wp,
+                active_wp=self.active_wp,
+                bc_mask_wp=self.bc_mask_wp,
+                gh_mask_wp=self.gh_mask_wp,
+                ghb_factor_wp=self.ghb_factor_wp,
+                M_inv_wp=self.M_inv_wp,
+                nx=int(self.nx),
+                ny=int(self.ny),
+                use_ghb=bool(self.use_ghb),
+            )
+            self._validate_device_diag_preconditioner(
+                level_name="fine_build_from_truth_inputs",
+                T_field=self.T_field_host,
+                active=self.active_host,
+                bc_mask=self.bc_mask_host,
+                gh_mask=self.gh_mask_host if self.use_ghb else None,
+                ghb_factor=self.ghb_factor_host if self.use_ghb else None,
+                dx=float(self.dx) if self.use_ghb else None,
+                M_inv_wp=self.M_inv_wp,
+            )
+        else:
+            wp.copy(self.M_inv_wp, wp.array(M_inv_host, dtype=WP_FLOAT, device="cpu"))
 
         # CPU-stage for M_inv (wrap host memory for in-place copies later)
         self._stage_M0_host = M_inv_host
@@ -3440,7 +3656,38 @@ class WarpDarcySolver:
             ghb_factor=self.ghb_factor_host if self.use_ghb else None,
             dx=float(self.dx) if self.use_ghb else None,
         )
-        self.M_inv_wp = wp.array(M_inv_host, dtype=WP_FLOAT, device=device)
+        self.M_inv_wp = wp.empty((int(self.ny), int(self.nx)), dtype=WP_FLOAT, device=device)
+        fine_backend = self._select_diag_preconditioner_backend(
+            T_wp=self.T_wp,
+            active_wp=self.active_wp,
+            bc_mask_wp=self.bc_mask_wp,
+            gh_mask_wp=self.gh_mask_wp,
+            ghb_factor_wp=self.ghb_factor_wp,
+        )
+        if fine_backend == "device":
+            self._update_diag_preconditioner_device(
+                T_wp=self.T_wp,
+                active_wp=self.active_wp,
+                bc_mask_wp=self.bc_mask_wp,
+                gh_mask_wp=self.gh_mask_wp,
+                ghb_factor_wp=self.ghb_factor_wp,
+                M_inv_wp=self.M_inv_wp,
+                nx=int(self.nx),
+                ny=int(self.ny),
+                use_ghb=bool(self.use_ghb),
+            )
+            self._validate_device_diag_preconditioner(
+                level_name="fine_build_from_fields",
+                T_field=self.T_field_host,
+                active=self.active_host,
+                bc_mask=self.bc_mask_host,
+                gh_mask=self.gh_mask_host if self.use_ghb else None,
+                ghb_factor=self.ghb_factor_host if self.use_ghb else None,
+                dx=float(self.dx) if self.use_ghb else None,
+                M_inv_wp=self.M_inv_wp,
+            )
+        else:
+            wp.copy(self.M_inv_wp, wp.array(M_inv_host, dtype=WP_FLOAT, device="cpu"))
 
         self._stage_M0_host = M_inv_host
         self._stage_M0 = wp.array(self._stage_M0_host, dtype=WP_FLOAT, device="cpu")
@@ -3541,10 +3788,10 @@ class WarpDarcySolver:
             active_f=self.active_host,
             bc_mask_f=self.bc_mask_host,
             bc_values_f=self.bc_values_host,
-            gh_mask_f=self.gh_mask_host,
-            gh_head_f=self.gh_head_host,
-            gh_width_f=self.gh_width_host,
-            ghb_factor_f=self.ghb_factor_host,
+            gh_mask_f=self.gh_mask_host if self.use_ghb else None,
+            gh_head_f=self.gh_head_host if self.use_ghb else None,
+            gh_width_f=self.gh_width_host if self.use_ghb else None,
+            ghb_factor_f=self.ghb_factor_host if self.use_ghb else None,
         )
 
         bc_values_c_host[...] = 0.0
@@ -3583,15 +3830,46 @@ class WarpDarcySolver:
         self.gh_width_c_wp = wp.array(gh_width_c_host, dtype=WP_FLOAT, device=device)
         self.ghb_factor_c_wp = wp.array(ghb_factor_c_host, dtype=WP_FLOAT, device=device)
 
-        M_inv_c_host = build_diag_preconditioner(
-            T_field=T_c_host,
-            active=active_c_host,
-            bc_mask=bc_mask_c_host,
-            gh_mask=gh_mask_c_host if self.use_ghb else None,
-            ghb_factor=ghb_factor_c_host if self.use_ghb else None,
-            dx=float(self.dx_c) if self.use_ghb else None,
+        self.M_inv_c_wp = wp.empty((int(ny_c), int(nx_c)), dtype=WP_FLOAT, device=device)
+        coarse_backend = self._select_diag_preconditioner_backend(
+            T_wp=self.T_c_wp,
+            active_wp=self.active_c_wp,
+            bc_mask_wp=self.bc_mask_c_wp,
+            gh_mask_wp=self.gh_mask_c_wp,
+            ghb_factor_wp=self.ghb_factor_c_wp,
         )
-        self.M_inv_c_wp = wp.array(M_inv_c_host, dtype=WP_FLOAT, device=device)
+        if coarse_backend == "device":
+            self._update_diag_preconditioner_device(
+                T_wp=self.T_c_wp,
+                active_wp=self.active_c_wp,
+                bc_mask_wp=self.bc_mask_c_wp,
+                gh_mask_wp=self.gh_mask_c_wp,
+                ghb_factor_wp=self.ghb_factor_c_wp,
+                M_inv_wp=self.M_inv_c_wp,
+                nx=int(nx_c),
+                ny=int(ny_c),
+                use_ghb=bool(self.use_ghb),
+            )
+            self._validate_device_diag_preconditioner(
+                level_name="two_level_cache",
+                T_field=T_c_host,
+                active=active_c_host,
+                bc_mask=bc_mask_c_host,
+                gh_mask=gh_mask_c_host if self.use_ghb else None,
+                ghb_factor=ghb_factor_c_host if self.use_ghb else None,
+                dx=float(self.dx_c) if self.use_ghb else None,
+                M_inv_wp=self.M_inv_c_wp,
+            )
+        else:
+            M_inv_c_host = build_diag_preconditioner(
+                T_field=T_c_host,
+                active=active_c_host,
+                bc_mask=bc_mask_c_host,
+                gh_mask=gh_mask_c_host if self.use_ghb else None,
+                ghb_factor=ghb_factor_c_host if self.use_ghb else None,
+                dx=float(self.dx_c) if self.use_ghb else None,
+            )
+            self.M_inv_c_wp = wp.array(M_inv_c_host, dtype=WP_FLOAT, device=device)
 
         self.mg_cache_built = True
 
@@ -3622,6 +3900,104 @@ class WarpDarcySolver:
 
         n_cells = int(self.nx) * int(self.ny)
         return "device" if n_cells >= min_cells else "host"
+
+    def _update_diag_preconditioner_device(
+        self,
+        *,
+        T_wp,
+        active_wp,
+        bc_mask_wp,
+        gh_mask_wp,
+        ghb_factor_wp,
+        M_inv_wp,
+        nx: int,
+        ny: int,
+        use_ghb: bool,
+    ) -> None:
+        """
+        Rebuild a diagonal preconditioner directly on the active device.
+
+        :param T_wp: device transmissivity array
+        :param active_wp: device active mask
+        :param bc_mask_wp: device Dirichlet mask
+        :param gh_mask_wp: device GHB mask
+        :param ghb_factor_wp: device GHB factor array
+        :param M_inv_wp: device output preconditioner array
+        :param nx: number of columns
+        :param ny: number of rows
+        :param use_ghb: whether GHB diagonal terms should be included
+        """
+        wp.launch(
+            build_diag_preconditioner_kernel,
+            dim=(int(ny), int(nx)),
+            inputs=[
+                T_wp,
+                active_wp,
+                bc_mask_wp,
+                gh_mask_wp,
+                ghb_factor_wp,
+                int(1 if use_ghb else 0),
+                int(nx),
+                int(ny),
+                M_inv_wp,
+            ],
+            device=self.device_str,
+        )
+
+    def _validate_device_diag_preconditioner(
+        self,
+        *,
+        level_name: str,
+        T_field: np.ndarray,
+        active: np.ndarray,
+        bc_mask: np.ndarray,
+        gh_mask: np.ndarray | None,
+        ghb_factor: np.ndarray | None,
+        dx: float | None,
+        M_inv_wp,
+        assume_finite_T: bool = False,
+    ) -> None:
+        if not self._validate_device_m_inv_enabled():
+            return
+
+        M_host = build_diag_preconditioner(
+            T_field=T_field,
+            active=active,
+            bc_mask=bc_mask,
+            gh_mask=gh_mask,
+            ghb_factor=ghb_factor,
+            dx=dx,
+            assume_finite_T=assume_finite_T,
+        )
+        if str(self.device_str).startswith("cuda"):
+            wp.synchronize_device(self.device_str)
+        M_device = np.asarray(M_inv_wp.numpy(), dtype=np.float64)
+        M_host64 = np.asarray(M_host, dtype=np.float64)
+        abs_diff = np.abs(M_device - M_host64)
+        rel_base = np.maximum(np.abs(M_host64), 1.0e-30)
+        rel_diff = abs_diff / rel_base
+        max_abs_diff = float(np.max(abs_diff)) if abs_diff.size > 0 else 0.0
+        max_rel_diff = float(np.max(rel_diff)) if rel_diff.size > 0 else 0.0
+        num_bad = int(np.count_nonzero(abs_diff > 1.0e-12))
+        summary = {
+            "level": str(level_name),
+            "max_abs_diff": max_abs_diff,
+            "max_rel_diff": max_rel_diff,
+            "num_bad": num_bad,
+        }
+        self._last_device_m_inv_validation.append(summary)
+        print(
+            "[DARCY_VALIDATE_DEVICE_M_INV] "
+            f"level={level_name} max_abs_diff={max_abs_diff:.6e} "
+            f"max_rel_diff={max_rel_diff:.6e} num_bad={num_bad}"
+        )
+
+    def _zero_ghb_device_arrays(self, shape: tuple[int, int], device: str) -> tuple[wp.array, wp.array, wp.array, wp.array]:
+        gh_mask_wp = wp.zeros(shape, dtype=wp.int32, device=device)
+        gh_head_wp = wp.zeros(shape, dtype=WP_FLOAT, device=device)
+        gh_width_wp = wp.zeros(shape, dtype=WP_FLOAT, device=device)
+        ghb_factor_wp = wp.zeros(shape, dtype=WP_FLOAT, device=device)
+        return gh_mask_wp, gh_head_wp, gh_width_wp, ghb_factor_wp
 
     def _build_rhs_fine_host(self, b_out_wp) -> None:
         """
@@ -4119,23 +4495,52 @@ class WarpDarcySolver:
         ny0 = int(self.ny)
         nx0 = int(self.nx)
 
-        M_inv_host = build_diag_preconditioner(
-            T_field=self.T_field_host,
-            active=self.active_host,
-            bc_mask=self.bc_mask_host,
-            gh_mask=self.gh_mask_host if self.use_ghb else None,
-            ghb_factor=self.ghb_factor_host if self.use_ghb else None,
-            dx=float(self.dx) if self.use_ghb else None,
-        ).astype(NP_FLOAT, copy=False)
-
         if self.M_inv_wp is None:
             self.M_inv_wp = wp.empty((ny0, nx0), dtype=WP_FLOAT, device=device)
+        backend = self._select_diag_preconditioner_backend(
+            T_wp=self.T_wp,
+            active_wp=self.active_wp,
+            bc_mask_wp=self.bc_mask_wp,
+            gh_mask_wp=self.gh_mask_wp,
+            ghb_factor_wp=self.ghb_factor_wp,
+        )
+        if backend == "device":
+            self._update_diag_preconditioner_device(
+                T_wp=self.T_wp,
+                active_wp=self.active_wp,
+                bc_mask_wp=self.bc_mask_wp,
+                gh_mask_wp=self.gh_mask_wp,
+                ghb_factor_wp=self.ghb_factor_wp,
+                M_inv_wp=self.M_inv_wp,
+                nx=nx0,
+                ny=ny0,
+                use_ghb=bool(self.use_ghb),
+            )
+            self._validate_device_diag_preconditioner(
+                level_name="fine_update",
+                T_field=self.T_field_host,
+                active=self.active_host,
+                bc_mask=self.bc_mask_host,
+                gh_mask=self.gh_mask_host if self.use_ghb else None,
+                ghb_factor=self.ghb_factor_host if self.use_ghb else None,
+                dx=float(self.dx) if self.use_ghb else None,
+                M_inv_wp=self.M_inv_wp,
+            )
+        else:
+            M_inv_host = build_diag_preconditioner(
+                T_field=self.T_field_host,
+                active=self.active_host,
+                bc_mask=self.bc_mask_host,
+                gh_mask=self.gh_mask_host if self.use_ghb else None,
+                ghb_factor=self.ghb_factor_host if self.use_ghb else None,
+                dx=float(self.dx) if self.use_ghb else None,
+            ).astype(NP_FLOAT, copy=False)
 
-        if self._stage_M0 is None or tuple(self._stage_M0.shape) != (ny0, nx0):
-            self._stage_M0 = wp.zeros((ny0, nx0), dtype=WP_FLOAT, device="cpu")
+            if self._stage_M0 is None or tuple(self._stage_M0.shape) != (ny0, nx0):
+                self._stage_M0 = wp.zeros((ny0, nx0), dtype=WP_FLOAT, device="cpu")
 
-        self._stage_M0.numpy()[:, :] = M_inv_host
-        wp.copy(self.M_inv_wp, self._stage_M0)
+            self._stage_M0.numpy()[:, :] = M_inv_host
+            wp.copy(self.M_inv_wp, self._stage_M0)
 
         if self._fine_level is not None:
             self._fine_level.M_inv_wp = self.M_inv_wp
@@ -4152,15 +4557,32 @@ class WarpDarcySolver:
             raise RuntimeError("Call build_from_truth_inputs() once before update_T_in_place().")
 
         device = self.device_str
+        profile_enabled = self._profile_update_T_enabled()
+        coarse_coarsening_s = 0.0
+        coarse_m_inv_build_s = 0.0
+        t_total_start = time.perf_counter() if profile_enabled else None
+
+        def _profile_sync() -> None:
+            if profile_enabled and str(device).startswith("cuda"):
+                wp.synchronize_device(device)
 
         # -------- fine host update + upload --------
+        t_phase = time.perf_counter() if profile_enabled else None
         self._update_fine_T_and_upload(T_truth)
+        if profile_enabled:
+            _profile_sync()
+            fine_t_upload_s = time.perf_counter() - t_phase
 
         # -------- rebuild fine diagonal preconditioner --------
+        t_phase = time.perf_counter() if profile_enabled else None
         self._update_fine_diag_preconditioner()
+        if profile_enabled:
+            _profile_sync()
+            fine_m_inv_build_s = time.perf_counter() - t_phase
 
         # -------- update 2-level cache (if built) --------
         if self.mg_cache_built and (self.T_c_host is not None) and (self.T_c_wp is not None):
+            t_phase = time.perf_counter() if profile_enabled else None
             (
                 T_c_new,
                 R_c_new,
@@ -4177,11 +4599,13 @@ class WarpDarcySolver:
                 active_f=self.active_host,
                 bc_mask_f=self.bc_mask_host,
                 bc_values_f=self.bc_values_host,
-                gh_mask_f=self.gh_mask_host,
-                gh_head_f=self.gh_head_host,
-                gh_width_f=self.gh_width_host,
-                ghb_factor_f=self.ghb_factor_host,
+                gh_mask_f=self.gh_mask_host if self.use_ghb else None,
+                gh_head_f=self.gh_head_host if self.use_ghb else None,
+                gh_width_f=self.gh_width_host if self.use_ghb else None,
+                ghb_factor_f=self.ghb_factor_host if self.use_ghb else None,
             )
+            if profile_enabled:
+                coarse_coarsening_s += time.perf_counter() - t_phase
 
             # correction scheme conventions
             bc_values_c_new[...] = NP_FLOAT(0.0)
@@ -4220,17 +4644,50 @@ class WarpDarcySolver:
             self._stage_Gc_2lvl.numpy()[:, :] = self.ghb_factor_c_host
             wp.copy(self.ghb_factor_c_wp, self._stage_Gc_2lvl)
 
-            M_inv_c_host = build_diag_preconditioner(
-                T_field=self.T_c_host,
-                active=self.active_c_host,
-                bc_mask=self.bc_mask_c_host,
-                gh_mask=self.gh_mask_c_host if self.use_ghb else None,
-                ghb_factor=self.ghb_factor_c_host if self.use_ghb else None,
-                dx=float(self.dx_c) if self.use_ghb else None,
-            ).astype(NP_FLOAT, copy=False)
-
-            self._stage_Mc_2lvl.numpy()[:, :] = M_inv_c_host
-            wp.copy(self.M_inv_c_wp, self._stage_Mc_2lvl)
+            t_phase = time.perf_counter() if profile_enabled else None
+            coarse_backend = self._select_diag_preconditioner_backend(
+                T_wp=self.T_c_wp,
+                active_wp=self.active_c_wp,
+                bc_mask_wp=self.bc_mask_c_wp,
+                gh_mask_wp=self.gh_mask_c_wp,
+                ghb_factor_wp=self.ghb_factor_c_wp,
+            )
+            if coarse_backend == "device":
+                self._update_diag_preconditioner_device(
+                    T_wp=self.T_c_wp,
+                    active_wp=self.active_c_wp,
+                    bc_mask_wp=self.bc_mask_c_wp,
+                    gh_mask_wp=self.gh_mask_c_wp,
+                    ghb_factor_wp=self.ghb_factor_c_wp,
+                    M_inv_wp=self.M_inv_c_wp,
+                    nx=int(self.nx_c),
+                    ny=int(self.ny_c),
+                    use_ghb=bool(self.use_ghb),
+                )
+                self._validate_device_diag_preconditioner(
+                    level_name="two_level_update",
+                    T_field=self.T_c_host,
+                    active=self.active_c_host,
+                    bc_mask=self.bc_mask_c_host,
+                    gh_mask=self.gh_mask_c_host if self.use_ghb else None,
+                    ghb_factor=self.ghb_factor_c_host if self.use_ghb else None,
+                    dx=float(self.dx_c) if self.use_ghb else None,
+                    M_inv_wp=self.M_inv_c_wp,
+                )
+            else:
+                M_inv_c_host = build_diag_preconditioner(
+                    T_field=self.T_c_host,
+                    active=self.active_c_host,
+                    bc_mask=self.bc_mask_c_host,
+                    gh_mask=self.gh_mask_c_host if self.use_ghb else None,
+                    ghb_factor=self.ghb_factor_c_host if self.use_ghb else None,
+                    dx=float(self.dx_c) if self.use_ghb else None,
+                ).astype(NP_FLOAT, copy=False)
+                self._stage_Mc_2lvl.numpy()[:, :] = M_inv_c_host
+                wp.copy(self.M_inv_c_wp, self._stage_Mc_2lvl)
+            if profile_enabled:
+                _profile_sync()
+                coarse_m_inv_build_s += time.perf_counter() - t_phase
 
             if self._coarse_level is not None:
                 self._coarse_level.T_wp = self.T_c_wp
@@ -4270,23 +4727,57 @@ class WarpDarcySolver:
                 self._stage_G_levels[0].numpy()[:, :] = lvl0.ghb_factor_host
                 wp.copy(lvl0.ghb_factor_wp, self._stage_G_levels[0])
 
-            M0 = build_diag_preconditioner(
-                T_field=lvl0.T_host,
-                active=lvl0.active_host,
-                bc_mask=lvl0.bc_mask_host,
-                gh_mask=lvl0.gh_mask_host if self.use_ghb else None,
-                ghb_factor=lvl0.ghb_factor_host if self.use_ghb else None,
-                dx=float(lvl0.dx) if self.use_ghb else None,
-            ).astype(NP_FLOAT, copy=False)
-
-            self._stage_M_levels[0].numpy()[:, :] = M0
-            wp.copy(lvl0.M_inv_wp, self._stage_M_levels[0])
+            t_phase = time.perf_counter() if profile_enabled else None
+            lvl0_backend = self._select_diag_preconditioner_backend(
+                T_wp=lvl0.T_wp,
+                active_wp=lvl0.active_wp,
+                bc_mask_wp=lvl0.bc_mask_wp,
+                gh_mask_wp=lvl0.gh_mask_wp,
+                ghb_factor_wp=lvl0.ghb_factor_wp,
+            )
+            if lvl0_backend == "device":
+                self._update_diag_preconditioner_device(
+                    T_wp=lvl0.T_wp,
+                    active_wp=lvl0.active_wp,
+                    bc_mask_wp=lvl0.bc_mask_wp,
+                    gh_mask_wp=lvl0.gh_mask_wp,
+                    ghb_factor_wp=lvl0.ghb_factor_wp,
+                    M_inv_wp=lvl0.M_inv_wp,
+                    nx=int(lvl0.nx),
+                    ny=int(lvl0.ny),
+                    use_ghb=bool(self.use_ghb),
+                )
+                self._validate_device_diag_preconditioner(
+                    level_name="mg_level_0_update",
+                    T_field=lvl0.T_host,
+                    active=lvl0.active_host,
+                    bc_mask=lvl0.bc_mask_host,
+                    gh_mask=lvl0.gh_mask_host if self.use_ghb else None,
+                    ghb_factor=lvl0.ghb_factor_host if self.use_ghb else None,
+                    dx=float(lvl0.dx) if self.use_ghb else None,
+                    M_inv_wp=lvl0.M_inv_wp,
+                )
+            else:
+                M0 = build_diag_preconditioner(
+                    T_field=lvl0.T_host,
+                    active=lvl0.active_host,
+                    bc_mask=lvl0.bc_mask_host,
+                    gh_mask=lvl0.gh_mask_host if self.use_ghb else None,
+                    ghb_factor=lvl0.ghb_factor_host if self.use_ghb else None,
+                    dx=float(lvl0.dx) if self.use_ghb else None,
+                ).astype(NP_FLOAT, copy=False)
+                self._stage_M_levels[0].numpy()[:, :] = M0
+                wp.copy(lvl0.M_inv_wp, self._stage_M_levels[0])
+            if profile_enabled:
+                _profile_sync()
+                coarse_m_inv_build_s += time.perf_counter() - t_phase
 
             # Coarse levels: re-coarsen from previous level and update T + M_inv
             for lid in range(1, nL):
                 fine = levels[lid - 1]
                 coarse = levels[lid]
 
+                t_phase = time.perf_counter() if profile_enabled else None
                 (
                     T_c,
                     R_c,
@@ -4303,12 +4794,14 @@ class WarpDarcySolver:
                     active_f=fine.active_host,
                     bc_mask_f=fine.bc_mask_host,
                     bc_values_f=fine.bc_values_host,
-                    gh_mask_f=fine.gh_mask_host,
-                    gh_head_f=fine.gh_head_host,
-                    gh_width_f=fine.gh_width_host,
-                    ghb_factor_f=fine.ghb_factor_host,
+                    gh_mask_f=fine.gh_mask_host if self.use_ghb else None,
+                    gh_head_f=fine.gh_head_host if self.use_ghb else None,
+                    gh_width_f=fine.gh_width_host if self.use_ghb else None,
+                    ghb_factor_f=fine.ghb_factor_host if self.use_ghb else None,
                     dx_c=float(coarse.dx),
                 )
+                if profile_enabled:
+                    coarse_coarsening_s += time.perf_counter() - t_phase
 
                 bc_values_c.fill(NP_FLOAT(0.0))
                 if gh_head_c is not None:
@@ -4335,22 +4828,72 @@ class WarpDarcySolver:
                     self._stage_G_levels[lid].numpy()[:, :] = coarse.ghb_factor_host
                     wp.copy(coarse.ghb_factor_wp, self._stage_G_levels[lid])
 
-                Mc = build_diag_preconditioner(
-                    T_field=coarse.T_host,
-                    active=coarse.active_host,
-                    bc_mask=coarse.bc_mask_host,
-                    gh_mask=coarse.gh_mask_host if self.use_ghb else None,
-                    ghb_factor=coarse.ghb_factor_host if self.use_ghb else None,
-                    dx=float(coarse.dx) if self.use_ghb else None,
-                ).astype(NP_FLOAT, copy=False)
+                t_phase = time.perf_counter() if profile_enabled else None
+                coarse_backend = self._select_diag_preconditioner_backend(
+                    T_wp=coarse.T_wp,
+                    active_wp=coarse.active_wp,
+                    bc_mask_wp=coarse.bc_mask_wp,
+                    gh_mask_wp=coarse.gh_mask_wp,
+                    ghb_factor_wp=coarse.ghb_factor_wp,
+                )
+                if coarse_backend == "device":
+                    self._update_diag_preconditioner_device(
+                        T_wp=coarse.T_wp,
+                        active_wp=coarse.active_wp,
+                        bc_mask_wp=coarse.bc_mask_wp,
+                        gh_mask_wp=coarse.gh_mask_wp,
+                        ghb_factor_wp=coarse.ghb_factor_wp,
+                        M_inv_wp=coarse.M_inv_wp,
+                        nx=int(coarse.nx),
+                        ny=int(coarse.ny),
+                        use_ghb=bool(self.use_ghb),
+                    )
+                    self._validate_device_diag_preconditioner(
+                        level_name=f"mg_level_{int(lid)}_update",
+                        T_field=coarse.T_host,
+                        active=coarse.active_host,
+                        bc_mask=coarse.bc_mask_host,
+                        gh_mask=coarse.gh_mask_host if self.use_ghb else None,
+                        ghb_factor=coarse.ghb_factor_host if self.use_ghb else None,
+                        dx=float(coarse.dx) if self.use_ghb else None,
+                        M_inv_wp=coarse.M_inv_wp,
+                    )
+                else:
+                    Mc = build_diag_preconditioner(
+                        T_field=coarse.T_host,
+                        active=coarse.active_host,
+                        bc_mask=coarse.bc_mask_host,
+                        gh_mask=coarse.gh_mask_host if self.use_ghb else None,
+                        ghb_factor=coarse.ghb_factor_host if self.use_ghb else None,
+                        dx=float(coarse.dx) if self.use_ghb else None,
+                    ).astype(NP_FLOAT, copy=False)
 
-                self._stage_M_levels[lid].numpy()[:, :] = Mc
-                wp.copy(coarse.M_inv_wp, self._stage_M_levels[lid])
+                    self._stage_M_levels[lid].numpy()[:, :] = Mc
+                    wp.copy(coarse.M_inv_wp, self._stage_M_levels[lid])
+                if profile_enabled:
+                    _profile_sync()
+                    coarse_m_inv_build_s += time.perf_counter() - t_phase
 
             self._mg_coarsening_diagnostics = updated_diags
 
         # Operator changed
         self._operator_dirty = True
+        if profile_enabled:
+            profile = {
+                "fine_t_upload_s": float(fine_t_upload_s),
+                "fine_m_inv_build_s": float(fine_m_inv_build_s),
+                "coarse_coarsening_s": float(coarse_coarsening_s),
+                "coarse_m_inv_build_s": float(coarse_m_inv_build_s),
+                "total_update_T_in_place_s": float(time.perf_counter() - t_total_start),
+            }
+            self._last_update_T_profile = profile
+            if self._update_T_profile_totals is None:
+                self._update_T_profile_totals = dict(profile)
+                self._update_T_profile_totals["count"] = 1
+            else:
+                for key, value in profile.items():
+                    self._update_T_profile_totals[key] = float(self._update_T_profile_totals.get(key, 0.0)) + float(value)
+                self._update_T_profile_totals["count"] = int(self._update_T_profile_totals.get("count", 0)) + 1
 
     def update_ghb_factor_in_place(
         self,
@@ -4391,10 +4934,10 @@ class WarpDarcySolver:
                 active_f=self.active_host,
                 bc_mask_f=self.bc_mask_host,
                 bc_values_f=self.bc_values_host,
-                gh_mask_f=self.gh_mask_host,
-                gh_head_f=self.gh_head_host,
-                gh_width_f=self.gh_width_host,
-                ghb_factor_f=self.ghb_factor_host,
+                gh_mask_f=self.gh_mask_host if self.use_ghb else None,
+                gh_head_f=self.gh_head_host if self.use_ghb else None,
+                gh_width_f=self.gh_width_host if self.use_ghb else None,
+                ghb_factor_f=self.ghb_factor_host if self.use_ghb else None,
             )
 
             np.copyto(self.ghb_factor_c_host, np.asarray(ghb_factor_c_new, dtype=NP_FLOAT, order="C"))
@@ -4408,17 +4951,47 @@ class WarpDarcySolver:
             self._stage_Gc_2lvl.numpy()[:, :] = self.ghb_factor_c_host
             wp.copy(self.ghb_factor_c_wp, self._stage_Gc_2lvl)
 
-            M_inv_c_host = build_diag_preconditioner(
-                T_field=self.T_c_host,
-                active=self.active_c_host,
-                bc_mask=self.bc_mask_c_host,
-                gh_mask=self.gh_mask_c_host if self.use_ghb else None,
-                ghb_factor=self.ghb_factor_c_host if self.use_ghb else None,
-                dx=float(self.dx_c) if self.use_ghb else None,
-            ).astype(NP_FLOAT, copy=False)
+            coarse_backend = self._select_diag_preconditioner_backend(
+                T_wp=self.T_c_wp,
+                active_wp=self.active_c_wp,
+                bc_mask_wp=self.bc_mask_c_wp,
+                gh_mask_wp=self.gh_mask_c_wp,
+                ghb_factor_wp=self.ghb_factor_c_wp,
+            )
+            if coarse_backend == "device":
+                self._update_diag_preconditioner_device(
+                    T_wp=self.T_c_wp,
+                    active_wp=self.active_c_wp,
+                    bc_mask_wp=self.bc_mask_c_wp,
+                    gh_mask_wp=self.gh_mask_c_wp,
+                    ghb_factor_wp=self.ghb_factor_c_wp,
+                    M_inv_wp=self.M_inv_c_wp,
+                    nx=int(self.nx_c),
+                    ny=int(self.ny_c),
+                    use_ghb=bool(self.use_ghb),
+                )
+                self._validate_device_diag_preconditioner(
+                    level_name="two_level_ghb_update",
+                    T_field=self.T_c_host,
+                    active=self.active_c_host,
+                    bc_mask=self.bc_mask_c_host,
+                    gh_mask=self.gh_mask_c_host if self.use_ghb else None,
+                    ghb_factor=self.ghb_factor_c_host if self.use_ghb else None,
+                    dx=float(self.dx_c) if self.use_ghb else None,
+                    M_inv_wp=self.M_inv_c_wp,
+                )
+            else:
+                M_inv_c_host = build_diag_preconditioner(
+                    T_field=self.T_c_host,
+                    active=self.active_c_host,
+                    bc_mask=self.bc_mask_c_host,
+                    gh_mask=self.gh_mask_c_host if self.use_ghb else None,
+                    ghb_factor=self.ghb_factor_c_host if self.use_ghb else None,
+                    dx=float(self.dx_c) if self.use_ghb else None,
+                ).astype(NP_FLOAT, copy=False)
 
-            self._stage_Mc_2lvl.numpy()[:, :] = M_inv_c_host
-            wp.copy(self.M_inv_c_wp, self._stage_Mc_2lvl)
+                self._stage_Mc_2lvl.numpy()[:, :] = M_inv_c_host
+                wp.copy(self.M_inv_c_wp, self._stage_Mc_2lvl)
 
             if self._coarse_level is not None:
                 self._coarse_level.ghb_factor_wp = self.ghb_factor_c_wp
@@ -4444,16 +5017,46 @@ class WarpDarcySolver:
                 self._stage_G_levels[0].numpy()[:, :] = lvl0.ghb_factor_host
                 wp.copy(lvl0.ghb_factor_wp, self._stage_G_levels[0])
 
-            M0 = build_diag_preconditioner(
-                T_field=lvl0.T_host,
-                active=lvl0.active_host,
-                bc_mask=lvl0.bc_mask_host,
-                gh_mask=lvl0.gh_mask_host if self.use_ghb else None,
-                ghb_factor=lvl0.ghb_factor_host if self.use_ghb else None,
-                dx=float(lvl0.dx) if self.use_ghb else None,
-            ).astype(NP_FLOAT, copy=False)
-            self._stage_M_levels[0].numpy()[:, :] = M0
-            wp.copy(lvl0.M_inv_wp, self._stage_M_levels[0])
+            lvl0_backend = self._select_diag_preconditioner_backend(
+                T_wp=lvl0.T_wp,
+                active_wp=lvl0.active_wp,
+                bc_mask_wp=lvl0.bc_mask_wp,
+                gh_mask_wp=lvl0.gh_mask_wp,
+                ghb_factor_wp=lvl0.ghb_factor_wp,
+            )
+            if lvl0_backend == "device":
+                self._update_diag_preconditioner_device(
+                    T_wp=lvl0.T_wp,
+                    active_wp=lvl0.active_wp,
+                    bc_mask_wp=lvl0.bc_mask_wp,
+                    gh_mask_wp=lvl0.gh_mask_wp,
+                    ghb_factor_wp=lvl0.ghb_factor_wp,
+                    M_inv_wp=lvl0.M_inv_wp,
+                    nx=int(lvl0.nx),
+                    ny=int(lvl0.ny),
+                    use_ghb=bool(self.use_ghb),
+                )
+                self._validate_device_diag_preconditioner(
+                    level_name="mg_level_0_ghb_update",
+                    T_field=lvl0.T_host,
+                    active=lvl0.active_host,
+                    bc_mask=lvl0.bc_mask_host,
+                    gh_mask=lvl0.gh_mask_host if self.use_ghb else None,
+                    ghb_factor=lvl0.ghb_factor_host if self.use_ghb else None,
+                    dx=float(lvl0.dx) if self.use_ghb else None,
+                    M_inv_wp=lvl0.M_inv_wp,
+                )
+            else:
+                M0 = build_diag_preconditioner(
+                    T_field=lvl0.T_host,
+                    active=lvl0.active_host,
+                    bc_mask=lvl0.bc_mask_host,
+                    gh_mask=lvl0.gh_mask_host if self.use_ghb else None,
+                    ghb_factor=lvl0.ghb_factor_host if self.use_ghb else None,
+                    dx=float(lvl0.dx) if self.use_ghb else None,
+                ).astype(NP_FLOAT, copy=False)
+                self._stage_M_levels[0].numpy()[:, :] = M0
+                wp.copy(lvl0.M_inv_wp, self._stage_M_levels[0])
 
             for lid in range(1, nL):
                 fine = levels[lid - 1]
@@ -4475,10 +5078,10 @@ class WarpDarcySolver:
                     active_f=fine.active_host,
                     bc_mask_f=fine.bc_mask_host,
                     bc_values_f=fine.bc_values_host,
-                    gh_mask_f=fine.gh_mask_host,
-                    gh_head_f=fine.gh_head_host,
-                    gh_width_f=fine.gh_width_host,
-                    ghb_factor_f=fine.ghb_factor_host,
+                    gh_mask_f=fine.gh_mask_host if self.use_ghb else None,
+                    gh_head_f=fine.gh_head_host if self.use_ghb else None,
+                    gh_width_f=fine.gh_width_host if self.use_ghb else None,
+                    ghb_factor_f=fine.ghb_factor_host if self.use_ghb else None,
                     dx_c=float(coarse.dx),
                 )
 
@@ -4487,16 +5090,46 @@ class WarpDarcySolver:
                     self._stage_G_levels[lid].numpy()[:, :] = coarse.ghb_factor_host
                     wp.copy(coarse.ghb_factor_wp, self._stage_G_levels[lid])
 
-                Mc = build_diag_preconditioner(
-                    T_field=coarse.T_host,
-                    active=coarse.active_host,
-                    bc_mask=coarse.bc_mask_host,
-                    gh_mask=coarse.gh_mask_host if self.use_ghb else None,
-                    ghb_factor=coarse.ghb_factor_host if self.use_ghb else None,
-                    dx=float(coarse.dx) if self.use_ghb else None,
-                ).astype(NP_FLOAT, copy=False)
-                self._stage_M_levels[lid].numpy()[:, :] = Mc
-                wp.copy(coarse.M_inv_wp, self._stage_M_levels[lid])
+                coarse_backend = self._select_diag_preconditioner_backend(
+                    T_wp=coarse.T_wp,
+                    active_wp=coarse.active_wp,
+                    bc_mask_wp=coarse.bc_mask_wp,
+                    gh_mask_wp=coarse.gh_mask_wp,
+                    ghb_factor_wp=coarse.ghb_factor_wp,
+                )
+                if coarse_backend == "device":
+                    self._update_diag_preconditioner_device(
+                        T_wp=coarse.T_wp,
+                        active_wp=coarse.active_wp,
+                        bc_mask_wp=coarse.bc_mask_wp,
+                        gh_mask_wp=coarse.gh_mask_wp,
+                        ghb_factor_wp=coarse.ghb_factor_wp,
+                        M_inv_wp=coarse.M_inv_wp,
+                        nx=int(coarse.nx),
+                        ny=int(coarse.ny),
+                        use_ghb=bool(self.use_ghb),
+                    )
+                    self._validate_device_diag_preconditioner(
+                        level_name=f"mg_level_{int(lid)}_ghb_update",
+                        T_field=coarse.T_host,
+                        active=coarse.active_host,
+                        bc_mask=coarse.bc_mask_host,
+                        gh_mask=coarse.gh_mask_host if self.use_ghb else None,
+                        ghb_factor=coarse.ghb_factor_host if self.use_ghb else None,
+                        dx=float(coarse.dx) if self.use_ghb else None,
+                        M_inv_wp=coarse.M_inv_wp,
+                    )
+                else:
+                    Mc = build_diag_preconditioner(
+                        T_field=coarse.T_host,
+                        active=coarse.active_host,
+                        bc_mask=coarse.bc_mask_host,
+                        gh_mask=coarse.gh_mask_host if self.use_ghb else None,
+                        ghb_factor=coarse.ghb_factor_host if self.use_ghb else None,
+                        dx=float(coarse.dx) if self.use_ghb else None,
+                    ).astype(NP_FLOAT, copy=False)
+                    self._stage_M_levels[lid].numpy()[:, :] = Mc
+                    wp.copy(coarse.M_inv_wp, self._stage_M_levels[lid])
 
         self._operator_dirty = True
 
@@ -5314,6 +5947,9 @@ class WarpDarcySolver:
                     "picard_head_tol": float(hclose_f),
                     "picard_dh_max_end": float(final_max_abs_head_change),
                     "unconfined_min_sat": float(min_sat),
+                    "diag_preconditioner_backend": self._diag_backend_env_or_default(),
+                    "update_T_profile_last": None if self._last_update_T_profile is None else dict(self._last_update_T_profile),
+                    "update_T_profile_totals": None if self._update_T_profile_totals is None else dict(self._update_T_profile_totals),
                 }
             )
             return (h_iter, info_out) if return_info else h_iter
@@ -6018,11 +6654,14 @@ class WarpDarcySolver:
             "converged": bool(converged),
             "aq_thickness": float(self.aq_thickness),
             "use_ghb": bool(self.use_ghb),
+            "diag_preconditioner_backend": self._diag_backend_env_or_default(),
             "cuda_graph_reused": bool((not graph_built_this_call) and (self._kcycle_graph is not None)),
             "cuda_graph_built_this_call": bool(graph_built_this_call),
             "check_every": int(check_every),
             "min_coarse_cells": None if min_coarse_cells is None else int(min_coarse_cells),
             "coarsening_diagnostics": [dict(item) for item in self._mg_coarsening_diagnostics],
+            "update_T_profile_last": None if self._last_update_T_profile is None else dict(self._last_update_T_profile),
+            "update_T_profile_totals": None if self._update_T_profile_totals is None else dict(self._update_T_profile_totals),
         }
         if (not history) or int(history[-1]["cycle"]) != int(n_cycles_used):
             history.append(

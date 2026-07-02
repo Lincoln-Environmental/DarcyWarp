@@ -33,7 +33,8 @@ from DARCY_WARP_PACKAGE.warped_darcy import WarpDarcySolver  # noqa: E402
 DEFAULT_DH_TOL = 1.0e-4
 DEFAULT_RESIDUAL_FLOOR_TOL = 1.0e-4
 DEFAULT_MF6_AGREEMENT_TOL = 5.0e-4
-BENCHMARK_GRID_SIZES = [(1000, 1000)] #(50, 50), (100, 100), (250, 250), (500, 500),
+DEFAULT_INNER_HEAD_RESIDUAL_TOL_MIN = 1.0e-4
+BENCHMARK_GRID_SIZES = [(250, 250), (500, 500), (1000, 1000)]
 
 
 @dataclass(frozen=True)
@@ -370,13 +371,16 @@ def run_warp_unconfined(
     device: str = "auto",
     chebyshev_enabled: bool = True,
     inner_smoother: str = "chebyshev",
-    cheby_lambda_min: float = 0.05,
-    cheby_lambda_max: float = 1.95,
+    cheby_lambda_min: float = 0.1,
+    cheby_lambda_max: float = 2.0,
     inner_forcing_eta: float = 0.10,
+    inner_head_residual_tol_min: float = DEFAULT_INNER_HEAD_RESIDUAL_TOL_MIN,
     inner_head_residual_tol_max: float = 1.0e-2,
     chebyshev_reset_factor: float = 1.2,
     transmissivity_relaxation_enabled: bool = False,
-    unconfined_startup_mode: str = "initial_head",
+    unconfined_startup_mode: str = "confined_pre_solve",
+    diag_preconditioner_backend: str = "auto",
+    check_every_no: int | None = None,
 ) -> Path:
     """
     Run the same unconfined problem in the main 2D Warp solver and save heads to NPZ.
@@ -395,6 +399,7 @@ def run_warp_unconfined(
         dx=case.dx,
         device=device,
         solver_type="kcycle",
+        diag_preconditioner_backend=diag_preconditioner_backend,
     ) as warp_solver:
         warp_solver.build_from_fields(
             T_field=initial_transmissivity,
@@ -412,12 +417,12 @@ def run_warp_unconfined(
             "max_cycles": 80,
             "max_levels": 5,
             "min_coarse_cells": 500,
-            "check_every_no": 1,
             "rel_tol": 5.0e-7,
             "abs_tol_min": 5.0e-7,
             "dh_rms_tol": DEFAULT_DH_TOL,
             "residual_floor_tol": DEFAULT_RESIDUAL_FLOOR_TOL,
             "inner_forcing_eta": float(inner_forcing_eta),
+            "inner_head_residual_tol_min": float(inner_head_residual_tol_min),
             "inner_head_residual_tol_max": float(inner_head_residual_tol_max),
             "chebyshev_reset_factor": float(chebyshev_reset_factor),
             "transmissivity_relaxation_enabled": bool(transmissivity_relaxation_enabled),
@@ -437,6 +442,8 @@ def run_warp_unconfined(
             "chebyshev_order": 3,
             "chebyshev_rejection_factor": 1.2,
         }
+        if check_every_no is not None:
+            solve1_kwargs["check_every_no"] = int(check_every_no)
         solve2_kwargs = dict(solve1_kwargs)
 
         t_solve1 = time.perf_counter()
@@ -609,13 +616,16 @@ def run_case(
     device: str = "auto",
     chebyshev_enabled: bool = True,
     inner_smoother: str = "chebyshev",
-    cheby_lambda_min: float = 0.05,
-    cheby_lambda_max: float = 1.95,
+    cheby_lambda_min: float = 0.1,
+    cheby_lambda_max: float = 2.0,
     inner_forcing_eta: float = 0.10,
+    inner_head_residual_tol_min: float = DEFAULT_INNER_HEAD_RESIDUAL_TOL_MIN,
     inner_head_residual_tol_max: float = 1.0e-2,
     chebyshev_reset_factor: float = 1.2,
     transmissivity_relaxation_enabled: bool = False,
-    unconfined_startup_mode: str = "initial_head",
+    unconfined_startup_mode: str = "confined_pre_solve",
+    diag_preconditioner_backend: str = "auto",
+    check_every_no: int | None = None,
     do_run_mf6: bool = True,
     do_run_warp: bool = True,
 ) -> dict:
@@ -647,10 +657,13 @@ def run_case(
             cheby_lambda_min=cheby_lambda_min,
             cheby_lambda_max=cheby_lambda_max,
             inner_forcing_eta=inner_forcing_eta,
+            inner_head_residual_tol_min=inner_head_residual_tol_min,
             inner_head_residual_tol_max=inner_head_residual_tol_max,
             chebyshev_reset_factor=chebyshev_reset_factor,
             transmissivity_relaxation_enabled=transmissivity_relaxation_enabled,
             unconfined_startup_mode=unconfined_startup_mode,
+            diag_preconditioner_backend=diag_preconditioner_backend,
+            check_every_no=check_every_no,
         )
 
     metrics = {}
@@ -672,6 +685,9 @@ def run_case(
         "inner_smoother": str(inner_smoother),
         "cheby_lambda_min": float(cheby_lambda_min),
         "cheby_lambda_max": float(cheby_lambda_max),
+        "diag_preconditioner_backend": str(diag_preconditioner_backend),
+        "check_every_no": None if check_every_no is None else int(check_every_no),
+        "unconfined_startup_mode": str(unconfined_startup_mode),
         "mf6_engine_time": _load_npz_scalar(mf6_path, "engine_time"),
         "mf6_total_time": _load_npz_scalar(mf6_path, "total_time"),
         "warp_total_time": _load_npz_scalar(warp_path, "total_time"),
@@ -721,13 +737,16 @@ def run_grid_benchmark(
     device: str = "auto",
     chebyshev_enabled: bool = True,
     inner_smoother: str = "chebyshev",
-    cheby_lambda_min: float = 0.05,
-    cheby_lambda_max: float = 1.95,
+    cheby_lambda_min: float = 0.1,
+    cheby_lambda_max: float = 2.0,
     inner_forcing_eta: float = 0.10,
+    inner_head_residual_tol_min: float = DEFAULT_INNER_HEAD_RESIDUAL_TOL_MIN,
     inner_head_residual_tol_max: float = 1.0e-2,
     chebyshev_reset_factor: float = 1.2,
     transmissivity_relaxation_enabled: bool = False,
-    unconfined_startup_mode: str = "initial_head",
+    unconfined_startup_mode: str = "confined_pre_solve",
+    diag_preconditioner_backend: str = "auto",
+    check_every_no: int | None = None,
     do_run_mf6: bool = True,
     do_run_warp: bool = True,
 ) -> list[dict]:
@@ -787,10 +806,13 @@ def run_grid_benchmark(
             cheby_lambda_min=cheby_lambda_min,
             cheby_lambda_max=cheby_lambda_max,
             inner_forcing_eta=inner_forcing_eta,
+            inner_head_residual_tol_min=inner_head_residual_tol_min,
             inner_head_residual_tol_max=inner_head_residual_tol_max,
             chebyshev_reset_factor=chebyshev_reset_factor,
             transmissivity_relaxation_enabled=transmissivity_relaxation_enabled,
             unconfined_startup_mode=unconfined_startup_mode,
+            diag_preconditioner_backend=diag_preconditioner_backend,
+            check_every_no=check_every_no,
             do_run_mf6=do_run_mf6,
             do_run_warp=do_run_warp,
         )
@@ -833,6 +855,103 @@ def run_grid_benchmark(
     return [results_dict[k] for k in sorted(results_dict.keys())]
 
 
+def run_diag_preconditioner_backend_matrix(
+    grid_sizes: list[int | tuple[int, int]] | tuple[int | tuple[int, int], ...] = tuple(BENCHMARK_GRID_SIZES),
+    dx: float = 100.0,
+    hydraulic_conductivity: float = 10.0,
+    recharge: float = 1.0e-4,
+    initial_saturated_thickness: float = 100.0,
+    workspace: str | Path | None = None,
+    device: str = "auto",
+    chebyshev_enabled: bool = True,
+    inner_smoother: str = "chebyshev",
+    cheby_lambda_min: float = 0.1,
+    cheby_lambda_max: float = 2.0,
+    inner_forcing_eta: float = 0.10,
+    inner_head_residual_tol_min: float = DEFAULT_INNER_HEAD_RESIDUAL_TOL_MIN,
+    inner_head_residual_tol_max: float = 1.0e-2,
+    chebyshev_reset_factor: float = 1.2,
+    transmissivity_relaxation_enabled: bool = False,
+    unconfined_startup_mode: str = "confined_pre_solve",
+    do_run_mf6: bool = True,
+    do_run_warp: bool = True,
+) -> list[dict]:
+    """
+    Run the tuned backend/check-frequency benchmark matrix for unconfined 2D cases.
+    """
+    if workspace is None:
+        workspace = data_store.joinpath("working_tests", "mf6_vs_warp_2d_unconfined_backend_matrix")
+    workspace = Path(workspace)
+    workspace.mkdir(parents=True, exist_ok=True)
+
+    normalized_sizes: list[tuple[int, int]] = []
+    for item in grid_sizes:
+        if isinstance(item, tuple):
+            nx_i, ny_i = item
+        else:
+            nx_i = int(item)
+            ny_i = int(item)
+        normalized_sizes.append((int(nx_i), int(ny_i)))
+
+    scenarios = (
+        {"case_id": "A", "diag_preconditioner_backend": "host", "check_every_no": 1},
+        {"case_id": "B", "diag_preconditioner_backend": "host", "check_every_no": 5},
+        {"case_id": "C", "diag_preconditioner_backend": "device", "check_every_no": 5},
+        {"case_id": "D", "diag_preconditioner_backend": "device", "check_every_no": 10},
+    )
+
+    results: list[dict] = []
+    for scenario in scenarios:
+        case_id = str(scenario["case_id"])
+        backend = str(scenario["diag_preconditioner_backend"])
+        check_every_no = int(scenario["check_every_no"])
+        for nx, ny in normalized_sizes:
+            case_workspace = workspace.joinpath(
+                f"{case_id}_backend_{backend}_check_{check_every_no}_grid_{nx:04d}x{ny:04d}"
+            )
+            row = run_case(
+                nx=nx,
+                ny=ny,
+                dx=dx,
+                hydraulic_conductivity=hydraulic_conductivity,
+                recharge=recharge,
+                initial_saturated_thickness=initial_saturated_thickness,
+                workspace=case_workspace,
+                device=device,
+                chebyshev_enabled=chebyshev_enabled,
+                inner_smoother=inner_smoother,
+                cheby_lambda_min=cheby_lambda_min,
+                cheby_lambda_max=cheby_lambda_max,
+                inner_forcing_eta=inner_forcing_eta,
+                inner_head_residual_tol_min=inner_head_residual_tol_min,
+                inner_head_residual_tol_max=inner_head_residual_tol_max,
+                chebyshev_reset_factor=chebyshev_reset_factor,
+                transmissivity_relaxation_enabled=transmissivity_relaxation_enabled,
+                unconfined_startup_mode=unconfined_startup_mode,
+                diag_preconditioner_backend=backend,
+                check_every_no=check_every_no,
+                do_run_mf6=do_run_mf6,
+                do_run_warp=do_run_warp,
+            )
+            row["case_id"] = case_id
+            results.append(row)
+
+    summary_json_path = workspace.joinpath("backend_matrix_summary.json")
+    with summary_json_path.open("w") as f:
+        json.dump(results, f, indent=4)
+
+    if results:
+        summary_csv_path = workspace.joinpath("backend_matrix_summary.csv")
+        columns = list(results[0].keys())
+        with summary_csv_path.open("w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=columns)
+            writer.writeheader()
+            writer.writerows(results)
+
+    print(f"Backend matrix summary saved to {summary_json_path}")
+    return results
+
+
 def run_chebyshev_lambda_sweep(
     nx: int = 500,
     ny: int = 500,
@@ -846,10 +965,13 @@ def run_chebyshev_lambda_sweep(
     device: str = "auto",
     do_run_mf6: bool = True,
     inner_forcing_eta: float = 0.10,
+    inner_head_residual_tol_min: float = DEFAULT_INNER_HEAD_RESIDUAL_TOL_MIN,
     inner_head_residual_tol_max: float = 1.0e-2,
     chebyshev_reset_factor: float = 1.2,
     transmissivity_relaxation_enabled: bool = False,
-    unconfined_startup_mode: str = "initial_head",
+    unconfined_startup_mode: str = "confined_pre_solve",
+    diag_preconditioner_backend: str = "auto",
+    check_every_no: int | None = None,
 ) -> list[dict]:
     """
     Run a single 2D unconfined case across a range of Chebyshev lambda bounds.
@@ -926,10 +1048,13 @@ def run_chebyshev_lambda_sweep(
                 cheby_lambda_min=float(lambda_min),
                 cheby_lambda_max=float(lambda_max),
                 inner_forcing_eta=float(inner_forcing_eta),
+                inner_head_residual_tol_min=float(inner_head_residual_tol_min),
                 inner_head_residual_tol_max=float(inner_head_residual_tol_max),
                 chebyshev_reset_factor=float(chebyshev_reset_factor),
                 transmissivity_relaxation_enabled=bool(transmissivity_relaxation_enabled),
                 unconfined_startup_mode=str(unconfined_startup_mode),
+                diag_preconditioner_backend=str(diag_preconditioner_backend),
+                check_every_no=check_every_no,
             )
 
             metrics = {}
@@ -943,6 +1068,9 @@ def run_chebyshev_lambda_sweep(
                 "dx": float(dx),
                 "cheby_lambda_min": float(lambda_min),
                 "cheby_lambda_max": float(lambda_max),
+                "diag_preconditioner_backend": str(diag_preconditioner_backend),
+                "check_every_no": None if check_every_no is None else int(check_every_no),
+                "unconfined_startup_mode": str(unconfined_startup_mode),
                 "converged": bool(warp_info.get("converged", False)) if warp_info else None,
                 "outer_iterations": warp_info.get("outer_iterations"),
                 "final_max_abs_head_change": _finite_float(warp_info.get("final_max_abs_head_change")),
@@ -994,15 +1122,41 @@ if __name__ == "__main__":
     cheby_lambda_min = 0.1
     cheby_lambda_max = 2.0
     inner_forcing_eta = 0.10
+    inner_head_residual_tol_min = DEFAULT_INNER_HEAD_RESIDUAL_TOL_MIN
     inner_head_residual_tol_max = 1.0e-2
     chebyshev_reset_factor = 1.2
     transmissivity_relaxation_enabled = False
     unconfined_startup_mode = "confined_pre_solve"  # or "initial_head"
-    do_run_mf6 = False
+    diag_preconditioner_backend = "device"
+    check_every_no = None
+    do_run_mf6 = True
     do_run_warp = True
     run_lambda_sweep = False
+    run_backend_matrix = True
 
-    if run_lambda_sweep:
+    if run_backend_matrix:
+        results = run_diag_preconditioner_backend_matrix(
+            grid_sizes=grid_sizes,
+            dx=dx,
+            hydraulic_conductivity=hydraulic_conductivity,
+            recharge=recharge,
+            initial_saturated_thickness=initial_saturated_thickness,
+            workspace=workspace,
+            device=device,
+            chebyshev_enabled=chebyshev_enabled,
+            inner_smoother=inner_smoother,
+            cheby_lambda_min=cheby_lambda_min,
+            cheby_lambda_max=cheby_lambda_max,
+            inner_forcing_eta=inner_forcing_eta,
+            inner_head_residual_tol_min=inner_head_residual_tol_min,
+            inner_head_residual_tol_max=inner_head_residual_tol_max,
+            chebyshev_reset_factor=chebyshev_reset_factor,
+            transmissivity_relaxation_enabled=transmissivity_relaxation_enabled,
+            unconfined_startup_mode=unconfined_startup_mode,
+            do_run_mf6=do_run_mf6,
+            do_run_warp=do_run_warp,
+        )
+    elif run_lambda_sweep:
         results = run_chebyshev_lambda_sweep(
             nx=500,
             ny=500,
@@ -1016,10 +1170,13 @@ if __name__ == "__main__":
             device=device,
             do_run_mf6=do_run_mf6,
             inner_forcing_eta=inner_forcing_eta,
+            inner_head_residual_tol_min=inner_head_residual_tol_min,
             inner_head_residual_tol_max=inner_head_residual_tol_max,
             chebyshev_reset_factor=chebyshev_reset_factor,
             transmissivity_relaxation_enabled=transmissivity_relaxation_enabled,
             unconfined_startup_mode=unconfined_startup_mode,
+            diag_preconditioner_backend=diag_preconditioner_backend,
+            check_every_no=check_every_no,
         )
     else:
         results = run_grid_benchmark(
@@ -1035,10 +1192,13 @@ if __name__ == "__main__":
             cheby_lambda_min=cheby_lambda_min,
             cheby_lambda_max=cheby_lambda_max,
             inner_forcing_eta=inner_forcing_eta,
+            inner_head_residual_tol_min=inner_head_residual_tol_min,
             inner_head_residual_tol_max=inner_head_residual_tol_max,
             chebyshev_reset_factor=chebyshev_reset_factor,
             transmissivity_relaxation_enabled=transmissivity_relaxation_enabled,
             unconfined_startup_mode=unconfined_startup_mode,
+            diag_preconditioner_backend=diag_preconditioner_backend,
+            check_every_no=check_every_no,
             do_run_mf6=do_run_mf6,
             do_run_warp=do_run_warp,
         )
