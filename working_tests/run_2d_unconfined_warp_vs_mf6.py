@@ -1128,11 +1128,11 @@ if __name__ == "__main__":
     transmissivity_relaxation_enabled = False
     unconfined_startup_mode = "confined_pre_solve"  # or "initial_head"
     diag_preconditioner_backend = "device"
-    check_every_no = None
+    check_every_no = 5
     do_run_mf6 = True
     do_run_warp = True
     run_lambda_sweep = False
-    run_backend_matrix = True
+    run_backend_matrix = False
 
     if run_backend_matrix:
         results = run_diag_preconditioner_backend_matrix(

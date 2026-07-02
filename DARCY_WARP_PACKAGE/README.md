@@ -11,14 +11,13 @@ Provenance:
 
 What is restored here:
 
-- `warped_darcy_chebyshev.py`: historical monolithic solver and compatibility wrappers.
-- `solvers_3d.py`: extracted 7-point Chebyshev and K-cycle solvers.
+- `solvers_3d.py`: 7-point Chebyshev and K-cycle solvers, plus the 7-point face-conductance, diagonal-preconditioner, and transient-term helpers.
 - `kernels_3d.py`: explicit 3D kernel export surface.
 - `sparse_operator.py`: sparse 5-point operator helper used by consistency tests.
 
 Known state:
 
 - The unconfined implementation is Picard-based and exposed through `unconfined=True`.
-- The 7-point stencil is exposed through `solve_chebyshev_7point_3d` and `solve_multigrid_kcycle_7point_3d`.
+- The 7-point stencil is exposed through `solve_chebyshev_7point_3d` and `solve_multigrid_kcycle_7point_3d` in `solvers_3d.py`.
 - Confined transient support is present through `transient=True`, `storage_coeff`, `dt`, and `head_prev`.
 - Transient unconfined support is scaffolded but explicitly raises as not implemented.

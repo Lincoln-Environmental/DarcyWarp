@@ -5,7 +5,6 @@ from __future__ import annotations
 import warp as wp
 
 from DARCY_WARP_PACKAGE.config import WP_FLOAT
-from DARCY_WARP_PACKAGE.warped_darcy_chebyshev import zero_scalar_kernel
 
 __all__ = [
     "add_correction_3d_kernel",
@@ -24,6 +23,20 @@ __all__ = [
     "vertical_line_relaxation_7point_kernel",
     "zero_scalar_kernel",
 ]
+
+
+@wp.kernel
+def zero_scalar_kernel(
+    buf: wp.array(dtype=wp.float64, ndim=1),
+):
+    """
+    Zero a 1D Warp array (length >= 1).
+    """
+    k = wp.tid()
+    if k >= buf.shape[0]:
+        return
+    buf[k] = wp.float64(0.0)
+
 
 @wp.kernel
 def apply_A_7point_kernel(

@@ -674,9 +674,7 @@ class Test3DSparseReference(unittest.TestCase):
         self.assertEqual(head_warp.shape, (nz, ny, nx))
 
         # Reference solve via scipy
-        from DARCY_WARP_PACKAGE.warped_darcy_chebyshev import (
-            build_7point_face_conductance_from_k,
-        )
+        from DARCY_WARP_PACKAGE.solvers_3d import build_7point_face_conductance_from_k
 
         tx_p, tx_m, ty_p, ty_m, tz_p, tz_m = build_7point_face_conductance_from_k(
             kx_field=kx,

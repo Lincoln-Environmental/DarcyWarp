@@ -18,9 +18,7 @@ from DARCY_WARP_PACKAGE.solvers_3d import (
     solve_chebyshev_7point_3d,
     solve_multigrid_kcycle_7point_3d,
 )
-from DARCY_WARP_PACKAGE.warped_darcy_chebyshev import (
-    build_7point_face_conductance_from_k,
-)
+from DARCY_WARP_PACKAGE.solvers_3d import build_7point_face_conductance_from_k
 
 
 class WarpDarcySolver3D:

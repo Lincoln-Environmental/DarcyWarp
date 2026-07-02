@@ -18,14 +18,275 @@ from DARCY_WARP_PACKAGE.kernels_3d import (
     restrict_blockavg_xy_3d_kernel,
     zero_scalar_kernel,
 )
-from DARCY_WARP_PACKAGE.warped_darcy_chebyshev import (
-    NP_FLOAT,
-    WP_FLOAT,
-    _chebyshev_relaxation_sequence,
-    _prepare_7point_transient_terms,
-    build_7point_face_conductance_from_k,
-    build_diag_preconditioner_7point,
-)
+from DARCY_WARP_PACKAGE.config import NP_FLOAT, WP_FLOAT
+from DARCY_WARP_PACKAGE.warped_darcy import _chebyshev_relaxation_sequence
+
+
+def build_7point_face_conductance_from_k(
+    kx_field: np.ndarray,
+    ky_field: np.ndarray,
+    kz_field: np.ndarray,
+    active: np.ndarray,
+    dx: float,
+    dy: float | None = None,
+    dz: float = 1.0,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Build 3D 7-point face conductances from cell-centered K fields.
+
+    Returns (tx_p, tx_m, ty_p, ty_m, tz_p, tz_m), each shape (nz, ny, nx),
+    where e.g. tx_p[k,j,i] couples cell (k,j,i) to (k,j,i+1).
+    """
+    if float(dx) <= 0.0:
+        raise ValueError("dx must be > 0.")
+    dy_f = float(dx) if dy is None else float(dy)
+    dz_f = float(dz)
+    if dy_f <= 0.0 or dz_f <= 0.0:
+        raise ValueError("dy and dz must be > 0.")
+
+    Kx = np.asarray(kx_field, dtype=np.float64)
+    Ky = np.asarray(ky_field, dtype=np.float64)
+    Kz = np.asarray(kz_field, dtype=np.float64)
+    act = np.asarray(active, dtype=np.int32) != 0
+
+    if Kx.ndim != 3 or Ky.ndim != 3 or Kz.ndim != 3:
+        raise ValueError("kx_field, ky_field, kz_field must all be 3D arrays (nz, ny, nx).")
+    if Ky.shape != Kx.shape or Kz.shape != Kx.shape:
+        raise ValueError("kx_field, ky_field, kz_field must have matching shapes.")
+    if act.shape != Kx.shape:
+        raise ValueError(f"active shape {act.shape} must match K shape {Kx.shape}.")
+    if not np.all(np.isfinite(Kx)) or not np.all(np.isfinite(Ky)) or not np.all(np.isfinite(Kz)):
+        raise ValueError("K fields must be finite.")
+    if np.any(Kx < 0.0) or np.any(Ky < 0.0) or np.any(Kz < 0.0):
+        raise ValueError("K fields must be >= 0.")
+
+    nz, ny, nx = Kx.shape
+    tiny = 1.0e-12
+
+    tx_p = np.zeros((nz, ny, nx), dtype=np.float64)
+    tx_m = np.zeros((nz, ny, nx), dtype=np.float64)
+    ty_p = np.zeros((nz, ny, nx), dtype=np.float64)
+    ty_m = np.zeros((nz, ny, nx), dtype=np.float64)
+    tz_p = np.zeros((nz, ny, nx), dtype=np.float64)
+    tz_m = np.zeros((nz, ny, nx), dtype=np.float64)
+
+    fac_x = dy_f * dz_f / float(dx)
+    fac_y = float(dx) * dz_f / dy_f
+    fac_z = float(dx) * dy_f / dz_f
+
+    if nx > 1:
+        KL = Kx[:, :, :-1]
+        KR = Kx[:, :, 1:]
+        denom = KL + KR
+        conn = act[:, :, :-1] & act[:, :, 1:] & (KL > 0.0) & (KR > 0.0) & (denom > tiny)
+        cond = np.zeros_like(denom, dtype=np.float64)
+        cond[conn] = 2.0 * KL[conn] * KR[conn] / denom[conn] * fac_x
+        tx_p[:, :, :-1] = cond
+        tx_m[:, :, 1:] = cond
+
+    if ny > 1:
+        KT = Ky[:, :-1, :]
+        KB = Ky[:, 1:, :]
+        denom = KT + KB
+        conn = act[:, :-1, :] & act[:, 1:, :] & (KT > 0.0) & (KB > 0.0) & (denom > tiny)
+        cond = np.zeros_like(denom, dtype=np.float64)
+        cond[conn] = 2.0 * KT[conn] * KB[conn] / denom[conn] * fac_y
+        ty_p[:, :-1, :] = cond
+        ty_m[:, 1:, :] = cond
+
+    if nz > 1:
+        KU = Kz[:-1, :, :]
+        KD = Kz[1:, :, :]
+        denom = KU + KD
+        conn = act[:-1, :, :] & act[1:, :, :] & (KU > 0.0) & (KD > 0.0) & (denom > tiny)
+        cond = np.zeros_like(denom, dtype=np.float64)
+        cond[conn] = 2.0 * KU[conn] * KD[conn] / denom[conn] * fac_z
+        tz_p[:-1, :, :] = cond
+        tz_m[1:, :, :] = cond
+
+    return (
+        tx_p.astype(NP_FLOAT, copy=False),
+        tx_m.astype(NP_FLOAT, copy=False),
+        ty_p.astype(NP_FLOAT, copy=False),
+        ty_m.astype(NP_FLOAT, copy=False),
+        tz_p.astype(NP_FLOAT, copy=False),
+        tz_m.astype(NP_FLOAT, copy=False),
+    )
+
+
+def build_diag_preconditioner_7point(
+    tx_p: np.ndarray,
+    tx_m: np.ndarray,
+    ty_p: np.ndarray,
+    ty_m: np.ndarray,
+    tz_p: np.ndarray,
+    tz_m: np.ndarray,
+    active: np.ndarray,
+    bc_mask: np.ndarray,
+    storage_diag: np.ndarray | None = None,
+) -> np.ndarray:
+    """
+    Build diagonal Jacobi preconditioner for 3D 7-point operator.
+    """
+    txp = np.asarray(tx_p, dtype=np.float64)
+    txm = np.asarray(tx_m, dtype=np.float64)
+    typ = np.asarray(ty_p, dtype=np.float64)
+    tym = np.asarray(ty_m, dtype=np.float64)
+    tzp = np.asarray(tz_p, dtype=np.float64)
+    tzm = np.asarray(tz_m, dtype=np.float64)
+    act = np.asarray(active, dtype=np.int32)
+    bc = np.asarray(bc_mask, dtype=np.int32)
+
+    shape = txp.shape
+    if txp.ndim != 3:
+        raise ValueError("7-point arrays must be 3D with shape (nz, ny, nx).")
+    for name, arr in (
+        ("tx_m", txm),
+        ("ty_p", typ),
+        ("ty_m", tym),
+        ("tz_p", tzp),
+        ("tz_m", tzm),
+    ):
+        if arr.shape != shape:
+            raise ValueError(f"{name} shape {arr.shape} expected {shape}")
+
+    if act.shape != shape:
+        raise ValueError(f"active shape {act.shape} expected {shape}")
+    if bc.shape != shape:
+        raise ValueError(f"bc_mask shape {bc.shape} expected {shape}")
+
+    for name, arr in (
+        ("tx_p", txp),
+        ("tx_m", txm),
+        ("ty_p", typ),
+        ("ty_m", tym),
+        ("tz_p", tzp),
+        ("tz_m", tzm),
+    ):
+        if not np.all(np.isfinite(arr)):
+            raise ValueError(f"{name} contains non-finite values")
+        if np.any(arr < 0.0):
+            raise ValueError(f"{name} must be >= 0")
+
+    free = (act != 0) & (bc == 0)
+    diag = txp + txm + typ + tym + tzp + tzm
+
+    if storage_diag is not None:
+        sdiag = np.asarray(storage_diag, dtype=np.float64)
+        if sdiag.shape != shape:
+            raise ValueError(f"storage_diag shape {sdiag.shape} expected {shape}")
+        if not np.all(np.isfinite(sdiag)):
+            raise ValueError("storage_diag contains non-finite values")
+        if np.any(sdiag < 0.0):
+            raise ValueError("storage_diag must be >= 0")
+        diag[free] += sdiag[free]
+
+    tiny = 1.0e-12
+    M_inv = np.ones(shape, dtype=np.float64)
+    valid = free & np.isfinite(diag) & (diag > tiny)
+    M_inv[valid] = 1.0 / diag[valid]
+    M_inv[~free] = 1.0
+    return M_inv.astype(NP_FLOAT, copy=False)
+
+
+def _prepare_7point_transient_terms(
+    rhs: np.ndarray,
+    storage_diag: np.ndarray | None,
+    active: np.ndarray,
+    bc_mask: np.ndarray,
+    bc_values: np.ndarray,
+    transient: bool,
+    storage_coeff: np.ndarray | float | None,
+    dt: float | None,
+    head_prev: np.ndarray | None,
+    initial_head: np.ndarray | None,
+    dx: float,
+    dy: float | None,
+    dz: float,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray | None, float]:
+    """
+    Prepare RHS and storage diagonal for optional confined transient 7-point solve.
+    """
+    b = np.asarray(rhs, dtype=NP_FLOAT).copy()
+    act = np.asarray(active, dtype=np.int32)
+    bcm = np.asarray(bc_mask, dtype=np.int32)
+    bcv = np.asarray(bc_values, dtype=NP_FLOAT)
+
+    shape = b.shape
+    free = (act != 0) & (bcm == 0)
+
+    if storage_diag is None:
+        sdiag = np.zeros(shape, dtype=NP_FLOAT)
+    else:
+        sdiag = np.asarray(storage_diag, dtype=NP_FLOAT).copy()
+        if sdiag.shape != shape:
+            raise ValueError(f"storage_diag shape {sdiag.shape} expected {shape}")
+        if not np.all(np.isfinite(sdiag)):
+            raise ValueError("storage_diag must be finite.")
+        if np.any(sdiag < NP_FLOAT(0.0)):
+            raise ValueError("storage_diag must be >= 0.")
+
+    sdiag[~free] = NP_FLOAT(0.0)
+
+    if not bool(transient):
+        return b, sdiag, None, float("nan")
+
+    dt_f = float(dt) if dt is not None else float("nan")
+    if not np.isfinite(dt_f) or dt_f <= 0.0:
+        raise ValueError("transient=True requires dt > 0.")
+    if storage_coeff is None:
+        raise ValueError("transient=True requires storage_coeff.")
+
+    dx_f = float(dx)
+    dy_f = float(dx) if dy is None else float(dy)
+    dz_f = float(dz)
+    if dx_f <= 0.0 or dy_f <= 0.0 or dz_f <= 0.0:
+        raise ValueError("dx, dy, dz must be positive for transient terms.")
+    vol = np.float64(dx_f * dy_f * dz_f)
+
+    s_in = np.asarray(storage_coeff, dtype=NP_FLOAT)
+    if s_in.shape == ():
+        Scoeff = np.full(shape, NP_FLOAT(s_in.reshape(()).item()), dtype=NP_FLOAT)
+    else:
+        if s_in.shape != shape:
+            raise ValueError(f"storage_coeff shape {s_in.shape} expected {shape}")
+        Scoeff = np.asarray(s_in, dtype=NP_FLOAT)
+
+    if not np.all(np.isfinite(Scoeff)):
+        raise ValueError("storage_coeff must contain finite values.")
+    if np.any(Scoeff < NP_FLOAT(0.0)):
+        raise ValueError("storage_coeff must be >= 0.")
+
+    sdiag_add = (
+        Scoeff.astype(np.float64, copy=False) * vol / np.float64(dt_f)
+    ).astype(NP_FLOAT, copy=False)
+    sdiag_add[~free] = NP_FLOAT(0.0)
+
+    if head_prev is not None:
+        h_prev = np.asarray(head_prev, dtype=NP_FLOAT).copy()
+        if h_prev.shape != shape:
+            raise ValueError(f"head_prev shape {h_prev.shape} expected {shape}")
+    elif initial_head is not None:
+        h_prev = np.asarray(initial_head, dtype=NP_FLOAT).copy()
+        if h_prev.shape != shape:
+            raise ValueError(f"initial_head shape {h_prev.shape} expected {shape}")
+    else:
+        h_prev = np.zeros(shape, dtype=NP_FLOAT)
+
+    h_prev[bcm != 0] = bcv[bcm != 0]
+    h_prev[act == 0] = NP_FLOAT(0.0)
+    if not np.all(np.isfinite(h_prev)):
+        raise ValueError("head_prev contains non-finite values.")
+
+    b[free] = (
+        b[free].astype(np.float64, copy=False)
+        + sdiag_add[free].astype(np.float64, copy=False) * h_prev[free].astype(np.float64, copy=False)
+    ).astype(NP_FLOAT, copy=False)
+    sdiag[free] = (
+        sdiag[free].astype(np.float64, copy=False) + sdiag_add[free].astype(np.float64, copy=False)
+    ).astype(NP_FLOAT, copy=False)
+
+    return b, sdiag, h_prev, float(dt_f)
 
 
 def _coarsen_mean_edge_1x2x2(field_f: np.ndarray) -> np.ndarray:
