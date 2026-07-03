@@ -35,3 +35,9 @@ docs/_build/
 # --- OS ---
 .DS_Store
 Thumbs.db
+
+# --- Large test fixtures (regenerate locally) ---
+# 2D unconfined MF6 truth fixtures over 10 MB — rebuild with:
+#   python working_tests/regenerate_unconfined_2d_truth.py
+# The test auto-discovers whatever fixtures are present, so a fresh checkout
+# runs the small committed grids and skips these until regenerated.
