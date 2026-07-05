@@ -248,7 +248,7 @@ def test_unconfined_near_dry_cells_remain_active_and_are_flagged():
 
 
 # ---------------------------------------------------------------------------
-# MF6 truth comparison across the benchmark grids.
+# Steady-state MF6 truth comparison across the benchmark grids.
 #
 # Re-runs the unconfined Warp solver for every truth fixture produced by
 # working_tests/regenerate_unconfined_2d_truth.py and checks the heads agree
@@ -258,6 +258,10 @@ def test_unconfined_near_dry_cells_remain_active_and_are_flagged():
 # guaranteed without this test importing the runner. No MF6 binary is needed
 # at test time. Tests skip per-grid when a fixture is absent (e.g. the large
 # grids are gitignored on a fresh checkout).
+#
+# These fixtures are steady-state unconfined truth. They are not evidence that
+# the transient 2D unconfined MF6 truth generator has completed; that separate
+# artifact is produced by working_tests/run_2d_transient_vs_mf6.py.
 # ---------------------------------------------------------------------------
 
 _TRUTH_FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "unconfined_2d"
@@ -351,8 +355,13 @@ def test_unconfined_warp_matches_mf6_truth_all_grids(nx: int, fixture_path: Path
 
 
 def test_truth_fixtures_present() -> None:
-    """Fail loudly (not skip) if the fixture dir is missing/empty, which means
-    the regen step was not run."""
+    """
+    Require at least one steady-state unconfined MF6 truth fixture.
+
+    This guards the steady Warp-vs-MF6 replay tests in this module. Transient
+    unconfined MF6 truth is generated and checked separately because it stores
+    per-period heads and storage/recharge time-series inputs.
+    """
     if not _warp_available():
         pytest.skip("warp is not available")
     if not _TRUTH_FIXTURE_DIR.exists():

@@ -205,7 +205,17 @@ def _prepare_7point_transient_terms(
     dz: float,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray | None, float]:
     """
-    Prepare RHS and storage diagonal for optional confined transient 7-point solve.
+    Prepare RHS and storage diagonal for an optional confined 3D transient step.
+
+    The transient term is backward Euler on active non-boundary cells:
+    ``storage_diag += storage_coeff * dx * dy * dz / dt`` and
+    ``rhs += storage_diag_add * head_prev``. Fixed-head boundary cells use
+    boundary values in the previous-head field and receive zero storage
+    contribution; inactive cells also receive zero storage contribution.
+
+    Existing ``storage_diag`` values are preserved and incremented by the
+    transient storage term. The returned arrays are host-side copies suitable
+    for upload to the Warp kernels.
     """
     b = np.asarray(rhs, dtype=NP_FLOAT).copy()
     act = np.asarray(active, dtype=np.int32)
