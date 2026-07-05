@@ -2732,6 +2732,12 @@ class WarpDarcySolver:
 
         self._operator_dirty = True
 
+        # True only while a transient storage diagonal is active. When False
+        # (steady solves) the storage diagonal is identically zero, so every
+        # multigrid level shares a single fine-size zero storage array instead
+        # of allocating one per level. See build_hierarchy().
+        self._storage_active = False
+
         # Hierarchy storage (for K cycle later)
         self.mg_levels = None
         self._mg_coarsening_diagnostics = []
@@ -2889,6 +2895,29 @@ class WarpDarcySolver:
 
         device = self.device_str
 
+        # Release the previous hierarchy's device arrays before rebuilding.
+        # Old _MGLevel objects survive reassignment of self.mg_levels because
+        # their wp.arrays participate in reference cycles (array -> device
+        # context) that CPython refcounting cannot break on its own. Without
+        # this, every K-cycle rebuild (e.g. each unconfined Picard iteration)
+        # accumulates a full hierarchy in the mempool until close() runs gc,
+        # which OOMs large grids. Nulling the slots drops the array refs;
+        # gc.collect() then reclaims the cyclic ones so the pool reuses the
+        # memory for the new build. This mirrors what close() does at teardown.
+        if self.mg_levels is not None:
+            try:
+                wp.synchronize_device(device)
+            except Exception:
+                pass
+            for _prev_lvl in self.mg_levels:
+                try:
+                    for _name in _prev_lvl.__slots__:
+                        setattr(_prev_lvl, _name, None)
+                except Exception:
+                    pass
+            self.mg_levels = None
+            gc.collect()
+
         levels = []
         self._mg_coarsening_diagnostics = []
 
@@ -2954,7 +2983,21 @@ class WarpDarcySolver:
             active_c_wp = wp.array(active_c, dtype=wp.int32, device=device)
             bc_mask_c_wp = wp.array(bc_mask_c, dtype=wp.int32, device=device)
             bc_values_c_wp = wp.array(bc_values_c, dtype=WP_FLOAT, device=device)
-            storage_diag_c_wp = wp.array(storage_diag_c, dtype=WP_FLOAT, device=device)
+            if self._storage_active:
+                storage_diag_c_wp = wp.array(storage_diag_c, dtype=WP_FLOAT, device=device)
+            else:
+                # Steady solve: the storage diagonal is identically zero on
+                # every level, so all coarse levels share the single fine-size
+                # zero storage array instead of allocating one per level.
+                # Coarse kernels read storage_diag[j, i] over the coarse launch
+                # dims, which are a subset of the fine grid, so the access is
+                # always in bounds and the value (0.0) leaves the operator
+                # unchanged.
+                if getattr(self, "storage_diag_wp", None) is None:
+                    self.storage_diag_wp = wp.zeros(
+                        (int(self.ny), int(self.nx)), dtype=WP_FLOAT, device=device
+                    )
+                storage_diag_c_wp = self.storage_diag_wp
 
             if self.use_ghb and gh_mask_c is not None:
                 gh_mask_c_wp = wp.array(gh_mask_c, dtype=wp.int32, device=device)
@@ -5657,6 +5700,10 @@ class WarpDarcySolver:
             "confined_pre_solve" runs one fixed-T confined solve to warm-start.
         """
 
+        # Track whether a transient storage diagonal is in use so build_hierarchy
+        # can skip per-level zero-storage device allocations for steady solves.
+        self._storage_active = bool(transient)
+
         # Normalize tolerances (treat None as disabled)
         dh_rms_tol_f = None if dh_rms_tol is None else float(dh_rms_tol)
 
@@ -7229,6 +7276,29 @@ class WarpDarcySolver:
             self._stage_Gc_2lvl = None
         if hasattr(self, "_stage_G_levels"):
             self._stage_G_levels = None
+        # Storage-diagonal and transmissivity/M_inv staging buffers (Warp arrays
+        # on CPU). These were previously leaked across solves because close()
+        # only dropped the R/G staging siblings.
+        if hasattr(self, "_stage_Sc_2lvl"):
+            self._stage_Sc_2lvl = None
+        if hasattr(self, "_stage_S_levels"):
+            self._stage_S_levels = None
+        if hasattr(self, "_stage_T0"):
+            self._stage_T0 = None
+        if hasattr(self, "_stage_T0_host"):
+            self._stage_T0_host = None
+        if hasattr(self, "_stage_M0"):
+            self._stage_M0 = None
+        if hasattr(self, "_stage_M0_host"):
+            self._stage_M0_host = None
+        if hasattr(self, "_stage_Tc_2lvl"):
+            self._stage_Tc_2lvl = None
+        if hasattr(self, "_stage_Mc_2lvl"):
+            self._stage_Mc_2lvl = None
+        if hasattr(self, "_stage_T_levels"):
+            self._stage_T_levels = None
+        if hasattr(self, "_stage_M_levels"):
+            self._stage_M_levels = None
 
         # 3) Drop multigrid hierarchy objects (these contain many Warp arrays).
         if self.mg_levels is not None:
@@ -7264,6 +7334,7 @@ class WarpDarcySolver:
         self.gh_mask_wp = None
         self.gh_head_wp = None
         self.gh_width_wp = None
+        self.storage_diag_wp = None
 
         self.M_inv_wp = None
 
@@ -7293,6 +7364,11 @@ class WarpDarcySolver:
         self.ghb_factor_c_wp = None
         self.storage_diag_c_wp = None
         self.M_inv_c_wp = None
+
+        # Storage-diagonal host mirrors (numpy). mg_levels already dropped the
+        # per-level copies above; release the solver-level mirrors too.
+        self.storage_diag_host = None
+        self.storage_diag_c_host = None
 
         # 7) Optionally keep host arrays for reuse, but if you want to drop everything:
         # self.T_field_host = None
