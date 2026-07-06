@@ -791,7 +791,10 @@ def _coarsen_level_host_2x2(
         storage_diag_c[inactive] = NP_FLOAT(0.0)
         storage_diag_c[bc_mask_c != 0] = NP_FLOAT(0.0)
     else:
-        storage_diag_c = np.zeros((ny_c, nx_c), dtype=NP_FLOAT)
+        # No storage active on the fine level: carry "no storage" as None
+        # instead of allocating a zero array. Steady coarsening must not pay for
+        # storage it does not use.
+        storage_diag_c = None
 
     bc_values_c = np.zeros((ny_c, nx_c), dtype=NP_FLOAT)
     gh_head_c = np.zeros((ny_c, nx_c), dtype=NP_FLOAT)
@@ -1985,6 +1988,633 @@ def init_pcg_with_A_kernel(
     wp.atomic_add(rTr_buf, 0, r64 * r64)
 
 
+# =============================================================================
+# No-storage (steady) kernel variants.
+#
+# These are byte-for-byte copies of the storage-aware kernels above, minus the
+# ``storage_diag`` parameter and the ``+ storage_diag[j, i]`` diagonal term. They
+# are used on every hot path when ``transient=False`` so steady solves never
+# allocate, stage, or read a storage diagonal. For steady solves the storage
+# term is identically zero, so these reproduce the storage-aware operator
+# exactly when storage_diag == 0. Transient solves keep using the kernels above.
+#
+# NOTE: ``apply_A_and_pAp_kernel`` / ``init_pcg_with_A_kernel`` accept a
+# ``storage_diag`` argument for signature symmetry but never read it; their
+# no-storage twins simply drop the (unused) argument.
+# =============================================================================
+@wp.kernel
+def jacobi_applyA_fused_no_storage_kernel(
+    T_field: wp.array(dtype=WP_FLOAT, ndim=2),
+    active: wp.array(dtype=wp.int32, ndim=2),
+    bc_mask: wp.array(dtype=wp.int32, ndim=2),
+    gh_mask: wp.array(dtype=wp.int32, ndim=2),
+    ghb_factor: wp.array(dtype=WP_FLOAT, ndim=2),
+    b: wp.array(dtype=WP_FLOAT, ndim=2),
+    x_in: wp.array(dtype=WP_FLOAT, ndim=2),
+    M_inv: wp.array(dtype=WP_FLOAT, ndim=2),
+    bc_values: wp.array(dtype=WP_FLOAT, ndim=2),
+    omega: float,
+    nx: int,
+    ny: int,
+    x_out: wp.array(dtype=WP_FLOAT, ndim=2),
+):
+    j, i = wp.tid()
+
+    if j >= ny or i >= nx:
+        return
+
+    if active[j, i] == 0:
+        x_out[j, i] = WP_FLOAT(0.0)
+        return
+
+    if bc_mask[j, i] != 0:
+        x_out[j, i] = bc_values[j, i]
+        return
+
+    T_c = wp.float64(T_field[j, i])
+    hC = wp.float64(x_in[j, i])
+
+    T_e = wp.float64(0.0)
+    T_w = wp.float64(0.0)
+    T_n = wp.float64(0.0)
+    T_s = wp.float64(0.0)
+
+    tiny = wp.float64(1.0e-12)
+
+    if i + 1 < nx and active[j, i + 1] != 0:
+        T_nb = wp.float64(T_field[j, i + 1])
+        if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
+            T_e = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+
+    if i - 1 >= 0 and active[j, i - 1] != 0:
+        T_nb = wp.float64(T_field[j, i - 1])
+        if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
+            T_w = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+
+    if j - 1 >= 0 and active[j - 1, i] != 0:
+        T_nb = wp.float64(T_field[j - 1, i])
+        if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
+            T_n = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+
+    if j + 1 < ny and active[j + 1, i] != 0:
+        T_nb = wp.float64(T_field[j + 1, i])
+        if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
+            T_s = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+
+    C_gh = wp.float64(0.0)
+    if gh_mask[j, i] != 0:
+        ghbf = wp.float64(ghb_factor[j, i])
+        if ghbf > wp.float64(0.0) and not wp.isnan(ghbf):
+            C_gh = T_c * ghbf
+
+    sum_T = T_e + T_w + T_n + T_s + C_gh
+
+    Ah = WP_FLOAT(0.0)
+    if sum_T < tiny:
+        Ah = WP_FLOAT(hC)
+    else:
+        val = sum_T * hC
+        if T_e > wp.float64(0.0):
+            val = val - T_e * wp.float64(x_in[j, i + 1])
+        if T_w > wp.float64(0.0):
+            val = val - T_w * wp.float64(x_in[j, i - 1])
+        if T_n > wp.float64(0.0):
+            val = val - T_n * wp.float64(x_in[j - 1, i])
+        if T_s > wp.float64(0.0):
+            val = val - T_s * wp.float64(x_in[j + 1, i])
+        Ah = WP_FLOAT(val)
+
+    r_ij = b[j, i] - Ah
+    x_out[j, i] = WP_FLOAT(hC) + WP_FLOAT(omega) * M_inv[j, i] * r_ij
+
+
+@wp.kernel
+def compute_head_residual_no_storage_kernel(
+    x: wp.array(dtype=WP_FLOAT, ndim=2),
+    b: wp.array(dtype=WP_FLOAT, ndim=2),
+    T_field: wp.array(dtype=WP_FLOAT, ndim=2),
+    active: wp.array(dtype=wp.int32, ndim=2),
+    bc_mask: wp.array(dtype=wp.int32, ndim=2),
+    gh_mask: wp.array(dtype=wp.int32, ndim=2),
+    ghb_factor: wp.array(dtype=WP_FLOAT, ndim=2),
+    r: wp.array(dtype=WP_FLOAT, ndim=2),
+    rTr_buf: wp.array(dtype=wp.float64, ndim=1),
+    nx: int,
+    ny: int,
+):
+    j, i = wp.tid()
+    if j >= ny or i >= nx:
+        return
+
+    if active[j, i] == 0 or bc_mask[j, i] != 0:
+        r[j, i] = WP_FLOAT(0.0)
+        return
+
+    tiny = wp.float64(1.0e-12)
+
+    T_c = wp.float64(T_field[j, i])
+    hC = wp.float64(x[j, i])
+
+    hE = wp.float64(0.0)
+    hW = wp.float64(0.0)
+    hN = wp.float64(0.0)
+    hS = wp.float64(0.0)
+
+    T_e = wp.float64(0.0)
+    T_w = wp.float64(0.0)
+    T_n = wp.float64(0.0)
+    T_s = wp.float64(0.0)
+
+    if i + 1 < nx and active[j, i + 1] != 0:
+        T_nb = wp.float64(T_field[j, i + 1])
+        hE = wp.float64(x[j, i + 1])
+        if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
+            T_e = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+
+    if i - 1 >= 0 and active[j, i - 1] != 0:
+        T_nb = wp.float64(T_field[j, i - 1])
+        hW = wp.float64(x[j, i - 1])
+        if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
+            T_w = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+
+    if j - 1 >= 0 and active[j - 1, i] != 0:
+        T_nb = wp.float64(T_field[j - 1, i])
+        hN = wp.float64(x[j - 1, i])
+        if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
+            T_n = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+
+    if j + 1 < ny and active[j + 1, i] != 0:
+        T_nb = wp.float64(T_field[j + 1, i])
+        hS = wp.float64(x[j + 1, i])
+        if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
+            T_s = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+
+    C_gh = wp.float64(0.0)
+    if gh_mask[j, i] != 0:
+        ghbf = wp.float64(ghb_factor[j, i])
+        if ghbf > wp.float64(0.0) and not wp.isnan(ghbf):
+            C_gh = T_c * ghbf
+
+    diagA = T_e + T_w + T_n + T_s + C_gh
+
+    Ax64 = wp.float64(0.0)
+    if diagA < tiny:
+        Ax64 = hC
+        rh64 = wp.float64(b[j, i]) - Ax64
+    else:
+        Ax64 = diagA * hC
+        if T_e > wp.float64(0.0):
+            Ax64 = Ax64 - T_e * hE
+        if T_w > wp.float64(0.0):
+            Ax64 = Ax64 - T_w * hW
+        if T_n > wp.float64(0.0):
+            Ax64 = Ax64 - T_n * hN
+        if T_s > wp.float64(0.0):
+            Ax64 = Ax64 - T_s * hS
+
+        rf64 = wp.float64(b[j, i]) - Ax64
+        rh64 = rf64 / diagA
+
+    r[j, i] = WP_FLOAT(rh64)
+    wp.atomic_add(rTr_buf, 0, rh64 * rh64)
+
+
+@wp.kernel
+def compute_residual_no_storage_kernel(
+    x: wp.array(dtype=WP_FLOAT, ndim=2),
+    b: wp.array(dtype=WP_FLOAT, ndim=2),
+    T_field: wp.array(dtype=WP_FLOAT, ndim=2),
+    active: wp.array(dtype=wp.int32, ndim=2),
+    bc_mask: wp.array(dtype=wp.int32, ndim=2),
+    gh_mask: wp.array(dtype=wp.int32, ndim=2),
+    ghb_factor: wp.array(dtype=WP_FLOAT, ndim=2),
+    r: wp.array(dtype=WP_FLOAT, ndim=2),
+    rTr_buf: wp.array(dtype=wp.float64, ndim=1),
+    nx: int,
+    ny: int,
+):
+    j, i = wp.tid()
+    if j >= ny or i >= nx:
+        return
+
+    if active[j, i] == 0 or bc_mask[j, i] != 0:
+        r[j, i] = WP_FLOAT(0.0)
+        return
+
+    tiny = wp.float64(1.0e-12)
+
+    T_c = wp.float64(T_field[j, i])
+    hC = wp.float64(x[j, i])
+
+    hE = wp.float64(0.0)
+    hW = wp.float64(0.0)
+    hN = wp.float64(0.0)
+    hS = wp.float64(0.0)
+
+    T_e = wp.float64(0.0)
+    T_w = wp.float64(0.0)
+    T_n = wp.float64(0.0)
+    T_s = wp.float64(0.0)
+
+    if i + 1 < nx and active[j, i + 1] != 0:
+        T_nb = wp.float64(T_field[j, i + 1])
+        hE = wp.float64(x[j, i + 1])
+        if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
+            T_e = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+
+    if i - 1 >= 0 and active[j, i - 1] != 0:
+        T_nb = wp.float64(T_field[j, i - 1])
+        hW = wp.float64(x[j, i - 1])
+        if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
+            T_w = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+
+    if j - 1 >= 0 and active[j - 1, i] != 0:
+        T_nb = wp.float64(T_field[j - 1, i])
+        hN = wp.float64(x[j - 1, i])
+        if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
+            T_n = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+
+    if j + 1 < ny and active[j + 1, i] != 0:
+        T_nb = wp.float64(T_field[j + 1, i])
+        hS = wp.float64(x[j + 1, i])
+        if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
+            T_s = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+
+    C_gh = wp.float64(0.0)
+    if gh_mask[j, i] != 0:
+        ghbf = wp.float64(ghb_factor[j, i])
+        if ghbf > wp.float64(0.0) and not wp.isnan(ghbf):
+            C_gh = T_c * ghbf
+
+    sum_T = T_e + T_w + T_n + T_s + C_gh
+
+    Ax64 = wp.float64(0.0)
+    if sum_T < tiny:
+        Ax64 = hC
+    else:
+        Ax64 = sum_T * hC
+        if T_e > wp.float64(0.0):
+            Ax64 = Ax64 - T_e * hE
+        if T_w > wp.float64(0.0):
+            Ax64 = Ax64 - T_w * hW
+        if T_n > wp.float64(0.0):
+            Ax64 = Ax64 - T_n * hN
+        if T_s > wp.float64(0.0):
+            Ax64 = Ax64 - T_s * hS
+
+    rf64 = wp.float64(b[j, i]) - Ax64
+    r[j, i] = WP_FLOAT(rf64)
+    wp.atomic_add(rTr_buf, 0, rf64 * rf64)
+
+
+@wp.kernel
+def kcycle_check_dh_and_residual_no_storage_kernel(
+    x: wp.array(dtype=WP_FLOAT, ndim=2),
+    x_prev: wp.array(dtype=WP_FLOAT, ndim=2),
+    b: wp.array(dtype=WP_FLOAT, ndim=2),
+    T_field: wp.array(dtype=WP_FLOAT, ndim=2),
+    active: wp.array(dtype=wp.int32, ndim=2),
+    bc_mask: wp.array(dtype=wp.int32, ndim=2),
+    gh_mask: wp.array(dtype=wp.int32, ndim=2),
+    ghb_factor: wp.array(dtype=WP_FLOAT, ndim=2),
+    dh2_buf: wp.array(dtype=wp.float64, ndim=1),
+    dh_max_buf: wp.array(dtype=wp.float64, ndim=1),
+    rTr_buf: wp.array(dtype=wp.float64, ndim=1),
+    nx: int,
+    ny: int,
+):
+    j, i = wp.tid()
+    if j >= ny or i >= nx:
+        return
+
+    x_new = wp.float64(x[j, i])
+    x_old = wp.float64(x_prev[j, i])
+    x_prev[j, i] = x[j, i]
+
+    if active[j, i] == 0 or bc_mask[j, i] != 0:
+        return
+
+    dh = x_new - x_old
+    abs_dh = wp.abs(dh)
+    wp.atomic_add(dh2_buf, 0, dh * dh)
+    wp.atomic_max(dh_max_buf, 0, abs_dh)
+
+    tiny = wp.float64(1.0e-12)
+
+    T_c = wp.float64(T_field[j, i])
+    hC = x_new
+
+    hE = wp.float64(0.0)
+    hW = wp.float64(0.0)
+    hN = wp.float64(0.0)
+    hS = wp.float64(0.0)
+
+    T_e = wp.float64(0.0)
+    T_w = wp.float64(0.0)
+    T_n = wp.float64(0.0)
+    T_s = wp.float64(0.0)
+
+    if i + 1 < nx and active[j, i + 1] != 0:
+        T_nb = wp.float64(T_field[j, i + 1])
+        hE = wp.float64(x[j, i + 1])
+        if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
+            T_e = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+
+    if i - 1 >= 0 and active[j, i - 1] != 0:
+        T_nb = wp.float64(T_field[j, i - 1])
+        hW = wp.float64(x[j, i - 1])
+        if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
+            T_w = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+
+    if j - 1 >= 0 and active[j - 1, i] != 0:
+        T_nb = wp.float64(T_field[j - 1, i])
+        hN = wp.float64(x[j - 1, i])
+        if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
+            T_n = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+
+    if j + 1 < ny and active[j + 1, i] != 0:
+        T_nb = wp.float64(T_field[j + 1, i])
+        hS = wp.float64(x[j + 1, i])
+        if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
+            T_s = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+
+    C_gh = wp.float64(0.0)
+    if gh_mask[j, i] != 0:
+        ghbf = wp.float64(ghb_factor[j, i])
+        if ghbf > wp.float64(0.0) and not wp.isnan(ghbf):
+            C_gh = T_c * ghbf
+
+    sum_T = T_e + T_w + T_n + T_s + C_gh
+
+    Ax64 = wp.float64(0.0)
+    if sum_T < tiny:
+        Ax64 = hC
+    else:
+        Ax64 = sum_T * hC
+        if T_e > wp.float64(0.0):
+            Ax64 = Ax64 - T_e * hE
+        if T_w > wp.float64(0.0):
+            Ax64 = Ax64 - T_w * hW
+        if T_n > wp.float64(0.0):
+            Ax64 = Ax64 - T_n * hN
+        if T_s > wp.float64(0.0):
+            Ax64 = Ax64 - T_s * hS
+
+    rf64 = wp.float64(b[j, i]) - Ax64
+    wp.atomic_add(rTr_buf, 0, rf64 * rf64)
+
+
+@wp.kernel
+def build_diag_preconditioner_no_storage_kernel(
+    T_field: wp.array(dtype=WP_FLOAT, ndim=2),
+    active: wp.array(dtype=wp.int32, ndim=2),
+    bc_mask: wp.array(dtype=wp.int32, ndim=2),
+    gh_mask: wp.array(dtype=wp.int32, ndim=2),
+    ghb_factor: wp.array(dtype=WP_FLOAT, ndim=2),
+    use_ghb: int,
+    nx: int,
+    ny: int,
+    M_inv_out: wp.array(dtype=WP_FLOAT, ndim=2),
+):
+    j, i = wp.tid()
+
+    if j >= ny or i >= nx:
+        return
+
+    if active[j, i] == 0 or bc_mask[j, i] != 0:
+        M_inv_out[j, i] = WP_FLOAT(1.0)
+        return
+
+    tiny = wp.float64(1.0e-12)
+    T_c = wp.float64(T_field[j, i])
+    diagonal = wp.float64(0.0)
+
+    if i + 1 < nx and active[j, i + 1] != 0:
+        T_nb = wp.float64(T_field[j, i + 1])
+        if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
+            diagonal = diagonal + wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+
+    if i - 1 >= 0 and active[j, i - 1] != 0:
+        T_nb = wp.float64(T_field[j, i - 1])
+        if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
+            diagonal = diagonal + wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+
+    if j - 1 >= 0 and active[j - 1, i] != 0:
+        T_nb = wp.float64(T_field[j - 1, i])
+        if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
+            diagonal = diagonal + wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+
+    if j + 1 < ny and active[j + 1, i] != 0:
+        T_nb = wp.float64(T_field[j + 1, i])
+        if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
+            diagonal = diagonal + wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+
+    if use_ghb != 0 and gh_mask[j, i] != 0:
+        ghbf = wp.float64(ghb_factor[j, i])
+        if T_c > wp.float64(0.0) and ghbf > wp.float64(0.0) and not wp.isnan(ghbf):
+            diagonal = diagonal + T_c * ghbf
+
+    if diagonal > tiny:
+        M_inv_out[j, i] = WP_FLOAT(wp.float64(1.0) / diagonal)
+    else:
+        M_inv_out[j, i] = WP_FLOAT(1.0)
+
+
+@wp.kernel
+def apply_A_and_pAp_no_storage_kernel(
+    T_field: wp.array(dtype=WP_FLOAT, ndim=2),
+    active: wp.array(dtype=wp.int32, ndim=2),
+    bc_mask: wp.array(dtype=wp.int32, ndim=2),
+    gh_mask: wp.array(dtype=wp.int32, ndim=2),
+    ghb_factor: wp.array(dtype=WP_FLOAT, ndim=2),
+    p: wp.array(dtype=WP_FLOAT, ndim=2),
+    Ap: wp.array(dtype=WP_FLOAT, ndim=2),
+    pAp_buf: wp.array(dtype=wp.float64, ndim=1),
+    nx: int,
+    ny: int,
+):
+    j, i = wp.tid()
+    if j >= ny or i >= nx:
+        return
+
+    if active[j, i] == 0 or bc_mask[j, i] != 0:
+        Ap[j, i] = p[j, i]
+        return
+
+    tiny = wp.float64(1.0e-12)
+
+    T_c = wp.float64(T_field[j, i])
+    pC = wp.float64(p[j, i])
+
+    pE = wp.float64(0.0)
+    pW = wp.float64(0.0)
+    pN = wp.float64(0.0)
+    pS = wp.float64(0.0)
+
+    T_e = wp.float64(0.0)
+    T_w = wp.float64(0.0)
+    T_n = wp.float64(0.0)
+    T_s = wp.float64(0.0)
+
+    if i + 1 < nx and active[j, i + 1] != 0:
+        T_nb = wp.float64(T_field[j, i + 1])
+        pE = wp.float64(p[j, i + 1])
+        if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
+            T_e = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+
+    if i - 1 >= 0 and active[j, i - 1] != 0:
+        T_nb = wp.float64(T_field[j, i - 1])
+        pW = wp.float64(p[j, i - 1])
+        if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
+            T_w = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+
+    if j - 1 >= 0 and active[j - 1, i] != 0:
+        T_nb = wp.float64(T_field[j - 1, i])
+        pN = wp.float64(p[j - 1, i])
+        if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
+            T_n = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+
+    if j + 1 < ny and active[j + 1, i] != 0:
+        T_nb = wp.float64(T_field[j + 1, i])
+        pS = wp.float64(p[j + 1, i])
+        if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
+            T_s = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+
+    C_gh = wp.float64(0.0)
+    if gh_mask[j, i] != 0:
+        ghbf = wp.float64(ghb_factor[j, i])
+        if ghbf > wp.float64(0.0) and not wp.isnan(ghbf):
+            C_gh = T_c * ghbf
+
+    sum_T = T_e + T_w + T_n + T_s + C_gh
+
+    val64 = wp.float64(0.0)
+    if sum_T < tiny:
+        val64 = pC
+    else:
+        val64 = sum_T * pC
+        if T_e > wp.float64(0.0):
+            val64 = val64 - T_e * pE
+        if T_w > wp.float64(0.0):
+            val64 = val64 - T_w * pW
+        if T_n > wp.float64(0.0):
+            val64 = val64 - T_n * pN
+        if T_s > wp.float64(0.0):
+            val64 = val64 - T_s * pS
+
+    Ap[j, i] = WP_FLOAT(val64)
+    wp.atomic_add(pAp_buf, 0, pC * val64)
+
+
+@wp.kernel
+def init_pcg_with_A_no_storage_kernel(
+    x: wp.array(dtype=WP_FLOAT, ndim=2),
+    b: wp.array(dtype=WP_FLOAT, ndim=2),
+    T_field: wp.array(dtype=WP_FLOAT, ndim=2),
+    active: wp.array(dtype=wp.int32, ndim=2),
+    bc_mask: wp.array(dtype=wp.int32, ndim=2),
+    gh_mask: wp.array(dtype=wp.int32, ndim=2),
+    ghb_factor: wp.array(dtype=WP_FLOAT, ndim=2),
+    M_inv: wp.array(dtype=WP_FLOAT, ndim=2),
+    Ap: wp.array(dtype=WP_FLOAT, ndim=2),
+    r: wp.array(dtype=WP_FLOAT, ndim=2),
+    z: wp.array(dtype=WP_FLOAT, ndim=2),
+    p: wp.array(dtype=WP_FLOAT, ndim=2),
+    rho_buf: wp.array(dtype=wp.float64, ndim=1),
+    rTr_buf: wp.array(dtype=wp.float64, ndim=1),
+    nx: int,
+    ny: int,
+):
+    j, i = wp.tid()
+
+    if j >= ny or i >= nx:
+        return
+
+    if active[j, i] == 0 or bc_mask[j, i] != 0:
+        Ap[j, i] = x[j, i]
+        r[j, i] = WP_FLOAT(0.0)
+        z[j, i] = WP_FLOAT(0.0)
+        p[j, i] = WP_FLOAT(0.0)
+        return
+
+    tiny = wp.float64(1.0e-12)
+
+    T_c = wp.float64(T_field[j, i])
+    hC = wp.float64(x[j, i])
+
+    hE = wp.float64(0.0)
+    hW = wp.float64(0.0)
+    hN = wp.float64(0.0)
+    hS = wp.float64(0.0)
+
+    T_e = wp.float64(0.0)
+    T_w = wp.float64(0.0)
+    T_n = wp.float64(0.0)
+    T_s = wp.float64(0.0)
+
+    if i + 1 < nx and active[j, i + 1] != 0:
+        T_nb = wp.float64(T_field[j, i + 1])
+        hE = wp.float64(x[j, i + 1])
+        if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
+            T_e = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+
+    if i - 1 >= 0 and active[j, i - 1] != 0:
+        T_nb = wp.float64(T_field[j, i - 1])
+        hW = wp.float64(x[j, i - 1])
+        if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
+            T_w = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+
+    if j - 1 >= 0 and active[j - 1, i] != 0:
+        T_nb = wp.float64(T_field[j - 1, i])
+        hN = wp.float64(x[j - 1, i])
+        if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
+            T_n = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+
+    if j + 1 < ny and active[j + 1, i] != 0:
+        T_nb = wp.float64(T_field[j + 1, i])
+        hS = wp.float64(x[j + 1, i])
+        if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
+            T_s = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+
+    C_gh = wp.float64(0.0)
+    if gh_mask[j, i] != 0:
+        ghbf = wp.float64(ghb_factor[j, i])
+        if ghbf > wp.float64(0.0) and not wp.isnan(ghbf):
+            C_gh = T_c * ghbf
+
+    sum_T = T_e + T_w + T_n + T_s + C_gh
+
+    Ap64 = wp.float64(0.0)
+    if sum_T < tiny:
+        Ap64 = hC
+    else:
+        Ap64 = sum_T * hC
+        if T_e > wp.float64(0.0):
+            Ap64 = Ap64 - T_e * hE
+        if T_w > wp.float64(0.0):
+            Ap64 = Ap64 - T_w * hW
+        if T_n > wp.float64(0.0):
+            Ap64 = Ap64 - T_n * hN
+        if T_s > wp.float64(0.0):
+            Ap64 = Ap64 - T_s * hS
+
+    Ap_val = WP_FLOAT(Ap64)
+    Ap[j, i] = Ap_val
+
+    r_val = b[j, i] - Ap_val
+    z_val = M_inv[j, i] * r_val
+
+    r[j, i] = r_val
+    z[j, i] = z_val
+    p[j, i] = z_val
+
+    r64 = wp.float64(r_val)
+    z64 = wp.float64(z_val)
+
+    wp.atomic_add(rho_buf, 0, r64 * z64)
+    wp.atomic_add(rTr_buf, 0, r64 * r64)
+
+
 @wp.kernel
 def update_x_r_z_rho_rTr_kernel(
     x: wp.array(dtype=WP_FLOAT, ndim=2),
@@ -2749,6 +3379,44 @@ class WarpDarcySolver:
         self._kcycle_graph = None
         self._kcycle_graph_shape = None
 
+    def _active_storage_diag_host(self) -> np.ndarray | None:
+        if not bool(self._storage_active):
+            return None
+        return self.storage_diag_host
+
+    def _active_storage_diag_wp(self):
+        if not bool(self._storage_active):
+            return None
+        return getattr(self, "storage_diag_wp", None)
+
+    def _clear_transient_storage_state(self) -> bool:
+        """
+        Drop transient storage contributions so the next steady solve sees a
+        pure steady operator without host/device storage staging.
+
+        Returns True only when real (transient) storage state was present and
+        got cleared. A steady solve carries no storage arrays at all (they are
+        ``None`` and the no-storage kernels never reference them), so a steady
+        solve after a steady solve returns False and triggers no rebuild. A
+        steady solve after a transient solve still sees the real transient
+        arrays and clears/deactivates them here.
+        """
+        had_storage = (
+            bool(self._storage_active)
+            or (self.storage_diag_host is not None)
+            or (getattr(self, "storage_diag_wp", None) is not None)
+            or (getattr(self, "storage_diag_c_host", None) is not None)
+            or (getattr(self, "storage_diag_c_wp", None) is not None)
+        )
+
+        self._storage_active = False
+        self.storage_diag_host = None
+        self.storage_diag_wp = None
+        self.storage_diag_c_host = None
+        self.storage_diag_c_wp = None
+
+        return had_storage
+
     def _invalidate_kcycle_graph(self) -> None:
         self._kcycle_graph = None
         self._kcycle_graph_shape = None
@@ -2986,18 +3654,11 @@ class WarpDarcySolver:
             if self._storage_active:
                 storage_diag_c_wp = wp.array(storage_diag_c, dtype=WP_FLOAT, device=device)
             else:
-                # Steady solve: the storage diagonal is identically zero on
-                # every level, so all coarse levels share the single fine-size
-                # zero storage array instead of allocating one per level.
-                # Coarse kernels read storage_diag[j, i] over the coarse launch
-                # dims, which are a subset of the fine grid, so the access is
-                # always in bounds and the value (0.0) leaves the operator
-                # unchanged.
-                if getattr(self, "storage_diag_wp", None) is None:
-                    self.storage_diag_wp = wp.zeros(
-                        (int(self.ny), int(self.nx)), dtype=WP_FLOAT, device=device
-                    )
-                storage_diag_c_wp = self.storage_diag_wp
+                # Steady solve: no transient storage diagonal exists, so coarse
+                # levels carry no storage array at all. The no-storage hot
+                # kernels do not reference storage_diag, so None is safe and
+                # avoids a per-level device allocation of zeros.
+                storage_diag_c_wp = None
 
             if self.use_ghb and gh_mask_c is not None:
                 gh_mask_c_wp = wp.array(gh_mask_c, dtype=wp.int32, device=device)
@@ -3126,6 +3787,7 @@ class WarpDarcySolver:
             levels.append(coarse)
 
         self.mg_levels = levels
+        self._operator_dirty = False
 
     def _mg_make_level_from_existing_fine(self, device: str):
         nx = int(self.nx)
@@ -3172,8 +3834,9 @@ class WarpDarcySolver:
 
         storage_diag0_host = getattr(self, 'storage_diag_host', None)
         storage_diag0_wp = getattr(self, 'storage_diag_wp', None)
-        if storage_diag0_wp is None:
-            storage_diag0_wp = wp.zeros((int(ny), int(nx)), dtype=WP_FLOAT, device=device)
+        # Steady no-storage path: leave storage arrays as None. The no-storage
+        # hot kernels never reference storage_diag, so level 0 does not need a
+        # placeholder zero array. Only transient solves carry a real diagonal.
 
         if self.M_inv_wp is None:
             diag_backend = self._select_diag_preconditioner_backend(
@@ -4083,7 +4746,8 @@ class WarpDarcySolver:
         self.gh_head_c_host = gh_head_c_host
         self.gh_width_c_host = gh_width_c_host
         self.ghb_factor_c_host = ghb_factor_c_host
-        self.storage_diag_c_host = storage_diag_c_host
+        storage_active = bool(self._storage_active)
+        self.storage_diag_c_host = storage_diag_c_host if storage_active else None
 
         self.T_c_wp = wp.array(T_c_host, dtype=WP_FLOAT, device=device)
         self.R_c_wp = wp.array(R_c_host, dtype=WP_FLOAT, device=device)
@@ -4094,7 +4758,10 @@ class WarpDarcySolver:
         self.gh_head_c_wp = wp.array(gh_head_c_host, dtype=WP_FLOAT, device=device)
         self.gh_width_c_wp = wp.array(gh_width_c_host, dtype=WP_FLOAT, device=device)
         self.ghb_factor_c_wp = wp.array(ghb_factor_c_host, dtype=WP_FLOAT, device=device)
-        self.storage_diag_c_wp = wp.array(storage_diag_c_host, dtype=WP_FLOAT, device=device)
+        if storage_active and storage_diag_c_host is not None:
+            self.storage_diag_c_wp = wp.array(storage_diag_c_host, dtype=WP_FLOAT, device=device)
+        else:
+            self.storage_diag_c_wp = None
 
         self.M_inv_c_wp = wp.empty((int(ny_c), int(nx_c)), dtype=WP_FLOAT, device=device)
         coarse_backend = self._select_diag_preconditioner_backend(
@@ -4115,7 +4782,7 @@ class WarpDarcySolver:
                 nx=int(nx_c),
                 ny=int(ny_c),
                 use_ghb=bool(self.use_ghb),
-                storage_diag_wp=self.storage_diag_c_wp,
+                storage_diag_wp=self.storage_diag_c_wp if storage_active else None,
             )
             self._validate_device_diag_preconditioner(
                 level_name="two_level_cache",
@@ -4126,7 +4793,7 @@ class WarpDarcySolver:
                 ghb_factor=ghb_factor_c_host if self.use_ghb else None,
                 dx=float(self.dx_c) if self.use_ghb else None,
                 M_inv_wp=self.M_inv_c_wp,
-                storage_diag=storage_diag_c_host,
+                storage_diag=storage_diag_c_host if storage_active else None,
             )
         else:
             M_inv_c_host = build_diag_preconditioner(
@@ -4136,7 +4803,7 @@ class WarpDarcySolver:
                 gh_mask=gh_mask_c_host if self.use_ghb else None,
                 ghb_factor=ghb_factor_c_host if self.use_ghb else None,
                 dx=float(self.dx_c) if self.use_ghb else None,
-                storage_diag=storage_diag_c_host,
+                storage_diag=storage_diag_c_host if storage_active else None,
             )
             self.M_inv_c_wp = wp.array(M_inv_c_host, dtype=WP_FLOAT, device=device)
 
@@ -4198,24 +4865,42 @@ class WarpDarcySolver:
         :param use_ghb: whether GHB diagonal terms should be included
         """
         if storage_diag_wp is None:
-            storage_diag_wp = wp.zeros((int(ny), int(nx)), dtype=WP_FLOAT, device=self.device_str)
-        wp.launch(
-            build_diag_preconditioner_kernel,
-            dim=(int(ny), int(nx)),
-            inputs=[
-                T_wp,
-                active_wp,
-                bc_mask_wp,
-                gh_mask_wp,
-                ghb_factor_wp,
-                storage_diag_wp,
-                int(1 if use_ghb else 0),
-                int(nx),
-                int(ny),
-                M_inv_wp,
-            ],
-            device=self.device_str,
-        )
+            # Steady no-storage path: no storage array to read, so use the
+            # no-storage kernel variant and skip allocating a throwaway zero.
+            wp.launch(
+                build_diag_preconditioner_no_storage_kernel,
+                dim=(int(ny), int(nx)),
+                inputs=[
+                    T_wp,
+                    active_wp,
+                    bc_mask_wp,
+                    gh_mask_wp,
+                    ghb_factor_wp,
+                    int(1 if use_ghb else 0),
+                    int(nx),
+                    int(ny),
+                    M_inv_wp,
+                ],
+                device=self.device_str,
+            )
+        else:
+            wp.launch(
+                build_diag_preconditioner_kernel,
+                dim=(int(ny), int(nx)),
+                inputs=[
+                    T_wp,
+                    active_wp,
+                    bc_mask_wp,
+                    gh_mask_wp,
+                    ghb_factor_wp,
+                    storage_diag_wp,
+                    int(1 if use_ghb else 0),
+                    int(nx),
+                    int(ny),
+                    M_inv_wp,
+                ],
+                device=self.device_str,
+            )
 
     def _validate_device_diag_preconditioner(
         self,
@@ -4433,8 +5118,9 @@ class WarpDarcySolver:
         nx = int(self.nx)
         ny = int(self.ny)
 
-        if getattr(self, 'storage_diag_wp', None) is None:
-            self.storage_diag_wp = wp.zeros((ny, nx), dtype=WP_FLOAT, device=device)
+        # PCG is steady-state only (transient PCG is rejected in solve()), so it
+        # never carries a storage diagonal. Use the no-storage kernels and do not
+        # allocate a placeholder storage array.
 
         self._pcg_build_rhs_and_upload()
         self._pcg_initialize_guess_and_upload(initial_head=initial_head)
@@ -4446,7 +5132,7 @@ class WarpDarcySolver:
         wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[self.rTr_buf], device=device)
 
         wp.launch(
-            kernel=init_pcg_with_A_kernel,
+            kernel=init_pcg_with_A_no_storage_kernel,
             dim=dim,
             inputs=[
                 self.x_wp,
@@ -4456,7 +5142,6 @@ class WarpDarcySolver:
                 self.bc_mask_wp,
                 self.gh_mask_wp,
                 self.ghb_factor_wp,
-                self.storage_diag_wp,
                 self.M_inv_wp,
                 self.Ap_wp,
                 self.r_wp,
@@ -4512,7 +5197,7 @@ class WarpDarcySolver:
 
             wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[self.pAp_buf], device=device)
             wp.launch(
-                kernel=apply_A_and_pAp_kernel,
+                kernel=apply_A_and_pAp_no_storage_kernel,
                 dim=dim,
                 inputs=[
                     self.T_wp,
@@ -4520,7 +5205,6 @@ class WarpDarcySolver:
                     self.bc_mask_wp,
                     self.gh_mask_wp,
                     self.ghb_factor_wp,
-                    self.storage_diag_wp,
                     self.p_wp,
                     self.Ap_wp,
                     self.pAp_buf,
@@ -4868,6 +5552,7 @@ class WarpDarcySolver:
         # -------- update 2-level cache (if built) --------
         if self.mg_cache_built and (self.T_c_host is not None) and (self.T_c_wp is not None):
             t_phase = time.perf_counter() if profile_enabled else None
+            storage_diag_fine = self._active_storage_diag_host()
             (
                 T_c_new,
                 R_c_new,
@@ -4889,7 +5574,7 @@ class WarpDarcySolver:
                 gh_head_f=self.gh_head_host if self.use_ghb else None,
                 gh_width_f=self.gh_width_host if self.use_ghb else None,
                 ghb_factor_f=self.ghb_factor_host if self.use_ghb else None,
-                storage_diag_f=self.storage_diag_host,
+                storage_diag_f=storage_diag_fine,
             )
             if profile_enabled:
                 coarse_coarsening_s += time.perf_counter() - t_phase
@@ -4915,7 +5600,7 @@ class WarpDarcySolver:
             np.copyto(self.gh_width_c_host, np.asarray(gh_width_c_new, dtype=NP_FLOAT, order="C"))
             np.copyto(self.gh_head_c_host, np.asarray(gh_head_c_new, dtype=NP_FLOAT, order="C"))
             np.copyto(self.ghb_factor_c_host, np.asarray(ghb_factor_c_new, dtype=NP_FLOAT, order="C"))
-            if hasattr(self, 'storage_diag_c_host') and self.storage_diag_c_host is not None:
+            if bool(self._storage_active) and hasattr(self, 'storage_diag_c_host') and self.storage_diag_c_host is not None:
                 np.copyto(self.storage_diag_c_host, np.asarray(storage_diag_c_new, dtype=NP_FLOAT, order="C"))
 
             nyc = int(self.ny_c)
@@ -4927,14 +5612,16 @@ class WarpDarcySolver:
                 self._stage_Mc_2lvl = wp.zeros((nyc, nxc), dtype=WP_FLOAT, device="cpu")
             if self._stage_Gc_2lvl is None or tuple(self._stage_Gc_2lvl.shape) != (nyc, nxc):
                 self._stage_Gc_2lvl = wp.zeros((nyc, nxc), dtype=WP_FLOAT, device="cpu")
-            if self._stage_Sc_2lvl is None or tuple(self._stage_Sc_2lvl.shape) != (nyc, nxc):
+            if bool(self._storage_active) and (
+                self._stage_Sc_2lvl is None or tuple(self._stage_Sc_2lvl.shape) != (nyc, nxc)
+            ):
                 self._stage_Sc_2lvl = wp.zeros((nyc, nxc), dtype=WP_FLOAT, device="cpu")
 
             self._stage_Tc_2lvl.numpy()[:, :] = self.T_c_host
             wp.copy(self.T_c_wp, self._stage_Tc_2lvl)
             self._stage_Gc_2lvl.numpy()[:, :] = self.ghb_factor_c_host
             wp.copy(self.ghb_factor_c_wp, self._stage_Gc_2lvl)
-            if self.storage_diag_c_wp is not None and self.storage_diag_c_host is not None:
+            if bool(self._storage_active) and self.storage_diag_c_wp is not None and self.storage_diag_c_host is not None:
                 self._stage_Sc_2lvl.numpy()[:, :] = self.storage_diag_c_host
                 wp.copy(self.storage_diag_c_wp, self._stage_Sc_2lvl)
 
@@ -4957,7 +5644,7 @@ class WarpDarcySolver:
                     nx=int(self.nx_c),
                     ny=int(self.ny_c),
                     use_ghb=bool(self.use_ghb),
-                    storage_diag_wp=self.storage_diag_c_wp,
+                    storage_diag_wp=self.storage_diag_c_wp if bool(self._storage_active) else None,
                 )
                 self._validate_device_diag_preconditioner(
                     level_name="two_level_update",
@@ -4968,7 +5655,7 @@ class WarpDarcySolver:
                     ghb_factor=self.ghb_factor_c_host if self.use_ghb else None,
                     dx=float(self.dx_c) if self.use_ghb else None,
                     M_inv_wp=self.M_inv_c_wp,
-                    storage_diag=self.storage_diag_c_host,
+                    storage_diag=self.storage_diag_c_host if bool(self._storage_active) else None,
                 )
             else:
                 M_inv_c_host = build_diag_preconditioner(
@@ -4978,7 +5665,7 @@ class WarpDarcySolver:
                     gh_mask=self.gh_mask_c_host if self.use_ghb else None,
                     ghb_factor=self.ghb_factor_c_host if self.use_ghb else None,
                     dx=float(self.dx_c) if self.use_ghb else None,
-                    storage_diag=self.storage_diag_c_host,
+                    storage_diag=self.storage_diag_c_host if bool(self._storage_active) else None,
                 ).astype(NP_FLOAT, copy=False)
                 self._stage_Mc_2lvl.numpy()[:, :] = M_inv_c_host
                 wp.copy(self.M_inv_c_wp, self._stage_Mc_2lvl)
@@ -5001,19 +5688,20 @@ class WarpDarcySolver:
                 self._stage_T_levels is None
                 or self._stage_M_levels is None
                 or self._stage_G_levels is None
-                or self._stage_S_levels is None
+                or (bool(self._storage_active) and self._stage_S_levels is None)
                 or len(self._stage_T_levels) != nL
-                or len(self._stage_S_levels) != nL
+                or (bool(self._storage_active) and len(self._stage_S_levels) != nL)
             ):
                 self._stage_T_levels = []
                 self._stage_M_levels = []
                 self._stage_G_levels = []
-                self._stage_S_levels = []
+                self._stage_S_levels = [] if bool(self._storage_active) else None
                 for lvl in levels:
                     self._stage_T_levels.append(wp.zeros((int(lvl.ny), int(lvl.nx)), dtype=WP_FLOAT, device="cpu"))
                     self._stage_M_levels.append(wp.zeros((int(lvl.ny), int(lvl.nx)), dtype=WP_FLOAT, device="cpu"))
                     self._stage_G_levels.append(wp.zeros((int(lvl.ny), int(lvl.nx)), dtype=WP_FLOAT, device="cpu"))
-                    self._stage_S_levels.append(wp.zeros((int(lvl.ny), int(lvl.nx)), dtype=WP_FLOAT, device="cpu"))
+                    if bool(self._storage_active):
+                        self._stage_S_levels.append(wp.zeros((int(lvl.ny), int(lvl.nx)), dtype=WP_FLOAT, device="cpu"))
 
             # Level 0: make sure level 0 host matches solver host
             lvl0 = levels[0]
@@ -5027,7 +5715,7 @@ class WarpDarcySolver:
             if getattr(lvl0, "ghb_factor_host", None) is not None and getattr(lvl0, "ghb_factor_wp", None) is not None:
                 self._stage_G_levels[0].numpy()[:, :] = lvl0.ghb_factor_host
                 wp.copy(lvl0.ghb_factor_wp, self._stage_G_levels[0])
-            if getattr(lvl0, "storage_diag_wp", None) is not None:
+            if bool(self._storage_active) and getattr(lvl0, "storage_diag_wp", None) is not None:
                 if getattr(lvl0, "storage_diag_host", None) is None:
                     lvl0.storage_diag_host = np.zeros((int(lvl0.ny), int(lvl0.nx)), dtype=NP_FLOAT)
                 if self.storage_diag_host is not None:
@@ -5036,6 +5724,10 @@ class WarpDarcySolver:
                     lvl0.storage_diag_host.fill(NP_FLOAT(0.0))
                 self._stage_S_levels[0].numpy()[:, :] = lvl0.storage_diag_host
                 wp.copy(lvl0.storage_diag_wp, self._stage_S_levels[0])
+            else:
+                lvl0.storage_diag_host = None
+                if bool(self._storage_active):
+                    self._operator_dirty = True
 
             t_phase = time.perf_counter() if profile_enabled else None
             lvl0_backend = self._select_diag_preconditioner_backend(
@@ -5056,7 +5748,7 @@ class WarpDarcySolver:
                     nx=int(lvl0.nx),
                     ny=int(lvl0.ny),
                     use_ghb=bool(self.use_ghb),
-                    storage_diag_wp=getattr(lvl0, "storage_diag_wp", None),
+                    storage_diag_wp=getattr(lvl0, "storage_diag_wp", None) if bool(self._storage_active) else None,
                 )
                 self._validate_device_diag_preconditioner(
                     level_name="mg_level_0_update",
@@ -5067,7 +5759,7 @@ class WarpDarcySolver:
                     ghb_factor=lvl0.ghb_factor_host if self.use_ghb else None,
                     dx=float(lvl0.dx) if self.use_ghb else None,
                     M_inv_wp=lvl0.M_inv_wp,
-                    storage_diag=getattr(lvl0, "storage_diag_host", None),
+                    storage_diag=getattr(lvl0, "storage_diag_host", None) if bool(self._storage_active) else None,
                 )
             else:
                 M0 = build_diag_preconditioner(
@@ -5077,7 +5769,7 @@ class WarpDarcySolver:
                     gh_mask=lvl0.gh_mask_host if self.use_ghb else None,
                     ghb_factor=lvl0.ghb_factor_host if self.use_ghb else None,
                     dx=float(lvl0.dx) if self.use_ghb else None,
-                    storage_diag=getattr(lvl0, "storage_diag_host", None),
+                    storage_diag=getattr(lvl0, "storage_diag_host", None) if bool(self._storage_active) else None,
                 ).astype(NP_FLOAT, copy=False)
                 self._stage_M_levels[0].numpy()[:, :] = M0
                 wp.copy(lvl0.M_inv_wp, self._stage_M_levels[0])
@@ -5091,6 +5783,7 @@ class WarpDarcySolver:
                 coarse = levels[lid]
 
                 t_phase = time.perf_counter() if profile_enabled else None
+                storage_diag_fine = getattr(fine, 'storage_diag_host', None) if bool(self._storage_active) else None
                 (
                     T_c,
                     R_c,
@@ -5113,7 +5806,7 @@ class WarpDarcySolver:
                     gh_width_f=fine.gh_width_host if self.use_ghb else None,
                     ghb_factor_f=fine.ghb_factor_host if self.use_ghb else None,
                     dx_c=float(coarse.dx),
-                    storage_diag_f=getattr(fine, 'storage_diag_host', None),
+                    storage_diag_f=storage_diag_fine,
                 )
                 if profile_enabled:
                     coarse_coarsening_s += time.perf_counter() - t_phase
@@ -5136,15 +5829,17 @@ class WarpDarcySolver:
                 np.copyto(coarse.T_host, T_c)
                 if coarse.ghb_factor_host is not None and ghb_factor_c is not None:
                     np.copyto(coarse.ghb_factor_host, ghb_factor_c)
-                if getattr(coarse, 'storage_diag_host', None) is not None and storage_diag_c is not None:
+                if bool(self._storage_active) and getattr(coarse, 'storage_diag_host', None) is not None and storage_diag_c is not None:
                     np.copyto(coarse.storage_diag_host, storage_diag_c)
+                else:
+                    coarse.storage_diag_host = None
 
                 self._stage_T_levels[lid].numpy()[:, :] = coarse.T_host
                 wp.copy(coarse.T_wp, self._stage_T_levels[lid])
                 if coarse.ghb_factor_wp is not None and coarse.ghb_factor_host is not None:
                     self._stage_G_levels[lid].numpy()[:, :] = coarse.ghb_factor_host
                     wp.copy(coarse.ghb_factor_wp, self._stage_G_levels[lid])
-                if getattr(coarse, 'storage_diag_wp', None) is not None and storage_diag_c is not None:
+                if bool(self._storage_active) and getattr(coarse, 'storage_diag_wp', None) is not None and storage_diag_c is not None:
                     self._stage_S_levels[lid].numpy()[:, :] = coarse.storage_diag_host
                     wp.copy(coarse.storage_diag_wp, self._stage_S_levels[lid])
 
@@ -5167,7 +5862,7 @@ class WarpDarcySolver:
                         nx=int(coarse.nx),
                         ny=int(coarse.ny),
                         use_ghb=bool(self.use_ghb),
-                        storage_diag_wp=getattr(coarse, "storage_diag_wp", None),
+                        storage_diag_wp=getattr(coarse, "storage_diag_wp", None) if bool(self._storage_active) else None,
                     )
                     self._validate_device_diag_preconditioner(
                         level_name=f"mg_level_{int(lid)}_update",
@@ -5178,7 +5873,7 @@ class WarpDarcySolver:
                         ghb_factor=coarse.ghb_factor_host if self.use_ghb else None,
                         dx=float(coarse.dx) if self.use_ghb else None,
                         M_inv_wp=coarse.M_inv_wp,
-                        storage_diag=getattr(coarse, "storage_diag_host", None),
+                        storage_diag=getattr(coarse, "storage_diag_host", None) if bool(self._storage_active) else None,
                     )
                 else:
                     Mc = build_diag_preconditioner(
@@ -5188,7 +5883,7 @@ class WarpDarcySolver:
                         gh_mask=coarse.gh_mask_host if self.use_ghb else None,
                         ghb_factor=coarse.ghb_factor_host if self.use_ghb else None,
                         dx=float(coarse.dx) if self.use_ghb else None,
-                        storage_diag=getattr(coarse, "storage_diag_host", None),
+                        storage_diag=getattr(coarse, "storage_diag_host", None) if bool(self._storage_active) else None,
                     ).astype(NP_FLOAT, copy=False)
 
                     self._stage_M_levels[lid].numpy()[:, :] = Mc
@@ -5199,8 +5894,8 @@ class WarpDarcySolver:
 
             self._mg_coarsening_diagnostics = updated_diags
 
-        # Operator changed
-        self._operator_dirty = True
+        # Operator was updated in place, hierarchy shape and structure remains unchanged.
+        # Do not mark dirty unless we explicitly know a rebuild is needed.
         if profile_enabled:
             profile = {
                 "fine_t_upload_s": float(fine_t_upload_s),
@@ -5241,6 +5936,7 @@ class WarpDarcySolver:
         self._update_fine_diag_preconditioner()
 
         if self.mg_cache_built and (self.ghb_factor_c_host is not None) and (self.ghb_factor_c_wp is not None):
+            storage_diag_fine = self._active_storage_diag_host()
             (
                 _T_c_new,
                 _R_c_new,
@@ -5262,7 +5958,7 @@ class WarpDarcySolver:
                 gh_head_f=self.gh_head_host if self.use_ghb else None,
                 gh_width_f=self.gh_width_host if self.use_ghb else None,
                 ghb_factor_f=self.ghb_factor_host if self.use_ghb else None,
-                storage_diag_f=self.storage_diag_host,
+                storage_diag_f=storage_diag_fine,
             )
 
             np.copyto(self.ghb_factor_c_host, np.asarray(ghb_factor_c_new, dtype=NP_FLOAT, order="C"))
@@ -5272,12 +5968,14 @@ class WarpDarcySolver:
                 self._stage_Gc_2lvl = wp.zeros((nyc, nxc), dtype=WP_FLOAT, device="cpu")
             if self._stage_Mc_2lvl is None or tuple(self._stage_Mc_2lvl.shape) != (nyc, nxc):
                 self._stage_Mc_2lvl = wp.zeros((nyc, nxc), dtype=WP_FLOAT, device="cpu")
-            if self._stage_Sc_2lvl is None or tuple(self._stage_Sc_2lvl.shape) != (nyc, nxc):
+            if bool(self._storage_active) and (
+                self._stage_Sc_2lvl is None or tuple(self._stage_Sc_2lvl.shape) != (nyc, nxc)
+            ):
                 self._stage_Sc_2lvl = wp.zeros((nyc, nxc), dtype=WP_FLOAT, device="cpu")
 
             self._stage_Gc_2lvl.numpy()[:, :] = self.ghb_factor_c_host
             wp.copy(self.ghb_factor_c_wp, self._stage_Gc_2lvl)
-            if self.storage_diag_c_host is not None and self.storage_diag_c_wp is not None:
+            if bool(self._storage_active) and self.storage_diag_c_host is not None and self.storage_diag_c_wp is not None:
                 np.copyto(self.storage_diag_c_host, np.asarray(storage_diag_c_new, dtype=NP_FLOAT, order="C"))
                 self._stage_Sc_2lvl.numpy()[:, :] = self.storage_diag_c_host
                 wp.copy(self.storage_diag_c_wp, self._stage_Sc_2lvl)
@@ -5300,7 +5998,7 @@ class WarpDarcySolver:
                     nx=int(self.nx_c),
                     ny=int(self.ny_c),
                     use_ghb=bool(self.use_ghb),
-                    storage_diag_wp=self.storage_diag_c_wp,
+                    storage_diag_wp=self.storage_diag_c_wp if bool(self._storage_active) else None,
                 )
                 self._validate_device_diag_preconditioner(
                     level_name="two_level_ghb_update",
@@ -5311,7 +6009,7 @@ class WarpDarcySolver:
                     ghb_factor=self.ghb_factor_c_host if self.use_ghb else None,
                     dx=float(self.dx_c) if self.use_ghb else None,
                     M_inv_wp=self.M_inv_c_wp,
-                    storage_diag=self.storage_diag_c_host,
+                    storage_diag=self.storage_diag_c_host if bool(self._storage_active) else None,
                 )
             else:
                 M_inv_c_host = build_diag_preconditioner(
@@ -5321,7 +6019,7 @@ class WarpDarcySolver:
                     gh_mask=self.gh_mask_c_host if self.use_ghb else None,
                     ghb_factor=self.ghb_factor_c_host if self.use_ghb else None,
                     dx=float(self.dx_c) if self.use_ghb else None,
-                    storage_diag=self.storage_diag_c_host,
+                    storage_diag=self.storage_diag_c_host if bool(self._storage_active) else None,
                 ).astype(NP_FLOAT, copy=False)
 
                 self._stage_Mc_2lvl.numpy()[:, :] = M_inv_c_host
@@ -5337,24 +6035,25 @@ class WarpDarcySolver:
             if (
                 self._stage_M_levels is None
                 or self._stage_G_levels is None
-                or self._stage_S_levels is None
+                or (bool(self._storage_active) and self._stage_S_levels is None)
                 or len(self._stage_M_levels) != nL
-                or len(self._stage_S_levels) != nL
+                or (bool(self._storage_active) and len(self._stage_S_levels) != nL)
             ):
                 self._stage_M_levels = []
                 self._stage_G_levels = []
-                self._stage_S_levels = []
+                self._stage_S_levels = [] if bool(self._storage_active) else None
                 for lvl in levels:
                     self._stage_M_levels.append(wp.zeros((int(lvl.ny), int(lvl.nx)), dtype=WP_FLOAT, device="cpu"))
                     self._stage_G_levels.append(wp.zeros((int(lvl.ny), int(lvl.nx)), dtype=WP_FLOAT, device="cpu"))
-                    self._stage_S_levels.append(wp.zeros((int(lvl.ny), int(lvl.nx)), dtype=WP_FLOAT, device="cpu"))
+                    if bool(self._storage_active):
+                        self._stage_S_levels.append(wp.zeros((int(lvl.ny), int(lvl.nx)), dtype=WP_FLOAT, device="cpu"))
 
             lvl0 = levels[0]
             if lvl0.ghb_factor_host is not None:
                 np.copyto(lvl0.ghb_factor_host, self.ghb_factor_host)
                 self._stage_G_levels[0].numpy()[:, :] = lvl0.ghb_factor_host
                 wp.copy(lvl0.ghb_factor_wp, self._stage_G_levels[0])
-            if getattr(lvl0, "storage_diag_wp", None) is not None:
+            if bool(self._storage_active) and getattr(lvl0, "storage_diag_wp", None) is not None:
                 if getattr(lvl0, "storage_diag_host", None) is None:
                     lvl0.storage_diag_host = np.zeros((int(lvl0.ny), int(lvl0.nx)), dtype=NP_FLOAT)
                 if self.storage_diag_host is not None:
@@ -5363,6 +6062,10 @@ class WarpDarcySolver:
                     lvl0.storage_diag_host.fill(NP_FLOAT(0.0))
                 self._stage_S_levels[0].numpy()[:, :] = lvl0.storage_diag_host
                 wp.copy(lvl0.storage_diag_wp, self._stage_S_levels[0])
+            else:
+                lvl0.storage_diag_host = None
+                if bool(self._storage_active):
+                    self._operator_dirty = True
 
             lvl0_backend = self._select_diag_preconditioner_backend(
                 T_wp=lvl0.T_wp,
@@ -5382,7 +6085,7 @@ class WarpDarcySolver:
                     nx=int(lvl0.nx),
                     ny=int(lvl0.ny),
                     use_ghb=bool(self.use_ghb),
-                    storage_diag_wp=getattr(lvl0, "storage_diag_wp", None),
+                    storage_diag_wp=getattr(lvl0, "storage_diag_wp", None) if bool(self._storage_active) else None,
                 )
                 self._validate_device_diag_preconditioner(
                     level_name="mg_level_0_ghb_update",
@@ -5393,7 +6096,7 @@ class WarpDarcySolver:
                     ghb_factor=lvl0.ghb_factor_host if self.use_ghb else None,
                     dx=float(lvl0.dx) if self.use_ghb else None,
                     M_inv_wp=lvl0.M_inv_wp,
-                    storage_diag=getattr(lvl0, "storage_diag_host", None),
+                    storage_diag=getattr(lvl0, "storage_diag_host", None) if bool(self._storage_active) else None,
                 )
             else:
                 M0 = build_diag_preconditioner(
@@ -5403,7 +6106,7 @@ class WarpDarcySolver:
                     gh_mask=lvl0.gh_mask_host if self.use_ghb else None,
                     ghb_factor=lvl0.ghb_factor_host if self.use_ghb else None,
                     dx=float(lvl0.dx) if self.use_ghb else None,
-                    storage_diag=getattr(lvl0, "storage_diag_host", None),
+                    storage_diag=getattr(lvl0, "storage_diag_host", None) if bool(self._storage_active) else None,
                 ).astype(NP_FLOAT, copy=False)
                 self._stage_M_levels[0].numpy()[:, :] = M0
                 wp.copy(lvl0.M_inv_wp, self._stage_M_levels[0])
@@ -5412,6 +6115,7 @@ class WarpDarcySolver:
                 fine = levels[lid - 1]
                 coarse = levels[lid]
 
+                storage_diag_fine = getattr(fine, 'storage_diag_host', None) if bool(self._storage_active) else None
                 (
                     _T_c,
                     _R_c,
@@ -5434,17 +6138,19 @@ class WarpDarcySolver:
                     gh_width_f=fine.gh_width_host if self.use_ghb else None,
                     ghb_factor_f=fine.ghb_factor_host if self.use_ghb else None,
                     dx_c=float(coarse.dx),
-                    storage_diag_f=getattr(fine, 'storage_diag_host', None),
+                    storage_diag_f=storage_diag_fine,
                 )
 
                 if coarse.ghb_factor_host is not None and ghb_factor_c is not None:
                     np.copyto(coarse.ghb_factor_host, ghb_factor_c)
                     self._stage_G_levels[lid].numpy()[:, :] = coarse.ghb_factor_host
                     wp.copy(coarse.ghb_factor_wp, self._stage_G_levels[lid])
-                if getattr(coarse, "storage_diag_host", None) is not None and storage_diag_c is not None:
+                if bool(self._storage_active) and getattr(coarse, "storage_diag_host", None) is not None and storage_diag_c is not None:
                     np.copyto(coarse.storage_diag_host, storage_diag_c)
                     self._stage_S_levels[lid].numpy()[:, :] = coarse.storage_diag_host
                     wp.copy(coarse.storage_diag_wp, self._stage_S_levels[lid])
+                else:
+                    coarse.storage_diag_host = None
 
                 coarse_backend = self._select_diag_preconditioner_backend(
                     T_wp=coarse.T_wp,
@@ -5464,7 +6170,7 @@ class WarpDarcySolver:
                         nx=int(coarse.nx),
                         ny=int(coarse.ny),
                         use_ghb=bool(self.use_ghb),
-                        storage_diag_wp=getattr(coarse, "storage_diag_wp", None),
+                        storage_diag_wp=getattr(coarse, "storage_diag_wp", None) if bool(self._storage_active) else None,
                     )
                     self._validate_device_diag_preconditioner(
                         level_name=f"mg_level_{int(lid)}_ghb_update",
@@ -5475,7 +6181,7 @@ class WarpDarcySolver:
                         ghb_factor=coarse.ghb_factor_host if self.use_ghb else None,
                         dx=float(coarse.dx) if self.use_ghb else None,
                         M_inv_wp=coarse.M_inv_wp,
-                        storage_diag=getattr(coarse, "storage_diag_host", None),
+                        storage_diag=getattr(coarse, "storage_diag_host", None) if bool(self._storage_active) else None,
                     )
                 else:
                     Mc = build_diag_preconditioner(
@@ -5485,13 +6191,10 @@ class WarpDarcySolver:
                         gh_mask=coarse.gh_mask_host if self.use_ghb else None,
                         ghb_factor=coarse.ghb_factor_host if self.use_ghb else None,
                         dx=float(coarse.dx) if self.use_ghb else None,
-                        storage_diag=getattr(coarse, "storage_diag_host", None),
+                        storage_diag=getattr(coarse, "storage_diag_host", None) if bool(self._storage_active) else None,
                     ).astype(NP_FLOAT, copy=False)
                     self._stage_M_levels[lid].numpy()[:, :] = Mc
                     wp.copy(coarse.M_inv_wp, self._stage_M_levels[lid])
-
-        self._operator_dirty = True
-
 
     def update_R_in_place(self, R_truth) -> None:
         """
@@ -5702,6 +6405,7 @@ class WarpDarcySolver:
 
         # Track whether a transient storage diagonal is in use so build_hierarchy
         # can skip per-level zero-storage device allocations for steady solves.
+        storage_was_active = bool(self._storage_active)
         self._storage_active = bool(transient)
 
         # Normalize tolerances (treat None as disabled)
@@ -6333,32 +7037,45 @@ class WarpDarcySolver:
             return (h_iter, info_out) if return_info else h_iter
 
 
-        # --- TRANSIENT STORAGE PREP ---
-        dummy_rhs = np.zeros_like(self.T_field_host)
-        _, new_sdiag, _, _, _ = _prepare_5point_transient_terms(
-            rhs=dummy_rhs,
-            storage_diag=None,
-            active=self.active_host,
-            bc_mask=self.bc_mask_host,
-            bc_values=self.bc_values_host,
-            transient=transient,
-            storage_coeff=storage_coeff,
-            dt=dt,
-            head_prev=head_prev,
-            initial_head=initial_head,
-            dx=float(self.dx),
-        )
-        if not hasattr(self, "storage_diag_host") or self.storage_diag_host is None:
-            self.storage_diag_host = np.zeros_like(self.T_field_host)
-            self.storage_diag_wp = wp.zeros((self.ny, self.nx), dtype=WP_FLOAT, device=self.device_str)
-            
-        if np.any(self.storage_diag_host != new_sdiag):
-            self.storage_diag_host[...] = new_sdiag
-            wp.copy(self.storage_diag_wp, wp.array(self.storage_diag_host, dtype=WP_FLOAT, device="cpu"))
-            self._update_fine_diag_preconditioner()
-            if refresh_diag_with_transient_storage:
+        if bool(transient):
+            # --- TRANSIENT STORAGE PREP ---
+            dummy_rhs = np.zeros_like(self.T_field_host)
+            _, new_sdiag, _, _, _ = _prepare_5point_transient_terms(
+                rhs=dummy_rhs,
+                storage_diag=None,
+                active=self.active_host,
+                bc_mask=self.bc_mask_host,
+                bc_values=self.bc_values_host,
+                transient=transient,
+                storage_coeff=storage_coeff,
+                dt=dt,
+                head_prev=head_prev,
+                initial_head=initial_head,
+                dx=float(self.dx),
+            )
+            if not hasattr(self, "storage_diag_host") or self.storage_diag_host is None:
+                self.storage_diag_host = np.zeros_like(self.T_field_host)
+                self.storage_diag_wp = wp.zeros((self.ny, self.nx), dtype=WP_FLOAT, device=self.device_str)
+
+            hierarchy_missing_storage = False
+            if self.mg_levels is not None and len(self.mg_levels) > 0:
+                if getattr(self.mg_levels[-1], "storage_diag_wp", None) is None:
+                    hierarchy_missing_storage = True
+
+            if np.any(self.storage_diag_host != new_sdiag) or not storage_was_active or hierarchy_missing_storage:
+                self.storage_diag_host[...] = new_sdiag
+                wp.copy(self.storage_diag_wp, wp.array(self.storage_diag_host, dtype=WP_FLOAT, device="cpu"))
+                self._update_fine_diag_preconditioner()
+                if refresh_diag_with_transient_storage or not storage_was_active or hierarchy_missing_storage:
+                    self._operator_dirty = True
+                    self._kcycle_graph = None
+            # ------------------------------
+        else:
+            cleared_stale_storage = self._clear_transient_storage_state()
+            if cleared_stale_storage or storage_was_active:
+                self._update_fine_diag_preconditioner()
                 self._operator_dirty = True
-        # ------------------------------
+                self._kcycle_graph = None
 
         if not hasattr(self, "_kcycle_graph"):
             self._kcycle_graph = None
@@ -6440,28 +7157,31 @@ class WarpDarcySolver:
 
         # Finest RHS assembled via selected backend.
         self._build_rhs_fine(lvl0.b_wp)
-        
-        # --- TRANSIENT RHS PREP ---
-        b_eff, _, _, _, _ = _prepare_5point_transient_terms(
-            rhs=lvl0.b_wp.numpy(),
-            storage_diag=None,
-            active=self.active_host,
-            bc_mask=self.bc_mask_host,
-            bc_values=self.bc_values_host,
-            transient=transient,
-            storage_coeff=storage_coeff,
-            dt=dt,
-            head_prev=head_prev,
-            initial_head=initial_head,
-            dx=float(self.dx),
-        )
-        if not hasattr(self, "_kcycle_stage_b") or self._kcycle_stage_b is None:
-            self._kcycle_stage_b = wp.zeros((self.ny, self.nx), dtype=WP_FLOAT, device="cpu")
-        self._kcycle_stage_b.numpy()[...] = b_eff
-        wp.copy(lvl0.b_wp, self._kcycle_stage_b)
-        lvl0.storage_diag_host = self.storage_diag_host
-        lvl0.storage_diag_wp = self.storage_diag_wp
-        # --------------------------
+
+        if bool(transient):
+            # --- TRANSIENT RHS PREP ---
+            b_eff, _, _, _, _ = _prepare_5point_transient_terms(
+                rhs=lvl0.b_wp.numpy(),
+                storage_diag=None,
+                active=self.active_host,
+                bc_mask=self.bc_mask_host,
+                bc_values=self.bc_values_host,
+                transient=transient,
+                storage_coeff=storage_coeff,
+                dt=dt,
+                head_prev=head_prev,
+                initial_head=initial_head,
+                dx=float(self.dx),
+            )
+            if not hasattr(self, "_kcycle_stage_b") or self._kcycle_stage_b is None:
+                self._kcycle_stage_b = wp.zeros((self.ny, self.nx), dtype=WP_FLOAT, device="cpu")
+            self._kcycle_stage_b.numpy()[...] = b_eff
+            wp.copy(lvl0.b_wp, self._kcycle_stage_b)
+            lvl0.storage_diag_host = self.storage_diag_host
+            lvl0.storage_diag_wp = self.storage_diag_wp
+            # --------------------------
+        else:
+            lvl0.storage_diag_host = None
 
         # Initial guess (host), then copy into persistent lvl0.x_wp
         x0 = np.zeros((ny0, nx0), dtype=NP_FLOAT)
@@ -6522,25 +7242,15 @@ class WarpDarcySolver:
 
         # Initial residual for tol computation (one scalar readback per solve)
         wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[lvl0.rTr_buf], device=device)
-        wp.launch(
-            kernel=compute_residual_kernel,
-            dim=dim0,
-            inputs=[
-                lvl0.x_wp,
-                lvl0.b_wp,
-                lvl0.T_wp,
-                lvl0.active_wp,
-                lvl0.bc_mask_wp,
-                lvl0.gh_mask_wp,
-                lvl0.ghb_factor_wp,
-                lvl0.storage_diag_wp,
-                lvl0.r_wp,
-                lvl0.rTr_buf,
-                nx0,
-                ny0,
-            ],
-            device=device,
-        )
+        _cr_k = compute_residual_kernel if self._storage_active else compute_residual_no_storage_kernel
+        _cr_in = [
+            lvl0.x_wp, lvl0.b_wp, lvl0.T_wp, lvl0.active_wp, lvl0.bc_mask_wp,
+            lvl0.gh_mask_wp, lvl0.ghb_factor_wp,
+        ]
+        if self._storage_active:
+            _cr_in.append(lvl0.storage_diag_wp)
+        _cr_in += [lvl0.r_wp, lvl0.rTr_buf, nx0, ny0]
+        wp.launch(kernel=_cr_k, dim=dim0, inputs=_cr_in, device=device)
         rTr0 = float(lvl0.rTr_buf.numpy()[0])
         r_rms0 = float(np.sqrt(max(rTr0, 0.0) / float(n_free0)))
         tol_abs = float(max(abs_tol_min, rel_tol * r_rms0))
@@ -6554,51 +7264,30 @@ class WarpDarcySolver:
             wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[level.rho_buf], device=device)
             wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[level.rTr_buf], device=device)
 
-            wp.launch(
-                kernel=init_pcg_with_A_kernel,
-                dim=dimL,
-                inputs=[
-                    level.x_wp,
-                    level.b_wp,
-                    level.T_wp,
-                    level.active_wp,
-                    level.bc_mask_wp,
-                    level.gh_mask_wp,
-                    level.ghb_factor_wp,
-                    level.storage_diag_wp,
-                    level.M_inv_wp,
-                    level.Ap_wp,
-                    level.r_wp,
-                    level.z_wp,
-                    level.p_wp,
-                    level.rho_buf,
-                    level.rTr_buf,
-                    nxL,
-                    nyL,
-                ],
-                device=device,
-            )
+            _ipcga_k = init_pcg_with_A_kernel if self._storage_active else init_pcg_with_A_no_storage_kernel
+            _ipcga_in = [
+                level.x_wp, level.b_wp, level.T_wp, level.active_wp, level.bc_mask_wp,
+                level.gh_mask_wp, level.ghb_factor_wp,
+            ]
+            if self._storage_active:
+                _ipcga_in.append(level.storage_diag_wp)
+            _ipcga_in += [
+                level.M_inv_wp, level.Ap_wp, level.r_wp, level.z_wp, level.p_wp,
+                level.rho_buf, level.rTr_buf, nxL, nyL,
+            ]
+            wp.launch(kernel=_ipcga_k, dim=dimL, inputs=_ipcga_in, device=device)
 
             for _ in range(int(max_iter_level)):
                 wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[level.pAp_buf], device=device)
-                wp.launch(
-                    kernel=apply_A_and_pAp_kernel,
-                    dim=dimL,
-                    inputs=[
-                        level.T_wp,
-                        level.active_wp,
-                        level.bc_mask_wp,
-                        level.gh_mask_wp,
-                        level.ghb_factor_wp,
-                        level.storage_diag_wp,
-                        level.p_wp,
-                        level.Ap_wp,
-                        level.pAp_buf,
-                        nxL,
-                        nyL,
-                    ],
-                    device=device,
-                )
+                _aap_k = apply_A_and_pAp_kernel if self._storage_active else apply_A_and_pAp_no_storage_kernel
+                _aap_in = [
+                    level.T_wp, level.active_wp, level.bc_mask_wp, level.gh_mask_wp,
+                    level.ghb_factor_wp,
+                ]
+                if self._storage_active:
+                    _aap_in.append(level.storage_diag_wp)
+                _aap_in += [level.p_wp, level.Ap_wp, level.pAp_buf, nxL, nyL]
+                wp.launch(kernel=_aap_k, dim=dimL, inputs=_aap_in, device=device)
 
                 wp.launch(
                     kernel=compute_alpha_kernel,
@@ -6664,27 +7353,18 @@ class WarpDarcySolver:
             x_out = x_tmp_wp
 
             for omega_step in pre_omegas:
-                wp.launch(
-                    kernel=jacobi_applyA_fused_kernel,
-                    dim=dimL,
-                    inputs=[
-                        level.T_wp,
-                        level.active_wp,
-                        level.bc_mask_wp,
-                        level.gh_mask_wp,
-                        level.ghb_factor_wp,
-                        level.storage_diag_wp,
-                        level.b_wp,
-                        x_in,
-                        level.M_inv_wp,
-                        level.bc_values_wp,
-                        float(omega_step),
-                        nxL,
-                        nyL,
-                        x_out,
-                    ],
-                    device=device,
-                )
+                _jac_k = jacobi_applyA_fused_kernel if self._storage_active else jacobi_applyA_fused_no_storage_kernel
+                _jac_in = [
+                    level.T_wp, level.active_wp, level.bc_mask_wp, level.gh_mask_wp,
+                    level.ghb_factor_wp,
+                ]
+                if self._storage_active:
+                    _jac_in.append(level.storage_diag_wp)
+                _jac_in += [
+                    level.b_wp, x_in, level.M_inv_wp, level.bc_values_wp,
+                    float(omega_step), nxL, nyL, x_out,
+                ]
+                wp.launch(kernel=_jac_k, dim=dimL, inputs=_jac_in, device=device)
                 tmp = x_in
                 x_in = x_out
                 x_out = tmp
@@ -6693,25 +7373,15 @@ class WarpDarcySolver:
                 wp.launch(kernel=copy_field_kernel, dim=dimL, inputs=[x_in, level.x_wp, nxL, nyL], device=device)
 
             wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[level.rTr_buf], device=device)
-            wp.launch(
-                kernel=compute_residual_kernel,
-                dim=dimL,
-                inputs=[
-                    level.x_wp,
-                    level.b_wp,
-                    level.T_wp,
-                    level.active_wp,
-                    level.bc_mask_wp,
-                    level.gh_mask_wp,
-                    level.ghb_factor_wp,
-                    level.storage_diag_wp,
-                    level.r_wp,
-                    level.rTr_buf,
-                    nxL,
-                    nyL,
-                ],
-                device=device,
-            )
+            _cr_k = compute_residual_kernel if self._storage_active else compute_residual_no_storage_kernel
+            _cr_in = [
+                level.x_wp, level.b_wp, level.T_wp, level.active_wp, level.bc_mask_wp,
+                level.gh_mask_wp, level.ghb_factor_wp,
+            ]
+            if self._storage_active:
+                _cr_in.append(level.storage_diag_wp)
+            _cr_in += [level.r_wp, level.rTr_buf, nxL, nyL]
+            wp.launch(kernel=_cr_k, dim=dimL, inputs=_cr_in, device=device)
 
             if level_id == (len(levels) - 1):
                 pcg_solve_level(level=level, max_iter_level=int(nu_coarse))
@@ -6745,25 +7415,15 @@ class WarpDarcySolver:
                 z1_wp = coarse.z_wp
 
             wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[coarse.rTr_buf], device=device)
-            wp.launch(
-                kernel=compute_residual_kernel,
-                dim=dimC,
-                inputs=[
-                    z1_wp,
-                    coarse.b_wp,
-                    coarse.T_wp,
-                    coarse.active_wp,
-                    coarse.bc_mask_wp,
-                    coarse.gh_mask_wp,
-                    coarse.ghb_factor_wp,
-                    coarse.storage_diag_wp,
-                    coarse.r_wp,
-                    coarse.rTr_buf,
-                    nxC,
-                    nyC,
-                ],
-                device=device,
-            )
+            _ccr_k = compute_residual_kernel if self._storage_active else compute_residual_no_storage_kernel
+            _ccr_in = [
+                z1_wp, coarse.b_wp, coarse.T_wp, coarse.active_wp, coarse.bc_mask_wp,
+                coarse.gh_mask_wp, coarse.ghb_factor_wp,
+            ]
+            if self._storage_active:
+                _ccr_in.append(coarse.storage_diag_wp)
+            _ccr_in += [coarse.r_wp, coarse.rTr_buf, nxC, nyC]
+            wp.launch(kernel=_ccr_k, dim=dimC, inputs=_ccr_in, device=device)
 
             wp.launch(kernel=copy_field_kernel, dim=dimC, inputs=[coarse.r_wp, coarse.b_wp, nxC, nyC], device=device)
             r1_wp = coarse.b_wp
@@ -6780,24 +7440,15 @@ class WarpDarcySolver:
             )
 
             wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[coarse.pAp_buf], device=device)
-            wp.launch(
-                kernel=apply_A_and_pAp_kernel,
-                dim=dimC,
-                inputs=[
-                    coarse.T_wp,
-                    coarse.active_wp,
-                    coarse.bc_mask_wp,
-                    coarse.gh_mask_wp,
-                    coarse.ghb_factor_wp,
-                    coarse.storage_diag_wp,
-                    coarse.x_wp,
-                    coarse.Ax_wp,
-                    coarse.pAp_buf,
-                    nxC,
-                    nyC,
-                ],
-                device=device,
-            )
+            _caap_k = apply_A_and_pAp_kernel if self._storage_active else apply_A_and_pAp_no_storage_kernel
+            _caap_in = [
+                coarse.T_wp, coarse.active_wp, coarse.bc_mask_wp, coarse.gh_mask_wp,
+                coarse.ghb_factor_wp,
+            ]
+            if self._storage_active:
+                _caap_in.append(coarse.storage_diag_wp)
+            _caap_in += [coarse.x_wp, coarse.Ax_wp, coarse.pAp_buf, nxC, nyC]
+            wp.launch(kernel=_caap_k, dim=dimC, inputs=_caap_in, device=device)
 
             wp.launch(
                 kernel=compute_safe_alpha_kernel,
@@ -6840,27 +7491,18 @@ class WarpDarcySolver:
             x_out = x_tmp_wp
 
             for omega_step in post_omegas:
-                wp.launch(
-                    kernel=jacobi_applyA_fused_kernel,
-                    dim=dimL,
-                    inputs=[
-                        level.T_wp,
-                        level.active_wp,
-                        level.bc_mask_wp,
-                        level.gh_mask_wp,
-                        level.ghb_factor_wp,
-                        level.storage_diag_wp,
-                        level.b_wp,
-                        x_in,
-                        level.M_inv_wp,
-                        level.bc_values_wp,
-                        float(omega_step),
-                        nxL,
-                        nyL,
-                        x_out,
-                    ],
-                    device=device,
-                )
+                _jac_k = jacobi_applyA_fused_kernel if self._storage_active else jacobi_applyA_fused_no_storage_kernel
+                _jac_in = [
+                    level.T_wp, level.active_wp, level.bc_mask_wp, level.gh_mask_wp,
+                    level.ghb_factor_wp,
+                ]
+                if self._storage_active:
+                    _jac_in.append(level.storage_diag_wp)
+                _jac_in += [
+                    level.b_wp, x_in, level.M_inv_wp, level.bc_values_wp,
+                    float(omega_step), nxL, nyL, x_out,
+                ]
+                wp.launch(kernel=_jac_k, dim=dimL, inputs=_jac_in, device=device)
                 tmp = x_in
                 x_in = x_out
                 x_out = tmp
@@ -6885,6 +7527,7 @@ class WarpDarcySolver:
             tuple(float(v) for v in pre_omegas),
             tuple(float(v) for v in post_omegas),
             float(omega),
+            bool(self._storage_active),
         ]
         if not self.trust_ghb_params_for_graph:
             graph_key.append(float(self.gh_alpha))
@@ -6933,27 +7576,15 @@ class WarpDarcySolver:
                 inputs=[lvl0.rho_buf, lvl0.dh_max_buf, lvl0.rTr_buf, lvl0.converged_flag],
                 device=device,
             )
-            wp.launch(
-                kernel=kcycle_check_dh_and_residual_kernel,
-                dim=dim0,
-                inputs=[
-                    lvl0.x_wp,
-                    lvl0.x_prev_wp,
-                    lvl0.b_wp,
-                    lvl0.T_wp,
-                    lvl0.active_wp,
-                    lvl0.bc_mask_wp,
-                    lvl0.gh_mask_wp,
-                    lvl0.ghb_factor_wp,
-                    lvl0.storage_diag_wp,
-                    lvl0.rho_buf,  # dh2_buf
-                    lvl0.dh_max_buf,
-                    lvl0.rTr_buf,  # residual norm
-                    nx0,
-                    ny0,
-                ],
-                device=device,
-            )
+            _kc_k = kcycle_check_dh_and_residual_kernel if self._storage_active else kcycle_check_dh_and_residual_no_storage_kernel
+            _kc_in = [
+                lvl0.x_wp, lvl0.x_prev_wp, lvl0.b_wp, lvl0.T_wp, lvl0.active_wp,
+                lvl0.bc_mask_wp, lvl0.gh_mask_wp, lvl0.ghb_factor_wp,
+            ]
+            if self._storage_active:
+                _kc_in.append(lvl0.storage_diag_wp)
+            _kc_in += [lvl0.rho_buf, lvl0.dh_max_buf, lvl0.rTr_buf, nx0, ny0]  # rho_buf=dh2, rTr_buf=residual
+            wp.launch(kernel=_kc_k, dim=dim0, inputs=_kc_in, device=device)
             wp.launch(
                 kernel=check_rtr_converged_kernel,
                 dim=1,
@@ -7016,49 +7647,29 @@ class WarpDarcySolver:
 
         # Final flux residual RMS for reporting
         wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[lvl0.rTr_buf], device=device)
-        wp.launch(
-            kernel=compute_residual_kernel,
-            dim=dim0,
-            inputs=[
-                lvl0.x_wp,
-                lvl0.b_wp,
-                lvl0.T_wp,
-                lvl0.active_wp,
-                lvl0.bc_mask_wp,
-                lvl0.gh_mask_wp,
-                lvl0.ghb_factor_wp,
-                lvl0.storage_diag_wp,
-                lvl0.r_wp,
-                lvl0.rTr_buf,
-                nx0,
-                ny0,
-            ],
-            device=device,
-        )
+        _cr_k = compute_residual_kernel if self._storage_active else compute_residual_no_storage_kernel
+        _cr_in = [
+            lvl0.x_wp, lvl0.b_wp, lvl0.T_wp, lvl0.active_wp, lvl0.bc_mask_wp,
+            lvl0.gh_mask_wp, lvl0.ghb_factor_wp,
+        ]
+        if self._storage_active:
+            _cr_in.append(lvl0.storage_diag_wp)
+        _cr_in += [lvl0.r_wp, lvl0.rTr_buf, nx0, ny0]
+        wp.launch(kernel=_cr_k, dim=dim0, inputs=_cr_in, device=device)
         rTr_end = float(lvl0.rTr_buf.numpy()[0])
         r_rms_end = float(np.sqrt(max(rTr_end, 0.0) / float(n_free0)))
 
         # Head-equivalent residual RMS for reporting
         wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[lvl0.rTr_buf], device=device)
-        wp.launch(
-            kernel=compute_head_residual_kernel,
-            dim=dim0,
-            inputs=[
-                lvl0.x_wp,
-                lvl0.b_wp,
-                lvl0.T_wp,
-                lvl0.active_wp,
-                lvl0.bc_mask_wp,
-                lvl0.gh_mask_wp,
-                lvl0.ghb_factor_wp,
-                lvl0.storage_diag_wp,
-                lvl0.r_wp,  # stores r_h [m]
-                lvl0.rTr_buf,  # sum(r_h^2)
-                nx0,
-                ny0,
-            ],
-            device=device,
-        )
+        _hr_k = compute_head_residual_kernel if self._storage_active else compute_head_residual_no_storage_kernel
+        _hr_in = [
+            lvl0.x_wp, lvl0.b_wp, lvl0.T_wp, lvl0.active_wp, lvl0.bc_mask_wp,
+            lvl0.gh_mask_wp, lvl0.ghb_factor_wp,
+        ]
+        if self._storage_active:
+            _hr_in.append(lvl0.storage_diag_wp)
+        _hr_in += [lvl0.r_wp, lvl0.rTr_buf, nx0, ny0]  # r stores r_h [m]; rTr_buf sums r_h^2
+        wp.launch(kernel=_hr_k, dim=dim0, inputs=_hr_in, device=device)
         hrTr_end = float(lvl0.rTr_buf.numpy()[0])
         h_rms_end = float(np.sqrt(max(hrTr_end, 0.0) / float(n_free0)))
 

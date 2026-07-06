@@ -440,6 +440,7 @@ def make_mf_model_multilayer(
     use_ghb: bool = False,
     kriv_factor: float = 1.0,
     record_full_time: bool = False,
+    icelltype: int | list[int] = 0,
 ):
     """
     Build a simple multi-layer steady MF6 truth model using the shared model-builder tools.
@@ -571,10 +572,15 @@ def make_mf_model_multilayer(
         strt=strt,
     )
 
+    if isinstance(icelltype, int):
+        icelltype_list = [icelltype for _ in range(nlay)]
+    else:
+        icelltype_list = list(icelltype)
+
     flopy.mf6.ModflowGwfnpf(
         gwf,
         pname="npf",
-        icelltype=[0 for _ in range(nlay)],
+        icelltype=icelltype_list,
         k=hk_use,
         k33=k33_use,
         k33overk=False,

@@ -381,6 +381,7 @@ def run_warp_unconfined(
     unconfined_startup_mode: str = "confined_pre_solve",
     diag_preconditioner_backend: str = "auto",
     check_every_no: int | None = None,
+    do_double_solve: bool = True,
 ) -> Path:
     """
     Run the same unconfined problem in the main 2D Warp solver and save heads to NPZ.
@@ -446,9 +447,13 @@ def run_warp_unconfined(
             solve1_kwargs["check_every_no"] = int(check_every_no)
         solve2_kwargs = dict(solve1_kwargs)
 
-        t_solve1 = time.perf_counter()
-        heads1, info1 = warp_solver.solve(**solve1_kwargs)
-        solve1_time = time.perf_counter() - t_solve1
+        if do_double_solve:
+            t_solve1 = time.perf_counter()
+            heads1, info1 = warp_solver.solve(**solve1_kwargs)
+            solve1_time = time.perf_counter() - t_solve1
+        else:
+            heads1, info1 = None, None
+            solve1_time = 0.0
 
         # Benchmark timing uses solve 2 from the same initial condition, matching
         # the 3D runner convention.
@@ -457,7 +462,7 @@ def run_warp_unconfined(
         solve2_time = time.perf_counter() - t_solve2
 
     total_time = time.perf_counter() - t0
-    solve1_summary = _solve_summary(info1, solve1_time, solve1_kwargs)
+    solve1_summary = _solve_summary(info1, solve1_time, solve1_kwargs) if do_double_solve else {}
     solve2_summary = _solve_summary(info, solve2_time, solve2_kwargs)
 
     first25_path = Path(out_path).parent.joinpath("outer_history_first25.csv")
@@ -471,7 +476,7 @@ def run_warp_unconfined(
         solve1_time=np.asarray(solve1_time, dtype=np.float64),
         solve2_time=np.asarray(solve2_time, dtype=np.float64),
         info=np.asarray(json.dumps(info, default=str)),
-        info_solve1=np.asarray(json.dumps(info1, default=str)),
+        info_solve1=np.asarray(json.dumps(info1, default=str) if info1 else "{}"),
         info_solve2=np.asarray(json.dumps(info, default=str)),
         summary_solve1=np.asarray(json.dumps(solve1_summary, default=str)),
         summary_solve2=np.asarray(json.dumps(solve2_summary, default=str)),
@@ -628,6 +633,7 @@ def run_case(
     check_every_no: int | None = None,
     do_run_mf6: bool = True,
     do_run_warp: bool = True,
+    do_double_solve: bool = True,
 ) -> dict:
     case = build_simple_unconfined_case(
         nx=nx,
@@ -664,6 +670,7 @@ def run_case(
             unconfined_startup_mode=unconfined_startup_mode,
             diag_preconditioner_backend=diag_preconditioner_backend,
             check_every_no=check_every_no,
+            do_double_solve=do_double_solve,
         )
 
     metrics = {}
@@ -749,6 +756,7 @@ def run_grid_benchmark(
     check_every_no: int | None = None,
     do_run_mf6: bool = True,
     do_run_warp: bool = True,
+    do_double_solve: bool = True,
 ) -> list[dict]:
     """
     Run the 2D unconfined MF6-vs-Warp benchmark over a range of grid sizes.
@@ -775,14 +783,16 @@ def run_grid_benchmark(
     print(f"workspace: {workspace}")
     print("=" * 72)
 
+    current_keys = [(int(nx), int(ny)) for nx, ny in normalized_sizes]
     summary_path = workspace.joinpath("grid_benchmark_summary.json")
+    previous_results: dict[tuple[int, int], dict] = {}
     results_dict: dict[tuple[int, int], dict] = {}
     if summary_path.exists():
         try:
             with summary_path.open("r") as f:
                 existing = json.load(f)
             for row in existing:
-                results_dict[(int(row["nx"]), int(row["ny"]))] = row
+                previous_results[(int(row["nx"]), int(row["ny"]))] = row
         except Exception:
             pass
 
@@ -815,11 +825,12 @@ def run_grid_benchmark(
             check_every_no=check_every_no,
             do_run_mf6=do_run_mf6,
             do_run_warp=do_run_warp,
+            do_double_solve=do_double_solve,
         )
 
         key = (int(nx), int(ny))
-        if key in results_dict:
-            old_row = results_dict[key]
+        old_row = previous_results.get(key)
+        if old_row is not None:
             if not do_run_mf6:
                 row["mf6_engine_time"] = old_row.get("mf6_engine_time")
                 row["mf6_total_time"] = old_row.get("mf6_total_time")
@@ -846,13 +857,13 @@ def run_grid_benchmark(
                 row["comparison"] = old_row.get("comparison", {})
 
         results_dict[key] = row
-        results = [results_dict[k] for k in sorted(results_dict.keys())]
+        results = [results_dict[k] for k in current_keys if k in results_dict]
         with summary_path.open("w") as f:
             json.dump(results, f, indent=4)
         print(f"Updated grid benchmark summary: {summary_path}")
 
     print("\nGrid benchmark complete.")
-    return [results_dict[k] for k in sorted(results_dict.keys())]
+    return [results_dict[k] for k in current_keys if k in results_dict]
 
 
 def run_diag_preconditioner_backend_matrix(
@@ -972,6 +983,7 @@ def run_chebyshev_lambda_sweep(
     unconfined_startup_mode: str = "confined_pre_solve",
     diag_preconditioner_backend: str = "auto",
     check_every_no: int | None = None,
+    do_double_solve: bool = True,
 ) -> list[dict]:
     """
     Run a single 2D unconfined case across a range of Chebyshev lambda bounds.
@@ -1055,6 +1067,7 @@ def run_chebyshev_lambda_sweep(
                 unconfined_startup_mode=str(unconfined_startup_mode),
                 diag_preconditioner_backend=str(diag_preconditioner_backend),
                 check_every_no=check_every_no,
+                do_double_solve=do_double_solve,
             )
 
             metrics = {}
@@ -1129,10 +1142,11 @@ if __name__ == "__main__":
     unconfined_startup_mode = "confined_pre_solve"  # or "initial_head"
     diag_preconditioner_backend = "device"
     check_every_no = 5
-    do_run_mf6 = True
+    do_run_mf6 = False
     do_run_warp = True
     run_lambda_sweep = False
     run_backend_matrix = False
+    do_double_solve = False
 
     if run_backend_matrix:
         results = run_diag_preconditioner_backend_matrix(
@@ -1201,5 +1215,6 @@ if __name__ == "__main__":
             check_every_no=check_every_no,
             do_run_mf6=do_run_mf6,
             do_run_warp=do_run_warp,
+            do_double_solve=do_double_solve,
         )
     print(json.dumps(results, indent=4))
