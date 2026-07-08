@@ -774,6 +774,8 @@ def _picard_unconfined_7point_3d(
     dy,
     dz,
     device,
+    transient=False,
+    dt=None,
     unconfined_startup_mode="initial_head",
     transmissivity_relaxation_enabled=False,
     transmissivity_relaxation_early=0.25,
@@ -1263,6 +1265,13 @@ def _picard_unconfined_7point_3d(
             "solver_type": str(solver_type_label),
             "linear_solver_type": str(last_linear_info.get("solver_type", linear_solver_type_label)),
             "unconfined": True,
+            "transient": bool(transient),
+            "transient_formulation": "unconfined" if bool(transient) else "steady",
+            "dt": (
+                float(dt)
+                if bool(transient) and dt is not None and np.isfinite(float(dt))
+                else float("nan")
+            ),
             "converged": bool(converged_nonlinear),
             "outer_iterations": int(len(outer_history)),
             "chebyshev_enabled": bool(chebyshev_enabled),
@@ -1351,6 +1360,7 @@ def solve_chebyshev_7point_3d(
     omega_min: float = 0.1,
     omega_max: float = 0.9,
     residual_floor_tol: float | None = 1.0e-4,
+    dh_rms_tol: float | None = 1.0e-4,
     inner_forcing_eta: float = 0.10,
     inner_head_residual_tol_min: float | None = None,
     inner_head_residual_tol_max: float = 1.0e-2,
@@ -1412,10 +1422,19 @@ def solve_chebyshev_7point_3d(
     n_free = int(np.count_nonzero(free))
 
     if bool(unconfined) and bool(transient):
-        raise NotImplementedError(
-            "Transient unconfined 3D solves are scaffolded but not implemented yet. "
-            "Use transient confined or steady unconfined mode."
-        )
+        # Transient unconfined 3D is driven by the shared Picard loop below.
+        # Each outer iteration calls the inner confined-transient solve, which
+        # prepares the backward-Euler storage diagonal (storage_coeff *
+        # dx*dy*dz / dt) and the head_prev RHS contribution. Force a clean
+        # storage diagonal here so the inner solve rebuilds it from
+        # storage_coeff / dt / head_prev on every iteration, which avoids
+        # double-counting a caller-supplied diagonal.
+        #
+        # CAVEAT: storage_coeff is treated as confined-style specific storage
+        # applied over the full cell volume (consistent with the 3D confined
+        # transient path). Specific-yield / phreatic-surface storage on the
+        # water table is not yet modelled here; see TRANSIENT_STATUS.md.
+        storage_diag = None
 
     if bool(unconfined):
         if kx_field is None or ky_field is None or kz_field is None or zbot_field is None:
@@ -1531,6 +1550,8 @@ def solve_chebyshev_7point_3d(
             diag_preconditioner_backend=diag_preconditioner_backend,
             linear_solver_type_label="chebyshev_7point_3d",
             solver_type_label="chebyshev_7point_3d_unconfined_picard",
+            transient=transient,
+            dt=dt,
             dry_cell_flag_threshold=dry_cell_flag_threshold,
             return_info=return_info,
         )
@@ -1695,10 +1716,19 @@ def solve_multigrid_kcycle_7point_3d(
     n_free0 = int(np.count_nonzero(free0))
 
     if bool(unconfined) and bool(transient):
-        raise NotImplementedError(
-            "Transient unconfined 3D solves are scaffolded but not implemented yet. "
-            "Use transient confined or steady unconfined mode."
-        )
+        # Transient unconfined 3D is driven by the shared Picard loop below.
+        # Each outer iteration calls the inner confined-transient solve, which
+        # prepares the backward-Euler storage diagonal (storage_coeff *
+        # dx*dy*dz / dt) and the head_prev RHS contribution. Force a clean
+        # storage diagonal here so the inner solve rebuilds it from
+        # storage_coeff / dt / head_prev on every iteration, which avoids
+        # double-counting a caller-supplied diagonal.
+        #
+        # CAVEAT: storage_coeff is treated as confined-style specific storage
+        # applied over the full cell volume (consistent with the 3D confined
+        # transient path). Specific-yield / phreatic-surface storage on the
+        # water table is not yet modelled here; see TRANSIENT_STATUS.md.
+        storage_diag = None
 
     if bool(unconfined):
         if kx_field is None or ky_field is None or kz_field is None or zbot_field is None:
@@ -1830,6 +1860,8 @@ def solve_multigrid_kcycle_7point_3d(
             diag_preconditioner_backend=diag_preconditioner_backend,
             linear_solver_type_label="kcycle_7point_3d",
             solver_type_label="kcycle_7point_3d_unconfined_picard",
+            transient=transient,
+            dt=dt,
             dry_cell_flag_threshold=dry_cell_flag_threshold,
             return_info=return_info,
         )

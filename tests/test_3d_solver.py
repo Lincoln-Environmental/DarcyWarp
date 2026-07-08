@@ -30,6 +30,59 @@ def _warp_test_device() -> str:
 WARP_AVAILABLE = _warp_available()
 
 
+def _build_tiny_3d_unconfined_fields(
+    nz: int = 3,
+    ny: int = 8,
+    nx: int = 10,
+    dx: float = 100.0,
+    dz: float = 100.0,
+    k_value: float = 10.0,
+) -> dict:
+    """
+    Build a tiny, fully-active 3D unconfined field set for fast CPU tests.
+
+    Returns a dict of the K fields, elevations (with per-layer tops/bottoms),
+    boundary conditions, a small top-layer recharge RHS, and a physically
+    consistent initial head. Used by the unconfined / transient-unconfined
+    smoke tests so they share one construction path.
+    """
+    shape = (nz, ny, nx)
+    k = np.full(shape, float(k_value), dtype=np.float64)
+    zbot = np.zeros(shape, dtype=np.float64)
+    ztop = np.zeros(shape, dtype=np.float64)
+    for iz in range(nz):
+        ztop[iz, :, :] = 150.0 - iz * dz
+        zbot[iz, :, :] = ztop[iz, 0, 0] - dz
+
+    active = np.ones(shape, dtype=np.int32)
+    bc_mask = np.zeros(shape, dtype=np.int32)
+    bc_values = np.zeros(shape, dtype=np.float64)
+    # Dirichlet on the west face at 100 m.
+    bc_mask[:, :, 0] = 1
+    bc_values[:, :, 0] = 100.0
+
+    rhs = np.zeros(shape, dtype=np.float64)
+    # Small recharge applied to the top layer only (m/s -> volumetric).
+    rhs[0, :, :] = 1.0e-5 * float(dx) * float(dx)
+
+    initial = np.minimum(zbot + 100.0, ztop)
+    initial[bc_mask != 0] = bc_values[bc_mask != 0]
+
+    return {
+        "shape": shape,
+        "k": k,
+        "zbot": zbot,
+        "ztop": ztop,
+        "active": active,
+        "bc_mask": bc_mask,
+        "bc_values": bc_values,
+        "rhs": rhs,
+        "initial": initial,
+        "dx": float(dx),
+        "dz": float(dz),
+    }
+
+
 @unittest.skipUnless(WARP_AVAILABLE, "warp not installed")
 class Test3DImports(unittest.TestCase):
     """Smoke tests that the 3D modules and factory are importable."""
@@ -82,41 +135,176 @@ class Test3DImports(unittest.TestCase):
         self.assertTrue(np.array_equal(solver._ky_field, ky))
         self.assertTrue(np.array_equal(solver._kz_field, kz))
 
-    def test_3d_transient_unconfined_is_rejected(self):
+    def test_3d_transient_unconfined_runs_in_both_backends(self):
+        """
+        Transient + unconfined 3D is implemented (not rejected).
+
+        Both the standalone-Chebyshev and K-cycle backends must produce finite
+        heads of the right shape, report transient=True with formulation
+        'unconfined', and move heads away from head_prev under storage+forcing.
+        """
         from DARCY_WARP_PACKAGE.solvers_3d import (
             solve_chebyshev_7point_3d,
             solve_multigrid_kcycle_7point_3d,
         )
 
-        shape = (2, 2, 2)
+        f = _build_tiny_3d_unconfined_fields()
+        shape = f["shape"]
         zeros = np.zeros(shape, dtype=np.float64)
-        ones = np.ones(shape, dtype=np.float64)
-        active = np.ones(shape, dtype=np.int32)
-        bc_mask = np.zeros(shape, dtype=np.int32)
+        storage_coeff = np.full(shape, 1.0e-4, dtype=np.float64)
+        dt = 86400.0
+        head_prev = f["initial"].copy()
 
-        for solve in (solve_chebyshev_7point_3d, solve_multigrid_kcycle_7point_3d):
-            with self.assertRaises(NotImplementedError):
-                solve(
-                    tx_p=zeros,
-                    tx_m=zeros,
-                    ty_p=zeros,
-                    ty_m=zeros,
-                    tz_p=zeros,
-                    tz_m=zeros,
-                    rhs=zeros,
-                    active=active,
-                    bc_mask=bc_mask,
-                    bc_values=zeros,
-                    transient=True,
-                    storage_coeff=1.0,
-                    dt=1.0,
-                    unconfined=True,
-                    kx_field=ones,
-                    ky_field=ones,
-                    kz_field=ones,
-                    zbot_field=zeros,
-                    device="cpu",
+        cheb_head, cheb_info = solve_chebyshev_7point_3d(
+            tx_p=zeros, tx_m=zeros, ty_p=zeros, ty_m=zeros, tz_p=zeros, tz_m=zeros,
+            rhs=f["rhs"], active=f["active"], bc_mask=f["bc_mask"], bc_values=f["bc_values"],
+            unconfined=True, transient=True,
+            kx_field=f["k"], ky_field=f["k"], kz_field=f["k"],
+            zbot_field=f["zbot"], ztop_field=f["ztop"],
+            initial_head=f["initial"], head_prev=head_prev,
+            storage_coeff=storage_coeff, dt=dt,
+            dx=f["dx"], dy=f["dx"], dz=f["dz"], device="cpu",
+            unconfined_startup_mode="initial_head",
+            unconfined_max_picard_iter=40,
+            unconfined_head_tol=1.0e-3,
+            return_info=True,
+        )
+
+        self.assertEqual(cheb_head.shape, shape)
+        self.assertTrue(np.all(np.isfinite(cheb_head)))
+        self.assertTrue(bool(cheb_info.get("transient", False)))
+        self.assertEqual(cheb_info.get("transient_formulation"), "unconfined")
+        # Storage + recharge must move heads relative to the previous step.
+        self.assertGreater(float(np.max(np.abs(cheb_head - head_prev))), 1.0e-8)
+
+        kc_head, kc_info = solve_multigrid_kcycle_7point_3d(
+            tx_p=zeros, tx_m=zeros, ty_p=zeros, ty_m=zeros, tz_p=zeros, tz_m=zeros,
+            rhs=f["rhs"], active=f["active"], bc_mask=f["bc_mask"], bc_values=f["bc_values"],
+            unconfined=True, transient=True,
+            kx_field=f["k"], ky_field=f["k"], kz_field=f["k"],
+            zbot_field=f["zbot"], ztop_field=f["ztop"],
+            initial_head=f["initial"], head_prev=head_prev,
+            storage_coeff=storage_coeff, dt=dt,
+            dx=f["dx"], dy=f["dx"], dz=f["dz"], device="cpu",
+            max_cycles=60, max_levels=4, min_coarse_n=2,
+            unconfined_startup_mode="initial_head",
+            unconfined_max_picard_iter=40,
+            unconfined_head_tol=1.0e-3,
+            smoother="chebyshev",
+            return_info=True,
+        )
+
+        self.assertEqual(kc_head.shape, shape)
+        self.assertTrue(np.all(np.isfinite(kc_head)))
+        self.assertTrue(bool(kc_info.get("transient", False)))
+        self.assertEqual(kc_info.get("transient_formulation"), "unconfined")
+        self.assertGreater(float(np.max(np.abs(kc_head - head_prev))), 1.0e-8)
+
+
+    def test_3d_transient_confined_heads_respond_to_storage(self):
+        """
+        3D confined transient (kcycle): storage must be active.
+
+        Two transient steps with the same forcing but different head_prev must
+        produce different heads (the backward-Euler storage term depends on
+        head_prev), and the info must report transient=True with the
+        'confined' formulation.
+        """
+        from DARCY_WARP_PACKAGE.warped_darcy_3d import WarpDarcySolver3D
+
+        f = _build_tiny_3d_unconfined_fields()
+        nz, ny, nx = f["shape"]
+        storage_coeff = np.full(f["shape"], 1.0e-5, dtype=np.float64)
+        dt = 86400.0
+
+        head_prev_lo = f["initial"].copy()
+        head_prev_hi = f["initial"].copy()
+        free = (f["active"] != 0) & (f["bc_mask"] == 0)
+        head_prev_hi[free] += 20.0
+
+        def _run(head_prev):
+            with WarpDarcySolver3D(
+                nx=nx, ny=ny, nz=nz, dx=f["dx"], dy=f["dx"], dz=f["dz"],
+                device="cpu", solver="kcycle", diag_preconditioner_backend="host",
+            ) as solver:
+                solver.build_from_K_fields(
+                    kx_field=f["k"], ky_field=f["k"], kz_field=f["k"],
+                    active=f["active"], bc_mask=f["bc_mask"],
+                    bc_values=f["bc_values"], rhs=f["rhs"], initial_head=f["initial"],
                 )
+                return solver.solve(
+                    transient=True,
+                    storage_coeff=storage_coeff,
+                    dt=dt,
+                    head_prev=head_prev,
+                    initial_head=head_prev,
+                    max_cycles=40,
+                    max_levels=4,
+                    min_coarse_n=2,
+                    check_every_no=1,
+                    return_info=True,
+                )
+
+        head_lo, info_lo = _run(head_prev_lo)
+        head_hi, info_hi = _run(head_prev_hi)
+
+        self.assertEqual(head_lo.shape, f["shape"])
+        self.assertTrue(np.all(np.isfinite(head_lo)))
+        self.assertTrue(bool(info_lo.get("transient", False)))
+        self.assertEqual(info_lo.get("transient_formulation"), "confined")
+        # Different memory (head_prev) -> different transient solution.
+        self.assertGreater(float(np.max(np.abs(head_hi - head_lo))), 1.0e-6)
+
+    def test_3d_steady_unconfined_smoke_with_full_speed_controls(self):
+        """
+        3D steady unconfined smoke (CPU): exercise ztop_field, Chebyshev
+        controls, inner_forcing_eta, transmissivity relaxation, and the
+        device/host diag preconditioner backend on a tiny grid.
+
+        Heavy layer benchmarks are intentionally NOT run here.
+        """
+        from DARCY_WARP_PACKAGE.solvers_3d import solve_multigrid_kcycle_7point_3d
+
+        f = _build_tiny_3d_unconfined_fields()
+        shape = f["shape"]
+        zeros = np.zeros(shape, dtype=np.float64)
+
+        head, info = solve_multigrid_kcycle_7point_3d(
+            tx_p=zeros, tx_m=zeros, ty_p=zeros, ty_m=zeros, tz_p=zeros, tz_m=zeros,
+            rhs=f["rhs"], active=f["active"], bc_mask=f["bc_mask"], bc_values=f["bc_values"],
+            unconfined=True, transient=False,
+            kx_field=f["k"], ky_field=f["k"], kz_field=f["k"],
+            zbot_field=f["zbot"], ztop_field=f["ztop"],
+            initial_head=f["initial"],
+            dx=f["dx"], dy=f["dx"], dz=f["dz"], device="cpu",
+            max_cycles=60, max_levels=4, min_coarse_n=2,
+            unconfined_startup_mode="confined_pre_solve",
+            unconfined_max_picard_iter=40,
+            unconfined_head_tol=1.0e-3,
+            smoother="chebyshev",
+            chebyshev_enabled=True,
+            chebyshev_reset_factor=1.2,
+            inner_forcing_eta=0.10,
+            inner_head_residual_tol_min=1.0e-4,
+            inner_head_residual_tol_max=1.0e-2,
+            transmissivity_relaxation_enabled=True,
+            diag_preconditioner_backend="device",
+            return_info=True,
+        )
+
+        self.assertEqual(head.shape, shape)
+        self.assertTrue(np.all(np.isfinite(head)))
+        self.assertTrue(bool(info.get("unconfined", False)))
+        self.assertFalse(bool(info.get("transient", False)))
+        self.assertTrue(bool(info.get("transmissivity_relaxation_enabled", False)))
+        self.assertEqual(info.get("diag_preconditioner_backend"), "device")
+        # Saturated free cells keep head at/above their cell bottom; recharge
+        # must move heads away from the initial guess. (The Picard loop caps
+        # saturated thickness / transmissivity, not the head value itself, so
+        # no upper-bound-on-ztop assertion is made here.)
+        free = (f["active"] != 0) & (f["bc_mask"] == 0)
+        self.assertTrue(np.all(head[free] >= f["zbot"][free] - 1.0e-6))
+        self.assertGreater(float(np.max(np.abs(head[free] - f["initial"][free]))), 1.0e-8)
 
     def test_horizontal_coarsening_preserves_layers_for_benchmark_shape(self):
         from DARCY_WARP_PACKAGE.solvers_3d import _coarsen_max_edge_1x2x2

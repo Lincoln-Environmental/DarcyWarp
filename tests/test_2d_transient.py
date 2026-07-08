@@ -385,3 +385,71 @@ def test_unconfined_transient_mass_balance():
     )
     assert max_rel < 2.0e-1, f"unconfined transient mass balance max rel residual {max_rel}"
     assert rms < 2.0e-4, f"unconfined transient mass balance rms residual {rms}"
+
+
+def test_2d_transient_replay_steps_periods_and_responds_to_recharge():
+    """
+    Multi-period Warp transient replay harness (MF6-free).
+
+    Exercises working_tests/run_2d_transient_warp_replay.py's core stepper on a
+    small synthetic case: heads must evolve across periods, the final state must
+    differ from the initial condition, and a larger recharge rate must mound
+    heads higher than a smaller one. No MF6/flopy dependency.
+    """
+    from working_tests.run_2d_transient_warp_replay import (
+        build_synthetic_spatial_fields,
+        run_warp_transient_replay,
+    )
+
+    spatial = build_synthetic_spatial_fields(nx=16, ny=12, hydraulic_conductivity=100.0)
+    fast_controls = {
+        "max_cycles": 30,
+        "max_levels": 4,
+        "max_outer_iterations": 30,
+        "min_coarse_cells": 1,
+    }
+
+    rates = np.array([1.0e-4, 1.0e-4, 1.0e-4, 1.0e-4], dtype=np.float64)
+    result = run_warp_transient_replay(
+        spatial,
+        recharge_rates=rates,
+        sy=0.2,
+        dt=7.0,
+        n_periods=4,
+        device="cpu",
+        diag_preconditioner_backend="host",
+        solve_controls=fast_controls,
+    )
+
+    heads = result["heads_per_period"]
+    assert heads.shape == (4, 12, 16)
+    assert np.all(np.isfinite(heads))
+    # Storage + forcing must move heads away from the initial condition.
+    assert not np.allclose(heads[-1], spatial["initial_head"], atol=1.0e-8)
+    assert bool(result["last_info"].get("converged", False))
+
+    # Recharge magnitude must matter: a high-rate single step mounds heads
+    # higher than a low-rate single step from the same initial condition.
+    low = run_warp_transient_replay(
+        spatial,
+        recharge_rates=np.array([1.0e-6], dtype=np.float64),
+        sy=0.2,
+        dt=7.0,
+        n_periods=1,
+        device="cpu",
+        diag_preconditioner_backend="host",
+        solve_controls=fast_controls,
+    )
+    high = run_warp_transient_replay(
+        spatial,
+        recharge_rates=np.array([1.0e-2], dtype=np.float64),
+        sy=0.2,
+        dt=7.0,
+        n_periods=1,
+        device="cpu",
+        diag_preconditioner_backend="host",
+        solve_controls=fast_controls,
+    )
+    active = spatial["active"] != 0
+    assert float(high["heads_final"][active].mean()) > float(low["heads_final"][active].mean())
+
