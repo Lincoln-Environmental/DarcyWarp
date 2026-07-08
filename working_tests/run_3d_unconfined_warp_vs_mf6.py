@@ -333,6 +333,7 @@ def run_warp_unconfined(
             simple_kwargs = {
                 "unconfined": True,
                 "zbot_field": case.bottom_3d,
+                "ztop_field": case.top_3d,
                 "unconfined_min_sat": 0.1,
                 "unconfined_max_picard_iter": 60,
                 "unconfined_relax": 0.7,
@@ -374,6 +375,7 @@ def run_warp_unconfined(
             simple_kwargs = {
                 "unconfined": True,
                 "zbot_field": case.bottom_3d,
+                "ztop_field": case.top_3d,
                 "unconfined_min_sat": 0.1,
                 "unconfined_max_picard_iter": 60,
                 "unconfined_relax": 0.7,
@@ -978,6 +980,7 @@ def run_layer_benchmark(
                     "n_levels": int(warp_info["n_levels"]) if "n_levels" in warp_info else None,
                     "level_shapes": warp_info.get("level_shapes"),
                 },
+                "speed_controls": warp_speed_controls,
                 "comparison": metrics,
             }
 
@@ -995,6 +998,7 @@ def run_layer_benchmark(
                     row["timing"]["warp_benchmark_time"] = old_row.get("timing", {}).get("warp_benchmark_time")
                     row["convergence"] = old_row.get("convergence", {})
                     row["warp_solver"] = old_row.get("warp_solver", {})
+                    row["speed_controls"] = old_row.get("speed_controls", {})
                 if not (do_run_mf6 and do_run_warp) and not metrics:
                     row["comparison"] = old_row.get("comparison", {})
 
