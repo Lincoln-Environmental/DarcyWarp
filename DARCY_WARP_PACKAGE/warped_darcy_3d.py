@@ -40,6 +40,7 @@ class WarpDarcySolver3D:
         dz: float = 1.0,
         device: str = "cuda:0",
         solver: str = "kcycle",
+        diag_preconditioner_backend: str = "auto",
     ):
         if nx <= 0 or ny <= 0 or nz <= 0:
             raise ValueError("nx, ny, nz must be positive")
@@ -55,6 +56,10 @@ class WarpDarcySolver3D:
         self.solver = str(solver).lower()
         if self.solver not in {"kcycle", "chebyshev"}:
             raise ValueError("solver must be 'kcycle' or 'chebyshev'")
+        backend_mode = str(diag_preconditioner_backend).strip().lower()
+        if backend_mode not in {"auto", "host", "device"}:
+            raise ValueError("diag_preconditioner_backend must be 'auto', 'host', or 'device'.")
+        self.diag_preconditioner_backend = backend_mode
 
         self._tx_p: np.ndarray | None = None
         self._tx_m: np.ndarray | None = None
@@ -213,6 +218,7 @@ class WarpDarcySolver3D:
             "dy": self.dy,
             "dz": self.dz,
             "device": self.device,
+            "diag_preconditioner_backend": self.diag_preconditioner_backend,
             "return_info": True,
         }
         solve_kwargs = dict(kwargs)

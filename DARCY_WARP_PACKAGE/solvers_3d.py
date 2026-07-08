@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import gc
+
 import numpy as np
 import warp as wp
 
@@ -9,8 +11,10 @@ from DARCY_WARP_PACKAGE.kernels_3d import (
     add_correction_3d_kernel,
     apply_A_and_pAp_7point_kernel,
     axpy_active_scalar_3d_kernel,
+    build_diag_preconditioner_7point_kernel,
     copy_field_3d_kernel,
     compute_residual_7point_kernel,
+    compute_head_residual_7point_kernel,
     dh_change_reduce_3d_kernel,
     dot_active_3d_kernel,
     jacobi_applyA_fused_7point_kernel,
@@ -19,7 +23,10 @@ from DARCY_WARP_PACKAGE.kernels_3d import (
     zero_scalar_kernel,
 )
 from DARCY_WARP_PACKAGE.config import NP_FLOAT, WP_FLOAT
-from DARCY_WARP_PACKAGE.warped_darcy import _chebyshev_relaxation_sequence
+from DARCY_WARP_PACKAGE.warped_darcy import (
+    _chebyshev_relaxation_sequence,
+    _chebyshev_update_weights,
+)
 
 
 def build_7point_face_conductance_from_k(
@@ -187,6 +194,86 @@ def build_diag_preconditioner_7point(
     M_inv[valid] = 1.0 / diag[valid]
     M_inv[~free] = 1.0
     return M_inv.astype(NP_FLOAT, copy=False)
+
+
+def _resolve_diag_backend(backend: str, device: str) -> str:
+    """
+    Resolve a diag_preconditioner_backend selection to a concrete 'host'/'device'.
+
+    Mirrors WarpDarcySolver._diag_backend_env_or_default /
+    _select_diag_preconditioner_backend: 'auto' selects 'device' on CUDA,
+    'host' otherwise. Honours the DARCY_M_INV_BACKEND env override.
+    """
+    mode = str(backend).strip().lower()
+    if mode not in {"auto", "host", "device"}:
+        env = str(__import__("os").environ.get("DARCY_M_INV_BACKEND", "")).strip().lower()
+        if env in {"auto", "host", "device"}:
+            mode = env
+        else:
+            mode = "auto"
+    if mode == "host":
+        return "host"
+    if mode == "device":
+        return "device"
+    return "device" if str(device).startswith("cuda") else "host"
+
+
+def _fill_m_inv_wp_7point(
+    level_wp_arrays: dict,
+    m_inv_wp,
+    dim,
+    nx: int,
+    ny: int,
+    nz: int,
+    device: str,
+) -> None:
+    """
+    Populate a device M_inv array via the device-side diag kernel, using the
+    already-uploaded conductance/active/bc/storage Warp arrays in ``level_wp_arrays``.
+    """
+    wp.launch(
+        kernel=build_diag_preconditioner_7point_kernel,
+        dim=dim,
+        inputs=[
+            level_wp_arrays["tx_p_wp"],
+            level_wp_arrays["tx_m_wp"],
+            level_wp_arrays["ty_p_wp"],
+            level_wp_arrays["ty_m_wp"],
+            level_wp_arrays["tz_p_wp"],
+            level_wp_arrays["tz_m_wp"],
+            level_wp_arrays["active_wp"],
+            level_wp_arrays["bc_mask_wp"],
+            level_wp_arrays["storage_wp"],
+            m_inv_wp,
+            int(nx),
+            int(ny),
+            int(nz),
+        ],
+        device=device,
+    )
+
+
+def _release_mg_levels_3d(levels: list[dict]) -> None:
+    """
+    Release the device arrays held by a 3D multigrid level list and clear the
+    list, so the unconfined Picard loop (which rebuilds levels every outer
+    iteration) does not accumulate GPU memory. Mirrors the 2D MG-hierarchy
+    leak fix.
+    """
+    if not levels:
+        return
+    for lvl in levels:
+        if not isinstance(lvl, dict):
+            continue
+        for key, val in list(lvl.items()):
+            if isinstance(val, wp.array):
+                try:
+                    val.release()
+                except Exception:
+                    pass
+                lvl[key] = None
+    levels.clear()
+    gc.collect()
 
 
 def _prepare_7point_transient_terms(
@@ -371,6 +458,7 @@ def _solve_chebyshev_7point_3d_linear(
     dy: float | None = None,
     dz: float = 1.0,
     device: str = "cuda:0",
+    diag_preconditioner_backend: str = "auto",
     return_info: bool = True,
 ):
     txp = np.asarray(tx_p, dtype=NP_FLOAT)
@@ -480,6 +568,7 @@ def _solve_chebyshev_7point_3d_linear(
 
     nz, ny, nx = shape
     dim = (nz, ny, nx)
+    diag_mode = _resolve_diag_backend(diag_preconditioner_backend, device)
 
     txp_wp = wp.array(txp, dtype=WP_FLOAT, device=device)
     txm_wp = wp.array(txm, dtype=WP_FLOAT, device=device)
@@ -492,7 +581,29 @@ def _solve_chebyshev_7point_3d_linear(
     bcm_wp = wp.array(bcm, dtype=wp.int32, device=device)
     bcv_wp = wp.array(bcv, dtype=WP_FLOAT, device=device)
     sdiag_wp = wp.array(sdiag, dtype=WP_FLOAT, device=device)
-    M_inv_wp = wp.array(M_inv, dtype=WP_FLOAT, device=device)
+    if diag_mode == "device":
+        M_inv_wp = wp.zeros(shape, dtype=WP_FLOAT, device=device)
+        _fill_m_inv_wp_7point(
+            {
+                "tx_p_wp": txp_wp,
+                "tx_m_wp": txm_wp,
+                "ty_p_wp": typ_wp,
+                "ty_m_wp": tym_wp,
+                "tz_p_wp": tzp_wp,
+                "tz_m_wp": tzm_wp,
+                "active_wp": act_wp,
+                "bc_mask_wp": bcm_wp,
+                "storage_wp": sdiag_wp,
+            },
+            M_inv_wp,
+            dim,
+            int(nx),
+            int(ny),
+            int(nz),
+            device,
+        )
+    else:
+        M_inv_wp = wp.array(M_inv, dtype=WP_FLOAT, device=device)
 
     x_wp = wp.array(x0, dtype=WP_FLOAT, device=device)
     x_tmp_wp = wp.zeros(shape, dtype=WP_FLOAT, device=device)
@@ -582,25 +693,623 @@ def _solve_chebyshev_7point_3d_linear(
 
     head_out = np.asarray(x_wp.numpy(), dtype=NP_FLOAT)
 
+    # Head-equivalent (Jacobi-preconditioned) residual RMS for reporting / inner-usable checks.
+    wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[rTr_buf], device=device)
+    wp.launch(
+        kernel=compute_head_residual_7point_kernel,
+        dim=dim,
+        inputs=[
+            x_wp,
+            b_wp,
+            txp_wp,
+            txm_wp,
+            typ_wp,
+            tym_wp,
+            tzp_wp,
+            tzm_wp,
+            act_wp,
+            bcm_wp,
+            sdiag_wp,
+            M_inv_wp,
+            r_wp,
+            rTr_buf,
+            int(nx),
+            int(ny),
+            int(nz),
+        ],
+        device=device,
+    )
+    hrTr_end = float(rTr_buf.numpy()[0])
+    h_rms_end = float(np.sqrt(max(hrTr_end, 0.0) / float(n_free)))
+
     info = {
         "solver_type": "chebyshev_7point_3d",
         "n_iter_used": int(n_iter_used),
+        "n_cycles_used": int(n_iter_used),
         "max_iter": int(max_iter),
         "cheby_order": int(len(omegas)),
         "cheby_omegas": [float(v) for v in omegas],
         "r_rms0": float(r_rms0),
+        "r_rms_start": float(r_rms0),
         "r_rms_end": float(r_rms_end),
+        "h_rms_end": float(h_rms_end),
         "tol_abs": float(tol_abs),
         "rel_tol": float(rel_tol),
         "abs_tol_min": float(abs_tol_min),
+        "dh_rms_lastcheck": None,
+        "dh_max_lastcheck": None,
         "transient": bool(transient),
         "transient_formulation": "confined" if bool(transient) else "steady",
         "dt": float(dt_used) if bool(transient) else float("nan"),
         "unconfined": False,
         "converged": bool(converged),
+        "diag_preconditioner_backend": diag_mode,
     }
 
     return (head_out, info) if return_info else head_out
+
+
+def _picard_unconfined_7point_3d(
+    inner_solve,
+    *,
+    shape,
+    active,
+    bc_mask,
+    bc_values,
+    rhs,
+    kx,
+    ky,
+    kz,
+    zbot,
+    ztop,
+    initial_head,
+    storage_diag,
+    min_sat,
+    max_outer,
+    pic_relax,
+    pic_tol,
+    omega_min,
+    omega_max,
+    dx,
+    dy,
+    dz,
+    device,
+    unconfined_startup_mode="initial_head",
+    transmissivity_relaxation_enabled=False,
+    transmissivity_relaxation_early=0.25,
+    transmissivity_relaxation_middle=0.50,
+    transmissivity_relaxation_late=1.00,
+    transmissivity_relaxation_middle_iteration=5,
+    transmissivity_relaxation_late_iteration=15,
+    inner_forcing_eta=0.10,
+    inner_head_residual_tol_min=None,
+    inner_head_residual_tol_max=1.0e-2,
+    inner_picard_scale_max_fraction=0.10,
+    chebyshev_enabled=True,
+    chebyshev_order=3,
+    chebyshev_lambda_min_fraction=0.1,
+    chebyshev_reset_on_residual_increase=True,
+    chebyshev_reset_factor=1.2,
+    chebyshev_minor_increase_patience=2,
+    chebyshev_rejection_factor=1.2,
+    unconfined_inner_max_cycles_early=10,
+    unconfined_inner_max_cycles_middle=25,
+    unconfined_inner_max_cycles_late=60,
+    unconfined_inner_late_dh=1.0e-2,
+    unconfined_inner_middle_dh=1.0,
+    max_head_change_per_outer_iteration=10.0,
+    residual_floor_tol=1.0e-4,
+    dh_rms_tol=1.0e-4,
+    diag_preconditioner_backend="auto",
+    linear_solver_type_label="kcycle_7point_3d",
+    solver_type_label="kcycle_7point_3d_unconfined_picard",
+    dry_cell_flag_threshold=0.1,
+    return_info=True,
+):
+    """
+    Shared unconfined Picard driver for the 3D 7-point solvers.
+
+    This is a faithful 3D port of the 2D unconfined nonlinear loop in
+    ``warped_darcy.py`` (``solve_multigrid_kcycle`` unconfined block). It accepts
+    an ``inner_solve(tx_p, tx_m, ty_p, ty_m, tz_p, tz_m, initial_head, max_cycles)``
+    closure so both the K-cycle and standalone-Chebyshev backends share one
+    implementation of the speed/convergence controls:
+
+      - ``unconfined_startup_mode`` ("initial_head" / "confined_pre_solve"),
+      - adaptive inner ``max_cycles`` (early/middle/late),
+      - ``transmissivity_relaxation_enabled`` (saturation under-relaxation),
+      - dynamic inexact inner tolerance (``inner_forcing_eta`` + min/max bounds),
+      - outer Chebyshev acceleration (``chebyshev_enabled``) with reset logic
+        (``chebyshev_reset_factor``),
+      - ``diag_preconditioner_backend`` (forwarded to the inner solve).
+
+    Returns ``(h_iter, info_out)`` where ``info_out`` carries both the nonlinear
+    (Picard) and the last inner-solve (K-cycle) reporting fields.
+    """
+    act = np.asarray(active, dtype=np.int32)
+    bcm = np.asarray(bc_mask, dtype=np.int32)
+    bcv = np.asarray(bc_values, dtype=NP_FLOAT)
+    b = np.asarray(rhs, dtype=NP_FLOAT)
+    active_mask = act != 0
+    bc_mask0 = bcm != 0
+    free_mask = active_mask & (~bc_mask0)
+    n_free = int(np.count_nonzero(free_mask))
+
+    kx64 = np.asarray(kx, dtype=np.float64)
+    ky64 = np.asarray(ky, dtype=np.float64)
+    kz64 = np.asarray(kz, dtype=np.float64)
+    zbot64 = np.asarray(zbot, dtype=np.float64)
+    ztop64 = None if ztop is None else np.asarray(ztop, dtype=np.float64)
+
+    hclose_f = float(pic_tol)
+    if hclose_f < 0.0 or not np.isfinite(hclose_f):
+        raise ValueError("unconfined_head_tol must be non-negative and finite.")
+
+    omega_min_f = float(omega_min)
+    omega_max_f = float(omega_max)
+    if not (0.0 < omega_min_f <= omega_max_f):
+        raise ValueError("omega_min and omega_max must satisfy 0 < omega_min <= omega_max.")
+    omega_current = min(max(float(pic_relax), omega_min_f), omega_max_f)
+
+    residual_floor_tol_f = None if residual_floor_tol is None else float(residual_floor_tol)
+    if residual_floor_tol_f is not None and residual_floor_tol_f < 0.0:
+        raise ValueError("residual_floor_tol must be non-negative.")
+    dh_rms_tol_f = None if dh_rms_tol is None else float(dh_rms_tol)
+
+    inner_forcing_eta_f = float(inner_forcing_eta)
+    if inner_forcing_eta_f < 0.0 or inner_forcing_eta_f > 1.0:
+        raise ValueError("inner_forcing_eta must be in [0, 1].")
+    inner_head_residual_tol_min_f = float(
+        inner_head_residual_tol_min if inner_head_residual_tol_min is not None else hclose_f
+    )
+    if inner_head_residual_tol_min_f < 0.0 or not np.isfinite(inner_head_residual_tol_min_f):
+        raise ValueError("inner_head_residual_tol_min must be non-negative and finite.")
+    inner_head_residual_tol_max_f = float(inner_head_residual_tol_max)
+    if inner_head_residual_tol_max_f < inner_head_residual_tol_min_f:
+        raise ValueError("inner_head_residual_tol_max must be >= inner_head_residual_tol_min.")
+    inner_picard_scale_max_fraction_f = float(inner_picard_scale_max_fraction)
+    if inner_picard_scale_max_fraction_f < 0.0 or inner_picard_scale_max_fraction_f > 1.0:
+        raise ValueError("inner_picard_scale_max_fraction must be in [0, 1].")
+
+    chebyshev_reset_factor_f = float(chebyshev_reset_factor)
+    if chebyshev_reset_factor_f <= 1.0 or not np.isfinite(chebyshev_reset_factor_f):
+        raise ValueError("chebyshev_reset_factor must be finite and > 1.")
+    chebyshev_minor_increase_patience_i = int(chebyshev_minor_increase_patience)
+    if chebyshev_minor_increase_patience_i < 0:
+        raise ValueError("chebyshev_minor_increase_patience must be >= 0.")
+    rejection_factor_f = float(chebyshev_rejection_factor)
+    if rejection_factor_f <= 1.0 or not np.isfinite(rejection_factor_f):
+        raise ValueError("chebyshev_rejection_factor must be finite and > 1.")
+
+    max_update_f = float(max_head_change_per_outer_iteration)
+    if max_update_f <= 0.0 or not np.isfinite(max_update_f):
+        raise ValueError("max_head_change_per_outer_iteration must be positive and finite.")
+
+    inner_max_cycles_early = int(unconfined_inner_max_cycles_early)
+    inner_max_cycles_middle = int(unconfined_inner_max_cycles_middle)
+    inner_max_cycles_late = int(unconfined_inner_max_cycles_late)
+    if min(inner_max_cycles_early, inner_max_cycles_middle, inner_max_cycles_late) < 1:
+        raise ValueError("unconfined inner max cycles must be >= 1.")
+    inner_late_dh_f = float(unconfined_inner_late_dh)
+    inner_middle_dh_f = float(unconfined_inner_middle_dh)
+    if inner_late_dh_f < 0.0 or inner_middle_dh_f < 0.0:
+        raise ValueError("unconfined inner dh thresholds must be non-negative.")
+
+    transmissivity_relaxation_enabled_b = bool(transmissivity_relaxation_enabled)
+    T_relax_early_f = float(transmissivity_relaxation_early)
+    T_relax_middle_f = float(transmissivity_relaxation_middle)
+    T_relax_late_f = float(transmissivity_relaxation_late)
+    if not all(0.0 <= v <= 1.0 for v in (T_relax_early_f, T_relax_middle_f, T_relax_late_f)):
+        raise ValueError("transmissivity relaxation factors must be in [0, 1].")
+    T_relax_middle_iter = int(transmissivity_relaxation_middle_iteration)
+    T_relax_late_iter = int(transmissivity_relaxation_late_iteration)
+    if T_relax_middle_iter < 1 or T_relax_late_iter < T_relax_middle_iter:
+        raise ValueError("transmissivity relaxation iterations must satisfy 1 <= middle <= late.")
+
+    startup_mode = str(unconfined_startup_mode).strip().lower()
+    if startup_mode not in {"initial_head", "confined_pre_solve"}:
+        raise ValueError("unconfined_startup_mode must be 'initial_head' or 'confined_pre_solve'.")
+
+    if initial_head is None:
+        h_iter = (zbot64 + float(min_sat)).astype(NP_FLOAT, copy=False)
+    else:
+        h_iter = np.asarray(initial_head, dtype=NP_FLOAT).copy()
+        if h_iter.shape != shape:
+            raise ValueError(f"initial_head shape {h_iter.shape} expected {shape}.")
+        if not np.all(np.isfinite(h_iter)):
+            raise ValueError("initial_head must be finite.")
+    h_iter[bc_mask0] = bcv[bc_mask0]
+    h_iter[~active_mask] = NP_FLOAT(0.0)
+
+    def _conductances_from_sat(sat_arr):
+        ks = sat_arr.astype(np.float64, copy=False)
+        return build_7point_face_conductance_from_k(
+            kx_field=(kx64 * ks).astype(NP_FLOAT, copy=False),
+            ky_field=(ky64 * ks).astype(NP_FLOAT, copy=False),
+            kz_field=(kz64 * ks).astype(NP_FLOAT, copy=False),
+            active=act,
+            dx=float(dx),
+            dy=float(dx) if dy is None else float(dy),
+            dz=float(dz),
+        )
+
+    if startup_mode == "confined_pre_solve":
+        sat_startup = np.maximum(h_iter.astype(np.float64, copy=False) - zbot64, float(min_sat))
+        if ztop64 is not None:
+            sat_startup = np.minimum(sat_startup, np.maximum(ztop64 - zbot64, float(min_sat)))
+        txp_s, txm_s, typ_s, tym_s, tzp_s, tzm_s = _conductances_from_sat(sat_startup)
+        h_startup, _ = inner_solve(txp_s, txm_s, typ_s, tym_s, tzp_s, tzm_s, h_iter, inner_max_cycles_late)
+        h_startup = np.asarray(h_startup, dtype=np.float64)
+        h_startup = np.maximum(h_startup, zbot64 + float(min_sat))
+        if ztop64 is not None:
+            h_startup = np.minimum(h_startup, ztop64)
+        h_startup[~active_mask] = 0.0
+        h_startup[bc_mask0] = bcv[bc_mask0]
+        if not np.all(np.isfinite(h_startup)):
+            raise FloatingPointError("confined pre-solve produced non-finite heads.")
+        h_iter = h_startup.astype(NP_FLOAT, copy=False)
+
+    cheb_weights = _chebyshev_update_weights(
+        order=int(chebyshev_order),
+        lambda_min_fraction=float(chebyshev_lambda_min_fraction),
+    )
+    previous_update = np.zeros(shape, dtype=np.float64)
+    previous_measure = float("inf")
+    chebyshev_rejections = 0
+    chebyshev_resets = 0
+    inner_solve_failures = 0
+    strict_inner_nonconvergence_count = 0
+    unusable_inner_solve_count = 0
+    practical_inner_acceptances = 0
+    accepted_picard_update_count = 0
+    outer_chebyshev_ready_count = 0
+    outer_chebyshev_used_count = 0
+    outer_chebyshev_reset_count = 0
+    improvement_streak = 0
+    minor_increase_count = 0
+    final_residual = None
+    final_h_rms_end = float("nan")
+    final_inner_max_cycles = 0
+    final_max_abs_head_change = float("nan")
+    final_picard_dh_rms = float("nan")
+    last_linear_info: dict = {}
+    outer_history: list[dict] = []
+    converged_nonlinear = False
+    sat_prev: np.ndarray | None = None
+    T_relax_used = float("nan")
+
+    def _to_finite(value):
+        try:
+            f = float(value)
+            return f if np.isfinite(f) else None
+        except Exception:
+            return None
+
+    for outer_idx in range(int(max_outer)):
+        if not np.isfinite(previous_measure):
+            inner_max_cycles = inner_max_cycles_early
+        elif previous_measure > inner_middle_dh_f:
+            inner_max_cycles = inner_max_cycles_early
+        elif previous_measure > inner_late_dh_f:
+            inner_max_cycles = inner_max_cycles_middle
+        else:
+            inner_max_cycles = inner_max_cycles_late
+
+        sat = h_iter.astype(np.float64, copy=False) - zbot64
+        sat = np.maximum(sat, float(min_sat))
+        if ztop64 is not None:
+            sat = np.minimum(sat, np.maximum(ztop64 - zbot64, float(min_sat)))
+        if not np.all(np.isfinite(sat)) or np.any(sat <= 0.0):
+            raise FloatingPointError("unconfined saturated thickness became invalid.")
+        sat_candidate = sat
+
+        if transmissivity_relaxation_enabled_b and outer_idx > 0 and sat_prev is not None:
+            if outer_idx < T_relax_middle_iter:
+                T_relax_used = T_relax_early_f
+            elif outer_idx < T_relax_late_iter:
+                T_relax_used = T_relax_middle_f
+            else:
+                T_relax_used = T_relax_late_f
+            sat_use = (1.0 - T_relax_used) * sat_prev + T_relax_used * sat_candidate
+        else:
+            sat_use = sat_candidate
+            T_relax_used = float("nan")
+        sat_prev = sat_candidate.copy()
+
+        txp_i, txm_i, typ_i, tym_i, tzp_i, tzm_i = _conductances_from_sat(sat_use)
+
+        head_lin, info_lin = inner_solve(txp_i, txm_i, typ_i, tym_i, tzp_i, tzm_i, h_iter, inner_max_cycles)
+        last_linear_info = dict(info_lin) if isinstance(info_lin, dict) else {}
+        inner_converged = bool(last_linear_info.get("converged", False))
+
+        h_lin = np.asarray(head_lin, dtype=np.float64)
+        if h_lin.shape != shape:
+            raise RuntimeError(f"inner linear solve returned shape {h_lin.shape}, expected {shape}.")
+        picard_update = h_lin - h_iter.astype(np.float64, copy=False)
+
+        if np.any(free_mask):
+            picard_update_free_raw = picard_update[free_mask]
+        else:
+            picard_update_free_raw = np.array([], dtype=np.float64)
+        if picard_update_free_raw.size > 0 and np.all(np.isfinite(picard_update_free_raw)):
+            picard_update_abs = np.abs(picard_update_free_raw)
+            picard_update_max = float(np.max(picard_update_abs))
+            picard_update_rms = float(np.sqrt(np.mean(picard_update_free_raw * picard_update_free_raw)))
+            picard_scale = max(
+                picard_update_rms,
+                inner_picard_scale_max_fraction_f * picard_update_max,
+            )
+            inner_head_residual_tol_used = min(
+                inner_head_residual_tol_max_f,
+                max(inner_head_residual_tol_min_f, inner_forcing_eta_f * picard_scale),
+            )
+            inner_usable_fallback = False
+        else:
+            picard_update_max = 0.0
+            picard_update_rms = 0.0
+            picard_scale = 0.0
+            inner_head_residual_tol_used = float(inner_head_residual_tol_min_f)
+            inner_usable_fallback = True
+
+        r_rms_end = _to_finite(last_linear_info.get("r_rms_end"))
+        h_rms_end = _to_finite(last_linear_info.get("h_rms_end"))
+        tol_abs_inner = _to_finite(last_linear_info.get("tol_abs"))
+        dh_rms_lastcheck = _to_finite(last_linear_info.get("dh_rms_lastcheck"))
+        inner_residual_converged = (
+            r_rms_end is not None and tol_abs_inner is not None and r_rms_end <= tol_abs_inner
+        )
+        inner_head_change_converged = (
+            dh_rms_lastcheck is not None and dh_rms_tol_f is not None and dh_rms_lastcheck <= dh_rms_tol_f
+        )
+        inner_practically_converged = (
+            inner_head_change_converged
+            and residual_floor_tol_f is not None
+            and r_rms_end is not None
+            and r_rms_end <= residual_floor_tol_f
+        )
+        inner_usable_for_picard = (
+            inner_converged
+            or inner_head_change_converged
+            or (
+                not inner_usable_fallback
+                and h_rms_end is not None
+                and np.isfinite(float(h_rms_end))
+                and float(h_rms_end) <= inner_head_residual_tol_used
+            )
+        )
+
+        if not inner_converged:
+            strict_inner_nonconvergence_count += 1
+
+        picard_update[bc_mask0] = 0.0
+        picard_update[~active_mask] = 0.0
+
+        chebyshev_used = False
+        chebyshev_rejected = False
+        chebyshev_reset = False
+        clipped_update = False
+
+        if not inner_usable_for_picard:
+            unusable_inner_solve_count += 1
+            inner_solve_failures += 1
+            chebyshev_resets += 1
+            chebyshev_reset = True
+            previous_update.fill(0.0)
+        else:
+            if not inner_converged:
+                practical_inner_acceptances += 1
+            accepted_picard_update_count += 1
+
+        outer_chebyshev_ready = (
+            bool(chebyshev_enabled)
+            and accepted_picard_update_count >= 2
+            and len(cheb_weights) > 0
+            and inner_usable_for_picard
+        )
+        use_cheb = outer_chebyshev_ready
+        if outer_chebyshev_ready:
+            outer_chebyshev_ready_count += 1
+        if use_cheb:
+            weight = float(cheb_weights[(outer_idx - 1) % len(cheb_weights)])
+            alpha = min(max(omega_current * weight, omega_min_f), omega_max_f)
+            beta = 0.2 * max(0.0, alpha - omega_current)
+            proposed_update = alpha * picard_update + beta * previous_update
+            chebyshev_used = True
+        else:
+            proposed_update = omega_current * picard_update
+
+        clipped = np.clip(proposed_update, -max_update_f, max_update_f)
+        clipped_update = bool(np.any(clipped != proposed_update))
+        h_trial = h_iter.astype(np.float64, copy=False) + clipped
+        h_trial[bc_mask0] = bcv[bc_mask0]
+        h_trial[~active_mask] = 0.0
+
+        if np.any(free_mask):
+            trial_dh = (h_trial - h_iter.astype(np.float64, copy=False))[free_mask]
+            trial_measure = float(np.max(np.abs(trial_dh)))
+            trial_measure_rms = float(np.sqrt(np.mean(trial_dh * trial_dh)))
+        else:
+            trial_measure = 0.0
+            trial_measure_rms = 0.0
+
+        reject_cheb = False
+        if chebyshev_used:
+            if clipped_update or not np.all(np.isfinite(h_trial)):
+                reject_cheb = True
+            elif np.isfinite(previous_measure) and trial_measure > rejection_factor_f * previous_measure:
+                reject_cheb = True
+
+        if reject_cheb:
+            chebyshev_rejected = True
+            chebyshev_used = False
+            chebyshev_rejections += 1
+            chebyshev_resets += 1
+            chebyshev_reset = True
+            previous_update.fill(0.0)
+            fallback_update = omega_current * picard_update
+            clipped = np.clip(fallback_update, -max_update_f, max_update_f)
+            clipped_update = bool(np.any(clipped != fallback_update))
+            h_trial = h_iter.astype(np.float64, copy=False) + clipped
+            h_trial[bc_mask0] = bcv[bc_mask0]
+            h_trial[~active_mask] = 0.0
+            if np.any(free_mask):
+                trial_dh = (h_trial - h_iter.astype(np.float64, copy=False))[free_mask]
+                trial_measure = float(np.max(np.abs(trial_dh)))
+                trial_measure_rms = float(np.sqrt(np.mean(trial_dh * trial_dh)))
+            else:
+                trial_measure = 0.0
+                trial_measure_rms = 0.0
+
+        if not np.all(np.isfinite(h_trial)):
+            chebyshev_resets += 1
+            raise FloatingPointError("unconfined nonlinear update produced non-finite heads.")
+
+        if np.isfinite(previous_measure) and trial_measure > rejection_factor_f * previous_measure:
+            omega_current = max(omega_min_f, 0.5 * omega_current)
+            improvement_streak = 0
+        else:
+            improvement_streak += 1
+            if improvement_streak >= 3:
+                omega_current = min(omega_max_f, 1.1 * omega_current)
+                improvement_streak = 0
+
+        previous_update[:, :, :] = clipped
+        h_iter = h_trial.astype(NP_FLOAT, copy=False)
+        final_max_abs_head_change = float(trial_measure)
+        final_picard_dh_rms = float(trial_measure_rms)
+        final_residual = last_linear_info.get("r_rms_end")
+        final_h_rms_end = h_rms_end if h_rms_end is not None else float("nan")
+        final_inner_max_cycles = int(inner_max_cycles)
+
+        if clipped_update:
+            chebyshev_resets += 1
+            chebyshev_reset = True
+            previous_update.fill(0.0)
+
+        if bool(chebyshev_reset_on_residual_increase) and np.isfinite(previous_measure):
+            if trial_measure > chebyshev_reset_factor_f * previous_measure:
+                chebyshev_resets += 1
+                chebyshev_reset = True
+                previous_update.fill(0.0)
+                minor_increase_count = 0
+            elif trial_measure > previous_measure:
+                minor_increase_count += 1
+                if minor_increase_count > chebyshev_minor_increase_patience_i:
+                    chebyshev_resets += 1
+                    chebyshev_reset = True
+                    previous_update.fill(0.0)
+                    minor_increase_count = 0
+            else:
+                minor_increase_count = 0
+
+        previous_measure = trial_measure
+
+        if chebyshev_used:
+            outer_chebyshev_used_count += 1
+        if chebyshev_reset:
+            outer_chebyshev_reset_count += 1
+
+        outer_history.append(
+            {
+                "outer_iteration": int(outer_idx + 1),
+                "inner_max_cycles_used": int(inner_max_cycles),
+                "inner_converged": bool(inner_converged),
+                "inner_head_change_converged": bool(inner_head_change_converged),
+                "inner_usable_for_picard": bool(inner_usable_for_picard),
+                "h_rms_end": float(h_rms_end) if h_rms_end is not None else None,
+                "inner_head_residual_tol_used": float(inner_head_residual_tol_used),
+                "picard_update_max": float(picard_update_max),
+                "picard_update_rms": float(picard_update_rms),
+                "picard_scale": float(picard_scale),
+                "accepted_picard_update_count": int(accepted_picard_update_count),
+                "omega": float(omega_current),
+                "chebyshev_used": bool(chebyshev_used),
+                "chebyshev_ready": bool(outer_chebyshev_ready),
+                "chebyshev_rejected": bool(chebyshev_rejected),
+                "chebyshev_reset": bool(chebyshev_reset),
+                "trial_measure": float(trial_measure),
+                "previous_measure": float(previous_measure) if np.isfinite(previous_measure) else None,
+                "clipped_update": bool(clipped_update),
+                "transmissivity_relaxation_used": None if np.isnan(T_relax_used) else float(T_relax_used),
+                "max_abs_head_change": float(final_max_abs_head_change),
+                "inner_iterations": int(last_linear_info.get("n_cycles_used", last_linear_info.get("n_iter_used", 0))),
+                "inner_residual": None if final_residual is None else float(final_residual),
+            }
+        )
+
+        head_change_converged = final_max_abs_head_change < hclose_f
+        if head_change_converged and inner_usable_for_picard:
+            converged_nonlinear = True
+            break
+
+    effectively_dry = active_mask & (
+        h_iter.astype(np.float64, copy=False) <= zbot64 + float(dry_cell_flag_threshold)
+    )
+    info_out = dict(last_linear_info) if isinstance(last_linear_info, dict) else {}
+    # Carry the last inner-solve (K-cycle) linear fields to the top level so the
+    # runner can report both nonlinear (Picard) and linear (K-cycle) convergence.
+    for _ck in (
+        "n_cycles_used",
+        "r_rms_end",
+        "h_rms_end",
+        "tol_abs",
+        "dh_rms_lastcheck",
+        "dh_max_lastcheck",
+    ):
+        if _ck in last_linear_info:
+            info_out[_ck] = last_linear_info[_ck]
+    info_out.update(
+        {
+            "solver_type": str(solver_type_label),
+            "linear_solver_type": str(last_linear_info.get("solver_type", linear_solver_type_label)),
+            "unconfined": True,
+            "converged": bool(converged_nonlinear),
+            "outer_iterations": int(len(outer_history)),
+            "chebyshev_enabled": bool(chebyshev_enabled),
+            "chebyshev_order": int(chebyshev_order),
+            "chebyshev_rejections": int(chebyshev_rejections),
+            "chebyshev_resets": int(chebyshev_resets),
+            "omega_final": float(omega_current),
+            "min_saturated_thickness": float(min_sat),
+            "max_head_change_per_outer_iteration": float(max_update_f),
+            "final_max_abs_head_change": float(final_max_abs_head_change),
+            "final_residual": None if final_residual is None else float(final_residual),
+            "inner_solve_failures": int(inner_solve_failures),
+            "strict_inner_nonconvergence_count": int(strict_inner_nonconvergence_count),
+            "unusable_inner_solve_count": int(unusable_inner_solve_count),
+            "practical_inner_acceptance_count": int(practical_inner_acceptances),
+            "accepted_picard_update_count": int(accepted_picard_update_count),
+            "outer_chebyshev_ready_count": int(outer_chebyshev_ready_count),
+            "outer_chebyshev_used_count": int(outer_chebyshev_used_count),
+            "outer_chebyshev_reset_count": int(outer_chebyshev_reset_count),
+            "effectively_dry_cell_count": int(np.count_nonzero(effectively_dry)),
+            "inner_forcing_eta": float(inner_forcing_eta_f),
+            "inner_head_residual_tol_min": float(inner_head_residual_tol_min_f),
+            "inner_head_residual_tol_max": float(inner_head_residual_tol_max_f),
+            "nonlinear_convergence_basis": "head_change_and_inner_usable_for_picard",
+            "residual_floor_tol": None if residual_floor_tol_f is None else float(residual_floor_tol_f),
+            "inner_residual_converged": bool(inner_residual_converged),
+            "inner_head_change_converged": bool(inner_head_change_converged),
+            "inner_practically_converged": bool(inner_practically_converged),
+            "inner_usable_for_picard": bool(inner_usable_for_picard),
+            "inner_h_rms_end": float(final_h_rms_end) if np.isfinite(final_h_rms_end) else None,
+            "inner_max_cycles_used": int(final_inner_max_cycles),
+            "outer_history": outer_history,
+            "picard_converged": bool(converged_nonlinear),
+            "picard_n_iter_used": int(len(outer_history)),
+            "picard_max_iter": int(max_outer),
+            "picard_relax": float(omega_current),
+            "picard_head_tol": float(hclose_f),
+            "picard_dh_rms_end": float(final_picard_dh_rms),
+            "picard_dh_max_end": float(final_max_abs_head_change),
+            "unconfined_min_sat": float(min_sat),
+            "unconfined_startup_mode": str(startup_mode),
+            "transmissivity_relaxation_enabled": bool(transmissivity_relaxation_enabled_b),
+            "diag_preconditioner_backend": str(diag_preconditioner_backend),
+            "r_rms_start": _to_finite(last_linear_info.get("r_rms_start", last_linear_info.get("r_rms0"))),
+        }
+    )
+    return (h_iter, info_out) if return_info else h_iter
 
 
 def solve_chebyshev_7point_3d(
@@ -638,6 +1347,36 @@ def solve_chebyshev_7point_3d(
     unconfined_max_picard_iter: int = 8,
     unconfined_relax: float = 0.7,
     unconfined_head_tol: float = 1.0e-3,
+    ztop_field: np.ndarray | None = None,
+    omega_min: float = 0.1,
+    omega_max: float = 0.9,
+    residual_floor_tol: float | None = 1.0e-4,
+    inner_forcing_eta: float = 0.10,
+    inner_head_residual_tol_min: float | None = None,
+    inner_head_residual_tol_max: float = 1.0e-2,
+    inner_picard_scale_max_fraction: float = 0.10,
+    chebyshev_enabled: bool = True,
+    chebyshev_order: int = 3,
+    chebyshev_lambda_min_fraction: float = 0.1,
+    chebyshev_reset_on_residual_increase: bool = True,
+    chebyshev_reset_factor: float = 1.2,
+    chebyshev_minor_increase_patience: int = 2,
+    chebyshev_rejection_factor: float = 1.2,
+    unconfined_inner_max_cycles_early: int = 10,
+    unconfined_inner_max_cycles_middle: int = 25,
+    unconfined_inner_max_cycles_late: int = 60,
+    unconfined_inner_late_dh: float = 1.0e-2,
+    unconfined_inner_middle_dh: float = 1.0,
+    transmissivity_relaxation_enabled: bool = False,
+    transmissivity_relaxation_early: float = 0.25,
+    transmissivity_relaxation_middle: float = 0.50,
+    transmissivity_relaxation_late: float = 1.00,
+    transmissivity_relaxation_middle_iteration: int = 5,
+    transmissivity_relaxation_late_iteration: int = 15,
+    unconfined_startup_mode: str = "initial_head",
+    max_head_change_per_outer_iteration: float = 10.0,
+    dry_cell_flag_threshold: float = 0.1,
+    diag_preconditioner_backend: str = "auto",
     device: str = "cuda:0",
     return_info: bool = True,
 ):
@@ -707,51 +1446,8 @@ def solve_chebyshev_7point_3d(
         if pic_tol < 0.0:
             raise ValueError("unconfined_head_tol must be >= 0.")
 
-        if initial_head is None:
-            h_iter = (
-                zbot.astype(np.float64, copy=False) + float(min_sat)
-            ).astype(NP_FLOAT, copy=False)
-        else:
-            h_iter = np.asarray(initial_head, dtype=NP_FLOAT).copy()
-            if h_iter.shape != shape:
-                raise ValueError(f"initial_head shape {h_iter.shape} expected {shape}")
-            if not np.all(np.isfinite(h_iter)):
-                raise ValueError("initial_head must be finite.")
-
-        h_iter[bcm != 0] = bcv[bcm != 0]
-        h_iter[act == 0] = NP_FLOAT(0.0)
-
-        nonlinear_converged = False
-        pic_used = 0
-        dh_rms_last = float("nan")
-        dh_max_last = float("nan")
-        last_linear_info = {}
-
-        for pic_it in range(n_pic):
-            pic_used = pic_it + 1
-
-            sat = np.maximum(
-                h_iter.astype(np.float64, copy=False) - zbot.astype(np.float64, copy=False),
-                float(min_sat),
-            ).astype(NP_FLOAT, copy=False)
-
-            txp_i, txm_i, typ_i, tym_i, tzp_i, tzm_i = build_7point_face_conductance_from_k(
-                kx_field=(kx.astype(np.float64, copy=False) * sat.astype(np.float64, copy=False)).astype(
-                    NP_FLOAT, copy=False
-                ),
-                ky_field=(ky.astype(np.float64, copy=False) * sat.astype(np.float64, copy=False)).astype(
-                    NP_FLOAT, copy=False
-                ),
-                kz_field=(kz.astype(np.float64, copy=False) * sat.astype(np.float64, copy=False)).astype(
-                    NP_FLOAT, copy=False
-                ),
-                active=act,
-                dx=float(dx),
-                dy=float(dx) if dy is None else float(dy),
-                dz=float(dz),
-            )
-
-            h_lin, info_lin = _solve_chebyshev_7point_3d_linear(
+        def _inner_solve_cheb(txp_i, txm_i, typ_i, tym_i, tzp_i, tzm_i, h0, mcycles):
+            return _solve_chebyshev_7point_3d_linear(
                 tx_p=txp_i,
                 tx_m=txm_i,
                 ty_p=typ_i,
@@ -762,7 +1458,7 @@ def solve_chebyshev_7point_3d(
                 active=act,
                 bc_mask=bcm,
                 bc_values=bcv,
-                initial_head=h_iter,
+                initial_head=h0,
                 storage_diag=storage_diag,
                 max_iter=int(max_iter),
                 cheby_order=int(cheby_order),
@@ -778,47 +1474,66 @@ def solve_chebyshev_7point_3d(
                 dy=dy,
                 dz=float(dz),
                 device=str(device),
+                diag_preconditioner_backend=str(diag_preconditioner_backend),
                 return_info=True,
             )
 
-            last_linear_info = info_lin if isinstance(info_lin, dict) else {}
-            h_lin = np.asarray(h_lin, dtype=NP_FLOAT)
-
-            h_next = (
-                h_iter.astype(np.float64, copy=False)
-                + pic_relax * (h_lin.astype(np.float64, copy=False) - h_iter.astype(np.float64, copy=False))
-            ).astype(NP_FLOAT, copy=False)
-            h_next[bcm != 0] = bcv[bcm != 0]
-            h_next[act == 0] = NP_FLOAT(0.0)
-
-            if n_free > 0:
-                dh = (
-                    h_next.astype(np.float64, copy=False) - h_iter.astype(np.float64, copy=False)
-                )[free]
-                dh_rms_last = float(np.sqrt(np.mean(dh * dh)))
-                dh_max_last = float(np.max(np.abs(dh)))
-            else:
-                dh_rms_last = 0.0
-                dh_max_last = 0.0
-
-            h_iter = h_next
-            if dh_rms_last <= pic_tol:
-                nonlinear_converged = True
-                break
-
-        info_out = dict(last_linear_info) if isinstance(last_linear_info, dict) else {}
-        info_out["solver_type"] = "chebyshev_7point_3d_unconfined_picard"
-        info_out["linear_solver_type"] = str(last_linear_info.get("solver_type", "chebyshev_7point_3d"))
-        info_out["unconfined"] = True
-        info_out["picard_converged"] = bool(nonlinear_converged)
-        info_out["picard_n_iter_used"] = int(pic_used)
-        info_out["picard_max_iter"] = int(n_pic)
-        info_out["picard_relax"] = float(pic_relax)
-        info_out["picard_head_tol"] = float(pic_tol)
-        info_out["picard_dh_rms_end"] = float(dh_rms_last)
-        info_out["picard_dh_max_end"] = float(dh_max_last)
-        info_out["unconfined_min_sat"] = float(min_sat)
-        return (h_iter, info_out) if return_info else h_iter
+        return _picard_unconfined_7point_3d(
+            _inner_solve_cheb,
+            shape=shape,
+            active=act,
+            bc_mask=bcm,
+            bc_values=bcv,
+            rhs=b,
+            kx=kx,
+            ky=ky,
+            kz=kz,
+            zbot=zbot,
+            ztop=ztop_field,
+            initial_head=initial_head,
+            storage_diag=storage_diag,
+            min_sat=min_sat,
+            max_outer=n_pic,
+            pic_relax=pic_relax,
+            pic_tol=pic_tol,
+            omega_min=omega_min,
+            omega_max=omega_max,
+            dx=float(dx),
+            dy=dy,
+            dz=float(dz),
+            device=str(device),
+            unconfined_startup_mode=unconfined_startup_mode,
+            transmissivity_relaxation_enabled=transmissivity_relaxation_enabled,
+            transmissivity_relaxation_early=transmissivity_relaxation_early,
+            transmissivity_relaxation_middle=transmissivity_relaxation_middle,
+            transmissivity_relaxation_late=transmissivity_relaxation_late,
+            transmissivity_relaxation_middle_iteration=transmissivity_relaxation_middle_iteration,
+            transmissivity_relaxation_late_iteration=transmissivity_relaxation_late_iteration,
+            inner_forcing_eta=inner_forcing_eta,
+            inner_head_residual_tol_min=inner_head_residual_tol_min,
+            inner_head_residual_tol_max=inner_head_residual_tol_max,
+            inner_picard_scale_max_fraction=inner_picard_scale_max_fraction,
+            chebyshev_enabled=chebyshev_enabled,
+            chebyshev_order=chebyshev_order,
+            chebyshev_lambda_min_fraction=chebyshev_lambda_min_fraction,
+            chebyshev_reset_on_residual_increase=chebyshev_reset_on_residual_increase,
+            chebyshev_reset_factor=chebyshev_reset_factor,
+            chebyshev_minor_increase_patience=chebyshev_minor_increase_patience,
+            chebyshev_rejection_factor=chebyshev_rejection_factor,
+            unconfined_inner_max_cycles_early=unconfined_inner_max_cycles_early,
+            unconfined_inner_max_cycles_middle=unconfined_inner_max_cycles_middle,
+            unconfined_inner_max_cycles_late=unconfined_inner_max_cycles_late,
+            unconfined_inner_late_dh=unconfined_inner_late_dh,
+            unconfined_inner_middle_dh=unconfined_inner_middle_dh,
+            max_head_change_per_outer_iteration=max_head_change_per_outer_iteration,
+            residual_floor_tol=residual_floor_tol,
+            dh_rms_tol=dh_rms_tol,
+            diag_preconditioner_backend=diag_preconditioner_backend,
+            linear_solver_type_label="chebyshev_7point_3d",
+            solver_type_label="chebyshev_7point_3d_unconfined_picard",
+            dry_cell_flag_threshold=dry_cell_flag_threshold,
+            return_info=return_info,
+        )
 
     return _solve_chebyshev_7point_3d_linear(
         tx_p=txp,
@@ -847,6 +1562,7 @@ def solve_chebyshev_7point_3d(
         dy=dy,
         dz=float(dz),
         device=str(device),
+        diag_preconditioner_backend=str(diag_preconditioner_backend),
         return_info=return_info,
     )
 
@@ -901,6 +1617,36 @@ def solve_multigrid_kcycle_7point_3d(
     unconfined_max_picard_iter: int = 8,
     unconfined_relax: float = 0.7,
     unconfined_head_tol: float = 1.0e-3,
+    ztop_field: np.ndarray | None = None,
+    omega_min: float = 0.1,
+    omega_max: float = 0.9,
+    residual_floor_tol: float | None = 1.0e-4,
+    inner_forcing_eta: float = 0.10,
+    inner_head_residual_tol_min: float | None = None,
+    inner_head_residual_tol_max: float = 1.0e-2,
+    inner_picard_scale_max_fraction: float = 0.10,
+    chebyshev_enabled: bool = True,
+    chebyshev_order: int = 3,
+    chebyshev_lambda_min_fraction: float = 0.1,
+    chebyshev_reset_on_residual_increase: bool = True,
+    chebyshev_reset_factor: float = 1.2,
+    chebyshev_minor_increase_patience: int = 2,
+    chebyshev_rejection_factor: float = 1.2,
+    unconfined_inner_max_cycles_early: int = 10,
+    unconfined_inner_max_cycles_middle: int = 25,
+    unconfined_inner_max_cycles_late: int = 60,
+    unconfined_inner_late_dh: float = 1.0e-2,
+    unconfined_inner_middle_dh: float = 1.0,
+    transmissivity_relaxation_enabled: bool = False,
+    transmissivity_relaxation_early: float = 0.25,
+    transmissivity_relaxation_middle: float = 0.50,
+    transmissivity_relaxation_late: float = 1.00,
+    transmissivity_relaxation_middle_iteration: int = 5,
+    transmissivity_relaxation_late_iteration: int = 15,
+    unconfined_startup_mode: str = "initial_head",
+    max_head_change_per_outer_iteration: float = 10.0,
+    dry_cell_flag_threshold: float = 0.1,
+    diag_preconditioner_backend: str = "auto",
     device: str = "cuda:0",
     return_info: bool = True,
 ):
@@ -983,49 +1729,8 @@ def solve_multigrid_kcycle_7point_3d(
         if pic_tol < 0.0:
             raise ValueError("unconfined_head_tol must be >= 0.")
 
-        if initial_head is None:
-            h_iter = (
-                zbot.astype(np.float64, copy=False) + float(min_sat)
-            ).astype(NP_FLOAT, copy=False)
-        else:
-            h_iter = np.asarray(initial_head, dtype=NP_FLOAT).copy()
-            if h_iter.shape != shape0:
-                raise ValueError(f"initial_head shape {h_iter.shape} expected {shape0}")
-
-        h_iter[bcm0 != 0] = bcv0[bcm0 != 0]
-        h_iter[act0 == 0] = NP_FLOAT(0.0)
-
-        nonlinear_converged = False
-        pic_used = 0
-        dh_rms_last = float("nan")
-        dh_max_last = float("nan")
-        last_linear_info = {}
-
-        for pic_it in range(n_pic):
-            pic_used = pic_it + 1
-
-            sat = np.maximum(
-                h_iter.astype(np.float64, copy=False) - zbot.astype(np.float64, copy=False),
-                float(min_sat),
-            ).astype(NP_FLOAT, copy=False)
-
-            txp_i, txm_i, typ_i, tym_i, tzp_i, tzm_i = build_7point_face_conductance_from_k(
-                kx_field=(kx.astype(np.float64, copy=False) * sat.astype(np.float64, copy=False)).astype(
-                    NP_FLOAT, copy=False
-                ),
-                ky_field=(ky.astype(np.float64, copy=False) * sat.astype(np.float64, copy=False)).astype(
-                    NP_FLOAT, copy=False
-                ),
-                kz_field=(kz.astype(np.float64, copy=False) * sat.astype(np.float64, copy=False)).astype(
-                    NP_FLOAT, copy=False
-                ),
-                active=act0,
-                dx=float(dx),
-                dy=float(dx) if dy is None else float(dy),
-                dz=float(dz),
-            )
-
-            h_lin, info_lin = solve_multigrid_kcycle_7point_3d(
+        def _inner_solve_kc(txp_i, txm_i, typ_i, tym_i, tzp_i, tzm_i, h0, mcycles):
+            return solve_multigrid_kcycle_7point_3d(
                 tx_p=txp_i,
                 tx_m=txm_i,
                 ty_p=typ_i,
@@ -1036,9 +1741,9 @@ def solve_multigrid_kcycle_7point_3d(
                 active=act0,
                 bc_mask=bcm0,
                 bc_values=bcv0,
-                initial_head=h_iter,
+                initial_head=h0,
                 storage_diag=storage_diag,
-                max_cycles=int(max_cycles),
+                max_cycles=int(mcycles),
                 nu_pre=int(nu_pre),
                 nu_post=int(nu_post),
                 nu_coarse=int(nu_coarse),
@@ -1067,48 +1772,67 @@ def solve_multigrid_kcycle_7point_3d(
                 dy=dy,
                 dz=float(dz),
                 unconfined=False,
+                diag_preconditioner_backend=str(diag_preconditioner_backend),
                 device=str(device),
                 return_info=True,
             )
 
-            last_linear_info = info_lin if isinstance(info_lin, dict) else {}
-            h_lin = np.asarray(h_lin, dtype=NP_FLOAT)
-
-            h_next = (
-                h_iter.astype(np.float64, copy=False)
-                + pic_relax * (h_lin.astype(np.float64, copy=False) - h_iter.astype(np.float64, copy=False))
-            ).astype(NP_FLOAT, copy=False)
-            h_next[bcm0 != 0] = bcv0[bcm0 != 0]
-            h_next[act0 == 0] = NP_FLOAT(0.0)
-
-            if n_free0 > 0:
-                dh = (
-                    h_next.astype(np.float64, copy=False) - h_iter.astype(np.float64, copy=False)
-                )[free0]
-                dh_rms_last = float(np.sqrt(np.mean(dh * dh)))
-                dh_max_last = float(np.max(np.abs(dh)))
-            else:
-                dh_rms_last = 0.0
-                dh_max_last = 0.0
-
-            h_iter = h_next
-            if dh_rms_last <= pic_tol:
-                nonlinear_converged = True
-                break
-
-        info_out = dict(last_linear_info) if isinstance(last_linear_info, dict) else {}
-        info_out["solver_type"] = "kcycle_7point_3d_unconfined_picard"
-        info_out["linear_solver_type"] = str(last_linear_info.get("solver_type", "kcycle_7point_3d"))
-        info_out["unconfined"] = True
-        info_out["picard_converged"] = bool(nonlinear_converged)
-        info_out["picard_n_iter_used"] = int(pic_used)
-        info_out["picard_max_iter"] = int(n_pic)
-        info_out["picard_relax"] = float(pic_relax)
-        info_out["picard_head_tol"] = float(pic_tol)
-        info_out["picard_dh_rms_end"] = float(dh_rms_last)
-        info_out["picard_dh_max_end"] = float(dh_max_last)
-        info_out["unconfined_min_sat"] = float(min_sat)
-        return (h_iter, info_out) if return_info else h_iter
+        return _picard_unconfined_7point_3d(
+            _inner_solve_kc,
+            shape=shape0,
+            active=act0,
+            bc_mask=bcm0,
+            bc_values=bcv0,
+            rhs=b0,
+            kx=kx,
+            ky=ky,
+            kz=kz,
+            zbot=zbot,
+            ztop=ztop_field,
+            initial_head=initial_head,
+            storage_diag=storage_diag,
+            min_sat=min_sat,
+            max_outer=n_pic,
+            pic_relax=pic_relax,
+            pic_tol=pic_tol,
+            omega_min=omega_min,
+            omega_max=omega_max,
+            dx=float(dx),
+            dy=dy,
+            dz=float(dz),
+            device=str(device),
+            unconfined_startup_mode=unconfined_startup_mode,
+            transmissivity_relaxation_enabled=transmissivity_relaxation_enabled,
+            transmissivity_relaxation_early=transmissivity_relaxation_early,
+            transmissivity_relaxation_middle=transmissivity_relaxation_middle,
+            transmissivity_relaxation_late=transmissivity_relaxation_late,
+            transmissivity_relaxation_middle_iteration=transmissivity_relaxation_middle_iteration,
+            transmissivity_relaxation_late_iteration=transmissivity_relaxation_late_iteration,
+            inner_forcing_eta=inner_forcing_eta,
+            inner_head_residual_tol_min=inner_head_residual_tol_min,
+            inner_head_residual_tol_max=inner_head_residual_tol_max,
+            inner_picard_scale_max_fraction=inner_picard_scale_max_fraction,
+            chebyshev_enabled=chebyshev_enabled,
+            chebyshev_order=chebyshev_order,
+            chebyshev_lambda_min_fraction=chebyshev_lambda_min_fraction,
+            chebyshev_reset_on_residual_increase=chebyshev_reset_on_residual_increase,
+            chebyshev_reset_factor=chebyshev_reset_factor,
+            chebyshev_minor_increase_patience=chebyshev_minor_increase_patience,
+            chebyshev_rejection_factor=chebyshev_rejection_factor,
+            unconfined_inner_max_cycles_early=unconfined_inner_max_cycles_early,
+            unconfined_inner_max_cycles_middle=unconfined_inner_max_cycles_middle,
+            unconfined_inner_max_cycles_late=unconfined_inner_max_cycles_late,
+            unconfined_inner_late_dh=unconfined_inner_late_dh,
+            unconfined_inner_middle_dh=unconfined_inner_middle_dh,
+            max_head_change_per_outer_iteration=max_head_change_per_outer_iteration,
+            residual_floor_tol=residual_floor_tol,
+            dh_rms_tol=dh_rms_tol,
+            diag_preconditioner_backend=diag_preconditioner_backend,
+            linear_solver_type_label="kcycle_7point_3d",
+            solver_type_label="kcycle_7point_3d_unconfined_picard",
+            dry_cell_flag_threshold=dry_cell_flag_threshold,
+            return_info=return_info,
+        )
 
     if n_free0 <= 0:
         if initial_head is None:
@@ -1275,22 +1999,11 @@ def solve_multigrid_kcycle_7point_3d(
         )
 
     levels: list[dict] = []
+    diag_mode = _resolve_diag_backend(diag_preconditioner_backend, device)
     for lid, lh in enumerate(levels_host):
         nz, ny, nx = lh["active"].shape
         shapeL = (nz, ny, nx)
         dimL = (nz, ny, nx)
-
-        M_inv_l = build_diag_preconditioner_7point(
-            tx_p=lh["tx_p"],
-            tx_m=lh["tx_m"],
-            ty_p=lh["ty_p"],
-            ty_m=lh["ty_m"],
-            tz_p=lh["tz_p"],
-            tz_m=lh["tz_m"],
-            active=lh["active"],
-            bc_mask=lh["bc_mask"],
-            storage_diag=lh["storage_diag"],
-        )
 
         lvl = {
             "level_id": int(lid),
@@ -1309,7 +2022,6 @@ def solve_multigrid_kcycle_7point_3d(
             "bc_mask_wp": wp.array(lh["bc_mask"], dtype=wp.int32, device=device),
             "bc_values_wp": wp.array(lh["bc_values"], dtype=WP_FLOAT, device=device),
             "storage_wp": wp.array(lh["storage_diag"], dtype=WP_FLOAT, device=device),
-            "M_inv_wp": wp.array(M_inv_l, dtype=WP_FLOAT, device=device),
             "x_wp": wp.zeros(shapeL, dtype=WP_FLOAT, device=device),
             "b_wp": wp.array(lh["b0"], dtype=WP_FLOAT, device=device),
             "r_wp": wp.zeros(shapeL, dtype=WP_FLOAT, device=device),
@@ -1322,6 +2034,33 @@ def solve_multigrid_kcycle_7point_3d(
             "pAp_buf": wp.zeros(1, dtype=wp.float64, device=device),
             "dh_max_buf": wp.zeros(1, dtype=wp.float64, device=device),
         }
+        if diag_mode == "device":
+            lvl["M_inv_wp"] = wp.zeros(shapeL, dtype=WP_FLOAT, device=device)
+            _fill_m_inv_wp_7point(
+                lvl,
+                lvl["M_inv_wp"],
+                dimL,
+                int(nx),
+                int(ny),
+                int(nz),
+                device,
+            )
+        else:
+            lvl["M_inv_wp"] = wp.array(
+                build_diag_preconditioner_7point(
+                    tx_p=lh["tx_p"],
+                    tx_m=lh["tx_m"],
+                    ty_p=lh["ty_p"],
+                    ty_m=lh["ty_m"],
+                    tz_p=lh["tz_p"],
+                    tz_m=lh["tz_m"],
+                    active=lh["active"],
+                    bc_mask=lh["bc_mask"],
+                    storage_diag=lh["storage_diag"],
+                ),
+                dtype=WP_FLOAT,
+                device=device,
+            )
         if uses_vertical_line:
             lvl["c_prime_wp"] = wp.zeros(shapeL, dtype=WP_FLOAT, device=device)
             lvl["d_prime_wp"] = wp.zeros(shapeL, dtype=WP_FLOAT, device=device)
@@ -1681,6 +2420,35 @@ def solve_multigrid_kcycle_7point_3d(
     rTr_end = compute_residual_norm(lvl0, lvl0["x_wp"], lvl0["r_wp"], lvl0["rTr_buf"])
     r_rms_end = float(np.sqrt(max(rTr_end, 0.0) / float(n_free0)))
 
+    # Head-equivalent (Jacobi-preconditioned) residual RMS for reporting / inner-usable checks.
+    wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[lvl0["rTr_buf"]], device=device)
+    wp.launch(
+        kernel=compute_head_residual_7point_kernel,
+        dim=lvl0["dim"],
+        inputs=[
+            lvl0["x_wp"],
+            lvl0["b_wp"],
+            lvl0["tx_p_wp"],
+            lvl0["tx_m_wp"],
+            lvl0["ty_p_wp"],
+            lvl0["ty_m_wp"],
+            lvl0["tz_p_wp"],
+            lvl0["tz_m_wp"],
+            lvl0["active_wp"],
+            lvl0["bc_mask_wp"],
+            lvl0["storage_wp"],
+            lvl0["M_inv_wp"],
+            lvl0["r_wp"],
+            lvl0["rTr_buf"],
+            int(lvl0["nx"]),
+            int(lvl0["ny"]),
+            int(lvl0["nz"]),
+        ],
+        device=device,
+    )
+    hrTr_end = float(lvl0["rTr_buf"].numpy()[0])
+    h_rms_end = float(np.sqrt(max(hrTr_end, 0.0) / float(n_free0)))
+
     info = {
         "solver_type": "kcycle_7point_3d",
         "n_levels": int(len(levels)),
@@ -1705,7 +2473,9 @@ def solve_multigrid_kcycle_7point_3d(
         "abs_tol_min": float(abs_tol_min),
         "tol_abs": float(tol_abs),
         "r_rms0": float(r_rms0),
+        "r_rms_start": float(r_rms0),
         "r_rms_end": float(r_rms_end),
+        "h_rms_end": float(h_rms_end),
         "dh_rms_lastcheck": float(dh_rms_lastcheck),
         "dh_max_lastcheck": float(dh_max_lastcheck),
         "converged": bool(converged),
@@ -1719,7 +2489,12 @@ def solve_multigrid_kcycle_7point_3d(
         "line_sweeps_coarse": int(line_sweeps_coarse_i),
         "check_every_no": int(check_every),
         "vertical_line_max_nz": int(vertical_line_max_nz),
+        "diag_preconditioner_backend": diag_mode,
     }
+
+    # Release the multigrid device arrays so the unconfined Picard loop (which
+    # rebuilds levels every outer iteration) does not accumulate GPU memory.
+    _release_mg_levels_3d(levels)
 
     return (head_out, info) if return_info else head_out
 

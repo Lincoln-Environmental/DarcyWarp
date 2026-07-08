@@ -11,8 +11,10 @@ __all__ = [
     "apply_A_7point_kernel",
     "apply_A_and_pAp_7point_kernel",
     "axpy_active_scalar_3d_kernel",
+    "build_diag_preconditioner_7point_kernel",
     "copy_field_3d_kernel",
     "compute_residual_7point_kernel",
+    "compute_head_residual_7point_kernel",
     "dh_change_reduce_3d_kernel",
     "dot_active_3d_kernel",
     "jacobi_applyA_fused_7point_kernel",
@@ -884,3 +886,153 @@ def apply_A_and_pAp_7point_kernel(
 
     Ap[k, j, i] = WP_FLOAT(val64)
     wp.atomic_add(pAp_buf, 0, pC * val64)
+
+
+@wp.kernel
+def build_diag_preconditioner_7point_kernel(
+    tx_p: wp.array(dtype=WP_FLOAT, ndim=3),
+    tx_m: wp.array(dtype=WP_FLOAT, ndim=3),
+    ty_p: wp.array(dtype=WP_FLOAT, ndim=3),
+    ty_m: wp.array(dtype=WP_FLOAT, ndim=3),
+    tz_p: wp.array(dtype=WP_FLOAT, ndim=3),
+    tz_m: wp.array(dtype=WP_FLOAT, ndim=3),
+    active: wp.array(dtype=wp.int32, ndim=3),
+    bc_mask: wp.array(dtype=wp.int32, ndim=3),
+    storage_diag: wp.array(dtype=WP_FLOAT, ndim=3),
+    M_inv_out: wp.array(dtype=WP_FLOAT, ndim=3),
+    nx: int,
+    ny: int,
+    nz: int,
+):
+    """
+    Device-side Jacobi (diagonal) preconditioner for the 7-point 3D operator.
+
+    Mirrors the host ``build_diag_preconditioner_7point`` so the host/device
+    backends produce an identical ``M_inv``: ``M_inv = 1 / (sum of face
+    conductances + storage)`` on free active cells where the diagonal exceeds
+    ``tiny`` (else 1.0), and 1.0 on inactive / Dirichlet cells.
+    """
+    k, j, i = wp.tid()
+    if k >= nz or j >= ny or i >= nx:
+        return
+
+    if active[k, j, i] == 0 or bc_mask[k, j, i] != 0:
+        M_inv_out[k, j, i] = WP_FLOAT(1.0)
+        return
+
+    tiny = wp.float64(1.0e-12)
+    cxp = wp.float64(tx_p[k, j, i])
+    cxm = wp.float64(tx_m[k, j, i])
+    cyp = wp.float64(ty_p[k, j, i])
+    cym = wp.float64(ty_m[k, j, i])
+    czp = wp.float64(tz_p[k, j, i])
+    czm = wp.float64(tz_m[k, j, i])
+    sdiag = wp.float64(storage_diag[k, j, i])
+    if sdiag < wp.float64(0.0):
+        sdiag = wp.float64(0.0)
+
+    diag = cxp + cxm + cyp + cym + czp + czm + sdiag
+    if diag > tiny:
+        M_inv_out[k, j, i] = WP_FLOAT(wp.float64(1.0) / diag)
+    else:
+        M_inv_out[k, j, i] = WP_FLOAT(1.0)
+
+
+@wp.kernel
+def compute_head_residual_7point_kernel(
+    x: wp.array(dtype=WP_FLOAT, ndim=3),
+    b: wp.array(dtype=WP_FLOAT, ndim=3),
+    tx_p: wp.array(dtype=WP_FLOAT, ndim=3),
+    tx_m: wp.array(dtype=WP_FLOAT, ndim=3),
+    ty_p: wp.array(dtype=WP_FLOAT, ndim=3),
+    ty_m: wp.array(dtype=WP_FLOAT, ndim=3),
+    tz_p: wp.array(dtype=WP_FLOAT, ndim=3),
+    tz_m: wp.array(dtype=WP_FLOAT, ndim=3),
+    active: wp.array(dtype=wp.int32, ndim=3),
+    bc_mask: wp.array(dtype=wp.int32, ndim=3),
+    storage_diag: wp.array(dtype=WP_FLOAT, ndim=3),
+    M_inv: wp.array(dtype=WP_FLOAT, ndim=3),
+    r: wp.array(dtype=WP_FLOAT, ndim=3),
+    rTr_buf: wp.array(dtype=wp.float64, ndim=1),
+    nx: int,
+    ny: int,
+    nz: int,
+):
+    """
+    Head-equivalent (Jacobi-preconditioned) residual: ``r_h = M_inv * (b - A x)``.
+
+    Identical to ``compute_residual_7point_kernel`` but multiplies the residual
+    by ``M_inv`` before storing and squaring into ``rTr_buf``. The resulting RMS
+    is the head-equivalent residual norm (``h_rms_end``) used to drive the
+    inexact-Picard inner tolerance in the unconfined solver.
+    """
+    k, j, i = wp.tid()
+    if k >= nz or j >= ny or i >= nx:
+        return
+
+    if active[k, j, i] == 0 or bc_mask[k, j, i] != 0:
+        r[k, j, i] = WP_FLOAT(0.0)
+        return
+
+    tiny = wp.float64(1.0e-12)
+    hC = wp.float64(x[k, j, i])
+
+    cxp = wp.float64(tx_p[k, j, i])
+    cxm = wp.float64(tx_m[k, j, i])
+    cyp = wp.float64(ty_p[k, j, i])
+    cym = wp.float64(ty_m[k, j, i])
+    czp = wp.float64(tz_p[k, j, i])
+    czm = wp.float64(tz_m[k, j, i])
+    sdiag = wp.float64(storage_diag[k, j, i])
+
+    if cxp < wp.float64(0.0):
+        cxp = wp.float64(0.0)
+    if cxm < wp.float64(0.0):
+        cxm = wp.float64(0.0)
+    if cyp < wp.float64(0.0):
+        cyp = wp.float64(0.0)
+    if cym < wp.float64(0.0):
+        cym = wp.float64(0.0)
+    if czp < wp.float64(0.0):
+        czp = wp.float64(0.0)
+    if czm < wp.float64(0.0):
+        czm = wp.float64(0.0)
+    if sdiag < wp.float64(0.0):
+        sdiag = wp.float64(0.0)
+
+    if i + 1 >= nx or active[k, j, i + 1] == 0:
+        cxp = wp.float64(0.0)
+    if i - 1 < 0 or active[k, j, i - 1] == 0:
+        cxm = wp.float64(0.0)
+    if j + 1 >= ny or active[k, j + 1, i] == 0:
+        cyp = wp.float64(0.0)
+    if j - 1 < 0 or active[k, j - 1, i] == 0:
+        cym = wp.float64(0.0)
+    if k + 1 >= nz or active[k + 1, j, i] == 0:
+        czp = wp.float64(0.0)
+    if k - 1 < 0 or active[k - 1, j, i] == 0:
+        czm = wp.float64(0.0)
+
+    diag = cxp + cxm + cyp + cym + czp + czm + sdiag
+    Ax = wp.float64(0.0)
+    if diag < tiny:
+        Ax = hC
+    else:
+        Ax = diag * hC
+        if cxp > wp.float64(0.0):
+            Ax = Ax - cxp * wp.float64(x[k, j, i + 1])
+        if cxm > wp.float64(0.0):
+            Ax = Ax - cxm * wp.float64(x[k, j, i - 1])
+        if cyp > wp.float64(0.0):
+            Ax = Ax - cyp * wp.float64(x[k, j + 1, i])
+        if cym > wp.float64(0.0):
+            Ax = Ax - cym * wp.float64(x[k, j - 1, i])
+        if czp > wp.float64(0.0):
+            Ax = Ax - czp * wp.float64(x[k + 1, j, i])
+        if czm > wp.float64(0.0):
+            Ax = Ax - czm * wp.float64(x[k - 1, j, i])
+
+    rf64 = wp.float64(b[k, j, i]) - Ax
+    rh = rf64 * wp.float64(M_inv[k, j, i])
+    r[k, j, i] = WP_FLOAT(rh)
+    wp.atomic_add(rTr_buf, 0, rh * rh)

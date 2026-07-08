@@ -21,7 +21,7 @@ from DARCY_WARP_PACKAGE.model_builder import (  # noqa: E402
     _build_domain,
     make_ugly_T_field,
 )
-from DARCY_WARP_PACKAGE.modflow_truth import make_mf_model_multilayer  # noqa: E402
+from DARCY_WARP_PACKAGE.modflow_truth import make_mf_model_multilayer, fill_nan_with_nearest  # noqa: E402
 from DARCY_WARP_PACKAGE.project_base import data_store  # noqa: E402
 from DARCY_WARP_PACKAGE.warped_darcy_3d import WarpDarcySolver3D  # noqa: E402
 
@@ -34,7 +34,7 @@ DEFAULT_MF6_AGREEMENT_TOL = 5.0e-5
 
 
 @dataclass(frozen=True)
-class Case3D:
+class Unconfined3DCase:
     nx: int
     ny: int
     nlay: int
@@ -42,6 +42,8 @@ class Case3D:
     dz: float
     workspace: Path
     hk_2d: np.ndarray
+    top_3d: np.ndarray
+    bottom_3d: np.ndarray
     recharge_2d: np.ndarray
     active_3d: np.ndarray
     bc_mask_3d: np.ndarray
@@ -61,7 +63,7 @@ def _warp_device(preferred: str = "cuda:0") -> str:
         return "cuda:0"
 
 
-def build_simple_multilayer_case(
+def build_simple_unconfined_multilayer_case(
     nx: int = 1000,
     ny: int = 200,
     nlay: int = 2,
@@ -69,10 +71,11 @@ def build_simple_multilayer_case(
     layer_thickness: float = 150.0,
     transmissivity: float = 3000.0,
     recharge: float = 1.0e-4,
+    initial_saturated_thickness: float = 100.0,
     heterogeneous_t: bool = False,
     seed: int = 123,
     workspace: str | Path | None = None,
-) -> Case3D:
+) -> Unconfined3DCase:
     """
     Build one simple multi-layer confined benchmark case shared by MF6 and Warp.
     """
@@ -108,9 +111,23 @@ def build_simple_multilayer_case(
     rhs_3d = np.zeros((nlay, int(ny), int(nx)), dtype=np.float64)
     rhs_3d[0, :, :] = recharge_2d * float(dx) * float(dx)
 
-    initial_head_3d = np.repeat(dem[np.newaxis, :, :], nlay, axis=0).astype(np.float64)
+    top_2d = fill_nan_with_nearest(dem).astype(np.float64)
+    top_3d = np.zeros((nlay, int(ny), int(nx)), dtype=np.float64)
+    bottom_3d = np.zeros((nlay, int(ny), int(nx)), dtype=np.float64)
+    for i in range(nlay):
+        top_3d[i, :, :] = top_2d - i * dz
+        bottom_3d[i, :, :] = top_2d - (i + 1) * dz
 
-    return Case3D(
+    initial_head_3d = bottom_3d + max(float(initial_saturated_thickness), 0.1)
+    initial_head_3d = np.minimum(initial_head_3d, top_3d)
+
+    for layer in range(nlay):
+        initial_head_3d[layer, dirichlet_mask] = dem[dirichlet_mask]
+        bc_values_3d[layer, dirichlet_mask] = dem[dirichlet_mask]
+
+    initial_head_3d[active_3d == 0] = 0.0
+
+    return Unconfined3DCase(
         nx=int(nx),
         ny=int(ny),
         nlay=nlay,
@@ -118,6 +135,8 @@ def build_simple_multilayer_case(
         dz=dz,
         workspace=workspace,
         hk_2d=hk_2d,
+        top_3d=top_3d,
+        bottom_3d=bottom_3d,
         recharge_2d=recharge_2d,
         active_3d=active_3d,
         bc_mask_3d=bc_mask_3d,
@@ -127,9 +146,9 @@ def build_simple_multilayer_case(
     )
 
 
-def run_mf6(case: Case3D, out_path: str | Path | None = None) -> Path:
+def run_mf6(case: Unconfined3DCase, out_path: str | Path | None = None) -> Path:
     """
-    Run the multi-layer MF6 truth model and save heads to NPZ.
+    Run the multi-layer MF6 unconfined truth model and save heads to NPZ.
     """
     out_path = Path(out_path) if out_path is not None else case.workspace.joinpath("mf6_heads.npz")
     mf6_ws = case.workspace.joinpath("mf6")
@@ -147,6 +166,7 @@ def run_mf6(case: Case3D, out_path: str | Path | None = None) -> Path:
         layer_thickness=case.dz,
         run=True,
         use_ghb=False,
+        icelltype=1,
     )
     total_time = time.perf_counter() - t0
 
@@ -166,8 +186,8 @@ def run_mf6(case: Case3D, out_path: str | Path | None = None) -> Path:
     return out_path
 
 
-def run_warp(
-    case: Case3D,
+def run_warp_unconfined(
+    case: Unconfined3DCase,
     out_path: str | Path | None = None,
     device: str = "auto",
     solver: str = "kcycle",
@@ -177,6 +197,18 @@ def run_warp(
     line_sweeps_pre: int = 1,
     line_sweeps_post: int = 1,
     line_sweeps_coarse: int = 1,
+    unconfined_startup_mode: str = "confined_pre_solve",
+    diag_preconditioner_backend: str = "auto",
+    check_every_no: int | None = None,
+    do_double_solve: bool = True,
+    chebyshev_enabled: bool = True,
+    cheby_lambda_min: float = 0.1,
+    cheby_lambda_max: float = 2.0,
+    inner_forcing_eta: float = 0.10,
+    inner_head_residual_tol_min: float = 1.0e-4,
+    inner_head_residual_tol_max: float = 1.0e-2,
+    chebyshev_reset_factor: float = 1.2,
+    transmissivity_relaxation_enabled: bool = False,
 ) -> Path:
     """
     Run the same multi-layer problem in Warp and save heads to NPZ.
@@ -185,32 +217,80 @@ def run_warp(
         return isinstance(info, dict) and bool(info.get("converged", False))
 
     def _solve_summary(info: object, elapsed: float, mode: str, settings: dict) -> dict:
-        summary = {
+        summary: dict = {
             "mode": str(mode),
             "time": float(elapsed),
             "settings": dict(settings),
             "converged": False,
-            "n_cycles_used": None,
-            "r_rms_start": None,
-            "r_rms_end": None,
-            "tol_abs": None,
-            "dh_rms_lastcheck": None,
-            "dh_tol": settings.get("dh_rms_tol"),
+            # Nonlinear (Picard) convergence group
+            "picard": {
+                "picard_converged": None,
+                "picard_n_iter_used": None,
+                "picard_dh_rms_end": None,
+                "picard_dh_max_end": None,
+            },
+            # Linear K-cycle convergence group (from the last inner solve)
+            "kcycle": {
+                "n_cycles_used": None,
+                "r_rms_end": None,
+                "tol_abs": None,
+                "dh_rms_lastcheck": None,
+                "dh_max_lastcheck": None,
+                "h_rms_end": None,
+            },
+            "outer_iterations": None,
+            "final_max_abs_head_change": None,
+            "final_residual": None,
+            "inner_solve_failures": None,
+            "strict_inner_nonconvergence_count": None,
+            "unusable_inner_solve_count": None,
+            "practical_inner_acceptance_count": None,
+            "accepted_picard_update_count": None,
+            "outer_chebyshev_ready_count": None,
+            "outer_chebyshev_used_count": None,
+            "outer_chebyshev_reset_count": None,
+            "chebyshev_rejections": None,
+            "chebyshev_resets": None,
+            "effectively_dry_cell_count": None,
         }
         if isinstance(info, dict):
             summary["converged"] = bool(info.get("converged", False))
+
+            pic = summary["picard"]
+            for key in ("picard_converged", "picard_n_iter_used"):
+                if info.get(key) is not None:
+                    value = info[key]
+                    pic[key] = int(value) if isinstance(value, (int, np.integer)) else bool(value)
+            for key in ("picard_dh_rms_end", "picard_dh_max_end"):
+                if info.get(key) is not None:
+                    pic[key] = float(info[key])
+
+            kc = summary["kcycle"]
             if info.get("n_cycles_used") is not None:
-                summary["n_cycles_used"] = int(info["n_cycles_used"])
-            if info.get("r_rms_start") is not None:
-                summary["r_rms_start"] = float(info["r_rms_start"])
-            if info.get("r_rms0") is not None:
-                summary["r_rms_start"] = float(info["r_rms0"])
-            if info.get("r_rms_end") is not None:
-                summary["r_rms_end"] = float(info["r_rms_end"])
-            if info.get("tol_abs") is not None:
-                summary["tol_abs"] = float(info["tol_abs"])
-            if info.get("dh_rms_lastcheck") is not None:
-                summary["dh_rms_lastcheck"] = float(info["dh_rms_lastcheck"])
+                kc["n_cycles_used"] = int(info["n_cycles_used"])
+            for key in ("r_rms_end", "tol_abs", "dh_rms_lastcheck", "dh_max_lastcheck", "h_rms_end"):
+                if info.get(key) is not None:
+                    kc[key] = float(info[key])
+
+            for key in (
+                "outer_iterations",
+                "final_max_abs_head_change",
+                "final_residual",
+                "inner_solve_failures",
+                "strict_inner_nonconvergence_count",
+                "unusable_inner_solve_count",
+                "practical_inner_acceptance_count",
+                "accepted_picard_update_count",
+                "outer_chebyshev_ready_count",
+                "outer_chebyshev_used_count",
+                "outer_chebyshev_reset_count",
+                "chebyshev_rejections",
+                "chebyshev_resets",
+                "effectively_dry_cell_count",
+            ):
+                if info.get(key) is not None:
+                    value = info[key]
+                    summary[key] = int(value) if isinstance(value, (int, np.integer)) else float(value)
         return summary
 
     out_path = Path(out_path) if out_path is not None else case.workspace.joinpath("warp_heads.npz")
@@ -237,6 +317,7 @@ def run_warp(
         dz=case.dz,
         device=device,
         solver=solver,
+        diag_preconditioner_backend=diag_preconditioner_backend,
     ) as warp_solver:
         warp_solver.build_from_K_fields(
             kx_field=hk_3d,
@@ -250,36 +331,66 @@ def run_warp(
         )
         if solver == "kcycle":
             simple_kwargs = {
-                "max_cycles": 200,
+                "unconfined": True,
+                "zbot_field": case.bottom_3d,
+                "unconfined_min_sat": 0.1,
+                "unconfined_max_picard_iter": 60,
+                "unconfined_relax": 0.7,
+                "unconfined_head_tol": DEFAULT_DH_TOL,
+                "unconfined_startup_mode": str(unconfined_startup_mode),
+                "initial_head": initial_head.copy(),
+                "max_cycles": 80,
                 "rel_tol": 5.0e-7,
                 "abs_tol_min": 5.0e-7,
-                "check_every_no": 1,
+                "check_every_no": check_every_no if check_every_no is not None else 1,
                 "max_levels": 6,
                 "smoother": smoother,
                 "nu_pre": 6,
                 "nu_post": 6,
                 "nu_coarse": 2,
-                "omega": 0.8,
+                "omega": 0.7,
                 "dh_rms_tol": DEFAULT_DH_TOL,
                 "line_omega": float(line_omega),
                 "line_sweeps_pre": int(line_sweeps_pre),
                 "line_sweeps_post": int(line_sweeps_post),
                 "line_sweeps_coarse": int(line_sweeps_coarse),
+                "cheby_lambda_min": float(cheby_lambda_min),
+                "cheby_lambda_max": float(cheby_lambda_max),
+                "chebyshev_enabled": bool(chebyshev_enabled),
+                "chebyshev_reset_factor": float(chebyshev_reset_factor),
+                "inner_forcing_eta": float(inner_forcing_eta),
+                "inner_head_residual_tol_min": float(inner_head_residual_tol_min),
+                "inner_head_residual_tol_max": float(inner_head_residual_tol_max),
+                "transmissivity_relaxation_enabled": bool(transmissivity_relaxation_enabled),
             }
             robust_kwargs = dict(simple_kwargs)
             robust_kwargs.update(
                 {
-                    "nu_pre": 13,
-                    "nu_post": 13,
-                    "nu_coarse": 3,
-                    "omega": 0.7,
+                    "unconfined_max_picard_iter": 100,
+                    "max_cycles": 400,
                 }
             )
         else:
             simple_kwargs = {
+                "unconfined": True,
+                "zbot_field": case.bottom_3d,
+                "unconfined_min_sat": 0.1,
+                "unconfined_max_picard_iter": 60,
+                "unconfined_relax": 0.7,
+                "unconfined_head_tol": DEFAULT_DH_TOL,
+                "unconfined_startup_mode": str(unconfined_startup_mode),
+                "initial_head": initial_head.copy(),
                 "max_iter": 400,
                 "rel_tol": 5.0e-7,
-                "abs_tol_min": 5.0e-7,
+                "check_every_no": check_every_no if check_every_no is not None else 1,
+                "cheby_lambda_min": float(cheby_lambda_min),
+                "cheby_lambda_max": float(cheby_lambda_max),
+                "chebyshev_enabled": bool(chebyshev_enabled),
+                "chebyshev_reset_factor": float(chebyshev_reset_factor),
+                "inner_forcing_eta": float(inner_forcing_eta),
+                "inner_head_residual_tol_min": float(inner_head_residual_tol_min),
+                "inner_head_residual_tol_max": float(inner_head_residual_tol_max),
+                "transmissivity_relaxation_enabled": bool(transmissivity_relaxation_enabled),
             }
             robust_kwargs = dict(simple_kwargs)
 
@@ -287,11 +398,16 @@ def run_warp(
         solve1_kwargs = dict(simple_kwargs)
         solve1_call_kwargs = dict(solve1_kwargs)
         solve1_call_kwargs["initial_head"] = initial_head.copy()
-        t_solve1 = time.perf_counter()
-        heads1, info1 = warp_solver.solve(**solve1_call_kwargs)
-        solve1_time = time.perf_counter() - t_solve1
+        
+        if do_double_solve:
+            t_solve1 = time.perf_counter()
+            heads1, info1 = warp_solver.solve(**solve1_call_kwargs)
+            solve1_time = time.perf_counter() - t_solve1
+        else:
+            heads1, info1 = None, None
+            solve1_time = 0.0
 
-        if solver == "kcycle" and adaptive_kcycle and not _is_converged(info1):
+        if solver == "kcycle" and adaptive_kcycle and info1 is not None and not _is_converged(info1):
             solve2_mode = "robust"
             solve2_kwargs = dict(robust_kwargs)
             print("Warp solve1 did not converge with simple settings; solve2 will use robust settings.")
@@ -305,19 +421,37 @@ def run_warp(
         heads, info = warp_solver.solve(**solve2_call_kwargs)
         solve2_time = time.perf_counter() - t_solve2
 
-    if heads1 is None or info1 is None:
-        raise RuntimeError("Warp solve1 did not return heads and convergence information.")
     if heads is None or info is None:
         raise RuntimeError("Warp solve2 did not return heads and convergence information.")
 
     total_time = time.perf_counter() - t0
     _ = heads1
 
-    solve1_summary = _solve_summary(info1, solve1_time, solve1_mode, solve1_kwargs)
+    solve1_summary = _solve_summary(info1, solve1_time, solve1_mode, solve1_kwargs) if do_double_solve else {}
     solve2_summary = _solve_summary(info, solve2_time, solve2_mode, solve2_kwargs)
     adaptive_settings = {
         "adaptive_kcycle": bool(adaptive_kcycle),
         "rule": "solve1_simple_then_solve2_robust_only_if_solve1_failed",
+    }
+    speed_controls = {
+        "check_every_no": None if check_every_no is None else int(check_every_no),
+        "do_double_solve": bool(do_double_solve),
+        "cheby_lambda_min": float(cheby_lambda_min),
+        "cheby_lambda_max": float(cheby_lambda_max),
+        "chebyshev_enabled": bool(chebyshev_enabled),
+        "chebyshev_reset_factor": float(chebyshev_reset_factor),
+        "inner_forcing_eta": float(inner_forcing_eta),
+        "inner_head_residual_tol_min": float(inner_head_residual_tol_min),
+        "inner_head_residual_tol_max": float(inner_head_residual_tol_max),
+        "transmissivity_relaxation_enabled": bool(transmissivity_relaxation_enabled),
+        "unconfined_startup_mode": str(unconfined_startup_mode),
+        "diag_preconditioner_backend": str(diag_preconditioner_backend),
+        "smoother": str(smoother),
+        "chebyshev_vertical_line": str(smoother) == "chebyshev_vertical_line",
+        "line_omega": float(line_omega),
+        "line_sweeps_pre": int(line_sweeps_pre),
+        "line_sweeps_post": int(line_sweeps_post),
+        "line_sweeps_coarse": int(line_sweeps_coarse),
     }
 
     np.savez_compressed(
@@ -327,11 +461,12 @@ def run_warp(
         solve1_time=np.asarray(solve1_time, dtype=np.float64),
         solve2_time=np.asarray(solve2_time, dtype=np.float64),
         info=np.asarray(json.dumps(info, default=str)),
-        info_solve1=np.asarray(json.dumps(info1, default=str)),
+        info_solve1=np.asarray(json.dumps(info1, default=str) if info1 else "{}"),
         info_solve2=np.asarray(json.dumps(info, default=str)),
         summary_solve1=np.asarray(json.dumps(solve1_summary, default=str)),
         summary_solve2=np.asarray(json.dumps(solve2_summary, default=str)),
         adaptive_settings=np.asarray(json.dumps(adaptive_settings, default=str)),
+        speed_controls=np.asarray(json.dumps(speed_controls, default=str)),
         solve1_mode=np.asarray(solve1_mode),
         solve2_mode=np.asarray(solve2_mode),
         solve1_settings=np.asarray(json.dumps(solve1_kwargs, default=str)),
@@ -520,6 +655,7 @@ def run_case(
     layer_thickness: float = 150.0,
     transmissivity: float = 3000.0,
     recharge: float = 1.0e-4,
+    initial_saturated_thickness: float = 100.0,
     heterogeneous_t: bool = False,
     seed: int = 123,
     workspace: str | Path | None = None,
@@ -533,8 +669,20 @@ def run_case(
     line_sweeps_pre: int = 1,
     line_sweeps_post: int = 1,
     line_sweeps_coarse: int = 1,
+    unconfined_startup_mode: str = "confined_pre_solve",
+    diag_preconditioner_backend: str = "auto",
+    check_every_no: int | None = None,
+    do_double_solve: bool = True,
+    chebyshev_enabled: bool = True,
+    cheby_lambda_min: float = 0.1,
+    cheby_lambda_max: float = 2.0,
+    chebyshev_reset_factor: float = 1.2,
+    inner_forcing_eta: float = 0.10,
+    inner_head_residual_tol_min: float = 1.0e-4,
+    inner_head_residual_tol_max: float = 1.0e-2,
+    transmissivity_relaxation_enabled: bool = False,
 ) -> dict[str, float]:
-    case = build_simple_multilayer_case(
+    case = build_simple_unconfined_multilayer_case(
         nx=nx,
         ny=ny,
         nlay=nlay,
@@ -542,6 +690,7 @@ def run_case(
         layer_thickness=layer_thickness,
         transmissivity=transmissivity,
         recharge=recharge,
+        initial_saturated_thickness=initial_saturated_thickness,
         heterogeneous_t=heterogeneous_t,
         seed=seed,
         workspace=workspace,
@@ -556,7 +705,7 @@ def run_case(
     if do_run_mf6:
         run_mf6(case, out_path=mf6_path)
     if do_run_warp:
-        run_warp(
+        run_warp_unconfined(
             case,
             out_path=warp_path,
             device=device,
@@ -567,6 +716,18 @@ def run_case(
             line_sweeps_pre=line_sweeps_pre,
             line_sweeps_post=line_sweeps_post,
             line_sweeps_coarse=line_sweeps_coarse,
+            unconfined_startup_mode=unconfined_startup_mode,
+            diag_preconditioner_backend=diag_preconditioner_backend,
+            check_every_no=check_every_no,
+            do_double_solve=do_double_solve,
+            chebyshev_enabled=chebyshev_enabled,
+            cheby_lambda_min=cheby_lambda_min,
+            cheby_lambda_max=cheby_lambda_max,
+            chebyshev_reset_factor=chebyshev_reset_factor,
+            inner_forcing_eta=inner_forcing_eta,
+            inner_head_residual_tol_min=inner_head_residual_tol_min,
+            inner_head_residual_tol_max=inner_head_residual_tol_max,
+            transmissivity_relaxation_enabled=transmissivity_relaxation_enabled,
         )
 
     if mf6_path.exists() and warp_path.exists():
@@ -585,6 +746,7 @@ def run_layer_benchmark(
     layer_thickness: float = 50.0,
     transmissivity: float = 3000.0,
     recharge: float = 1.0e-4,
+    initial_saturated_thickness: float = 100.0,
     heterogeneous_t: bool = False,
     seed: int = 123,
     workspace: str | Path | None = None,
@@ -598,9 +760,21 @@ def run_layer_benchmark(
     line_sweeps_pre: int = 1,
     line_sweeps_post: int = 1,
     line_sweeps_coarse: int = 1,
+    unconfined_startup_mode: str = "confined_pre_solve",
+    diag_preconditioner_backend: str = "auto",
+    check_every_no: int | None = None,
+    do_double_solve: bool = True,
+    chebyshev_enabled: bool = True,
+    cheby_lambda_min: float = 0.1,
+    cheby_lambda_max: float = 2.0,
+    chebyshev_reset_factor: float = 1.2,
+    inner_forcing_eta: float = 0.10,
+    inner_head_residual_tol_min: float = 1.0e-4,
+    inner_head_residual_tol_max: float = 1.0e-2,
+    transmissivity_relaxation_enabled: bool = False,
 ) -> list[dict]:
     if workspace is None:
-        workspace = data_store.joinpath("working_tests", "mf6_vs_warp_3d_layer_benchmark")
+        workspace = data_store.joinpath("working_tests", "mf6_vs_warp_3d_unconfined_layer_benchmark")
     workspace = Path(workspace)
     workspace.mkdir(parents=True, exist_ok=True)
 
@@ -644,6 +818,7 @@ def run_layer_benchmark(
                 layer_thickness=layer_thickness,
                 transmissivity=transmissivity,
                 recharge=recharge,
+                initial_saturated_thickness=initial_saturated_thickness,
                 heterogeneous_t=heterogeneous_t,
                 seed=seed,
                 workspace=case_workspace,
@@ -657,6 +832,18 @@ def run_layer_benchmark(
                 line_sweeps_pre=line_sweeps_pre,
                 line_sweeps_post=line_sweeps_post,
                 line_sweeps_coarse=line_sweeps_coarse,
+                unconfined_startup_mode=unconfined_startup_mode,
+                diag_preconditioner_backend=diag_preconditioner_backend,
+                check_every_no=check_every_no,
+                do_double_solve=do_double_solve,
+                chebyshev_enabled=chebyshev_enabled,
+                cheby_lambda_min=cheby_lambda_min,
+                cheby_lambda_max=cheby_lambda_max,
+                chebyshev_reset_factor=chebyshev_reset_factor,
+                inner_forcing_eta=inner_forcing_eta,
+                inner_head_residual_tol_min=inner_head_residual_tol_min,
+                inner_head_residual_tol_max=inner_head_residual_tol_max,
+                transmissivity_relaxation_enabled=transmissivity_relaxation_enabled,
             )
 
             mf6_path = case_workspace.joinpath("mf6_heads.npz")
@@ -671,6 +858,7 @@ def run_layer_benchmark(
             solve2_mode = _load_npz_string(warp_path, "solve2_mode")
             solve1_settings = _load_npz_json(warp_path, "solve1_settings")
             solve2_settings = _load_npz_json(warp_path, "solve2_settings")
+            warp_speed_controls = _load_npz_json(warp_path, "speed_controls")
             solve1_report = _convergence_report(
                 warp_info_solve1,
                 comparison=metrics,
@@ -702,23 +890,35 @@ def run_layer_benchmark(
                 "ny": int(ny),
                 "n_cells": int(nx * ny * nlay),
                 "workspace": str(case_workspace),
-                "solve2_r_rms_end": solve2_r_rms_end,
-                "solve2_tol_abs": solve2_tol_abs,
-                "solve2_dh_rms_lastcheck": solve2_dh_rms_lastcheck,
-                "solve2_dh_max_lastcheck": solve2_dh_max_lastcheck,
-                "solve2_n_cycles_used": (
-                    int(warp_info_solve2["n_cycles_used"])
-                    if "n_cycles_used" in warp_info_solve2
-                    else None
-                ),
-                "solve2_converged": (
-                    bool(warp_info_solve2.get("converged", False))
-                    if warp_info_solve2
-                    else None
-                ),
-                "solve2_residual_converged": solve2_report.get("residual_converged"),
-                "solve2_head_change_converged": solve2_report.get("head_change_converged"),
-                "solve2_practically_converged": solve2_report.get("practically_converged"),
+                "solve2_converged": bool(warp_info_solve2.get("converged", False)) if warp_info_solve2 else None,
+                "picard_converged": bool(warp_info_solve2.get("picard_converged", False)) if warp_info_solve2 else None,
+                "picard_n_iter_used": warp_info_solve2.get("picard_n_iter_used") if warp_info_solve2 else None,
+                "picard_dh_rms_end": warp_info_solve2.get("picard_dh_rms_end") if warp_info_solve2 else None,
+                "picard_dh_max_end": warp_info_solve2.get("picard_dh_max_end") if warp_info_solve2 else None,
+                "n_cycles_used": warp_info_solve2.get("n_cycles_used") if warp_info_solve2 else None,
+                "r_rms_end": solve2_r_rms_end,
+                "tol_abs": solve2_tol_abs,
+                "dh_rms_lastcheck": solve2_dh_rms_lastcheck,
+                "dh_max_lastcheck": solve2_dh_max_lastcheck,
+                "solve2_outer_iterations": warp_info_solve2.get("outer_iterations"),
+                "solve2_final_max_abs_head_change": warp_info_solve2.get("final_max_abs_head_change"),
+                "solve2_final_residual": warp_info_solve2.get("final_residual"),
+                "solve2_final_h_rms_inner_residual": warp_info_solve2.get("inner_h_rms_end"),
+                "solve2_chebyshev_rejections": warp_info_solve2.get("chebyshev_rejections"),
+                "solve2_chebyshev_resets": warp_info_solve2.get("chebyshev_resets"),
+                "solve2_strict_inner_nonconvergence_count": warp_info_solve2.get("strict_inner_nonconvergence_count"),
+                "solve2_unusable_inner_solve_count": warp_info_solve2.get("unusable_inner_solve_count"),
+                "solve2_practical_inner_acceptance_count": warp_info_solve2.get("practical_inner_acceptance_count"),
+                "solve2_accepted_picard_update_count": warp_info_solve2.get("accepted_picard_update_count"),
+                "solve2_outer_chebyshev_ready_count": warp_info_solve2.get("outer_chebyshev_ready_count"),
+                "solve2_outer_chebyshev_used_count": warp_info_solve2.get("outer_chebyshev_used_count"),
+                "solve2_outer_chebyshev_reset_count": warp_info_solve2.get("outer_chebyshev_reset_count"),
+                "solve2_inner_forcing_eta": warp_info_solve2.get("inner_forcing_eta"),
+                "solve2_inner_head_residual_tol_min": warp_info_solve2.get("inner_head_residual_tol_min"),
+                "solve2_inner_head_residual_tol_max": warp_info_solve2.get("inner_head_residual_tol_max"),
+                "solve2_inner_solve_failures": warp_info_solve2.get("inner_solve_failures"),
+                "solve2_effectively_dry_cell_count": warp_info_solve2.get("effectively_dry_cell_count"),
+                "convergence_report": solve2_report,
                 "timing": {
                     "mf6_engine_time": _load_npz_scalar(mf6_path, "engine_time"),
                     "mf6_total_time": _load_npz_scalar(mf6_path, "total_time"),
@@ -819,6 +1019,7 @@ if __name__ == "__main__":
     layer_thickness = 50.0
     transmissivity = 3000.0
     recharge = 1.0e-4
+    initial_saturated_thickness = 100.0
     heterogeneous_t = False
     seed = 123
     workspace = None
@@ -832,6 +1033,18 @@ if __name__ == "__main__":
     line_sweeps_pre = 1
     line_sweeps_post = 1
     line_sweeps_coarse = 1
+    unconfined_startup_mode = "confined_pre_solve"
+    diag_preconditioner_backend = "device"
+    check_every_no = 5
+    do_double_solve = False
+    chebyshev_enabled = True
+    cheby_lambda_min = 0.1
+    cheby_lambda_max = 2.0
+    chebyshev_reset_factor = 1.2
+    inner_forcing_eta = 0.10
+    inner_head_residual_tol_min = 1.0e-4
+    inner_head_residual_tol_max = 1.0e-2
+    transmissivity_relaxation_enabled = False
 
     run_layer_benchmark(
         nx=nx,
@@ -841,6 +1054,7 @@ if __name__ == "__main__":
         layer_thickness=layer_thickness,
         transmissivity=transmissivity,
         recharge=recharge,
+        initial_saturated_thickness=initial_saturated_thickness,
         heterogeneous_t=heterogeneous_t,
         seed=seed,
         workspace=workspace,
@@ -854,4 +1068,16 @@ if __name__ == "__main__":
         line_sweeps_pre=line_sweeps_pre,
         line_sweeps_post=line_sweeps_post,
         line_sweeps_coarse=line_sweeps_coarse,
+        unconfined_startup_mode=unconfined_startup_mode,
+        diag_preconditioner_backend=diag_preconditioner_backend,
+        check_every_no=check_every_no,
+        do_double_solve=do_double_solve,
+        chebyshev_enabled=chebyshev_enabled,
+        cheby_lambda_min=cheby_lambda_min,
+        cheby_lambda_max=cheby_lambda_max,
+        chebyshev_reset_factor=chebyshev_reset_factor,
+        inner_forcing_eta=inner_forcing_eta,
+        inner_head_residual_tol_min=inner_head_residual_tol_min,
+        inner_head_residual_tol_max=inner_head_residual_tol_max,
+        transmissivity_relaxation_enabled=transmissivity_relaxation_enabled,
     )
