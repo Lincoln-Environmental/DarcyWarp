@@ -671,6 +671,290 @@ def make_mf_model_multilayer(
     return heads3d, float(engine_time)
 
 
+def make_mf_model_multilayer_transient(
+    nx: int = 1000,
+    ny: int = 200,
+    nlay: int = 2,
+    grid_size: float = 100.0,
+    nper: int = 1,
+    perlen: float = 1.0,
+    nstp: int = 1,
+    tsmult: float = 1.0,
+    workspace=None,
+    hk: float | np.ndarray = 10.0,
+    vertical_k: float | np.ndarray | None = None,
+    recharge_per_period: float | np.ndarray | None = None,
+    layer_thickness: float | tuple[float, ...] | list[float] | np.ndarray = 150.0,
+    ss: float = 1.0e-5,
+    sy: float | None = None,
+    iconvert: int = 0,
+    icelltype: int | list[int] | None = None,
+    initial_head: np.ndarray | None = None,
+    run: bool = True,
+    record_full_time: bool = False,
+):
+    """
+    Build and run a multi-layer transient MF6 truth model.
+
+    A transient companion to :func:`make_mf_model_multilayer`: it adds a STO
+    package (specific storage ``ss`` and optional specific yield ``sy``) and
+    steps the model through ``nper`` stress periods of length ``perlen``,
+    returning the per-period head field. Confined models use
+    ``iconvert=0``/``icelltype=0`` (no Sy); unconfined (convertible) models use
+    ``iconvert=1`` with ``icelltype>=1`` on the convertible layers and a Sy.
+
+    :param nx: number of columns
+    :param ny: number of rows
+    :param nlay: number of layers
+    :param grid_size: horizontal cell size [m]
+    :param nper: number of transient stress periods
+    :param perlen: period length [days] (time units are DAYS)
+    :param nstp: time steps per period
+    :param tsmult: time-step multiplier
+    :param workspace: output folder
+    :param hk: horizontal K [m/d], scalar / 2D / 3D
+    :param vertical_k: vertical K [m/d], same shapes as ``hk``; defaults to ``hk``
+    :param recharge_per_period: recharge [m/d] as a scalar (constant), an
+        ``(nper,)`` array of uniform-in-space rates, or an
+        ``(nper, ny, nx)`` array. Defaults to ``1.0e-4``.
+    :param layer_thickness: scalar or ``nlay`` positive thicknesses
+    :param ss: specific storage [1/m]
+    :param sy: specific yield [-]; ``None`` for confined models
+    :param iconvert: STO conversion flag (0 confined, 1 unconfined)
+    :param icelltype: NPF cell type per layer; ``None`` -> ``iconvert`` for all
+    :param initial_head: ``(nlay, ny, nx)`` starting heads; ``None`` -> model top
+    :param run: if True, run MF6 and return heads
+    :param record_full_time: if True, return total time instead of engine time
+    :return: ``(heads_per_period (nper, nlay, ny, nx), time)``
+
+    Time units are DAYS throughout (K in m/d, recharge in m/d, ``perlen`` in
+    days), matching the steady multilayer model.
+    """
+    if workspace is None:
+        workspace = data_store.joinpath("mf6_truth_multilayer_transient")
+    workspace = Path(workspace)
+    workspace.mkdir(parents=True, exist_ok=True)
+
+    # MF6 limits model names to 16 characters; keep this short.
+    name = "mltr_truth"
+
+    domain = _build_domain(nx=nx, ny=ny)
+    dem = _build_dem(domain=domain)
+    dirichlet_mask = _build_dirichlet_boundary_mask(domain)
+
+    nrow, ncol = domain.shape
+    nlay = int(nlay)
+    shape2d = (nrow, ncol)
+    nper = int(nper)
+    perlen = float(perlen)
+    nstp = int(nstp)
+    tsmult = float(tsmult)
+
+    thickness = np.asarray(layer_thickness, dtype=float)
+    if thickness.ndim == 0:
+        layer_thicknesses = np.full(nlay, float(thickness), dtype=float)
+    elif thickness.shape == (nlay,):
+        layer_thicknesses = thickness.astype(float, copy=True)
+    else:
+        raise ValueError(f"layer_thickness has shape {thickness.shape}, expected scalar or {(nlay,)}.")
+    if not np.all(np.isfinite(layer_thicknesses)) or np.any(layer_thicknesses <= 0.0):
+        raise ValueError("layer_thickness values must be positive finite numbers.")
+
+    model_top = fill_nan_with_nearest(dem).astype(float)
+    cumulative_thickness = np.cumsum(layer_thicknesses)
+    botm = np.empty((nlay, nrow, ncol), dtype=float)
+    for layer in range(nlay):
+        botm[layer, :, :] = model_top - cumulative_thickness[layer]
+
+    idomain = np.repeat(domain[np.newaxis, :, :], nlay, axis=0).astype(int)
+    if initial_head is None:
+        strt = np.repeat(model_top[np.newaxis, :, :], nlay, axis=0).astype(float)
+    else:
+        strt = np.asarray(initial_head, dtype=float)
+        if strt.shape != (nlay, nrow, ncol):
+            raise ValueError(f"initial_head shape {strt.shape} expected {(nlay, nrow, ncol)}.")
+
+    hk_use = _normalize_layer_field(hk, nlay=nlay, shape=shape2d, name="hk")
+    if not np.all(np.isfinite(hk_use)) or np.any(hk_use <= 0.0):
+        raise ValueError("hk values must be positive finite numbers.")
+    if vertical_k is None:
+        k33_use = hk_use.copy()
+    else:
+        k33_use = _normalize_layer_field(vertical_k, nlay=nlay, shape=shape2d, name="vertical_k")
+        if not np.all(np.isfinite(k33_use)) or np.any(k33_use <= 0.0):
+            raise ValueError("vertical_k values must be positive finite numbers.")
+
+    # Per-period recharge: normalise to an (nper, ny, nx) array of rates [m/d].
+    if recharge_per_period is None:
+        recharge_rates = np.full((nper, nrow, ncol), 1.0e-4, dtype=float)
+    else:
+        rp = np.asarray(recharge_per_period, dtype=float)
+        if rp.ndim == 0:
+            recharge_rates = np.full((nper, nrow, ncol), float(rp), dtype=float)
+        elif rp.shape == (nper,):
+            recharge_rates = np.repeat(rp.reshape(nper, 1, 1), nrow * ncol, axis=1).reshape(nper, nrow, ncol)
+        elif rp.shape == (nper, nrow, ncol):
+            recharge_rates = rp.astype(float, copy=True)
+        else:
+            raise ValueError(
+                f"recharge_per_period shape {rp.shape} not scalar, (nper,), or (nper, ny, nx)."
+            )
+    for per in range(nper):
+        recharge_rates[per][domain == 0] = 0.0
+
+    if icelltype is None:
+        icelltype_list = [int(iconvert) for _ in range(nlay)]
+    elif isinstance(icelltype, int):
+        icelltype_list = [int(icelltype) for _ in range(nlay)]
+    else:
+        icelltype_list = [int(v) for v in icelltype]
+    if len(icelltype_list) != nlay:
+        raise ValueError(f"icelltype has {len(icelltype_list)} entries, expected {nlay}.")
+
+    sim = flopy.mf6.MFSimulation(
+        sim_name=name,
+        exe_name=str(require_mf6()),
+        version="mf6",
+        sim_ws=str(workspace),
+    )
+
+    flopy.mf6.ModflowTdis(
+        sim,
+        pname="tdis",
+        time_units="DAYS",
+        nper=nper,
+        perioddata=[(perlen, nstp, tsmult)] * nper,
+    )
+
+    gwf = flopy.mf6.ModflowGwf(
+        sim,
+        modelname=name,
+        model_nam_file=f"{name}.nam",
+    )
+
+    hclose = 1.0e-6
+    rclose = 1.0e-9
+    ims = flopy.mf6.ModflowIms(
+        sim,
+        pname="ims",
+        print_option="SUMMARY",
+        complexity="COMPLEX",
+        linear_acceleration="BICGSTAB",
+        outer_maximum=200,
+        outer_dvclose=hclose,
+        inner_maximum=500,
+        inner_dvclose=hclose,
+        rcloserecord=[rclose, "RELATIVE_RCLOSE"],
+        scaling_method="DIAGONAL",
+    )
+    sim.register_ims_package(ims, [gwf.name])
+
+    delr = float(grid_size)
+    delc = float(grid_size)
+
+    flopy.mf6.ModflowGwfdis(
+        gwf,
+        pname="dis",
+        nlay=nlay,
+        nrow=nrow,
+        ncol=ncol,
+        delr=delr,
+        delc=delc,
+        top=model_top,
+        botm=botm,
+        idomain=idomain,
+    )
+
+    flopy.mf6.ModflowGwfic(
+        gwf,
+        pname="ic",
+        strt=strt,
+    )
+
+    flopy.mf6.ModflowGwfnpf(
+        gwf,
+        pname="npf",
+        icelltype=icelltype_list,
+        k=hk_use,
+        k33=k33_use,
+        k33overk=False,
+        save_specific_discharge=True,
+        save_saturation=True,
+    )
+
+    flopy.mf6.ModflowGwfsto(
+        gwf,
+        pname="sto",
+        ss=float(ss),
+        sy=(float(sy) if sy is not None else 0.0),
+        iconvert=int(iconvert),
+        transient={0: True},
+    )
+
+    fixed_head_cells = dirichlet_mask.astype(float)
+    fixed_head_cells[fixed_head_cells == 0.0] = np.nan
+    fixed_head_cells = fixed_head_cells * model_top
+
+    chd_spd = _create_chd_single_period_multilayer(
+        boundary_heads=fixed_head_cells,
+        active=domain,
+        nlay=nlay,
+    )
+    flopy.mf6.ModflowGwfchd(
+        gwf,
+        pname="chd",
+        stress_period_data=chd_spd,
+        save_flows=True,
+    )
+
+    recharge_spd = {
+        per: np.ascontiguousarray(recharge_rates[per]) for per in range(nper)
+    }
+    flopy.mf6.ModflowGwfrcha(
+        gwf,
+        pname="recharge",
+        recharge=recharge_spd,
+    )
+
+    flopy.mf6.ModflowGwfoc(
+        gwf,
+        pname="oc",
+        saverecord=[("HEAD", "ALL")],
+        head_filerecord=[f"{name}.hds"],
+        budget_filerecord=[f"{name}.cbb"],
+        printrecord=[],
+    )
+
+    t_total_start = time.perf_counter()
+    sim.write_simulation(silent=True)
+
+    if not run:
+        return None
+
+    t_engine_start = time.perf_counter()
+    ok, _ = sim.run_simulation(silent=True, report=False)
+    t_engine_end = time.perf_counter()
+    engine_time = t_engine_end - t_engine_start
+
+    if not ok:
+        raise RuntimeError("MF6 transient multilayer run failed.")
+
+    hds_path = workspace.joinpath(f"{name}.hds")
+    heads_all = flopy.utils.HeadFile(str(hds_path)).get_alldata()
+    # get_alldata() -> (ntimes, nlay, nrow, ncol). With nstp=1 per period this
+    # is exactly (nper, nlay, nrow, ncol).
+    heads_per_period = np.asarray(heads_all, dtype=np.float64)
+    heads_per_period[heads_per_period > 1.0e6] = np.nan
+
+    t_total_end = time.perf_counter()
+    total_time = t_total_end - t_total_start
+
+    if record_full_time:
+        return heads_per_period, float(total_time)
+
+    return heads_per_period, float(engine_time)
+
+
 def _extract_heads(hds_path: Path, totim: float = 1.0, plot=False):
     """
     Extract 2D head array from MF6 head file at specified time.

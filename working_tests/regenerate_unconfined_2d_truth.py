@@ -180,4 +180,5 @@ def main(grid_sizes: list[int] = GRID_SIZES) -> list[Path]:
 
 
 if __name__ == "__main__":
-    main()
+    grid_sizes = GRID_SIZES
+    main(grid_sizes=grid_sizes)

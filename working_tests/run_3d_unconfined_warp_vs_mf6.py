@@ -1014,6 +1014,77 @@ def run_layer_benchmark(
     return [results_dict[k] for k in sorted(results_dict.keys())]
 
 
+def main(
+    nx=250,
+    ny=250,
+    layers=BENCHMARK_LAYERS,
+    dx=100.0,
+    layer_thickness=50.0,
+    transmissivity=3000.0,
+    recharge=1.0e-4,
+    initial_saturated_thickness=100.0,
+    heterogeneous_t=False,
+    seed=123,
+    workspace=None,
+    device="auto",
+    solver="kcycle",
+    smoother='chebyshev_vertical_line',
+    do_run_mf6=True,
+    do_run_warp=True,
+    adaptive_kcycle=True,
+    line_omega=0.8,
+    line_sweeps_pre=1,
+    line_sweeps_post=1,
+    line_sweeps_coarse=1,
+    unconfined_startup_mode="confined_pre_solve",
+    diag_preconditioner_backend="device",
+    check_every_no=5,
+    do_double_solve=False,
+    chebyshev_enabled=True,
+    cheby_lambda_min=0.1,
+    cheby_lambda_max=2.0,
+    chebyshev_reset_factor=1.2,
+    inner_forcing_eta=0.10,
+    inner_head_residual_tol_min=1.0e-4,
+    inner_head_residual_tol_max=1.0e-2,
+    transmissivity_relaxation_enabled=False,
+):
+    run_layer_benchmark(
+        nx=nx,
+        ny=ny,
+        layers=layers,
+        dx=dx,
+        layer_thickness=layer_thickness,
+        transmissivity=transmissivity,
+        recharge=recharge,
+        initial_saturated_thickness=initial_saturated_thickness,
+        heterogeneous_t=heterogeneous_t,
+        seed=seed,
+        workspace=workspace,
+        device=device,
+        solver=solver,
+        smoother=smoother,
+        do_run_mf6=do_run_mf6,
+        do_run_warp=do_run_warp,
+        adaptive_kcycle=adaptive_kcycle,
+        line_omega=line_omega,
+        line_sweeps_pre=line_sweeps_pre,
+        line_sweeps_post=line_sweeps_post,
+        line_sweeps_coarse=line_sweeps_coarse,
+        unconfined_startup_mode=unconfined_startup_mode,
+        diag_preconditioner_backend=diag_preconditioner_backend,
+        check_every_no=check_every_no,
+        do_double_solve=do_double_solve,
+        chebyshev_enabled=chebyshev_enabled,
+        cheby_lambda_min=cheby_lambda_min,
+        cheby_lambda_max=cheby_lambda_max,
+        chebyshev_reset_factor=chebyshev_reset_factor,
+        inner_forcing_eta=inner_forcing_eta,
+        inner_head_residual_tol_min=inner_head_residual_tol_min,
+        inner_head_residual_tol_max=inner_head_residual_tol_max,
+        transmissivity_relaxation_enabled=transmissivity_relaxation_enabled,
+    )
+
 if __name__ == "__main__":
     # Configuration parameters
     nx = 250
@@ -1050,7 +1121,7 @@ if __name__ == "__main__":
     inner_head_residual_tol_max = 1.0e-2
     transmissivity_relaxation_enabled = False
 
-    run_layer_benchmark(
+    main(
         nx=nx,
         ny=ny,
         layers=layers,

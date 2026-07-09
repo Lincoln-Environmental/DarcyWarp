@@ -776,6 +776,10 @@ def _picard_unconfined_7point_3d(
     device,
     transient=False,
     dt=None,
+    sy=None,
+    ss=None,
+    head_prev=None,
+    unconfined_storage_mode="phreatic_sy",
     unconfined_startup_mode="initial_head",
     transmissivity_relaxation_enabled=False,
     transmissivity_relaxation_early=0.25,
@@ -912,6 +916,74 @@ def _picard_unconfined_7point_3d(
     if startup_mode not in {"initial_head", "confined_pre_solve"}:
         raise ValueError("unconfined_startup_mode must be 'initial_head' or 'confined_pre_solve'.")
 
+    # --- Transient unconfined storage configuration -----------------------
+    # Two explicit storage modes for transient unconfined 3D:
+    #   * "phreatic_sy" - specific-yield (water-table) storage coupled to the
+    #     Picard saturated-thickness update: Sy*dx*dy/dt on the per-column
+    #     water-table cell plus Ss*sat*dx*dy/dt on saturated cells. This is
+    #     area-based (NOT full-cell-volume) and is the physically meaningful
+    #     unconfined term, recomputed every outer iteration from h_iter.
+    #   * "confined_volume" - legacy first-order approximation: the inner
+    #     confined-transient solve applies storage_coeff*dx*dy*dz/dt over the
+    #     full cell volume. Kept for backward compatibility / comparison only.
+    storage_mode = str(unconfined_storage_mode).strip().lower()
+    if storage_mode not in {"phreatic_sy", "confined_volume"}:
+        raise ValueError(
+            "unconfined_storage_mode must be 'phreatic_sy' or 'confined_volume'."
+        )
+
+    def _broadcast_storage_field(value, name: str) -> np.ndarray | None:
+        if value is None:
+            return None
+        arr = np.asarray(value, dtype=np.float64)
+        if arr.shape == ():
+            return np.full(shape, float(arr.reshape(()).item()), dtype=np.float64)
+        if arr.shape != shape:
+            raise ValueError(f"{name} shape {arr.shape} expected {shape}")
+        if not np.all(np.isfinite(arr)):
+            raise ValueError(f"{name} must be finite.")
+        if np.any(arr < 0.0):
+            raise ValueError(f"{name} must be >= 0.")
+        return arr.astype(np.float64, copy=True)
+
+    def _storage_param_summary(value) -> float | str | None:
+        if value is None:
+            return None
+        arr = np.asarray(value)
+        return float(arr.reshape(()).item()) if arr.shape == () else "field"
+
+    sy_field = _broadcast_storage_field(sy, "sy")
+    ss_field = _broadcast_storage_field(ss, "ss")
+    sy_summary = _storage_param_summary(sy)
+    ss_summary = _storage_param_summary(ss)
+    # Phreatic Sy storage is active only for a transient phreatic_sy solve with
+    # a supplied specific yield. Otherwise the inner solve uses the legacy
+    # confined-volume path (or is steady).
+    phreatic_active = (
+        bool(transient)
+        and storage_mode == "phreatic_sy"
+        and sy_field is not None
+    )
+
+    h_prev_storage: np.ndarray | None = None
+    if phreatic_active:
+        if dt is None or not np.isfinite(float(dt)) or float(dt) <= 0.0:
+            raise ValueError("phreatic_sy transient storage requires dt > 0.")
+        if head_prev is not None:
+            h_prev_storage = np.asarray(head_prev, dtype=NP_FLOAT).copy()
+        elif initial_head is not None:
+            h_prev_storage = np.asarray(initial_head, dtype=NP_FLOAT).copy()
+        else:
+            h_prev_storage = np.full(
+                shape, float(zbot64.min()) + float(min_sat), dtype=NP_FLOAT
+            )
+        if h_prev_storage.shape != shape:
+            raise ValueError(f"head_prev shape {h_prev_storage.shape} expected {shape}.")
+        h_prev_storage[bc_mask0] = bcv[bc_mask0]
+        h_prev_storage[~active_mask] = NP_FLOAT(0.0)
+        if not np.all(np.isfinite(h_prev_storage)):
+            raise ValueError("head_prev contains non-finite values.")
+
     if initial_head is None:
         h_iter = (zbot64 + float(min_sat)).astype(NP_FLOAT, copy=False)
     else:
@@ -1020,7 +1092,51 @@ def _picard_unconfined_7point_3d(
 
         txp_i, txm_i, typ_i, tym_i, tzp_i, tzm_i = _conductances_from_sat(sat_use)
 
-        head_lin, info_lin = inner_solve(txp_i, txm_i, typ_i, tym_i, tzp_i, tzm_i, h_iter, inner_max_cycles)
+        iter_storage_kwargs: dict = {}
+        if phreatic_active:
+            # Physical saturated thickness from the current iterate (0 if dry,
+            # capped at the cell thickness). This couples the storage capacity
+            # to the Picard saturated-thickness update.
+            phys_sat = np.maximum(h_iter.astype(np.float64, copy=False) - zbot64, 0.0)
+            if ztop64 is not None:
+                phys_sat = np.minimum(phys_sat, np.maximum(ztop64 - zbot64, 0.0))
+            saturated = active_mask & (phys_sat > 0.0)
+            # Water-table cell per (j,i) column: the topmost (smallest layer
+            # index) active cell with positive saturation. Layers are ordered
+            # top->bottom, so this is the cell containing the phreatic surface.
+            has_sat_col = saturated.any(axis=0)
+            wt_layer = saturated.argmax(axis=0)
+            lay_idx = np.arange(shape[0])[:, None, None]
+            is_wt = has_sat_col[None, :, :] & (lay_idx == wt_layer[None, :, :])
+
+            area_f = float(dx) * (float(dx) if dy is None else float(dy))
+            dt_f = float(dt)
+            ss_term = (
+                ss_field * phys_sat * area_f / dt_f
+                if ss_field is not None
+                else np.zeros(shape, dtype=np.float64)
+            )
+            sy_term = np.where(
+                is_wt,
+                sy_field * area_f / dt_f,
+                0.0,
+            )
+            storage_diag_iter = (ss_term + sy_term).astype(NP_FLOAT, copy=False)
+            storage_diag_iter[~free_mask] = NP_FLOAT(0.0)
+            # Backward-Euler RHS contribution from the previous time step.
+            rhs_eff_iter = (
+                b.astype(np.float64, copy=False)
+                + storage_diag_iter.astype(np.float64, copy=False) * h_prev_storage
+            ).astype(NP_FLOAT, copy=False)
+            iter_storage_kwargs = {
+                "storage_diag_iter": storage_diag_iter,
+                "rhs_eff_iter": rhs_eff_iter,
+            }
+
+        head_lin, info_lin = inner_solve(
+            txp_i, txm_i, typ_i, tym_i, tzp_i, tzm_i, h_iter, inner_max_cycles,
+            **iter_storage_kwargs,
+        )
         last_linear_info = dict(info_lin) if isinstance(info_lin, dict) else {}
         inner_converged = bool(last_linear_info.get("converged", False))
 
@@ -1272,6 +1388,10 @@ def _picard_unconfined_7point_3d(
                 if bool(transient) and dt is not None and np.isfinite(float(dt))
                 else float("nan")
             ),
+            "unconfined_storage_mode": str(storage_mode),
+            "phreatic_storage_active": bool(phreatic_active),
+            "sy": sy_summary,
+            "ss": ss_summary,
             "converged": bool(converged_nonlinear),
             "outer_iterations": int(len(outer_history)),
             "chebyshev_enabled": bool(chebyshev_enabled),
@@ -1344,6 +1464,9 @@ def solve_chebyshev_7point_3d(
     storage_coeff: np.ndarray | float | None = None,
     dt: float | None = None,
     head_prev: np.ndarray | None = None,
+    sy: np.ndarray | float | None = None,
+    ss: np.ndarray | float | None = None,
+    unconfined_storage_mode: str = "phreatic_sy",
     dx: float = 1.0,
     dy: float | None = None,
     dz: float = 1.0,
@@ -1422,18 +1545,23 @@ def solve_chebyshev_7point_3d(
     n_free = int(np.count_nonzero(free))
 
     if bool(unconfined) and bool(transient):
-        # Transient unconfined 3D is driven by the shared Picard loop below.
-        # Each outer iteration calls the inner confined-transient solve, which
-        # prepares the backward-Euler storage diagonal (storage_coeff *
-        # dx*dy*dz / dt) and the head_prev RHS contribution. Force a clean
-        # storage diagonal here so the inner solve rebuilds it from
-        # storage_coeff / dt / head_prev on every iteration, which avoids
-        # double-counting a caller-supplied diagonal.
-        #
-        # CAVEAT: storage_coeff is treated as confined-style specific storage
-        # applied over the full cell volume (consistent with the 3D confined
-        # transient path). Specific-yield / phreatic-surface storage on the
-        # water table is not yet modelled here; see TRANSIENT_STATUS.md.
+        # Resolve the transient unconfined storage mode. When a specific yield
+        # (sy) is supplied the phreatic water-table storage path is used
+        # (Sy*dx*dy/dt on the per-column water-table cell + Ss*sat*dx*dy/dt on
+        # saturated cells, recomputed every Picard iteration from h_iter).
+        # When only storage_coeff is supplied the legacy confined-volume
+        # approximation (storage_coeff*dx*dy*dz/dt over the full cell volume)
+        # is retained for backward compatibility. Either way a clean storage
+        # diagonal is forced so the inner solve rebuilds / replaces it on every
+        # outer iteration (no double-counting of a caller-supplied diagonal).
+        _storage_mode = str(unconfined_storage_mode).strip().lower()
+        if _storage_mode not in {"phreatic_sy", "confined_volume"}:
+            raise ValueError("unconfined_storage_mode must be 'phreatic_sy' or 'confined_volume'.")
+        if _storage_mode == "phreatic_sy" and sy is None and storage_coeff is not None:
+            # Caller used the legacy storage_coeff argument: keep the confined-
+            # volume approximation so existing callers/tests behave as before.
+            _storage_mode = "confined_volume"
+        unconfined_storage_mode = _storage_mode
         storage_diag = None
 
     if bool(unconfined):
@@ -1465,7 +1593,47 @@ def solve_chebyshev_7point_3d(
         if pic_tol < 0.0:
             raise ValueError("unconfined_head_tol must be >= 0.")
 
-        def _inner_solve_cheb(txp_i, txm_i, typ_i, tym_i, tzp_i, tzm_i, h0, mcycles):
+        def _inner_solve_cheb(txp_i, txm_i, typ_i, tym_i, tzp_i, tzm_i, h0, mcycles,
+                              storage_diag_iter=None, rhs_eff_iter=None):
+            if storage_diag_iter is not None:
+                # Phreatic Sy path: the storage diagonal and head_prev RHS were
+                # built by the Picard loop from the current saturated thickness.
+                # Use them directly with transient=False so the inner solve does
+                # not re-derive a confined-volume storage term.
+                return _solve_chebyshev_7point_3d_linear(
+                    tx_p=txp_i,
+                    tx_m=txm_i,
+                    ty_p=typ_i,
+                    ty_m=tym_i,
+                    tz_p=tzp_i,
+                    tz_m=tzm_i,
+                    rhs=rhs_eff_iter,
+                    active=act,
+                    bc_mask=bcm,
+                    bc_values=bcv,
+                    initial_head=h0,
+                    storage_diag=storage_diag_iter,
+                    max_iter=int(max_iter),
+                    cheby_order=int(cheby_order),
+                    cheby_lambda_min=float(cheby_lambda_min),
+                    cheby_lambda_max=float(cheby_lambda_max),
+                    rel_tol=float(rel_tol),
+                    abs_tol_min=float(abs_tol_min),
+                    transient=False,
+                    storage_coeff=None,
+                    dt=None,
+                    head_prev=None,
+                    dx=float(dx),
+                    dy=dy,
+                    dz=float(dz),
+                    device=str(device),
+                    diag_preconditioner_backend=str(diag_preconditioner_backend),
+                    return_info=True,
+                )
+            # Legacy / steady path. Only enable the inner confined-transient
+            # storage term when storage_coeff is available (confined_volume
+            # mode); otherwise solve steady.
+            legacy_transient = bool(transient) and storage_coeff is not None
             return _solve_chebyshev_7point_3d_linear(
                 tx_p=txp_i,
                 tx_m=txm_i,
@@ -1485,10 +1653,10 @@ def solve_chebyshev_7point_3d(
                 cheby_lambda_max=float(cheby_lambda_max),
                 rel_tol=float(rel_tol),
                 abs_tol_min=float(abs_tol_min),
-                transient=bool(transient),
-                storage_coeff=storage_coeff,
-                dt=dt,
-                head_prev=head_prev,
+                transient=legacy_transient,
+                storage_coeff=(storage_coeff if legacy_transient else None),
+                dt=(dt if legacy_transient else None),
+                head_prev=(head_prev if legacy_transient else None),
                 dx=float(dx),
                 dy=dy,
                 dz=float(dz),
@@ -1552,6 +1720,10 @@ def solve_chebyshev_7point_3d(
             solver_type_label="chebyshev_7point_3d_unconfined_picard",
             transient=transient,
             dt=dt,
+            sy=sy,
+            ss=ss,
+            head_prev=head_prev,
+            unconfined_storage_mode=unconfined_storage_mode,
             dry_cell_flag_threshold=dry_cell_flag_threshold,
             return_info=return_info,
         )
@@ -1626,6 +1798,9 @@ def solve_multigrid_kcycle_7point_3d(
     storage_coeff: np.ndarray | float | None = None,
     dt: float | None = None,
     head_prev: np.ndarray | None = None,
+    sy: np.ndarray | float | None = None,
+    ss: np.ndarray | float | None = None,
+    unconfined_storage_mode: str = "phreatic_sy",
     dx: float = 1.0,
     dy: float | None = None,
     dz: float = 1.0,
@@ -1716,18 +1891,23 @@ def solve_multigrid_kcycle_7point_3d(
     n_free0 = int(np.count_nonzero(free0))
 
     if bool(unconfined) and bool(transient):
-        # Transient unconfined 3D is driven by the shared Picard loop below.
-        # Each outer iteration calls the inner confined-transient solve, which
-        # prepares the backward-Euler storage diagonal (storage_coeff *
-        # dx*dy*dz / dt) and the head_prev RHS contribution. Force a clean
-        # storage diagonal here so the inner solve rebuilds it from
-        # storage_coeff / dt / head_prev on every iteration, which avoids
-        # double-counting a caller-supplied diagonal.
-        #
-        # CAVEAT: storage_coeff is treated as confined-style specific storage
-        # applied over the full cell volume (consistent with the 3D confined
-        # transient path). Specific-yield / phreatic-surface storage on the
-        # water table is not yet modelled here; see TRANSIENT_STATUS.md.
+        # Resolve the transient unconfined storage mode. When a specific yield
+        # (sy) is supplied the phreatic water-table storage path is used
+        # (Sy*dx*dy/dt on the per-column water-table cell + Ss*sat*dx*dy/dt on
+        # saturated cells, recomputed every Picard iteration from h_iter).
+        # When only storage_coeff is supplied the legacy confined-volume
+        # approximation (storage_coeff*dx*dy*dz/dt over the full cell volume)
+        # is retained for backward compatibility. Either way a clean storage
+        # diagonal is forced so the inner solve rebuilds / replaces it on every
+        # outer iteration (no double-counting of a caller-supplied diagonal).
+        _storage_mode = str(unconfined_storage_mode).strip().lower()
+        if _storage_mode not in {"phreatic_sy", "confined_volume"}:
+            raise ValueError("unconfined_storage_mode must be 'phreatic_sy' or 'confined_volume'.")
+        if _storage_mode == "phreatic_sy" and sy is None and storage_coeff is not None:
+            # Caller used the legacy storage_coeff argument: keep the confined-
+            # volume approximation so existing callers/tests behave as before.
+            _storage_mode = "confined_volume"
+        unconfined_storage_mode = _storage_mode
         storage_diag = None
 
     if bool(unconfined):
@@ -1759,20 +1939,19 @@ def solve_multigrid_kcycle_7point_3d(
         if pic_tol < 0.0:
             raise ValueError("unconfined_head_tol must be >= 0.")
 
-        def _inner_solve_kc(txp_i, txm_i, typ_i, tym_i, tzp_i, tzm_i, h0, mcycles):
-            return solve_multigrid_kcycle_7point_3d(
+        def _inner_solve_kc(txp_i, txm_i, typ_i, tym_i, tzp_i, tzm_i, h0, mcycles,
+                            storage_diag_iter=None, rhs_eff_iter=None):
+            common_kwargs = dict(
                 tx_p=txp_i,
                 tx_m=txm_i,
                 ty_p=typ_i,
                 ty_m=tym_i,
                 tz_p=tzp_i,
                 tz_m=tzm_i,
-                rhs=b0,
                 active=act0,
                 bc_mask=bcm0,
                 bc_values=bcv0,
                 initial_head=h0,
-                storage_diag=storage_diag,
                 max_cycles=int(mcycles),
                 nu_pre=int(nu_pre),
                 nu_post=int(nu_post),
@@ -1794,10 +1973,6 @@ def solve_multigrid_kcycle_7point_3d(
                 dh_rms_tol=dh_rms_tol,
                 dh_max_tol=dh_max_tol,
                 dh_max_factor=float(dh_max_factor),
-                transient=bool(transient),
-                storage_coeff=storage_coeff,
-                dt=dt,
-                head_prev=head_prev,
                 dx=float(dx),
                 dy=dy,
                 dz=float(dz),
@@ -1805,6 +1980,31 @@ def solve_multigrid_kcycle_7point_3d(
                 diag_preconditioner_backend=str(diag_preconditioner_backend),
                 device=str(device),
                 return_info=True,
+            )
+            if storage_diag_iter is not None:
+                # Phreatic Sy path: use the Picard-built storage diagonal and
+                # head_prev RHS directly (no inner confined-transient term).
+                return solve_multigrid_kcycle_7point_3d(
+                    rhs=rhs_eff_iter,
+                    storage_diag=storage_diag_iter,
+                    transient=False,
+                    storage_coeff=None,
+                    dt=None,
+                    head_prev=None,
+                    **common_kwargs,
+                )
+            # Legacy / steady path. Only enable the inner confined-transient
+            # storage term when storage_coeff is available (confined_volume
+            # mode); otherwise solve steady.
+            legacy_transient = bool(transient) and storage_coeff is not None
+            return solve_multigrid_kcycle_7point_3d(
+                rhs=b0,
+                storage_diag=storage_diag,
+                transient=legacy_transient,
+                storage_coeff=(storage_coeff if legacy_transient else None),
+                dt=(dt if legacy_transient else None),
+                head_prev=(head_prev if legacy_transient else None),
+                **common_kwargs,
             )
 
         return _picard_unconfined_7point_3d(
@@ -1862,6 +2062,10 @@ def solve_multigrid_kcycle_7point_3d(
             solver_type_label="kcycle_7point_3d_unconfined_picard",
             transient=transient,
             dt=dt,
+            sy=sy,
+            ss=ss,
+            head_prev=head_prev,
+            unconfined_storage_mode=unconfined_storage_mode,
             dry_cell_flag_threshold=dry_cell_flag_threshold,
             return_info=return_info,
         )

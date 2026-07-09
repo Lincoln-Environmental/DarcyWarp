@@ -810,6 +810,51 @@ def run_layer_benchmark(
     return [results_dict[k] for k in sorted(results_dict.keys())]
 
 
+def main(
+    nx=250,
+    ny=250,
+    layers=BENCHMARK_LAYERS,
+    dx=100.0,
+    layer_thickness=50.0,
+    transmissivity=3000.0,
+    recharge=1.0e-4,
+    heterogeneous_t=False,
+    seed=123,
+    workspace=None,
+    device="auto",
+    solver="kcycle",
+    smoother='chebyshev_vertical_line',
+    do_run_mf6=True,
+    do_run_warp=True,
+    adaptive_kcycle=True,
+    line_omega=0.8,
+    line_sweeps_pre=1,
+    line_sweeps_post=1,
+    line_sweeps_coarse=1,
+):
+    run_layer_benchmark(
+        nx=nx,
+        ny=ny,
+        layers=layers,
+        dx=dx,
+        layer_thickness=layer_thickness,
+        transmissivity=transmissivity,
+        recharge=recharge,
+        heterogeneous_t=heterogeneous_t,
+        seed=seed,
+        workspace=workspace,
+        device=device,
+        solver=solver,
+        smoother=smoother,
+        do_run_mf6=do_run_mf6,
+        do_run_warp=do_run_warp,
+        adaptive_kcycle=adaptive_kcycle,
+        line_omega=line_omega,
+        line_sweeps_pre=line_sweeps_pre,
+        line_sweeps_post=line_sweeps_post,
+        line_sweeps_coarse=line_sweeps_coarse,
+    )
+
 if __name__ == "__main__":
     # Configuration parameters
     nx = 250
@@ -833,7 +878,7 @@ if __name__ == "__main__":
     line_sweeps_post = 1
     line_sweeps_coarse = 1
 
-    run_layer_benchmark(
+    main(
         nx=nx,
         ny=ny,
         layers=layers,

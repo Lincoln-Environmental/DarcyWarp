@@ -1121,33 +1121,32 @@ def run_chebyshev_lambda_sweep(
     return results
 
 
-if __name__ == "__main__":
-    # Configuration parameters
-    grid_sizes = BENCHMARK_GRID_SIZES
-    dx = 100.0
-    hydraulic_conductivity = 100.0
-    recharge = 1.0e-4
-    initial_saturated_thickness = 100.0
-    workspace = None
-    device = "auto"
-    chebyshev_enabled = True
-    inner_smoother = "chebyshev"
-    cheby_lambda_min = 0.1
-    cheby_lambda_max = 2.0
-    inner_forcing_eta = 0.10
-    inner_head_residual_tol_min = DEFAULT_INNER_HEAD_RESIDUAL_TOL_MIN
-    inner_head_residual_tol_max = 1.0e-2
-    chebyshev_reset_factor = 1.2
-    transmissivity_relaxation_enabled = False
-    unconfined_startup_mode = "confined_pre_solve"  # or "initial_head"
-    diag_preconditioner_backend = "device"
-    check_every_no = 5
-    do_run_mf6 = False
-    do_run_warp = True
-    run_lambda_sweep = False
-    run_backend_matrix = False
-    do_double_solve = False
-
+def main(
+    grid_sizes=BENCHMARK_GRID_SIZES,
+    dx=100.0,
+    hydraulic_conductivity=100.0,
+    recharge=1.0e-4,
+    initial_saturated_thickness=100.0,
+    workspace=None,
+    device="auto",
+    chebyshev_enabled=True,
+    inner_smoother="chebyshev",
+    cheby_lambda_min=0.1,
+    cheby_lambda_max=2.0,
+    inner_forcing_eta=0.10,
+    inner_head_residual_tol_min=DEFAULT_INNER_HEAD_RESIDUAL_TOL_MIN,
+    inner_head_residual_tol_max=1.0e-2,
+    chebyshev_reset_factor=1.2,
+    transmissivity_relaxation_enabled=False,
+    unconfined_startup_mode="confined_pre_solve",
+    diag_preconditioner_backend="device",
+    check_every_no=5,
+    do_run_mf6=False,
+    do_run_warp=True,
+    run_lambda_sweep=False,
+    run_backend_matrix=False,
+    do_double_solve=False,
+):
     if run_backend_matrix:
         results = run_diag_preconditioner_backend_matrix(
             grid_sizes=grid_sizes,
@@ -1218,3 +1217,57 @@ if __name__ == "__main__":
             do_double_solve=do_double_solve,
         )
     print(json.dumps(results, indent=4))
+
+if __name__ == '__main__':
+    # Configuration parameters
+    grid_sizes = BENCHMARK_GRID_SIZES
+    dx = 100.0
+    hydraulic_conductivity = 100.0
+    recharge = 1.0e-4
+    initial_saturated_thickness = 100.0
+    workspace = None
+    device = "auto"
+    chebyshev_enabled = True
+    inner_smoother = "chebyshev"
+    cheby_lambda_min = 0.1
+    cheby_lambda_max = 2.0
+    inner_forcing_eta = 0.10
+    inner_head_residual_tol_min = DEFAULT_INNER_HEAD_RESIDUAL_TOL_MIN
+    inner_head_residual_tol_max = 1.0e-2
+    chebyshev_reset_factor = 1.2
+    transmissivity_relaxation_enabled = False
+    unconfined_startup_mode = "confined_pre_solve"  # or "initial_head"
+    diag_preconditioner_backend = "device"
+    check_every_no = 5
+    do_run_mf6 = False
+    do_run_warp = True
+    run_lambda_sweep = False
+    run_backend_matrix = False
+    do_double_solve = False
+
+    main(
+        grid_sizes=grid_sizes,
+        dx=dx,
+        hydraulic_conductivity=hydraulic_conductivity,
+        recharge=recharge,
+        initial_saturated_thickness=initial_saturated_thickness,
+        workspace=workspace,
+        device=device,
+        chebyshev_enabled=chebyshev_enabled,
+        inner_smoother=inner_smoother,
+        cheby_lambda_min=cheby_lambda_min,
+        cheby_lambda_max=cheby_lambda_max,
+        inner_forcing_eta=inner_forcing_eta,
+        inner_head_residual_tol_min=inner_head_residual_tol_min,
+        inner_head_residual_tol_max=inner_head_residual_tol_max,
+        chebyshev_reset_factor=chebyshev_reset_factor,
+        transmissivity_relaxation_enabled=transmissivity_relaxation_enabled,
+        unconfined_startup_mode=unconfined_startup_mode,
+        diag_preconditioner_backend=diag_preconditioner_backend,
+        check_every_no=check_every_no,
+        do_run_mf6=do_run_mf6,
+        do_run_warp=do_run_warp,
+        run_lambda_sweep=run_lambda_sweep,
+        run_backend_matrix=run_backend_matrix,
+        do_double_solve=do_double_solve,
+    )

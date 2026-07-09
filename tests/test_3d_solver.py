@@ -174,6 +174,8 @@ class Test3DImports(unittest.TestCase):
         self.assertTrue(np.all(np.isfinite(cheb_head)))
         self.assertTrue(bool(cheb_info.get("transient", False)))
         self.assertEqual(cheb_info.get("transient_formulation"), "unconfined")
+        self.assertEqual(cheb_info.get("unconfined_storage_mode"), "confined_volume")
+        self.assertFalse(bool(cheb_info.get("phreatic_storage_active", True)))
         # Storage + recharge must move heads relative to the previous step.
         self.assertGreater(float(np.max(np.abs(cheb_head - head_prev))), 1.0e-8)
 
@@ -198,7 +200,87 @@ class Test3DImports(unittest.TestCase):
         self.assertTrue(np.all(np.isfinite(kc_head)))
         self.assertTrue(bool(kc_info.get("transient", False)))
         self.assertEqual(kc_info.get("transient_formulation"), "unconfined")
+        self.assertEqual(kc_info.get("unconfined_storage_mode"), "confined_volume")
+        self.assertFalse(bool(kc_info.get("phreatic_storage_active", True)))
         self.assertGreater(float(np.max(np.abs(kc_head - head_prev))), 1.0e-8)
+
+    def test_3d_transient_unconfined_phreatic_sy_reports_storage_mode(self):
+        """
+        Transient unconfined 3D supports explicit phreatic Sy storage.
+
+        This path is distinct from the legacy confined-volume approximation:
+        callers pass sy/ss, the Picard loop builds the storage diagonal from
+        saturated thickness, and the info dict reports the active mode.
+        """
+        from DARCY_WARP_PACKAGE.solvers_3d import (
+            solve_chebyshev_7point_3d,
+            solve_multigrid_kcycle_7point_3d,
+        )
+
+        f = _build_tiny_3d_unconfined_fields(nz=2, ny=6, nx=8)
+        shape = f["shape"]
+        zeros = np.zeros(shape, dtype=np.float64)
+        dt = 7.0
+        head_prev = f["initial"].copy()
+
+        common = {
+            "tx_p": zeros,
+            "tx_m": zeros,
+            "ty_p": zeros,
+            "ty_m": zeros,
+            "tz_p": zeros,
+            "tz_m": zeros,
+            "rhs": f["rhs"],
+            "active": f["active"],
+            "bc_mask": f["bc_mask"],
+            "bc_values": f["bc_values"],
+            "unconfined": True,
+            "transient": True,
+            "kx_field": f["k"],
+            "ky_field": f["k"],
+            "kz_field": f["k"],
+            "zbot_field": f["zbot"],
+            "ztop_field": f["ztop"],
+            "initial_head": f["initial"],
+            "head_prev": head_prev,
+            "sy": 0.20,
+            "ss": 1.0e-5,
+            "dt": dt,
+            "dx": f["dx"],
+            "dy": f["dx"],
+            "dz": f["dz"],
+            "device": "cpu",
+            "unconfined_storage_mode": "phreatic_sy",
+            "unconfined_startup_mode": "initial_head",
+            "unconfined_max_picard_iter": 35,
+            "unconfined_head_tol": 1.0e-3,
+            "return_info": True,
+        }
+
+        cheb_head, cheb_info = solve_chebyshev_7point_3d(
+            **common,
+            max_iter=80,
+        )
+        self.assertEqual(cheb_head.shape, shape)
+        self.assertTrue(np.all(np.isfinite(cheb_head)))
+        self.assertEqual(cheb_info.get("unconfined_storage_mode"), "phreatic_sy")
+        self.assertTrue(bool(cheb_info.get("phreatic_storage_active", False)))
+        self.assertEqual(float(cheb_info.get("sy")), 0.20)
+        self.assertEqual(float(cheb_info.get("ss")), 1.0e-5)
+
+        kc_head, kc_info = solve_multigrid_kcycle_7point_3d(
+            **common,
+            max_cycles=60,
+            max_levels=4,
+            min_coarse_n=2,
+            smoother="chebyshev",
+        )
+        self.assertEqual(kc_head.shape, shape)
+        self.assertTrue(np.all(np.isfinite(kc_head)))
+        self.assertEqual(kc_info.get("unconfined_storage_mode"), "phreatic_sy")
+        self.assertTrue(bool(kc_info.get("phreatic_storage_active", False)))
+        self.assertEqual(float(kc_info.get("sy")), 0.20)
+        self.assertEqual(float(kc_info.get("ss")), 1.0e-5)
 
 
     def test_3d_transient_confined_heads_respond_to_storage(self):

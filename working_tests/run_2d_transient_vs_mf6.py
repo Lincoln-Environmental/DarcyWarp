@@ -1,15 +1,18 @@
 #!/usr/bin/env python
 # SPDX-License-Identifier: AGPL-3.0-only
 """
-Build a MODFLOW 6 truth artifact for the 2D transient unconfined path.
+Build a MODFLOW 6 truth artifact for the 2D transient path.
 
-The runner creates a single-layer convertible MF6 model with weekly stress
-periods, seasonal recharge, specific yield, and specific storage. Its default
-output is ``DARCY_WARP_PACKAGE/data/working_tests/mf6_transient_2d_unconfined/
+The runner creates a single-layer transient MF6 model with weekly stress
+periods and seasonal recharge. ``formulation="unconfined"`` uses a convertible
+cell with specific yield and specific storage; ``formulation="confined"`` uses a
+confined cell with specific storage only. Its default output is formulation
+specific:
+``DARCY_WARP_PACKAGE/data/working_tests/mf6_transient_2d_<formulation>/
 mf6_transient_heads.npz.lzma``. That compressed artifact stores every input
 needed for a future Warp-vs-MF6 transient replay: per-period heads, final heads,
-initial heads, active and boundary masks, bottom/top elevations, hydraulic
-conductivity, recharge time series, and storage parameters.
+the confined steady-state warm-start head, active and boundary masks, bottom/top
+elevations, hydraulic conductivity, recharge time series, and storage parameters.
 
 The current Warp transient tests in ``tests/test_2d_transient.py`` exercise the
 2D confined and unconfined Warp code paths directly. This runner is the separate
@@ -54,16 +57,19 @@ from DARCY_WARP_PACKAGE.project_base import data_store, require_mf6  # noqa: E40
 
 
 # ---- defaults --------------------------------------------------------------
-N_WEEKS = 52
+N_WEEKS = 10
 DT_DAYS = 7.0
-ANNUAL_RECHARGE_M = 0.3
-DEFAULT_NX = DEFAULT_NY = 250
+ANNUAL_RECHARGE_M = 0.1
+DEFAULT_NX = DEFAULT_NY = 500
 DEFAULT_DX = 100.0
 DEFAULT_K = 100.0
 DEFAULT_SY = 0.20           # specific yield (unconfined storage)
 DEFAULT_SS = 1.0e-5         # specific storage (1/m), confined/saturated portion
 DEFAULT_INIT_SAT_THICKNESS = 100.0
 MF6_MODEL_NAME = "tr2d_truth"
+FORMULATION_CONFINED = "confined"
+FORMULATION_UNCONFINED = "unconfined"
+FORMULATION_MODES = {FORMULATION_CONFINED, FORMULATION_UNCONFINED}
 
 
 def build_seasonal_recharge(
@@ -197,13 +203,162 @@ def _save_compressed_npz(out_path: Path, arrays: dict[str, np.ndarray], preset: 
     out_path.write_bytes(lzma.compress(buf.getvalue(), preset=preset))
 
 
+def build_confined_transmissivity(
+    case: TransientCase,
+    mode: str = "initial_saturated_thickness",
+    min_sat: float = 0.1,
+) -> np.ndarray:
+    """
+    Build the transmissivity convention used for confined steady warm starts.
+
+    ``initial_saturated_thickness`` matches the unconfined pre-solve convention:
+    ``K * max(initial_head-bottom, min_sat)``. ``full_thickness`` matches an MF6
+    confined transient layer with ``icelltype=0``: ``K * (top-bottom)``.
+    """
+    mode = str(mode).strip().lower()
+    if mode == "initial_saturated_thickness":
+        thickness = np.maximum(case.initial_head - case.bottom, float(min_sat))
+    elif mode == "full_thickness":
+        thickness = np.maximum(case.top - case.bottom, float(min_sat))
+    else:
+        raise ValueError("mode must be 'initial_saturated_thickness' or 'full_thickness'.")
+    transmissivity = np.asarray(case.hydraulic_conductivity, dtype=np.float64) * thickness
+    transmissivity[case.active == 0] = 0.0
+    return transmissivity.astype(np.float64, copy=False)
+
+
+def run_mf6_confined_steady_warm_start(
+    case: TransientCase,
+    recharge_rate: float | None = None,
+    mf6_workspace: str | Path | None = None,
+    transmissivity_mode: str = "initial_saturated_thickness",
+) -> tuple[np.ndarray, float]:
+    """
+    Run the matching confined steady MF6 problem used as transient warm start.
+
+    MF6 receives a confined single-layer model with unit thickness and
+    ``k = transmissivity``. That is equivalent to a fixed-transmissivity
+    confined flow solve and matches the Warp warm-start convention.
+    """
+    mf6_ws = Path(mf6_workspace) if mf6_workspace is not None else data_store.joinpath(
+        "working_tests", "mf6_transient_2d_unconfined", "mf6_confined_steady_warm_start"
+    )
+    mf6_ws.mkdir(parents=True, exist_ok=True)
+
+    recharge_rate = (
+        float(np.mean(case.recharge_rates))
+        if recharge_rate is None
+        else float(recharge_rate)
+    )
+    transmissivity = build_confined_transmissivity(
+        case=case,
+        mode=transmissivity_mode,
+    )
+
+    name = "tr2d_c_ss"
+    sim = flopy.mf6.MFSimulation(
+        sim_name=name,
+        exe_name=str(require_mf6()),
+        version="mf6",
+        sim_ws=str(mf6_ws),
+    )
+    flopy.mf6.ModflowTdis(
+        sim,
+        pname="tdis",
+        time_units="DAYS",
+        nper=1,
+        perioddata=[(1.0, 1, 1.0)],
+    )
+    gwf = flopy.mf6.ModflowGwf(
+        sim,
+        modelname=name,
+        model_nam_file=f"{name}.nam",
+        save_flows=True,
+    )
+    ims = flopy.mf6.ModflowIms(
+        sim,
+        pname="ims",
+        print_option="SUMMARY",
+        complexity="COMPLEX",
+        linear_acceleration="BICGSTAB",
+        outer_maximum=100,
+        outer_dvclose=1.0e-7,
+        inner_maximum=300,
+        inner_dvclose=1.0e-9,
+        rcloserecord=[1.0e-7, "RELATIVE_RCLOSE"],
+        scaling_method="DIAGONAL",
+    )
+    sim.register_ims_package(ims, [gwf.name])
+
+    confined_top = np.ones((case.ny, case.nx), dtype=np.float64)
+    confined_bottom = np.zeros((case.ny, case.nx), dtype=np.float64)
+    flopy.mf6.ModflowGwfdis(
+        gwf,
+        pname="dis",
+        nlay=1,
+        nrow=case.ny,
+        ncol=case.nx,
+        delr=case.dx,
+        delc=case.dx,
+        top=confined_top,
+        botm=confined_bottom,
+        idomain=case.active,
+    )
+    flopy.mf6.ModflowGwfic(gwf, pname="ic", strt=case.initial_head)
+    flopy.mf6.ModflowGwfnpf(
+        gwf,
+        pname="npf",
+        icelltype=[0],
+        k=transmissivity,
+        k33=transmissivity,
+        k33overk=False,
+        save_specific_discharge=True,
+    )
+
+    fixed_head_cells = np.full((case.ny, case.nx), np.nan, dtype=np.float64)
+    fixed_head_cells[case.bc_mask != 0] = case.bc_values[case.bc_mask != 0]
+    chd_spd = _create_chd_single_period(boundary_heads=fixed_head_cells, active=case.active)
+    flopy.mf6.ModflowGwfchd(gwf, pname="chd", stress_period_data=chd_spd, save_flows=True)
+
+    recharge = np.full((case.ny, case.nx), recharge_rate, dtype=np.float64)
+    recharge[case.active == 0] = 0.0
+    flopy.mf6.ModflowGwfrcha(gwf, pname="recharge", recharge=recharge)
+    flopy.mf6.ModflowGwfoc(
+        gwf,
+        pname="oc",
+        saverecord=[("HEAD", "LAST")],
+        head_filerecord=[f"{name}.hds"],
+        budget_filerecord=[f"{name}.cbb"],
+        printrecord=[],
+    )
+
+    t_engine_start = time.perf_counter()
+    sim.write_simulation(silent=True)
+    ok, _ = sim.run_simulation(silent=True, report=False)
+    engine_time = time.perf_counter() - t_engine_start
+    if not ok:
+        raise RuntimeError("MF6 confined steady warm-start run failed.")
+
+    hds_path = mf6_ws.joinpath(f"{name}.hds")
+    heads = flopy.utils.HeadFile(str(hds_path)).get_alldata()
+    confined_head = np.asarray(heads[-1, 0, :, :], dtype=np.float64)
+    confined_head[case.active == 0] = 0.0
+    confined_head[case.bc_mask != 0] = case.bc_values[case.bc_mask != 0]
+    if not np.all(np.isfinite(confined_head)):
+        raise FloatingPointError("MF6 confined steady warm-start head contains non-finite values.")
+    return confined_head, float(engine_time)
+
+
 def run_mf6_transient(
     case: TransientCase,
     out_path: str | Path | None = None,
     mf6_workspace: str | Path | None = None,
+    warm_start_mode: str = "confined_steady_mf6",
+    confined_steady_head: np.ndarray | None = None,
+    formulation: str = FORMULATION_UNCONFINED,
 ) -> Path:
     """
-    Run MODFLOW 6 for one transient unconfined case and write the truth artifact.
+    Run MODFLOW 6 for one transient case and write the truth artifact.
 
     Parameters
     ----------
@@ -211,7 +366,8 @@ def run_mf6_transient(
         Complete spatial, boundary, storage, and recharge inputs for the model.
     out_path:
         Optional compressed ``.npz.lzma`` output path. When omitted, the
-        artifact is written under ``data/working_tests/mf6_transient_2d_unconfined``.
+        artifact is written under
+        ``data/working_tests/mf6_transient_2d_<formulation>``.
     mf6_workspace:
         Optional directory for MF6 input/output files. When omitted, a sibling
         ``mf6`` directory next to ``out_path`` is used.
@@ -222,13 +378,51 @@ def run_mf6_transient(
         Path to the compressed truth artifact containing per-period MF6 heads
         and all replay inputs.
     """
+    formulation = str(formulation).strip().lower()
+    if formulation not in FORMULATION_MODES:
+        raise ValueError(f"formulation must be one of {sorted(FORMULATION_MODES)}.")
     if out_path is None:
         out_path = data_store.joinpath(
-            "working_tests", "mf6_transient_2d_unconfined", "mf6_transient_heads.npz.lzma"
+            "working_tests", f"mf6_transient_2d_{formulation}", "mf6_transient_heads.npz.lzma"
         )
     out_path = Path(out_path)
     mf6_ws = Path(mf6_workspace) if mf6_workspace is not None else out_path.parent.joinpath("mf6")
     mf6_ws.mkdir(parents=True, exist_ok=True)
+
+    warm_start_mode = str(warm_start_mode).strip().lower()
+    if warm_start_mode not in {"artifact_initial", "confined_steady_mf6"}:
+        raise ValueError("warm_start_mode must be 'artifact_initial' or 'confined_steady_mf6'.")
+    confined_steady_engine_time = float("nan")
+    if warm_start_mode == "confined_steady_mf6":
+        if confined_steady_head is None:
+            warm_start_transmissivity_mode = (
+                "full_thickness"
+                if formulation == FORMULATION_CONFINED
+                else "initial_saturated_thickness"
+            )
+            confined_steady_head, confined_steady_engine_time = run_mf6_confined_steady_warm_start(
+                case=case,
+                recharge_rate=float(np.mean(case.recharge_rates)),
+                mf6_workspace=out_path.parent.joinpath("mf6_confined_steady_warm_start"),
+                transmissivity_mode=warm_start_transmissivity_mode,
+            )
+        else:
+            confined_steady_head = np.asarray(confined_steady_head, dtype=np.float64)
+            warm_start_transmissivity_mode = "provided"
+        if confined_steady_head.shape != (case.ny, case.nx):
+            raise ValueError(
+                f"confined_steady_head shape {confined_steady_head.shape} expected {(case.ny, case.nx)}."
+            )
+        if not np.all(np.isfinite(confined_steady_head)):
+            raise ValueError("confined_steady_head must be finite.")
+        transient_initial_head = confined_steady_head.copy()
+    else:
+        transient_initial_head = np.asarray(case.initial_head, dtype=np.float64).copy()
+        confined_steady_head = np.full((case.ny, case.nx), np.nan, dtype=np.float64)
+        warm_start_transmissivity_mode = "not_used"
+
+    transient_initial_head[case.active == 0] = 0.0
+    transient_initial_head[case.bc_mask != 0] = case.bc_values[case.bc_mask != 0]
 
     name = MF6_MODEL_NAME
     sim = flopy.mf6.MFSimulation(
@@ -274,11 +468,11 @@ def run_mf6_transient(
         botm=case.bottom,
         idomain=case.active,
     )
-    flopy.mf6.ModflowGwfic(gwf, pname="ic", strt=case.initial_head)
+    flopy.mf6.ModflowGwfic(gwf, pname="ic", strt=transient_initial_head)
     flopy.mf6.ModflowGwfnpf(
         gwf,
         pname="npf",
-        icelltype=[1],                       # convertible -> unconfined
+        icelltype=[1 if formulation == FORMULATION_UNCONFINED else 0],
         k=case.hydraulic_conductivity,
         k33=case.hydraulic_conductivity,
         k33overk=False,
@@ -289,8 +483,8 @@ def run_mf6_transient(
         gwf,
         pname="sto",
         ss=case.ss,
-        sy=case.sy,
-        iconvert=1,
+        sy=(case.sy if formulation == FORMULATION_UNCONFINED else 0.0),
+        iconvert=(1 if formulation == FORMULATION_UNCONFINED else 0),
         transient={0: True},                 # all periods transient (inherited)
     )
 
@@ -332,7 +526,9 @@ def run_mf6_transient(
     arrays = {
         "heads_per_period": heads_per_period,
         "heads_final": heads_per_period[-1],
-        "initial_head": np.asarray(case.initial_head, dtype=np.float64),
+        "initial_head": np.asarray(transient_initial_head, dtype=np.float64),
+        "raw_initial_head": np.asarray(case.initial_head, dtype=np.float64),
+        "confined_steady_head": np.asarray(confined_steady_head, dtype=np.float64),
         "active": np.asarray(case.active, dtype=np.int32),
         "bc_mask": np.asarray(case.bc_mask, dtype=np.int32),
         "bc_values": np.asarray(case.bc_values, dtype=np.float64),
@@ -343,15 +539,21 @@ def run_mf6_transient(
         "recharge_rates": np.asarray(case.recharge_rates, dtype=np.float64),
         "sy": np.asarray(case.sy, dtype=np.float64),
         "ss": np.asarray(case.ss, dtype=np.float64),
+        "formulation": np.asarray(formulation),
         "nx": np.asarray(case.nx, dtype=np.int32),
         "ny": np.asarray(case.ny, dtype=np.int32),
         "dx": np.asarray(case.dx, dtype=np.float64),
         "n_weeks": np.asarray(case.n_weeks, dtype=np.int32),
         "dt_days": np.asarray(case.dt_days, dtype=np.float64),
         "engine_time": np.asarray(engine_time, dtype=np.float64),
+        "confined_steady_engine_time": np.asarray(confined_steady_engine_time, dtype=np.float64),
+        "confined_steady_transmissivity_mode": np.asarray(warm_start_transmissivity_mode),
         "total_time": np.asarray(total_time, dtype=np.float64),
         "provenance": np.asarray(json.dumps({
-            "kind": "2d_unconfined_transient_mf6_truth",
+            "kind": f"2d_{formulation}_transient_mf6_truth",
+            "formulation": formulation,
+            "warm_start_mode": warm_start_mode,
+            "confined_steady_transmissivity_mode": warm_start_transmissivity_mode,
             "n_weeks": case.n_weeks,
             "dt_days": case.dt_days,
             "annual_recharge_m": float(case.recharge_depths.sum()),
@@ -370,6 +572,8 @@ def run_mf6_transient(
         f"  n_weeks={case.n_weeks} dt={case.dt_days}d  recharge annual sum={annual:.4f} m "
         f"(target {ANNUAL_RECHARGE_M}); Sy={case.sy} Ss={case.ss}"
     )
+    print(f"  formulation: {formulation}")
+    print(f"  warm start: {warm_start_mode}")
     print(f"  MF6 total time: {total_time:.2f}s (engine {engine_time:.2f}s)")
     finite = np.isfinite(heads_per_period)
     print(
@@ -390,14 +594,19 @@ def main(
     n_weeks: int = N_WEEKS,
     annual_recharge_m: float = ANNUAL_RECHARGE_M,
     out_path: str | Path | None = None,
+    warm_start_mode: str = "confined_steady_mf6",
+    formulation: str = FORMULATION_UNCONFINED,
 ) -> Path:
     """
-    Build the default transient unconfined MF6 case and write its truth file.
+    Build the default transient MF6 case and write its truth file.
 
     Parameters mirror the user-adjustable case settings in the module defaults.
     The returned path is the compressed truth artifact created by
     ``run_mf6_transient``.
     """
+    formulation = str(formulation).strip().lower()
+    if formulation not in FORMULATION_MODES:
+        raise ValueError(f"formulation must be one of {sorted(FORMULATION_MODES)}.")
     case = build_transient_unconfined_case(
         nx=nx,
         ny=ny,
@@ -408,8 +617,13 @@ def main(
         n_weeks=n_weeks,
         annual_recharge_m=annual_recharge_m,
     )
-    print(f"Transient 2D unconfined MF6 truth: {nx}x{ny}, {n_weeks} weekly steps, K={hydraulic_conductivity}")
-    return run_mf6_transient(case, out_path=out_path)
+    print(f"Transient 2D {formulation} MF6 truth: {nx}x{ny}, {n_weeks} weekly steps, K={hydraulic_conductivity}")
+    return run_mf6_transient(
+        case=case,
+        out_path=out_path,
+        warm_start_mode=warm_start_mode,
+        formulation=formulation,
+    )
 
 
 if __name__ == "__main__":
@@ -423,6 +637,8 @@ if __name__ == "__main__":
     n_weeks = N_WEEKS
     annual_recharge_m = ANNUAL_RECHARGE_M
     out_path = None
+    warm_start_mode = "confined_steady_mf6"
+    formulation = FORMULATION_UNCONFINED
 
     main(
         nx=nx,
@@ -434,4 +650,6 @@ if __name__ == "__main__":
         n_weeks=n_weeks,
         annual_recharge_m=annual_recharge_m,
         out_path=out_path,
+        warm_start_mode=warm_start_mode,
+        formulation=formulation,
     )
