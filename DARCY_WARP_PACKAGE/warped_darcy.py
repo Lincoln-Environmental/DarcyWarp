@@ -1816,7 +1816,7 @@ def apply_A_and_pAp_kernel(
         if ghbf > wp.float64(0.0) and not wp.isnan(ghbf):
             C_gh = T_c * ghbf
 
-    sum_T = T_e + T_w + T_n + T_s + C_gh
+    sum_T = T_e + T_w + T_n + T_s + C_gh + wp.float64(storage_diag[j, i])
 
     val64 = wp.float64(0.0)
     if sum_T < tiny:
@@ -1955,7 +1955,7 @@ def init_pcg_with_A_kernel(
         if ghbf > wp.float64(0.0) and not wp.isnan(ghbf):
             C_gh = T_c * ghbf
 
-    sum_T = T_e + T_w + T_n + T_s + C_gh
+    sum_T = T_e + T_w + T_n + T_s + C_gh + wp.float64(storage_diag[j, i])
 
     Ap64 = wp.float64(0.0)
     if sum_T < tiny:
@@ -1998,9 +1998,9 @@ def init_pcg_with_A_kernel(
 # term is identically zero, so these reproduce the storage-aware operator
 # exactly when storage_diag == 0. Transient solves keep using the kernels above.
 #
-# NOTE: ``apply_A_and_pAp_kernel`` / ``init_pcg_with_A_kernel`` accept a
-# ``storage_diag`` argument for signature symmetry but never read it; their
-# no-storage twins simply drop the (unused) argument.
+# The transient ``apply_A_and_pAp_kernel`` / ``init_pcg_with_A_kernel`` include
+# ``storage_diag`` in the diagonal. Their no-storage twins below drop that
+# argument only on steady paths where storage is identically zero.
 # =============================================================================
 @wp.kernel
 def jacobi_applyA_fused_no_storage_kernel(
@@ -6356,6 +6356,7 @@ class WarpDarcySolver:
             dt=None,
             head_prev=None,
             refresh_diag_with_transient_storage: bool = True,
+            accept_on_head_change_only: bool = False,
     ):
         """
         K-cycle multigrid using your existing hierarchy (self.mg_levels).
@@ -6745,7 +6746,9 @@ class WarpDarcySolver:
                     storage_coeff=storage_coeff,
                     dt=dt,
                     head_prev=head_prev,
-                    refresh_diag_with_transient_storage=False,
+                    # Rebuild hierarchy when period-dependent storage changes;
+                    # otherwise coarse MG levels can retain stale storage.
+                    refresh_diag_with_transient_storage=True,
                     **kc_base_kwargs,
                 )
                 last_linear_info = dict(info_lin) if isinstance(info_lin, dict) else {}
@@ -6970,7 +6973,11 @@ class WarpDarcySolver:
                 )
 
                 head_change_converged = final_max_abs_head_change < hclose_f
-                if head_change_converged and inner_usable_for_picard:
+                # Diagnostic opt-in (default off): accept the Picard update on head
+                # change alone, treating the inner-residual / inner_usable_for_picard
+                # gate as a guardrail rather than a hard failure criterion. When False
+                # this is identical to ``and inner_usable_for_picard``.
+                if head_change_converged and (inner_usable_for_picard or accept_on_head_change_only):
                     converged_nonlinear = True
                     break
 
@@ -7012,7 +7019,12 @@ class WarpDarcySolver:
                     "inner_forcing_eta": float(inner_forcing_eta_f),
                     "inner_head_residual_tol_min": float(inner_head_residual_tol_min_f),
                     "inner_head_residual_tol_max": float(inner_head_residual_tol_max_f),
-                    "nonlinear_convergence_basis": "head_change_and_inner_usable_for_picard",
+                    "nonlinear_convergence_basis": (
+                        "head_change_only"
+                        if bool(accept_on_head_change_only)
+                        else "head_change_and_inner_usable_for_picard"
+                    ),
+                    "accept_on_head_change_only": bool(accept_on_head_change_only),
                     "residual_floor_tol": None if residual_floor_tol_f is None else float(residual_floor_tol_f),
                     "inner_head_residual_tol": float(inner_head_residual_tol_f),
                     "inner_residual_converged": bool(inner_residual_converged),

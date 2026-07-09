@@ -73,6 +73,58 @@ def test_transient_storage_terms_are_idempotent():
     np.testing.assert_allclose(b_second, expected_rhs)
 
 
+def test_storage_diagonal_kernel_components_are_consistent():
+    from working_tests.run_storage_diagonal_kernel_diagnostics import (
+        build_cases,
+        test_apply_A,
+        test_apply_A_and_pAp,
+        test_compute_residual,
+        test_fused_smoother,
+        test_init_pcg_with_A,
+        test_preconditioner,
+    )
+
+    cases_by_name = {case.name: case for case in build_cases()}
+    case = cases_by_name["large_storage_small_diffusion"]
+    checks = (
+        test_apply_A,
+        test_compute_residual,
+        test_apply_A_and_pAp,
+        test_init_pcg_with_A,
+        test_preconditioner,
+        test_fused_smoother,
+    )
+
+    for check in checks:
+        max_error, rms_error, rel_error, diagnosis = check(case, "cpu")
+        assert diagnosis == "PASS", (
+            f"{check.__name__} failed: {diagnosis}; "
+            f"max={max_error} rms={rms_error} rel={rel_error}"
+        )
+
+
+def test_storage_dominated_kcycle_matches_dense_reference():
+    from working_tests.run_storage_diagonal_kernel_diagnostics import (
+        build_cases,
+        test_full_solver_storage_only,
+    )
+
+    cases_by_name = {case.name: case for case in build_cases()}
+    for case_name in ("storage_only_uniform", "large_storage_small_diffusion"):
+        case = cases_by_name[case_name]
+        for max_levels in (1, 3):
+            max_error, rms_error, diagnosis, converged = test_full_solver_storage_only(
+                case=case,
+                device="cpu",
+                max_levels=max_levels,
+            )
+            assert converged
+            assert diagnosis == "PASS", (
+                f"{case_name} max_levels={max_levels} failed: {diagnosis}; "
+                f"max={max_error} rms={rms_error}"
+            )
+
+
 def test_pcg_transient_is_rejected_instead_of_ignored():
     from DARCY_WARP_PACKAGE.warped_darcy import WarpDarcySolver
 
@@ -387,7 +439,28 @@ def test_unconfined_transient_mass_balance():
     assert rms < 2.0e-4, f"unconfined transient mass balance rms residual {rms}"
 
 
-def test_2d_transient_replay_steps_periods_and_responds_to_recharge():
+def test_replay_initial_transmissivity_caps_at_top():
+    from working_tests.run_2d_transient_warp_replay import _initial_transmissivity
+
+    k = np.array([[2.0, 2.0]], dtype=np.float64)
+    initial_head = np.array([[15.0, 8.0]], dtype=np.float64)
+    top = np.array([[10.0, 10.0]], dtype=np.float64)
+    bottom = np.array([[0.0, 0.0]], dtype=np.float64)
+    active = np.ones((1, 2), dtype=np.int32)
+
+    transmissivity = _initial_transmissivity(
+        k=k,
+        initial_head=initial_head,
+        top=top,
+        bottom=bottom,
+        active=active,
+        min_sat=0.1,
+    )
+
+    np.testing.assert_allclose(transmissivity, np.array([[20.0, 16.0]], dtype=np.float64))
+
+
+def test_2d_transient_replay_steps_periods_and_responds_to_recharge(monkeypatch):
     """
     Multi-period Warp transient replay harness (MF6-free).
 
@@ -428,6 +501,9 @@ def test_2d_transient_replay_steps_periods_and_responds_to_recharge():
     assert not np.allclose(heads[-1], spatial["initial_head"], atol=1.0e-8)
     assert bool(result["last_info"].get("converged", False))
 
+    # Force device RHS assembly to catch stale host-only recharge updates.
+    monkeypatch.setenv("DARCY_RHS_MODE", "device")
+
     # Recharge magnitude must matter: a high-rate single step mounds heads
     # higher than a low-rate single step from the same initial condition.
     low = run_warp_transient_replay(
@@ -452,4 +528,3 @@ def test_2d_transient_replay_steps_periods_and_responds_to_recharge():
     )
     active = spatial["active"] != 0
     assert float(high["heads_final"][active].mean()) > float(low["heads_final"][active].mean())
-
