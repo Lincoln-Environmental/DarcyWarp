@@ -155,6 +155,102 @@ def _chebyshev_relaxation_sequence(
     return tuple(out)
 
 
+def _top_switch_above_mask(
+    *,
+    head_ref: np.ndarray,
+    top: np.ndarray,
+    threshold_mode: str,
+    free_mask: np.ndarray | None = None,
+) -> np.ndarray:
+    """
+    Build the raw above-top mask used by the MF6-like top-switch storativity.
+
+    :param head_ref: Reference head field.
+    :param top: Model-top elevation field.
+    :param threshold_mode: ``"ge"`` or ``"gt"``.
+    :param free_mask: Optional active non-Dirichlet mask.
+    :return: Boolean above-top mask.
+    """
+    head_ref_arr = np.asarray(head_ref, dtype=np.float64)
+    top_arr = np.asarray(top, dtype=np.float64)
+    mode = str(threshold_mode).strip().lower()
+    if mode == "ge":
+        mask = head_ref_arr >= top_arr
+    elif mode == "gt":
+        mask = head_ref_arr > top_arr
+    else:
+        raise ValueError("threshold_mode must be 'ge' or 'gt'.")
+    if free_mask is not None:
+        mask = mask & np.asarray(free_mask, dtype=bool)
+    return mask
+
+
+def _apply_top_switch_hysteresis(
+    *,
+    raw_above_top: np.ndarray,
+    head_ref: np.ndarray,
+    top: np.ndarray,
+    previous_above_top: np.ndarray | None,
+    hysteresis_eps: float,
+    free_mask: np.ndarray,
+) -> np.ndarray:
+    """
+    Apply a symmetric top-surface hysteresis band to the above-top mask.
+
+    :param raw_above_top: Raw top-switch mask from the current reference head.
+    :param head_ref: Current reference head field.
+    :param top: Model-top elevation field.
+    :param previous_above_top: Previous effective above-top mask.
+    :param hysteresis_eps: Hysteresis half-band around ``top``.
+    :param free_mask: Active non-Dirichlet mask.
+    :return: Stabilised above-top mask.
+    """
+    raw_mask = np.asarray(raw_above_top, dtype=bool)
+    free = np.asarray(free_mask, dtype=bool)
+    if previous_above_top is None:
+        out = raw_mask.copy()
+        out[~free] = False
+        return out
+
+    head_ref_arr = np.asarray(head_ref, dtype=np.float64)
+    top_arr = np.asarray(top, dtype=np.float64)
+    prev_mask = np.asarray(previous_above_top, dtype=bool)
+    eps = max(float(hysteresis_eps), 0.0)
+
+    stay_above = prev_mask & (head_ref_arr >= (top_arr - eps))
+    stay_below = (~prev_mask) & (head_ref_arr < (top_arr + eps))
+
+    out = raw_mask.copy()
+    out[stay_above] = True
+    out[stay_below] = False
+    out[~free] = False
+    return out
+
+
+def _storage_active_set_change_metrics(
+    *,
+    current_mask: np.ndarray | None,
+    previous_mask: np.ndarray | None,
+    free_mask: np.ndarray,
+) -> tuple[int, float]:
+    """
+    Compute active-set change count and fraction over active non-Dirichlet cells.
+
+    :param current_mask: Current effective above-top mask.
+    :param previous_mask: Previous effective above-top mask.
+    :param free_mask: Active non-Dirichlet mask.
+    :return: ``(changed_count, changed_fraction)``.
+    """
+    free = np.asarray(free_mask, dtype=bool)
+    denom = int(np.count_nonzero(free))
+    if current_mask is None or previous_mask is None or denom == 0:
+        return 0, 0.0
+    changed = np.asarray(current_mask, dtype=bool) ^ np.asarray(previous_mask, dtype=bool)
+    changed[~free] = False
+    count = int(np.count_nonzero(changed))
+    return count, float(count / denom)
+
+
 
 def _prepare_5point_transient_terms(
     rhs: np.ndarray,
@@ -6351,6 +6447,7 @@ class WarpDarcySolver:
             transmissivity_relaxation_middle_iteration: int = 5,
             transmissivity_relaxation_late_iteration: int = 15,
             unconfined_startup_mode: str = "initial_head",
+            unconfined_pre_solve_iterations: int = 3,
             transient: bool = False,
             storage_coeff=None,
             dt=None,
@@ -6359,6 +6456,11 @@ class WarpDarcySolver:
             storage_reference: str = "previous_period",
             unconfined_storage_mode_2d: str | None = None,
             storage_top_threshold: str = "ge",
+            storage_active_set_strategy: str = "none",
+            storage_hysteresis_eps: float = 0.0,
+            storage_freeze_after_stable_iterations: int = 0,
+            storage_freeze_after_outer: int | None = None,
+            storage_switch_fraction_tol: float = 0.0,
             sy: float | None = None,
             ss: float | None = None,
             accept_on_head_change_only: bool = False,
@@ -6406,7 +6508,10 @@ class WarpDarcySolver:
           - transmissivity_relaxation_enabled and *_early/middle/late: optional
             under-relaxation of T(h) updates during early Picard iterations.
           - unconfined_startup_mode: "initial_head" keeps current behaviour;
-            "confined_pre_solve" runs one fixed-T confined solve to warm-start.
+            "confined_pre_solve" runs one fixed-T confined solve to warm-start;
+            "unconfined_pre_solve" runs a few Picard sub-iterations that rebuild
+            transmissivity from the current head (unconfined linearisation),
+            controlled by unconfined_pre_solve_iterations.
           - storage_reference: "previous_period" keeps transient storage fixed
             from the caller-supplied storage_coeff. "current_picard" is a
             diagnostic path that rebuilds 2D unconfined storage from the current
@@ -6581,8 +6686,14 @@ class WarpDarcySolver:
                 raise ValueError("transmissivity relaxation iterations must satisfy 1 <= middle <= late.")
 
             startup_mode = str(unconfined_startup_mode).strip().lower()
-            if startup_mode not in {"initial_head", "confined_pre_solve"}:
-                raise ValueError("unconfined_startup_mode must be 'initial_head' or 'confined_pre_solve'.")
+            if startup_mode not in {"initial_head", "confined_pre_solve", "unconfined_pre_solve"}:
+                raise ValueError(
+                    "unconfined_startup_mode must be 'initial_head', 'confined_pre_solve', "
+                    "or 'unconfined_pre_solve'."
+                )
+            unconfined_pre_solve_iterations_i = int(unconfined_pre_solve_iterations)
+            if unconfined_pre_solve_iterations_i < 1 or not np.isfinite(unconfined_pre_solve_iterations_i):
+                raise ValueError("unconfined_pre_solve_iterations must be a finite integer >= 1.")
 
             storage_reference_mode = str(storage_reference).strip().lower()
             if storage_reference_mode not in {"previous_period", "current_picard"}:
@@ -6590,6 +6701,26 @@ class WarpDarcySolver:
             storage_top_threshold_mode = str(storage_top_threshold).strip().lower()
             if storage_top_threshold_mode not in {"ge", "gt"}:
                 raise ValueError("storage_top_threshold must be 'ge' or 'gt'.")
+            storage_active_set_strategy_mode = str(storage_active_set_strategy).strip().lower()
+            if storage_active_set_strategy_mode not in {"none", "hysteresis", "freeze_when_stable"}:
+                raise ValueError(
+                    "storage_active_set_strategy must be 'none', 'hysteresis', or 'freeze_when_stable'."
+                )
+            storage_hysteresis_eps_f = float(storage_hysteresis_eps)
+            if storage_hysteresis_eps_f < 0.0 or not np.isfinite(storage_hysteresis_eps_f):
+                raise ValueError("storage_hysteresis_eps must be finite and >= 0.")
+            storage_freeze_after_stable_iterations_i = int(storage_freeze_after_stable_iterations)
+            if storage_freeze_after_stable_iterations_i < 0:
+                raise ValueError("storage_freeze_after_stable_iterations must be >= 0.")
+            if storage_freeze_after_outer is None:
+                storage_freeze_after_outer_i = None
+            else:
+                storage_freeze_after_outer_i = int(storage_freeze_after_outer)
+                if storage_freeze_after_outer_i < 1:
+                    raise ValueError("storage_freeze_after_outer must be >= 1 when provided.")
+            storage_switch_fraction_tol_f = float(storage_switch_fraction_tol)
+            if storage_switch_fraction_tol_f < 0.0 or not np.isfinite(storage_switch_fraction_tol_f):
+                raise ValueError("storage_switch_fraction_tol must be finite and >= 0.")
             storage_mode_2d = None if unconfined_storage_mode_2d is None else str(unconfined_storage_mode_2d).strip().lower()
             current_picard_storage = bool(transient) and storage_reference_mode == "current_picard"
             if current_picard_storage:
@@ -6609,6 +6740,11 @@ class WarpDarcySolver:
             else:
                 sy_f = float("nan")
                 ss_f = float("nan")
+                storage_active_set_strategy_mode = "none"
+                storage_hysteresis_eps_f = 0.0
+                storage_freeze_after_stable_iterations_i = 0
+                storage_freeze_after_outer_i = None
+                storage_switch_fraction_tol_f = 0.0
 
             max_update_f = float(max_head_change_per_outer_iteration)
             if max_update_f <= 0.0 or not np.isfinite(max_update_f):
@@ -6663,20 +6799,42 @@ class WarpDarcySolver:
                 "cheby_lambda_max": float(cheby_lambda_max),
             }
 
-            def _storage_from_picard_head(head_ref_arr: np.ndarray) -> np.ndarray:
+            def _storage_from_picard_head(
+                    head_ref_arr: np.ndarray,
+                    *,
+                    previous_above_top_mask: np.ndarray | None = None,
+                    frozen_above_top_mask: np.ndarray | None = None,
+            ) -> tuple[np.ndarray, np.ndarray | None, np.ndarray | None]:
                 head_ref64 = np.asarray(head_ref_arr, dtype=np.float64)
                 if ztop_arr is None:
                     raise ValueError("ztop_field is required for current Picard storage.")
                 full_thickness = np.maximum(ztop_arr - zbot_arr, min_sat)
                 sat_ref = np.clip(head_ref64 - zbot_arr, min_sat, full_thickness)
+                raw_above_top = None
+                effective_above_top = None
                 if storage_mode_2d == "mf6_convertible_top_switch":
-                    above_top = (
-                        head_ref64 >= ztop_arr
-                        if storage_top_threshold_mode == "ge"
-                        else head_ref64 > ztop_arr
+                    raw_above_top = _top_switch_above_mask(
+                        head_ref=head_ref64,
+                        top=ztop_arr,
+                        threshold_mode=storage_top_threshold_mode,
+                        free_mask=free_mask0,
                     )
+                    if frozen_above_top_mask is not None:
+                        effective_above_top = np.asarray(frozen_above_top_mask, dtype=bool).copy()
+                        effective_above_top[~free_mask0] = False
+                    elif storage_active_set_strategy_mode == "hysteresis":
+                        effective_above_top = _apply_top_switch_hysteresis(
+                            raw_above_top=raw_above_top,
+                            head_ref=head_ref64,
+                            top=ztop_arr,
+                            previous_above_top=previous_above_top_mask,
+                            hysteresis_eps=storage_hysteresis_eps_f,
+                            free_mask=free_mask0,
+                        )
+                    else:
+                        effective_above_top = raw_above_top
                     storage = np.where(
-                        above_top,
+                        effective_above_top,
                         ss_f * full_thickness,
                         sy_f + ss_f * sat_ref,
                     )
@@ -6684,7 +6842,7 @@ class WarpDarcySolver:
                     storage = sy_f + ss_f * sat_ref
                 storage = storage.astype(NP_FLOAT, copy=False)
                 storage[~free_mask0] = NP_FLOAT(0.0)
-                return storage
+                return storage, raw_above_top, effective_above_top
 
             if startup_mode == "confined_pre_solve":
                 sat_startup = h_iter.astype(np.float64, copy=False) - zbot_arr
@@ -6696,7 +6854,7 @@ class WarpDarcySolver:
                 T_startup[~active_mask] = NP_FLOAT(0.0)
                 self.update_T_in_place(T_startup)
                 storage_coeff_startup = (
-                    _storage_from_picard_head(h_iter)
+                    _storage_from_picard_head(h_iter)[0]
                     if current_picard_storage
                     else storage_coeff
                 )
@@ -6722,6 +6880,52 @@ class WarpDarcySolver:
                 if not np.all(np.isfinite(h_startup)):
                     raise FloatingPointError("confined pre-solve produced non-finite heads.")
                 h_iter = h_startup.astype(NP_FLOAT, copy=False)
+
+            elif startup_mode == "unconfined_pre_solve":
+                # Unconfined warm start: a small fixed number of Picard
+                # sub-iterations that rebuild transmissivity from the current
+                # head (unconfined linearisation), each solved as a linearised
+                # K-cycle step. Unlike ``confined_pre_solve`` (one fixed-T
+                # solve), this lets the saturated thickness relax before the
+                # main transient Picard loop begins. The storage term follows
+                # the same reference as the main solve (current Picard head when
+                # ``storage_reference='current_picard'``).
+                h_pre = np.asarray(h_iter, dtype=np.float64)
+                if ztop_arr is not None:
+                    sat_cap_pre = np.maximum(ztop_arr - zbot_arr, min_sat)
+                for _ in range(unconfined_pre_solve_iterations_i):
+                    sat_pre = np.maximum(h_pre - zbot_arr, min_sat)
+                    if ztop_arr is not None:
+                        sat_pre = np.minimum(sat_pre, sat_cap_pre)
+                    T_pre = (K_arr * sat_pre).astype(NP_FLOAT, copy=False)
+                    T_pre[~active_mask] = NP_FLOAT(0.0)
+                    self.update_T_in_place(T_pre)
+                    storage_coeff_pre = (
+                        _storage_from_picard_head(h_pre)[0]
+                        if current_picard_storage
+                        else storage_coeff
+                    )
+                    h_pre = self.solve_multigrid_kcycle(
+                        max_cycles=int(max_cycles),
+                        initial_head=h_pre,
+                        return_info=False,
+                        unconfined=False,
+                        transient=transient,
+                        storage_coeff=storage_coeff_pre,
+                        dt=dt,
+                        head_prev=head_prev,
+                        refresh_diag_with_transient_storage=True,
+                        **kc_base_kwargs,
+                    )
+                    h_pre = np.asarray(h_pre, dtype=np.float64)
+                    h_pre = np.maximum(h_pre, zbot_arr + min_sat)
+                    if ztop_arr is not None:
+                        h_pre = np.minimum(h_pre, ztop_arr)
+                    h_pre[~active_mask] = 0.0
+                    h_pre[bc_mask0] = bc_values0[bc_mask0]
+                    if not np.all(np.isfinite(h_pre)):
+                        raise FloatingPointError("unconfined pre-solve produced non-finite heads.")
+                h_iter = h_pre.astype(NP_FLOAT, copy=False)
 
             cheb_weights = _chebyshev_update_weights(
                 order=int(chebyshev_order),
@@ -6750,6 +6954,15 @@ class WarpDarcySolver:
             converged_nonlinear = False
             T_previous: np.ndarray | None = None
             T_relax = float("nan")
+            previous_storage_diag_arr: np.ndarray | None = None
+            previous_top_switch_mask: np.ndarray | None = None
+            frozen_top_switch_mask: np.ndarray | None = None
+            frozen_top_switch_outer_iteration: int | None = None
+            stable_top_switch_iterations = 0
+            max_top_switch_changed_count = 0
+            max_top_switch_changed_fraction = 0.0
+            max_storage_diag_change_max = 0.0
+            max_storage_diag_change_rms = 0.0
 
             def _to_finite(value):
                 try:
@@ -6799,11 +7012,16 @@ class WarpDarcySolver:
 
                 self.update_T_in_place(T_pic)
                 T_previous = T_pic.copy()
-                storage_coeff_inner = (
-                    _storage_from_picard_head(h_iter)
-                    if current_picard_storage
-                    else storage_coeff
-                )
+                top_switch_raw_mask = None
+                top_switch_effective_mask = None
+                if current_picard_storage:
+                    storage_coeff_inner, top_switch_raw_mask, top_switch_effective_mask = _storage_from_picard_head(
+                        h_iter,
+                        previous_above_top_mask=previous_top_switch_mask,
+                        frozen_above_top_mask=frozen_top_switch_mask,
+                    )
+                else:
+                    storage_coeff_inner = storage_coeff
                 if storage_coeff_inner is not None:
                     storage_inner_arr = np.asarray(storage_coeff_inner, dtype=np.float64)
                     if storage_inner_arr.ndim == 0:
@@ -6817,6 +7035,20 @@ class WarpDarcySolver:
                     storage_coeff_min = float(np.min(storage_coeff_free)) if storage_coeff_free.size else None
                     storage_coeff_max = float(np.max(storage_coeff_free)) if storage_coeff_free.size else None
                     storage_coeff_mean = float(np.mean(storage_coeff_free)) if storage_coeff_free.size else None
+                    if previous_storage_diag_arr is None:
+                        storage_diag_change_max = None
+                        storage_diag_change_rms = None
+                    else:
+                        storage_diag_delta = storage_inner_diag - previous_storage_diag_arr
+                        storage_diag_delta_free = storage_diag_delta[free_mask0]
+                        if storage_diag_delta_free.size > 0:
+                            storage_diag_change_max = float(np.max(np.abs(storage_diag_delta_free)))
+                            storage_diag_change_rms = float(
+                                np.sqrt(np.mean(storage_diag_delta_free * storage_diag_delta_free))
+                            )
+                        else:
+                            storage_diag_change_max = 0.0
+                            storage_diag_change_rms = 0.0
                 else:
                     storage_diag_min = None
                     storage_diag_max = None
@@ -6824,6 +7056,28 @@ class WarpDarcySolver:
                     storage_coeff_min = None
                     storage_coeff_max = None
                     storage_coeff_mean = None
+                    storage_diag_change_max = None
+                    storage_diag_change_rms = None
+
+                if top_switch_effective_mask is not None:
+                    free_count = int(np.count_nonzero(free_mask0))
+                    above_top_count = int(np.count_nonzero(top_switch_effective_mask & free_mask0))
+                    above_top_fraction = float(above_top_count / free_count) if free_count > 0 else 0.0
+                    top_switch_changed_count, top_switch_changed_fraction = _storage_active_set_change_metrics(
+                        current_mask=top_switch_effective_mask,
+                        previous_mask=previous_top_switch_mask,
+                        free_mask=free_mask0,
+                    )
+                    max_top_switch_changed_count = max(max_top_switch_changed_count, top_switch_changed_count)
+                    max_top_switch_changed_fraction = max(
+                        max_top_switch_changed_fraction,
+                        top_switch_changed_fraction,
+                    )
+                else:
+                    above_top_count = 0
+                    above_top_fraction = 0.0
+                    top_switch_changed_count = 0
+                    top_switch_changed_fraction = 0.0
 
                 head_lin, info_lin = self.solve_multigrid_kcycle(
                     max_cycles=int(inner_max_cycles),
@@ -6949,8 +7203,10 @@ class WarpDarcySolver:
                 if np.any(free_mask0):
                     trial_dh = (h_trial - h_iter.astype(np.float64, copy=False))[free_mask0]
                     trial_measure = float(np.max(np.abs(trial_dh)))
+                    trial_rms = float(np.sqrt(np.mean(trial_dh * trial_dh)))
                 else:
                     trial_measure = 0.0
+                    trial_rms = 0.0
 
                 reject_cheb = False
                 if chebyshev_used:
@@ -6975,8 +7231,10 @@ class WarpDarcySolver:
                     if np.any(free_mask0):
                         trial_dh = (h_trial - h_iter.astype(np.float64, copy=False))[free_mask0]
                         trial_measure = float(np.max(np.abs(trial_dh)))
+                        trial_rms = float(np.sqrt(np.mean(trial_dh * trial_dh)))
                     else:
                         trial_measure = 0.0
+                        trial_rms = 0.0
 
                 if not np.all(np.isfinite(h_trial)):
                     chebyshev_resets += 1
@@ -7026,6 +7284,37 @@ class WarpDarcySolver:
                 if chebyshev_reset:
                     outer_chebyshev_reset_count += 1
 
+                if storage_diag_change_max is not None:
+                    max_storage_diag_change_max = max(max_storage_diag_change_max, float(storage_diag_change_max))
+                if storage_diag_change_rms is not None:
+                    max_storage_diag_change_rms = max(max_storage_diag_change_rms, float(storage_diag_change_rms))
+
+                if top_switch_effective_mask is not None:
+                    if top_switch_changed_fraction <= storage_switch_fraction_tol_f:
+                        stable_top_switch_iterations += 1
+                    else:
+                        stable_top_switch_iterations = 0
+
+                    if (
+                        storage_active_set_strategy_mode == "freeze_when_stable"
+                        and frozen_top_switch_mask is None
+                        and storage_freeze_after_stable_iterations_i > 0
+                        and stable_top_switch_iterations >= storage_freeze_after_stable_iterations_i
+                    ):
+                        frozen_top_switch_mask = np.asarray(top_switch_effective_mask, dtype=bool).copy()
+                        frozen_top_switch_outer_iteration = int(outer_idx + 1)
+
+                    if (
+                        storage_active_set_strategy_mode == "freeze_when_stable"
+                        and frozen_top_switch_mask is None
+                        and storage_freeze_after_outer_i is not None
+                        and int(outer_idx + 1) >= storage_freeze_after_outer_i
+                    ):
+                        frozen_top_switch_mask = np.asarray(top_switch_effective_mask, dtype=bool).copy()
+                        frozen_top_switch_outer_iteration = int(outer_idx + 1)
+                else:
+                    stable_top_switch_iterations = 0
+
                 outer_history.append(
                     {
                         "outer_iteration": int(outer_idx + 1),
@@ -7045,16 +7334,40 @@ class WarpDarcySolver:
                         "chebyshev_rejected": bool(chebyshev_rejected),
                         "chebyshev_reset": bool(chebyshev_reset),
                         "trial_measure": float(trial_measure),
+                        "trial_rms": float(trial_rms),
                         "previous_measure": float(previous_measure) if np.isfinite(previous_measure) else None,
                         "clipped_update": bool(clipped_update),
+                        "accepted_update": bool(inner_usable_for_picard),
                         "transmissivity_relaxation_used": None if np.isnan(T_relax) else float(T_relax),
                         "max_abs_head_change": float(final_max_abs_head_change),
+                        "rms_head_change": float(trial_rms),
                         "min_head": float(np.nanmin(h_iter[active_mask])) if np.any(active_mask) else float("nan"),
                         "max_head": float(np.nanmax(h_iter[active_mask])) if np.any(active_mask) else float("nan"),
                         "min_saturated_thickness": float(np.nanmin(sat[active_mask])) if np.any(active_mask) else float("nan"),
                         "max_saturated_thickness": float(np.nanmax(sat[active_mask])) if np.any(active_mask) else float("nan"),
+                        "mean_saturated_thickness": float(np.nanmean(sat[free_mask0])) if np.any(free_mask0) else float("nan"),
                         "min_transmissivity": float(np.nanmin(T_pic[active_mask])) if np.any(active_mask) else float("nan"),
                         "max_transmissivity": float(np.nanmax(T_pic[active_mask])) if np.any(active_mask) else float("nan"),
+                        "above_top_count": int(above_top_count),
+                        "above_top_fraction": float(above_top_fraction),
+                        "top_switch_changed_count": int(top_switch_changed_count),
+                        "top_switch_changed_fraction": float(top_switch_changed_fraction),
+                        "top_switch_frozen": bool(frozen_top_switch_mask is not None),
+                        "top_switch_frozen_outer_iteration": (
+                            int(frozen_top_switch_outer_iteration)
+                            if frozen_top_switch_outer_iteration is not None
+                            else None
+                        ),
+                        "stable_top_switch_iterations": int(stable_top_switch_iterations),
+                        "storage_active_set_strategy": str(storage_active_set_strategy_mode),
+                        "storage_hysteresis_eps": float(storage_hysteresis_eps_f),
+                        "storage_freeze_after_stable_iterations": int(storage_freeze_after_stable_iterations_i),
+                        "storage_freeze_after_outer": (
+                            int(storage_freeze_after_outer_i)
+                            if storage_freeze_after_outer_i is not None
+                            else None
+                        ),
+                        "storage_switch_fraction_tol": float(storage_switch_fraction_tol_f),
                         "storage_reference": str(storage_reference_mode),
                         "unconfined_storage_mode_2d": storage_mode_2d,
                         "storage_top_threshold": storage_top_threshold_mode,
@@ -7064,10 +7377,16 @@ class WarpDarcySolver:
                         "storage_diag_min": storage_diag_min,
                         "storage_diag_max": storage_diag_max,
                         "storage_diag_mean": storage_diag_mean,
+                        "storage_diag_change_max": storage_diag_change_max,
+                        "storage_diag_change_rms": storage_diag_change_rms,
                         "inner_iterations": int(last_linear_info.get("n_cycles_used", 0)),
                         "inner_residual": None if final_residual is None else float(final_residual),
                     }
                 )
+
+                previous_storage_diag_arr = None if storage_coeff_inner is None else np.asarray(storage_inner_diag, dtype=np.float64).copy()
+                if top_switch_effective_mask is not None:
+                    previous_top_switch_mask = np.asarray(top_switch_effective_mask, dtype=bool).copy()
 
                 head_change_converged = final_max_abs_head_change < hclose_f
                 # Diagnostic opt-in (default off): accept the Picard update on head
@@ -7138,9 +7457,50 @@ class WarpDarcySolver:
                     "picard_head_tol": float(hclose_f),
                     "picard_dh_max_end": float(final_max_abs_head_change),
                     "unconfined_min_sat": float(min_sat),
+                    "unconfined_startup_mode": str(startup_mode),
+                    "unconfined_pre_solve_iterations": int(unconfined_pre_solve_iterations_i),
                     "storage_reference": str(storage_reference_mode),
                     "unconfined_storage_mode_2d": storage_mode_2d,
                     "storage_top_threshold": storage_top_threshold_mode,
+                    "storage_active_set_strategy": str(storage_active_set_strategy_mode),
+                    "storage_hysteresis_eps": float(storage_hysteresis_eps_f),
+                    "storage_freeze_after_stable_iterations": int(storage_freeze_after_stable_iterations_i),
+                    "storage_freeze_after_outer": (
+                        int(storage_freeze_after_outer_i)
+                        if storage_freeze_after_outer_i is not None
+                        else None
+                    ),
+                    "storage_switch_fraction_tol": float(storage_switch_fraction_tol_f),
+                    "top_switch_frozen": bool(frozen_top_switch_mask is not None),
+                    "top_switch_frozen_outer_iteration": (
+                        int(frozen_top_switch_outer_iteration)
+                        if frozen_top_switch_outer_iteration is not None
+                        else None
+                    ),
+                    "max_top_switch_changed_count": int(max_top_switch_changed_count),
+                    "max_top_switch_changed_fraction": float(max_top_switch_changed_fraction),
+                    "last_top_switch_changed_count": (
+                        int(outer_history[-1]["top_switch_changed_count"])
+                        if outer_history
+                        else 0
+                    ),
+                    "last_top_switch_changed_fraction": (
+                        float(outer_history[-1]["top_switch_changed_fraction"])
+                        if outer_history
+                        else 0.0
+                    ),
+                    "last_above_top_count": (
+                        int(outer_history[-1]["above_top_count"])
+                        if outer_history
+                        else 0
+                    ),
+                    "last_above_top_fraction": (
+                        float(outer_history[-1]["above_top_fraction"])
+                        if outer_history
+                        else 0.0
+                    ),
+                    "max_storage_diag_change_max": float(max_storage_diag_change_max),
+                    "max_storage_diag_change_rms": float(max_storage_diag_change_rms),
                     "diag_preconditioner_backend": self._diag_backend_env_or_default(),
                     "update_T_profile_last": None if self._last_update_T_profile is None else dict(self._last_update_T_profile),
                     "update_T_profile_totals": None if self._update_T_profile_totals is None else dict(self._update_T_profile_totals),

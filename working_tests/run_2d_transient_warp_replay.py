@@ -129,6 +129,16 @@ STORAGE_TOP_THRESHOLD_MODES = {
     STORAGE_TOP_THRESHOLD_GE,
     STORAGE_TOP_THRESHOLD_GT,
 }
+STORAGE_ACTIVE_SET_NONE = "none"
+STORAGE_ACTIVE_SET_HYSTERESIS = "hysteresis"
+STORAGE_ACTIVE_SET_FREEZE_WHEN_STABLE = "freeze_when_stable"
+STORAGE_ACTIVE_SET_PREDICTOR_CORRECTOR = "predictor_corrector"
+STORAGE_ACTIVE_SET_STRATEGIES = {
+    STORAGE_ACTIVE_SET_NONE,
+    STORAGE_ACTIVE_SET_HYSTERESIS,
+    STORAGE_ACTIVE_SET_FREEZE_WHEN_STABLE,
+    STORAGE_ACTIVE_SET_PREDICTOR_CORRECTOR,
+}
 
 
 def _warp_solver_class():
@@ -392,13 +402,17 @@ def build_unconfined_storativity(
     * ``include_specific_storage=False`` / ``phreatic_only``:
         ``S = Sy`` on active non-boundary water-table cells.
     * ``integrated_sy_ss`` / legacy ``mf6_convertible``:
+        Simple vertically integrated unconfined approximation.
         ``S = Sy + Ss * saturated_thickness_ref`` where
         ``saturated_thickness_ref = clip(head_ref - bottom, min_sat, top-bottom)``.
         This is the existing vertically integrated approximation and applies
         ``Sy`` even where the reference head is at or above ``top``.
     * ``mf6_convertible_top_switch``:
+        MF6-compatible benchmark mode.
         ``S = Ss * full_thickness`` where the selected top-threshold rule is
         met, otherwise ``S = Sy + Ss * saturated_thickness_ref``.
+        The closest tested MF6 match uses ``storage_reference=current_picard``
+        with threshold ``ge``.
 
     Inactive and fixed-head boundary cells are zeroed: they carry no storage in
     the Warp 5-point transient assembly (the solver zeroes them too, so this is
@@ -463,6 +477,104 @@ def build_unconfined_storativity(
     return (
         storativity.astype(np.float64, copy=False),
         None if sat_ref is None else sat_ref.astype(np.float64, copy=False),
+    )
+
+
+def top_switch_above_mask(
+    *,
+    head_ref: np.ndarray,
+    top: np.ndarray,
+    threshold_mode: str = STORAGE_TOP_THRESHOLD_GE,
+    active: np.ndarray | None = None,
+    bc_mask: np.ndarray | None = None,
+) -> np.ndarray:
+    """
+    Build the raw above-top mask for MF6-like unconfined top-switch storage.
+
+    :param head_ref: Reference head field.
+    :param top: Model-top elevation field.
+    :param threshold_mode: ``ge`` or ``gt``.
+    :param active: Optional active mask.
+    :param bc_mask: Optional Dirichlet mask.
+    :return: Boolean above-top mask.
+    """
+    head_ref_arr = np.asarray(head_ref, dtype=np.float64)
+    top_arr = np.asarray(top, dtype=np.float64)
+    mode = str(threshold_mode).strip().lower()
+    if mode == STORAGE_TOP_THRESHOLD_GE:
+        above = head_ref_arr >= top_arr
+    elif mode == STORAGE_TOP_THRESHOLD_GT:
+        above = head_ref_arr > top_arr
+    else:
+        raise ValueError(f"threshold_mode must be one of {sorted(STORAGE_TOP_THRESHOLD_MODES)}.")
+    if active is not None:
+        above = above & (np.asarray(active, dtype=np.int32) != 0)
+    if bc_mask is not None:
+        above = above & (np.asarray(bc_mask, dtype=np.int32) == 0)
+    return above
+
+
+def apply_top_switch_hysteresis(
+    *,
+    raw_above_top: np.ndarray,
+    head_ref: np.ndarray,
+    top: np.ndarray,
+    previous_above_top: np.ndarray | None,
+    hysteresis_eps: float,
+    active: np.ndarray | None = None,
+    bc_mask: np.ndarray | None = None,
+) -> np.ndarray:
+    """
+    Apply a symmetric top hysteresis band to a raw top-switch mask.
+
+    :param raw_above_top: Raw above-top mask for the current head.
+    :param head_ref: Current reference head field.
+    :param top: Model-top elevation field.
+    :param previous_above_top: Previous effective above-top mask.
+    :param hysteresis_eps: Symmetric hysteresis half-band around ``top``.
+    :param active: Optional active mask.
+    :param bc_mask: Optional Dirichlet mask.
+    :return: Stabilised above-top mask.
+    """
+    raw_mask = np.asarray(raw_above_top, dtype=bool)
+    if previous_above_top is None:
+        out = raw_mask.copy()
+    else:
+        head_ref_arr = np.asarray(head_ref, dtype=np.float64)
+        top_arr = np.asarray(top, dtype=np.float64)
+        prev_mask = np.asarray(previous_above_top, dtype=bool)
+        eps = max(float(hysteresis_eps), 0.0)
+        out = raw_mask.copy()
+        out[prev_mask & (head_ref_arr >= (top_arr - eps))] = True
+        out[(~prev_mask) & (head_ref_arr < (top_arr + eps))] = False
+    if active is not None:
+        out = out & (np.asarray(active, dtype=np.int32) != 0)
+    if bc_mask is not None:
+        out = out & (np.asarray(bc_mask, dtype=np.int32) == 0)
+    return out
+
+
+def should_freeze_top_switch(
+    *,
+    changed_fraction: float,
+    stable_iteration_count: int,
+    fraction_tol: float,
+    freeze_after_stable_iterations: int,
+) -> bool:
+    """
+    Decide whether the top-switch active set should be frozen.
+
+    :param changed_fraction: Fraction of free cells whose top-switch state changed.
+    :param stable_iteration_count: Consecutive stable-iteration counter.
+    :param fraction_tol: Fraction threshold treated as stable.
+    :param freeze_after_stable_iterations: Required stable-iteration count.
+    :return: True when the mask should freeze.
+    """
+    if int(freeze_after_stable_iterations) <= 0:
+        return False
+    return (
+        float(changed_fraction) <= float(fraction_tol)
+        and int(stable_iteration_count) >= int(freeze_after_stable_iterations)
     )
 
 
@@ -646,9 +758,18 @@ def default_solve_controls() -> dict:
         "inner_head_residual_tol_max": 1.0e-2,
         "transmissivity_relaxation_enabled": False,
         "unconfined_startup_mode": "confined_pre_solve",
+        "unconfined_pre_solve_iterations": 3,
         "min_saturated_thickness": 0.1,
         "initial_saturated_thickness": 100.0,
         "max_head_change_per_outer_iteration": 10.0,
+        "storage_active_set_strategy": STORAGE_ACTIVE_SET_NONE,
+        "storage_hysteresis_eps": 0.0,
+        "storage_freeze_after_stable_iterations": 0,
+        "storage_freeze_after_outer": None,
+        "storage_switch_fraction_tol": 0.0,
+        "predictor_max_outer_iterations": 5,
+        "corrector_max_outer_iterations": 100,
+        "predictor_corrector_corrector_strategy": STORAGE_ACTIVE_SET_NONE,
     }
 
 
@@ -669,6 +790,11 @@ def run_warp_transient_replay(
     unconfined_storage_mode: str = UNCONFINED_STORAGE_PHREATIC_ONLY,
     storage_reference: str = STORAGE_REFERENCE_PREVIOUS_PERIOD,
     storage_top_threshold: str = STORAGE_TOP_THRESHOLD_GE,
+    storage_active_set_strategy: str = STORAGE_ACTIVE_SET_NONE,
+    storage_hysteresis_eps: float = 0.0,
+    storage_freeze_after_stable_iterations: int = 0,
+    storage_freeze_after_outer: int | None = None,
+    storage_switch_fraction_tol: float = 0.0,
 ) -> dict:
     """
     Step the 2D Warp transient solver through every stress period.
@@ -713,6 +839,10 @@ def run_warp_transient_replay(
     storage_top_threshold:
         For ``mf6_convertible_top_switch``, ``ge`` uses ``h_ref >= top`` and
         ``gt`` uses ``h_ref > top`` for the confined/full-saturated switch.
+    storage_active_set_strategy:
+        Optional current-Picard top-switch stabilisation:
+        ``none``, ``hysteresis``, ``freeze_when_stable``, or the replay-level
+        ``predictor_corrector`` wrapper.
     """
     warm_start_mode = str(warm_start_mode).strip().lower()
     if warm_start_mode not in WARM_START_MODES:
@@ -733,11 +863,58 @@ def run_warp_transient_replay(
     storage_top_threshold = str(storage_top_threshold).strip().lower()
     if storage_top_threshold not in STORAGE_TOP_THRESHOLD_MODES:
         raise ValueError(f"storage_top_threshold must be one of {sorted(STORAGE_TOP_THRESHOLD_MODES)}.")
+    storage_active_set_strategy = str(storage_active_set_strategy).strip().lower()
+    if storage_active_set_strategy not in STORAGE_ACTIVE_SET_STRATEGIES:
+        raise ValueError(
+            f"storage_active_set_strategy must be one of {sorted(STORAGE_ACTIVE_SET_STRATEGIES)}."
+        )
+    storage_hysteresis_eps = float(storage_hysteresis_eps)
+    if storage_hysteresis_eps < 0.0 or not np.isfinite(storage_hysteresis_eps):
+        raise ValueError("storage_hysteresis_eps must be finite and >= 0.")
+    storage_freeze_after_stable_iterations = int(storage_freeze_after_stable_iterations)
+    if storage_freeze_after_stable_iterations < 0:
+        raise ValueError("storage_freeze_after_stable_iterations must be >= 0.")
+    if storage_freeze_after_outer is not None:
+        storage_freeze_after_outer = int(storage_freeze_after_outer)
+        if storage_freeze_after_outer < 1:
+            raise ValueError("storage_freeze_after_outer must be >= 1 when provided.")
+    storage_switch_fraction_tol = float(storage_switch_fraction_tol)
+    if storage_switch_fraction_tol < 0.0 or not np.isfinite(storage_switch_fraction_tol):
+        raise ValueError("storage_switch_fraction_tol must be finite and >= 0.")
 
-    explicit_control_keys = set(solve_controls.keys()) if solve_controls else set()
     controls = dict(default_solve_controls())
     if solve_controls:
         controls.update(solve_controls)
+
+    predictor_max_outer_iterations = int(
+        controls.pop("predictor_max_outer_iterations", default_solve_controls()["predictor_max_outer_iterations"])
+    )
+    corrector_max_outer_iterations = int(
+        controls.pop("corrector_max_outer_iterations", default_solve_controls()["corrector_max_outer_iterations"])
+    )
+    predictor_corrector_corrector_strategy = str(
+        controls.pop(
+            "predictor_corrector_corrector_strategy",
+            default_solve_controls()["predictor_corrector_corrector_strategy"],
+        )
+    ).strip().lower()
+    if predictor_corrector_corrector_strategy not in {
+        STORAGE_ACTIVE_SET_NONE,
+        STORAGE_ACTIVE_SET_HYSTERESIS,
+        STORAGE_ACTIVE_SET_FREEZE_WHEN_STABLE,
+    }:
+        raise ValueError(
+            "predictor_corrector_corrector_strategy must be "
+            "'none', 'hysteresis', or 'freeze_when_stable'."
+        )
+    for active_set_key in (
+        "storage_active_set_strategy",
+        "storage_hysteresis_eps",
+        "storage_freeze_after_stable_iterations",
+        "storage_freeze_after_outer",
+        "storage_switch_fraction_tol",
+    ):
+        controls.pop(active_set_key, None)
 
     nx = int(spatial["nx"])
     ny = int(spatial["ny"])
@@ -792,13 +969,17 @@ def run_warp_transient_replay(
 
     warm_start_controls = dict(controls)
     transient_controls = dict(controls)
-    if formulation == FORMULATION_UNCONFINED and warm_start_used != WARM_START_ARTIFACT_INITIAL and (
-        "unconfined_startup_mode" not in explicit_control_keys
-    ):
-        # The replay already starts from a steady head, so the solver's internal
-        # confined pre-solve would repeat startup work during the first
-        # transient Picard step and can destabilize large-grid replays.
-        transient_controls["unconfined_startup_mode"] = "initial_head"
+    # MF6-compatible replay default: keep the declared
+    # ``unconfined_startup_mode`` (``confined_pre_solve`` in
+    # :func:`default_solve_controls`). A previous version of this path silently
+    # overrode the startup mode to ``initial_head`` whenever a steady warm start
+    # was supplied; that is exactly what made the *direct* MF6 replay diverge
+    # from the winning ``mf6_top_switch_current_picard`` variant, which runs the
+    # same solver with ``confined_pre_solve`` (final max_abs_diff ~= 0.0307 m).
+    # The startup mode is therefore left untouched here so the direct replay and
+    # the variant replay share one explicit MF6-compatible startup path. A caller
+    # that genuinely wants ``initial_head`` can still request it by passing it in
+    # ``solve_controls`` (caller-supplied keys override the defaults above).
 
     # Build the storativity field S (dimensionless) that the solver assembles as
     # ``storage_coeff * dx**2 / dt``. This MUST be a storativity, not a raw MF6
@@ -871,6 +1052,19 @@ def run_warp_transient_replay(
                 include_specific_storage=False,
                 storage_mode=UNCONFINED_STORAGE_PHREATIC_ONLY,
             )
+
+    using_predictor_corrector = (
+        formulation == FORMULATION_UNCONFINED
+        and include_specific_storage
+        and storage_reference == STORAGE_REFERENCE_CURRENT_PICARD
+        and storage_active_set_strategy == STORAGE_ACTIVE_SET_PREDICTOR_CORRECTOR
+    )
+    if storage_active_set_strategy == STORAGE_ACTIVE_SET_PREDICTOR_CORRECTOR and not using_predictor_corrector:
+        raise ValueError(
+            "storage_active_set_strategy='predictor_corrector' requires "
+            "formulation='unconfined', storage_reference='current_picard', and "
+            "an unconfined specific-storage mode."
+        )
     # Uniform-in-space recharge field, rebuilt per period.
     recharge_field = np.zeros((ny, nx), dtype=np.float64)
 
@@ -999,11 +1193,63 @@ def run_warp_transient_replay(
                             "storage_reference": STORAGE_REFERENCE_CURRENT_PICARD,
                             "unconfined_storage_mode_2d": unconfined_storage_mode_resolved,
                             "storage_top_threshold": storage_top_threshold,
+                            "storage_active_set_strategy": (
+                                predictor_corrector_corrector_strategy
+                                if using_predictor_corrector
+                                else storage_active_set_strategy
+                            ),
+                            "storage_hysteresis_eps": float(storage_hysteresis_eps),
+                            "storage_freeze_after_stable_iterations": int(
+                                storage_freeze_after_stable_iterations
+                            ),
+                            "storage_freeze_after_outer": storage_freeze_after_outer,
+                            "storage_switch_fraction_tol": float(storage_switch_fraction_tol),
                             "sy": float(sy),
                             "ss": float(ss),
                         }
                     )
-            head, info = solver.solve(**solve_kwargs)
+            if using_predictor_corrector:
+                predictor_kwargs = dict(solve_kwargs)
+                predictor_kwargs["initial_head"] = head_prev
+                predictor_kwargs["storage_reference"] = STORAGE_REFERENCE_PREVIOUS_PERIOD
+                predictor_kwargs["max_outer_iterations"] = int(predictor_max_outer_iterations)
+                predictor_kwargs.pop("storage_active_set_strategy", None)
+                predictor_kwargs.pop("storage_hysteresis_eps", None)
+                predictor_kwargs.pop("storage_freeze_after_stable_iterations", None)
+                predictor_kwargs.pop("storage_freeze_after_outer", None)
+                predictor_kwargs.pop("storage_switch_fraction_tol", None)
+                predictor_storativity, _predictor_sat_ref = build_unconfined_storativity(
+                    sy=sy,
+                    ss=float(ss),
+                    head_ref=head_prev,
+                    bottom=bottom,
+                    top=top,
+                    active=active,
+                    bc_mask=bc_mask,
+                    min_sat=min_sat,
+                    include_specific_storage=True,
+                    storage_mode=unconfined_storage_mode_resolved,
+                    storage_top_threshold=storage_top_threshold,
+                )
+                predictor_kwargs["storage_coeff"] = predictor_storativity
+                predictor_head, predictor_info = solver.solve(**predictor_kwargs)
+
+                solve_kwargs["initial_head"] = np.asarray(predictor_head, dtype=np.float64)
+                solve_kwargs["max_outer_iterations"] = int(corrector_max_outer_iterations)
+                head, info = solver.solve(**solve_kwargs)
+                if isinstance(info, dict):
+                    info = dict(info)
+                    info["predictor_corrector"] = {
+                        "enabled": True,
+                        "predictor_outer_iterations_requested": int(predictor_max_outer_iterations),
+                        "corrector_outer_iterations_requested": int(corrector_max_outer_iterations),
+                        "corrector_storage_active_set_strategy": (
+                            predictor_corrector_corrector_strategy
+                        ),
+                        "predictor_info": predictor_info if isinstance(predictor_info, dict) else None,
+                    }
+            else:
+                head, info = solver.solve(**solve_kwargs)
             period_times[per] = time.perf_counter() - t_per
 
             head = np.asarray(head, dtype=np.float64)
@@ -1013,6 +1259,19 @@ def run_warp_transient_replay(
             period_infos.append(last_info)
 
     total_time = time.perf_counter() - t0
+    solve_controls_used = dict(transient_controls)
+    solve_controls_used.update(
+        {
+            "storage_active_set_strategy": storage_active_set_strategy,
+            "storage_hysteresis_eps": float(storage_hysteresis_eps),
+            "storage_freeze_after_stable_iterations": int(storage_freeze_after_stable_iterations),
+            "storage_freeze_after_outer": storage_freeze_after_outer,
+            "storage_switch_fraction_tol": float(storage_switch_fraction_tol),
+            "predictor_max_outer_iterations": int(predictor_max_outer_iterations),
+            "corrector_max_outer_iterations": int(corrector_max_outer_iterations),
+            "predictor_corrector_corrector_strategy": predictor_corrector_corrector_strategy,
+        }
+    )
 
     return {
         "heads_per_period": heads_per_period,
@@ -1035,9 +1294,14 @@ def run_warp_transient_replay(
         "saturated_thickness_reference_source": sat_ref_source,
         "storage_reference": storage_reference,
         "storage_top_threshold": storage_top_threshold,
+        "storage_active_set_strategy": storage_active_set_strategy,
+        "storage_hysteresis_eps": float(storage_hysteresis_eps),
+        "storage_freeze_after_stable_iterations": int(storage_freeze_after_stable_iterations),
+        "storage_freeze_after_outer": storage_freeze_after_outer,
+        "storage_switch_fraction_tol": float(storage_switch_fraction_tol),
         "dt": float(dt),
         "formulation": formulation,
-        "solve_controls": transient_controls,
+        "solve_controls": solve_controls_used,
         "warm_start_mode": warm_start_mode,
         "warm_start_used": warm_start_used,
         "warm_start_head": actual_warm_start_head,
@@ -1144,8 +1408,13 @@ def run_replay_from_artifact(
     warm_start_mode: str = WARM_START_UNCONFINED_STEADY_MF6,
     formulation: str = FORMULATION_UNCONFINED,
     unconfined_storage_mode: str = UNCONFINED_STORAGE_MF6_CONVERTIBLE_TOP_SWITCH,
-    storage_reference: str = STORAGE_REFERENCE_PREVIOUS_PERIOD,
+    storage_reference: str = STORAGE_REFERENCE_CURRENT_PICARD,
     storage_top_threshold: str = STORAGE_TOP_THRESHOLD_GE,
+    storage_active_set_strategy: str = STORAGE_ACTIVE_SET_NONE,
+    storage_hysteresis_eps: float = 0.0,
+    storage_freeze_after_stable_iterations: int = 0,
+    storage_freeze_after_outer: int | None = None,
+    storage_switch_fraction_tol: float = 0.0,
     allow_warm_start_mismatch: bool = False,
 ) -> dict:
     """
@@ -1157,7 +1426,8 @@ def run_replay_from_artifact(
     By default the replay starts from the artifact's own
     ``unconfined_steady_head`` (``unconfined_steady_mf6``) and builds an explicit
     MF6-like convertible top-switch storativity field
-    (``mf6_convertible_top_switch``). Starting from a different warm start
+    (``mf6_convertible_top_switch``) using ``storage_reference=current_picard``,
+    the closest tested match to MF6. Starting from a different warm start
     than the artifact used is rejected unless
     ``allow_warm_start_mismatch=True``.
     """
@@ -1195,6 +1465,11 @@ def run_replay_from_artifact(
     storage_top_threshold = str(storage_top_threshold).strip().lower()
     if storage_top_threshold not in STORAGE_TOP_THRESHOLD_MODES:
         raise ValueError(f"storage_top_threshold must be one of {sorted(STORAGE_TOP_THRESHOLD_MODES)}.")
+    storage_active_set_strategy = str(storage_active_set_strategy).strip().lower()
+    if storage_active_set_strategy not in STORAGE_ACTIVE_SET_STRATEGIES:
+        raise ValueError(
+            f"storage_active_set_strategy must be one of {sorted(STORAGE_ACTIVE_SET_STRATEGIES)}."
+        )
 
     # The Warp warm start must be comparable to the MF6 artifact's warm-start
     # provenance. Re-solving the warm start with Warp (confined_steady_warp)
@@ -1240,7 +1515,8 @@ def run_replay_from_artifact(
             print(
                 f"  formulation: unconfined; storativity S = Ss*full_thickness above top, "
                 f"else Sy + Ss*saturated_thickness (Sy={sy}, Ss={ss}, "
-                f"reference={storage_reference}, top_threshold={storage_top_threshold})"
+                f"reference={storage_reference}, top_threshold={storage_top_threshold}, "
+                f"active_set_strategy={storage_active_set_strategy})"
             )
         else:
             print(
@@ -1251,6 +1527,23 @@ def run_replay_from_artifact(
         print(f"  formulation: confined; storativity S = Ss*full_thickness (Ss={ss})")
     print(f"  warm start: {warm_start_used} (artifact provenance: {artifact_warm_start})")
     print(f"  artifact: {artifact_path}")
+
+    # Effective MF6 replay settings (caller overrides applied on top of the
+    # declared defaults). Printed explicitly so the direct replay header and the
+    # winning variant cannot silently drift apart again.
+    effective_controls = dict(default_solve_controls())
+    if solve_controls:
+        effective_controls.update(solve_controls)
+    effective_startup_mode = str(
+        effective_controls.get("unconfined_startup_mode", "confined_pre_solve")
+    )
+    print(
+        f"  MF6 replay settings: unconfined_storage_mode={unconfined_storage_mode}, "
+        f"storage_reference={storage_reference}, "
+        f"storage_top_threshold={storage_top_threshold}, "
+        f"storage_active_set_strategy={storage_active_set_strategy}, "
+        f"unconfined_startup_mode={effective_startup_mode}, warm_start={warm_start_used}"
+    )
 
     warp_result = run_warp_transient_replay(
         spatial=spatial,
@@ -1268,6 +1561,11 @@ def run_replay_from_artifact(
         unconfined_storage_mode=unconfined_storage_mode,
         storage_reference=storage_reference,
         storage_top_threshold=storage_top_threshold,
+        storage_active_set_strategy=storage_active_set_strategy,
+        storage_hysteresis_eps=storage_hysteresis_eps,
+        storage_freeze_after_stable_iterations=storage_freeze_after_stable_iterations,
+        storage_freeze_after_outer=storage_freeze_after_outer,
+        storage_switch_fraction_tol=storage_switch_fraction_tol,
     )
 
     comparison = compare_transient(
@@ -1313,6 +1611,22 @@ def run_replay_from_artifact(
         ),
         storage_reference=np.asarray(warp_result.get("storage_reference", STORAGE_REFERENCE_PREVIOUS_PERIOD)),
         storage_top_threshold=np.asarray(warp_result.get("storage_top_threshold", STORAGE_TOP_THRESHOLD_GE)),
+        storage_active_set_strategy=np.asarray(
+            warp_result.get("storage_active_set_strategy", STORAGE_ACTIVE_SET_NONE)
+        ),
+        storage_hysteresis_eps=np.asarray(
+            warp_result.get("storage_hysteresis_eps", 0.0), dtype=np.float64
+        ),
+        storage_freeze_after_stable_iterations=np.asarray(
+            warp_result.get("storage_freeze_after_stable_iterations", 0), dtype=np.int32
+        ),
+        storage_freeze_after_outer=np.asarray(
+            -1 if warp_result.get("storage_freeze_after_outer") is None else warp_result.get("storage_freeze_after_outer"),
+            dtype=np.int32,
+        ),
+        storage_switch_fraction_tol=np.asarray(
+            warp_result.get("storage_switch_fraction_tol", 0.0), dtype=np.float64
+        ),
         saturated_thickness_reference=(
             np.asarray(sat_ref_field, dtype=np.float64)
             if sat_ref_field is not None
@@ -1361,12 +1675,31 @@ def run_replay_from_artifact(
         "n_periods": n_periods,
         "dt": dt,
         "formulation": formulation,
+        # Consolidated, explicit MF6 replay settings. The direct replay and the
+        # winning ``mf6_top_switch_current_picard`` variant must agree on these.
+        "mf6_replay_settings": {
+            "unconfined_storage_mode": warp_result["unconfined_storage_mode"],
+            "storage_reference": warp_result.get("storage_reference", STORAGE_REFERENCE_PREVIOUS_PERIOD),
+            "storage_top_threshold": warp_result.get("storage_top_threshold", STORAGE_TOP_THRESHOLD_GE),
+            "storage_active_set_strategy": warp_result.get("storage_active_set_strategy", STORAGE_ACTIVE_SET_NONE),
+            "unconfined_startup_mode": warp_result["solve_controls"].get(
+                "unconfined_startup_mode", "confined_pre_solve"
+            ),
+            "warm_start": warp_result["warm_start_used"],
+        },
         "storage": {
             "sy": sy,
             "ss": ss,
             "unconfined_storage_mode": warp_result["unconfined_storage_mode"],
             "storage_reference": warp_result.get("storage_reference", STORAGE_REFERENCE_PREVIOUS_PERIOD),
             "storage_top_threshold": warp_result.get("storage_top_threshold", STORAGE_TOP_THRESHOLD_GE),
+            "storage_active_set_strategy": warp_result.get("storage_active_set_strategy", STORAGE_ACTIVE_SET_NONE),
+            "storage_hysteresis_eps": warp_result.get("storage_hysteresis_eps", 0.0),
+            "storage_freeze_after_stable_iterations": warp_result.get(
+                "storage_freeze_after_stable_iterations", 0
+            ),
+            "storage_freeze_after_outer": warp_result.get("storage_freeze_after_outer"),
+            "storage_switch_fraction_tol": warp_result.get("storage_switch_fraction_tol", 0.0),
             "warp_storativity": _field_stats(warp_result["storativity"], free_mask),
             "warp_storativity_kind": warp_result["storativity_kind"],
             "include_specific_storage": warp_result["include_specific_storage"],
@@ -1445,6 +1778,14 @@ def _summarize_last_info(info: dict) -> dict:
         "chebyshev_resets", "accepted_picard_update_count",
         "strict_inner_nonconvergence_count", "unusable_inner_solve_count",
         "practical_inner_acceptance_count", "effectively_dry_cell_count",
+        "storage_active_set_strategy", "storage_hysteresis_eps",
+        "storage_freeze_after_stable_iterations", "storage_freeze_after_outer",
+        "storage_switch_fraction_tol", "max_top_switch_changed_count",
+        "max_top_switch_changed_fraction", "last_top_switch_changed_count",
+        "last_top_switch_changed_fraction", "last_above_top_count",
+        "last_above_top_fraction", "top_switch_frozen",
+        "top_switch_frozen_outer_iteration", "max_storage_diag_change_max",
+        "max_storage_diag_change_rms",
     )
     out = {}
     for key in keys:
@@ -1491,6 +1832,21 @@ def _summarize_period_infos(period_infos: list[dict]) -> dict:
         "inner_h_rms_end",
         "inner_max_cycles_used",
         "effectively_dry_cell_count",
+        "storage_active_set_strategy",
+        "storage_hysteresis_eps",
+        "storage_freeze_after_stable_iterations",
+        "storage_freeze_after_outer",
+        "storage_switch_fraction_tol",
+        "max_top_switch_changed_count",
+        "max_top_switch_changed_fraction",
+        "last_top_switch_changed_count",
+        "last_top_switch_changed_fraction",
+        "last_above_top_count",
+        "last_above_top_fraction",
+        "top_switch_frozen",
+        "top_switch_frozen_outer_iteration",
+        "max_storage_diag_change_max",
+        "max_storage_diag_change_rms",
     )
 
     periods = []
@@ -1504,6 +1860,20 @@ def _summarize_period_infos(period_infos: list[dict]) -> dict:
         converged = bool(period_summary.get("converged", False))
         if not converged and first_nonconverged_period is None:
             first_nonconverged_period = int(period_index)
+        diagnosis = "stable"
+        if (
+            period_summary.get("storage_active_set_strategy") in {
+                STORAGE_ACTIVE_SET_HYSTERESIS,
+                STORAGE_ACTIVE_SET_FREEZE_WHEN_STABLE,
+            }
+            and bool(period_summary.get("top_switch_frozen", False))
+        ):
+            diagnosis = "top_switch_frozen"
+        if float(period_summary.get("last_top_switch_changed_fraction", 0.0) or 0.0) > 0.0:
+            diagnosis = "active_set_still_changing"
+        if not converged and float(period_summary.get("max_top_switch_changed_fraction", 0.0) or 0.0) > 0.0:
+            diagnosis = "active_set_cycling_suspected"
+        period_summary["diagnosis"] = diagnosis
         periods.append(period_summary)
 
     return {
@@ -1572,8 +1942,13 @@ def main(
     warm_start_mode: str = WARM_START_UNCONFINED_STEADY_MF6,
     formulation: str = FORMULATION_UNCONFINED,
     unconfined_storage_mode: str = UNCONFINED_STORAGE_MF6_CONVERTIBLE_TOP_SWITCH,
-    storage_reference: str = STORAGE_REFERENCE_PREVIOUS_PERIOD,
+    storage_reference: str = STORAGE_REFERENCE_CURRENT_PICARD,
     storage_top_threshold: str = STORAGE_TOP_THRESHOLD_GE,
+    storage_active_set_strategy: str = STORAGE_ACTIVE_SET_NONE,
+    storage_hysteresis_eps: float = 0.0,
+    storage_freeze_after_stable_iterations: int = 0,
+    storage_freeze_after_outer: int | None = None,
+    storage_switch_fraction_tol: float = 0.0,
     allow_warm_start_mismatch: bool = False,
 ) -> dict:
     """
@@ -1607,6 +1982,11 @@ def main(
         unconfined_storage_mode=unconfined_storage_mode,
         storage_reference=storage_reference,
         storage_top_threshold=storage_top_threshold,
+        storage_active_set_strategy=storage_active_set_strategy,
+        storage_hysteresis_eps=storage_hysteresis_eps,
+        storage_freeze_after_stable_iterations=storage_freeze_after_stable_iterations,
+        storage_freeze_after_outer=storage_freeze_after_outer,
+        storage_switch_fraction_tol=storage_switch_fraction_tol,
         allow_warm_start_mismatch=allow_warm_start_mismatch,
     )
 
@@ -1623,8 +2003,13 @@ if __name__ == "__main__":
     warm_start_mode = WARM_START_UNCONFINED_STEADY_MF6
     formulation = FORMULATION_UNCONFINED
     unconfined_storage_mode = UNCONFINED_STORAGE_MF6_CONVERTIBLE_TOP_SWITCH
-    storage_reference = STORAGE_REFERENCE_PREVIOUS_PERIOD
+    storage_reference = STORAGE_REFERENCE_CURRENT_PICARD
     storage_top_threshold = STORAGE_TOP_THRESHOLD_GE
+    storage_active_set_strategy = STORAGE_ACTIVE_SET_NONE
+    storage_hysteresis_eps = 0.0
+    storage_freeze_after_stable_iterations = 0
+    storage_freeze_after_outer = None
+    storage_switch_fraction_tol = 0.0
     allow_warm_start_mismatch = False
     main(
         artifact_path=artifact_path,
@@ -1636,5 +2021,10 @@ if __name__ == "__main__":
         unconfined_storage_mode=unconfined_storage_mode,
         storage_reference=storage_reference,
         storage_top_threshold=storage_top_threshold,
+        storage_active_set_strategy=storage_active_set_strategy,
+        storage_hysteresis_eps=storage_hysteresis_eps,
+        storage_freeze_after_stable_iterations=storage_freeze_after_stable_iterations,
+        storage_freeze_after_outer=storage_freeze_after_outer,
+        storage_switch_fraction_tol=storage_switch_fraction_tol,
         allow_warm_start_mismatch=allow_warm_start_mismatch,
     )
