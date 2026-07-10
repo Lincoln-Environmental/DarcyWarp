@@ -6356,6 +6356,11 @@ class WarpDarcySolver:
             dt=None,
             head_prev=None,
             refresh_diag_with_transient_storage: bool = True,
+            storage_reference: str = "previous_period",
+            unconfined_storage_mode_2d: str | None = None,
+            storage_top_threshold: str = "ge",
+            sy: float | None = None,
+            ss: float | None = None,
             accept_on_head_change_only: bool = False,
     ):
         """
@@ -6402,6 +6407,10 @@ class WarpDarcySolver:
             under-relaxation of T(h) updates during early Picard iterations.
           - unconfined_startup_mode: "initial_head" keeps current behaviour;
             "confined_pre_solve" runs one fixed-T confined solve to warm-start.
+          - storage_reference: "previous_period" keeps transient storage fixed
+            from the caller-supplied storage_coeff. "current_picard" is a
+            diagnostic path that rebuilds 2D unconfined storage from the current
+            Picard head using sy/ss and unconfined_storage_mode_2d.
         """
 
         # Track whether a transient storage diagonal is in use so build_hierarchy
@@ -6575,6 +6584,32 @@ class WarpDarcySolver:
             if startup_mode not in {"initial_head", "confined_pre_solve"}:
                 raise ValueError("unconfined_startup_mode must be 'initial_head' or 'confined_pre_solve'.")
 
+            storage_reference_mode = str(storage_reference).strip().lower()
+            if storage_reference_mode not in {"previous_period", "current_picard"}:
+                raise ValueError("storage_reference must be 'previous_period' or 'current_picard'.")
+            storage_top_threshold_mode = str(storage_top_threshold).strip().lower()
+            if storage_top_threshold_mode not in {"ge", "gt"}:
+                raise ValueError("storage_top_threshold must be 'ge' or 'gt'.")
+            storage_mode_2d = None if unconfined_storage_mode_2d is None else str(unconfined_storage_mode_2d).strip().lower()
+            current_picard_storage = bool(transient) and storage_reference_mode == "current_picard"
+            if current_picard_storage:
+                if storage_mode_2d not in {"integrated_sy_ss", "mf6_convertible", "mf6_convertible_top_switch"}:
+                    raise ValueError(
+                        "current_picard storage requires unconfined_storage_mode_2d to be "
+                        "'integrated_sy_ss', 'mf6_convertible', or 'mf6_convertible_top_switch'."
+                    )
+                if sy is None or ss is None:
+                    raise ValueError("current_picard storage requires sy and ss.")
+                if ztop_arr is None:
+                    raise ValueError("current_picard storage requires ztop_field.")
+                sy_f = float(sy)
+                ss_f = float(ss)
+                if sy_f < 0.0 or ss_f < 0.0 or not np.isfinite(sy_f) or not np.isfinite(ss_f):
+                    raise ValueError("sy and ss must be finite and non-negative.")
+            else:
+                sy_f = float("nan")
+                ss_f = float("nan")
+
             max_update_f = float(max_head_change_per_outer_iteration)
             if max_update_f <= 0.0 or not np.isfinite(max_update_f):
                 raise ValueError("max_head_change_per_outer_iteration must be positive and finite.")
@@ -6628,6 +6663,29 @@ class WarpDarcySolver:
                 "cheby_lambda_max": float(cheby_lambda_max),
             }
 
+            def _storage_from_picard_head(head_ref_arr: np.ndarray) -> np.ndarray:
+                head_ref64 = np.asarray(head_ref_arr, dtype=np.float64)
+                if ztop_arr is None:
+                    raise ValueError("ztop_field is required for current Picard storage.")
+                full_thickness = np.maximum(ztop_arr - zbot_arr, min_sat)
+                sat_ref = np.clip(head_ref64 - zbot_arr, min_sat, full_thickness)
+                if storage_mode_2d == "mf6_convertible_top_switch":
+                    above_top = (
+                        head_ref64 >= ztop_arr
+                        if storage_top_threshold_mode == "ge"
+                        else head_ref64 > ztop_arr
+                    )
+                    storage = np.where(
+                        above_top,
+                        ss_f * full_thickness,
+                        sy_f + ss_f * sat_ref,
+                    )
+                else:
+                    storage = sy_f + ss_f * sat_ref
+                storage = storage.astype(NP_FLOAT, copy=False)
+                storage[~free_mask0] = NP_FLOAT(0.0)
+                return storage
+
             if startup_mode == "confined_pre_solve":
                 sat_startup = h_iter.astype(np.float64, copy=False) - zbot_arr
                 sat_startup = np.maximum(sat_startup, min_sat)
@@ -6637,6 +6695,11 @@ class WarpDarcySolver:
                 T_startup = (K_arr * sat_startup).astype(NP_FLOAT, copy=False)
                 T_startup[~active_mask] = NP_FLOAT(0.0)
                 self.update_T_in_place(T_startup)
+                storage_coeff_startup = (
+                    _storage_from_picard_head(h_iter)
+                    if current_picard_storage
+                    else storage_coeff
+                )
 
                 h_startup = self.solve_multigrid_kcycle(
                     max_cycles=int(max_cycles),
@@ -6644,7 +6707,7 @@ class WarpDarcySolver:
                     return_info=False,
                     unconfined=False,
                     transient=transient,
-                    storage_coeff=storage_coeff,
+                    storage_coeff=storage_coeff_startup,
                     dt=dt,
                     head_prev=head_prev,
                     refresh_diag_with_transient_storage=True,
@@ -6736,6 +6799,31 @@ class WarpDarcySolver:
 
                 self.update_T_in_place(T_pic)
                 T_previous = T_pic.copy()
+                storage_coeff_inner = (
+                    _storage_from_picard_head(h_iter)
+                    if current_picard_storage
+                    else storage_coeff
+                )
+                if storage_coeff_inner is not None:
+                    storage_inner_arr = np.asarray(storage_coeff_inner, dtype=np.float64)
+                    if storage_inner_arr.ndim == 0:
+                        storage_inner_arr = np.full(shape0, float(storage_inner_arr.reshape(())), dtype=np.float64)
+                    storage_inner_diag = storage_inner_arr * float(self.dx) * float(self.dx) / float(dt)
+                    storage_inner_free = storage_inner_diag[free_mask0]
+                    storage_coeff_free = storage_inner_arr[free_mask0]
+                    storage_diag_min = float(np.min(storage_inner_free)) if storage_inner_free.size else None
+                    storage_diag_max = float(np.max(storage_inner_free)) if storage_inner_free.size else None
+                    storage_diag_mean = float(np.mean(storage_inner_free)) if storage_inner_free.size else None
+                    storage_coeff_min = float(np.min(storage_coeff_free)) if storage_coeff_free.size else None
+                    storage_coeff_max = float(np.max(storage_coeff_free)) if storage_coeff_free.size else None
+                    storage_coeff_mean = float(np.mean(storage_coeff_free)) if storage_coeff_free.size else None
+                else:
+                    storage_diag_min = None
+                    storage_diag_max = None
+                    storage_diag_mean = None
+                    storage_coeff_min = None
+                    storage_coeff_max = None
+                    storage_coeff_mean = None
 
                 head_lin, info_lin = self.solve_multigrid_kcycle(
                     max_cycles=int(inner_max_cycles),
@@ -6743,7 +6831,7 @@ class WarpDarcySolver:
                     return_info=True,
                     unconfined=False,
                     transient=transient,
-                    storage_coeff=storage_coeff,
+                    storage_coeff=storage_coeff_inner,
                     dt=dt,
                     head_prev=head_prev,
                     # Rebuild hierarchy when period-dependent storage changes;
@@ -6967,6 +7055,15 @@ class WarpDarcySolver:
                         "max_saturated_thickness": float(np.nanmax(sat[active_mask])) if np.any(active_mask) else float("nan"),
                         "min_transmissivity": float(np.nanmin(T_pic[active_mask])) if np.any(active_mask) else float("nan"),
                         "max_transmissivity": float(np.nanmax(T_pic[active_mask])) if np.any(active_mask) else float("nan"),
+                        "storage_reference": str(storage_reference_mode),
+                        "unconfined_storage_mode_2d": storage_mode_2d,
+                        "storage_top_threshold": storage_top_threshold_mode,
+                        "storage_coeff_min": storage_coeff_min,
+                        "storage_coeff_max": storage_coeff_max,
+                        "storage_coeff_mean": storage_coeff_mean,
+                        "storage_diag_min": storage_diag_min,
+                        "storage_diag_max": storage_diag_max,
+                        "storage_diag_mean": storage_diag_mean,
                         "inner_iterations": int(last_linear_info.get("n_cycles_used", 0)),
                         "inner_residual": None if final_residual is None else float(final_residual),
                     }
@@ -7041,6 +7138,9 @@ class WarpDarcySolver:
                     "picard_head_tol": float(hclose_f),
                     "picard_dh_max_end": float(final_max_abs_head_change),
                     "unconfined_min_sat": float(min_sat),
+                    "storage_reference": str(storage_reference_mode),
+                    "unconfined_storage_mode_2d": storage_mode_2d,
+                    "storage_top_threshold": storage_top_threshold_mode,
                     "diag_preconditioner_backend": self._diag_backend_env_or_default(),
                     "update_T_profile_last": None if self._last_update_T_profile is None else dict(self._last_update_T_profile),
                     "update_T_profile_totals": None if self._update_T_profile_totals is None else dict(self._update_T_profile_totals),

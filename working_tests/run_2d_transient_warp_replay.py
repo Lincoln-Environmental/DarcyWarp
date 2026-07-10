@@ -106,10 +106,28 @@ FORMULATION_MODES = {FORMULATION_CONFINED, FORMULATION_UNCONFINED}
 # storativity field S is built for unconfined replay; they are distinct from the
 # 3D solver's own ``unconfined_storage_mode`` (``phreatic_sy`` / ``confined_volume``).
 UNCONFINED_STORAGE_PHREATIC_ONLY = "phreatic_only"
+# Existing vertically integrated behavior. The older public name
+# ``mf6_convertible`` remains accepted as an alias for this behavior.
+UNCONFINED_STORAGE_INTEGRATED_SY_SS = "integrated_sy_ss"
 UNCONFINED_STORAGE_MF6_CONVERTIBLE = "mf6_convertible"
+UNCONFINED_STORAGE_MF6_CONVERTIBLE_TOP_SWITCH = "mf6_convertible_top_switch"
 UNCONFINED_STORAGE_MODES = {
     UNCONFINED_STORAGE_PHREATIC_ONLY,
+    UNCONFINED_STORAGE_INTEGRATED_SY_SS,
     UNCONFINED_STORAGE_MF6_CONVERTIBLE,
+    UNCONFINED_STORAGE_MF6_CONVERTIBLE_TOP_SWITCH,
+}
+STORAGE_REFERENCE_PREVIOUS_PERIOD = "previous_period"
+STORAGE_REFERENCE_CURRENT_PICARD = "current_picard"
+STORAGE_REFERENCE_MODES = {
+    STORAGE_REFERENCE_PREVIOUS_PERIOD,
+    STORAGE_REFERENCE_CURRENT_PICARD,
+}
+STORAGE_TOP_THRESHOLD_GE = "ge"
+STORAGE_TOP_THRESHOLD_GT = "gt"
+STORAGE_TOP_THRESHOLD_MODES = {
+    STORAGE_TOP_THRESHOLD_GE,
+    STORAGE_TOP_THRESHOLD_GT,
 }
 
 
@@ -358,6 +376,8 @@ def build_unconfined_storativity(
     top: np.ndarray | None = None,
     min_sat: float = DEFAULT_MIN_SAT,
     include_specific_storage: bool = False,
+    storage_mode: str | None = None,
+    storage_top_threshold: str = STORAGE_TOP_THRESHOLD_GE,
 ) -> tuple[np.ndarray, np.ndarray | None]:
     """
     Build a dimensionless storativity field for 2D unconfined transient replay.
@@ -369,16 +389,16 @@ def build_unconfined_storativity(
     NOT and must be converted to a storativity by multiplying by saturated
     thickness.
 
-    * ``include_specific_storage=False`` (phreatic_only):
+    * ``include_specific_storage=False`` / ``phreatic_only``:
         ``S = Sy`` on active non-boundary water-table cells.
-    * ``include_specific_storage=True`` (mf6_convertible):
+    * ``integrated_sy_ss`` / legacy ``mf6_convertible``:
         ``S = Sy + Ss * saturated_thickness_ref`` where
         ``saturated_thickness_ref = clip(head_ref - bottom, min_sat, top-bottom)``.
-        This mirrors MF6 convertible-cell (``iconvert=1``) storage, which carries
-        both the phreatic ``Sy`` term and the confined elastic
-        ``Ss * saturated_thickness`` term. (When a cell is fully confined MF6
-        drops ``Sy``; this approximation keeps ``Sy + Ss*sat_thickness`` because
-        these water-table cases stay below ``top``.)
+        This is the existing vertically integrated approximation and applies
+        ``Sy`` even where the reference head is at or above ``top``.
+    * ``mf6_convertible_top_switch``:
+        ``S = Ss * full_thickness`` where the selected top-threshold rule is
+        met, otherwise ``S = Sy + Ss * saturated_thickness_ref``.
 
     Inactive and fixed-head boundary cells are zeroed: they carry no storage in
     the Warp 5-point transient assembly (the solver zeroes them too, so this is
@@ -388,25 +408,50 @@ def build_unconfined_storativity(
     element is the saturated-thickness field used for the ``Ss`` term (or
     ``None`` when ``include_specific_storage`` is False).
     """
+    mode = (
+        UNCONFINED_STORAGE_MF6_CONVERTIBLE
+        if storage_mode is None and include_specific_storage
+        else (
+            UNCONFINED_STORAGE_PHREATIC_ONLY
+            if storage_mode is None
+            else str(storage_mode).strip().lower()
+        )
+    )
+    if mode not in UNCONFINED_STORAGE_MODES:
+        raise ValueError(f"storage_mode must be one of {sorted(UNCONFINED_STORAGE_MODES)}.")
+    threshold_mode = str(storage_top_threshold).strip().lower()
+    if threshold_mode not in STORAGE_TOP_THRESHOLD_MODES:
+        raise ValueError(f"storage_top_threshold must be one of {sorted(STORAGE_TOP_THRESHOLD_MODES)}.")
+
     active_i = np.asarray(active, dtype=np.int32)
     bcm = np.asarray(bc_mask, dtype=np.int32)
     shape = active_i.shape
     free = (active_i != 0) & (bcm == 0)
 
-    storativity = np.full(shape, float(sy), dtype=np.float64)
+    storativity = np.zeros(shape, dtype=np.float64)
     sat_ref: np.ndarray | None = None
 
-    if include_specific_storage:
+    if mode == UNCONFINED_STORAGE_PHREATIC_ONLY:
+        storativity[free] = float(sy)
+    else:
         if head_ref is None or bottom is None or top is None:
             raise ValueError(
-                "include_specific_storage=True requires head_ref, bottom, and top."
+                f"storage_mode='{mode}' requires head_ref, bottom, and top."
             )
         head_ref = np.asarray(head_ref, dtype=np.float64)
         bottom = np.asarray(bottom, dtype=np.float64)
         top = np.asarray(top, dtype=np.float64)
         full_thickness = np.maximum(top - bottom, float(min_sat))
         sat_ref = np.clip(head_ref - bottom, float(min_sat), full_thickness)
-        storativity = storativity + float(ss) * sat_ref
+        if mode == UNCONFINED_STORAGE_MF6_CONVERTIBLE_TOP_SWITCH:
+            above_top = head_ref >= top if threshold_mode == STORAGE_TOP_THRESHOLD_GE else head_ref > top
+            storativity = np.where(
+                above_top,
+                float(ss) * full_thickness,
+                float(sy) + float(ss) * sat_ref,
+            )
+        else:
+            storativity = float(sy) + float(ss) * sat_ref
 
     # Solver convention: no storage on inactive or fixed-head boundary cells.
     storativity = storativity.copy()
@@ -622,6 +667,8 @@ def run_warp_transient_replay(
     warm_start_head: np.ndarray | None = None,
     formulation: str = FORMULATION_UNCONFINED,
     unconfined_storage_mode: str = UNCONFINED_STORAGE_PHREATIC_ONLY,
+    storage_reference: str = STORAGE_REFERENCE_PREVIOUS_PERIOD,
+    storage_top_threshold: str = STORAGE_TOP_THRESHOLD_GE,
 ) -> dict:
     """
     Step the 2D Warp transient solver through every stress period.
@@ -656,8 +703,16 @@ def run_warp_transient_replay(
         Number of periods to step. Defaults to ``len(recharge_rates)``.
     unconfined_storage_mode:
         How the unconfined storativity field is built: ``phreatic_only``
-        (``S = Sy``) or ``mf6_convertible`` (``S = Sy + Ss*saturated_thickness``).
-        Ignored for confined formulation.
+        (``S = Sy``), ``integrated_sy_ss`` / legacy ``mf6_convertible``
+        (``S = Sy + Ss*saturated_thickness``), or
+        ``mf6_convertible_top_switch``. Ignored for confined formulation.
+    storage_reference:
+        ``previous_period`` builds storage from the previous converged transient
+        head. ``current_picard`` lets the unconfined Picard loop rebuild storage
+        from the current Picard head.
+    storage_top_threshold:
+        For ``mf6_convertible_top_switch``, ``ge`` uses ``h_ref >= top`` and
+        ``gt`` uses ``h_ref > top`` for the confined/full-saturated switch.
     """
     warm_start_mode = str(warm_start_mode).strip().lower()
     if warm_start_mode not in WARM_START_MODES:
@@ -670,8 +725,14 @@ def run_warp_transient_replay(
     unconfined_storage_mode = str(unconfined_storage_mode).strip().lower()
     if unconfined_storage_mode not in UNCONFINED_STORAGE_MODES:
         raise ValueError(
-            "unconfined_storage_mode must be 'phreatic_only' or 'mf6_convertible'."
+            f"unconfined_storage_mode must be one of {sorted(UNCONFINED_STORAGE_MODES)}."
         )
+    storage_reference = str(storage_reference).strip().lower()
+    if storage_reference not in STORAGE_REFERENCE_MODES:
+        raise ValueError(f"storage_reference must be one of {sorted(STORAGE_REFERENCE_MODES)}.")
+    storage_top_threshold = str(storage_top_threshold).strip().lower()
+    if storage_top_threshold not in STORAGE_TOP_THRESHOLD_MODES:
+        raise ValueError(f"storage_top_threshold must be one of {sorted(STORAGE_TOP_THRESHOLD_MODES)}.")
 
     explicit_control_keys = set(solve_controls.keys()) if solve_controls else set()
     controls = dict(default_solve_controls())
@@ -778,20 +839,28 @@ def run_warp_transient_replay(
             min_sat=min_sat,
         )
         unconfined_storage_mode_resolved = unconfined_storage_mode
-        include_specific_storage = unconfined_storage_mode_resolved == UNCONFINED_STORAGE_MF6_CONVERTIBLE
+        include_specific_storage = unconfined_storage_mode_resolved != UNCONFINED_STORAGE_PHREATIC_ONLY
         if include_specific_storage and ss is None:
             raise ValueError(
-                "unconfined_storage_mode='mf6_convertible' requires ss (specific storage)."
+                f"unconfined_storage_mode='{unconfined_storage_mode_resolved}' requires ss (specific storage)."
             )
         storativity_kind = (
-            "sy_plus_ss_times_saturated_thickness"
-            if include_specific_storage
-            else "sy"
+            "sy"
+            if not include_specific_storage
+            else (
+                "mf6_convertible_top_switch"
+                if unconfined_storage_mode_resolved == UNCONFINED_STORAGE_MF6_CONVERTIBLE_TOP_SWITCH
+                else "sy_plus_ss_times_saturated_thickness"
+            )
         )
-        sat_ref_source = "head_prev" if include_specific_storage else None
-        if include_specific_storage:
-            # Built per period from head_prev so the Ss*saturated_thickness term
-            # tracks the water table (backward-Euler linearization).
+        sat_ref_source = storage_reference if include_specific_storage else None
+        if include_specific_storage and storage_reference == STORAGE_REFERENCE_CURRENT_PICARD:
+            # Built inside the unconfined Picard loop from the current Picard
+            # head. The previous-period head remains the RHS storage head.
+            storativity_field = None
+        elif include_specific_storage:
+            # Built per period from head_prev so the storage term tracks the
+            # previous converged water table (backward-Euler linearization).
             storativity_field = None
         else:
             storativity_field, _ = build_unconfined_storativity(
@@ -800,6 +869,7 @@ def run_warp_transient_replay(
                 bc_mask=bc_mask,
                 min_sat=min_sat,
                 include_specific_storage=False,
+                storage_mode=UNCONFINED_STORAGE_PHREATIC_ONLY,
             )
     # Uniform-in-space recharge field, rebuilt per period.
     recharge_field = np.zeros((ny, nx), dtype=np.float64)
@@ -883,9 +953,13 @@ def run_warp_transient_replay(
             recharge_field[active == 0] = 0.0
             solver.update_R_in_place(recharge_field)
 
-            if formulation == FORMULATION_UNCONFINED and include_specific_storage:
-                # Rebuild storativity each period so the Ss*saturated_thickness
-                # term follows the previous period's water table.
+            if (
+                formulation == FORMULATION_UNCONFINED
+                and include_specific_storage
+                and storage_reference == STORAGE_REFERENCE_PREVIOUS_PERIOD
+            ):
+                # Rebuild storativity each period so storage follows the
+                # previous period's water table.
                 storativity_field, sat_thickness_ref = build_unconfined_storativity(
                     sy=sy,
                     ss=float(ss),
@@ -896,6 +970,8 @@ def run_warp_transient_replay(
                     bc_mask=bc_mask,
                     min_sat=min_sat,
                     include_specific_storage=True,
+                    storage_mode=unconfined_storage_mode_resolved,
+                    storage_top_threshold=storage_top_threshold,
                 )
 
             t_per = time.perf_counter()
@@ -917,6 +993,16 @@ def run_warp_transient_replay(
                         "ztop_field": top,
                     }
                 )
+                if include_specific_storage and storage_reference == STORAGE_REFERENCE_CURRENT_PICARD:
+                    solve_kwargs.update(
+                        {
+                            "storage_reference": STORAGE_REFERENCE_CURRENT_PICARD,
+                            "unconfined_storage_mode_2d": unconfined_storage_mode_resolved,
+                            "storage_top_threshold": storage_top_threshold,
+                            "sy": float(sy),
+                            "ss": float(ss),
+                        }
+                    )
             head, info = solver.solve(**solve_kwargs)
             period_times[per] = time.perf_counter() - t_per
 
@@ -947,6 +1033,8 @@ def run_warp_transient_replay(
         "unconfined_storage_mode": unconfined_storage_mode_resolved,
         "saturated_thickness_reference": sat_thickness_ref,
         "saturated_thickness_reference_source": sat_ref_source,
+        "storage_reference": storage_reference,
+        "storage_top_threshold": storage_top_threshold,
         "dt": float(dt),
         "formulation": formulation,
         "solve_controls": transient_controls,
@@ -1055,7 +1143,9 @@ def run_replay_from_artifact(
     solve_controls: dict | None = None,
     warm_start_mode: str = WARM_START_UNCONFINED_STEADY_MF6,
     formulation: str = FORMULATION_UNCONFINED,
-    unconfined_storage_mode: str = UNCONFINED_STORAGE_MF6_CONVERTIBLE,
+    unconfined_storage_mode: str = UNCONFINED_STORAGE_MF6_CONVERTIBLE_TOP_SWITCH,
+    storage_reference: str = STORAGE_REFERENCE_PREVIOUS_PERIOD,
+    storage_top_threshold: str = STORAGE_TOP_THRESHOLD_GE,
     allow_warm_start_mismatch: bool = False,
 ) -> dict:
     """
@@ -1065,9 +1155,9 @@ def run_replay_from_artifact(
     plus ``warp_transient_heads.npz`` under the workspace.
 
     By default the replay starts from the artifact's own
-    ``unconfined_steady_head`` (``unconfined_steady_mf6``) and builds an
-    MF6-matching convertible storativity field (``mf6_convertible``:
-    ``S = Sy + Ss*saturated_thickness``). Starting from a different warm start
+    ``unconfined_steady_head`` (``unconfined_steady_mf6``) and builds an explicit
+    MF6-like convertible top-switch storativity field
+    (``mf6_convertible_top_switch``). Starting from a different warm start
     than the artifact used is rejected unless
     ``allow_warm_start_mismatch=True``.
     """
@@ -1097,8 +1187,14 @@ def run_replay_from_artifact(
         and unconfined_storage_mode not in UNCONFINED_STORAGE_MODES
     ):
         raise ValueError(
-            "unconfined_storage_mode must be 'phreatic_only' or 'mf6_convertible'."
+            f"unconfined_storage_mode must be one of {sorted(UNCONFINED_STORAGE_MODES)}."
         )
+    storage_reference = str(storage_reference).strip().lower()
+    if storage_reference not in STORAGE_REFERENCE_MODES:
+        raise ValueError(f"storage_reference must be one of {sorted(STORAGE_REFERENCE_MODES)}.")
+    storage_top_threshold = str(storage_top_threshold).strip().lower()
+    if storage_top_threshold not in STORAGE_TOP_THRESHOLD_MODES:
+        raise ValueError(f"storage_top_threshold must be one of {sorted(STORAGE_TOP_THRESHOLD_MODES)}.")
 
     # The Warp warm start must be comparable to the MF6 artifact's warm-start
     # provenance. Re-solving the warm start with Warp (confined_steady_warp)
@@ -1133,7 +1229,18 @@ def run_replay_from_artifact(
         if unconfined_storage_mode == UNCONFINED_STORAGE_MF6_CONVERTIBLE:
             print(
                 f"  formulation: unconfined; storativity S = Sy + Ss*saturated_thickness "
-                f"(Sy={sy}, Ss={ss}, mf6_convertible)"
+                f"(Sy={sy}, Ss={ss}, integrated alias mf6_convertible, reference={storage_reference})"
+            )
+        elif unconfined_storage_mode == UNCONFINED_STORAGE_INTEGRATED_SY_SS:
+            print(
+                f"  formulation: unconfined; storativity S = Sy + Ss*saturated_thickness "
+                f"(Sy={sy}, Ss={ss}, integrated_sy_ss, reference={storage_reference})"
+            )
+        elif unconfined_storage_mode == UNCONFINED_STORAGE_MF6_CONVERTIBLE_TOP_SWITCH:
+            print(
+                f"  formulation: unconfined; storativity S = Ss*full_thickness above top, "
+                f"else Sy + Ss*saturated_thickness (Sy={sy}, Ss={ss}, "
+                f"reference={storage_reference}, top_threshold={storage_top_threshold})"
             )
         else:
             print(
@@ -1159,6 +1266,8 @@ def run_replay_from_artifact(
         warm_start_head=warm_start_head,
         formulation=formulation,
         unconfined_storage_mode=unconfined_storage_mode,
+        storage_reference=storage_reference,
+        storage_top_threshold=storage_top_threshold,
     )
 
     comparison = compare_transient(
@@ -1190,7 +1299,11 @@ def run_replay_from_artifact(
         period_times=warp_result["period_times"],
         last_info=np.asarray(json.dumps(warp_result["last_info"], default=str)),
         period_infos=np.asarray(json.dumps(period_infos, default=str)),
-        warp_storativity=np.asarray(warp_result["storativity"], dtype=np.float64),
+        warp_storativity=(
+            np.asarray(warp_result["storativity"], dtype=np.float64)
+            if warp_result["storativity"] is not None
+            else np.asarray([], dtype=np.float64)
+        ),
         warp_storativity_kind=np.asarray(warp_result["storativity_kind"]),
         include_specific_storage=np.asarray(warp_result["include_specific_storage"]),
         unconfined_storage_mode=np.asarray(
@@ -1198,6 +1311,8 @@ def run_replay_from_artifact(
             if warp_result["unconfined_storage_mode"] is not None
             else "none"
         ),
+        storage_reference=np.asarray(warp_result.get("storage_reference", STORAGE_REFERENCE_PREVIOUS_PERIOD)),
+        storage_top_threshold=np.asarray(warp_result.get("storage_top_threshold", STORAGE_TOP_THRESHOLD_GE)),
         saturated_thickness_reference=(
             np.asarray(sat_ref_field, dtype=np.float64)
             if sat_ref_field is not None
@@ -1210,7 +1325,11 @@ def run_replay_from_artifact(
         warm_start_used=np.asarray(warp_result["warm_start_used"]),
         warm_start_head=np.asarray(warp_result["warm_start_head"], dtype=np.float64),
         # Deprecated aliases:
-        storage_coeff=np.asarray(warp_result["storativity"], dtype=np.float64),
+        storage_coeff=(
+            np.asarray(warp_result["storativity"], dtype=np.float64)
+            if warp_result["storativity"] is not None
+            else np.asarray([], dtype=np.float64)
+        ),
         storage_coeff_kind=np.asarray(warp_result["storativity_kind"]),
     )
 
@@ -1246,6 +1365,8 @@ def run_replay_from_artifact(
             "sy": sy,
             "ss": ss,
             "unconfined_storage_mode": warp_result["unconfined_storage_mode"],
+            "storage_reference": warp_result.get("storage_reference", STORAGE_REFERENCE_PREVIOUS_PERIOD),
+            "storage_top_threshold": warp_result.get("storage_top_threshold", STORAGE_TOP_THRESHOLD_GE),
             "warp_storativity": _field_stats(warp_result["storativity"], free_mask),
             "warp_storativity_kind": warp_result["storativity_kind"],
             "include_specific_storage": warp_result["include_specific_storage"],
@@ -1450,7 +1571,9 @@ def main(
     diag_preconditioner_backend: str = "auto",
     warm_start_mode: str = WARM_START_UNCONFINED_STEADY_MF6,
     formulation: str = FORMULATION_UNCONFINED,
-    unconfined_storage_mode: str = UNCONFINED_STORAGE_MF6_CONVERTIBLE,
+    unconfined_storage_mode: str = UNCONFINED_STORAGE_MF6_CONVERTIBLE_TOP_SWITCH,
+    storage_reference: str = STORAGE_REFERENCE_PREVIOUS_PERIOD,
+    storage_top_threshold: str = STORAGE_TOP_THRESHOLD_GE,
     allow_warm_start_mismatch: bool = False,
 ) -> dict:
     """
@@ -1482,6 +1605,8 @@ def main(
         warm_start_mode=warm_start_mode,
         formulation=formulation,
         unconfined_storage_mode=unconfined_storage_mode,
+        storage_reference=storage_reference,
+        storage_top_threshold=storage_top_threshold,
         allow_warm_start_mismatch=allow_warm_start_mismatch,
     )
 
@@ -1495,10 +1620,12 @@ if __name__ == "__main__":
     # Default to the artifact's own unconfined steady head so the Warp-vs-MF6
     # comparison starts from a steady water table. Override to a Warp-resolved
     # warm start only with allow_warm_start_mismatch=True.
-    warm_start_mode = WARM_START_UNCONFINED_STEADY_WARP
+    warm_start_mode = WARM_START_UNCONFINED_STEADY_MF6
     formulation = FORMULATION_UNCONFINED
-    unconfined_storage_mode = UNCONFINED_STORAGE_MF6_CONVERTIBLE
-    allow_warm_start_mismatch = True
+    unconfined_storage_mode = UNCONFINED_STORAGE_MF6_CONVERTIBLE_TOP_SWITCH
+    storage_reference = STORAGE_REFERENCE_PREVIOUS_PERIOD
+    storage_top_threshold = STORAGE_TOP_THRESHOLD_GE
+    allow_warm_start_mismatch = False
     main(
         artifact_path=artifact_path,
         workspace=workspace,
@@ -1507,5 +1634,7 @@ if __name__ == "__main__":
         warm_start_mode=warm_start_mode,
         formulation=formulation,
         unconfined_storage_mode=unconfined_storage_mode,
+        storage_reference=storage_reference,
+        storage_top_threshold=storage_top_threshold,
         allow_warm_start_mismatch=allow_warm_start_mismatch,
     )
