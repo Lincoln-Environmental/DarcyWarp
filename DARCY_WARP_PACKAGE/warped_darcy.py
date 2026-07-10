@@ -6464,6 +6464,11 @@ class WarpDarcySolver:
             sy: float | None = None,
             ss: float | None = None,
             accept_on_head_change_only: bool = False,
+            practical_picard_acceptance_enabled: bool = False,
+            min_practical_outer_iterations: int = 8,
+            practical_residual_tol: float = 1.0e-4,
+            practical_dh_rms_tol: float = 3.0e-3,
+            practical_storage_diag_change_rms_tol: float = 30.0,
     ):
         """
         K-cycle multigrid using your existing hierarchy (self.mg_levels).
@@ -6516,6 +6521,10 @@ class WarpDarcySolver:
             from the caller-supplied storage_coeff. "current_picard" is a
             diagnostic path that rebuilds 2D unconfined storage from the current
             Picard head using sy/ss and unconfined_storage_mode_2d.
+          - practical_picard_acceptance_enabled: optional production acceptance
+            path for secant-Sy replay. Keeps strict Picard convergence metrics,
+            but allows the nonlinear loop to stop when the head field and the
+            storage linearisation have practically stabilised.
         """
 
         # Track whether a transient storage diagonal is in use so build_hierarchy
@@ -6724,10 +6733,16 @@ class WarpDarcySolver:
             storage_mode_2d = None if unconfined_storage_mode_2d is None else str(unconfined_storage_mode_2d).strip().lower()
             current_picard_storage = bool(transient) and storage_reference_mode == "current_picard"
             if current_picard_storage:
-                if storage_mode_2d not in {"integrated_sy_ss", "mf6_convertible", "mf6_convertible_top_switch"}:
+                if storage_mode_2d not in {
+                    "integrated_sy_ss",
+                    "mf6_convertible",
+                    "mf6_convertible_top_switch",
+                    "mf6_convertible_secant_sy",
+                }:
                     raise ValueError(
                         "current_picard storage requires unconfined_storage_mode_2d to be "
-                        "'integrated_sy_ss', 'mf6_convertible', or 'mf6_convertible_top_switch'."
+                        "'integrated_sy_ss', 'mf6_convertible', 'mf6_convertible_top_switch', "
+                        "or 'mf6_convertible_secant_sy'."
                     )
                 if sy is None or ss is None:
                     raise ValueError("current_picard storage requires sy and ss.")
@@ -6749,6 +6764,25 @@ class WarpDarcySolver:
             max_update_f = float(max_head_change_per_outer_iteration)
             if max_update_f <= 0.0 or not np.isfinite(max_update_f):
                 raise ValueError("max_head_change_per_outer_iteration must be positive and finite.")
+
+            practical_picard_acceptance_enabled_b = bool(practical_picard_acceptance_enabled)
+            min_practical_outer_iterations_i = int(min_practical_outer_iterations)
+            if min_practical_outer_iterations_i < 1:
+                raise ValueError("min_practical_outer_iterations must be >= 1.")
+            practical_residual_tol_f = float(practical_residual_tol)
+            practical_dh_rms_tol_f = float(practical_dh_rms_tol)
+            practical_storage_diag_change_rms_tol_f = float(practical_storage_diag_change_rms_tol)
+            if (
+                practical_residual_tol_f < 0.0
+                or practical_dh_rms_tol_f < 0.0
+                or practical_storage_diag_change_rms_tol_f < 0.0
+            ):
+                raise ValueError("practical Picard tolerances must be non-negative.")
+            secant_sy_practical_mode = bool(
+                practical_picard_acceptance_enabled_b
+                and current_picard_storage
+                and storage_mode_2d == "mf6_convertible_secant_sy"
+            )
 
             initial_sat_f = float(initial_saturated_thickness)
             if initial_sat_f <= 0.0 or not np.isfinite(initial_sat_f):
@@ -6804,14 +6838,19 @@ class WarpDarcySolver:
                     *,
                     previous_above_top_mask: np.ndarray | None = None,
                     frozen_above_top_mask: np.ndarray | None = None,
-            ) -> tuple[np.ndarray, np.ndarray | None, np.ndarray | None]:
+            ) -> dict[str, np.ndarray | None]:
                 head_ref64 = np.asarray(head_ref_arr, dtype=np.float64)
                 if ztop_arr is None:
                     raise ValueError("ztop_field is required for current Picard storage.")
                 full_thickness = np.maximum(ztop_arr - zbot_arr, min_sat)
-                sat_ref = np.clip(head_ref64 - zbot_arr, min_sat, full_thickness)
+                head_old64 = np.asarray(head_prev, dtype=np.float64)
+                sat_ref_zero = np.clip(head_ref64 - zbot_arr, 0.0, full_thickness)
+                sat_old_zero = np.clip(head_old64 - zbot_arr, 0.0, full_thickness)
+                sat_ref_ss = np.clip(head_ref64 - zbot_arr, min_sat, full_thickness)
                 raw_above_top = None
                 effective_above_top = None
+                sy_coeff = np.zeros(shape0, dtype=np.float64)
+                ss_coeff = np.zeros(shape0, dtype=np.float64)
                 if storage_mode_2d == "mf6_convertible_top_switch":
                     raw_above_top = _top_switch_above_mask(
                         head_ref=head_ref64,
@@ -6833,16 +6872,46 @@ class WarpDarcySolver:
                         )
                     else:
                         effective_above_top = raw_above_top
-                    storage = np.where(
-                        effective_above_top,
-                        ss_f * full_thickness,
-                        sy_f + ss_f * sat_ref,
-                    )
+                    sy_coeff[:, :] = sy_f
+                    sy_coeff[effective_above_top] = 0.0
+                    ss_coeff[:, :] = ss_f * sat_ref_ss
+                    ss_coeff[effective_above_top] = ss_f * full_thickness[effective_above_top]
+                elif storage_mode_2d == "mf6_convertible_secant_sy":
+                    dh_ref = head_ref64 - head_old64
+                    moving = np.abs(dh_ref) > 1.0e-12
+                    sy_coeff[moving] = sy_f * ((sat_ref_zero[moving] - sat_old_zero[moving]) / dh_ref[moving])
+                    fallback = (~moving) & (head_ref64 < ztop_arr) & (head_ref64 > zbot_arr)
+                    sy_coeff[fallback] = sy_f
+                    sy_coeff = np.clip(sy_coeff, 0.0, sy_f)
+                    ss_coeff[:, :] = ss_f * sat_ref_ss
                 else:
-                    storage = sy_f + ss_f * sat_ref
+                    sy_coeff[:, :] = sy_f
+                    ss_coeff[:, :] = ss_f * sat_ref_ss
+                storage = sy_coeff + ss_coeff
                 storage = storage.astype(NP_FLOAT, copy=False)
                 storage[~free_mask0] = NP_FLOAT(0.0)
-                return storage, raw_above_top, effective_above_top
+                sy_coeff = sy_coeff.astype(np.float64, copy=False)
+                ss_coeff = ss_coeff.astype(np.float64, copy=False)
+                sy_coeff[~free_mask0] = 0.0
+                ss_coeff[~free_mask0] = 0.0
+                sat_ref_zero = sat_ref_zero.astype(np.float64, copy=False)
+                sat_old_zero = sat_old_zero.astype(np.float64, copy=False)
+                sat_ref_ss = sat_ref_ss.astype(np.float64, copy=False)
+                sat_ref_zero[~free_mask0] = 0.0
+                sat_old_zero[~free_mask0] = 0.0
+                sat_ref_ss[~free_mask0] = 0.0
+                return {
+                    "storage": storage,
+                    "raw_above_top": raw_above_top,
+                    "effective_above_top": effective_above_top,
+                    "sy_coeff": sy_coeff,
+                    "ss_coeff": ss_coeff,
+                    "sat_ref_zero": sat_ref_zero,
+                    "sat_old_zero": sat_old_zero,
+                    "sat_ref_ss": sat_ref_ss,
+                    "full_thickness": full_thickness.astype(np.float64, copy=False),
+                    "head_ref": head_ref64.astype(np.float64, copy=False),
+                }
 
             if startup_mode == "confined_pre_solve":
                 sat_startup = h_iter.astype(np.float64, copy=False) - zbot_arr
@@ -6854,7 +6923,7 @@ class WarpDarcySolver:
                 T_startup[~active_mask] = NP_FLOAT(0.0)
                 self.update_T_in_place(T_startup)
                 storage_coeff_startup = (
-                    _storage_from_picard_head(h_iter)[0]
+                    _storage_from_picard_head(h_iter)["storage"]
                     if current_picard_storage
                     else storage_coeff
                 )
@@ -6901,7 +6970,7 @@ class WarpDarcySolver:
                     T_pre[~active_mask] = NP_FLOAT(0.0)
                     self.update_T_in_place(T_pre)
                     storage_coeff_pre = (
-                        _storage_from_picard_head(h_pre)[0]
+                        _storage_from_picard_head(h_pre)["storage"]
                         if current_picard_storage
                         else storage_coeff
                     )
@@ -6951,7 +7020,9 @@ class WarpDarcySolver:
             final_max_abs_head_change = float("nan")
             last_linear_info: dict = {}
             outer_history: list[dict] = []
-            converged_nonlinear = False
+            strict_picard_convergence_passed = False
+            practical_picard_acceptance_passed = False
+            production_acceptance_passed = False
             T_previous: np.ndarray | None = None
             T_relax = float("nan")
             previous_storage_diag_arr: np.ndarray | None = None
@@ -6963,6 +7034,10 @@ class WarpDarcySolver:
             max_top_switch_changed_fraction = 0.0
             max_storage_diag_change_max = 0.0
             max_storage_diag_change_rms = 0.0
+            last_storage_coeff_array: np.ndarray | None = None
+            last_sy_storage_coeff_array: np.ndarray | None = None
+            last_ss_storage_coeff_array: np.ndarray | None = None
+            last_storage_reference_head_array: np.ndarray | None = None
 
             def _to_finite(value):
                 try:
@@ -7014,12 +7089,21 @@ class WarpDarcySolver:
                 T_previous = T_pic.copy()
                 top_switch_raw_mask = None
                 top_switch_effective_mask = None
+                storage_sy_coeff_arr = None
+                storage_ss_coeff_arr = None
+                storage_reference_head_arr = None
                 if current_picard_storage:
-                    storage_coeff_inner, top_switch_raw_mask, top_switch_effective_mask = _storage_from_picard_head(
+                    storage_state = _storage_from_picard_head(
                         h_iter,
                         previous_above_top_mask=previous_top_switch_mask,
                         frozen_above_top_mask=frozen_top_switch_mask,
                     )
+                    storage_coeff_inner = storage_state["storage"]
+                    top_switch_raw_mask = storage_state["raw_above_top"]
+                    top_switch_effective_mask = storage_state["effective_above_top"]
+                    storage_sy_coeff_arr = np.asarray(storage_state["sy_coeff"], dtype=np.float64)
+                    storage_ss_coeff_arr = np.asarray(storage_state["ss_coeff"], dtype=np.float64)
+                    storage_reference_head_arr = np.asarray(storage_state["head_ref"], dtype=np.float64)
                 else:
                     storage_coeff_inner = storage_coeff
                 if storage_coeff_inner is not None:
@@ -7387,14 +7471,50 @@ class WarpDarcySolver:
                 previous_storage_diag_arr = None if storage_coeff_inner is None else np.asarray(storage_inner_diag, dtype=np.float64).copy()
                 if top_switch_effective_mask is not None:
                     previous_top_switch_mask = np.asarray(top_switch_effective_mask, dtype=bool).copy()
+                last_storage_coeff_array = (
+                    None if storage_coeff_inner is None else np.asarray(storage_inner_arr, dtype=np.float64).copy()
+                )
+                last_sy_storage_coeff_array = (
+                    None if storage_sy_coeff_arr is None else np.asarray(storage_sy_coeff_arr, dtype=np.float64).copy()
+                )
+                last_ss_storage_coeff_array = (
+                    None if storage_ss_coeff_arr is None else np.asarray(storage_ss_coeff_arr, dtype=np.float64).copy()
+                )
+                last_storage_reference_head_array = (
+                    None
+                    if storage_reference_head_arr is None
+                    else np.asarray(storage_reference_head_arr, dtype=np.float64).copy()
+                )
 
                 head_change_converged = final_max_abs_head_change < hclose_f
+                strict_picard_convergence_passed = bool(
+                    head_change_converged and (inner_usable_for_picard or accept_on_head_change_only)
+                )
+                practical_picard_acceptance_passed = False
+                if secant_sy_practical_mode:
+                    practical_picard_acceptance_passed = bool(
+                        int(outer_idx + 1) >= min_practical_outer_iterations_i
+                        and final_residual is not None
+                        and np.isfinite(float(final_residual))
+                        and float(final_residual) <= practical_residual_tol_f
+                        and np.isfinite(float(trial_rms))
+                        and float(trial_rms) <= practical_dh_rms_tol_f
+                        and storage_diag_change_rms is not None
+                        and np.isfinite(float(storage_diag_change_rms))
+                        and float(storage_diag_change_rms) <= practical_storage_diag_change_rms_tol_f
+                    )
+                production_acceptance_passed = bool(
+                    strict_picard_convergence_passed or practical_picard_acceptance_passed
+                )
+                if outer_history:
+                    outer_history[-1]["strict_picard_convergence_passed"] = bool(strict_picard_convergence_passed)
+                    outer_history[-1]["practical_picard_acceptance_passed"] = bool(practical_picard_acceptance_passed)
+                    outer_history[-1]["production_acceptance_passed"] = bool(production_acceptance_passed)
                 # Diagnostic opt-in (default off): accept the Picard update on head
                 # change alone, treating the inner-residual / inner_usable_for_picard
                 # gate as a guardrail rather than a hard failure criterion. When False
                 # this is identical to ``and inner_usable_for_picard``.
-                if head_change_converged and (inner_usable_for_picard or accept_on_head_change_only):
-                    converged_nonlinear = True
+                if production_acceptance_passed:
                     break
 
             final_sat = h_iter.astype(np.float64, copy=False) - zbot_arr
@@ -7408,11 +7528,11 @@ class WarpDarcySolver:
             effectively_dry = active_mask & (h_iter.astype(np.float64, copy=False) <= zbot_arr + float(dry_cell_flag_threshold))
             info_out = dict(last_linear_info) if isinstance(last_linear_info, dict) else {}
             info_out.update(
-                {
-                    "solver_type": "kcycle_unconfined_picard_chebyshev",
-                    "linear_solver_type": str(last_linear_info.get("solver_type", "kcycle")),
-                    "unconfined": True,
-                    "converged": bool(converged_nonlinear),
+                    {
+                        "solver_type": "kcycle_unconfined_picard_chebyshev",
+                        "linear_solver_type": str(last_linear_info.get("solver_type", "kcycle")),
+                        "unconfined": True,
+                    "converged": bool(production_acceptance_passed),
                     "outer_iterations": int(len(outer_history)),
                     "chebyshev_enabled": bool(chebyshev_enabled),
                     "chebyshev_order": int(chebyshev_order),
@@ -7450,7 +7570,15 @@ class WarpDarcySolver:
                     "inner_h_rms_end": float(final_h_rms_end) if np.isfinite(final_h_rms_end) else None,
                     "inner_max_cycles_used": int(final_inner_max_cycles),
                     "outer_history": outer_history,
-                    "picard_converged": bool(converged_nonlinear),
+                    "picard_converged": bool(strict_picard_convergence_passed),
+                    "strict_picard_convergence_passed": bool(strict_picard_convergence_passed),
+                    "practical_picard_acceptance_passed": bool(practical_picard_acceptance_passed),
+                    "production_acceptance_passed": bool(production_acceptance_passed),
+                    "practical_picard_acceptance_enabled": bool(secant_sy_practical_mode),
+                    "min_practical_outer_iterations": int(min_practical_outer_iterations_i),
+                    "practical_residual_tol": float(practical_residual_tol_f),
+                    "practical_dh_rms_tol": float(practical_dh_rms_tol_f),
+                    "practical_storage_diag_change_rms_tol": float(practical_storage_diag_change_rms_tol_f),
                     "picard_n_iter_used": int(len(outer_history)),
                     "picard_max_iter": int(max_outer),
                     "picard_relax": float(omega_current),
@@ -7501,6 +7629,10 @@ class WarpDarcySolver:
                     ),
                     "max_storage_diag_change_max": float(max_storage_diag_change_max),
                     "max_storage_diag_change_rms": float(max_storage_diag_change_rms),
+                    "storage_coeff_last_linearization_array": last_storage_coeff_array,
+                    "sy_storage_coeff_last_linearization_array": last_sy_storage_coeff_array,
+                    "ss_storage_coeff_last_linearization_array": last_ss_storage_coeff_array,
+                    "storage_reference_head_last_linearization_array": last_storage_reference_head_array,
                     "diag_preconditioner_backend": self._diag_backend_env_or_default(),
                     "update_T_profile_last": None if self._last_update_T_profile is None else dict(self._last_update_T_profile),
                     "update_T_profile_totals": None if self._update_T_profile_totals is None else dict(self._update_T_profile_totals),

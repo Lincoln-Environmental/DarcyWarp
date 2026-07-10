@@ -211,6 +211,172 @@ def _save_compressed_npz(out_path: Path, arrays: dict[str, np.ndarray], preset: 
     out_path.write_bytes(lzma.compress(buf.getvalue(), preset=preset))
 
 
+def _decode_budget_record_name(name: object) -> str:
+    """
+    Normalize an MF6 budget record name to text.
+
+    :param name: Raw record name from Flopy.
+    :return: Decoded text.
+    """
+    if isinstance(name, bytes):
+        return name.decode("utf-8", errors="ignore").strip()
+    return str(name).strip()
+
+
+def _budget_array_2d(
+    *,
+    budget_file: "flopy.utils.CellBudgetFile",
+    record_name: str,
+    kstpkper: tuple[int, int],
+) -> np.ndarray | None:
+    """
+    Read one structured-grid cell-budget record as a 2D array.
+
+    :param budget_file: Flopy cell-budget reader.
+    :param record_name: MF6 record name.
+    :param kstpkper: ``(kstp, kper)`` tuple.
+    :return: ``(ny, nx)`` float64 array or ``None`` when the record is absent.
+    """
+    try:
+        data = budget_file.get_data(kstpkper=kstpkper, text=record_name, full3D=True)
+    except TypeError:
+        data = budget_file.get_data(kstpkper=kstpkper, text=record_name)
+    if not data:
+        return None
+    arr = np.asarray(data[0], dtype=np.float64)
+    if arr.ndim == 3 and arr.shape[0] == 1:
+        arr = arr[0]
+    if arr.ndim != 2:
+        raise ValueError(
+            f"budget record '{record_name}' at {kstpkper} has shape {arr.shape}, expected 2D structured data"
+        )
+    return arr.astype(np.float64, copy=False)
+
+
+def save_mf6_storage_budget_terms(
+    *,
+    cbb_path: Path,
+    out_path: Path,
+    case: TransientCase,
+    formulation: str,
+) -> Path:
+    """
+    Extract MF6 storage cell-budget terms and save them as a deterministic artifact.
+
+    :param cbb_path: MF6 cell-budget path.
+    :param out_path: Output ``.npz`` path.
+    :param case: Transient case metadata.
+    :param formulation: ``confined`` or ``unconfined``.
+    :return: Written path.
+    """
+    cbc = flopy.utils.CellBudgetFile(str(cbb_path), precision="double")
+    unique_names = [_decode_budget_record_name(name) for name in cbc.get_unique_record_names()]
+    storage_record_names = [name for name in unique_names if "STO" in name.upper() or "STORAGE" in name.upper()]
+    kstpkper_list = list(cbc.get_kstpkper())
+    nper = int(case.n_weeks)
+
+    per_record_arrays: dict[str, np.ndarray] = {}
+    total_storage = np.zeros((nper, case.ny, case.nx), dtype=np.float64)
+    package_terms = {
+        "recharge": np.zeros((nper, case.ny, case.nx), dtype=np.float64),
+        "chd": np.zeros((nper, case.ny, case.nx), dtype=np.float64),
+        "ghb": np.zeros((nper, case.ny, case.nx), dtype=np.float64),
+        "storage": np.zeros((nper, case.ny, case.nx), dtype=np.float64),
+    }
+
+    for record_name in storage_record_names:
+        record_arrays = np.zeros((nper, case.ny, case.nx), dtype=np.float64)
+        for period_index in range(nper):
+            arr = _budget_array_2d(
+                budget_file=cbc,
+                record_name=record_name,
+                kstpkper=kstpkper_list[period_index],
+            )
+            if arr is None:
+                continue
+            record_arrays[period_index] = arr
+            total_storage[period_index] += arr
+        per_record_arrays[record_name] = record_arrays
+
+    for record_name in unique_names:
+        package_key = None
+        record_name_upper = record_name.upper()
+        if "RCH" in record_name_upper:
+            package_key = "recharge"
+        elif "CHD" in record_name_upper:
+            package_key = "chd"
+        elif "GHB" in record_name_upper:
+            package_key = "ghb"
+        elif "STO" in record_name_upper or "STORAGE" in record_name_upper:
+            package_key = "storage"
+        if package_key is None:
+            continue
+        record_arrays = np.zeros((nper, case.ny, case.nx), dtype=np.float64)
+        for period_index in range(nper):
+            arr = _budget_array_2d(
+                budget_file=cbc,
+                record_name=record_name,
+                kstpkper=kstpkper_list[period_index],
+            )
+            if arr is None:
+                continue
+            record_arrays[period_index] = arr
+            package_terms[package_key][period_index] += arr
+        per_record_arrays.setdefault(record_name, record_arrays)
+
+    mass_balance_rows = []
+    for period_index in range(nper):
+        row = {"period": int(period_index + 1)}
+        total_in = 0.0
+        total_out = 0.0
+        for package_key, values in package_terms.items():
+            period_values = np.asarray(values[period_index], dtype=np.float64)
+            gross_in = float(np.sum(np.maximum(period_values, 0.0)))
+            gross_out = float(np.sum(np.maximum(-period_values, 0.0)))
+            row[f"{package_key}_in"] = gross_in
+            row[f"{package_key}_out"] = gross_out
+            total_in += gross_in
+            total_out += gross_out
+        in_minus_out = total_in - total_out
+        denom = abs(total_in) + abs(total_out)
+        row["total_in"] = float(total_in)
+        row["total_out"] = float(total_out)
+        row["in_minus_out"] = float(in_minus_out)
+        row["percent_discrepancy"] = 0.0 if denom == 0.0 else float(100.0 * in_minus_out / denom)
+        mass_balance_rows.append(row)
+
+    out_arrays: dict[str, np.ndarray] = {
+        "unique_record_names": np.asarray(unique_names, dtype=object),
+        "storage_record_names": np.asarray(storage_record_names, dtype=object),
+        "selected_storage_record_name": np.asarray(
+            "+".join(storage_record_names) if storage_record_names else "",
+            dtype=object,
+        ),
+        "storage_total_per_period": total_storage,
+        "period_count": np.asarray(nper, dtype=np.int32),
+        "dt_days": np.asarray(case.dt_days, dtype=np.float64),
+        "sy": np.asarray(case.sy, dtype=np.float64),
+        "ss": np.asarray(case.ss, dtype=np.float64),
+        "top": np.asarray(case.top, dtype=np.float64),
+        "bottom": np.asarray(case.bottom, dtype=np.float64),
+        "icelltype": np.asarray([1 if formulation == FORMULATION_UNCONFINED else 0], dtype=np.int32),
+        "iconvert": np.asarray(1 if formulation == FORMULATION_UNCONFINED else 0, dtype=np.int32),
+        "mf6_mass_balance_json": np.asarray(json.dumps(mass_balance_rows), dtype=object),
+    }
+    for record_name, values in per_record_arrays.items():
+        safe_name = record_name.lower().replace(" ", "_").replace("-", "_")
+        out_arrays[f"record_{safe_name}_per_period"] = values
+    for package_key, values in package_terms.items():
+        out_arrays[f"package_{package_key}_per_period"] = values
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(out_path, **out_arrays)
+    print(f"MF6 budget records: {unique_names}")
+    print(f"MF6 storage records: {storage_record_names}")
+    print(f"MF6 storage budget terms saved to {out_path}")
+    return out_path
+
+
 def build_confined_transmissivity(
     case: TransientCase,
     mode: str = "initial_saturated_thickness",
@@ -321,6 +487,7 @@ def run_mf6_confined_steady_warm_start(
         k33=transmissivity,
         k33overk=False,
         save_specific_discharge=True,
+        save_flows=True,
     )
 
     fixed_head_cells = np.full((case.ny, case.nx), np.nan, dtype=np.float64)
@@ -330,7 +497,7 @@ def run_mf6_confined_steady_warm_start(
 
     recharge = np.full((case.ny, case.nx), recharge_rate, dtype=np.float64)
     recharge[case.active == 0] = 0.0
-    flopy.mf6.ModflowGwfrcha(gwf, pname="recharge", recharge=recharge)
+    flopy.mf6.ModflowGwfrcha(gwf, pname="recharge", recharge=recharge, save_flows=True)
     flopy.mf6.ModflowGwfoc(
         gwf,
         pname="oc",
@@ -433,6 +600,7 @@ def run_mf6_unconfined_steady_warm_start(
         k33overk=False,
         save_specific_discharge=True,
         save_saturation=True,
+        save_flows=True,
     )
 
     fixed_head_cells = np.full((case.ny, case.nx), np.nan, dtype=np.float64)
@@ -622,6 +790,7 @@ def run_mf6_transient(
         k33overk=False,
         save_specific_discharge=True,
         save_saturation=True,
+        save_flows=True,
     )
     flopy.mf6.ModflowGwfsto(
         gwf,
@@ -630,6 +799,7 @@ def run_mf6_transient(
         sy=(case.sy if formulation == FORMULATION_UNCONFINED else 0.0),
         iconvert=(1 if formulation == FORMULATION_UNCONFINED else 0),
         transient={0: True},                 # all periods transient (inherited)
+        save_flows=True,
     )
 
     fixed_head_cells = np.full((case.ny, case.nx), np.nan, dtype=np.float64)
@@ -643,12 +813,12 @@ def run_mf6_transient(
         per: np.full((case.ny, case.nx), float(case.recharge_rates[per]), dtype=np.float64)
         for per in range(case.n_weeks)
     }
-    flopy.mf6.ModflowGwfrcha(gwf, pname="recharge", recharge=recharge_spd)
+    flopy.mf6.ModflowGwfrcha(gwf, pname="recharge", recharge=recharge_spd, save_flows=True)
 
     flopy.mf6.ModflowGwfoc(
         gwf,
         pname="oc",
-        saverecord=[("HEAD", "ALL")],
+        saverecord=[("HEAD", "ALL"), ("BUDGET", "ALL")],
         head_filerecord=[f"{name}.hds"],
         budget_filerecord=[f"{name}.cbb"],
         printrecord=[],
@@ -666,6 +836,14 @@ def run_mf6_transient(
     hds_path = mf6_ws.joinpath(f"{name}.hds")
     heads_all = flopy.utils.HeadFile(str(hds_path)).get_alldata()  # (ntimes, nlay, ny, nx)
     heads_per_period = np.asarray(heads_all[:, 0, :, :], dtype=np.float64)  # (n_weeks, ny, nx)
+    cbb_path = mf6_ws.joinpath(f"{name}.cbb")
+    mf6_storage_budget_path = out_path.with_name("mf6_storage_budget_terms.npz")
+    save_mf6_storage_budget_terms(
+        cbb_path=cbb_path,
+        out_path=mf6_storage_budget_path,
+        case=case,
+        formulation=formulation,
+    )
 
     arrays = {
         "heads_per_period": heads_per_period,
@@ -695,6 +873,7 @@ def run_mf6_transient(
         "unconfined_steady_engine_time": np.asarray(unconfined_steady_engine_time, dtype=np.float64),
         "confined_steady_transmissivity_mode": np.asarray(warm_start_transmissivity_mode),
         "total_time": np.asarray(total_time, dtype=np.float64),
+        "mf6_storage_budget_artifact": np.asarray(str(mf6_storage_budget_path)),
         "provenance": np.asarray(json.dumps({
             "kind": f"2d_{formulation}_transient_mf6_truth",
             "formulation": formulation,

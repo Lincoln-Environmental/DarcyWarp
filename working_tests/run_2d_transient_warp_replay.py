@@ -111,11 +111,15 @@ UNCONFINED_STORAGE_PHREATIC_ONLY = "phreatic_only"
 UNCONFINED_STORAGE_INTEGRATED_SY_SS = "integrated_sy_ss"
 UNCONFINED_STORAGE_MF6_CONVERTIBLE = "mf6_convertible"
 UNCONFINED_STORAGE_MF6_CONVERTIBLE_TOP_SWITCH = "mf6_convertible_top_switch"
+UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY = "mf6_convertible_secant_sy"
+UNCONFINED_STORAGE_MF6_CONVERTIBLE_CROSSING_VOLUME_SY = "mf6_convertible_crossing_volume_sy"
 UNCONFINED_STORAGE_MODES = {
     UNCONFINED_STORAGE_PHREATIC_ONLY,
     UNCONFINED_STORAGE_INTEGRATED_SY_SS,
     UNCONFINED_STORAGE_MF6_CONVERTIBLE,
     UNCONFINED_STORAGE_MF6_CONVERTIBLE_TOP_SWITCH,
+    UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
+    UNCONFINED_STORAGE_MF6_CONVERTIBLE_CROSSING_VOLUME_SY,
 }
 STORAGE_REFERENCE_PREVIOUS_PERIOD = "previous_period"
 STORAGE_REFERENCE_CURRENT_PICARD = "current_picard"
@@ -382,12 +386,14 @@ def build_unconfined_storativity(
     bc_mask: np.ndarray,
     ss: float = 0.0,
     head_ref: np.ndarray | None = None,
+    head_old: np.ndarray | None = None,
     bottom: np.ndarray | None = None,
     top: np.ndarray | None = None,
     min_sat: float = DEFAULT_MIN_SAT,
     include_specific_storage: bool = False,
     storage_mode: str | None = None,
     storage_top_threshold: str = STORAGE_TOP_THRESHOLD_GE,
+    secant_eps: float = 1.0e-12,
 ) -> tuple[np.ndarray, np.ndarray | None]:
     """
     Build a dimensionless storativity field for 2D unconfined transient replay.
@@ -413,6 +419,10 @@ def build_unconfined_storativity(
         met, otherwise ``S = Sy + Ss * saturated_thickness_ref``.
         The closest tested MF6 match uses ``storage_reference=current_picard``
         with threshold ``ge``.
+    * ``mf6_convertible_secant_sy``:
+        Diagnostic crossing-aware approximation. ``Sy`` is converted to a
+        secant coefficient from the change in clipped saturated length between
+        ``head_old`` and ``head_ref``.
 
     Inactive and fixed-head boundary cells are zeroed: they carry no storage in
     the Warp 5-point transient assembly (the solver zeroes them too, so this is
@@ -441,43 +451,183 @@ def build_unconfined_storativity(
     bcm = np.asarray(bc_mask, dtype=np.int32)
     shape = active_i.shape
     free = (active_i != 0) & (bcm == 0)
-
-    storativity = np.zeros(shape, dtype=np.float64)
-    sat_ref: np.ndarray | None = None
-
-    if mode == UNCONFINED_STORAGE_PHREATIC_ONLY:
-        storativity[free] = float(sy)
-    else:
-        if head_ref is None or bottom is None or top is None:
-            raise ValueError(
-                f"storage_mode='{mode}' requires head_ref, bottom, and top."
-            )
-        head_ref = np.asarray(head_ref, dtype=np.float64)
-        bottom = np.asarray(bottom, dtype=np.float64)
-        top = np.asarray(top, dtype=np.float64)
-        full_thickness = np.maximum(top - bottom, float(min_sat))
-        sat_ref = np.clip(head_ref - bottom, float(min_sat), full_thickness)
-        if mode == UNCONFINED_STORAGE_MF6_CONVERTIBLE_TOP_SWITCH:
-            above_top = head_ref >= top if threshold_mode == STORAGE_TOP_THRESHOLD_GE else head_ref > top
-            storativity = np.where(
-                above_top,
-                float(ss) * full_thickness,
-                float(sy) + float(ss) * sat_ref,
-            )
-        else:
-            storativity = float(sy) + float(ss) * sat_ref
-
-    # Solver convention: no storage on inactive or fixed-head boundary cells.
-    storativity = storativity.copy()
-    storativity[~free] = 0.0
-    if sat_ref is not None:
-        sat_ref = sat_ref.copy()
-        sat_ref[~free] = 0.0
+    components = compute_unconfined_storage_components(
+        sy=float(sy),
+        ss=float(ss),
+        head_ref=head_ref,
+        head_old=head_old,
+        bottom=bottom,
+        top=top,
+        active=active_i,
+        bc_mask=bcm,
+        min_sat=float(min_sat),
+        storage_mode=mode,
+        storage_top_threshold=threshold_mode,
+        secant_eps=float(secant_eps),
+    )
+    storativity = np.asarray(components["storage_coeff"], dtype=np.float64)
+    sat_ref = np.asarray(components["sat_ref_ss"], dtype=np.float64) if components["sat_ref_ss"] is not None else None
 
     return (
         storativity.astype(np.float64, copy=False),
         None if sat_ref is None else sat_ref.astype(np.float64, copy=False),
     )
+
+
+def compute_unconfined_storage_components(
+    *,
+    sy: float,
+    ss: float,
+    head_ref: np.ndarray | None,
+    head_old: np.ndarray | None,
+    bottom: np.ndarray | None,
+    top: np.ndarray | None,
+    active: np.ndarray,
+    bc_mask: np.ndarray,
+    min_sat: float,
+    storage_mode: str,
+    storage_top_threshold: str = STORAGE_TOP_THRESHOLD_GE,
+    secant_eps: float = 1.0e-12,
+    above_top_mask_override: np.ndarray | None = None,
+) -> dict[str, np.ndarray | None]:
+    """
+    Compute storage coefficients and component fields for 2D unconfined replay.
+
+    :param sy: Specific yield.
+    :param ss: Specific storage.
+    :param head_ref: Reference head used for storage.
+    :param head_old: Previous-time head used for secant/crossing diagnostics.
+    :param bottom: Model bottom.
+    :param top: Model top.
+    :param active: Active mask.
+    :param bc_mask: Dirichlet mask.
+    :param min_sat: Minimum saturated thickness used for elastic storage.
+    :param storage_mode: Unconfined storage mode.
+    :param storage_top_threshold: ``ge`` or ``gt`` for top-switch mode.
+    :param secant_eps: Small denominator safeguard for secant mode.
+    :param above_top_mask_override: Optional override of the effective above-top mask.
+    :return: Dictionary with total, Sy, and Ss coefficients plus saturation helpers.
+    """
+    mode = str(storage_mode).strip().lower()
+    threshold_mode = str(storage_top_threshold).strip().lower()
+    if mode not in UNCONFINED_STORAGE_MODES:
+        raise ValueError(f"storage_mode must be one of {sorted(UNCONFINED_STORAGE_MODES)}.")
+    if threshold_mode not in STORAGE_TOP_THRESHOLD_MODES:
+        raise ValueError(f"storage_top_threshold must be one of {sorted(STORAGE_TOP_THRESHOLD_MODES)}.")
+
+    active_i = np.asarray(active, dtype=np.int32)
+    bc_i = np.asarray(bc_mask, dtype=np.int32)
+    free = (active_i != 0) & (bc_i == 0)
+    shape = active_i.shape
+
+    storage_coeff = np.zeros(shape, dtype=np.float64)
+    sy_coeff = np.zeros(shape, dtype=np.float64)
+    ss_coeff = np.zeros(shape, dtype=np.float64)
+    sat_old_zero = np.zeros(shape, dtype=np.float64)
+    sat_ref_zero = np.zeros(shape, dtype=np.float64)
+    sat_ref_ss = np.zeros(shape, dtype=np.float64)
+    full_thickness = None
+    raw_above_top = None
+    effective_above_top = None
+
+    if mode == UNCONFINED_STORAGE_PHREATIC_ONLY:
+        sy_coeff[free] = float(sy)
+        storage_coeff[free] = float(sy)
+        return {
+            "storage_coeff": storage_coeff,
+            "sy_coeff": sy_coeff,
+            "ss_coeff": ss_coeff,
+            "sat_old_zero": sat_old_zero,
+            "sat_ref_zero": sat_ref_zero,
+            "sat_ref_ss": None,
+            "full_thickness": None,
+            "raw_above_top": None,
+            "effective_above_top": None,
+        }
+
+    if head_ref is None or bottom is None or top is None:
+        raise ValueError(f"storage_mode='{mode}' requires head_ref, bottom, and top.")
+
+    head_ref_arr = np.asarray(head_ref, dtype=np.float64)
+    bottom_arr = np.asarray(bottom, dtype=np.float64)
+    top_arr = np.asarray(top, dtype=np.float64)
+    full_thickness = np.maximum(top_arr - bottom_arr, float(min_sat))
+    sat_ref_zero = np.clip(head_ref_arr - bottom_arr, 0.0, full_thickness)
+    sat_ref_ss = np.clip(head_ref_arr - bottom_arr, float(min_sat), full_thickness)
+
+    if head_old is None:
+        head_old_arr = head_ref_arr
+    else:
+        head_old_arr = np.asarray(head_old, dtype=np.float64)
+    sat_old_zero = np.clip(head_old_arr - bottom_arr, 0.0, full_thickness)
+
+    if mode in {UNCONFINED_STORAGE_INTEGRATED_SY_SS, UNCONFINED_STORAGE_MF6_CONVERTIBLE}:
+        sy_coeff[free] = float(sy)
+        ss_coeff[free] = float(ss) * sat_ref_ss[free]
+    elif mode == UNCONFINED_STORAGE_MF6_CONVERTIBLE_TOP_SWITCH:
+        raw_above_top = top_switch_above_mask(
+            head_ref=head_ref_arr,
+            top=top_arr,
+            threshold_mode=threshold_mode,
+            active=active_i,
+            bc_mask=bc_i,
+        )
+        effective_above_top = (
+            np.asarray(above_top_mask_override, dtype=bool)
+            if above_top_mask_override is not None
+            else raw_above_top.copy()
+        )
+        effective_above_top = effective_above_top & free
+        sy_coeff[free] = float(sy)
+        sy_coeff[effective_above_top] = 0.0
+        ss_coeff[free] = float(ss) * sat_ref_ss[free]
+        ss_coeff[effective_above_top] = float(ss) * full_thickness[effective_above_top]
+    elif mode == UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY:
+        dh_ref = head_ref_arr - head_old_arr
+        sy_coeff_calc = np.zeros(shape, dtype=np.float64)
+        moving = np.abs(dh_ref) > float(secant_eps)
+        sy_coeff_calc[moving] = float(sy) * (
+            (sat_ref_zero[moving] - sat_old_zero[moving]) / dh_ref[moving]
+        )
+        fallback_below_top = (np.abs(dh_ref) <= float(secant_eps)) & (head_ref_arr < top_arr) & (head_ref_arr > bottom_arr)
+        sy_coeff_calc[fallback_below_top] = float(sy)
+        sy_coeff_calc = np.clip(sy_coeff_calc, 0.0, float(sy))
+        sy_coeff[free] = sy_coeff_calc[free]
+        ss_coeff[free] = float(ss) * sat_ref_ss[free]
+    elif mode == UNCONFINED_STORAGE_MF6_CONVERTIBLE_CROSSING_VOLUME_SY:
+        dh_ref = head_ref_arr - head_old_arr
+        sy_coeff_calc = np.zeros(shape, dtype=np.float64)
+        moving = np.abs(dh_ref) > float(secant_eps)
+        sy_coeff_calc[moving] = float(sy) * (
+            (sat_ref_zero[moving] - sat_old_zero[moving]) / dh_ref[moving]
+        )
+        fallback_below_top = (np.abs(dh_ref) <= float(secant_eps)) & (head_ref_arr < top_arr) & (head_ref_arr > bottom_arr)
+        sy_coeff_calc[fallback_below_top] = float(sy)
+        sy_coeff_calc = np.clip(sy_coeff_calc, 0.0, float(sy))
+        sy_coeff[free] = sy_coeff_calc[free]
+        ss_coeff[free] = float(ss) * sat_ref_ss[free]
+    else:
+        raise ValueError(f"unsupported storage_mode '{mode}'.")
+
+    storage_coeff = sy_coeff + ss_coeff
+    storage_coeff[~free] = 0.0
+    sy_coeff[~free] = 0.0
+    ss_coeff[~free] = 0.0
+    sat_old_zero[~free] = 0.0
+    sat_ref_zero[~free] = 0.0
+    sat_ref_ss[~free] = 0.0
+
+    return {
+        "storage_coeff": storage_coeff,
+        "sy_coeff": sy_coeff,
+        "ss_coeff": ss_coeff,
+        "sat_old_zero": sat_old_zero,
+        "sat_ref_zero": sat_ref_zero,
+        "sat_ref_ss": sat_ref_ss,
+        "full_thickness": full_thickness,
+        "raw_above_top": raw_above_top,
+        "effective_above_top": effective_above_top,
+    }
 
 
 def top_switch_above_mask(
@@ -770,6 +920,11 @@ def default_solve_controls() -> dict:
         "predictor_max_outer_iterations": 5,
         "corrector_max_outer_iterations": 100,
         "predictor_corrector_corrector_strategy": STORAGE_ACTIVE_SET_NONE,
+        "practical_picard_acceptance_enabled": True,
+        "min_practical_outer_iterations": 8,
+        "practical_residual_tol": 1.0e-4,
+        "practical_dh_rms_tol": 3.0e-3,
+        "practical_storage_diag_change_rms_tol": 30.0,
     }
 
 
@@ -830,15 +985,15 @@ def run_warp_transient_replay(
     unconfined_storage_mode:
         How the unconfined storativity field is built: ``phreatic_only``
         (``S = Sy``), ``integrated_sy_ss`` / legacy ``mf6_convertible``
-        (``S = Sy + Ss*saturated_thickness``), or
-        ``mf6_convertible_top_switch``. Ignored for confined formulation.
+        (``S = Sy + Ss*saturated_thickness``), ``mf6_convertible_top_switch``,
+        or ``mf6_convertible_secant_sy``. Ignored for confined formulation.
     storage_reference:
         ``previous_period`` builds storage from the previous converged transient
         head. ``current_picard`` lets the unconfined Picard loop rebuild storage
         from the current Picard head.
     storage_top_threshold:
-        For ``mf6_convertible_top_switch``, ``ge`` uses ``h_ref >= top`` and
-        ``gt`` uses ``h_ref > top`` for the confined/full-saturated switch.
+        For MF6-compatible top-switch/secant modes, ``ge`` uses ``h_ref >= top``
+        and ``gt`` uses ``h_ref > top`` for the confined/full-saturated switch.
     storage_active_set_strategy:
         Optional current-Picard top-switch stabilisation:
         ``none``, ``hysteresis``, ``freeze_when_stable``, or the replay-level
@@ -974,8 +1129,8 @@ def run_warp_transient_replay(
     # :func:`default_solve_controls`). A previous version of this path silently
     # overrode the startup mode to ``initial_head`` whenever a steady warm start
     # was supplied; that is exactly what made the *direct* MF6 replay diverge
-    # from the winning ``mf6_top_switch_current_picard`` variant, which runs the
-    # same solver with ``confined_pre_solve`` (final max_abs_diff ~= 0.0307 m).
+    # from the winning secant-Sy MF6 replay variant, which runs the same solver
+    # with ``confined_pre_solve``.
     # The startup mode is therefore left untouched here so the direct replay and
     # the variant replay share one explicit MF6-compatible startup path. A caller
     # that genuinely wants ``initial_head`` can still request it by passing it in
@@ -1048,6 +1203,7 @@ def run_warp_transient_replay(
                 sy=sy,
                 active=active,
                 bc_mask=bc_mask,
+                head_old=replay_start_head,
                 min_sat=min_sat,
                 include_specific_storage=False,
                 storage_mode=UNCONFINED_STORAGE_PHREATIC_ONLY,
@@ -1069,6 +1225,15 @@ def run_warp_transient_replay(
     recharge_field = np.zeros((ny, nx), dtype=np.float64)
 
     heads_per_period = np.zeros((n_periods, ny, nx), dtype=np.float64)
+    heads_old_per_period = np.zeros((n_periods, ny, nx), dtype=np.float64)
+    storage_reference_heads_per_period = np.zeros((n_periods, ny, nx), dtype=np.float64)
+    storage_coeffs_per_period = np.zeros((n_periods, ny, nx), dtype=np.float64)
+    sy_storage_coeffs_per_period = np.zeros((n_periods, ny, nx), dtype=np.float64)
+    ss_storage_coeffs_per_period = np.zeros((n_periods, ny, nx), dtype=np.float64)
+    storage_terms_per_period = np.zeros((n_periods, ny, nx), dtype=np.float64)
+    sy_storage_terms_per_period = np.zeros((n_periods, ny, nx), dtype=np.float64)
+    ss_storage_terms_per_period = np.zeros((n_periods, ny, nx), dtype=np.float64)
+    sy_crossing_volume_terms_per_period = np.zeros((n_periods, ny, nx), dtype=np.float64)
     period_infos: list[dict] = []
     period_times = np.zeros(n_periods, dtype=np.float64)
 
@@ -1146,6 +1311,7 @@ def run_warp_transient_replay(
             recharge_field[...] = rate
             recharge_field[active == 0] = 0.0
             solver.update_R_in_place(recharge_field)
+            period_head_old = np.asarray(head_prev, dtype=np.float64).copy()
 
             if (
                 formulation == FORMULATION_UNCONFINED
@@ -1158,6 +1324,7 @@ def run_warp_transient_replay(
                     sy=sy,
                     ss=float(ss),
                     head_ref=head_prev,
+                    head_old=head_prev,
                     bottom=bottom,
                     top=top,
                     active=active,
@@ -1222,6 +1389,7 @@ def run_warp_transient_replay(
                     sy=sy,
                     ss=float(ss),
                     head_ref=head_prev,
+                    head_old=head_prev,
                     bottom=bottom,
                     top=top,
                     active=active,
@@ -1254,8 +1422,93 @@ def run_warp_transient_replay(
 
             head = np.asarray(head, dtype=np.float64)
             heads_per_period[per] = head
+            heads_old_per_period[per] = period_head_old
             head_prev = head
             last_info = dict(info) if isinstance(info, dict) else {}
+            storage_reference_head = last_info.pop(
+                "storage_reference_head_last_linearization_array",
+                None,
+            )
+            storage_coeff_period = last_info.pop(
+                "storage_coeff_last_linearization_array",
+                None,
+            )
+            sy_coeff_period = last_info.pop(
+                "sy_storage_coeff_last_linearization_array",
+                None,
+            )
+            ss_coeff_period = last_info.pop(
+                "ss_storage_coeff_last_linearization_array",
+                None,
+            )
+            if storage_reference_head is None or storage_coeff_period is None:
+                if formulation == FORMULATION_UNCONFINED:
+                    reference_proxy = (
+                        period_head_old
+                        if storage_reference == STORAGE_REFERENCE_PREVIOUS_PERIOD
+                        else head
+                    )
+                    components = compute_unconfined_storage_components(
+                        sy=float(sy),
+                        ss=float(0.0 if ss is None else ss),
+                        head_ref=reference_proxy,
+                        head_old=period_head_old,
+                        bottom=bottom,
+                        top=top,
+                        active=active,
+                        bc_mask=bc_mask,
+                        min_sat=float(min_sat),
+                        storage_mode=unconfined_storage_mode_resolved,
+                        storage_top_threshold=storage_top_threshold,
+                    )
+                    storage_reference_head = np.asarray(reference_proxy, dtype=np.float64)
+                    storage_coeff_period = np.asarray(components["storage_coeff"], dtype=np.float64)
+                    sy_coeff_period = np.asarray(components["sy_coeff"], dtype=np.float64)
+                    ss_coeff_period = np.asarray(components["ss_coeff"], dtype=np.float64)
+                    sy_crossing_volume_term = float(sy) * (
+                        np.asarray(components["sat_ref_zero"], dtype=np.float64)
+                        - np.asarray(components["sat_old_zero"], dtype=np.float64)
+                    ) / float(dt)
+                else:
+                    storage_reference_head = np.asarray(period_head_old, dtype=np.float64)
+                    storage_coeff_period = np.asarray(storativity_field, dtype=np.float64)
+                    sy_coeff_period = np.zeros_like(storage_coeff_period)
+                    ss_coeff_period = np.asarray(storage_coeff_period, dtype=np.float64)
+                    sy_crossing_volume_term = np.zeros_like(storage_coeff_period)
+            else:
+                storage_reference_head = np.asarray(storage_reference_head, dtype=np.float64)
+                storage_coeff_period = np.asarray(storage_coeff_period, dtype=np.float64)
+                sy_coeff_period = np.asarray(sy_coeff_period, dtype=np.float64)
+                ss_coeff_period = np.asarray(ss_coeff_period, dtype=np.float64)
+                if formulation == FORMULATION_UNCONFINED:
+                    components = compute_unconfined_storage_components(
+                        sy=float(sy),
+                        ss=float(0.0 if ss is None else ss),
+                        head_ref=storage_reference_head,
+                        head_old=period_head_old,
+                        bottom=bottom,
+                        top=top,
+                        active=active,
+                        bc_mask=bc_mask,
+                        min_sat=float(min_sat),
+                        storage_mode=unconfined_storage_mode_resolved,
+                        storage_top_threshold=storage_top_threshold,
+                    )
+                    sy_crossing_volume_term = float(sy) * (
+                        np.asarray(components["sat_ref_zero"], dtype=np.float64)
+                        - np.asarray(components["sat_old_zero"], dtype=np.float64)
+                    ) / float(dt)
+                else:
+                    sy_crossing_volume_term = np.zeros_like(storage_coeff_period)
+            storage_reference_heads_per_period[per] = storage_reference_head
+            storage_coeffs_per_period[per] = storage_coeff_period
+            sy_storage_coeffs_per_period[per] = sy_coeff_period
+            ss_storage_coeffs_per_period[per] = ss_coeff_period
+            delta_head = head - period_head_old
+            storage_terms_per_period[per] = storage_coeff_period * delta_head / float(dt)
+            sy_storage_terms_per_period[per] = sy_coeff_period * delta_head / float(dt)
+            ss_storage_terms_per_period[per] = ss_coeff_period * delta_head / float(dt)
+            sy_crossing_volume_terms_per_period[per] = np.asarray(sy_crossing_volume_term, dtype=np.float64)
             period_infos.append(last_info)
 
     total_time = time.perf_counter() - t0
@@ -1275,7 +1528,16 @@ def run_warp_transient_replay(
 
     return {
         "heads_per_period": heads_per_period,
+        "heads_old_per_period": heads_old_per_period,
         "heads_final": heads_per_period[-1],
+        "storage_reference_heads_per_period": storage_reference_heads_per_period,
+        "storage_coeffs_per_period": storage_coeffs_per_period,
+        "sy_storage_coeffs_per_period": sy_storage_coeffs_per_period,
+        "ss_storage_coeffs_per_period": ss_storage_coeffs_per_period,
+        "storage_terms_per_period": storage_terms_per_period,
+        "sy_storage_terms_per_period": sy_storage_terms_per_period,
+        "ss_storage_terms_per_period": ss_storage_terms_per_period,
+        "sy_crossing_volume_terms_per_period": sy_crossing_volume_terms_per_period,
         "period_infos": period_infos,
         "last_info": last_info,
         "period_times": period_times,
@@ -1366,8 +1628,8 @@ def compare_transient(
     """
     Compare Warp per-period/final heads against MF6 truth.
 
-    Returns per-period metrics, final metrics, and the worst (max-abs-diff)
-    period index.
+    Returns per-period metrics, final metrics, and both zero-based and one-based
+    worst-period identifiers.
     """
     warp_hpp = np.asarray(warp_result["heads_per_period"], dtype=np.float64)
     mf6_hpp = np.asarray(mf6_heads_per_period, dtype=np.float64)
@@ -1387,7 +1649,11 @@ def compare_transient(
     return {
         "per_period": per_period,
         "final": final,
-        "worst_period": worst_period,
+        "worst_period_index_zero_based": worst_period,
+        "worst_period_number_one_based": (None if worst_period is None else int(worst_period + 1)),
+        # Human-facing alias. Prefer the explicit *_index_zero_based /
+        # *_number_one_based keys in new code.
+        "worst_period": (None if worst_period is None else int(worst_period + 1)),
     }
 
 
@@ -1399,6 +1665,562 @@ def save_summary(path: str | Path, summary: dict) -> Path:
     return path
 
 
+def print_mass_balance_table(mass_balance: dict) -> None:
+    """
+    Print the preferred Warp mass-balance table.
+
+    :param mass_balance: Replay mass-balance summary.
+    """
+    rows = mass_balance.get("per_period", []) if isinstance(mass_balance, dict) else []
+    if not rows:
+        print("\nMass balance table: not_available")
+        return
+    print("\nMass balance table, Warp, preferred storage budget")
+    print(
+        "period  recharge_in  recharge_out  chd_in      chd_out     ghb_in      ghb_out     "
+        "storage_in  storage_out total_in    total_out   discrepancy_pct"
+    )
+    for row in rows:
+        print(
+            f"{int(row['period']):>6d}  {float(row['recharge_in']):>11.5g}  {float(row['recharge_out']):>12.5g}  "
+            f"{float(row['chd_in']):>10.5g}  {float(row['chd_out']):>10.5g}  {float(row['ghb_in']):>10.5g}  "
+            f"{float(row['ghb_out']):>10.5g}  {float(row['storage_in']):>10.5g}  {float(row['storage_out']):>11.5g}  "
+            f"{float(row['total_in']):>10.5g}  {float(row['total_out']):>10.5g}  {float(row['percent_discrepancy']):>15.6g}"
+        )
+
+
+def print_cumulative_mass_balance(mass_balance: dict) -> None:
+    """
+    Print cumulative Warp mass-balance totals for the preferred storage budget.
+
+    :param mass_balance: Replay mass-balance summary.
+    """
+    cumulative = mass_balance.get("cumulative", {}) if isinstance(mass_balance, dict) else {}
+    if not cumulative:
+        print("\nCumulative mass balance: not_available")
+        return
+    print("\nCumulative mass balance")
+    for key in (
+        "recharge_in_total",
+        "recharge_out_total",
+        "chd_in_total",
+        "chd_out_total",
+        "ghb_in_total",
+        "ghb_out_total",
+        "storage_in_total",
+        "storage_out_total",
+        "total_in_total",
+        "total_out_total",
+        "in_minus_out_total",
+        "percent_discrepancy",
+    ):
+        print(f"  {key}={cumulative.get(key)}")
+
+
+def storage_budget_arrays_from_warp_result(warp_result: dict) -> dict[str, np.ndarray]:
+    """
+    Normalise storage-budget arrays from a replay result, with compatibility fallbacks.
+
+    :param warp_result: Replay result dictionary.
+    :return: Dict of dense per-period storage-budget arrays.
+    """
+    heads_new = np.asarray(warp_result["heads_per_period"], dtype=np.float64)
+    warm_start_head = np.asarray(warp_result["warm_start_head"], dtype=np.float64)
+    n_periods = int(heads_new.shape[0])
+    ny, nx = heads_new.shape[1:]
+
+    heads_old = warp_result.get("heads_old_per_period")
+    if heads_old is None:
+        heads_old_arr = np.zeros_like(heads_new)
+        previous = warm_start_head
+        for period_index in range(n_periods):
+            heads_old_arr[period_index] = previous
+            previous = heads_new[period_index]
+    else:
+        heads_old_arr = np.asarray(heads_old, dtype=np.float64)
+
+    base_coeff = warp_result.get("storativity")
+    if base_coeff is None:
+        base_coeff_arr = np.zeros((ny, nx), dtype=np.float64)
+    else:
+        base_coeff_arr = np.asarray(base_coeff, dtype=np.float64)
+
+    def _period_or_repeat(key: str, default: np.ndarray) -> np.ndarray:
+        value = warp_result.get(key)
+        if value is None:
+            if default.ndim == 2:
+                return np.repeat(default[None, :, :], n_periods, axis=0)
+            return np.asarray(default, dtype=np.float64)
+        return np.asarray(value, dtype=np.float64)
+
+    storage_reference_heads = _period_or_repeat(
+        "storage_reference_heads_per_period",
+        heads_new,
+    )
+    storage_coeffs = _period_or_repeat(
+        "storage_coeffs_per_period",
+        base_coeff_arr,
+    )
+    sy_storage_coeffs = _period_or_repeat(
+        "sy_storage_coeffs_per_period",
+        np.zeros_like(base_coeff_arr),
+    )
+    ss_storage_coeffs = _period_or_repeat(
+        "ss_storage_coeffs_per_period",
+        storage_coeffs[0] if storage_coeffs.ndim == 3 else storage_coeffs,
+    )
+    storage_terms = warp_result.get("storage_terms_per_period")
+    if storage_terms is None:
+        delta = heads_new - heads_old_arr
+        storage_terms_arr = storage_coeffs * delta / float(np.asarray(warp_result["dt"]).reshape(()))
+    else:
+        storage_terms_arr = np.asarray(storage_terms, dtype=np.float64)
+    sy_storage_terms = warp_result.get("sy_storage_terms_per_period")
+    if sy_storage_terms is None:
+        delta = heads_new - heads_old_arr
+        sy_storage_terms_arr = sy_storage_coeffs * delta / float(np.asarray(warp_result["dt"]).reshape(()))
+    else:
+        sy_storage_terms_arr = np.asarray(sy_storage_terms, dtype=np.float64)
+    ss_storage_terms = warp_result.get("ss_storage_terms_per_period")
+    if ss_storage_terms is None:
+        delta = heads_new - heads_old_arr
+        ss_storage_terms_arr = ss_storage_coeffs * delta / float(np.asarray(warp_result["dt"]).reshape(()))
+    else:
+        ss_storage_terms_arr = np.asarray(ss_storage_terms, dtype=np.float64)
+    sy_crossing_volume_terms = _period_or_repeat(
+        "sy_crossing_volume_terms_per_period",
+        np.zeros((ny, nx), dtype=np.float64),
+    )
+
+    return {
+        "heads_old_per_period": heads_old_arr,
+        "heads_new_per_period": heads_new,
+        "storage_reference_heads_per_period": storage_reference_heads,
+        "storage_coeffs_per_period": storage_coeffs,
+        "sy_storage_coeffs_per_period": sy_storage_coeffs,
+        "ss_storage_coeffs_per_period": ss_storage_coeffs,
+        "storage_terms_per_period": storage_terms_arr,
+        "sy_storage_terms_per_period": sy_storage_terms_arr,
+        "ss_storage_terms_per_period": ss_storage_terms_arr,
+        "sy_crossing_volume_terms_per_period": sy_crossing_volume_terms,
+    }
+
+
+def save_warp_storage_budget_terms(
+    *,
+    path: Path,
+    warp_result: dict,
+) -> Path:
+    """
+    Save deterministic Warp storage-budget diagnostic arrays.
+
+    :param path: Output ``.npz`` path.
+    :param warp_result: Replay result from :func:`run_warp_transient_replay`.
+    :return: Written path.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    arrays = storage_budget_arrays_from_warp_result(warp_result=warp_result)
+    np.savez_compressed(
+        path,
+        heads_old_per_period=np.asarray(arrays["heads_old_per_period"], dtype=np.float64),
+        heads_new_per_period=np.asarray(arrays["heads_new_per_period"], dtype=np.float64),
+        storage_reference_heads_per_period=np.asarray(arrays["storage_reference_heads_per_period"], dtype=np.float64),
+        storage_coeffs_per_period=np.asarray(arrays["storage_coeffs_per_period"], dtype=np.float64),
+        sy_storage_coeffs_per_period=np.asarray(arrays["sy_storage_coeffs_per_period"], dtype=np.float64),
+        ss_storage_coeffs_per_period=np.asarray(arrays["ss_storage_coeffs_per_period"], dtype=np.float64),
+        storage_terms_per_period=np.asarray(arrays["storage_terms_per_period"], dtype=np.float64),
+        sy_storage_terms_per_period=np.asarray(arrays["sy_storage_terms_per_period"], dtype=np.float64),
+        ss_storage_terms_per_period=np.asarray(arrays["ss_storage_terms_per_period"], dtype=np.float64),
+        sy_crossing_volume_terms_per_period=np.asarray(
+            arrays["sy_crossing_volume_terms_per_period"], dtype=np.float64
+        ),
+        storage_reference=np.asarray(warp_result.get("storage_reference", STORAGE_REFERENCE_PREVIOUS_PERIOD)),
+        unconfined_storage_mode=np.asarray(
+            "none" if warp_result["unconfined_storage_mode"] is None else warp_result["unconfined_storage_mode"]
+        ),
+        storage_top_threshold=np.asarray(warp_result.get("storage_top_threshold", STORAGE_TOP_THRESHOLD_GE)),
+        storage_active_set_strategy=np.asarray(
+            warp_result.get("storage_active_set_strategy", STORAGE_ACTIVE_SET_NONE)
+        ),
+        dt=np.asarray(warp_result["dt"], dtype=np.float64),
+        warm_start_head=np.asarray(warp_result["warm_start_head"], dtype=np.float64),
+    )
+    return path
+
+
+def transmissivity_from_period_head(
+    *,
+    formulation: str,
+    head: np.ndarray,
+    k: np.ndarray,
+    top: np.ndarray,
+    bottom: np.ndarray,
+    active: np.ndarray,
+    min_sat: float,
+) -> np.ndarray:
+    """
+    Reconstruct the per-period transmissivity field used for budget reporting.
+
+    :param formulation: ``confined`` or ``unconfined``.
+    :param head: Period head field.
+    :param k: Hydraulic conductivity.
+    :param top: Model top.
+    :param bottom: Model bottom.
+    :param active: Active mask.
+    :param min_sat: Minimum saturated thickness.
+    :return: Period transmissivity field.
+    """
+    formulation_mode = str(formulation).strip().lower()
+    if formulation_mode == FORMULATION_CONFINED:
+        return _confined_transmissivity(
+            k=k,
+            top=top,
+            bottom=bottom,
+            active=active,
+            min_sat=min_sat,
+        )
+    return _initial_transmissivity(
+        k=k,
+        initial_head=head,
+        top=top,
+        bottom=bottom,
+        active=active,
+        min_sat=min_sat,
+    )
+
+
+def _split_signed_flux(total: np.ndarray) -> tuple[float, float]:
+    """
+    Split a signed flux array into MF6-style gross IN and gross OUT totals.
+
+    :param total: Signed volumetric flux array; positive means into the model.
+    :return: ``(gross_in, gross_out)``.
+    """
+    arr = np.asarray(total, dtype=np.float64)
+    return float(np.sum(np.maximum(arr, 0.0))), float(np.sum(np.maximum(-arr, 0.0)))
+
+
+def compute_boundary_flux_terms(
+    *,
+    T_field: np.ndarray,
+    recharge_rate: float,
+    head: np.ndarray,
+    active: np.ndarray,
+    bc_mask: np.ndarray,
+    bc_values: np.ndarray,
+    dx: float,
+) -> dict:
+    """
+    Compute recharge and CHD gross budget terms for one replay period.
+
+    :param T_field: Period transmissivity field.
+    :param recharge_rate: Uniform recharge rate for the period.
+    :param head: Period head field.
+    :param active: Active mask.
+    :param bc_mask: Dirichlet mask.
+    :param bc_values: Dirichlet head values.
+    :param dx: Cell size.
+    :return: Dictionary with gross recharge / CHD / total terms.
+    """
+    T = np.asarray(T_field, dtype=np.float64)
+    h = np.asarray(head, dtype=np.float64)
+    active_i = np.asarray(active, dtype=np.int32) != 0
+    bc_i = np.asarray(bc_mask, dtype=np.int32) != 0
+    bc_v = np.asarray(bc_values, dtype=np.float64)
+    free = active_i & (~bc_i)
+    dx_f = float(dx)
+    tiny = 1.0e-12
+
+    h_use = np.asarray(h, dtype=np.float64).copy()
+    h_use[~active_i] = 0.0
+    h_use[bc_i] = bc_v[bc_i]
+
+    recharge_cell = np.zeros_like(h_use, dtype=np.float64)
+    recharge_cell[free] = float(recharge_rate) * dx_f * dx_f
+    recharge_in, recharge_out = _split_signed_flux(recharge_cell)
+
+    chd_in = 0.0
+    chd_out = 0.0
+
+    act_l = active_i[:, :-1]
+    act_r = active_i[:, 1:]
+    conn_e = act_l & act_r
+    T_l = T[:, :-1]
+    T_r = T[:, 1:]
+    denom_e = T_l + T_r
+    cond_e = np.zeros((T.shape[0], T.shape[1] - 1), dtype=np.float64)
+    valid_e = conn_e & (T_l > 0.0) & (T_r > 0.0) & (denom_e > tiny)
+    cond_e[valid_e] = 2.0 * T_l[valid_e] * T_r[valid_e] / denom_e[valid_e]
+    q_l_to_r = cond_e * (h_use[:, :-1] - h_use[:, 1:])
+    bc_l = bc_i[:, :-1]
+    bc_r = bc_i[:, 1:]
+    dom_l = conn_e & (~bc_l) & bc_r
+    dom_r = conn_e & bc_l & (~bc_r)
+    q_int_to_bc_l = np.where(dom_l, q_l_to_r, 0.0)
+    q_int_to_bc_r = np.where(dom_r, -q_l_to_r, 0.0)
+    chd_out += float(np.sum(np.maximum(q_int_to_bc_l, 0.0)))
+    chd_in += float(np.sum(np.maximum(-q_int_to_bc_l, 0.0)))
+    chd_out += float(np.sum(np.maximum(q_int_to_bc_r, 0.0)))
+    chd_in += float(np.sum(np.maximum(-q_int_to_bc_r, 0.0)))
+
+    act_t = active_i[:-1, :]
+    act_b = active_i[1:, :]
+    conn_s = act_t & act_b
+    T_t = T[:-1, :]
+    T_b = T[1:, :]
+    denom_s = T_t + T_b
+    cond_s = np.zeros((T.shape[0] - 1, T.shape[1]), dtype=np.float64)
+    valid_s = conn_s & (T_t > 0.0) & (T_b > 0.0) & (denom_s > tiny)
+    cond_s[valid_s] = 2.0 * T_t[valid_s] * T_b[valid_s] / denom_s[valid_s]
+    q_t_to_b = cond_s * (h_use[:-1, :] - h_use[1:, :])
+    bc_t = bc_i[:-1, :]
+    bc_b = bc_i[1:, :]
+    dom_t = conn_s & (~bc_t) & bc_b
+    dom_b = conn_s & bc_t & (~bc_b)
+    q_int_to_bc_t = np.where(dom_t, q_t_to_b, 0.0)
+    q_int_to_bc_b = np.where(dom_b, -q_t_to_b, 0.0)
+    chd_out += float(np.sum(np.maximum(q_int_to_bc_t, 0.0)))
+    chd_in += float(np.sum(np.maximum(-q_int_to_bc_t, 0.0)))
+    chd_out += float(np.sum(np.maximum(q_int_to_bc_b, 0.0)))
+    chd_in += float(np.sum(np.maximum(-q_int_to_bc_b, 0.0)))
+
+    ghb_in = 0.0
+    ghb_out = 0.0
+    total_in = recharge_in + chd_in + ghb_in
+    total_out = recharge_out + chd_out + ghb_out
+    in_minus_out = total_in - total_out
+    throughflow = 0.5 * (total_in + total_out)
+    denom = abs(total_in) + abs(total_out)
+    percent_discrepancy = 0.0 if denom == 0.0 else 100.0 * in_minus_out / denom
+    imbalance_fraction = 0.0 if throughflow == 0.0 else in_minus_out / throughflow
+
+    return {
+        "recharge_in": recharge_in,
+        "recharge_out": recharge_out,
+        "chd_in": chd_in,
+        "chd_out": chd_out,
+        "ghb_in": ghb_in,
+        "ghb_out": ghb_out,
+        "total_in_without_storage": total_in,
+        "total_out_without_storage": total_out,
+        "in_minus_out_without_storage": in_minus_out,
+        "percent_discrepancy_without_storage": percent_discrepancy,
+        "throughflow_without_storage": throughflow,
+        "imbalance_fraction_without_storage": imbalance_fraction,
+    }
+
+
+def finalize_mass_balance_row(
+    *,
+    period_number: int,
+    base_terms: dict,
+    storage_release: np.ndarray,
+) -> dict:
+    """
+    Combine non-storage terms with a storage-release field into one period row.
+
+    :param period_number: One-based period number.
+    :param base_terms: Output of :func:`compute_boundary_flux_terms`.
+    :param storage_release: Signed storage-release array; positive means water enters flow system.
+    :return: JSON-safe period mass-balance row.
+    """
+    storage_in, storage_out = _split_signed_flux(storage_release)
+    total_in = float(base_terms["recharge_in"] + base_terms["chd_in"] + base_terms["ghb_in"] + storage_in)
+    total_out = float(base_terms["recharge_out"] + base_terms["chd_out"] + base_terms["ghb_out"] + storage_out)
+    in_minus_out = total_in - total_out
+    throughflow = 0.5 * (total_in + total_out)
+    denom = abs(total_in) + abs(total_out)
+    percent_discrepancy = 0.0 if denom == 0.0 else 100.0 * in_minus_out / denom
+    imbalance_fraction = 0.0 if throughflow == 0.0 else in_minus_out / throughflow
+    return {
+        "period": int(period_number),
+        "recharge_in": float(base_terms["recharge_in"]),
+        "recharge_out": float(base_terms["recharge_out"]),
+        "chd_in": float(base_terms["chd_in"]),
+        "chd_out": float(base_terms["chd_out"]),
+        "ghb_in": float(base_terms["ghb_in"]),
+        "ghb_out": float(base_terms["ghb_out"]),
+        "storage_in": float(storage_in),
+        "storage_out": float(storage_out),
+        "total_in": float(total_in),
+        "total_out": float(total_out),
+        "in_minus_out": float(in_minus_out),
+        "percent_discrepancy": float(percent_discrepancy),
+        "throughflow": float(throughflow),
+        "imbalance_fraction": float(imbalance_fraction),
+    }
+
+
+def summarize_mass_balance_rows(rows: list[dict]) -> tuple[dict, dict]:
+    """
+    Build cumulative and worst-period mass-balance summaries.
+
+    :param rows: Per-period mass-balance rows.
+    :return: ``(cumulative, worst_period_row)``.
+    """
+    if not rows:
+        return {}, {}
+    keys = (
+        "recharge_in", "recharge_out", "chd_in", "chd_out",
+        "ghb_in", "ghb_out", "storage_in", "storage_out",
+        "total_in", "total_out", "in_minus_out",
+    )
+    cumulative = {"n_periods": int(len(rows))}
+    for key in keys:
+        cumulative[f"{key}_total"] = float(sum(float(row.get(key, 0.0) or 0.0) for row in rows))
+    total_in = float(cumulative["total_in_total"])
+    total_out = float(cumulative["total_out_total"])
+    in_minus_out = float(cumulative["in_minus_out_total"])
+    throughflow = 0.5 * (total_in + total_out)
+    denom = abs(total_in) + abs(total_out)
+    cumulative["throughflow"] = float(throughflow)
+    cumulative["percent_discrepancy"] = 0.0 if denom == 0.0 else float(100.0 * in_minus_out / denom)
+    cumulative["imbalance_fraction"] = 0.0 if throughflow == 0.0 else float(in_minus_out / throughflow)
+    def _worst_key(row: dict) -> float:
+        return abs(float(row.get("percent_discrepancy", 0.0) or 0.0))
+
+    worst_row = max(rows, key=_worst_key)
+    return cumulative, dict(worst_row)
+
+
+def compute_replay_mass_balance(
+    *,
+    spatial: dict,
+    recharge_rates: np.ndarray,
+    sy: float,
+    dt: float,
+    formulation: str,
+    unconfined_storage_mode: str | None,
+    warp_result: dict,
+    min_sat: float,
+) -> dict:
+    """
+    Compute period-level Warp transient mass balance from replay outputs.
+
+    :param spatial: Plain NumPy spatial fields.
+    :param recharge_rates: Period recharge rates.
+    :param sy: Specific yield.
+    :param dt: Period length.
+    :param formulation: ``confined`` or ``unconfined``.
+    :param unconfined_storage_mode: Selected 2D unconfined storage mode.
+    :param warp_result: Replay result.
+    :param min_sat: Minimum saturated thickness.
+    :return: Mass-balance summary with linearized and volume-Sy storage variants.
+    """
+    active = np.asarray(spatial["active"], dtype=np.int32)
+    bc_mask = np.asarray(spatial["bc_mask"], dtype=np.int32)
+    bc_values = np.asarray(spatial["bc_values"], dtype=np.float64)
+    k = np.asarray(spatial["k"], dtype=np.float64)
+    top = np.asarray(spatial["top"], dtype=np.float64)
+    bottom = np.asarray(spatial["bottom"], dtype=np.float64)
+    dx = float(spatial["dx"])
+    area = dx * dx
+    heads_new = np.asarray(warp_result["heads_per_period"], dtype=np.float64)
+    arrays = storage_budget_arrays_from_warp_result(warp_result=warp_result)
+    heads_old = np.asarray(arrays["heads_old_per_period"], dtype=np.float64)
+    storage_coeffs = np.asarray(arrays["storage_coeffs_per_period"], dtype=np.float64)
+    ss_coeffs = np.asarray(arrays["ss_storage_coeffs_per_period"], dtype=np.float64)
+    n_periods = int(heads_new.shape[0])
+    recharge_series = np.asarray(recharge_rates, dtype=np.float64).reshape(-1)
+
+    linearized_rows: list[dict] = []
+    volume_sy_rows: list[dict] = []
+    full_thickness = np.maximum(top - bottom, float(min_sat))
+
+    for period_index in range(n_periods):
+        head_new = heads_new[period_index]
+        head_old = heads_old[period_index]
+        T_period = transmissivity_from_period_head(
+            formulation=formulation,
+            head=head_new,
+            k=k,
+            top=top,
+            bottom=bottom,
+            active=active,
+            min_sat=min_sat,
+        )
+        base_terms = compute_boundary_flux_terms(
+            T_field=T_period,
+            recharge_rate=float(recharge_series[period_index]),
+            head=head_new,
+            active=active,
+            bc_mask=bc_mask,
+            bc_values=bc_values,
+            dx=dx,
+        )
+
+        delta_head = head_new - head_old
+        storage_release_linearized = -np.asarray(storage_coeffs[period_index], dtype=np.float64) * delta_head * area / float(dt)
+        sat_old = np.clip(head_old - bottom, 0.0, full_thickness)
+        sat_new = np.clip(head_new - bottom, 0.0, full_thickness)
+        sy_storage_release_volume = -float(sy) * (sat_new - sat_old) * area / float(dt)
+        ss_storage_release_linearized = -np.asarray(ss_coeffs[period_index], dtype=np.float64) * delta_head * area / float(dt)
+        storage_release_volume = sy_storage_release_volume + ss_storage_release_linearized
+
+        linearized_row = finalize_mass_balance_row(
+            period_number=period_index + 1,
+            base_terms=base_terms,
+            storage_release=storage_release_linearized,
+        )
+        linearized_row["storage_release_total"] = float(np.sum(storage_release_linearized))
+        linearized_rows.append(linearized_row)
+
+        volume_sy_row = finalize_mass_balance_row(
+            period_number=period_index + 1,
+            base_terms=base_terms,
+            storage_release=storage_release_volume,
+        )
+        volume_sy_row["storage_release_total"] = float(np.sum(storage_release_volume))
+        volume_sy_row["sy_storage_release_volume_total"] = float(np.sum(sy_storage_release_volume))
+        volume_sy_row["ss_storage_release_linearized_total"] = float(np.sum(ss_storage_release_linearized))
+        volume_sy_rows.append(volume_sy_row)
+
+    linearized_cumulative, linearized_worst = summarize_mass_balance_rows(linearized_rows)
+    volume_sy_cumulative, volume_sy_worst = summarize_mass_balance_rows(volume_sy_rows)
+    preferred_storage_budget = (
+        "volume_sy"
+        if str(unconfined_storage_mode).strip().lower() == UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY
+        else "linearized"
+    )
+    preferred_rows = volume_sy_rows if preferred_storage_budget == "volume_sy" else linearized_rows
+    preferred_cumulative = volume_sy_cumulative if preferred_storage_budget == "volume_sy" else linearized_cumulative
+    preferred_worst = volume_sy_worst if preferred_storage_budget == "volume_sy" else linearized_worst
+    max_abs_percent_discrepancy = max(
+        abs(float(row.get("percent_discrepancy", 0.0) or 0.0)) for row in preferred_rows
+    ) if preferred_rows else None
+    max_abs_in_minus_out = max(
+        abs(float(row.get("in_minus_out", 0.0) or 0.0)) for row in preferred_rows
+    ) if preferred_rows else None
+    return {
+        "warp_mass_balance_available": True,
+        "warp_storage_budget_available": True,
+        "mf6_mass_balance_available": False,
+        "mf6_storage_budget_available": False,
+        "storage_budget_comparison_available": False,
+        "preferred_storage_budget": preferred_storage_budget,
+        "per_period": preferred_rows,
+        "cumulative": preferred_cumulative,
+        "worst_period": preferred_worst,
+        "max_abs_percent_discrepancy": max_abs_percent_discrepancy,
+        "max_abs_in_minus_out": max_abs_in_minus_out,
+        "mass_balance_linearized": {
+            "per_period": linearized_rows,
+            "cumulative": linearized_cumulative,
+            "worst_period": linearized_worst,
+        },
+        "mass_balance_volume_sy": {
+            "per_period": volume_sy_rows,
+            "cumulative": volume_sy_cumulative,
+            "worst_period": volume_sy_worst,
+        },
+        "status_thresholds": {
+            "excellent_percent_discrepancy": 0.001,
+            "good_percent_discrepancy": 0.01,
+            "warning_percent_discrepancy": 0.1,
+        },
+    }
+
+
 def run_replay_from_artifact(
     artifact_path: str | Path,
     workspace: str | Path | None = None,
@@ -1407,7 +2229,7 @@ def run_replay_from_artifact(
     solve_controls: dict | None = None,
     warm_start_mode: str = WARM_START_UNCONFINED_STEADY_MF6,
     formulation: str = FORMULATION_UNCONFINED,
-    unconfined_storage_mode: str = UNCONFINED_STORAGE_MF6_CONVERTIBLE_TOP_SWITCH,
+    unconfined_storage_mode: str = UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
     storage_reference: str = STORAGE_REFERENCE_CURRENT_PICARD,
     storage_top_threshold: str = STORAGE_TOP_THRESHOLD_GE,
     storage_active_set_strategy: str = STORAGE_ACTIVE_SET_NONE,
@@ -1425,9 +2247,9 @@ def run_replay_from_artifact(
 
     By default the replay starts from the artifact's own
     ``unconfined_steady_head`` (``unconfined_steady_mf6``) and builds an explicit
-    MF6-like convertible top-switch storativity field
-    (``mf6_convertible_top_switch``) using ``storage_reference=current_picard``,
-    the closest tested match to MF6. Starting from a different warm start
+    MF6-like secant-Sy storativity field
+    (``mf6_convertible_secant_sy``) using ``storage_reference=current_picard``,
+    the closest tested head match to MF6. Starting from a different warm start
     than the artifact used is rejected unless
     ``allow_warm_start_mismatch=True``.
     """
@@ -1518,6 +2340,12 @@ def run_replay_from_artifact(
                 f"reference={storage_reference}, top_threshold={storage_top_threshold}, "
                 f"active_set_strategy={storage_active_set_strategy})"
             )
+        elif unconfined_storage_mode == UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY:
+            print(
+                f"  formulation: unconfined; storativity S = secant(Sy crossing) + Ss*saturated_thickness "
+                f"(Sy={sy}, Ss={ss}, reference={storage_reference}, "
+                f"active_set_strategy={storage_active_set_strategy})"
+            )
         else:
             print(
                 f"  formulation: unconfined; storativity S = Sy (Sy={sy}, phreatic_only; "
@@ -1537,13 +2365,14 @@ def run_replay_from_artifact(
     effective_startup_mode = str(
         effective_controls.get("unconfined_startup_mode", "confined_pre_solve")
     )
-    print(
-        f"  MF6 replay settings: unconfined_storage_mode={unconfined_storage_mode}, "
-        f"storage_reference={storage_reference}, "
-        f"storage_top_threshold={storage_top_threshold}, "
-        f"storage_active_set_strategy={storage_active_set_strategy}, "
-        f"unconfined_startup_mode={effective_startup_mode}, warm_start={warm_start_used}"
-    )
+    mass_balance_min_sat = float(effective_controls.get("min_saturated_thickness", DEFAULT_MIN_SAT))
+    print("  MF6 replay settings:")
+    print(f"    unconfined_storage_mode={unconfined_storage_mode}")
+    print(f"    storage_reference={storage_reference}")
+    print(f"    storage_top_threshold={storage_top_threshold}")
+    print(f"    storage_active_set_strategy={storage_active_set_strategy}")
+    print(f"    unconfined_startup_mode={effective_startup_mode}")
+    print(f"    warm_start={warm_start_used}")
 
     warp_result = run_warp_transient_replay(
         spatial=spatial,
@@ -1574,6 +2403,16 @@ def run_replay_from_artifact(
         np.asarray(artifact["heads_final"], dtype=np.float64),
         spatial["active"],
     )
+    mass_balance = compute_replay_mass_balance(
+        spatial=spatial,
+        recharge_rates=recharge_rates,
+        sy=sy,
+        dt=dt,
+        formulation=formulation,
+        unconfined_storage_mode=warp_result["unconfined_storage_mode"],
+        warp_result=warp_result,
+        min_sat=mass_balance_min_sat,
+    )
 
     # Quantify how far the Warp warm start is from the artifact's initial_head
     # (the head MF6 started period 0 from). Near-zero when Warp reuses the
@@ -1586,12 +2425,14 @@ def run_replay_from_artifact(
 
     warp_npz = workspace.joinpath("warp_transient_heads.npz")
     sat_ref_field = warp_result["saturated_thickness_reference"]
+    storage_budget_arrays = storage_budget_arrays_from_warp_result(warp_result=warp_result)
     period_infos = warp_result.get("period_infos")
     if not isinstance(period_infos, list):
         period_infos = [warp_result["last_info"]]
     np.savez_compressed(
         warp_npz,
         heads_per_period=warp_result["heads_per_period"],
+        heads_old_per_period=storage_budget_arrays["heads_old_per_period"],
         heads_final=warp_result["heads_final"],
         total_time=np.asarray(warp_result["total_time"], dtype=np.float64),
         period_times=warp_result["period_times"],
@@ -1627,6 +2468,14 @@ def run_replay_from_artifact(
         storage_switch_fraction_tol=np.asarray(
             warp_result.get("storage_switch_fraction_tol", 0.0), dtype=np.float64
         ),
+        storage_reference_heads_per_period=np.asarray(storage_budget_arrays["storage_reference_heads_per_period"], dtype=np.float64),
+        storage_coeffs_per_period=np.asarray(storage_budget_arrays["storage_coeffs_per_period"], dtype=np.float64),
+        sy_storage_coeffs_per_period=np.asarray(storage_budget_arrays["sy_storage_coeffs_per_period"], dtype=np.float64),
+        ss_storage_coeffs_per_period=np.asarray(storage_budget_arrays["ss_storage_coeffs_per_period"], dtype=np.float64),
+        storage_terms_per_period=np.asarray(storage_budget_arrays["storage_terms_per_period"], dtype=np.float64),
+        sy_storage_terms_per_period=np.asarray(storage_budget_arrays["sy_storage_terms_per_period"], dtype=np.float64),
+        ss_storage_terms_per_period=np.asarray(storage_budget_arrays["ss_storage_terms_per_period"], dtype=np.float64),
+        sy_crossing_volume_terms_per_period=np.asarray(storage_budget_arrays["sy_crossing_volume_terms_per_period"], dtype=np.float64),
         saturated_thickness_reference=(
             np.asarray(sat_ref_field, dtype=np.float64)
             if sat_ref_field is not None
@@ -1668,6 +2517,17 @@ def run_replay_from_artifact(
         np.asarray(spatial["bc_mask"], dtype=np.int32) == 0
     )
 
+    solve_settings_recorded = dict(warp_result["solve_controls"])
+    solve_settings_recorded.update(
+        {
+            "unconfined_storage_mode": warp_result["unconfined_storage_mode"],
+            "storage_reference": warp_result.get("storage_reference", STORAGE_REFERENCE_PREVIOUS_PERIOD),
+            "storage_top_threshold": warp_result.get("storage_top_threshold", STORAGE_TOP_THRESHOLD_GE),
+            "storage_active_set_strategy": warp_result.get("storage_active_set_strategy", STORAGE_ACTIVE_SET_NONE),
+            "warm_start": warp_result["warm_start_used"],
+        }
+    )
+
     summary = {
         "artifact_path": str(artifact_path),
         "artifact_formulation": artifact_mode,
@@ -1676,7 +2536,7 @@ def run_replay_from_artifact(
         "dt": dt,
         "formulation": formulation,
         # Consolidated, explicit MF6 replay settings. The direct replay and the
-        # winning ``mf6_top_switch_current_picard`` variant must agree on these.
+        # winning ``mf6_secant_sy_current_picard_none`` variant must agree on these.
         "mf6_replay_settings": {
             "unconfined_storage_mode": warp_result["unconfined_storage_mode"],
             "storage_reference": warp_result.get("storage_reference", STORAGE_REFERENCE_PREVIOUS_PERIOD),
@@ -1731,6 +2591,18 @@ def run_replay_from_artifact(
             "mf6_engine_time_including_warm_start": mf6_combined_engine_time,
             "warp_period_time_mean": float(np.mean(warp_result["period_times"])),
             "warp_period_time_max": float(np.max(warp_result["period_times"])),
+            "warp_period_time_sum": float(np.sum(warp_result["period_times"])),
+            "warp_period_times": [float(value) for value in np.asarray(warp_result["period_times"], dtype=np.float64)],
+            "warp_period_1_time": (
+                float(np.asarray(warp_result["period_times"], dtype=np.float64)[0])
+                if int(np.asarray(warp_result["period_times"]).size) > 0
+                else None
+            ),
+            "warp_period_time_mean_excluding_period_1": (
+                float(np.mean(np.asarray(warp_result["period_times"], dtype=np.float64)[1:]))
+                if int(np.asarray(warp_result["period_times"]).size) > 1
+                else None
+            ),
         },
         "convergence": _summarize_last_info(warp_result["last_info"]),
         "period_convergence": _summarize_period_infos(period_infos),
@@ -1739,12 +2611,19 @@ def run_replay_from_artifact(
             active=spatial["active"],
             bc_mask=spatial["bc_mask"],
         ),
-        "solve_settings": warp_result["solve_controls"],
+        "solve_settings": solve_settings_recorded,
         "device": warp_result["device"],
         "diag_preconditioner_backend": diag_preconditioner_backend,
         "comparison": comparison,
+        "mass_balance": mass_balance,
         "mf6_provenance": provenance,
     }
+    warp_storage_budget_path = workspace.joinpath("warp_storage_budget_terms.npz")
+    save_warp_storage_budget_terms(
+        path=warp_storage_budget_path,
+        warp_result=warp_result,
+    )
+    summary["storage_budget_artifact"] = str(warp_storage_budget_path)
 
     summary_path = workspace.joinpath("transient_replay_summary.json")
     save_summary(summary_path, summary)
@@ -1755,8 +2634,10 @@ def run_replay_from_artifact(
     final_rmse = comparison["final"]["rmse"]
     print(
         f"Final vs MF6: max_abs_diff={final_max:.6g} m, rmse={final_rmse:.6g} m "
-        f"(worst period {comparison['worst_period']})"
+        f"(worst period {comparison['worst_period_number_one_based']})"
     )
+    print_mass_balance_table(mass_balance)
+    print_cumulative_mass_balance(mass_balance)
     return summary
 
 
@@ -1778,6 +2659,10 @@ def _summarize_last_info(info: dict) -> dict:
         "chebyshev_resets", "accepted_picard_update_count",
         "strict_inner_nonconvergence_count", "unusable_inner_solve_count",
         "practical_inner_acceptance_count", "effectively_dry_cell_count",
+        "strict_picard_convergence_passed", "practical_picard_acceptance_passed",
+        "production_acceptance_passed", "practical_picard_acceptance_enabled",
+        "min_practical_outer_iterations", "practical_residual_tol",
+        "practical_dh_rms_tol", "practical_storage_diag_change_rms_tol",
         "storage_active_set_strategy", "storage_hysteresis_eps",
         "storage_freeze_after_stable_iterations", "storage_freeze_after_outer",
         "storage_switch_fraction_tol", "max_top_switch_changed_count",
@@ -1828,6 +2713,14 @@ def _summarize_period_infos(period_infos: list[dict]) -> dict:
         "unusable_inner_solve_count",
         "practical_inner_acceptance_count",
         "accepted_picard_update_count",
+        "strict_picard_convergence_passed",
+        "practical_picard_acceptance_passed",
+        "production_acceptance_passed",
+        "practical_picard_acceptance_enabled",
+        "min_practical_outer_iterations",
+        "practical_residual_tol",
+        "practical_dh_rms_tol",
+        "practical_storage_diag_change_rms_tol",
         "inner_usable_for_picard",
         "inner_h_rms_end",
         "inner_max_cycles_used",
@@ -1857,8 +2750,13 @@ def _summarize_period_infos(period_infos: list[dict]) -> dict:
             for key in keys:
                 if key in info:
                     period_summary[key] = _summary_value(info[key])
-        converged = bool(period_summary.get("converged", False))
-        if not converged and first_nonconverged_period is None:
+        production_accepted = bool(period_summary.get("production_acceptance_passed", period_summary.get("converged", False)))
+        strict_converged = bool(period_summary.get("strict_picard_convergence_passed", False))
+        practical_accepted = bool(period_summary.get("practical_picard_acceptance_passed", False) or production_accepted)
+        period_summary["converged"] = production_accepted
+        period_summary["strict_converged"] = strict_converged
+        period_summary["practical_accepted"] = practical_accepted
+        if not production_accepted and first_nonconverged_period is None:
             first_nonconverged_period = int(period_index)
         diagnosis = "stable"
         if (
@@ -1871,15 +2769,28 @@ def _summarize_period_infos(period_infos: list[dict]) -> dict:
             diagnosis = "top_switch_frozen"
         if float(period_summary.get("last_top_switch_changed_fraction", 0.0) or 0.0) > 0.0:
             diagnosis = "active_set_still_changing"
-        if not converged and float(period_summary.get("max_top_switch_changed_fraction", 0.0) or 0.0) > 0.0:
+        if not production_accepted and float(period_summary.get("max_top_switch_changed_fraction", 0.0) or 0.0) > 0.0:
             diagnosis = "active_set_cycling_suspected"
         period_summary["diagnosis"] = diagnosis
         periods.append(period_summary)
 
+    strict_fail_period = None
+    practical_fail_period = None
+    for period in periods:
+        if strict_fail_period is None and not bool(period.get("strict_converged", False)):
+            strict_fail_period = int(period["period"])
+        if practical_fail_period is None and not bool(period.get("practical_accepted", False)):
+            practical_fail_period = int(period["period"])
+
     return {
         "n_periods": int(len(periods)),
         "all_converged": first_nonconverged_period is None and len(periods) > 0,
+        "strict_all_converged": strict_fail_period is None and len(periods) > 0,
+        "practical_all_accepted": practical_fail_period is None and len(periods) > 0,
+        "production_accepted": first_nonconverged_period is None and len(periods) > 0,
         "first_nonconverged_period": first_nonconverged_period,
+        "first_strict_nonconverged_period": strict_fail_period,
+        "first_practical_nonaccepted_period": practical_fail_period,
         "periods": periods,
     }
 
@@ -1941,7 +2852,7 @@ def main(
     diag_preconditioner_backend: str = "auto",
     warm_start_mode: str = WARM_START_UNCONFINED_STEADY_MF6,
     formulation: str = FORMULATION_UNCONFINED,
-    unconfined_storage_mode: str = UNCONFINED_STORAGE_MF6_CONVERTIBLE_TOP_SWITCH,
+    unconfined_storage_mode: str = UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
     storage_reference: str = STORAGE_REFERENCE_CURRENT_PICARD,
     storage_top_threshold: str = STORAGE_TOP_THRESHOLD_GE,
     storage_active_set_strategy: str = STORAGE_ACTIVE_SET_NONE,
@@ -2002,7 +2913,7 @@ if __name__ == "__main__":
     # warm start only with allow_warm_start_mismatch=True.
     warm_start_mode = WARM_START_UNCONFINED_STEADY_MF6
     formulation = FORMULATION_UNCONFINED
-    unconfined_storage_mode = UNCONFINED_STORAGE_MF6_CONVERTIBLE_TOP_SWITCH
+    unconfined_storage_mode = UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY
     storage_reference = STORAGE_REFERENCE_CURRENT_PICARD
     storage_top_threshold = STORAGE_TOP_THRESHOLD_GE
     storage_active_set_strategy = STORAGE_ACTIVE_SET_NONE
