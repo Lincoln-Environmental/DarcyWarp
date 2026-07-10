@@ -59,6 +59,7 @@ from __future__ import annotations
 import io
 import json
 import lzma
+import math
 import os
 import sys
 import time
@@ -2221,6 +2222,581 @@ def compute_replay_mass_balance(
     }
 
 
+# ---------------------------------------------------------------------------
+# Production acceptance, tiered mass-balance classification, performance
+# summary. These are reporting/acceptance layers only; they do not change the
+# validated secant-Sy solver semantics.
+# ---------------------------------------------------------------------------
+
+PRODUCTION_RUN_MODE = "production"
+BENCHMARK_RUN_MODE = "benchmark"
+DIAGNOSTICS_RUN_MODE = "diagnostics"
+RUN_MODES = (PRODUCTION_RUN_MODE, BENCHMARK_RUN_MODE, DIAGNOSTICS_RUN_MODE)
+
+# Tiered mass-balance thresholds, expressed as absolute percent discrepancy.
+MASS_BALANCE_EXCELLENT_PCT = 0.001
+MASS_BALANCE_GOOD_PCT = 0.01
+MASS_BALANCE_ACCEPTABLE_PCT = 0.1
+MASS_BALANCE_STARTUP_WARN_PCT = 0.2
+MASS_BALANCE_STARTUP_PERIOD = 1
+
+# Validated MF6-compatible secant-Sy method settings. ``method_settings_valid``
+# is True only when a run uses exactly these.
+VALIDATED_METHOD_SETTINGS = {
+    "unconfined_storage_mode": UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
+    "storage_reference": STORAGE_REFERENCE_CURRENT_PICARD,
+    "storage_top_threshold": STORAGE_TOP_THRESHOLD_GE,
+    "storage_active_set_strategy": STORAGE_ACTIVE_SET_NONE,
+    "unconfined_startup_mode": "confined_pre_solve",
+    "warm_start": WARM_START_UNCONFINED_STEADY_MF6,
+}
+
+# Production head-accuracy acceptance criteria.
+HEAD_ACCURACY_CRITERIA = {
+    "final_rmse_max": 0.001,
+    "final_max_abs_diff_max": 0.005,
+    "worst_period_rmse_max": 0.005,
+    "worst_period_max_abs_diff_max": 0.02,
+    "all_period_percent_within_0_01m_min": 99.9,
+}
+
+# Production runtime acceptance (seconds) for the 500x500 / 10-period CUDA case.
+PRODUCTION_RUNTIME_TARGET_S = 30.0
+PRODUCTION_RUNTIME_STRETCH_TARGET_S = 20.0
+
+
+def default_run_config(
+    *,
+    run_mode: str = PRODUCTION_RUN_MODE,
+    device: str = "auto",
+    compute_mass_balance: bool = True,
+    profile_performance: bool = False,
+    save_heavy_diagnostics: bool = False,
+    run_replay_matrix: bool = False,
+) -> dict:
+    """Build a self-describing run configuration record.
+
+    :param run_mode: ``production`` (default), ``benchmark``, or ``diagnostics``.
+    :param device: Warp device string used for the run.
+    :param compute_mass_balance: Whether the per-period/cumulative mass balance
+        is computed and reported.
+    :param profile_performance: Whether optional category timing is recorded.
+    :param save_heavy_diagnostics: Whether large diagnostic artifacts (per-cell
+        storage-budget NPZ, worst-cell tables, per-outer histories) are written.
+    :param run_replay_matrix: Whether the full comparison-variant matrix runs.
+    :return: JSON-safe run configuration dict.
+    """
+    mode = str(run_mode).strip().lower()
+    if mode not in RUN_MODES:
+        raise ValueError(f"run_mode must be one of {RUN_MODES}.")
+    return {
+        "run_mode": mode,
+        "device": str(device),
+        "compute_mass_balance": bool(compute_mass_balance),
+        "profile_performance": bool(profile_performance),
+        "save_heavy_diagnostics": bool(save_heavy_diagnostics),
+        "run_replay_matrix": bool(run_replay_matrix),
+    }
+
+
+def classify_period_mass_balance(percent_discrepancy: float, is_startup_period: bool) -> str:
+    """Classify one period's mass-balance discrepancy into a tier label.
+
+    :param percent_discrepancy: Signed percent discrepancy for the period.
+    :param is_startup_period: True for the warm-start startup period (period 1).
+    :return: One of ``excellent``, ``good``, ``startup_warning``,
+        ``acceptable``, ``fail``.
+    """
+    value = abs(float(percent_discrepancy or 0.0))
+    if value < MASS_BALANCE_EXCELLENT_PCT:
+        return "excellent"
+    if value < MASS_BALANCE_GOOD_PCT:
+        return "good"
+    if is_startup_period:
+        if value < MASS_BALANCE_STARTUP_WARN_PCT:
+            return "startup_warning"
+        return "fail"
+    if value < MASS_BALANCE_ACCEPTABLE_PCT:
+        return "acceptable"
+    return "fail"
+
+
+def classify_replay_mass_balance(
+    mass_balance: dict,
+    startup_period: int = MASS_BALANCE_STARTUP_PERIOD,
+) -> dict:
+    """Apply the tiered mass-balance classification to a replay mass balance.
+
+    :param mass_balance: Output of :func:`compute_replay_mass_balance`.
+    :param startup_period: One-based period number treated as the startup period.
+    :return: Dict with ``mass_balance_class`` (overall), ``mass_balance_passed``,
+        ``cumulative_percent_discrepancy``, ``worst_nonstartup_percent_discrepancy``,
+        ``startup_percent_discrepancy``, ``warnings``, and ``failures``.
+    """
+    rows = mass_balance.get("per_period") or []
+    cumulative = mass_balance.get("cumulative") or {}
+    cumulative_pct = float(cumulative.get("percent_discrepancy", 0.0) or 0.0)
+    warnings: list[str] = []
+    failures: list[str] = []
+
+    if not rows:
+        return {
+            "mass_balance_class": "fail",
+            "mass_balance_passed": False,
+            "cumulative_percent_discrepancy": cumulative_pct,
+            "startup_percent_discrepancy": None,
+            "worst_nonstartup_percent_discrepancy": None,
+            "warnings": warnings,
+            "failures": ["mass balance has no per-period rows"],
+        }
+
+    startup_row = next(
+        (row for row in rows if int(row.get("period", 0)) == int(startup_period)),
+        None,
+    )
+    startup_pct = (
+        abs(float(startup_row.get("percent_discrepancy", 0.0) or 0.0))
+        if startup_row is not None
+        else 0.0
+    )
+    nonstartup_values = [
+        abs(float(row.get("percent_discrepancy", 0.0) or 0.0))
+        for row in rows
+        if int(row.get("period", 0)) != int(startup_period)
+    ]
+    worst_nonstartup = max(nonstartup_values) if nonstartup_values else 0.0
+    cum_abs = abs(cumulative_pct)
+
+    failed = False
+    if cum_abs >= MASS_BALANCE_ACCEPTABLE_PCT:
+        failed = True
+        failures.append(
+            f"cumulative percent discrepancy {cum_abs:.5g}% >= {MASS_BALANCE_ACCEPTABLE_PCT}%"
+        )
+    if nonstartup_values and worst_nonstartup >= MASS_BALANCE_GOOD_PCT:
+        failed = True
+        failures.append(
+            f"a non-startup period has percent discrepancy {worst_nonstartup:.5g}% >= "
+            f"{MASS_BALANCE_GOOD_PCT}%"
+        )
+    if startup_pct >= MASS_BALANCE_STARTUP_WARN_PCT:
+        failed = True
+        failures.append(
+            f"startup period {startup_period} percent discrepancy {startup_pct:.5g}% >= "
+            f"{MASS_BALANCE_STARTUP_WARN_PCT}%"
+        )
+
+    if failed:
+        return {
+            "mass_balance_class": "fail",
+            "mass_balance_passed": False,
+            "cumulative_percent_discrepancy": cumulative_pct,
+            "startup_percent_discrepancy": startup_pct,
+            "worst_nonstartup_percent_discrepancy": worst_nonstartup,
+            "warnings": warnings,
+            "failures": failures,
+        }
+
+    startup_elevated = (
+        startup_pct >= MASS_BALANCE_GOOD_PCT
+        and cum_abs < MASS_BALANCE_ACCEPTABLE_PCT
+        and (not nonstartup_values or worst_nonstartup < MASS_BALANCE_GOOD_PCT)
+    )
+    if startup_elevated:
+        warnings.append(
+            f"Period {startup_period} has a slightly elevated mass-balance discrepancy "
+            f"({startup_pct:.5g}%) during the confined_pre_solve / warm-start startup "
+            "transient. Cumulative closure is acceptable and non-startup periods close tightly."
+        )
+        return {
+            "mass_balance_class": "startup_warning",
+            "mass_balance_passed": True,
+            "cumulative_percent_discrepancy": cumulative_pct,
+            "startup_percent_discrepancy": startup_pct,
+            "worst_nonstartup_percent_discrepancy": worst_nonstartup,
+            "warnings": warnings,
+            "failures": failures,
+        }
+
+    worst_overall = max(abs(float(row.get("percent_discrepancy", 0.0) or 0.0)) for row in rows)
+    if worst_overall < MASS_BALANCE_EXCELLENT_PCT:
+        overall_class = "excellent"
+    elif worst_overall < MASS_BALANCE_GOOD_PCT:
+        overall_class = "good"
+    else:
+        overall_class = "acceptable"
+    return {
+        "mass_balance_class": overall_class,
+        "mass_balance_passed": True,
+        "cumulative_percent_discrepancy": cumulative_pct,
+        "startup_percent_discrepancy": startup_pct,
+        "worst_nonstartup_percent_discrepancy": worst_nonstartup,
+        "warnings": warnings,
+        "failures": failures,
+    }
+
+
+def annotate_mass_balance_classification(
+    mass_balance: dict,
+    startup_period: int = MASS_BALANCE_STARTUP_PERIOD,
+) -> dict:
+    """Add tiered classification keys to a mass-balance summary in place.
+
+    Adds top-level ``mass_balance_class``, ``mass_balance_passed``,
+    ``cumulative_percent_discrepancy`` and a per-period ``mass_balance_class`` to
+    every period row (including the preferred and the linearized/volume_sy
+    variants).
+
+    :param mass_balance: Output of :func:`compute_replay_mass_balance`.
+    :param startup_period: One-based startup period number.
+    :return: The same dict with classification keys added.
+    """
+    classification = classify_replay_mass_balance(mass_balance, startup_period=startup_period)
+    mass_balance["mass_balance_class"] = classification["mass_balance_class"]
+    mass_balance["mass_balance_passed"] = classification["mass_balance_passed"]
+    mass_balance["cumulative_percent_discrepancy"] = classification["cumulative_percent_discrepancy"]
+    mass_balance["startup_percent_discrepancy"] = classification["startup_percent_discrepancy"]
+    mass_balance["worst_nonstartup_percent_discrepancy"] = classification[
+        "worst_nonstartup_percent_discrepancy"
+    ]
+    mass_balance["mass_balance_warnings"] = classification["warnings"]
+    mass_balance["mass_balance_failures"] = classification["failures"]
+
+    def _annotate_rows(rows: list[dict]) -> None:
+        for row in rows:
+            period_number = int(row.get("period", 0))
+            row["mass_balance_class"] = classify_period_mass_balance(
+                row.get("percent_discrepancy", 0.0),
+                is_startup_period=(period_number == int(startup_period)),
+            )
+
+    _annotate_rows(mass_balance.get("per_period") or [])
+    for variant_key in ("mass_balance_linearized", "mass_balance_volume_sy"):
+        variant = mass_balance.get(variant_key) or {}
+        _annotate_rows(variant.get("per_period") or [])
+    return mass_balance
+
+
+def evaluate_head_accuracy(comparison: dict) -> dict:
+    """Evaluate the production head-accuracy criteria from a comparison block.
+
+    :param comparison: Replay comparison summary (``final`` + ``per_period``).
+    :return: Dict with ``passed`` plus the individual metric values.
+    """
+    per_period = comparison.get("per_period") or []
+    final = comparison.get("final") or {}
+    final_rmse = float(final.get("rmse", math.inf) or math.inf)
+    final_max_abs = float(final.get("max_abs_diff", math.inf) or math.inf)
+    worst_rmse = max(
+        (float(row.get("rmse", 0.0) or 0.0) for row in per_period),
+        default=math.inf,
+    )
+    worst_max_abs = max(
+        (float(row.get("max_abs_diff", 0.0) or 0.0) for row in per_period),
+        default=math.inf,
+    )
+    min_percent_within = min(
+        (float(row.get("percent_within_0_01m", 0.0) or 0.0) for row in per_period),
+        default=0.0,
+    )
+    criteria = HEAD_ACCURACY_CRITERIA
+    checks = {
+        "final_rmse_lt_0p001": final_rmse < criteria["final_rmse_max"],
+        "final_max_abs_lt_0p005": final_max_abs < criteria["final_max_abs_diff_max"],
+        "worst_period_rmse_lt_0p005": worst_rmse < criteria["worst_period_rmse_max"],
+        "worst_period_max_abs_lt_0p02": worst_max_abs < criteria["worst_period_max_abs_diff_max"],
+        "all_period_percent_within_0p01m_ge_99p9": (
+            min_percent_within >= criteria["all_period_percent_within_0_01m_min"]
+        ),
+    }
+    return {
+        "passed": all(checks.values()),
+        "final_rmse": final_rmse,
+        "final_max_abs_diff": final_max_abs,
+        "worst_period_rmse": worst_rmse,
+        "worst_period_max_abs_diff": worst_max_abs,
+        "all_period_percent_within_0_01m_min": min_percent_within,
+        "criteria": criteria,
+        "checks": checks,
+    }
+
+
+def evaluate_method_settings(
+    *,
+    unconfined_storage_mode: str,
+    storage_reference: str,
+    storage_top_threshold: str,
+    storage_active_set_strategy: str,
+    unconfined_startup_mode: str,
+    warm_start: str,
+) -> dict:
+    """Check whether a run uses the validated MF6-compatible secant-Sy method.
+
+    :param unconfined_storage_mode: Storage mode used.
+    :param storage_reference: Storage reference used.
+    :param storage_top_threshold: Top-threshold mode used.
+    :param storage_active_set_strategy: Active-set strategy used.
+    :param unconfined_startup_mode: Startup mode used.
+    :param warm_start: Warm-start mode used.
+    :return: Dict with ``passed`` and any ``mismatches``.
+    """
+    actual = {
+        "unconfined_storage_mode": str(unconfined_storage_mode),
+        "storage_reference": str(storage_reference),
+        "storage_top_threshold": str(storage_top_threshold),
+        "storage_active_set_strategy": str(storage_active_set_strategy),
+        "unconfined_startup_mode": str(unconfined_startup_mode),
+        "warm_start": str(warm_start),
+    }
+    mismatches = {
+        key: {"expected": VALIDATED_METHOD_SETTINGS[key], "actual": actual[key]}
+        for key in VALIDATED_METHOD_SETTINGS
+        if actual[key] != VALIDATED_METHOD_SETTINGS[key]
+    }
+    return {"passed": not mismatches, "settings": actual, "mismatches": mismatches}
+
+
+def build_production_acceptance(
+    *,
+    method_settings: dict,
+    head_accuracy: dict,
+    mass_balance: dict,
+    period_convergence: dict,
+) -> dict:
+    """Assemble the top-level production acceptance block.
+
+    :param method_settings: Output of :func:`evaluate_method_settings`.
+    :param head_accuracy: Output of :func:`evaluate_head_accuracy`.
+    :param mass_balance: Classified mass-balance summary.
+    :param period_convergence: Output of :func:`_summarize_period_infos`.
+    :return: Production acceptance summary dict.
+    """
+    warnings: list[str] = []
+    failures: list[str] = []
+
+    method_valid = bool(method_settings["passed"])
+    head_passed = bool(head_accuracy["passed"])
+    mass_passed = bool(mass_balance.get("mass_balance_passed", False))
+    strict_passed = bool(period_convergence.get("strict_all_converged", False))
+    practical_passed = bool(period_convergence.get("practical_all_accepted", False))
+
+    if not method_valid:
+        failures.append("method settings do not match the validated secant-Sy method")
+    if not head_passed:
+        failures.append("head-accuracy target not met")
+    if not mass_passed:
+        failures.append(
+            f"mass balance failed (class={mass_balance.get('mass_balance_class')})"
+        )
+    if not practical_passed:
+        failures.append("practical Picard production acceptance failed for at least one period")
+
+    if not strict_passed:
+        first_strict_fail = period_convergence.get("first_strict_nonconverged_period")
+        warnings.append(
+            "strict Picard convergence failed"
+            + (f" first in period {first_strict_fail}" if first_strict_fail else "")
+            + "; practical production acceptance is the production gate"
+        )
+    for warning in (mass_balance.get("mass_balance_warnings") or []):
+        warnings.append(warning)
+
+    production_passed = method_valid and head_passed and mass_passed and practical_passed
+    return {
+        "method_settings_valid": method_valid,
+        "head_accuracy_passed": head_passed,
+        "mass_balance_passed": mass_passed,
+        "strict_picard_convergence_passed": strict_passed,
+        "practical_picard_acceptance_passed": practical_passed,
+        "production_acceptance_passed": production_passed,
+        "warnings": warnings,
+        "failures": failures,
+    }
+
+
+def build_performance_summary(
+    *,
+    timing: dict,
+    period_convergence: dict,
+    solve_settings: dict,
+    mass_balance_runtime: float | None,
+    profile: dict | None,
+) -> dict:
+    """Assemble the top-level performance summary from timing fields.
+
+    :param timing: Replay ``timing`` block.
+    :param period_convergence: Replay ``period_convergence`` block.
+    :param solve_settings: Recorded solve settings (for selected-profile labels).
+    :param mass_balance_runtime: Measured mass-balance runtime, or ``None``.
+    :param profile: Optional detailed category-timing dict, or ``None``.
+    :return: Performance summary dict.
+    """
+    warp_total_time = float(timing.get("warp_total_time", 0.0) or 0.0)
+    mf6_transient_total_time = timing.get("mf6_transient_total_time")
+    mf6_including_warm_start = timing.get("mf6_engine_time_including_warm_start")
+
+    def _speedup(reference):
+        try:
+            reference_f = float(reference)
+        except (TypeError, ValueError):
+            return None
+        if not math.isfinite(reference_f) or reference_f <= 0.0 or warp_total_time <= 0.0:
+            return None
+        return reference_f / warp_total_time
+
+    periods = period_convergence.get("periods") or []
+    outer_iterations = [
+        int(p.get("outer_iterations", 0) or 0) for p in periods if isinstance(p, dict)
+    ]
+    total_outer_iterations = int(sum(outer_iterations)) if outer_iterations else 0
+    period_1_outer_iterations = int(outer_iterations[0]) if outer_iterations else 0
+
+    summary = {
+        "warp_total_time": warp_total_time,
+        "mf6_transient_total_time": mf6_transient_total_time,
+        "mf6_engine_time_including_warm_start": mf6_including_warm_start,
+        "speedup_vs_mf6_transient": _speedup(mf6_transient_total_time),
+        "speedup_vs_mf6_including_warm_start": _speedup(mf6_including_warm_start),
+        "period_1_runtime": timing.get("warp_period_1_time"),
+        "period_runtime_mean": timing.get("warp_period_time_mean"),
+        "period_runtime_mean_excluding_period_1": timing.get(
+            "warp_period_time_mean_excluding_period_1"
+        ),
+        "period_runtime_max": timing.get("warp_period_time_max"),
+        "period_runtime_sum": timing.get("warp_period_time_sum"),
+        "total_outer_iterations": total_outer_iterations,
+        "period_1_outer_iterations": period_1_outer_iterations,
+        "selected_practical_stopping_setting": {
+            "practical_picard_acceptance_enabled": solve_settings.get(
+                "practical_picard_acceptance_enabled"
+            ),
+            "min_practical_outer_iterations": solve_settings.get(
+                "min_practical_outer_iterations"
+            ),
+            "practical_residual_tol": solve_settings.get("practical_residual_tol"),
+            "practical_dh_rms_tol": solve_settings.get("practical_dh_rms_tol"),
+            "practical_storage_diag_change_rms_tol": solve_settings.get(
+                "practical_storage_diag_change_rms_tol"
+            ),
+            "max_outer_iterations": solve_settings.get("max_outer_iterations"),
+        },
+        "selected_inner_solve_profile": {
+            "nu_pre": solve_settings.get("nu_pre"),
+            "nu_post": solve_settings.get("nu_post"),
+            "nu_coarse": solve_settings.get("nu_coarse"),
+            "omega": solve_settings.get("omega"),
+            "max_cycles": solve_settings.get("max_cycles"),
+            "smoother": solve_settings.get("smoother"),
+        },
+        "mass_balance_runtime": mass_balance_runtime,
+        "runtime_target_s": PRODUCTION_RUNTIME_TARGET_S,
+        "runtime_stretch_target_s": PRODUCTION_RUNTIME_STRETCH_TARGET_S,
+        "runtime_target_met": (
+            warp_total_time <= PRODUCTION_RUNTIME_TARGET_S if warp_total_time > 0.0 else False
+        ),
+    }
+    if profile is not None:
+        summary["profile_available"] = True
+        summary["profile"] = profile
+    else:
+        summary["profile_available"] = False
+        summary["profile_reason"] = "category timing not yet instrumented"
+    return summary
+
+
+def _fmt_optional(value, spec: str = ".3g") -> str:
+    """:param value: numeric or None. :param spec: numeric format spec. :return: formatted string or ``n/a``."""
+    if value is None:
+        return "n/a"
+    try:
+        return format(float(value), spec)
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _print_production_report(*, summary: dict) -> None:
+    """Print the production acceptance, performance, and mass-balance summaries.
+
+    :param summary: Replay summary dict with ``production_acceptance``,
+        ``performance``, ``head_accuracy``, and ``mass_balance`` blocks.
+    """
+    acceptance = summary.get("production_acceptance", {}) or {}
+    performance = summary.get("performance", {}) or {}
+    head = summary.get("head_accuracy", {}) or {}
+    mass_balance = summary.get("mass_balance", {}) or {}
+
+    print("\nProduction acceptance")
+    print(
+        f"  method settings valid: "
+        f"{'PASS: method settings valid' if acceptance.get('method_settings_valid') else 'FAIL: method settings invalid'}"
+    )
+    print(
+        f"  head accuracy target:  "
+        f"{'PASS: head accuracy target met' if acceptance.get('head_accuracy_passed') else 'FAIL: head accuracy target not met'} "
+        f"(final rmse={_fmt_optional(head.get('final_rmse'))}, "
+        f"max_abs={_fmt_optional(head.get('final_max_abs_diff'))}, "
+        f"worst rmse={_fmt_optional(head.get('worst_period_rmse'))}, "
+        f"worst max_abs={_fmt_optional(head.get('worst_period_max_abs_diff'))}, "
+        f"min %within0.01m={_fmt_optional(head.get('all_period_percent_within_0_01m_min'), '.4g')})"
+    )
+    if acceptance.get("strict_picard_convergence_passed"):
+        print("  strict Picard convergence: PASS")
+    else:
+        first_strict = (summary.get("period_convergence") or {}).get("first_strict_nonconverged_period")
+        suffix = f" first in period {first_strict}" if first_strict else ""
+        print(f"  strict Picard convergence: WARNING: strict Picard convergence failed but practical acceptance passed{suffix}")
+    print(
+        f"  practical production convergence: "
+        f"{'PASS: practical production convergence accepted' if acceptance.get('practical_picard_acceptance_passed') else 'FAIL: practical production convergence not accepted'}"
+    )
+    mass_class = mass_balance.get("mass_balance_class")
+    if acceptance.get("mass_balance_passed"):
+        if mass_class == "startup_warning":
+            print(f"  mass balance: PASS: mass balance acceptable with startup warning (class={mass_class})")
+        else:
+            print(f"  mass balance: PASS (class={mass_class})")
+    else:
+        print(f"  mass balance: FAIL (class={mass_class})")
+    print(
+        f"  production accepted: "
+        f"{'PASS: production run accepted' if acceptance.get('production_acceptance_passed') else 'FAIL: production run rejected'}"
+    )
+    for warning in acceptance.get("warnings", []):
+        print(f"  WARNING: {warning}")
+    for failure in acceptance.get("failures", []):
+        print(f"  FAILURE: {failure}")
+
+    print("\nPerformance summary")
+    print(f"  Warp total time: {_fmt_optional(performance.get('warp_total_time'))} s")
+    print(f"  Period 1 time: {_fmt_optional(performance.get('period_1_runtime'))} s")
+    print(
+        f"  Mean period time excluding period 1: "
+        f"{_fmt_optional(performance.get('period_runtime_mean_excluding_period_1'))} s"
+    )
+    speedup_transient = performance.get("speedup_vs_mf6_transient")
+    speedup_warm = performance.get("speedup_vs_mf6_including_warm_start")
+    print(f"  Speedup vs MF6 transient: {_fmt_optional(speedup_transient)}x")
+    print(f"  Speedup vs MF6 including warm start: {_fmt_optional(speedup_warm)}x")
+    print(
+        f"  total outer iterations: {performance.get('total_outer_iterations')} "
+        f"(period 1: {performance.get('period_1_outer_iterations')})"
+    )
+    if performance.get("runtime_target_met"):
+        print(f"  runtime target (<{performance.get('runtime_target_s')}s): PASS: performance target met")
+    else:
+        print(f"  runtime target (<{performance.get('runtime_target_s')}s): WARNING: runtime target not met")
+    if not performance.get("profile_available"):
+        print(f"  WARNING: detailed profiling not implemented ({performance.get('profile_reason')})")
+
+    print("\nMass balance summary")
+    print(f"  cumulative discrepancy: {_fmt_optional(mass_balance.get('cumulative_percent_discrepancy'), '.6g')}%")
+    print(f"  max period discrepancy: {_fmt_optional(mass_balance.get('max_abs_percent_discrepancy'), '.6g')}%")
+    worst_period = mass_balance.get("worst_period") or {}
+    print(f"  worst period: {worst_period.get('period')}")
+    print(f"  class: {mass_class}")
+    print(f"  passed: {mass_balance.get('mass_balance_passed')}")
+
+
 def run_replay_from_artifact(
     artifact_path: str | Path,
     workspace: str | Path | None = None,
@@ -2238,6 +2814,7 @@ def run_replay_from_artifact(
     storage_freeze_after_outer: int | None = None,
     storage_switch_fraction_tol: float = 0.0,
     allow_warm_start_mismatch: bool = False,
+    run_config: dict | None = None,
 ) -> dict:
     """
     Load the MF6 truth artifact, replay Warp through every period, compare, save.
@@ -2366,6 +2943,17 @@ def run_replay_from_artifact(
         effective_controls.get("unconfined_startup_mode", "confined_pre_solve")
     )
     mass_balance_min_sat = float(effective_controls.get("min_saturated_thickness", DEFAULT_MIN_SAT))
+    if run_config is None:
+        run_config = default_run_config(device=device)
+    else:
+        merged = default_run_config(device=device)
+        merged.update({str(k): v for k, v in run_config.items()})
+        run_config = merged
+    print(f"  run_mode={run_config['run_mode']} device={run_config['device']} "
+          f"compute_mass_balance={run_config['compute_mass_balance']} "
+          f"profile_performance={run_config['profile_performance']} "
+          f"save_heavy_diagnostics={run_config['save_heavy_diagnostics']} "
+          f"run_replay_matrix={run_config['run_replay_matrix']}")
     print("  MF6 replay settings:")
     print(f"    unconfined_storage_mode={unconfined_storage_mode}")
     print(f"    storage_reference={storage_reference}")
@@ -2403,16 +2991,34 @@ def run_replay_from_artifact(
         np.asarray(artifact["heads_final"], dtype=np.float64),
         spatial["active"],
     )
-    mass_balance = compute_replay_mass_balance(
-        spatial=spatial,
-        recharge_rates=recharge_rates,
-        sy=sy,
-        dt=dt,
-        formulation=formulation,
-        unconfined_storage_mode=warp_result["unconfined_storage_mode"],
-        warp_result=warp_result,
-        min_sat=mass_balance_min_sat,
-    )
+    mass_balance_runtime: float | None = None
+    if run_config.get("compute_mass_balance", True):
+        mass_balance_t0 = time.perf_counter()
+        mass_balance = compute_replay_mass_balance(
+            spatial=spatial,
+            recharge_rates=recharge_rates,
+            sy=sy,
+            dt=dt,
+            formulation=formulation,
+            unconfined_storage_mode=warp_result["unconfined_storage_mode"],
+            warp_result=warp_result,
+            min_sat=mass_balance_min_sat,
+        )
+        mass_balance_runtime = float(time.perf_counter() - mass_balance_t0)
+        annotate_mass_balance_classification(mass_balance)
+    else:
+        mass_balance = {
+            "warp_mass_balance_available": False,
+            "per_period": [],
+            "cumulative": {},
+            "worst_period": {},
+            "max_abs_percent_discrepancy": None,
+            "mass_balance_class": "not_computed",
+            "mass_balance_passed": False,
+            "cumulative_percent_discrepancy": None,
+            "mass_balance_warnings": ["compute_mass_balance=False; mass balance not computed"],
+            "mass_balance_failures": [],
+        }
 
     # Quantify how far the Warp warm start is from the artifact's initial_head
     # (the head MF6 started period 0 from). Near-zero when Warp reuses the
@@ -2618,12 +3224,46 @@ def run_replay_from_artifact(
         "mass_balance": mass_balance,
         "mf6_provenance": provenance,
     }
-    warp_storage_budget_path = workspace.joinpath("warp_storage_budget_terms.npz")
-    save_warp_storage_budget_terms(
-        path=warp_storage_budget_path,
-        warp_result=warp_result,
+    # --- Production acceptance, performance summary, run configuration. ---
+    method_settings = evaluate_method_settings(
+        unconfined_storage_mode=warp_result["unconfined_storage_mode"],
+        storage_reference=storage_reference,
+        storage_top_threshold=storage_top_threshold,
+        storage_active_set_strategy=storage_active_set_strategy,
+        unconfined_startup_mode=effective_startup_mode,
+        warm_start=warm_start_used,
     )
-    summary["storage_budget_artifact"] = str(warp_storage_budget_path)
+    head_accuracy = evaluate_head_accuracy(comparison)
+    summary["run_config"] = run_config
+    summary["head_accuracy"] = head_accuracy
+    summary["method_settings"] = method_settings
+    summary["production_acceptance"] = build_production_acceptance(
+        method_settings=method_settings,
+        head_accuracy=head_accuracy,
+        mass_balance=mass_balance,
+        period_convergence=summary["period_convergence"],
+    )
+    summary["performance"] = build_performance_summary(
+        timing=summary["timing"],
+        period_convergence=summary["period_convergence"],
+        solve_settings=solve_settings_recorded,
+        mass_balance_runtime=mass_balance_runtime,
+        profile=None,
+    )
+
+    save_heavy = bool(
+        run_config.get("save_heavy_diagnostics", False)
+        or run_config.get("run_mode") == DIAGNOSTICS_RUN_MODE
+    )
+    if save_heavy:
+        warp_storage_budget_path = workspace.joinpath("warp_storage_budget_terms.npz")
+        save_warp_storage_budget_terms(
+            path=warp_storage_budget_path,
+            warp_result=warp_result,
+        )
+        summary["storage_budget_artifact"] = str(warp_storage_budget_path)
+    else:
+        summary["storage_budget_artifact"] = None
 
     summary_path = workspace.joinpath("transient_replay_summary.json")
     save_summary(summary_path, summary)
@@ -2636,8 +3276,10 @@ def run_replay_from_artifact(
         f"Final vs MF6: max_abs_diff={final_max:.6g} m, rmse={final_rmse:.6g} m "
         f"(worst period {comparison['worst_period_number_one_based']})"
     )
-    print_mass_balance_table(mass_balance)
-    print_cumulative_mass_balance(mass_balance)
+    if run_config.get("compute_mass_balance", True):
+        print_mass_balance_table(mass_balance)
+        print_cumulative_mass_balance(mass_balance)
+    _print_production_report(summary=summary)
     return summary
 
 
@@ -2861,6 +3503,7 @@ def main(
     storage_freeze_after_outer: int | None = None,
     storage_switch_fraction_tol: float = 0.0,
     allow_warm_start_mismatch: bool = False,
+    run_config: dict | None = None,
 ) -> dict:
     """
     Run the default transient replay against the MF6 truth artifact.
@@ -2899,6 +3542,7 @@ def main(
         storage_freeze_after_outer=storage_freeze_after_outer,
         storage_switch_fraction_tol=storage_switch_fraction_tol,
         allow_warm_start_mismatch=allow_warm_start_mismatch,
+        run_config=run_config,
     )
 
 
@@ -2922,6 +3566,26 @@ if __name__ == "__main__":
     storage_freeze_after_outer = None
     storage_switch_fraction_tol = 0.0
     allow_warm_start_mismatch = False
+    # Explicit production configuration variables (no argparse required).
+    #   RUN_MODE:              production | benchmark | diagnostics
+    #   COMPUTE_MASS_BALANCE:  report per-period/cumulative mass balance
+    #   PROFILE_PERFORMANCE:   record optional category timing (not yet instrumented)
+    #   SAVE_HEAVY_DIAGNOSTICS: write per-cell storage-budget NPZ artifacts
+    #   RUN_REPLAY_MATRIX:     run the full comparison-variant matrix
+    RUN_MODE = PRODUCTION_RUN_MODE
+    DEVICE = device
+    COMPUTE_MASS_BALANCE = True
+    PROFILE_PERFORMANCE = False
+    SAVE_HEAVY_DIAGNOSTICS = False
+    RUN_REPLAY_MATRIX = False
+    run_config = default_run_config(
+        run_mode=RUN_MODE,
+        device=DEVICE,
+        compute_mass_balance=COMPUTE_MASS_BALANCE,
+        profile_performance=PROFILE_PERFORMANCE,
+        save_heavy_diagnostics=SAVE_HEAVY_DIAGNOSTICS,
+        run_replay_matrix=RUN_REPLAY_MATRIX,
+    )
     main(
         artifact_path=artifact_path,
         workspace=workspace,
@@ -2938,4 +3602,5 @@ if __name__ == "__main__":
         storage_freeze_after_outer=storage_freeze_after_outer,
         storage_switch_fraction_tol=storage_switch_fraction_tol,
         allow_warm_start_mismatch=allow_warm_start_mismatch,
+        run_config=run_config,
     )
