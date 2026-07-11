@@ -2972,6 +2972,23 @@ def copy_field_kernel(
 
 
 @wp.kernel
+def fill_uniform_recharge_kernel(
+    R: wp.array(dtype=WP_FLOAT, ndim=2),
+    active: wp.array(dtype=wp.int32, ndim=2),
+    recharge_value: WP_FLOAT,
+    nx: int,
+    ny: int,
+):
+    j, i = wp.tid()
+    if j >= ny or i >= nx:
+        return
+    if active[j, i] != 0:
+        R[j, i] = recharge_value
+    else:
+        R[j, i] = WP_FLOAT(0.0)
+
+
+@wp.kernel
 def enforce_constraints_kernel(
     x: wp.array(dtype=WP_FLOAT, ndim=2),
     r: wp.array(dtype=WP_FLOAT, ndim=2),
@@ -3471,6 +3488,7 @@ class WarpDarcySolver:
         self._last_device_m_inv_validation = []
         self._last_update_T_profile = None
         self._update_T_profile_totals = None
+        self._transient_replay_counters = {}
         # ---------------- CUDA graph cache (K-cycle path) ----------------
         self._kcycle_graph = None
         self._kcycle_graph_shape = None
@@ -6317,6 +6335,35 @@ class WarpDarcySolver:
         self._stage_R0.numpy()[:, :] = self.R_field_host
         wp.copy(self.R_wp, self._stage_R0)
 
+    def update_uniform_recharge_in_place(self, recharge_rate: float) -> None:
+        """
+        Update a uniform recharge field on device from a scalar.
+
+        The host mirror is kept in sync for reporting/debug paths, but the
+        device field no longer requires staging or uploading a full recharge
+        grid every transient period.
+
+        :param recharge_rate: Uniform recharge rate for active cells.
+        """
+        if self.R_field_host is None or self.R_wp is None or self.active_wp is None:
+            raise RuntimeError("Call build_from_truth_inputs() once before update_uniform_recharge_in_place().")
+        rate = NP_FLOAT(float(recharge_rate))
+        self.R_field_host[:, :] = rate
+        if self.active_host is not None:
+            self.R_field_host[np.asarray(self.active_host, dtype=np.int32) == 0] = NP_FLOAT(0.0)
+        wp.launch(
+            kernel=fill_uniform_recharge_kernel,
+            dim=(int(self.ny), int(self.nx)),
+            inputs=[
+                self.R_wp,
+                self.active_wp,
+                WP_FLOAT(rate),
+                int(self.nx),
+                int(self.ny),
+            ],
+            device=self.device_str,
+        )
+
     def update_T_in_place_fast(self, T_truth, update_diag_preconditioner: bool = False) -> None:
         """
         Fast update: fine-level T upload only. Optionally refresh fine M_inv.
@@ -6469,6 +6516,7 @@ class WarpDarcySolver:
             practical_residual_tol: float = 1.0e-4,
             practical_dh_rms_tol: float = 3.0e-3,
             practical_storage_diag_change_rms_tol: float = 30.0,
+            save_transient_diagnostics: bool = False,
     ):
         """
         K-cycle multigrid using your existing hierarchy (self.mg_levels).
@@ -6778,6 +6826,7 @@ class WarpDarcySolver:
                 or practical_storage_diag_change_rms_tol_f < 0.0
             ):
                 raise ValueError("practical Picard tolerances must be non-negative.")
+            save_transient_diagnostics_b = bool(save_transient_diagnostics)
             secant_sy_practical_mode = bool(
                 practical_picard_acceptance_enabled_b
                 and current_picard_storage
@@ -7471,20 +7520,21 @@ class WarpDarcySolver:
                 previous_storage_diag_arr = None if storage_coeff_inner is None else np.asarray(storage_inner_diag, dtype=np.float64).copy()
                 if top_switch_effective_mask is not None:
                     previous_top_switch_mask = np.asarray(top_switch_effective_mask, dtype=bool).copy()
-                last_storage_coeff_array = (
-                    None if storage_coeff_inner is None else np.asarray(storage_inner_arr, dtype=np.float64).copy()
-                )
-                last_sy_storage_coeff_array = (
-                    None if storage_sy_coeff_arr is None else np.asarray(storage_sy_coeff_arr, dtype=np.float64).copy()
-                )
-                last_ss_storage_coeff_array = (
-                    None if storage_ss_coeff_arr is None else np.asarray(storage_ss_coeff_arr, dtype=np.float64).copy()
-                )
-                last_storage_reference_head_array = (
-                    None
-                    if storage_reference_head_arr is None
-                    else np.asarray(storage_reference_head_arr, dtype=np.float64).copy()
-                )
+                if save_transient_diagnostics_b:
+                    last_storage_coeff_array = (
+                        None if storage_coeff_inner is None else np.asarray(storage_inner_arr, dtype=np.float64).copy()
+                    )
+                    last_sy_storage_coeff_array = (
+                        None if storage_sy_coeff_arr is None else np.asarray(storage_sy_coeff_arr, dtype=np.float64).copy()
+                    )
+                    last_ss_storage_coeff_array = (
+                        None if storage_ss_coeff_arr is None else np.asarray(storage_ss_coeff_arr, dtype=np.float64).copy()
+                    )
+                    last_storage_reference_head_array = (
+                        None
+                        if storage_reference_head_arr is None
+                        else np.asarray(storage_reference_head_arr, dtype=np.float64).copy()
+                    )
 
                 head_change_converged = final_max_abs_head_change < hclose_f
                 strict_picard_convergence_passed = bool(
@@ -7629,15 +7679,21 @@ class WarpDarcySolver:
                     ),
                     "max_storage_diag_change_max": float(max_storage_diag_change_max),
                     "max_storage_diag_change_rms": float(max_storage_diag_change_rms),
-                    "storage_coeff_last_linearization_array": last_storage_coeff_array,
-                    "sy_storage_coeff_last_linearization_array": last_sy_storage_coeff_array,
-                    "ss_storage_coeff_last_linearization_array": last_ss_storage_coeff_array,
-                    "storage_reference_head_last_linearization_array": last_storage_reference_head_array,
+                    "save_transient_diagnostics": bool(save_transient_diagnostics_b),
                     "diag_preconditioner_backend": self._diag_backend_env_or_default(),
                     "update_T_profile_last": None if self._last_update_T_profile is None else dict(self._last_update_T_profile),
                     "update_T_profile_totals": None if self._update_T_profile_totals is None else dict(self._update_T_profile_totals),
                 }
             )
+            if save_transient_diagnostics_b:
+                info_out.update(
+                    {
+                        "storage_coeff_last_linearization_array": last_storage_coeff_array,
+                        "sy_storage_coeff_last_linearization_array": last_sy_storage_coeff_array,
+                        "ss_storage_coeff_last_linearization_array": last_ss_storage_coeff_array,
+                        "storage_reference_head_last_linearization_array": last_storage_reference_head_array,
+                    }
+                )
             return (h_iter, info_out) if return_info else h_iter
 
 
@@ -8366,6 +8422,7 @@ class WarpDarcySolver:
             storage_switch_fraction_tol: float = 0.0,
             solve_controls: dict | None = None,
             min_saturated_thickness: float = 0.1,
+            save_diagnostics: bool = False,
             return_info: bool = True,
     ):
         """
@@ -8395,6 +8452,7 @@ class WarpDarcySolver:
         :param storage_switch_fraction_tol: Stable-switch fraction tolerance.
         :param solve_controls: Extra controls forwarded to :meth:`solve`.
         :param min_saturated_thickness: Minimum saturated thickness.
+        :param save_diagnostics: Save full-grid storage/reference arrays.
         :param return_info: Return ``(heads_per_period, info)`` when true.
         :return: Heads per period, plus diagnostics when ``return_info`` is true.
         """
@@ -8432,6 +8490,7 @@ class WarpDarcySolver:
             raise ValueError("dt must be finite and > 0.")
 
         controls = {} if solve_controls is None else dict(solve_controls)
+        save_diagnostics_b = bool(controls.pop("save_transient_diagnostics", save_diagnostics))
         # The ``storage_*`` controls are forwarded to ``solve()`` as explicit
         # keyword arguments below, and the ``predictor_*`` keys are replay-level
         # controls that ``solve()`` does not accept. Drop both groups from the
@@ -8463,26 +8522,53 @@ class WarpDarcySolver:
 
         n_periods = int(rates.size)
         heads_per_period = np.zeros((n_periods, self.ny, self.nx), dtype=np.float64)
-        heads_old_per_period = np.zeros_like(heads_per_period)
-        storage_reference_heads = np.zeros_like(heads_per_period)
-        storage_coeffs = np.zeros_like(heads_per_period)
-        sy_coeffs = np.zeros_like(heads_per_period)
-        ss_coeffs = np.zeros_like(heads_per_period)
-        storage_terms = np.zeros_like(heads_per_period)
-        sy_terms = np.zeros_like(heads_per_period)
-        ss_terms = np.zeros_like(heads_per_period)
-        sy_crossing_terms = np.zeros_like(heads_per_period)
+        if save_diagnostics_b:
+            heads_old_per_period = np.zeros_like(heads_per_period)
+            storage_reference_heads = np.zeros_like(heads_per_period)
+            storage_coeffs = np.zeros_like(heads_per_period)
+            sy_coeffs = np.zeros_like(heads_per_period)
+            ss_coeffs = np.zeros_like(heads_per_period)
+            storage_terms = np.zeros_like(heads_per_period)
+            sy_terms = np.zeros_like(heads_per_period)
+            ss_terms = np.zeros_like(heads_per_period)
+            sy_crossing_terms = np.zeros_like(heads_per_period)
+        else:
+            heads_old_per_period = None
+            storage_reference_heads = None
+            storage_coeffs = None
+            sy_coeffs = None
+            ss_coeffs = None
+            storage_terms = None
+            sy_terms = None
+            ss_terms = None
+            sy_crossing_terms = None
         period_infos: list[dict] = []
         period_times = np.zeros(n_periods, dtype=np.float64)
+        counters = {
+            "host_to_device_full_grid_copies": 0,
+            "device_to_host_full_grid_copies": 0,
+            "full_grid_allocations_inside_period_loop": 0,
+            "full_grid_allocations_inside_outer_loop": 0,
+            "hierarchy_rebuilds": 0,
+            "T_device_updates": 0,
+            "storage_device_updates": 0,
+            "R_device_updates": 0,
+            "head_downloads": 0,
+            "diagnostic_full_grid_arrays_saved": int(save_diagnostics_b),
+        }
+        if save_diagnostics_b:
+            counters["full_grid_allocations_inside_period_loop"] += 9
 
         head_prev = np.asarray(h0, dtype=np.float64).copy()
         total_t0 = time.perf_counter()
         last_info: dict = {}
         for period_index in range(n_periods):
-            recharge_field.fill(float(rates[period_index]))
-            recharge_field[active_i == 0] = 0.0
-            self.update_R_in_place(recharge_field)
-            period_head_old = np.asarray(head_prev, dtype=np.float64).copy()
+            self.update_uniform_recharge_in_place(float(rates[period_index]))
+            counters["R_device_updates"] += 1
+            if save_diagnostics_b:
+                period_head_old = np.asarray(head_prev, dtype=np.float64).copy()
+            else:
+                period_head_old = head_prev
             period_t0 = time.perf_counter()
             head, info = self.solve(
                 formulation="unconfined",
@@ -8503,62 +8589,65 @@ class WarpDarcySolver:
                 storage_freeze_after_stable_iterations=storage_freeze_after_stable_iterations,
                 storage_freeze_after_outer=storage_freeze_after_outer,
                 storage_switch_fraction_tol=storage_switch_fraction_tol,
+                save_transient_diagnostics=save_diagnostics_b,
                 sy=float(sy),
                 ss=float(ss),
                 **controls,
             )
             period_times[period_index] = time.perf_counter() - period_t0
+            counters["device_to_host_full_grid_copies"] += 1
+            counters["head_downloads"] += 1
             head_arr = np.asarray(head, dtype=np.float64)
             info_out = dict(info) if isinstance(info, dict) else {}
             storage_ref = info_out.pop("storage_reference_head_last_linearization_array", None)
             storage_coeff = info_out.pop("storage_coeff_last_linearization_array", None)
             sy_coeff = info_out.pop("sy_storage_coeff_last_linearization_array", None)
             ss_coeff = info_out.pop("ss_storage_coeff_last_linearization_array", None)
-            if storage_ref is None:
-                storage_ref = head_arr if storage_reference == "current_picard" else period_head_old
-            if storage_coeff is None:
-                storage_coeff = np.zeros_like(head_arr)
-            if sy_coeff is None:
-                sy_coeff = np.zeros_like(head_arr)
-            if ss_coeff is None:
-                ss_coeff = np.asarray(storage_coeff, dtype=np.float64) - np.asarray(sy_coeff, dtype=np.float64)
-
-            storage_ref_arr = np.asarray(storage_ref, dtype=np.float64)
-            storage_coeff_arr = np.asarray(storage_coeff, dtype=np.float64)
-            sy_coeff_arr = np.asarray(sy_coeff, dtype=np.float64)
-            ss_coeff_arr = np.asarray(ss_coeff, dtype=np.float64)
-            delta_head = head_arr - period_head_old
-
-            full_thickness = np.maximum(top - bottom, min_sat).astype(np.float64, copy=False)
-            sat_ref = np.clip(storage_ref_arr - bottom, 0.0, full_thickness)
-            sat_old = np.clip(period_head_old - bottom, 0.0, full_thickness)
+            update_profile = info_out.get("update_T_profile_totals")
+            if isinstance(update_profile, dict):
+                counters["T_device_updates"] += int(update_profile.get("count", 0) or 0)
+            else:
+                counters["T_device_updates"] += int(info_out.get("outer_iterations", 0) or 0)
+            counters["storage_device_updates"] += int(info_out.get("outer_iterations", 0) or 0)
+            if bool(info_out.get("cuda_graph_built_this_call", False)):
+                counters["hierarchy_rebuilds"] += 1
 
             heads_per_period[period_index] = head_arr
-            heads_old_per_period[period_index] = period_head_old
-            storage_reference_heads[period_index] = storage_ref_arr
-            storage_coeffs[period_index] = storage_coeff_arr
-            sy_coeffs[period_index] = sy_coeff_arr
-            ss_coeffs[period_index] = ss_coeff_arr
-            storage_terms[period_index] = storage_coeff_arr * delta_head / dt_f
-            sy_terms[period_index] = sy_coeff_arr * delta_head / dt_f
-            ss_terms[period_index] = ss_coeff_arr * delta_head / dt_f
-            sy_crossing_terms[period_index] = float(sy) * (sat_ref - sat_old) / dt_f
+            if save_diagnostics_b:
+                if storage_ref is None:
+                    storage_ref = head_arr if storage_reference == "current_picard" else period_head_old
+                if storage_coeff is None:
+                    storage_coeff = np.zeros_like(head_arr)
+                if sy_coeff is None:
+                    sy_coeff = np.zeros_like(head_arr)
+                if ss_coeff is None:
+                    ss_coeff = np.asarray(storage_coeff, dtype=np.float64) - np.asarray(sy_coeff, dtype=np.float64)
+
+                storage_ref_arr = np.asarray(storage_ref, dtype=np.float64)
+                storage_coeff_arr = np.asarray(storage_coeff, dtype=np.float64)
+                sy_coeff_arr = np.asarray(sy_coeff, dtype=np.float64)
+                ss_coeff_arr = np.asarray(ss_coeff, dtype=np.float64)
+                delta_head = head_arr - period_head_old
+
+                full_thickness = np.maximum(top - bottom, min_sat).astype(np.float64, copy=False)
+                sat_ref = np.clip(storage_ref_arr - bottom, 0.0, full_thickness)
+                sat_old = np.clip(period_head_old - bottom, 0.0, full_thickness)
+                heads_old_per_period[period_index] = period_head_old
+                storage_reference_heads[period_index] = storage_ref_arr
+                storage_coeffs[period_index] = storage_coeff_arr
+                sy_coeffs[period_index] = sy_coeff_arr
+                ss_coeffs[period_index] = ss_coeff_arr
+                storage_terms[period_index] = storage_coeff_arr * delta_head / dt_f
+                sy_terms[period_index] = sy_coeff_arr * delta_head / dt_f
+                ss_terms[period_index] = ss_coeff_arr * delta_head / dt_f
+                sy_crossing_terms[period_index] = float(sy) * (sat_ref - sat_old) / dt_f
             period_infos.append(info_out)
             last_info = info_out
             head_prev = head_arr
 
         info_all = {
             "heads_per_period": heads_per_period,
-            "heads_old_per_period": heads_old_per_period,
             "heads_final": heads_per_period[-1],
-            "storage_reference_heads_per_period": storage_reference_heads,
-            "storage_coeffs_per_period": storage_coeffs,
-            "sy_storage_coeffs_per_period": sy_coeffs,
-            "ss_storage_coeffs_per_period": ss_coeffs,
-            "storage_terms_per_period": storage_terms,
-            "sy_storage_terms_per_period": sy_terms,
-            "ss_storage_terms_per_period": ss_terms,
-            "sy_crossing_volume_terms_per_period": sy_crossing_terms,
             "period_infos": period_infos,
             "last_info": last_info,
             "period_times": period_times,
@@ -8573,7 +8662,24 @@ class WarpDarcySolver:
             "storage_switch_fraction_tol": float(storage_switch_fraction_tol),
             "dt": dt_f,
             "solve_controls": controls,
+            "save_diagnostics": bool(save_diagnostics_b),
+            "transient_replay_counters": counters,
         }
+        if save_diagnostics_b:
+            info_all.update(
+                {
+                    "heads_old_per_period": heads_old_per_period,
+                    "storage_reference_heads_per_period": storage_reference_heads,
+                    "storage_coeffs_per_period": storage_coeffs,
+                    "sy_storage_coeffs_per_period": sy_coeffs,
+                    "ss_storage_coeffs_per_period": ss_coeffs,
+                    "storage_terms_per_period": storage_terms,
+                    "sy_storage_terms_per_period": sy_terms,
+                    "ss_storage_terms_per_period": ss_terms,
+                    "sy_crossing_volume_terms_per_period": sy_crossing_terms,
+                }
+            )
+        self._transient_replay_counters = dict(counters)
         return (heads_per_period, info_all) if return_info else heads_per_period
 
     def solve(
