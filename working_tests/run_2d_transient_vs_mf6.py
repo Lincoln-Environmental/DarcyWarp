@@ -57,9 +57,9 @@ from DARCY_WARP_PACKAGE.project_base import data_store, require_mf6  # noqa: E40
 
 
 # ---- defaults --------------------------------------------------------------
-N_WEEKS = 10
+N_WEEKS = 52
 DT_DAYS = 7.0
-ANNUAL_RECHARGE_M = 0.1
+ANNUAL_RECHARGE_M = 0.3
 DEFAULT_NX = DEFAULT_NY = 500
 DEFAULT_DX = 100.0
 DEFAULT_K = 100.0

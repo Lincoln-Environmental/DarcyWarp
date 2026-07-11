@@ -2,12 +2,11 @@
 """
 Focused 2D transient-unconfined replay mismatch analysis.
 
-This script explains the remaining Warp-vs-MF6 mismatch after the transient
-unconfined K-cycle storage-diagonal fix.  By default it reads the existing MF6
-truth artifact and existing Warp replay output, writes an analysis JSON next to
-the replay output, and prints compact numeric tables.  With ``--run-replays`` it
-can also run tight-tolerance and storage-formulation variants into separate
-workspaces.
+This script audits the production secant-Sy Warp-vs-MF6 replay. By default it
+reads the existing MF6 truth artifact and existing Warp replay output, writes an
+analysis JSON next to the replay output, and prints compact numeric tables. With
+``--run-replays`` it runs only the production secant-Sy replay and the
+freeze-after-outer secant-Sy variants.
 """
 
 from __future__ import annotations
@@ -26,31 +25,23 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from DARCY_WARP_PACKAGE.project_base import data_store  # noqa: E402
-from working_tests.run_2d_transient_warp_replay import (  # noqa: E402
+from working_tests.transient_artifacts import (  # noqa: E402
     FORMULATION_UNCONFINED,
-    STORAGE_ACTIVE_SET_FREEZE_WHEN_STABLE,
-    STORAGE_ACTIVE_SET_HYSTERESIS,
-    STORAGE_ACTIVE_SET_NONE,
-    STORAGE_ACTIVE_SET_PREDICTOR_CORRECTOR,
-    STORAGE_REFERENCE_CURRENT_PICARD,
-    STORAGE_REFERENCE_PREVIOUS_PERIOD,
-    STORAGE_TOP_THRESHOLD_GE,
-    STORAGE_TOP_THRESHOLD_GT,
-    UNCONFINED_STORAGE_INTEGRATED_SY_SS,
-    UNCONFINED_STORAGE_MF6_CONVERTIBLE,
     UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
-    UNCONFINED_STORAGE_MF6_CONVERTIBLE_TOP_SWITCH,
-    UNCONFINED_STORAGE_PHREATIC_ONLY,
     WARM_START_UNCONFINED_STEADY_MF6,
-    compare_transient,
-    save_warp_storage_budget_terms,
     default_artifact_path,
-    default_solve_controls,
     load_transient_artifact,
-    run_replay_from_artifact,
-    run_warp_transient_replay,
-    spatial_fields_from_artifact,
 )
+from working_tests.transient_replay_settings import (  # noqa: E402
+    STORAGE_ACTIVE_SET_FREEZE_WHEN_STABLE,
+    STORAGE_ACTIVE_SET_NONE,
+    STORAGE_REFERENCE_CURRENT_PICARD,
+    STORAGE_TOP_THRESHOLD_GE,
+    default_solve_controls,
+    production_secant_sy_settings,
+    secant_sy_freeze_settings,
+)
+from working_tests.transient_replay_support import run_replay_from_artifact  # noqa: E402
 
 
 NOT_AVAILABLE = "not_available"
@@ -620,36 +611,12 @@ def classify_error_pattern(rows: list[dict], free_count: int) -> dict:
 
 def period_storage_diag(artifact: dict, warp: dict, period_index: int) -> np.ndarray:
     """:param artifact: MF6 artifact. :param warp: Warp arrays. :param period_index: zero-based period. :return: storage diagonal."""
-    if "storage_coeffs_per_period" in warp:
-        coeffs = np.asarray(warp["storage_coeffs_per_period"], dtype=np.float64)
-        dx = float(np.asarray(artifact["dx"]).reshape(()))
-        dt = float(np.asarray(artifact["dt_days"]).reshape(()))
-        return coeffs[period_index] * dx * dx / dt
-    active = np.asarray(artifact["active"], dtype=np.int32)
-    bc_mask = np.asarray(artifact["bc_mask"], dtype=np.int32)
-    bottom = np.asarray(artifact["bottom"], dtype=np.float64)
-    top = np.asarray(artifact["top"], dtype=np.float64)
-    sy = float(np.asarray(artifact["sy"]).reshape(()))
-    ss = float(np.asarray(artifact["ss"]).reshape(()))
+    if "storage_coeffs_per_period" not in warp:
+        raise KeyError("warp replay artifact is missing storage_coeffs_per_period")
+    coeffs = np.asarray(warp["storage_coeffs_per_period"], dtype=np.float64)
     dx = float(np.asarray(artifact["dx"]).reshape(()))
     dt = float(np.asarray(artifact["dt_days"]).reshape(()))
-    if period_index == 0:
-        head_prev = np.asarray(warp.get("warm_start_head", artifact["initial_head"]), dtype=np.float64)
-    else:
-        head_prev = np.asarray(warp["heads_per_period"], dtype=np.float64)[period_index - 1]
-    full = np.maximum(top - bottom, 0.1)
-    sat = np.clip(head_prev - bottom, 0.1, full)
-    mode = scalar_string(warp.get("unconfined_storage_mode", UNCONFINED_STORAGE_MF6_CONVERTIBLE)).strip().lower()
-    threshold = scalar_string(warp.get("storage_top_threshold", STORAGE_TOP_THRESHOLD_GE)).strip().lower()
-    if mode == UNCONFINED_STORAGE_PHREATIC_ONLY:
-        storativity = np.full_like(sat, sy, dtype=np.float64)
-    elif mode == UNCONFINED_STORAGE_MF6_CONVERTIBLE_TOP_SWITCH:
-        above_top = head_prev >= top if threshold == STORAGE_TOP_THRESHOLD_GE else head_prev > top
-        storativity = np.where(above_top, ss * full, sy + ss * sat)
-    else:
-        storativity = sy + ss * sat
-    storativity[(active == 0) | (bc_mask != 0)] = 0.0
-    return storativity * dx * dx / dt
+    return coeffs[period_index] * dx * dx / dt
 
 
 def nearest_mask_distance(i: int, j: int, mask: np.ndarray) -> int | str:
@@ -852,7 +819,6 @@ def mf6_semantics_summary(artifact: dict) -> dict:
         "artifact_ss": finite_scalar(artifact["ss"]),
         "artifact_dt_days": finite_scalar(artifact["dt_days"]),
         "artifact_warm_start_mode": None if not isinstance(parsed, dict) else parsed.get("warm_start_mode"),
-        "darcywarp_simple_mode": "integrated_sy_ss -> Sy + Ss * clipped saturated_thickness_reference",
         "darcywarp_mf6_compatible_mode": (
             "mf6_convertible_secant_sy -> secant Sy crossing coefficient + Ss * clipped saturated_thickness_reference"
         ),
@@ -864,235 +830,31 @@ def mf6_semantics_summary(artifact: dict) -> dict:
     }
 
 
-def tight_solve_controls() -> dict:
-    """:return: tighter replay solve controls for diagnostic runs."""
-    controls = default_solve_controls()
-    controls.update(
-        {
-            "max_cycles": max(int(controls.get("max_cycles", 200)), 300),
-            "max_outer_iterations": max(int(controls.get("max_outer_iterations", 100)), 150),
-            "hclose": 1.0e-6,
-            "rel_tol": 1.0e-9,
-            "abs_tol_min": 1.0e-9,
-            "dh_rms_tol": 1.0e-6,
-            "residual_floor_tol": 1.0e-7,
-            "inner_head_residual_tol_min": 1.0e-6,
-            "inner_head_residual_tol_max": 1.0e-4,
-            "unconfined_inner_max_cycles_early": 40,
-            "unconfined_inner_max_cycles_middle": 80,
-            "unconfined_inner_max_cycles_late": 160,
-        }
-    )
-    return controls
-
-
-def practical_secant_controls(
-    *,
-    min_practical_outer_iterations: int,
-    practical_residual_tol: float,
-    practical_dh_rms_tol: float,
-    practical_storage_diag_change_rms_tol: float,
-    max_outer_iterations: int,
-) -> dict:
-    """
-    Build secant-Sy practical-acceptance solver controls.
-
-    :param min_practical_outer_iterations: Minimum outer iterations before practical acceptance.
-    :param practical_residual_tol: Practical residual tolerance.
-    :param practical_dh_rms_tol: Practical RMS head-change tolerance.
-    :param practical_storage_diag_change_rms_tol: Practical storage-diagonal RMS-change tolerance.
-    :param max_outer_iterations: Hard Picard cap for the run.
-    :return: Solver controls dictionary.
-    """
-    controls = default_solve_controls()
-    controls.update(
-        {
-            "max_outer_iterations": int(max_outer_iterations),
-            "practical_picard_acceptance_enabled": True,
-            "min_practical_outer_iterations": int(min_practical_outer_iterations),
-            "practical_residual_tol": float(practical_residual_tol),
-            "practical_dh_rms_tol": float(practical_dh_rms_tol),
-            "practical_storage_diag_change_rms_tol": float(practical_storage_diag_change_rms_tol),
-        }
-    )
-    return controls
-
-
-def _mf6_top_switch_base_cfg(
-    *,
-    solve_controls: dict | None = None,
-    storage_reference: str = STORAGE_REFERENCE_CURRENT_PICARD,
-    storage_top_threshold: str = STORAGE_TOP_THRESHOLD_GE,
-) -> dict:
-    """:param solve_controls: optional solver controls (defaults to default_solve_controls). :param storage_reference: current_picard or previous_period. :param storage_top_threshold: ge or gt. :return: a current-Picard top-switch variant config with confined-pre-solve startup and the unconfined_steady_mf6 warm start."""
-    return {
-        "solve_controls": default_solve_controls() if solve_controls is None else solve_controls,
-        "unconfined_storage_mode": UNCONFINED_STORAGE_MF6_CONVERTIBLE_TOP_SWITCH,
-        "storage_reference": storage_reference,
-        "storage_top_threshold": storage_top_threshold,
-        "sy_override": None,
-        "ss_override": None,
-    }
-
-
 def _replay_variant_configs(variant_set: str = "full") -> dict:
-    """:param variant_set: ``full`` or ``speed``. :return: ordered mapping of replay variant name -> config dict."""
+    """
+    Return normal replay-analysis variants.
+
+    The normal harness intentionally exposes only the validated production
+    secant-Sy replay and secant-Sy freeze-after-outer variants.
+
+    :param variant_set: ``full`` or ``speed``. Both normal sets expose the same
+        production/freeze secant-Sy matrix.
+    :return: Ordered mapping of replay variant name to config dict.
+    """
     variant_mode = str(variant_set).strip().lower()
     if variant_mode not in {"full", "speed"}:
         raise ValueError("variant_set must be 'full' or 'speed'.")
     variants: dict[str, Any] = {
-        "tight_combined": {
-            "solve_controls": tight_solve_controls(),
-            "unconfined_storage_mode": UNCONFINED_STORAGE_MF6_CONVERTIBLE,
-            "storage_reference": STORAGE_REFERENCE_PREVIOUS_PERIOD,
-            "storage_top_threshold": STORAGE_TOP_THRESHOLD_GE,
-            "sy_override": None,
-            "ss_override": None,
-        },
-        "sy_only": {
-            "solve_controls": default_solve_controls(),
-            "unconfined_storage_mode": UNCONFINED_STORAGE_PHREATIC_ONLY,
-            "storage_reference": STORAGE_REFERENCE_PREVIOUS_PERIOD,
-            "storage_top_threshold": STORAGE_TOP_THRESHOLD_GE,
-            "sy_override": None,
-            "ss_override": None,
-        },
-        "ss_only": {
-            "solve_controls": default_solve_controls(),
-            "unconfined_storage_mode": UNCONFINED_STORAGE_MF6_CONVERTIBLE,
-            "storage_reference": STORAGE_REFERENCE_PREVIOUS_PERIOD,
-            "storage_top_threshold": STORAGE_TOP_THRESHOLD_GE,
-            "sy_override": 0.0,
-            "ss_override": None,
-        },
-        "integrated_sy_ss_baseline": _mf6_top_switch_base_cfg(
-            storage_reference=STORAGE_REFERENCE_PREVIOUS_PERIOD,
-        ) | {"unconfined_storage_mode": UNCONFINED_STORAGE_INTEGRATED_SY_SS},
-        "mf6_top_switch_previous_period": _mf6_top_switch_base_cfg(
-            storage_reference=STORAGE_REFERENCE_PREVIOUS_PERIOD,
-        ),
-        "mf6_top_switch_current_picard": _mf6_top_switch_base_cfg(),
-        "mf6_top_switch_current_picard_none": _mf6_top_switch_base_cfg(),
-        "mf6_top_switch_previous_period_gt": _mf6_top_switch_base_cfg(
-            storage_reference=STORAGE_REFERENCE_PREVIOUS_PERIOD,
-            storage_top_threshold=STORAGE_TOP_THRESHOLD_GT,
-        ),
-        "mf6_top_switch_current_picard_gt": _mf6_top_switch_base_cfg(
-            storage_top_threshold=STORAGE_TOP_THRESHOLD_GT,
-        ),
-        "mf6_top_switch_current_picard_hysteresis_0p01": _mf6_top_switch_base_cfg()
-        | {
-            "storage_active_set_strategy": STORAGE_ACTIVE_SET_HYSTERESIS,
-            "storage_hysteresis_eps": 0.01,
-        },
-        "mf6_top_switch_current_picard_freeze_stable2": _mf6_top_switch_base_cfg()
-        | {
-            "storage_active_set_strategy": STORAGE_ACTIVE_SET_FREEZE_WHEN_STABLE,
-            "storage_freeze_after_stable_iterations": 2,
-            "storage_switch_fraction_tol": 0.0,
-        },
-        "mf6_top_switch_predictor_corrector": _mf6_top_switch_base_cfg(
-            solve_controls={
-                **default_solve_controls(),
-                "predictor_max_outer_iterations": 5,
-                "corrector_max_outer_iterations": 40,
-                "predictor_corrector_corrector_strategy": STORAGE_ACTIVE_SET_HYSTERESIS,
-            },
+        "production_secant_sy": production_secant_sy_settings(),
+    }
+    for freeze_after_outer in (2, 3, 4, 5, 6, 8, 10):
+        variants[f"secant_sy_freeze_after_outer_{freeze_after_outer}"] = secant_sy_freeze_settings(
+            freeze_after_outer=freeze_after_outer,
         )
-        | {
-            "storage_active_set_strategy": STORAGE_ACTIVE_SET_PREDICTOR_CORRECTOR,
-            "storage_hysteresis_eps": 0.01,
-        },
-        "fixed_initial_saturated_thickness": {
-            "skipped": True,
-            "reason": "not implemented in the public replay path without changing formulation code",
-        },
-    }
-    # Task 5: forced active-set freeze after a chosen outer iteration. Uses the
-    # freeze_when_stable mechanism but with storage_freeze_after_stable_iterations=0
-    # so only the forced-after-N branch fires (the active set never has to become
-    # stable on its own).
-    for freeze_n in (3, 5, 8, 10, 15, 20):
-        variants[f"current_picard_freeze_after_outer_{freeze_n}"] = _mf6_top_switch_base_cfg() | {
-            "storage_active_set_strategy": STORAGE_ACTIVE_SET_FREEZE_WHEN_STABLE,
-            "storage_freeze_after_stable_iterations": 0,
-            "storage_freeze_after_outer": freeze_n,
-            "storage_switch_fraction_tol": 0.0,
-        }
-    for freeze_n in (8, 10, 20):
-        variants[f"mf6_top_switch_current_picard_freeze_after_outer_{freeze_n}"] = _mf6_top_switch_base_cfg() | {
-            "storage_active_set_strategy": STORAGE_ACTIVE_SET_FREEZE_WHEN_STABLE,
-            "storage_freeze_after_stable_iterations": 0,
-            "storage_freeze_after_outer": freeze_n,
-            "storage_switch_fraction_tol": 0.0,
-        }
-    # Task 6: smaller hysteresis sweep (run only when forced-freeze is inconclusive;
-    # included here unconditionally so the analysis reports them when --run-replays).
-    for eps in (0.001, 0.002, 0.005, 0.01, 0.02):
-        eps_tag = (f"{eps:g}").replace(".", "p")
-        variants[f"current_picard_hysteresis_{eps_tag}"] = _mf6_top_switch_base_cfg() | {
-            "storage_active_set_strategy": STORAGE_ACTIVE_SET_HYSTERESIS,
-            "storage_hysteresis_eps": eps,
-        }
-    variants["mf6_secant_sy_current_picard_none"] = _mf6_top_switch_base_cfg() | {
-        "unconfined_storage_mode": UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
-    }
-    for freeze_n in (8, 10, 20):
-        variants[f"mf6_secant_sy_current_picard_freeze_after_outer_{freeze_n}"] = _mf6_top_switch_base_cfg() | {
-            "unconfined_storage_mode": UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
-            "storage_active_set_strategy": STORAGE_ACTIVE_SET_FREEZE_WHEN_STABLE,
-            "storage_freeze_after_stable_iterations": 0,
-            "storage_freeze_after_outer": freeze_n,
-            "storage_switch_fraction_tol": 0.0,
-        }
-    # Secondary diagnostic: unconfined pre-solve startup (a few Picard
-    # sub-iterations that rebuild transmissivity, instead of one fixed-T solve).
-    variants["current_picard_unconfined_pre_solve"] = _mf6_top_switch_base_cfg(
-        solve_controls={
-            **default_solve_controls(),
-            "unconfined_startup_mode": "unconfined_pre_solve",
-            "unconfined_pre_solve_iterations": 3,
-        },
-    )
-    candidate_practical = {
-        "min_practical_outer_iterations": 8,
-        "practical_residual_tol": 1.0e-4,
-        "practical_dh_rms_tol": 3.0e-3,
-        "practical_storage_diag_change_rms_tol": 30.0,
-    }
-    stricter_practical = {
-        "min_practical_outer_iterations": 10,
-        "practical_residual_tol": 5.0e-5,
-        "practical_dh_rms_tol": 2.0e-3,
-        "practical_storage_diag_change_rms_tol": 20.0,
-    }
-    speed_variants: dict[str, Any] = {}
-    for outer_cap in (8, 10, 12, 15, 20, 30, 50, 100):
-        speed_variants[f"mf6_secant_sy_speed_outer_{outer_cap}"] = _mf6_top_switch_base_cfg(
-            solve_controls=practical_secant_controls(
-                max_outer_iterations=outer_cap,
-                **candidate_practical,
-            )
-        ) | {
-            "unconfined_storage_mode": UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
-            "variant_family": "speed_candidate",
-        }
-        speed_variants[f"mf6_secant_sy_speed_outer_{outer_cap}_strict_practical"] = _mf6_top_switch_base_cfg(
-            solve_controls=practical_secant_controls(
-                max_outer_iterations=outer_cap,
-                **stricter_practical,
-            )
-        ) | {
-            "unconfined_storage_mode": UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
-            "variant_family": "speed_strict",
-        }
-    if variant_mode == "speed":
-        return speed_variants
-    variants.update(speed_variants)
     return variants
 
 
-WINNING_VARIANT_NAME = "mf6_secant_sy_current_picard_none"
+WINNING_VARIANT_NAME = "production_secant_sy"
 
 # Fields the direct MF6 replay and the winning variant must agree on (Task 2).
 CONSISTENCY_FIELDS = (
@@ -1124,14 +886,15 @@ CONSISTENCY_FIELDS = (
 
 def direct_replay_settings() -> dict:
     """:return: the effective direct MF6 replay settings (main/run_replay_from_artifact defaults merged with default_solve_controls)."""
-    controls = default_solve_controls()
+    production = production_secant_sy_settings()
+    controls = production["solve_controls"]
     return {
-        "unconfined_storage_mode": UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
-        "storage_reference": STORAGE_REFERENCE_CURRENT_PICARD,
-        "storage_top_threshold": STORAGE_TOP_THRESHOLD_GE,
-        "storage_active_set_strategy": STORAGE_ACTIVE_SET_NONE,
+        "unconfined_storage_mode": production["unconfined_storage_mode"],
+        "storage_reference": production["storage_reference"],
+        "storage_top_threshold": production["storage_top_threshold"],
+        "storage_active_set_strategy": production["storage_active_set_strategy"],
         "unconfined_startup_mode": controls["unconfined_startup_mode"],
-        "warm_start": WARM_START_UNCONFINED_STEADY_MF6,
+        "warm_start": production["warm_start_mode"],
         "max_cycles": controls["max_cycles"],
         "max_outer_iterations": controls["max_outer_iterations"],
         "hclose": controls["hclose"],
@@ -1161,7 +924,7 @@ def winning_variant_settings_from_config(cfg: dict) -> dict:
         "storage_top_threshold": cfg["storage_top_threshold"],
         "storage_active_set_strategy": cfg.get("storage_active_set_strategy", STORAGE_ACTIVE_SET_NONE),
         "unconfined_startup_mode": controls["unconfined_startup_mode"],
-        "warm_start": WARM_START_UNCONFINED_STEADY_MF6,
+        "warm_start": cfg.get("warm_start_mode", WARM_START_UNCONFINED_STEADY_MF6),
         "max_cycles": controls["max_cycles"],
         "max_outer_iterations": controls["max_outer_iterations"],
         "hclose": controls["hclose"],
@@ -1223,6 +986,18 @@ def check_direct_vs_winning_variant() -> dict:
     }
 
 
+def _effective_solver_active_set_strategy(cfg: dict) -> str:
+    """
+    Return the lower-level solver active-set strategy for a replay config.
+
+    :param cfg: Replay variant config.
+    :return: Strategy passed into the solver.
+    """
+    if cfg.get("storage_freeze_after_outer") is not None:
+        return STORAGE_ACTIVE_SET_FREEZE_WHEN_STABLE
+    return cfg.get("storage_active_set_strategy", STORAGE_ACTIVE_SET_NONE)
+
+
 def run_optional_replay_variants(
     *,
     artifact_path: Path,
@@ -1235,53 +1010,25 @@ def run_optional_replay_variants(
     variants = _replay_variant_configs(variant_set=variant_set)
     results: dict[str, Any] = {}
     for name, cfg in variants.items():
-        if cfg.get("skipped"):
-            results[name] = {
-                "skipped": True,
-                "reason": cfg["reason"],
-            }
-            continue
         workspace = output_dir.joinpath(f"replay_{name}")
-        if cfg["sy_override"] is None and cfg["ss_override"] is None:
-            summary = run_replay_from_artifact(
-                artifact_path=artifact_path,
-                workspace=workspace,
-                device=device,
-                diag_preconditioner_backend="device" if device != "cpu" else "host",
-                solve_controls=cfg["solve_controls"],
-                warm_start_mode=WARM_START_UNCONFINED_STEADY_MF6,
-                formulation=FORMULATION_UNCONFINED,
-                unconfined_storage_mode=cfg["unconfined_storage_mode"],
-                storage_reference=cfg["storage_reference"],
-                storage_top_threshold=cfg["storage_top_threshold"],
-                storage_active_set_strategy=cfg.get("storage_active_set_strategy", STORAGE_ACTIVE_SET_NONE),
-                storage_hysteresis_eps=cfg.get("storage_hysteresis_eps", 0.0),
-                storage_freeze_after_stable_iterations=cfg.get(
-                    "storage_freeze_after_stable_iterations", 0
-                ),
-                storage_freeze_after_outer=cfg.get("storage_freeze_after_outer"),
-                storage_switch_fraction_tol=cfg.get("storage_switch_fraction_tol", 0.0),
-                allow_warm_start_mismatch=allow_warm_start_mismatch,
-            )
-        else:
-            summary = run_direct_storage_variant(
-                artifact_path=artifact_path,
-                workspace=workspace,
-                device=device,
-                solve_controls=cfg["solve_controls"],
-                unconfined_storage_mode=cfg["unconfined_storage_mode"],
-                storage_reference=cfg["storage_reference"],
-                storage_top_threshold=cfg["storage_top_threshold"],
-                storage_active_set_strategy=cfg.get("storage_active_set_strategy", STORAGE_ACTIVE_SET_NONE),
-                storage_hysteresis_eps=cfg.get("storage_hysteresis_eps", 0.0),
-                storage_freeze_after_stable_iterations=cfg.get(
-                    "storage_freeze_after_stable_iterations", 0
-                ),
-                storage_freeze_after_outer=cfg.get("storage_freeze_after_outer"),
-                storage_switch_fraction_tol=cfg.get("storage_switch_fraction_tol", 0.0),
-                sy_override=cfg["sy_override"],
-                ss_override=cfg["ss_override"],
-            )
+        summary = run_replay_from_artifact(
+            artifact_path=artifact_path,
+            workspace=workspace,
+            device=device,
+            diag_preconditioner_backend="device" if device != "cpu" else "host",
+            solve_controls=cfg["solve_controls"],
+            warm_start_mode=cfg.get("warm_start_mode", WARM_START_UNCONFINED_STEADY_MF6),
+            formulation=FORMULATION_UNCONFINED,
+            unconfined_storage_mode=cfg["unconfined_storage_mode"],
+            storage_reference=cfg["storage_reference"],
+            storage_top_threshold=cfg["storage_top_threshold"],
+            storage_active_set_strategy=_effective_solver_active_set_strategy(cfg),
+            storage_hysteresis_eps=cfg.get("storage_hysteresis_eps", 0.0),
+            storage_freeze_after_stable_iterations=cfg.get("storage_freeze_after_stable_iterations", 0),
+            storage_freeze_after_outer=cfg.get("storage_freeze_after_outer"),
+            storage_switch_fraction_tol=cfg.get("storage_switch_fraction_tol", 0.0),
+            allow_warm_start_mismatch=allow_warm_start_mismatch,
+        )
         comparison = summary.get("comparison", {}) if isinstance(summary, dict) else {}
         variant_rows, variant_pattern, variant_worst_cells, variant_picard, variant_storage = variant_diagnostics_from_workspace(
             artifact_path=artifact_path,
@@ -1306,8 +1053,7 @@ def run_optional_replay_variants(
                 ),
                 "storage_freeze_after_outer": cfg.get("storage_freeze_after_outer"),
                 "storage_switch_fraction_tol": cfg.get("storage_switch_fraction_tol", 0.0),
-                "sy_override": cfg["sy_override"],
-                "ss_override": cfg["ss_override"],
+                "warm_start_mode": cfg.get("warm_start_mode", WARM_START_UNCONFINED_STEADY_MF6),
             },
             "final": summary.get("comparison", {}).get("final", {}),
             "worst_period": comparison.get(
@@ -1325,9 +1071,8 @@ def run_optional_replay_variants(
                 artifact_path=artifact_path,
                 workspace=workspace,
             ),
-            # Captured so full per-variant metrics (outer iterations, top-switch
-            # fractions, nonconverged periods, runtime) can be reported without
-            # reloading the workspace JSON. Absent for run_direct_storage_variant.
+            # Captured so full per-variant metrics can be reported without
+            # reloading the workspace JSON.
             "convergence": summary.get("convergence", {}) if isinstance(summary, dict) else {},
             "period_convergence": summary.get("period_convergence", {}) if isinstance(summary, dict) else {},
             "timing": summary.get("timing", {}) if isinstance(summary, dict) else {},
@@ -1335,142 +1080,6 @@ def run_optional_replay_variants(
             "runtime": finite_scalar((summary.get("timing", {}) if isinstance(summary, dict) else {}).get("warp_total_time")),
         }
     return results
-
-
-def run_direct_storage_variant(
-    *,
-    artifact_path: Path,
-    workspace: Path,
-    device: str,
-    solve_controls: dict,
-    unconfined_storage_mode: str,
-    storage_reference: str,
-    storage_top_threshold: str,
-    storage_active_set_strategy: str,
-    storage_hysteresis_eps: float,
-    storage_freeze_after_stable_iterations: int,
-    storage_freeze_after_outer: int | None,
-    storage_switch_fraction_tol: float,
-    sy_override: float | None,
-    ss_override: float | None,
-) -> dict:
-    """:param artifact_path: MF6 artifact. :param workspace: output directory. :param device: Warp device. :param solve_controls: solver settings. :param unconfined_storage_mode: storage mode. :param sy_override: optional Sy. :param ss_override: optional Ss. :return: replay summary."""
-    artifact = load_transient_artifact(artifact_path)
-    spatial = spatial_fields_from_artifact(artifact)
-    spatial["workspace"] = workspace
-    workspace.mkdir(parents=True, exist_ok=True)
-    sy = float(artifact["sy"]) if sy_override is None else float(sy_override)
-    ss = float(artifact["ss"]) if ss_override is None else float(ss_override)
-    dt = float(artifact["dt_days"])
-    recharge_rates = np.asarray(artifact["recharge_rates"], dtype=np.float64)
-    warm_start_head = np.asarray(artifact["unconfined_steady_head"], dtype=np.float64)
-    warp_result = run_warp_transient_replay(
-        spatial=spatial,
-        recharge_rates=recharge_rates,
-        sy=sy,
-        ss=ss,
-        dt=dt,
-        n_periods=int(recharge_rates.shape[0]),
-        device=device,
-        diag_preconditioner_backend="device" if device != "cpu" else "host",
-        solve_controls=solve_controls,
-        warm_start_mode=WARM_START_UNCONFINED_STEADY_MF6,
-        warm_start_head=warm_start_head,
-        formulation=FORMULATION_UNCONFINED,
-        unconfined_storage_mode=unconfined_storage_mode,
-        storage_reference=storage_reference,
-        storage_top_threshold=storage_top_threshold,
-        storage_active_set_strategy=storage_active_set_strategy,
-        storage_hysteresis_eps=storage_hysteresis_eps,
-        storage_freeze_after_stable_iterations=storage_freeze_after_stable_iterations,
-        storage_freeze_after_outer=storage_freeze_after_outer,
-        storage_switch_fraction_tol=storage_switch_fraction_tol,
-    )
-    comparison = compare_transient(
-        warp_result=warp_result,
-        mf6_heads_per_period=np.asarray(artifact["heads_per_period"], dtype=np.float64),
-        mf6_heads_final=np.asarray(artifact["heads_final"], dtype=np.float64),
-        active=np.asarray(artifact["active"], dtype=np.int32),
-    )
-    warp_npz = workspace.joinpath("warp_transient_heads.npz")
-    np.savez_compressed(
-        warp_npz,
-        heads_per_period=warp_result["heads_per_period"],
-        heads_old_per_period=warp_result["heads_old_per_period"],
-        heads_final=warp_result["heads_final"],
-        total_time=np.asarray(warp_result["total_time"], dtype=np.float64),
-        period_times=warp_result["period_times"],
-        last_info=np.asarray(json.dumps(warp_result["last_info"], default=str)),
-        period_infos=np.asarray(json.dumps(warp_result["period_infos"], default=str)),
-        warp_storativity=(
-            np.asarray(warp_result["storativity"], dtype=np.float64)
-            if warp_result["storativity"] is not None
-            else np.asarray([], dtype=np.float64)
-        ),
-        warp_storativity_kind=np.asarray(warp_result["storativity_kind"]),
-        include_specific_storage=np.asarray(warp_result["include_specific_storage"]),
-        unconfined_storage_mode=np.asarray(warp_result["unconfined_storage_mode"]),
-        storage_reference=np.asarray(warp_result["storage_reference"]),
-        storage_top_threshold=np.asarray(warp_result["storage_top_threshold"]),
-        storage_active_set_strategy=np.asarray(warp_result.get("storage_active_set_strategy", STORAGE_ACTIVE_SET_NONE)),
-        storage_reference_heads_per_period=np.asarray(
-            warp_result["storage_reference_heads_per_period"], dtype=np.float64
-        ),
-        storage_coeffs_per_period=np.asarray(
-            warp_result["storage_coeffs_per_period"], dtype=np.float64
-        ),
-        sy_storage_coeffs_per_period=np.asarray(
-            warp_result["sy_storage_coeffs_per_period"], dtype=np.float64
-        ),
-        ss_storage_coeffs_per_period=np.asarray(
-            warp_result["ss_storage_coeffs_per_period"], dtype=np.float64
-        ),
-        storage_terms_per_period=np.asarray(
-            warp_result["storage_terms_per_period"], dtype=np.float64
-        ),
-        sy_storage_terms_per_period=np.asarray(
-            warp_result["sy_storage_terms_per_period"], dtype=np.float64
-        ),
-        ss_storage_terms_per_period=np.asarray(
-            warp_result["ss_storage_terms_per_period"], dtype=np.float64
-        ),
-        sy_crossing_volume_terms_per_period=np.asarray(
-            warp_result["sy_crossing_volume_terms_per_period"], dtype=np.float64
-        ),
-        dt=np.asarray(warp_result["dt"], dtype=np.float64),
-        formulation=np.asarray(warp_result["formulation"]),
-        device=np.asarray(warp_result["device"]),
-        warm_start_mode=np.asarray(warp_result["warm_start_mode"]),
-        warm_start_used=np.asarray(warp_result["warm_start_used"]),
-        warm_start_head=np.asarray(warp_result["warm_start_head"], dtype=np.float64),
-    )
-    save_warp_storage_budget_terms(
-        path=workspace.joinpath("warp_storage_budget_terms.npz"),
-        warp_result=warp_result,
-    )
-    summary = {
-        "artifact_path": str(artifact_path),
-        "variant": {
-            "sy": sy,
-            "ss": ss,
-            "unconfined_storage_mode": unconfined_storage_mode,
-            "storage_reference": storage_reference,
-            "storage_top_threshold": storage_top_threshold,
-            "warm_start_mode": WARM_START_UNCONFINED_STEADY_MF6,
-        },
-        "solve_settings": warp_result["solve_controls"],
-        "device": warp_result["device"],
-        "timing": {
-            "warp_total_time": float(warp_result["total_time"]),
-            "warp_period_time_mean": float(np.mean(warp_result["period_times"])),
-            "warp_period_time_max": float(np.max(warp_result["period_times"])),
-        },
-        "comparison": comparison,
-    }
-    workspace.joinpath("transient_replay_summary.json").write_text(
-        json.dumps(summary, indent=2, default=str)
-    )
-    return summary
 
 
 def variant_diagnostics_from_workspace(
@@ -1929,11 +1538,12 @@ def print_storage_budget_table(storage_budget: dict) -> None:
     print("\nStorage budget table")
     print("period  rmse         max_abs      mean_bias    p95_abs      p99_abs    n_cells")
     for row in storage_budget.get("rows", []):
+        n_compared = row.get("n_compared_cells", row.get("n_cells", 0))
         print(
             f"{int(row['period']):>6d}  {float(row['storage_rmse']):>11.6g}  "
             f"{float(row['storage_max_abs']):>11.6g}  {float(row['storage_mean_bias']):>11.6g}  "
             f"{float(row['storage_p95_abs']):>11.6g}  {float(row['storage_p99_abs']):>11.6g}  "
-            f"{int(row['n_compared_cells']):>7d}"
+            f"{int(n_compared):>7d}"
         )
     print(f"  storage_sign_used={storage_budget.get('storage_sign_used', NOT_AVAILABLE)}")
 
@@ -2048,11 +1658,11 @@ FREEZE_TABLE_COLUMNS = (
 
 
 def print_freeze_metrics_table(rows: list[dict]) -> None:
-    """:param rows: per-forced-freeze-variant metric dicts (Task 5)."""
+    """:param rows: per secant-Sy freeze-after-outer variant metric dicts."""
     if not rows:
-        print("\nForced-freeze variants: none run")
+        print("\nSecant-Sy freeze sweep: none run")
         return
-    print("\nForced-freeze variant comparison (Task 5)")
+    print("\nSecant-Sy freeze sweep")
     header = "  ".join(col for col in FREEZE_TABLE_COLUMNS)
     print("-" * len(header))
     print(header)
@@ -2198,7 +1808,12 @@ def main(argv: list[str] | None = None) -> int:
             existing_summary = {}
         existing_variants = existing_summary.get("variant_results")
         if isinstance(existing_variants, dict):
-            variant_results = existing_variants
+            normal_variant_names = set(_replay_variant_configs())
+            variant_results = {
+                name: result
+                for name, result in existing_variants.items()
+                if name in normal_variant_names
+            }
 
     semantics = mf6_semantics_summary(artifact=artifact)
     consistency = check_direct_vs_winning_variant()
@@ -2209,9 +1824,9 @@ def main(argv: list[str] | None = None) -> int:
         variant_results=variant_results,
     )
 
-    # Task 4: full metrics for the winning variant. Task 5: forced-freeze rows.
+    # Full metrics for the production secant-Sy baseline and its freeze sweep.
     winning_full_metrics = None
-    forced_freeze_metrics: list[dict] = []
+    secant_freeze_metrics: list[dict] = []
     speed_sweep_metrics: list[dict] = []
     if variant_results:
         winning_result = variant_results.get(WINNING_VARIANT_NAME)
@@ -2221,7 +1836,7 @@ def main(argv: list[str] | None = None) -> int:
             if not isinstance(result, dict) or result.get("skipped"):
                 continue
             full_result = variant_full_metrics(result)
-            if name.startswith("current_picard_freeze_after_outer_"):
+            if name.startswith("secant_sy_freeze_after_outer_"):
                 settings = result.get("settings") or {}
                 convergence = result.get("convergence") or {}
                 full_result["variant"] = name
@@ -2232,7 +1847,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 full_result["converged"] = convergence.get("converged")
                 full_result["runtime"] = result.get("runtime")
-                forced_freeze_metrics.append(full_result)
+                secant_freeze_metrics.append(full_result)
             if str(name).startswith("mf6_secant_sy_speed_outer_"):
                 speed_sweep_metrics.append(full_result)
 
@@ -2253,7 +1868,7 @@ def main(argv: list[str] | None = None) -> int:
         "mf6_semantics": semantics,
         "direct_vs_winning_variant": consistency,
         "winning_variant_full_metrics": winning_full_metrics,
-        "forced_freeze_metrics": forced_freeze_metrics,
+        "secant_sy_freeze_metrics": secant_freeze_metrics,
         "speed_sweep_metrics": speed_sweep_metrics,
         "default_replay": {
             "final": final_metrics,
@@ -2283,7 +1898,7 @@ def main(argv: list[str] | None = None) -> int:
     print_storage_worst_cells(storage_budget.get("worst_cells", []) if isinstance(storage_budget, dict) else [])
     print_mass_balance_table(mass_balance)
     print_mf6_mass_balance_comparison(mf6_mass_balance_comparison)
-    print("\nReplay summary")
+    print("\nProduction secant-Sy replay summary")
     print_summary_table("default", final_metrics, worst_period)
     if variant_results:
         for name, result in variant_results.items():
@@ -2311,7 +1926,7 @@ def main(argv: list[str] | None = None) -> int:
     print(json.dumps(semantics, indent=2, default=str))
     if winning_full_metrics is not None:
         print_variant_full_metrics(WINNING_VARIANT_NAME, winning_full_metrics)
-    print_freeze_metrics_table(forced_freeze_metrics)
+    print_freeze_metrics_table(secant_freeze_metrics)
     print_speed_sweep_table(speed_sweep_metrics)
     print("\nDiagnosis")
     print(json.dumps(diagnosis, indent=2, default=str))

@@ -8342,6 +8342,240 @@ class WarpDarcySolver:
 
         return (head_out, info) if return_info else head_out
 
+    def solve_transient_2d_unconfined(
+            self,
+            *,
+            initial_head: np.ndarray,
+            recharge_rates: np.ndarray,
+            k_field: np.ndarray,
+            zbot_field: np.ndarray,
+            ztop_field: np.ndarray,
+            sy: float,
+            ss: float,
+            dt: float,
+            active: np.ndarray | None = None,
+            bc_mask: np.ndarray | None = None,
+            bc_values: np.ndarray | None = None,
+            storage_mode: str = "mf6_convertible_secant_sy",
+            storage_reference: str = "current_picard",
+            storage_top_threshold: str = "ge",
+            storage_active_set_strategy: str = "none",
+            storage_hysteresis_eps: float = 0.0,
+            storage_freeze_after_stable_iterations: int = 0,
+            storage_freeze_after_outer: int | None = None,
+            storage_switch_fraction_tol: float = 0.0,
+            solve_controls: dict | None = None,
+            min_saturated_thickness: float = 0.1,
+            return_info: bool = True,
+    ):
+        """
+        Step a 2D unconfined transient solve through multiple stress periods.
+
+        This is solver infrastructure only: callers remain responsible for MF6
+        artifact loading, comparisons, reporting, mass balance, and persistence.
+
+        :param initial_head: Initial/previous head for period 1.
+        :param recharge_rates: One recharge value per stress period.
+        :param k_field: Hydraulic conductivity field.
+        :param zbot_field: Cell bottom field.
+        :param ztop_field: Cell top field.
+        :param sy: Specific yield.
+        :param ss: Specific storage.
+        :param dt: Transient time step.
+        :param active: Optional active mask; defaults to all active.
+        :param bc_mask: Optional Dirichlet mask; defaults to no Dirichlet cells.
+        :param bc_values: Optional Dirichlet values; defaults to initial heads.
+        :param storage_mode: 2D unconfined storage mode passed to the Picard solver.
+        :param storage_reference: ``current_picard`` or ``previous_period``.
+        :param storage_top_threshold: ``ge`` or ``gt`` for top-switch semantics.
+        :param storage_active_set_strategy: Active-set strategy for current-Picard storage.
+        :param storage_hysteresis_eps: Hysteresis half-band.
+        :param storage_freeze_after_stable_iterations: Stable-iteration freeze trigger.
+        :param storage_freeze_after_outer: Forced freeze-after-outer trigger.
+        :param storage_switch_fraction_tol: Stable-switch fraction tolerance.
+        :param solve_controls: Extra controls forwarded to :meth:`solve`.
+        :param min_saturated_thickness: Minimum saturated thickness.
+        :param return_info: Return ``(heads_per_period, info)`` when true.
+        :return: Heads per period, plus diagnostics when ``return_info`` is true.
+        """
+        h0 = np.asarray(initial_head, dtype=NP_FLOAT)
+        if h0.shape != (self.ny, self.nx):
+            raise ValueError(f"initial_head shape {h0.shape} expected {(self.ny, self.nx)}")
+        k = np.asarray(k_field, dtype=NP_FLOAT)
+        bottom = np.asarray(zbot_field, dtype=NP_FLOAT)
+        top = np.asarray(ztop_field, dtype=NP_FLOAT)
+        for name, arr in (("k_field", k), ("zbot_field", bottom), ("ztop_field", top)):
+            if arr.shape != h0.shape:
+                raise ValueError(f"{name} shape {arr.shape} expected {h0.shape}")
+
+        if active is None:
+            active_i = np.ones(h0.shape, dtype=np.int32)
+        else:
+            active_i = np.asarray(active, dtype=np.int32)
+        if bc_mask is None:
+            bc_i = np.zeros(h0.shape, dtype=np.int32)
+        else:
+            bc_i = np.asarray(bc_mask, dtype=np.int32)
+        if bc_values is None:
+            bc_v = np.asarray(h0, dtype=NP_FLOAT)
+        else:
+            bc_v = np.asarray(bc_values, dtype=NP_FLOAT)
+        for name, arr in (("active", active_i), ("bc_mask", bc_i), ("bc_values", bc_v)):
+            if arr.shape != h0.shape:
+                raise ValueError(f"{name} shape {arr.shape} expected {h0.shape}")
+
+        rates = np.asarray(recharge_rates, dtype=NP_FLOAT).reshape(-1)
+        if rates.size < 1:
+            raise ValueError("recharge_rates must contain at least one period.")
+        dt_f = float(dt)
+        if not np.isfinite(dt_f) or dt_f <= 0.0:
+            raise ValueError("dt must be finite and > 0.")
+
+        controls = {} if solve_controls is None else dict(solve_controls)
+        # The ``storage_*`` controls are forwarded to ``solve()`` as explicit
+        # keyword arguments below, and the ``predictor_*`` keys are replay-level
+        # controls that ``solve()`` does not accept. Drop both groups from the
+        # forwarded controls so the ``**controls`` spread neither duplicates an
+        # explicit keyword nor injects an unexpected one.
+        for _control_key in (
+            "storage_active_set_strategy",
+            "storage_hysteresis_eps",
+            "storage_freeze_after_stable_iterations",
+            "storage_freeze_after_outer",
+            "storage_switch_fraction_tol",
+            "predictor_max_outer_iterations",
+            "corrector_max_outer_iterations",
+            "predictor_corrector_corrector_strategy",
+        ):
+            controls.pop(_control_key, None)
+        min_sat = float(controls.get("min_saturated_thickness", min_saturated_thickness))
+        thickness = np.clip(h0 - bottom, min_sat, np.maximum(top - bottom, min_sat))
+        initial_T = np.asarray(k * thickness, dtype=NP_FLOAT)
+        initial_T[active_i == 0] = 0.0
+        recharge_field = np.zeros(h0.shape, dtype=NP_FLOAT)
+        self.build_from_fields(
+            T_field=initial_T,
+            R_field=recharge_field,
+            active=active_i,
+            bc_mask=bc_i,
+            bc_values=bc_v,
+        )
+
+        n_periods = int(rates.size)
+        heads_per_period = np.zeros((n_periods, self.ny, self.nx), dtype=np.float64)
+        heads_old_per_period = np.zeros_like(heads_per_period)
+        storage_reference_heads = np.zeros_like(heads_per_period)
+        storage_coeffs = np.zeros_like(heads_per_period)
+        sy_coeffs = np.zeros_like(heads_per_period)
+        ss_coeffs = np.zeros_like(heads_per_period)
+        storage_terms = np.zeros_like(heads_per_period)
+        sy_terms = np.zeros_like(heads_per_period)
+        ss_terms = np.zeros_like(heads_per_period)
+        sy_crossing_terms = np.zeros_like(heads_per_period)
+        period_infos: list[dict] = []
+        period_times = np.zeros(n_periods, dtype=np.float64)
+
+        head_prev = np.asarray(h0, dtype=np.float64).copy()
+        total_t0 = time.perf_counter()
+        last_info: dict = {}
+        for period_index in range(n_periods):
+            recharge_field.fill(float(rates[period_index]))
+            recharge_field[active_i == 0] = 0.0
+            self.update_R_in_place(recharge_field)
+            period_head_old = np.asarray(head_prev, dtype=np.float64).copy()
+            period_t0 = time.perf_counter()
+            head, info = self.solve(
+                formulation="unconfined",
+                initial_head=head_prev,
+                K_field=k,
+                zbot_field=bottom,
+                ztop_field=top,
+                transient=True,
+                storage_coeff=None,
+                dt=dt_f,
+                head_prev=head_prev,
+                return_info=True,
+                storage_reference=storage_reference,
+                unconfined_storage_mode_2d=storage_mode,
+                storage_top_threshold=storage_top_threshold,
+                storage_active_set_strategy=storage_active_set_strategy,
+                storage_hysteresis_eps=storage_hysteresis_eps,
+                storage_freeze_after_stable_iterations=storage_freeze_after_stable_iterations,
+                storage_freeze_after_outer=storage_freeze_after_outer,
+                storage_switch_fraction_tol=storage_switch_fraction_tol,
+                sy=float(sy),
+                ss=float(ss),
+                **controls,
+            )
+            period_times[period_index] = time.perf_counter() - period_t0
+            head_arr = np.asarray(head, dtype=np.float64)
+            info_out = dict(info) if isinstance(info, dict) else {}
+            storage_ref = info_out.pop("storage_reference_head_last_linearization_array", None)
+            storage_coeff = info_out.pop("storage_coeff_last_linearization_array", None)
+            sy_coeff = info_out.pop("sy_storage_coeff_last_linearization_array", None)
+            ss_coeff = info_out.pop("ss_storage_coeff_last_linearization_array", None)
+            if storage_ref is None:
+                storage_ref = head_arr if storage_reference == "current_picard" else period_head_old
+            if storage_coeff is None:
+                storage_coeff = np.zeros_like(head_arr)
+            if sy_coeff is None:
+                sy_coeff = np.zeros_like(head_arr)
+            if ss_coeff is None:
+                ss_coeff = np.asarray(storage_coeff, dtype=np.float64) - np.asarray(sy_coeff, dtype=np.float64)
+
+            storage_ref_arr = np.asarray(storage_ref, dtype=np.float64)
+            storage_coeff_arr = np.asarray(storage_coeff, dtype=np.float64)
+            sy_coeff_arr = np.asarray(sy_coeff, dtype=np.float64)
+            ss_coeff_arr = np.asarray(ss_coeff, dtype=np.float64)
+            delta_head = head_arr - period_head_old
+
+            full_thickness = np.maximum(top - bottom, min_sat).astype(np.float64, copy=False)
+            sat_ref = np.clip(storage_ref_arr - bottom, 0.0, full_thickness)
+            sat_old = np.clip(period_head_old - bottom, 0.0, full_thickness)
+
+            heads_per_period[period_index] = head_arr
+            heads_old_per_period[period_index] = period_head_old
+            storage_reference_heads[period_index] = storage_ref_arr
+            storage_coeffs[period_index] = storage_coeff_arr
+            sy_coeffs[period_index] = sy_coeff_arr
+            ss_coeffs[period_index] = ss_coeff_arr
+            storage_terms[period_index] = storage_coeff_arr * delta_head / dt_f
+            sy_terms[period_index] = sy_coeff_arr * delta_head / dt_f
+            ss_terms[period_index] = ss_coeff_arr * delta_head / dt_f
+            sy_crossing_terms[period_index] = float(sy) * (sat_ref - sat_old) / dt_f
+            period_infos.append(info_out)
+            last_info = info_out
+            head_prev = head_arr
+
+        info_all = {
+            "heads_per_period": heads_per_period,
+            "heads_old_per_period": heads_old_per_period,
+            "heads_final": heads_per_period[-1],
+            "storage_reference_heads_per_period": storage_reference_heads,
+            "storage_coeffs_per_period": storage_coeffs,
+            "sy_storage_coeffs_per_period": sy_coeffs,
+            "ss_storage_coeffs_per_period": ss_coeffs,
+            "storage_terms_per_period": storage_terms,
+            "sy_storage_terms_per_period": sy_terms,
+            "ss_storage_terms_per_period": ss_terms,
+            "sy_crossing_volume_terms_per_period": sy_crossing_terms,
+            "period_infos": period_infos,
+            "last_info": last_info,
+            "period_times": period_times,
+            "total_time": float(time.perf_counter() - total_t0),
+            "n_periods": n_periods,
+            "storage_reference": storage_reference,
+            "storage_top_threshold": storage_top_threshold,
+            "storage_active_set_strategy": storage_active_set_strategy,
+            "storage_hysteresis_eps": float(storage_hysteresis_eps),
+            "storage_freeze_after_stable_iterations": int(storage_freeze_after_stable_iterations),
+            "storage_freeze_after_outer": storage_freeze_after_outer,
+            "storage_switch_fraction_tol": float(storage_switch_fraction_tol),
+            "dt": dt_f,
+            "solve_controls": controls,
+        }
+        return (heads_per_period, info_all) if return_info else heads_per_period
+
     def solve(
         self,
         formulation: str = "confined",

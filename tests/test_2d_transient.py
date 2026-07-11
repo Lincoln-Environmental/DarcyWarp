@@ -440,7 +440,7 @@ def test_unconfined_transient_mass_balance():
 
 
 def test_replay_initial_transmissivity_caps_at_top():
-    from working_tests.run_2d_transient_warp_replay import _initial_transmissivity
+    from working_tests.transient_replay_storage import _initial_transmissivity
 
     k = np.array([[2.0, 2.0]], dtype=np.float64)
     initial_head = np.array([[15.0, 8.0]], dtype=np.float64)
@@ -464,15 +464,13 @@ def test_2d_transient_replay_steps_periods_and_responds_to_recharge(monkeypatch)
     """
     Multi-period Warp transient replay harness (MF6-free).
 
-    Exercises working_tests/run_2d_transient_warp_replay.py's core stepper on a
+    Exercises the MF6-free transient replay core on a
     small synthetic case: heads must evolve across periods, the final state must
     differ from the initial condition, and a larger recharge rate must mound
     heads higher than a smaller one. No MF6/flopy dependency.
     """
-    from working_tests.run_2d_transient_warp_replay import (
-        build_synthetic_spatial_fields,
-        run_warp_transient_replay,
-    )
+    from working_tests.transient_artifacts import build_synthetic_spatial_fields
+    from working_tests.transient_replay_support import run_warp_transient_replay
 
     spatial = build_synthetic_spatial_fields(nx=16, ny=12, hydraulic_conductivity=100.0)
     fast_controls = {

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import importlib.util
+import importlib
 import sys
 from pathlib import Path
 
@@ -9,14 +9,7 @@ import pytest
 
 
 def _load_replay_module():
-    script_path = Path("working_tests/run_2d_transient_warp_replay.py").resolve()
-    spec = importlib.util.spec_from_file_location("run_2d_transient_warp_replay", script_path)
-    if spec is None or spec.loader is None:
-        raise ImportError(f"Could not load {script_path}")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
+    return importlib.import_module("working_tests.transient_replay_support")
 
 
 def _load_mf6_module():
@@ -196,190 +189,6 @@ def test_mismatched_artifact_formulation_errors_clearly(tmp_path):
             requested_formulation=replay.FORMULATION_CONFINED,
             artifact_path=artifact_path,
         )
-
-
-def test_replay_uses_provided_warm_start_for_period_zero(monkeypatch):
-    replay = _load_replay_module()
-
-    spatial = replay.build_synthetic_spatial_fields(nx=8, ny=6)
-    warm_head = np.asarray(spatial["initial_head"], dtype=np.float64).copy()
-    active = spatial["active"] != 0
-    warm_head[active] += 0.5
-    warm_head[spatial["bc_mask"] != 0] = spatial["bc_values"][spatial["bc_mask"] != 0]
-
-    captured = {}
-
-    class FakeSolver:
-        def __init__(self, nx, ny, dx, device, solver_type, diag_preconditioner_backend):
-            self.nx = int(nx)
-            self.ny = int(ny)
-            self.dx = float(dx)
-            self.R_field_host = np.zeros((self.ny, self.nx), dtype=np.float64)
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-        def build_from_fields(self, T_field, R_field, active, bc_mask, bc_values):
-            self.R_field_host = np.asarray(R_field, dtype=np.float64).copy()
-
-        def update_R_in_place(self, R_truth):
-            self.R_field_host = np.asarray(R_truth, dtype=np.float64).copy()
-
-        def solve(self, **kwargs):
-            if kwargs["formulation"] == "unconfined" and "first_head_prev" not in captured:
-                captured["first_initial_head"] = np.asarray(kwargs["initial_head"], dtype=np.float64).copy()
-                captured["first_head_prev"] = np.asarray(kwargs["head_prev"], dtype=np.float64).copy()
-                captured["first_startup_mode"] = kwargs["unconfined_startup_mode"]
-            head = np.asarray(kwargs["head_prev"], dtype=np.float64).copy()
-            head[spatial["active"] != 0] += 0.01
-            head[spatial["bc_mask"] != 0] = spatial["bc_values"][spatial["bc_mask"] != 0]
-            return head, {"converged": True, "formulation": kwargs["formulation"]}
-
-    monkeypatch.setattr(replay, "_warp_device", lambda preferred: "cpu")
-    monkeypatch.setattr(replay, "_warp_solver_class", lambda: FakeSolver)
-
-    result = replay.run_warp_transient_replay(
-        spatial=spatial,
-        recharge_rates=np.array([1.0e-4], dtype=np.float64),
-        sy=0.2,
-        dt=7.0,
-        n_periods=1,
-        device="cpu",
-        warm_start_mode=replay.WARM_START_CONFINED_STEADY_MF6,
-        warm_start_head=warm_head,
-    )
-
-    np.testing.assert_allclose(captured["first_initial_head"], warm_head)
-    np.testing.assert_allclose(captured["first_head_prev"], warm_head)
-    # The direct MF6 replay retains the declared ``confined_pre_solve`` startup
-    # (the previous ``initial_head`` override is gone), so the warm-start head is
-    # still used for period 0 but the solver's startup path is confined pre-solve.
-    assert captured["first_startup_mode"] == "confined_pre_solve"
-    np.testing.assert_allclose(result["warm_start_head"], warm_head)
-    assert result["warm_start_used"] == replay.WARM_START_CONFINED_STEADY_MF6
-    assert result["solve_controls"]["unconfined_startup_mode"] == "confined_pre_solve"
-
-
-def test_replay_respects_explicit_unconfined_startup_mode(monkeypatch):
-    replay = _load_replay_module()
-
-    spatial = replay.build_synthetic_spatial_fields(nx=8, ny=6)
-    warm_head = np.asarray(spatial["initial_head"], dtype=np.float64).copy()
-    warm_head[spatial["bc_mask"] != 0] = spatial["bc_values"][spatial["bc_mask"] != 0]
-    captured = {}
-
-    class FakeSolver:
-        def __init__(self, nx, ny, dx, device, solver_type, diag_preconditioner_backend):
-            self.R_field_host = np.zeros((int(ny), int(nx)), dtype=np.float64)
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-        def build_from_fields(self, T_field, R_field, active, bc_mask, bc_values):
-            self.R_field_host = np.asarray(R_field, dtype=np.float64).copy()
-
-        def update_R_in_place(self, R_truth):
-            self.R_field_host = np.asarray(R_truth, dtype=np.float64).copy()
-
-        def solve(self, **kwargs):
-            captured["startup_mode"] = kwargs["unconfined_startup_mode"]
-            return np.asarray(kwargs["head_prev"], dtype=np.float64).copy(), {
-                "converged": True,
-                "formulation": kwargs["formulation"],
-            }
-
-    monkeypatch.setattr(replay, "_warp_device", lambda preferred: "cpu")
-    monkeypatch.setattr(replay, "_warp_solver_class", lambda: FakeSolver)
-
-    result = replay.run_warp_transient_replay(
-        spatial=spatial,
-        recharge_rates=np.array([1.0e-4], dtype=np.float64),
-        sy=0.2,
-        dt=7.0,
-        n_periods=1,
-        device="cpu",
-        warm_start_mode=replay.WARM_START_CONFINED_STEADY_MF6,
-        warm_start_head=warm_head,
-        solve_controls={"unconfined_startup_mode": "confined_pre_solve"},
-    )
-
-    assert captured["startup_mode"] == "confined_pre_solve"
-    assert result["solve_controls"]["unconfined_startup_mode"] == "confined_pre_solve"
-
-
-def test_replay_confined_switch_uses_confined_storage(monkeypatch):
-    replay = _load_replay_module()
-
-    spatial = replay.build_synthetic_spatial_fields(nx=8, ny=6)
-    warm_head = np.asarray(spatial["initial_head"], dtype=np.float64).copy()
-    warm_head[spatial["bc_mask"] != 0] = spatial["bc_values"][spatial["bc_mask"] != 0]
-    captured = {}
-
-    class FakeSolver:
-        def __init__(self, nx, ny, dx, device, solver_type, diag_preconditioner_backend):
-            self.nx = int(nx)
-            self.ny = int(ny)
-            self.dx = float(dx)
-            self.R_field_host = np.zeros((self.ny, self.nx), dtype=np.float64)
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-        def build_from_fields(self, T_field, R_field, active, bc_mask, bc_values):
-            captured["T_field"] = np.asarray(T_field, dtype=np.float64).copy()
-            self.R_field_host = np.asarray(R_field, dtype=np.float64).copy()
-
-        def update_R_in_place(self, R_truth):
-            self.R_field_host = np.asarray(R_truth, dtype=np.float64).copy()
-
-        def solve(self, **kwargs):
-            captured["formulation"] = kwargs["formulation"]
-            captured["storage_coeff"] = np.asarray(kwargs["storage_coeff"], dtype=np.float64).copy()
-            assert "K_field" not in kwargs
-            head = np.asarray(kwargs["head_prev"], dtype=np.float64).copy()
-            head[spatial["active"] != 0] += 0.01
-            head[spatial["bc_mask"] != 0] = spatial["bc_values"][spatial["bc_mask"] != 0]
-            return head, {"converged": True, "formulation": kwargs["formulation"]}
-
-    monkeypatch.setattr(replay, "_warp_device", lambda preferred: "cpu")
-    monkeypatch.setattr(replay, "_warp_solver_class", lambda: FakeSolver)
-
-    result = replay.run_warp_transient_replay(
-        spatial=spatial,
-        recharge_rates=np.array([1.0e-4], dtype=np.float64),
-        sy=0.2,
-        ss=1.0e-5,
-        dt=7.0,
-        n_periods=1,
-        device="cpu",
-        warm_start_mode=replay.WARM_START_CONFINED_STEADY_MF6,
-        warm_start_head=warm_head,
-        formulation=replay.FORMULATION_CONFINED,
-    )
-
-    expected_thickness = np.maximum(
-        spatial["top"] - spatial["bottom"],
-        replay.DEFAULT_MIN_SAT,
-    )
-    expected_storage = 1.0e-5 * expected_thickness
-    expected_storage[spatial["active"] == 0] = 0.0
-    expected_transmissivity = spatial["k"] * expected_thickness
-    expected_transmissivity[spatial["active"] == 0] = 0.0
-
-    assert captured["formulation"] == replay.FORMULATION_CONFINED
-    np.testing.assert_allclose(captured["T_field"], expected_transmissivity)
-    np.testing.assert_allclose(captured["storage_coeff"], expected_storage)
-    assert result["formulation"] == replay.FORMULATION_CONFINED
-    assert result["storage_coeff_kind"] == "ss_times_cell_thickness"
 
 
 def test_mf6_truth_main_forwards_formulation_switch(monkeypatch, tmp_path):
@@ -933,135 +742,6 @@ def test_build_unconfined_storativity_zeroes_inactive_and_boundary():
     assert storativity[0, 2] == 0.0  # inactive
 
 
-def test_replay_unconfined_passes_storativity_field_not_scalar(monkeypatch):
-    replay, spatial = _spatial_8x6()
-    active = spatial["active"]
-    bc_mask = spatial["bc_mask"]
-    free = (active != 0) & (bc_mask == 0)
-    captured = {}
-
-    class FakeSolver:
-        def __init__(self, nx, ny, dx, device, solver_type, diag_preconditioner_backend):
-            self.R_field_host = np.zeros((int(ny), int(nx)), dtype=np.float64)
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-        def build_from_fields(self, T_field, R_field, active, bc_mask, bc_values):
-            self.R_field_host = np.asarray(R_field, dtype=np.float64).copy()
-
-        def update_R_in_place(self, R_truth):
-            self.R_field_host = np.asarray(R_truth, dtype=np.float64).copy()
-
-        def solve(self, **kwargs):
-            captured["storage_coeff"] = np.asarray(kwargs["storage_coeff"]).copy()
-            head = np.asarray(kwargs["head_prev"], dtype=np.float64).copy()
-            head[active != 0] += 0.01
-            head[bc_mask != 0] = spatial["bc_values"][bc_mask != 0]
-            return head, {"converged": True, "formulation": kwargs["formulation"]}
-
-    monkeypatch.setattr(replay, "_warp_device", lambda preferred: "cpu")
-    monkeypatch.setattr(replay, "_warp_solver_class", lambda: FakeSolver)
-
-    result = replay.run_warp_transient_replay(
-        spatial=spatial,
-        recharge_rates=np.array([1.0e-4], dtype=np.float64),
-        sy=0.2,
-        dt=7.0,
-        n_periods=1,
-        device="cpu",
-    )
-
-    passed = captured["storage_coeff"]
-    # A grid field, not a raw scalar Sy.
-    assert passed.ndim == 2
-    np.testing.assert_allclose(passed[free], 0.2)
-    assert np.all(passed[~free] == 0.0)
-    assert result["storativity_kind"] == "sy"
-    assert result["include_specific_storage"] is False
-    assert result["unconfined_storage_mode"] == replay.UNCONFINED_STORAGE_PHREATIC_ONLY
-    # Deprecated alias still mirrors the field.
-    np.testing.assert_array_equal(result["storage_coeff"], result["storativity"])
-
-
-def test_replay_mf6_convertible_requires_ss(monkeypatch):
-    replay, spatial = _spatial_8x6()
-    monkeypatch.setattr(replay, "_warp_device", lambda preferred: "cpu")
-
-    with pytest.raises(ValueError, match="mf6_convertible"):
-        replay.run_warp_transient_replay(
-            spatial=spatial,
-            recharge_rates=np.array([1.0e-4], dtype=np.float64),
-            sy=0.2,
-            dt=7.0,
-            n_periods=1,
-            device="cpu",
-            unconfined_storage_mode=replay.UNCONFINED_STORAGE_MF6_CONVERTIBLE,
-            ss=None,
-        )
-
-
-def test_replay_mf6_convertible_passes_sy_plus_ss_field(monkeypatch):
-    replay, spatial = _spatial_8x6()
-    active = spatial["active"]
-    bc_mask = spatial["bc_mask"]
-    top, bottom = spatial["top"], spatial["bottom"]
-    free = (active != 0) & (bc_mask == 0)
-    captured = {}
-
-    class FakeSolver:
-        def __init__(self, nx, ny, dx, device, solver_type, diag_preconditioner_backend):
-            self.R_field_host = np.zeros((int(ny), int(nx)), dtype=np.float64)
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-        def build_from_fields(self, T_field, R_field, active, bc_mask, bc_values):
-            self.R_field_host = np.asarray(R_field, dtype=np.float64).copy()
-
-        def update_R_in_place(self, R_truth):
-            self.R_field_host = np.asarray(R_truth, dtype=np.float64).copy()
-
-        def solve(self, **kwargs):
-            captured.setdefault("storage_coeff", np.asarray(kwargs["storage_coeff"]).copy())
-            head = np.asarray(kwargs["head_prev"], dtype=np.float64).copy()
-            head[active != 0] += 0.01
-            head[bc_mask != 0] = spatial["bc_values"][bc_mask != 0]
-            return head, {"converged": True, "formulation": kwargs["formulation"]}
-
-    monkeypatch.setattr(replay, "_warp_device", lambda preferred: "cpu")
-    monkeypatch.setattr(replay, "_warp_solver_class", lambda: FakeSolver)
-
-    result = replay.run_warp_transient_replay(
-        spatial=spatial,
-        recharge_rates=np.array([1.0e-4, 1.0e-4], dtype=np.float64),
-        sy=0.2,
-        ss=1.0e-5,
-        dt=7.0,
-        n_periods=2,
-        device="cpu",
-        warm_start_mode=replay.WARM_START_ARTIFACT_INITIAL,
-        unconfined_storage_mode=replay.UNCONFINED_STORAGE_MF6_CONVERTIBLE,
-    )
-
-    passed = captured["storage_coeff"]
-    assert passed.ndim == 2
-    head0 = spatial["initial_head"]
-    full_thickness = np.maximum(top - bottom, replay.DEFAULT_MIN_SAT)
-    expected_sat = np.clip(head0 - bottom, replay.DEFAULT_MIN_SAT, full_thickness)
-    expected = 0.2 + 1.0e-5 * expected_sat
-    np.testing.assert_allclose(passed[free], expected[free])
-    assert result["storativity_kind"] == "sy_plus_ss_times_saturated_thickness"
-    assert result["include_specific_storage"] is True
-    assert result["saturated_thickness_reference"] is not None
-
-
 # ---------------------------------------------------------------------------
 # Warm-start provenance comparability.
 # ---------------------------------------------------------------------------
@@ -1282,128 +962,89 @@ def _load_analysis_module():
 # Task 8: regression tests for startup-mode propagation and JSON recording.
 # ---------------------------------------------------------------------------
 
-class _StartupCaptureSolver:
-    """Fake solver that records the startup mode passed to each transient solve."""
-
-    def __init__(self, nx, ny, dx, device, solver_type, diag_preconditioner_backend, spatial, capture):
-        self.nx = int(nx)
-        self.ny = int(ny)
-        self.R_field_host = np.zeros((self.ny, self.nx), dtype=np.float64)
-        self._spatial = spatial
-        self._capture = capture
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc, tb):
-        return False
-
-    def build_from_fields(self, T_field, R_field, active, bc_mask, bc_values):
-        self.R_field_host = np.asarray(R_field, dtype=np.float64).copy()
-
-    def update_R_in_place(self, R_truth):
-        self.R_field_host = np.asarray(R_truth, dtype=np.float64).copy()
-
-    def solve(self, **kwargs):
-        self._capture.setdefault("startup_mode", kwargs.get("unconfined_startup_mode"))
-        head = np.asarray(kwargs["head_prev"], dtype=np.float64).copy()
-        head[self._spatial["active"] != 0] += 0.01
-        head[self._spatial["bc_mask"] != 0] = self._spatial["bc_values"][self._spatial["bc_mask"] != 0]
-        return head, {"converged": True, "formulation": kwargs["formulation"]}
-
-
-def test_mf6_replay_default_path_passes_confined_pre_solve_into_solver(monkeypatch, tmp_path):
-    """The direct MF6 replay path must propagate confined_pre_solve to the solver and record it in the JSON summary."""
-    replay, spatial = _spatial_8x6()
-    artifact = _fake_artifact(spatial, "unconfined", "unconfined_steady_mf6")
-    artifact_path = tmp_path / "mf6_transient_heads.npz.lzma"
-    artifact_path.write_bytes(b"placeholder")
-
-    def fake_load_artifact(path):
-        return artifact
-
-    monkeypatch.setattr(replay, "load_transient_artifact", fake_load_artifact)
-
-    capture: dict = {}
-
-    def fake_solver_class():
-        def factory(nx, ny, dx, device, solver_type, diag_preconditioner_backend):
-            return _StartupCaptureSolver(nx, ny, dx, device, solver_type, diag_preconditioner_backend, spatial, capture)
-        return factory
-
-    def fake_warp_device(preferred):
-        return "cpu"
-
-    monkeypatch.setattr(replay, "_warp_device", fake_warp_device)
-    monkeypatch.setattr(replay, "_warp_solver_class", fake_solver_class)
-
-    summary = replay.run_replay_from_artifact(
-        artifact_path=artifact_path,
-        workspace=tmp_path / "ws",
-        device="cpu",
-        formulation=replay.FORMULATION_UNCONFINED,
-    )
-
-    # The direct MF6 replay path must pass confined_pre_solve into the solver.
-    assert capture["startup_mode"] == "confined_pre_solve"
-    assert summary["solve_settings"]["unconfined_startup_mode"] == "confined_pre_solve"
-    # Consolidated MF6 replay settings block (Task 1).
-    mf6_settings = summary["mf6_replay_settings"]
-    assert mf6_settings["unconfined_startup_mode"] == "confined_pre_solve"
-    assert mf6_settings["unconfined_storage_mode"] == replay.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY
-    assert mf6_settings["storage_reference"] == replay.STORAGE_REFERENCE_CURRENT_PICARD
-    assert mf6_settings["storage_top_threshold"] == replay.STORAGE_TOP_THRESHOLD_GE
-    assert mf6_settings["storage_active_set_strategy"] == replay.STORAGE_ACTIVE_SET_NONE
-    assert mf6_settings["warm_start"] == replay.WARM_START_UNCONFINED_STEADY_MF6
-    # Storage settings recorded in the JSON summary.
-    storage = summary["storage"]
-    assert storage["unconfined_storage_mode"] == replay.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY
-    assert storage["storage_reference"] == replay.STORAGE_REFERENCE_CURRENT_PICARD
-    assert storage["storage_top_threshold"] == replay.STORAGE_TOP_THRESHOLD_GE
-    assert storage["storage_active_set_strategy"] == replay.STORAGE_ACTIVE_SET_NONE
-    assert summary["solve_settings"]["unconfined_storage_mode"] == replay.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY
-    assert summary["solve_settings"]["warm_start"] == replay.WARM_START_UNCONFINED_STEADY_MF6
-
-
 def test_direct_replay_consistent_with_winning_variant():
     """The direct MF6 replay defaults and the winning variant must agree on all material settings (Task 2)."""
     analysis = _load_analysis_module()
     report = analysis.check_direct_vs_winning_variant()
     assert report["consistent"] is True
     assert report["mismatches"] == []
-    assert report["winning_variant"] == "mf6_secant_sy_current_picard_none"
+    assert report["winning_variant"] == "production_secant_sy"
     assert report["direct_settings"]["unconfined_startup_mode"] == "confined_pre_solve"
     assert report["winning_variant_settings"]["unconfined_startup_mode"] == "confined_pre_solve"
     assert report["direct_settings"]["warm_start"] == "unconfined_steady_mf6"
     assert report["direct_settings"]["unconfined_storage_mode"] == analysis.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY
 
 
-def test_replay_variant_configs_include_forced_freeze_and_hysteresis():
-    """Forced-freeze (Task 5) and hysteresis-sweep (Task 6) variants are configured."""
+def test_replay_variant_configs_expose_only_production_and_secant_freeze():
+    """Normal replay analysis exposes only production secant-Sy and freeze-after-outer variants."""
     analysis = _load_analysis_module()
     replay = _load_replay_module()
     configs = analysis._replay_variant_configs()
-    for freeze_n in (3, 5, 8, 10, 15, 20):
-        name = f"current_picard_freeze_after_outer_{freeze_n}"
-        assert name in configs
-        cfg = configs[name]
-        assert cfg["storage_active_set_strategy"] == analysis.STORAGE_ACTIVE_SET_FREEZE_WHEN_STABLE
-        assert cfg["storage_freeze_after_outer"] == freeze_n
-        assert cfg["storage_freeze_after_stable_iterations"] == 0
-        assert cfg["unconfined_storage_mode"] == analysis.UNCONFINED_STORAGE_MF6_CONVERTIBLE_TOP_SWITCH
-        assert cfg["storage_reference"] == analysis.STORAGE_REFERENCE_CURRENT_PICARD
+    expected_names = {"production_secant_sy"} | {
+        f"secant_sy_freeze_after_outer_{freeze_n}" for freeze_n in (2, 3, 4, 5, 6, 8, 10)
+    }
+
+    assert set(configs) == expected_names
+    forbidden_tokens = (
+        "phreatic",
+        "integrated",
+        "top_switch",
+        "previous_period",
+        "hysteresis",
+        "predictor",
+        "_gt",
+        "crossing_volume",
+    )
+    for name, cfg in configs.items():
+        assert not any(token in name for token in forbidden_tokens)
+        assert cfg["unconfined_storage_mode"] == replay.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY
+        assert cfg["storage_reference"] == replay.STORAGE_REFERENCE_CURRENT_PICARD
+        assert cfg["storage_top_threshold"] == replay.STORAGE_TOP_THRESHOLD_GE
+        assert cfg["storage_active_set_strategy"] == replay.STORAGE_ACTIVE_SET_NONE
         assert cfg["solve_controls"]["unconfined_startup_mode"] == "confined_pre_solve"
-    for eps in (0.001, 0.002, 0.005, 0.01, 0.02):
-        eps_tag = (f"{eps:g}").replace(".", "p")
-        name = f"current_picard_hysteresis_{eps_tag}"
-        assert name in configs
-        assert configs[name]["storage_hysteresis_eps"] == eps
-    assert configs["current_picard_unconfined_pre_solve"]["solve_controls"]["unconfined_startup_mode"] == "unconfined_pre_solve"
-    assert configs["mf6_secant_sy_current_picard_none"]["unconfined_storage_mode"] == replay.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY
-    for freeze_n in (8, 10, 20):
-        name = f"mf6_secant_sy_current_picard_freeze_after_outer_{freeze_n}"
-        assert configs[name]["unconfined_storage_mode"] == replay.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY
-        assert configs[name]["storage_freeze_after_outer"] == freeze_n
+
+
+def test_production_secant_sy_settings_match_validated_defaults():
+    """Production helper preserves the validated MF6-compatible replay settings."""
+    replay = _load_replay_module()
+
+    settings = replay.production_secant_sy_settings()
+
+    assert settings["unconfined_storage_mode"] == replay.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY
+    assert settings["storage_reference"] == replay.STORAGE_REFERENCE_CURRENT_PICARD
+    assert settings["storage_top_threshold"] == replay.STORAGE_TOP_THRESHOLD_GE
+    assert settings["storage_active_set_strategy"] == replay.STORAGE_ACTIVE_SET_NONE
+    assert settings["storage_freeze_after_outer"] is None
+    assert settings["warm_start_mode"] == replay.WARM_START_UNCONFINED_STEADY_MF6
+    assert settings["solve_controls"]["unconfined_startup_mode"] == "confined_pre_solve"
+
+
+def test_secant_freeze_settings_differ_only_by_freeze_after_outer():
+    """Freeze helper changes only storage_freeze_after_outer from production settings."""
+    replay = _load_replay_module()
+
+    production = replay.production_secant_sy_settings()
+    freeze = replay.secant_sy_freeze_settings(freeze_after_outer=4)
+    changed = {
+        key for key in production
+        if production.get(key) != freeze.get(key)
+    }
+
+    assert changed == {"storage_freeze_after_outer"}
+    assert freeze["storage_freeze_after_outer"] == 4
+
+
+def test_legacy_storage_variants_not_called_by_normal_execution(monkeypatch):
+    """The normal variant matrix must not call the manual-only legacy matrix."""
+    analysis = _load_analysis_module()
+
+    def fail_if_called(variant_set="full"):
+        raise AssertionError("legacy matrix should be manual-only")
+
+    monkeypatch.setattr(analysis, "legacy_storage_variant_matrix_for_manual_debug_only", fail_if_called)
+    configs = analysis._replay_variant_configs()
+
+    assert "production_secant_sy" in configs
 
 
 def test_compare_transient_reports_one_based_and_zero_based_worst_period():
