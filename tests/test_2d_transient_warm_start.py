@@ -7,6 +7,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from working_tests import transient_artifacts as artifact_helpers
+from working_tests import transient_replay_settings as replay_settings
+from working_tests import transient_replay_storage as storage_helpers
+
 
 def _load_replay_module():
     return importlib.import_module("working_tests.transient_replay_support")
@@ -25,79 +29,69 @@ def _load_mf6_module():
 
 
 def test_artifact_confined_steady_warm_start_is_selected():
-    replay = _load_replay_module()
-
-    spatial = replay.build_synthetic_spatial_fields(nx=8, ny=6)
+    spatial = artifact_helpers.build_synthetic_spatial_fields(nx=8, ny=6)
     warm_head = np.asarray(spatial["initial_head"], dtype=np.float64).copy()
     active = spatial["active"] != 0
     warm_head[active] += 0.25
     warm_head[spatial["bc_mask"] != 0] = spatial["bc_values"][spatial["bc_mask"] != 0]
 
-    selected, used = replay.select_artifact_warm_start(
+    selected, used = artifact_helpers.select_artifact_warm_start(
         artifact={
             "initial_head": spatial["initial_head"],
             "confined_steady_head": warm_head,
         },
         spatial=spatial,
-        warm_start_mode=replay.WARM_START_CONFINED_STEADY_MF6,
+        warm_start_mode=artifact_helpers.WARM_START_CONFINED_STEADY_MF6,
     )
 
-    assert used == replay.WARM_START_CONFINED_STEADY_MF6
+    assert used == artifact_helpers.WARM_START_CONFINED_STEADY_MF6
     np.testing.assert_allclose(selected, warm_head)
 
 
 def test_missing_confined_steady_warm_start_errors_clearly():
-    replay = _load_replay_module()
-
-    spatial = replay.build_synthetic_spatial_fields(nx=8, ny=6)
+    spatial = artifact_helpers.build_synthetic_spatial_fields(nx=8, ny=6)
 
     with pytest.raises(KeyError, match="confined_steady_head"):
-        replay.select_artifact_warm_start(
+        artifact_helpers.select_artifact_warm_start(
             artifact={"initial_head": spatial["initial_head"]},
             spatial=spatial,
-            warm_start_mode=replay.WARM_START_CONFINED_STEADY_MF6,
+            warm_start_mode=artifact_helpers.WARM_START_CONFINED_STEADY_MF6,
         )
 
 
 def test_artifact_unconfined_steady_warm_start_is_selected():
-    replay = _load_replay_module()
-
-    spatial = replay.build_synthetic_spatial_fields(nx=8, ny=6)
+    spatial = artifact_helpers.build_synthetic_spatial_fields(nx=8, ny=6)
     warm_head = np.asarray(spatial["initial_head"], dtype=np.float64).copy()
     active = spatial["active"] != 0
     warm_head[active] += 0.5
     warm_head[spatial["bc_mask"] != 0] = spatial["bc_values"][spatial["bc_mask"] != 0]
 
-    selected, used = replay.select_artifact_warm_start(
+    selected, used = artifact_helpers.select_artifact_warm_start(
         artifact={
             "initial_head": spatial["initial_head"],
             "unconfined_steady_head": warm_head,
         },
         spatial=spatial,
-        warm_start_mode=replay.WARM_START_UNCONFINED_STEADY_MF6,
+        warm_start_mode=artifact_helpers.WARM_START_UNCONFINED_STEADY_MF6,
     )
 
-    assert used == replay.WARM_START_UNCONFINED_STEADY_MF6
+    assert used == artifact_helpers.WARM_START_UNCONFINED_STEADY_MF6
     np.testing.assert_allclose(selected, warm_head)
 
 
 def test_missing_unconfined_steady_warm_start_errors_clearly():
-    replay = _load_replay_module()
-
-    spatial = replay.build_synthetic_spatial_fields(nx=8, ny=6)
+    spatial = artifact_helpers.build_synthetic_spatial_fields(nx=8, ny=6)
 
     with pytest.raises(KeyError, match="unconfined_steady_head"):
-        replay.select_artifact_warm_start(
+        artifact_helpers.select_artifact_warm_start(
             artifact={"initial_head": spatial["initial_head"]},
             spatial=spatial,
-            warm_start_mode=replay.WARM_START_UNCONFINED_STEADY_MF6,
+            warm_start_mode=artifact_helpers.WARM_START_UNCONFINED_STEADY_MF6,
         )
 
 
 def test_default_solve_controls_include_full_kcycle_and_unconfined_settings():
-    replay = _load_replay_module()
-
-    controls = replay.default_solve_controls()
+    controls = replay_settings.default_solve_controls()
 
     expected = {
         "max_cycles": 200,
@@ -150,25 +144,21 @@ def test_default_solve_controls_include_full_kcycle_and_unconfined_settings():
 
 
 def test_default_artifact_path_is_formulation_specific():
-    replay = _load_replay_module()
-
-    confined_path = replay.default_artifact_path(
-        formulation=replay.FORMULATION_CONFINED,
+    confined_path = artifact_helpers.default_artifact_path(
+        formulation=artifact_helpers.FORMULATION_CONFINED,
     )
-    unconfined_path = replay.default_artifact_path(
-        formulation=replay.FORMULATION_UNCONFINED,
+    unconfined_path = artifact_helpers.default_artifact_path(
+        formulation=artifact_helpers.FORMULATION_UNCONFINED,
     )
 
     assert "mf6_transient_2d_confined" in str(confined_path)
     assert "mf6_transient_2d_unconfined" in str(unconfined_path)
-    assert confined_path.name == replay.DEFAULT_ARTIFACT_NAME
-    assert unconfined_path.name == replay.DEFAULT_ARTIFACT_NAME
+    assert confined_path.name == artifact_helpers.DEFAULT_ARTIFACT_NAME
+    assert unconfined_path.name == artifact_helpers.DEFAULT_ARTIFACT_NAME
 
 
 def test_artifact_formulation_is_read_from_legacy_provenance():
-    replay = _load_replay_module()
-
-    formulation = replay.artifact_formulation(
+    formulation = artifact_helpers.artifact_formulation(
         artifact={
             "provenance": np.asarray(
                 '{"kind": "2d_unconfined_transient_mf6_truth"}',
@@ -176,17 +166,15 @@ def test_artifact_formulation_is_read_from_legacy_provenance():
         },
     )
 
-    assert formulation == replay.FORMULATION_UNCONFINED
+    assert formulation == artifact_helpers.FORMULATION_UNCONFINED
 
 
 def test_mismatched_artifact_formulation_errors_clearly(tmp_path):
-    replay = _load_replay_module()
-
     artifact_path = tmp_path / "mf6_transient_heads.npz.lzma"
     with pytest.raises(ValueError, match="does not match MF6 artifact formulation"):
-        replay.require_matching_artifact_formulation(
-            artifact={"formulation": np.asarray(replay.FORMULATION_UNCONFINED)},
-            requested_formulation=replay.FORMULATION_CONFINED,
+        artifact_helpers.require_matching_artifact_formulation(
+            artifact={"formulation": np.asarray(artifact_helpers.FORMULATION_UNCONFINED)},
+            requested_formulation=artifact_helpers.FORMULATION_CONFINED,
             artifact_path=artifact_path,
         )
 
@@ -221,16 +209,16 @@ def test_mf6_truth_main_forwards_formulation_switch(monkeypatch, tmp_path):
 
 def _spatial_8x6():
     replay = _load_replay_module()
-    return replay, replay.build_synthetic_spatial_fields(nx=8, ny=6)
+    return replay, artifact_helpers.build_synthetic_spatial_fields(nx=8, ny=6)
 
 
 def test_build_unconfined_storativity_phreatic_only_is_sy_field():
-    replay, spatial = _spatial_8x6()
+    spatial = artifact_helpers.build_synthetic_spatial_fields(nx=8, ny=6)
     active = spatial["active"]
     bc_mask = spatial["bc_mask"]
     free = (active != 0) & (bc_mask == 0)
 
-    storativity, sat_ref = replay.build_unconfined_storativity(
+    storativity, sat_ref = storage_helpers.build_unconfined_storativity(
         sy=0.2,
         active=active,
         bc_mask=bc_mask,
@@ -246,7 +234,7 @@ def test_build_unconfined_storativity_phreatic_only_is_sy_field():
 
 
 def test_build_unconfined_storativity_mf6_convertible_adds_ss_term():
-    replay, spatial = _spatial_8x6()
+    spatial = artifact_helpers.build_synthetic_spatial_fields(nx=8, ny=6)
     active = spatial["active"]
     bc_mask = spatial["bc_mask"]
     top = spatial["top"]
@@ -255,7 +243,7 @@ def test_build_unconfined_storativity_mf6_convertible_adds_ss_term():
     free = (active != 0) & (bc_mask == 0)
 
     sy, ss = 0.2, 1.0e-5
-    storativity, sat_ref = replay.build_unconfined_storativity(
+    storativity, sat_ref = storage_helpers.build_unconfined_storativity(
         sy=sy,
         ss=ss,
         head_ref=head_ref,
@@ -266,8 +254,8 @@ def test_build_unconfined_storativity_mf6_convertible_adds_ss_term():
         include_specific_storage=True,
     )
 
-    full_thickness = np.maximum(top - bottom, replay.DEFAULT_MIN_SAT)
-    expected_sat = np.clip(head_ref - bottom, replay.DEFAULT_MIN_SAT, full_thickness)
+    full_thickness = np.maximum(top - bottom, replay_settings.DEFAULT_MIN_SAT)
+    expected_sat = np.clip(head_ref - bottom, replay_settings.DEFAULT_MIN_SAT, full_thickness)
     expected = sy + ss * expected_sat
 
     np.testing.assert_allclose(storativity[free], expected[free])
@@ -277,7 +265,6 @@ def test_build_unconfined_storativity_mf6_convertible_adds_ss_term():
 
 
 def test_build_unconfined_storativity_clips_saturated_thickness():
-    replay = _load_replay_module()
     ny, nx = 1, 3
     active = np.ones((ny, nx), dtype=np.int32)
     bc_mask = np.zeros((ny, nx), dtype=np.int32)
@@ -286,7 +273,7 @@ def test_build_unconfined_storativity_clips_saturated_thickness():
     # dry (below bottom), water-table, confined (above top)
     head_ref = np.array([[5.0, 60.0, 200.0]])
 
-    _, sat_ref = replay.build_unconfined_storativity(
+    _, sat_ref = storage_helpers.build_unconfined_storativity(
         sy=0.2,
         ss=1.0e-5,
         head_ref=head_ref,
@@ -297,20 +284,19 @@ def test_build_unconfined_storativity_clips_saturated_thickness():
         include_specific_storage=True,
     )
 
-    np.testing.assert_allclose(sat_ref[0, 0], replay.DEFAULT_MIN_SAT)  # clipped to min_sat
+    np.testing.assert_allclose(sat_ref[0, 0], replay_settings.DEFAULT_MIN_SAT)  # clipped to min_sat
     np.testing.assert_allclose(sat_ref[0, 1], 50.0)                    # head - bottom
     np.testing.assert_allclose(sat_ref[0, 2], 100.0)                   # clipped to top-bottom
 
 
 def test_build_unconfined_top_switch_storage_above_top_uses_elastic_full_thickness():
-    replay = _load_replay_module()
     active = np.ones((1, 1), dtype=np.int32)
     bc_mask = np.zeros((1, 1), dtype=np.int32)
     bottom = np.array([[10.0]], dtype=np.float64)
     top = np.array([[110.0]], dtype=np.float64)
     head_ref = np.array([[120.0]], dtype=np.float64)
 
-    storativity, sat_ref = replay.build_unconfined_storativity(
+    storativity, sat_ref = storage_helpers.build_unconfined_storativity(
         sy=0.2,
         ss=1.0e-5,
         head_ref=head_ref,
@@ -318,7 +304,7 @@ def test_build_unconfined_top_switch_storage_above_top_uses_elastic_full_thickne
         top=top,
         active=active,
         bc_mask=bc_mask,
-        storage_mode=replay.UNCONFINED_STORAGE_MF6_CONVERTIBLE_TOP_SWITCH,
+        storage_mode=artifact_helpers.UNCONFINED_STORAGE_MF6_CONVERTIBLE_TOP_SWITCH,
     )
 
     np.testing.assert_allclose(storativity[0, 0], 1.0e-5 * 100.0)
@@ -326,14 +312,13 @@ def test_build_unconfined_top_switch_storage_above_top_uses_elastic_full_thickne
 
 
 def test_build_unconfined_top_switch_storage_at_top_ge_uses_elastic_full_thickness():
-    replay = _load_replay_module()
     active = np.ones((1, 1), dtype=np.int32)
     bc_mask = np.zeros((1, 1), dtype=np.int32)
     bottom = np.array([[10.0]], dtype=np.float64)
     top = np.array([[110.0]], dtype=np.float64)
     head_ref = np.array([[110.0]], dtype=np.float64)
 
-    storativity, sat_ref = replay.build_unconfined_storativity(
+    storativity, sat_ref = storage_helpers.build_unconfined_storativity(
         sy=0.2,
         ss=1.0e-5,
         head_ref=head_ref,
@@ -341,8 +326,8 @@ def test_build_unconfined_top_switch_storage_at_top_ge_uses_elastic_full_thickne
         top=top,
         active=active,
         bc_mask=bc_mask,
-        storage_mode=replay.UNCONFINED_STORAGE_MF6_CONVERTIBLE_TOP_SWITCH,
-        storage_top_threshold=replay.STORAGE_TOP_THRESHOLD_GE,
+        storage_mode=artifact_helpers.UNCONFINED_STORAGE_MF6_CONVERTIBLE_TOP_SWITCH,
+        storage_top_threshold=replay_settings.STORAGE_TOP_THRESHOLD_GE,
     )
 
     np.testing.assert_allclose(storativity[0, 0], 1.0e-5 * 100.0)
@@ -350,14 +335,13 @@ def test_build_unconfined_top_switch_storage_at_top_ge_uses_elastic_full_thickne
 
 
 def test_build_unconfined_top_switch_storage_at_top_gt_keeps_sy_active():
-    replay = _load_replay_module()
     active = np.ones((1, 1), dtype=np.int32)
     bc_mask = np.zeros((1, 1), dtype=np.int32)
     bottom = np.array([[10.0]], dtype=np.float64)
     top = np.array([[110.0]], dtype=np.float64)
     head_ref = np.array([[110.0]], dtype=np.float64)
 
-    storativity, sat_ref = replay.build_unconfined_storativity(
+    storativity, sat_ref = storage_helpers.build_unconfined_storativity(
         sy=0.2,
         ss=1.0e-5,
         head_ref=head_ref,
@@ -365,8 +349,8 @@ def test_build_unconfined_top_switch_storage_at_top_gt_keeps_sy_active():
         top=top,
         active=active,
         bc_mask=bc_mask,
-        storage_mode=replay.UNCONFINED_STORAGE_MF6_CONVERTIBLE_TOP_SWITCH,
-        storage_top_threshold=replay.STORAGE_TOP_THRESHOLD_GT,
+        storage_mode=artifact_helpers.UNCONFINED_STORAGE_MF6_CONVERTIBLE_TOP_SWITCH,
+        storage_top_threshold=replay_settings.STORAGE_TOP_THRESHOLD_GT,
     )
 
     np.testing.assert_allclose(storativity[0, 0], 0.2 + 1.0e-5 * 100.0)
@@ -374,14 +358,13 @@ def test_build_unconfined_top_switch_storage_at_top_gt_keeps_sy_active():
 
 
 def test_build_unconfined_top_switch_storage_below_top_uses_sy_plus_elastic_sat():
-    replay = _load_replay_module()
     active = np.ones((1, 1), dtype=np.int32)
     bc_mask = np.zeros((1, 1), dtype=np.int32)
     bottom = np.array([[10.0]], dtype=np.float64)
     top = np.array([[110.0]], dtype=np.float64)
     head_ref = np.array([[60.0]], dtype=np.float64)
 
-    storativity, sat_ref = replay.build_unconfined_storativity(
+    storativity, sat_ref = storage_helpers.build_unconfined_storativity(
         sy=0.2,
         ss=1.0e-5,
         head_ref=head_ref,
@@ -389,7 +372,7 @@ def test_build_unconfined_top_switch_storage_below_top_uses_sy_plus_elastic_sat(
         top=top,
         active=active,
         bc_mask=bc_mask,
-        storage_mode=replay.UNCONFINED_STORAGE_MF6_CONVERTIBLE_TOP_SWITCH,
+        storage_mode=artifact_helpers.UNCONFINED_STORAGE_MF6_CONVERTIBLE_TOP_SWITCH,
     )
 
     np.testing.assert_allclose(storativity[0, 0], 0.2 + 1.0e-5 * 50.0)
@@ -397,14 +380,13 @@ def test_build_unconfined_top_switch_storage_below_top_uses_sy_plus_elastic_sat(
 
 
 def test_build_unconfined_top_switch_storage_near_bottom_uses_min_sat_with_sy():
-    replay = _load_replay_module()
     active = np.ones((1, 1), dtype=np.int32)
     bc_mask = np.zeros((1, 1), dtype=np.int32)
     bottom = np.array([[10.0]], dtype=np.float64)
     top = np.array([[110.0]], dtype=np.float64)
     head_ref = np.array([[9.0]], dtype=np.float64)
 
-    storativity, sat_ref = replay.build_unconfined_storativity(
+    storativity, sat_ref = storage_helpers.build_unconfined_storativity(
         sy=0.2,
         ss=1.0e-5,
         head_ref=head_ref,
@@ -412,22 +394,21 @@ def test_build_unconfined_top_switch_storage_near_bottom_uses_min_sat_with_sy():
         top=top,
         active=active,
         bc_mask=bc_mask,
-        storage_mode=replay.UNCONFINED_STORAGE_MF6_CONVERTIBLE_TOP_SWITCH,
+        storage_mode=artifact_helpers.UNCONFINED_STORAGE_MF6_CONVERTIBLE_TOP_SWITCH,
     )
 
-    np.testing.assert_allclose(sat_ref[0, 0], replay.DEFAULT_MIN_SAT)
-    np.testing.assert_allclose(storativity[0, 0], 0.2 + 1.0e-5 * replay.DEFAULT_MIN_SAT)
+    np.testing.assert_allclose(sat_ref[0, 0], replay_settings.DEFAULT_MIN_SAT)
+    np.testing.assert_allclose(storativity[0, 0], 0.2 + 1.0e-5 * replay_settings.DEFAULT_MIN_SAT)
 
 
 def test_build_unconfined_top_switch_storage_zeroes_inactive_and_dirichlet():
-    replay = _load_replay_module()
     active = np.array([[1, 1, 0]], dtype=np.int32)
     bc_mask = np.array([[1, 0, 0]], dtype=np.int32)
     bottom = np.full((1, 3), 10.0, dtype=np.float64)
     top = np.full((1, 3), 110.0, dtype=np.float64)
     head_ref = np.array([[120.0, 60.0, 60.0]], dtype=np.float64)
 
-    storativity, _ = replay.build_unconfined_storativity(
+    storativity, _ = storage_helpers.build_unconfined_storativity(
         sy=0.2,
         ss=1.0e-5,
         head_ref=head_ref,
@@ -435,7 +416,7 @@ def test_build_unconfined_top_switch_storage_zeroes_inactive_and_dirichlet():
         top=top,
         active=active,
         bc_mask=bc_mask,
-        storage_mode=replay.UNCONFINED_STORAGE_MF6_CONVERTIBLE_TOP_SWITCH,
+        storage_mode=artifact_helpers.UNCONFINED_STORAGE_MF6_CONVERTIBLE_TOP_SWITCH,
     )
 
     np.testing.assert_allclose(storativity[0, 0], 0.0)
@@ -444,13 +425,12 @@ def test_build_unconfined_top_switch_storage_zeroes_inactive_and_dirichlet():
 
 
 def test_build_unconfined_secant_sy_below_to_below_recovers_sy():
-    replay = _load_replay_module()
     active = np.ones((1, 1), dtype=np.int32)
     bc_mask = np.zeros((1, 1), dtype=np.int32)
     bottom = np.array([[10.0]], dtype=np.float64)
     top = np.array([[110.0]], dtype=np.float64)
 
-    components = replay.compute_unconfined_storage_components(
+    components = storage_helpers.compute_unconfined_storage_components(
         sy=0.2,
         ss=1.0e-5,
         head_old=np.array([[60.0]], dtype=np.float64),
@@ -459,21 +439,20 @@ def test_build_unconfined_secant_sy_below_to_below_recovers_sy():
         top=top,
         active=active,
         bc_mask=bc_mask,
-        min_sat=replay.DEFAULT_MIN_SAT,
-        storage_mode=replay.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
+        min_sat=replay_settings.DEFAULT_MIN_SAT,
+        storage_mode=artifact_helpers.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
     )
 
     np.testing.assert_allclose(components["sy_coeff"][0, 0], 0.2)
 
 
 def test_build_unconfined_secant_sy_above_to_above_zeroes_sy():
-    replay = _load_replay_module()
     active = np.ones((1, 1), dtype=np.int32)
     bc_mask = np.zeros((1, 1), dtype=np.int32)
     bottom = np.array([[10.0]], dtype=np.float64)
     top = np.array([[110.0]], dtype=np.float64)
 
-    components = replay.compute_unconfined_storage_components(
+    components = storage_helpers.compute_unconfined_storage_components(
         sy=0.2,
         ss=1.0e-5,
         head_old=np.array([[120.0]], dtype=np.float64),
@@ -482,15 +461,14 @@ def test_build_unconfined_secant_sy_above_to_above_zeroes_sy():
         top=top,
         active=active,
         bc_mask=bc_mask,
-        min_sat=replay.DEFAULT_MIN_SAT,
-        storage_mode=replay.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
+        min_sat=replay_settings.DEFAULT_MIN_SAT,
+        storage_mode=artifact_helpers.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
     )
 
     np.testing.assert_allclose(components["sy_coeff"][0, 0], 0.0)
 
 
 def test_build_unconfined_secant_sy_below_to_above_is_fractional():
-    replay = _load_replay_module()
     active = np.ones((1, 1), dtype=np.int32)
     bc_mask = np.zeros((1, 1), dtype=np.int32)
     bottom = np.array([[10.0]], dtype=np.float64)
@@ -498,7 +476,7 @@ def test_build_unconfined_secant_sy_below_to_above_is_fractional():
     head_old = np.array([[100.0]], dtype=np.float64)
     head_ref = np.array([[120.0]], dtype=np.float64)
 
-    components = replay.compute_unconfined_storage_components(
+    components = storage_helpers.compute_unconfined_storage_components(
         sy=0.2,
         ss=1.0e-5,
         head_old=head_old,
@@ -507,8 +485,8 @@ def test_build_unconfined_secant_sy_below_to_above_is_fractional():
         top=top,
         active=active,
         bc_mask=bc_mask,
-        min_sat=replay.DEFAULT_MIN_SAT,
-        storage_mode=replay.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
+        min_sat=replay_settings.DEFAULT_MIN_SAT,
+        storage_mode=artifact_helpers.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
     )
 
     expected = 0.2 * (110.0 - 100.0) / (120.0 - 100.0)
@@ -517,7 +495,6 @@ def test_build_unconfined_secant_sy_below_to_above_is_fractional():
 
 
 def test_build_unconfined_secant_sy_above_to_below_is_fractional():
-    replay = _load_replay_module()
     active = np.ones((1, 1), dtype=np.int32)
     bc_mask = np.zeros((1, 1), dtype=np.int32)
     bottom = np.array([[10.0]], dtype=np.float64)
@@ -525,7 +502,7 @@ def test_build_unconfined_secant_sy_above_to_below_is_fractional():
     head_old = np.array([[120.0]], dtype=np.float64)
     head_ref = np.array([[100.0]], dtype=np.float64)
 
-    components = replay.compute_unconfined_storage_components(
+    components = storage_helpers.compute_unconfined_storage_components(
         sy=0.2,
         ss=1.0e-5,
         head_old=head_old,
@@ -534,8 +511,8 @@ def test_build_unconfined_secant_sy_above_to_below_is_fractional():
         top=top,
         active=active,
         bc_mask=bc_mask,
-        min_sat=replay.DEFAULT_MIN_SAT,
-        storage_mode=replay.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
+        min_sat=replay_settings.DEFAULT_MIN_SAT,
+        storage_mode=artifact_helpers.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
     )
 
     expected = 0.2 * (100.0 - 110.0) / (100.0 - 120.0)
@@ -544,13 +521,12 @@ def test_build_unconfined_secant_sy_above_to_below_is_fractional():
 
 
 def test_build_unconfined_secant_sy_no_change_below_uses_sy():
-    replay = _load_replay_module()
     active = np.ones((1, 1), dtype=np.int32)
     bc_mask = np.zeros((1, 1), dtype=np.int32)
     bottom = np.array([[10.0]], dtype=np.float64)
     top = np.array([[110.0]], dtype=np.float64)
 
-    components = replay.compute_unconfined_storage_components(
+    components = storage_helpers.compute_unconfined_storage_components(
         sy=0.2,
         ss=1.0e-5,
         head_old=np.array([[60.0]], dtype=np.float64),
@@ -559,21 +535,20 @@ def test_build_unconfined_secant_sy_no_change_below_uses_sy():
         top=top,
         active=active,
         bc_mask=bc_mask,
-        min_sat=replay.DEFAULT_MIN_SAT,
-        storage_mode=replay.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
+        min_sat=replay_settings.DEFAULT_MIN_SAT,
+        storage_mode=artifact_helpers.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
     )
 
     np.testing.assert_allclose(components["sy_coeff"][0, 0], 0.2)
 
 
 def test_build_unconfined_secant_sy_no_change_above_uses_zero_sy():
-    replay = _load_replay_module()
     active = np.ones((1, 1), dtype=np.int32)
     bc_mask = np.zeros((1, 1), dtype=np.int32)
     bottom = np.array([[10.0]], dtype=np.float64)
     top = np.array([[110.0]], dtype=np.float64)
 
-    components = replay.compute_unconfined_storage_components(
+    components = storage_helpers.compute_unconfined_storage_components(
         sy=0.2,
         ss=1.0e-5,
         head_old=np.array([[120.0]], dtype=np.float64),
@@ -582,21 +557,20 @@ def test_build_unconfined_secant_sy_no_change_above_uses_zero_sy():
         top=top,
         active=active,
         bc_mask=bc_mask,
-        min_sat=replay.DEFAULT_MIN_SAT,
-        storage_mode=replay.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
+        min_sat=replay_settings.DEFAULT_MIN_SAT,
+        storage_mode=artifact_helpers.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
     )
 
     np.testing.assert_allclose(components["sy_coeff"][0, 0], 0.0)
 
 
 def test_build_unconfined_secant_sy_zeroes_inactive_and_dirichlet():
-    replay = _load_replay_module()
     active = np.array([[1, 1, 0]], dtype=np.int32)
     bc_mask = np.array([[1, 0, 0]], dtype=np.int32)
     bottom = np.full((1, 3), 10.0, dtype=np.float64)
     top = np.full((1, 3), 110.0, dtype=np.float64)
 
-    components = replay.compute_unconfined_storage_components(
+    components = storage_helpers.compute_unconfined_storage_components(
         sy=0.2,
         ss=1.0e-5,
         head_old=np.array([[100.0, 60.0, 60.0]], dtype=np.float64),
@@ -605,8 +579,8 @@ def test_build_unconfined_secant_sy_zeroes_inactive_and_dirichlet():
         top=top,
         active=active,
         bc_mask=bc_mask,
-        min_sat=replay.DEFAULT_MIN_SAT,
-        storage_mode=replay.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
+        min_sat=replay_settings.DEFAULT_MIN_SAT,
+        storage_mode=artifact_helpers.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
     )
 
     np.testing.assert_allclose(components["storage_coeff"][0, 0], 0.0)
@@ -614,41 +588,38 @@ def test_build_unconfined_secant_sy_zeroes_inactive_and_dirichlet():
 
 
 def test_top_switch_above_mask_ge_marks_at_top_above():
-    replay = _load_replay_module()
     top = np.array([[110.0]], dtype=np.float64)
     head_ref = np.array([[110.0]], dtype=np.float64)
 
-    above = replay.top_switch_above_mask(
+    above = storage_helpers.top_switch_above_mask(
         head_ref=head_ref,
         top=top,
-        threshold_mode=replay.STORAGE_TOP_THRESHOLD_GE,
+        threshold_mode=replay_settings.STORAGE_TOP_THRESHOLD_GE,
     )
 
     assert bool(above[0, 0]) is True
 
 
 def test_top_switch_above_mask_gt_keeps_at_top_below():
-    replay = _load_replay_module()
     top = np.array([[110.0]], dtype=np.float64)
     head_ref = np.array([[110.0]], dtype=np.float64)
 
-    above = replay.top_switch_above_mask(
+    above = storage_helpers.top_switch_above_mask(
         head_ref=head_ref,
         top=top,
-        threshold_mode=replay.STORAGE_TOP_THRESHOLD_GT,
+        threshold_mode=replay_settings.STORAGE_TOP_THRESHOLD_GT,
     )
 
     assert bool(above[0, 0]) is False
 
 
 def test_apply_top_switch_hysteresis_promotes_below_to_above():
-    replay = _load_replay_module()
     top = np.array([[110.0]], dtype=np.float64)
     head_ref = np.array([[110.02]], dtype=np.float64)
     raw = np.array([[True]])
     prev = np.array([[False]])
 
-    out = replay.apply_top_switch_hysteresis(
+    out = storage_helpers.apply_top_switch_hysteresis(
         raw_above_top=raw,
         head_ref=head_ref,
         top=top,
@@ -660,13 +631,12 @@ def test_apply_top_switch_hysteresis_promotes_below_to_above():
 
 
 def test_apply_top_switch_hysteresis_demotes_above_to_below():
-    replay = _load_replay_module()
     top = np.array([[110.0]], dtype=np.float64)
     head_ref = np.array([[109.98]], dtype=np.float64)
     raw = np.array([[False]])
     prev = np.array([[True]])
 
-    out = replay.apply_top_switch_hysteresis(
+    out = storage_helpers.apply_top_switch_hysteresis(
         raw_above_top=raw,
         head_ref=head_ref,
         top=top,
@@ -678,13 +648,12 @@ def test_apply_top_switch_hysteresis_demotes_above_to_below():
 
 
 def test_apply_top_switch_hysteresis_holds_previous_above_inside_band():
-    replay = _load_replay_module()
     top = np.array([[110.0]], dtype=np.float64)
     head_ref = np.array([[109.995]], dtype=np.float64)
     raw = np.array([[False]])
     prev = np.array([[True]])
 
-    out = replay.apply_top_switch_hysteresis(
+    out = storage_helpers.apply_top_switch_hysteresis(
         raw_above_top=raw,
         head_ref=head_ref,
         top=top,
@@ -696,13 +665,12 @@ def test_apply_top_switch_hysteresis_holds_previous_above_inside_band():
 
 
 def test_apply_top_switch_hysteresis_holds_previous_below_inside_band():
-    replay = _load_replay_module()
     top = np.array([[110.0]], dtype=np.float64)
     head_ref = np.array([[110.005]], dtype=np.float64)
     raw = np.array([[True]])
     prev = np.array([[False]])
 
-    out = replay.apply_top_switch_hysteresis(
+    out = storage_helpers.apply_top_switch_hysteresis(
         raw_above_top=raw,
         head_ref=head_ref,
         top=top,
@@ -714,15 +682,13 @@ def test_apply_top_switch_hysteresis_holds_previous_below_inside_band():
 
 
 def test_should_freeze_top_switch_requires_requested_stability_window():
-    replay = _load_replay_module()
-
-    assert replay.should_freeze_top_switch(
+    assert storage_helpers.should_freeze_top_switch(
         changed_fraction=0.0,
         stable_iteration_count=2,
         fraction_tol=0.0,
         freeze_after_stable_iterations=2,
     )
-    assert not replay.should_freeze_top_switch(
+    assert not storage_helpers.should_freeze_top_switch(
         changed_fraction=1.0e-4,
         stable_iteration_count=1,
         fraction_tol=0.0,
@@ -731,10 +697,9 @@ def test_should_freeze_top_switch_requires_requested_stability_window():
 
 
 def test_build_unconfined_storativity_zeroes_inactive_and_boundary():
-    replay = _load_replay_module()
     active = np.array([[1, 1, 0]], dtype=np.int32)   # last cell inactive
     bc_mask = np.array([[1, 0, 0]], dtype=np.int32)  # first cell boundary
-    storativity, _ = replay.build_unconfined_storativity(
+    storativity, _ = storage_helpers.build_unconfined_storativity(
         sy=0.3, active=active, bc_mask=bc_mask, include_specific_storage=False,
     )
     assert storativity[0, 0] == 0.0  # boundary
@@ -748,38 +713,34 @@ def test_build_unconfined_storativity_zeroes_inactive_and_boundary():
 
 def test_artifact_warm_start_provenance_reads_provenance():
     import json
-    replay = _load_replay_module()
-
     artifact = {
         "provenance": np.asarray(json.dumps({
             "kind": "2d_unconfined_transient_mf6_truth",
             "warm_start_mode": "confined_steady_mf6",
         })),
     }
-    assert replay.artifact_warm_start_provenance(artifact) == "confined_steady_mf6"
+    assert artifact_helpers.artifact_warm_start_provenance(artifact) == "confined_steady_mf6"
 
-    assert replay.artifact_warm_start_provenance({"provenance": None}) is None
-    assert replay.artifact_warm_start_provenance({}) is None
-    assert replay.artifact_warm_start_provenance(
+    assert artifact_helpers.artifact_warm_start_provenance({"provenance": None}) is None
+    assert artifact_helpers.artifact_warm_start_provenance({}) is None
+    assert artifact_helpers.artifact_warm_start_provenance(
         {"provenance": np.asarray("not-json")}
     ) is None
 
 
 def test_validate_warm_start_comparability_errors_on_mismatch():
-    replay = _load_replay_module()
-
     with pytest.raises(ValueError, match="warm-start provenance"):
-        replay.validate_warm_start_comparability(
+        artifact_helpers.validate_warm_start_comparability(
             artifact_warm_start="confined_steady_mf6",
-            warp_warm_start_mode=replay.WARM_START_CONFINED_STEADY_WARP,
+            warp_warm_start_mode=artifact_helpers.WARM_START_CONFINED_STEADY_WARP,
             allow_warm_start_mismatch=False,
         )
 
     # artifact_initial provenance is equally incomparable with a Warp re-solve.
     with pytest.raises(ValueError, match="warm-start provenance"):
-        replay.validate_warm_start_comparability(
+        artifact_helpers.validate_warm_start_comparability(
             artifact_warm_start="artifact_initial",
-            warp_warm_start_mode=replay.WARM_START_CONFINED_STEADY_WARP,
+            warp_warm_start_mode=artifact_helpers.WARM_START_CONFINED_STEADY_WARP,
             allow_warm_start_mismatch=False,
         )
 
@@ -788,25 +749,25 @@ def test_validate_warm_start_comparability_override_must_be_explicit():
     replay = _load_replay_module()
 
     # Explicit override suppresses the error.
-    replay.validate_warm_start_comparability(
+    artifact_helpers.validate_warm_start_comparability(
         artifact_warm_start="confined_steady_mf6",
-        warp_warm_start_mode=replay.WARM_START_CONFINED_STEADY_WARP,
+        warp_warm_start_mode=artifact_helpers.WARM_START_CONFINED_STEADY_WARP,
         allow_warm_start_mismatch=True,
     )
 
     # Comparable Warp modes never raise, regardless of provenance.
-    replay.validate_warm_start_comparability(
+    artifact_helpers.validate_warm_start_comparability(
         artifact_warm_start="confined_steady_mf6",
-        warp_warm_start_mode=replay.WARM_START_CONFINED_STEADY_MF6,
+        warp_warm_start_mode=artifact_helpers.WARM_START_CONFINED_STEADY_MF6,
     )
-    replay.validate_warm_start_comparability(
+    artifact_helpers.validate_warm_start_comparability(
         artifact_warm_start="confined_steady_mf6",
-        warp_warm_start_mode=replay.WARM_START_ARTIFACT_INITIAL,
+        warp_warm_start_mode=artifact_helpers.WARM_START_ARTIFACT_INITIAL,
     )
     # No provenance -> never blocks.
-    replay.validate_warm_start_comparability(
+    artifact_helpers.validate_warm_start_comparability(
         artifact_warm_start=None,
-        warp_warm_start_mode=replay.WARM_START_CONFINED_STEADY_WARP,
+        warp_warm_start_mode=artifact_helpers.WARM_START_CONFINED_STEADY_WARP,
     )
 
 
@@ -841,7 +802,7 @@ def _fake_artifact(spatial, formulation, warm_start_mode):
     }
 
 
-def test_run_replay_from_artifact_rejects_warm_start_mismatch(monkeypatch, tmp_path):
+def test_run_replay_from_artifact_rejects_nonproduction_warm_start(monkeypatch, tmp_path):
     replay, spatial = _spatial_8x6()
     artifact = _fake_artifact(spatial, "unconfined", "confined_steady_mf6")
     artifact_path = tmp_path / "mf6_transient_heads.npz.lzma"
@@ -853,25 +814,25 @@ def test_run_replay_from_artifact_rejects_warm_start_mismatch(monkeypatch, tmp_p
         raise AssertionError("run_warp_transient_replay must not run on a mismatch")
     monkeypatch.setattr(replay, "run_warp_transient_replay", boom)
 
-    with pytest.raises(ValueError, match="warm-start provenance"):
+    with pytest.raises(ValueError, match="warm_start_mode='unconfined_steady_mf6'"):
         replay.run_replay_from_artifact(
             artifact_path=artifact_path,
             workspace=tmp_path / "ws",
             device="cpu",
-            warm_start_mode=replay.WARM_START_CONFINED_STEADY_WARP,
-            formulation=replay.FORMULATION_UNCONFINED,
+            warm_start_mode=artifact_helpers.WARM_START_CONFINED_STEADY_WARP,
+            formulation=artifact_helpers.FORMULATION_UNCONFINED,
             allow_warm_start_mismatch=False,
         )
 
 
 def test_run_replay_from_artifact_override_emits_provenance_and_diff(monkeypatch, tmp_path):
     replay, spatial = _spatial_8x6()
-    artifact = _fake_artifact(spatial, "unconfined", "confined_steady_mf6")
+    artifact = _fake_artifact(spatial, "unconfined", "unconfined_steady_mf6")
     artifact_path = tmp_path / "mf6_transient_heads.npz.lzma"
     artifact_path.write_bytes(b"placeholder")
     monkeypatch.setattr(replay, "load_transient_artifact", lambda path: artifact)
 
-    warm_head = spatial["initial_head"] + 0.0  # a deliberate Warp warm start
+    warm_head = spatial["initial_head"] + 0.0
     captured = {}
 
     def fake_core(**kwargs):
@@ -883,16 +844,23 @@ def test_run_replay_from_artifact_override_emits_provenance_and_diff(monkeypatch
             "total_time": 0.0,
             "last_info": {"converged": True},
             "storativity": np.full((6, 8), 0.2),
-            "storativity_kind": "sy",
-            "include_specific_storage": False,
-            "unconfined_storage_mode": replay.UNCONFINED_STORAGE_PHREATIC_ONLY,
+            "storativity_kind": "sy_plus_ss_secant_saturated_thickness",
+            "include_specific_storage": True,
+            "unconfined_storage_mode": artifact_helpers.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
             "saturated_thickness_reference": None,
-            "saturated_thickness_reference_source": None,
+            "saturated_thickness_reference_source": replay_settings.STORAGE_REFERENCE_CURRENT_PICARD,
             "dt": 7.0,
-            "formulation": replay.FORMULATION_UNCONFINED,
-            "solve_controls": {},
-            "warm_start_mode": replay.WARM_START_CONFINED_STEADY_WARP,
-            "warm_start_used": replay.WARM_START_CONFINED_STEADY_WARP,
+            "formulation": artifact_helpers.FORMULATION_UNCONFINED,
+            "solve_controls": {"unconfined_startup_mode": "confined_pre_solve"},
+            "storage_reference": replay_settings.STORAGE_REFERENCE_CURRENT_PICARD,
+            "storage_top_threshold": replay_settings.STORAGE_TOP_THRESHOLD_GE,
+            "storage_active_set_strategy": replay_settings.STORAGE_ACTIVE_SET_NONE,
+            "storage_hysteresis_eps": 0.0,
+            "storage_freeze_after_stable_iterations": 0,
+            "storage_freeze_after_outer": None,
+            "storage_switch_fraction_tol": 0.0,
+            "warm_start_mode": artifact_helpers.WARM_START_UNCONFINED_STEADY_MF6,
+            "warm_start_used": artifact_helpers.WARM_START_UNCONFINED_STEADY_MF6,
             "warm_start_head": warm_head.copy(),
             "device": "cpu",
         }
@@ -903,27 +871,23 @@ def test_run_replay_from_artifact_override_emits_provenance_and_diff(monkeypatch
         artifact_path=artifact_path,
         workspace=tmp_path / "ws",
         device="cpu",
-        warm_start_mode=replay.WARM_START_CONFINED_STEADY_WARP,
-        formulation=replay.FORMULATION_UNCONFINED,
-        unconfined_storage_mode=replay.UNCONFINED_STORAGE_PHREATIC_ONLY,
-        allow_warm_start_mismatch=True,
+        warm_start_mode=artifact_helpers.WARM_START_UNCONFINED_STEADY_MF6,
+        formulation=artifact_helpers.FORMULATION_UNCONFINED,
+        unconfined_storage_mode=artifact_helpers.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
     )
 
-    assert captured["warm_start_mode"] == replay.WARM_START_CONFINED_STEADY_WARP
-    assert captured["unconfined_storage_mode"] == replay.UNCONFINED_STORAGE_PHREATIC_ONLY
+    assert captured["warm_start_mode"] == artifact_helpers.WARM_START_UNCONFINED_STEADY_MF6
+    assert captured["unconfined_storage_mode"] == artifact_helpers.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY
     ws = summary["warm_start"]
-    assert ws["allow_warm_start_mismatch"] is True
-    assert ws["artifact_provenance"] == "confined_steady_mf6"
-    assert ws["used"] == replay.WARM_START_CONFINED_STEADY_WARP
+    assert ws["allow_warm_start_mismatch"] is False
+    assert ws["artifact_provenance"] == "unconfined_steady_mf6"
+    assert ws["used"] == artifact_helpers.WARM_START_UNCONFINED_STEADY_MF6
     assert "warm_start_vs_initial_head" in ws
-    # New storativity summary keys present, deprecated aliases retained.
     storage = summary["storage"]
-    assert storage["warp_storativity_kind"] == "sy"
-    assert storage["include_specific_storage"] is False
-    assert storage["unconfined_storage_mode"] == replay.UNCONFINED_STORAGE_PHREATIC_ONLY
+    assert storage["warp_storativity_kind"] == "sy_plus_ss_secant_saturated_thickness"
+    assert storage["include_specific_storage"] is True
+    assert storage["unconfined_storage_mode"] == artifact_helpers.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY
     assert "warp_storativity" in storage
-    assert "warp_storage_coeff" in storage  # deprecated alias
-    assert storage["warp_storage_coeff_kind"] == "sy"
 
 
 def test_run_replay_from_artifact_defaults_align_with_mf6():
@@ -931,19 +895,19 @@ def test_run_replay_from_artifact_defaults_align_with_mf6():
     replay = _load_replay_module()
 
     sig = inspect.signature(replay.run_replay_from_artifact)
-    assert sig.parameters["warm_start_mode"].default == replay.WARM_START_UNCONFINED_STEADY_MF6
-    assert sig.parameters["unconfined_storage_mode"].default == replay.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY
-    assert sig.parameters["storage_reference"].default == replay.STORAGE_REFERENCE_CURRENT_PICARD
-    assert sig.parameters["storage_top_threshold"].default == replay.STORAGE_TOP_THRESHOLD_GE
-    assert sig.parameters["storage_active_set_strategy"].default == replay.STORAGE_ACTIVE_SET_NONE
+    assert sig.parameters["warm_start_mode"].default == artifact_helpers.WARM_START_UNCONFINED_STEADY_MF6
+    assert sig.parameters["unconfined_storage_mode"].default == artifact_helpers.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY
+    assert sig.parameters["storage_reference"].default == replay_settings.STORAGE_REFERENCE_CURRENT_PICARD
+    assert sig.parameters["storage_top_threshold"].default == replay_settings.STORAGE_TOP_THRESHOLD_GE
+    assert sig.parameters["storage_active_set_strategy"].default == replay_settings.STORAGE_ACTIVE_SET_NONE
     assert sig.parameters["allow_warm_start_mismatch"].default is False
 
     main_sig = inspect.signature(replay.main)
-    assert main_sig.parameters["warm_start_mode"].default == replay.WARM_START_UNCONFINED_STEADY_MF6
-    assert main_sig.parameters["unconfined_storage_mode"].default == replay.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY
-    assert main_sig.parameters["storage_reference"].default == replay.STORAGE_REFERENCE_CURRENT_PICARD
-    assert main_sig.parameters["storage_top_threshold"].default == replay.STORAGE_TOP_THRESHOLD_GE
-    assert main_sig.parameters["storage_active_set_strategy"].default == replay.STORAGE_ACTIVE_SET_NONE
+    assert main_sig.parameters["warm_start_mode"].default == artifact_helpers.WARM_START_UNCONFINED_STEADY_MF6
+    assert main_sig.parameters["unconfined_storage_mode"].default == artifact_helpers.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY
+    assert main_sig.parameters["storage_reference"].default == replay_settings.STORAGE_REFERENCE_CURRENT_PICARD
+    assert main_sig.parameters["storage_top_threshold"].default == replay_settings.STORAGE_TOP_THRESHOLD_GE
+    assert main_sig.parameters["storage_active_set_strategy"].default == replay_settings.STORAGE_ACTIVE_SET_NONE
 
 
 def _load_analysis_module():
@@ -997,10 +961,10 @@ def test_replay_variant_configs_expose_only_production_and_secant_freeze():
     )
     for name, cfg in configs.items():
         assert not any(token in name for token in forbidden_tokens)
-        assert cfg["unconfined_storage_mode"] == replay.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY
-        assert cfg["storage_reference"] == replay.STORAGE_REFERENCE_CURRENT_PICARD
-        assert cfg["storage_top_threshold"] == replay.STORAGE_TOP_THRESHOLD_GE
-        assert cfg["storage_active_set_strategy"] == replay.STORAGE_ACTIVE_SET_NONE
+        assert cfg["unconfined_storage_mode"] == artifact_helpers.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY
+        assert cfg["storage_reference"] == replay_settings.STORAGE_REFERENCE_CURRENT_PICARD
+        assert cfg["storage_top_threshold"] == replay_settings.STORAGE_TOP_THRESHOLD_GE
+        assert cfg["storage_active_set_strategy"] == replay_settings.STORAGE_ACTIVE_SET_NONE
         assert cfg["solve_controls"]["unconfined_startup_mode"] == "confined_pre_solve"
 
 
@@ -1008,14 +972,14 @@ def test_production_secant_sy_settings_match_validated_defaults():
     """Production helper preserves the validated MF6-compatible replay settings."""
     replay = _load_replay_module()
 
-    settings = replay.production_secant_sy_settings()
+    settings = replay_settings.production_secant_sy_settings()
 
-    assert settings["unconfined_storage_mode"] == replay.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY
-    assert settings["storage_reference"] == replay.STORAGE_REFERENCE_CURRENT_PICARD
-    assert settings["storage_top_threshold"] == replay.STORAGE_TOP_THRESHOLD_GE
-    assert settings["storage_active_set_strategy"] == replay.STORAGE_ACTIVE_SET_NONE
+    assert settings["unconfined_storage_mode"] == artifact_helpers.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY
+    assert settings["storage_reference"] == replay_settings.STORAGE_REFERENCE_CURRENT_PICARD
+    assert settings["storage_top_threshold"] == replay_settings.STORAGE_TOP_THRESHOLD_GE
+    assert settings["storage_active_set_strategy"] == replay_settings.STORAGE_ACTIVE_SET_NONE
     assert settings["storage_freeze_after_outer"] is None
-    assert settings["warm_start_mode"] == replay.WARM_START_UNCONFINED_STEADY_MF6
+    assert settings["warm_start_mode"] == artifact_helpers.WARM_START_UNCONFINED_STEADY_MF6
     assert settings["solve_controls"]["unconfined_startup_mode"] == "confined_pre_solve"
 
 
@@ -1023,8 +987,8 @@ def test_secant_freeze_settings_differ_only_by_freeze_after_outer():
     """Freeze helper changes only storage_freeze_after_outer from production settings."""
     replay = _load_replay_module()
 
-    production = replay.production_secant_sy_settings()
-    freeze = replay.secant_sy_freeze_settings(freeze_after_outer=4)
+    production = replay_settings.production_secant_sy_settings()
+    freeze = replay_settings.secant_sy_freeze_settings(freeze_after_outer=4)
     changed = {
         key for key in production
         if production.get(key) != freeze.get(key)
@@ -1276,7 +1240,7 @@ def test_compute_replay_mass_balance_contains_all_periods_and_cumulative_totals(
         ),
         "warm_start_head": np.full((2, 2), 5.0, dtype=np.float64),
         "dt": 1.0,
-        "unconfined_storage_mode": replay.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
+        "unconfined_storage_mode": artifact_helpers.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
         "storage_coeffs_per_period": np.asarray(
             [
                 np.full((2, 2), 0.2, dtype=np.float64),
@@ -1303,8 +1267,8 @@ def test_compute_replay_mass_balance_contains_all_periods_and_cumulative_totals(
         recharge_rates=np.asarray([0.0, 0.0], dtype=np.float64),
         sy=0.2,
         dt=1.0,
-        formulation=replay.FORMULATION_UNCONFINED,
-        unconfined_storage_mode=replay.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
+        formulation=artifact_helpers.FORMULATION_UNCONFINED,
+        unconfined_storage_mode=artifact_helpers.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
         warp_result=warp_result,
         min_sat=0.1,
     )
@@ -1336,7 +1300,7 @@ def test_secant_sy_mass_balance_storage_release_sign_and_small_dh_consistency():
         "heads_per_period": np.asarray([[[5.001]], [[4.999]]], dtype=np.float64),
         "warm_start_head": np.asarray([[5.0]], dtype=np.float64),
         "dt": 1.0,
-        "unconfined_storage_mode": replay.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
+        "unconfined_storage_mode": artifact_helpers.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
         "storage_coeffs_per_period": np.asarray([[[0.2]], [[0.2]]], dtype=np.float64),
         "sy_storage_coeffs_per_period": np.asarray([[[0.2]], [[0.2]]], dtype=np.float64),
         "ss_storage_coeffs_per_period": np.zeros((2, 1, 1), dtype=np.float64),
@@ -1348,8 +1312,8 @@ def test_secant_sy_mass_balance_storage_release_sign_and_small_dh_consistency():
         recharge_rates=np.asarray([0.0, 0.0], dtype=np.float64),
         sy=0.2,
         dt=1.0,
-        formulation=replay.FORMULATION_UNCONFINED,
-        unconfined_storage_mode=replay.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
+        formulation=artifact_helpers.FORMULATION_UNCONFINED,
+        unconfined_storage_mode=artifact_helpers.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
         warp_result=warp_result,
         min_sat=0.1,
     )
@@ -1488,21 +1452,21 @@ def test_evaluate_head_accuracy_pass_and_fail():
 def test_evaluate_method_settings_validated_vs_deviation():
     replay = _load_replay_module()
     valid = replay.evaluate_method_settings(
-        unconfined_storage_mode=replay.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
-        storage_reference=replay.STORAGE_REFERENCE_CURRENT_PICARD,
-        storage_top_threshold=replay.STORAGE_TOP_THRESHOLD_GE,
-        storage_active_set_strategy=replay.STORAGE_ACTIVE_SET_NONE,
+        unconfined_storage_mode=artifact_helpers.UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
+        storage_reference=replay_settings.STORAGE_REFERENCE_CURRENT_PICARD,
+        storage_top_threshold=replay_settings.STORAGE_TOP_THRESHOLD_GE,
+        storage_active_set_strategy=replay_settings.STORAGE_ACTIVE_SET_NONE,
         unconfined_startup_mode="confined_pre_solve",
-        warm_start=replay.WARM_START_UNCONFINED_STEADY_MF6,
+        warm_start=artifact_helpers.WARM_START_UNCONFINED_STEADY_MF6,
     )
     assert valid["passed"] is True
     deviated = replay.evaluate_method_settings(
-        unconfined_storage_mode=replay.UNCONFINED_STORAGE_MF6_CONVERTIBLE_TOP_SWITCH,
-        storage_reference=replay.STORAGE_REFERENCE_CURRENT_PICARD,
-        storage_top_threshold=replay.STORAGE_TOP_THRESHOLD_GE,
-        storage_active_set_strategy=replay.STORAGE_ACTIVE_SET_NONE,
+        unconfined_storage_mode=artifact_helpers.UNCONFINED_STORAGE_MF6_CONVERTIBLE_TOP_SWITCH,
+        storage_reference=replay_settings.STORAGE_REFERENCE_CURRENT_PICARD,
+        storage_top_threshold=replay_settings.STORAGE_TOP_THRESHOLD_GE,
+        storage_active_set_strategy=replay_settings.STORAGE_ACTIVE_SET_NONE,
         unconfined_startup_mode="confined_pre_solve",
-        warm_start=replay.WARM_START_UNCONFINED_STEADY_MF6,
+        warm_start=artifact_helpers.WARM_START_UNCONFINED_STEADY_MF6,
     )
     assert deviated["passed"] is False
     assert "unconfined_storage_mode" in deviated["mismatches"]
@@ -1598,7 +1562,7 @@ def test_performance_summary_contains_required_keys():
 
 def test_default_run_config_records_production_defaults():
     replay = _load_replay_module()
-    cfg = replay.default_run_config(device="cuda:0")
+    cfg = replay_settings.default_run_config(device="cuda:0")
     assert cfg["run_mode"] == "production"
     assert cfg["compute_mass_balance"] is True
     assert cfg["profile_performance"] is False
