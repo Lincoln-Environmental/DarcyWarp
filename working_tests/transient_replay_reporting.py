@@ -303,6 +303,29 @@ def _print_production_report(*, summary: dict) -> None:
         print(f"  runtime target (<{performance.get('runtime_target_s')}s): WARNING: runtime target not met")
     if not performance.get("profile_available"):
         print(f"  WARNING: detailed profiling not implemented ({performance.get('profile_reason')})")
+    else:
+        profile = performance.get("profile") or {}
+        totals = profile.get("totals") or {}
+        fractions = profile.get("fractions_of_period_total") or {}
+        print("  profile totals:")
+        for key in (
+            "T_update_seconds",
+            "storage_kernel_seconds",
+            "fine_m_inv_refresh_seconds",
+            "dynamic_coarse_refresh_seconds",
+            "rhs_assembly_seconds",
+            "inner_solver_seconds",
+            "outer_convergence_check_seconds",
+            "final_nonlinear_residual_check_seconds",
+            "head_download_seconds",
+        ):
+            value = totals.get(key)
+            fraction = fractions.get(key)
+            print(
+                f"    {key}: {_fmt_optional(value)} s "
+                f"({_fmt_optional(None if fraction is None else 100.0 * float(fraction), '.3g')}%)"
+            )
+        print(f"    mass_balance_runtime: {_fmt_optional(profile.get('mass_balance_runtime'))} s")
     print("\nMass balance summary")
     print(f"  cumulative discrepancy: {_fmt_optional(mass_balance.get('cumulative_percent_discrepancy'), '.6g')}%")
     print(f"  max period discrepancy: {_fmt_optional(mass_balance.get('max_abs_percent_discrepancy'), '.6g')}%")

@@ -183,6 +183,8 @@ def _summarize_period_infos(period_infos: list[dict]) -> dict:
         "inner_usable_for_picard",
         "inner_h_rms_end",
         "inner_max_cycles_used",
+        "total_inner_kcycles",
+        "maximum_inner_kcycles_in_one_outer_iteration",
         "effectively_dry_cell_count",
         "storage_active_set_strategy",
         "storage_hysteresis_eps",
@@ -199,6 +201,16 @@ def _summarize_period_infos(period_infos: list[dict]) -> dict:
         "top_switch_frozen_outer_iteration",
         "max_storage_diag_change_max",
         "max_storage_diag_change_rms",
+        "T_update_seconds",
+        "storage_kernel_seconds",
+        "fine_m_inv_refresh_seconds",
+        "dynamic_coarse_refresh_seconds",
+        "rhs_assembly_seconds",
+        "inner_solver_seconds",
+        "outer_convergence_check_seconds",
+        "final_nonlinear_residual_check_seconds",
+        "head_download_seconds",
+        "period_total_seconds",
     )
     periods = []
     first_nonconverged_period = None

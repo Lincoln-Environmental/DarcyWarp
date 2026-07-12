@@ -324,7 +324,7 @@ def _prepare_5point_transient_terms(
     dx_f = float(dx)
     if dx_f <= 0.0:
         raise ValueError("dx must be positive for transient terms.")
-    
+
     vol = np.float64(dx_f * dx_f)
 
     s_in = np.asarray(storage_coeff, dtype=NP_FLOAT)
@@ -725,6 +725,17 @@ def _mean_2x2_with_mask(values_pad: np.ndarray, mask_pad: np.ndarray) -> np.ndar
     return out.astype(NP_FLOAT, copy=False)
 
 
+def _sum_2x2_with_mask(values_pad: np.ndarray, mask_pad: np.ndarray) -> np.ndarray:
+    ny_c = int(values_pad.shape[0] // 2)
+    nx_c = int(values_pad.shape[1] // 2)
+
+    v_blk = np.asarray(values_pad, dtype=np.float64).reshape(ny_c, 2, nx_c, 2)
+    m_blk = np.asarray(mask_pad, dtype=np.float64).reshape(ny_c, 2, nx_c, 2)
+
+    out = (v_blk * m_blk).sum(axis=(1, 3), dtype=np.float64)
+    return out.astype(NP_FLOAT, copy=False)
+
+
 def _coarsen_active_mask_2x2(active_pad: np.ndarray, valid_pad: np.ndarray) -> np.ndarray:
     ny_c = int(active_pad.shape[0] // 2)
     nx_c = int(active_pad.shape[1] // 2)
@@ -882,7 +893,7 @@ def _coarsen_level_host_2x2(
             dtype=NP_FLOAT,
             fill_value=0.0,
         )
-        storage_diag_c = _mean_2x2_with_mask(values_pad=storage_diag_pad, mask_pad=valid_pad)
+        storage_diag_c = _sum_2x2_with_mask(values_pad=storage_diag_pad, mask_pad=valid_pad)
         storage_diag_c = np.asarray(storage_diag_c, dtype=NP_FLOAT)
         storage_diag_c[inactive] = NP_FLOAT(0.0)
         storage_diag_c[bc_mask_c != 0] = NP_FLOAT(0.0)
@@ -907,6 +918,68 @@ def _coarsen_level_host_2x2(
         ghb_factor_c,
         storage_diag_c,
     )
+
+
+def _select_unconfined_inner_max_cycles(
+    *,
+    previous_dh_measure: float | None,
+    early_cycles: int,
+    middle_cycles: int,
+    late_cycles: int,
+    middle_dh: float,
+    late_dh: float,
+) -> int:
+    """
+    Choose an adaptive inner K-cycle cap for the transient unconfined Picard loop.
+
+    :param previous_dh_measure: Previous outer head-change measure, usually max abs dh.
+    :param early_cycles: Inner-cycle cap for early Picard iterations.
+    :param middle_cycles: Inner-cycle cap for middle Picard iterations.
+    :param late_cycles: Inner-cycle cap for late Picard iterations.
+    :param middle_dh: Threshold above which the solve remains in the early phase.
+    :param late_dh: Threshold above which the solve remains in the middle phase.
+    :return: Selected inner-cycle cap.
+    """
+    if previous_dh_measure is None or not np.isfinite(float(previous_dh_measure)):
+        return int(early_cycles)
+    dh_value = float(previous_dh_measure)
+    if dh_value > float(middle_dh):
+        return int(early_cycles)
+    if dh_value > float(late_dh):
+        return int(middle_cycles)
+    return int(late_cycles)
+
+
+def _format_unaccepted_transient_period_error(
+    *,
+    period_index: int,
+    outer_iterations: int,
+    final_max_abs_head_change: float,
+    final_rms_head_change: float,
+    final_head_residual_rms: float,
+    final_flow_residual_rms: float,
+    storage_diag_change_max: float,
+    storage_diag_change_rms: float,
+    storage_mode: str,
+    storage_reference: str,
+) -> str:
+    """
+    Format a compact transient period production-acceptance failure message.
+    """
+    return (
+        "Transient unconfined period did not achieve production acceptance: "
+        f"period_index={int(period_index)} "
+        f"outer_iterations={int(outer_iterations)} "
+        f"final_max_abs_head_change={float(final_max_abs_head_change):.6g} "
+        f"final_rms_head_change={float(final_rms_head_change):.6g} "
+        f"final_head_residual_rms={float(final_head_residual_rms):.6g} "
+        f"final_flow_residual_rms={float(final_flow_residual_rms):.6g} "
+        f"storage_diag_change_max={float(storage_diag_change_max):.6g} "
+        f"storage_diag_change_rms={float(storage_diag_change_rms):.6g} "
+        f"storage_mode={storage_mode} "
+        f"storage_reference={storage_reference}"
+    )
+
 
 @wp.kernel
 def jacobi_applyA_fused_kernel(
@@ -1230,6 +1303,93 @@ def compute_head_residual_kernel(
 
 
 @wp.kernel
+def compute_dual_residual_kernel(
+    x: wp.array(dtype=WP_FLOAT, ndim=2),
+    b: wp.array(dtype=WP_FLOAT, ndim=2),
+    T_field: wp.array(dtype=WP_FLOAT, ndim=2),
+    active: wp.array(dtype=wp.int32, ndim=2),
+    bc_mask: wp.array(dtype=wp.int32, ndim=2),
+    gh_mask: wp.array(dtype=wp.int32, ndim=2),
+    ghb_factor: wp.array(dtype=WP_FLOAT, ndim=2),
+    storage_diag: wp.array(dtype=WP_FLOAT, ndim=2),
+    flow_rTr_buf: wp.array(dtype=wp.float64, ndim=1),
+    head_rTr_buf: wp.array(dtype=wp.float64, ndim=1),
+    nx: int,
+    ny: int,
+):
+    j, i = wp.tid()
+    if j >= ny or i >= nx:
+        return
+    if active[j, i] == 0 or bc_mask[j, i] != 0:
+        return
+
+    tiny = wp.float64(1.0e-12)
+    T_c = wp.float64(T_field[j, i])
+    hC = wp.float64(x[j, i])
+
+    hE = wp.float64(0.0)
+    hW = wp.float64(0.0)
+    hN = wp.float64(0.0)
+    hS = wp.float64(0.0)
+    T_e = wp.float64(0.0)
+    T_w = wp.float64(0.0)
+    T_n = wp.float64(0.0)
+    T_s = wp.float64(0.0)
+
+    if i + 1 < nx and active[j, i + 1] != 0:
+        T_nb = wp.float64(T_field[j, i + 1])
+        hE = wp.float64(x[j, i + 1])
+        if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
+            T_e = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+    if i - 1 >= 0 and active[j, i - 1] != 0:
+        T_nb = wp.float64(T_field[j, i - 1])
+        hW = wp.float64(x[j, i - 1])
+        if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
+            T_w = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+    if j - 1 >= 0 and active[j - 1, i] != 0:
+        T_nb = wp.float64(T_field[j - 1, i])
+        hN = wp.float64(x[j - 1, i])
+        if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
+            T_n = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+    if j + 1 < ny and active[j + 1, i] != 0:
+        T_nb = wp.float64(T_field[j + 1, i])
+        hS = wp.float64(x[j + 1, i])
+        if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
+            T_s = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+
+    C_gh = wp.float64(0.0)
+    if gh_mask[j, i] != 0:
+        ghbf = wp.float64(ghb_factor[j, i])
+        if ghbf > wp.float64(0.0) and not wp.isnan(ghbf):
+            C_gh = T_c * ghbf
+
+    diagA = T_e + T_w + T_n + T_s + C_gh + wp.float64(storage_diag[j, i])
+    Ax64 = wp.float64(0.0)
+    flow_residual = wp.float64(0.0)
+    head_residual = wp.float64(0.0)
+
+    if diagA < tiny:
+        Ax64 = hC
+        flow_residual = wp.float64(b[j, i]) - Ax64
+        head_residual = flow_residual
+    else:
+        Ax64 = diagA * hC
+        if T_e > wp.float64(0.0):
+            Ax64 = Ax64 - T_e * hE
+        if T_w > wp.float64(0.0):
+            Ax64 = Ax64 - T_w * hW
+        if T_n > wp.float64(0.0):
+            Ax64 = Ax64 - T_n * hN
+        if T_s > wp.float64(0.0):
+            Ax64 = Ax64 - T_s * hS
+        flow_residual = wp.float64(b[j, i]) - Ax64
+        head_residual = flow_residual / diagA
+
+    wp.atomic_add(flow_rTr_buf, 0, flow_residual * flow_residual)
+    wp.atomic_add(head_rTr_buf, 0, head_residual * head_residual)
+
+
+@wp.kernel
 def compute_residual_kernel(
     x: wp.array(dtype=WP_FLOAT, ndim=2),
     b: wp.array(dtype=WP_FLOAT, ndim=2),
@@ -1332,6 +1492,7 @@ def kcycle_check_dh_and_residual_kernel(
     dh2_buf: wp.array(dtype=wp.float64, ndim=1),
     dh_max_buf: wp.array(dtype=wp.float64, ndim=1),
     rTr_buf: wp.array(dtype=wp.float64, ndim=1),
+    use_ghb: int,
     nx: int,
     ny: int,
 ):
@@ -1392,7 +1553,7 @@ def kcycle_check_dh_and_residual_kernel(
             T_s = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
 
     C_gh = wp.float64(0.0)
-    if gh_mask[j, i] != 0:
+    if use_ghb != 0 and gh_mask[j, i] != 0:
         ghbf = wp.float64(ghb_factor[j, i])
         if ghbf > wp.float64(0.0) and not wp.isnan(ghbf):
             C_gh = T_c * ghbf
@@ -1415,6 +1576,107 @@ def kcycle_check_dh_and_residual_kernel(
 
     rf64 = wp.float64(b[j, i]) - Ax64
     wp.atomic_add(rTr_buf, 0, rf64 * rf64)
+
+
+@wp.kernel
+def kcycle_check_dh_and_dual_residual_kernel(
+    x: wp.array(dtype=WP_FLOAT, ndim=2),
+    x_prev: wp.array(dtype=WP_FLOAT, ndim=2),
+    b: wp.array(dtype=WP_FLOAT, ndim=2),
+    T_field: wp.array(dtype=WP_FLOAT, ndim=2),
+    active: wp.array(dtype=wp.int32, ndim=2),
+    bc_mask: wp.array(dtype=wp.int32, ndim=2),
+    gh_mask: wp.array(dtype=wp.int32, ndim=2),
+    ghb_factor: wp.array(dtype=WP_FLOAT, ndim=2),
+    storage_diag: wp.array(dtype=WP_FLOAT, ndim=2),
+    dh2_buf: wp.array(dtype=wp.float64, ndim=1),
+    dh_max_buf: wp.array(dtype=wp.float64, ndim=1),
+    flow_rTr_buf: wp.array(dtype=wp.float64, ndim=1),
+    head_rTr_buf: wp.array(dtype=wp.float64, ndim=1),
+    use_ghb: int,
+    nx: int,
+    ny: int,
+):
+    j, i = wp.tid()
+    if j >= ny or i >= nx:
+        return
+
+    x_new = wp.float64(x[j, i])
+    x_old = wp.float64(x_prev[j, i])
+    x_prev[j, i] = x[j, i]
+
+    if active[j, i] == 0 or bc_mask[j, i] != 0:
+        return
+
+    dh = x_new - x_old
+    abs_dh = wp.abs(dh)
+    wp.atomic_add(dh2_buf, 0, dh * dh)
+    wp.atomic_max(dh_max_buf, 0, abs_dh)
+
+    tiny = wp.float64(1.0e-12)
+    T_c = wp.float64(T_field[j, i])
+    hC = x_new
+
+    hE = wp.float64(0.0)
+    hW = wp.float64(0.0)
+    hN = wp.float64(0.0)
+    hS = wp.float64(0.0)
+    T_e = wp.float64(0.0)
+    T_w = wp.float64(0.0)
+    T_n = wp.float64(0.0)
+    T_s = wp.float64(0.0)
+
+    if i + 1 < nx and active[j, i + 1] != 0:
+        T_nb = wp.float64(T_field[j, i + 1])
+        hE = wp.float64(x[j, i + 1])
+        if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
+            T_e = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+    if i - 1 >= 0 and active[j, i - 1] != 0:
+        T_nb = wp.float64(T_field[j, i - 1])
+        hW = wp.float64(x[j, i - 1])
+        if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
+            T_w = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+    if j - 1 >= 0 and active[j - 1, i] != 0:
+        T_nb = wp.float64(T_field[j - 1, i])
+        hN = wp.float64(x[j - 1, i])
+        if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
+            T_n = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+    if j + 1 < ny and active[j + 1, i] != 0:
+        T_nb = wp.float64(T_field[j + 1, i])
+        hS = wp.float64(x[j + 1, i])
+        if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
+            T_s = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+
+    C_gh = wp.float64(0.0)
+    if use_ghb != 0 and gh_mask[j, i] != 0:
+        ghbf = wp.float64(ghb_factor[j, i])
+        if ghbf > wp.float64(0.0) and not wp.isnan(ghbf):
+            C_gh = T_c * ghbf
+
+    diagA = T_e + T_w + T_n + T_s + C_gh + wp.float64(storage_diag[j, i])
+    Ax64 = wp.float64(0.0)
+    flow_residual = wp.float64(0.0)
+    head_residual = wp.float64(0.0)
+
+    if diagA < tiny:
+        Ax64 = hC
+        flow_residual = wp.float64(b[j, i]) - Ax64
+        head_residual = flow_residual
+    else:
+        Ax64 = diagA * hC
+        if T_e > wp.float64(0.0):
+            Ax64 = Ax64 - T_e * hE
+        if T_w > wp.float64(0.0):
+            Ax64 = Ax64 - T_w * hW
+        if T_n > wp.float64(0.0):
+            Ax64 = Ax64 - T_n * hN
+        if T_s > wp.float64(0.0):
+            Ax64 = Ax64 - T_s * hS
+        flow_residual = wp.float64(b[j, i]) - Ax64
+        head_residual = flow_residual / diagA
+
+    wp.atomic_add(flow_rTr_buf, 0, flow_residual * flow_residual)
+    wp.atomic_add(head_rTr_buf, 0, head_residual * head_residual)
 
 
 def build_rhs_fd_like(
@@ -2376,6 +2638,7 @@ def kcycle_check_dh_and_residual_no_storage_kernel(
     dh2_buf: wp.array(dtype=wp.float64, ndim=1),
     dh_max_buf: wp.array(dtype=wp.float64, ndim=1),
     rTr_buf: wp.array(dtype=wp.float64, ndim=1),
+    use_ghb: int,
     nx: int,
     ny: int,
 ):
@@ -2435,7 +2698,7 @@ def kcycle_check_dh_and_residual_no_storage_kernel(
             T_s = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
 
     C_gh = wp.float64(0.0)
-    if gh_mask[j, i] != 0:
+    if use_ghb != 0 and gh_mask[j, i] != 0:
         ghbf = wp.float64(ghb_factor[j, i])
         if ghbf > wp.float64(0.0) and not wp.isnan(ghbf):
             C_gh = T_c * ghbf
@@ -2972,6 +3235,74 @@ def copy_field_kernel(
 
 
 @wp.kernel
+def apply_relaxed_clipped_picard_update_kernel(
+    candidate_head: wp.array(dtype=WP_FLOAT, ndim=2),
+    previous_head: wp.array(dtype=WP_FLOAT, ndim=2),
+    active: wp.array(dtype=wp.int32, ndim=2),
+    bc_mask: wp.array(dtype=wp.int32, ndim=2),
+    bc_values: wp.array(dtype=WP_FLOAT, ndim=2),
+    omega: WP_FLOAT,
+    max_head_change: WP_FLOAT,
+    nx: int,
+    ny: int,
+    output_head: wp.array(dtype=WP_FLOAT, ndim=2),
+):
+    j, i = wp.tid()
+    if j >= ny or i >= nx:
+        return
+
+    if active[j, i] == 0:
+        output_head[j, i] = WP_FLOAT(0.0)
+        return
+
+    if bc_mask[j, i] != 0:
+        output_head[j, i] = bc_values[j, i]
+        return
+
+    raw_update = omega * (candidate_head[j, i] - previous_head[j, i])
+    if wp.isnan(raw_update):
+        raw_update = WP_FLOAT(0.0)
+    if raw_update > max_head_change:
+        raw_update = max_head_change
+    elif raw_update < -max_head_change:
+        raw_update = -max_head_change
+    output_head[j, i] = previous_head[j, i] + raw_update
+
+
+@wp.kernel
+def clamp_unconfined_head_kernel(
+    head: wp.array(dtype=WP_FLOAT, ndim=2),
+    bottom: wp.array(dtype=WP_FLOAT, ndim=2),
+    top: wp.array(dtype=WP_FLOAT, ndim=2),
+    active: wp.array(dtype=wp.int32, ndim=2),
+    bc_mask: wp.array(dtype=wp.int32, ndim=2),
+    bc_values: wp.array(dtype=WP_FLOAT, ndim=2),
+    min_sat: WP_FLOAT,
+    nx: int,
+    ny: int,
+):
+    j, i = wp.tid()
+    if j >= ny or i >= nx:
+        return
+    if active[j, i] == 0:
+        head[j, i] = WP_FLOAT(0.0)
+        return
+    if bc_mask[j, i] != 0:
+        head[j, i] = bc_values[j, i]
+        return
+    lower = bottom[j, i] + min_sat
+    upper = top[j, i]
+    h = head[j, i]
+    if wp.isnan(h):
+        h = lower
+    if h < lower:
+        h = lower
+    if h > upper:
+        h = upper
+    head[j, i] = h
+
+
+@wp.kernel
 def fill_uniform_recharge_kernel(
     R: wp.array(dtype=WP_FLOAT, ndim=2),
     active: wp.array(dtype=wp.int32, ndim=2),
@@ -2986,6 +3317,166 @@ def fill_uniform_recharge_kernel(
         R[j, i] = recharge_value
     else:
         R[j, i] = WP_FLOAT(0.0)
+
+
+@wp.kernel
+def update_unconfined_transmissivity_from_head_kernel(
+    head: wp.array(dtype=WP_FLOAT, ndim=2),
+    k_field: wp.array(dtype=WP_FLOAT, ndim=2),
+    bottom: wp.array(dtype=WP_FLOAT, ndim=2),
+    top: wp.array(dtype=WP_FLOAT, ndim=2),
+    active: wp.array(dtype=wp.int32, ndim=2),
+    min_sat: WP_FLOAT,
+    nx: int,
+    ny: int,
+    T_out: wp.array(dtype=WP_FLOAT, ndim=2),
+):
+    j, i = wp.tid()
+    if j >= ny or i >= nx:
+        return
+    if active[j, i] == 0:
+        T_out[j, i] = WP_FLOAT(0.0)
+        return
+    full = wp.max(top[j, i] - bottom[j, i], min_sat)
+    sat = wp.min(wp.max(head[j, i] - bottom[j, i], min_sat), full)
+    T_out[j, i] = k_field[j, i] * sat
+
+
+@wp.kernel
+def update_secant_sy_storage_kernel(
+    head_ref: wp.array(dtype=WP_FLOAT, ndim=2),
+    head_prev: wp.array(dtype=WP_FLOAT, ndim=2),
+    bottom: wp.array(dtype=WP_FLOAT, ndim=2),
+    top: wp.array(dtype=WP_FLOAT, ndim=2),
+    active: wp.array(dtype=wp.int32, ndim=2),
+    bc_mask: wp.array(dtype=wp.int32, ndim=2),
+    sy: WP_FLOAT,
+    ss: WP_FLOAT,
+    dx: WP_FLOAT,
+    dt: WP_FLOAT,
+    min_sat: WP_FLOAT,
+    eps: WP_FLOAT,
+    nx: int,
+    ny: int,
+    storage_coeff_out: wp.array(dtype=WP_FLOAT, ndim=2),
+    sy_coeff_out: wp.array(dtype=WP_FLOAT, ndim=2),
+    ss_coeff_out: wp.array(dtype=WP_FLOAT, ndim=2),
+    storage_diag_out: wp.array(dtype=WP_FLOAT, ndim=2),
+    storage_diag_prev: wp.array(dtype=WP_FLOAT, ndim=2),
+    storage_change_sum_sq: wp.array(dtype=wp.float64, ndim=1),
+    storage_change_max: wp.array(dtype=wp.float64, ndim=1),
+):
+    j, i = wp.tid()
+    if j >= ny or i >= nx:
+        return
+    if active[j, i] == 0 or bc_mask[j, i] != 0:
+        storage_coeff_out[j, i] = WP_FLOAT(0.0)
+        sy_coeff_out[j, i] = WP_FLOAT(0.0)
+        ss_coeff_out[j, i] = WP_FLOAT(0.0)
+        storage_diag_out[j, i] = WP_FLOAT(0.0)
+        return
+
+    full = wp.max(top[j, i] - bottom[j, i], min_sat)
+    sat_old = wp.min(wp.max(head_prev[j, i] - bottom[j, i], WP_FLOAT(0.0)), full)
+    sat_ref_zero = wp.min(wp.max(head_ref[j, i] - bottom[j, i], WP_FLOAT(0.0)), full)
+    sat_ref_ss = wp.min(wp.max(head_ref[j, i] - bottom[j, i], min_sat), full)
+    dh = head_ref[j, i] - head_prev[j, i]
+
+    sy_coeff = WP_FLOAT(0.0)
+    if wp.abs(dh) > eps:
+        sy_coeff = sy * ((sat_ref_zero - sat_old) / dh)
+    elif head_ref[j, i] > bottom[j, i] and head_ref[j, i] < top[j, i]:
+        sy_coeff = sy
+
+    sy_coeff = wp.min(wp.max(sy_coeff, WP_FLOAT(0.0)), sy)
+    ss_coeff = ss * sat_ref_ss
+    storage_coeff = sy_coeff + ss_coeff
+    storage_diag = storage_coeff * dx * dx / dt
+    delta = wp.float64(storage_diag - storage_diag_prev[j, i])
+
+    sy_coeff_out[j, i] = sy_coeff
+    ss_coeff_out[j, i] = ss_coeff
+    storage_coeff_out[j, i] = storage_coeff
+    storage_diag_out[j, i] = storage_diag
+    wp.atomic_add(storage_change_sum_sq, 0, delta * delta)
+    wp.atomic_max(storage_change_max, 0, wp.abs(delta))
+
+
+@wp.kernel
+def build_transient_rhs_from_storage_kernel(
+    recharge_rate: wp.array(dtype=WP_FLOAT, ndim=2),
+    storage_diag: wp.array(dtype=WP_FLOAT, ndim=2),
+    head_prev: wp.array(dtype=WP_FLOAT, ndim=2),
+    active: wp.array(dtype=wp.int32, ndim=2),
+    bc_mask: wp.array(dtype=wp.int32, ndim=2),
+    bc_values: wp.array(dtype=WP_FLOAT, ndim=2),
+    dx: WP_FLOAT,
+    nx: int,
+    ny: int,
+    rhs_out: wp.array(dtype=WP_FLOAT, ndim=2),
+):
+    j, i = wp.tid()
+    if j >= ny or i >= nx:
+        return
+    if active[j, i] == 0:
+        rhs_out[j, i] = WP_FLOAT(0.0)
+    elif bc_mask[j, i] != 0:
+        rhs_out[j, i] = bc_values[j, i]
+    else:
+        rhs_out[j, i] = recharge_rate[j, i] * dx * dx + storage_diag[j, i] * head_prev[j, i]
+
+
+@wp.kernel
+def coarsen_transient_operator_level_kernel(
+    T_f: wp.array(dtype=WP_FLOAT, ndim=2),
+    storage_diag_f: wp.array(dtype=WP_FLOAT, ndim=2),
+    active_f: wp.array(dtype=wp.int32, ndim=2),
+    active_c: wp.array(dtype=wp.int32, ndim=2),
+    bc_mask_c: wp.array(dtype=wp.int32, ndim=2),
+    nx_f: int,
+    ny_f: int,
+    nx_c: int,
+    ny_c: int,
+    T_c_out: wp.array(dtype=WP_FLOAT, ndim=2),
+    storage_diag_c_out: wp.array(dtype=WP_FLOAT, ndim=2),
+):
+    j, i = wp.tid()
+    if j >= ny_c or i >= nx_c:
+        return
+
+    if active_c[j, i] == 0:
+        T_c_out[j, i] = WP_FLOAT(0.0)
+        storage_diag_c_out[j, i] = WP_FLOAT(0.0)
+        return
+
+    inv_sum = wp.float64(0.0)
+    count = wp.int32(0)
+    storage_sum = wp.float64(0.0)
+
+    for dj in range(2):
+        fj = j * 2 + dj
+        if fj >= ny_f:
+            continue
+        for di in range(2):
+            fi = i * 2 + di
+            if fi >= nx_f:
+                continue
+            storage_sum = storage_sum + wp.float64(storage_diag_f[fj, fi])
+            if active_f[fj, fi] != 0:
+                t_val = wp.float64(T_f[fj, fi])
+                if t_val > wp.float64(0.0) and not wp.isnan(t_val):
+                    inv_sum = inv_sum + wp.float64(1.0) / t_val
+                    count = count + wp.int32(1)
+
+    if count > wp.int32(0) and inv_sum > wp.float64(0.0):
+        T_c_out[j, i] = WP_FLOAT(wp.float64(count) / inv_sum)
+    else:
+        T_c_out[j, i] = WP_FLOAT(0.0)
+
+    if bc_mask_c[j, i] != 0:
+        storage_diag_c_out[j, i] = WP_FLOAT(0.0)
+    else:
+        storage_diag_c_out[j, i] = WP_FLOAT(storage_sum)
 
 
 @wp.kernel
@@ -5016,6 +5507,66 @@ class WarpDarcySolver:
                 device=self.device_str,
             )
 
+    def _refresh_transient_device_hierarchy_values(
+        self,
+        *,
+        levels,
+    ) -> None:
+        """
+        Refresh dynamic transient operator values on device-only K-cycle levels.
+
+        The transient fast path updates the fine-grid transmissivity and storage
+        diagonal in device buffers. Coarse masks and hierarchy topology are
+        static, but coarse transmissivity, storage diagonal, and diagonal
+        preconditioner values must track the current Picard linearisation.
+
+        :param levels: Multigrid levels whose level 0 arrays are already current.
+        """
+        if levels is None or len(levels) <= 1:
+            return
+        if self.use_ghb:
+            raise NotImplementedError(
+                "device-side transient fast path does not yet support GHB RHS/coarse refresh assembly"
+            )
+
+        device = self.device_str
+        for lid in range(1, len(levels)):
+            fine = levels[lid - 1]
+            coarse = levels[lid]
+            if getattr(fine, "storage_diag_wp", None) is None or getattr(coarse, "storage_diag_wp", None) is None:
+                raise RuntimeError("transient device hierarchy is missing storage diagonal buffers")
+
+            wp.launch(
+                kernel=coarsen_transient_operator_level_kernel,
+                dim=(int(coarse.ny), int(coarse.nx)),
+                inputs=[
+                    fine.T_wp,
+                    fine.storage_diag_wp,
+                    fine.active_wp,
+                    coarse.active_wp,
+                    coarse.bc_mask_wp,
+                    int(fine.nx),
+                    int(fine.ny),
+                    int(coarse.nx),
+                    int(coarse.ny),
+                    coarse.T_wp,
+                    coarse.storage_diag_wp,
+                ],
+                device=device,
+            )
+            self._update_diag_preconditioner_device(
+                T_wp=coarse.T_wp,
+                active_wp=coarse.active_wp,
+                bc_mask_wp=coarse.bc_mask_wp,
+                gh_mask_wp=coarse.gh_mask_wp,
+                ghb_factor_wp=coarse.ghb_factor_wp,
+                M_inv_wp=coarse.M_inv_wp,
+                nx=int(coarse.nx),
+                ny=int(coarse.ny),
+                use_ghb=False,
+                storage_diag_wp=coarse.storage_diag_wp,
+            )
+
     def _validate_device_diag_preconditioner(
         self,
         *,
@@ -6424,6 +6975,562 @@ class WarpDarcySolver:
 
         self._operator_dirty = True
 
+
+
+    def _solve_multigrid_kcycle_device_buffers(
+        self,
+        *,
+        x_wp,
+        rhs_wp,
+        T_wp,
+        storage_diag_wp,
+        active_wp,
+        bc_mask_wp,
+        bc_values_wp,
+        levels,
+        solve_controls,
+        return_scalar_info=True,
+    ):
+        device = self.device_str
+
+        max_cycles_i = int(solve_controls.get("max_cycles", 20))
+        nu_pre = int(solve_controls.get("nu_pre", 2))
+        nu_post = int(solve_controls.get("nu_post", 2))
+        nu_coarse = int(solve_controls.get("nu_coarse", 30))
+        omega = float(solve_controls.get("omega", 0.8))
+        rel_tol = float(solve_controls.get("rel_tol", 5.0e-7))
+        abs_tol_min = float(solve_controls.get("abs_tol_min", 5.0e-7))
+
+        dh_rms_tol_f = solve_controls.get("dh_rms_tol", 1.0e-4)
+        if dh_rms_tol_f is not None: dh_rms_tol_f = float(dh_rms_tol_f)
+        dh_max_tol = solve_controls.get("dh_max_tol", None)
+        if dh_max_tol is not None: dh_max_tol = float(dh_max_tol)
+
+        smoother_mode = str(solve_controls.get("smoother", "chebyshev")).strip().lower()
+        cheby_lambda_min = float(solve_controls.get("cheby_lambda_min", 0.05))
+        cheby_lambda_max = float(solve_controls.get("cheby_lambda_max", 1.95))
+        coarse_operator_mode = str(
+            solve_controls.get("coarse_operator_mode", "stale_approximate_preconditioner")
+        )
+
+        if smoother_mode == "chebyshev":
+            pre_omegas = _chebyshev_relaxation_sequence(nu_pre, cheby_lambda_min, cheby_lambda_max)
+            post_omegas = _chebyshev_relaxation_sequence(nu_post, cheby_lambda_min, cheby_lambda_max)
+        else:
+            pre_omegas = tuple(omega for _ in range(nu_pre))
+            post_omegas = tuple(omega for _ in range(nu_post))
+        if len(pre_omegas) == 0: pre_omegas = (float(omega),)
+        if len(post_omegas) == 0: post_omegas = (float(omega),)
+
+        lvl0 = levels[0]
+        nx0 = int(lvl0.nx)
+        ny0 = int(lvl0.ny)
+        dim0 = (ny0, nx0)
+
+        # Wire buffers
+        lvl0.x_wp = x_wp
+        lvl0.b_wp = rhs_wp
+        lvl0.T_wp = T_wp
+        lvl0.storage_diag_wp = storage_diag_wp
+        lvl0.active_wp = active_wp
+        lvl0.bc_mask_wp = bc_mask_wp
+        lvl0.bc_values_wp = bc_values_wp
+
+        wp.launch(
+            kernel=copy_field_kernel,
+            dim=dim0,
+            inputs=[lvl0.x_wp, lvl0.x_prev_wp, nx0, ny0],
+            device=device,
+        )
+
+        for k in range(1, len(levels)):
+            levels[k].x_wp.fill_(WP_FLOAT(0.0))
+            levels[k].b_wp.fill_(WP_FLOAT(0.0))
+            levels[k].r_wp.fill_(WP_FLOAT(0.0))
+            levels[k].Ax_wp.fill_(WP_FLOAT(0.0))
+            levels[k].e_wp.fill_(WP_FLOAT(0.0))
+            levels[k].z_wp.fill_(WP_FLOAT(0.0))
+            levels[k].p_wp.fill_(WP_FLOAT(0.0))
+            levels[k].Ap_wp.fill_(WP_FLOAT(0.0))
+            levels[k].rTr_buf.fill_(0.0)
+            levels[k].rho_buf.fill_(0.0)
+            levels[k].rho_new_buf.fill_(0.0)
+            levels[k].pAp_buf.fill_(0.0)
+            levels[k].alpha_buf.fill_(0.0)
+            levels[k].beta_buf.fill_(0.0)
+            levels[k].converged_flag.fill_(0)
+            if getattr(levels[k], "dh_max_buf", None) is not None:
+                levels[k].dh_max_buf.fill_(0.0)
+            if getattr(levels[k], "x_prev_wp", None) is not None:
+                levels[k].x_prev_wp.fill_(WP_FLOAT(0.0))
+
+        gpu_scalar_sync_count = 0
+
+        # We must count free cells
+        n_free0 = int(np.count_nonzero((self.active_host != 0) & (self.bc_mask_host == 0)))
+        if n_free0 <= 0:
+            return {
+                "converged": True,
+                "n_cycles_used": 0,
+                "r_rms_end": 0.0,
+                "h_rms_end": 0.0,
+                "gpu_scalar_synchronization_count": 0,
+                "coarse_operator_mode": coarse_operator_mode,
+                "fine_operator_residual_checked": True,
+            }
+
+        wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[lvl0.rTr_buf], device=device)
+        if storage_diag_wp is not None:
+            _cr_k = compute_residual_kernel
+            _cr_in = [
+                lvl0.x_wp, lvl0.b_wp, lvl0.T_wp, lvl0.active_wp, lvl0.bc_mask_wp,
+                lvl0.gh_mask_wp, lvl0.ghb_factor_wp, storage_diag_wp,
+                lvl0.r_wp, lvl0.rTr_buf, nx0, ny0
+            ]
+        else:
+            _cr_k = compute_residual_no_storage_kernel
+            _cr_in = [
+                lvl0.x_wp, lvl0.b_wp, lvl0.T_wp, lvl0.active_wp, lvl0.bc_mask_wp,
+                lvl0.gh_mask_wp, lvl0.ghb_factor_wp,
+                lvl0.r_wp, lvl0.rTr_buf, nx0, ny0
+            ]
+        wp.launch(kernel=_cr_k, dim=dim0, inputs=_cr_in, device=device)
+        rTr0 = float(lvl0.rTr_buf.numpy()[0])
+        gpu_scalar_sync_count += 1
+        r_rms0 = float(np.sqrt(max(rTr0, 0.0) / float(n_free0)))
+        tol_abs = float(max(abs_tol_min, rel_tol * r_rms0))
+        thr_rTr = float((tol_abs * tol_abs) * float(n_free0))
+
+        if rTr0 <= thr_rTr:
+            return {"converged": True, "n_cycles_used": 0, "r_rms_end": r_rms0}
+
+        def pcg_solve_level(level, max_iter_level: int):
+            nxL = int(level.nx)
+            nyL = int(level.ny)
+            dimL = (nyL, nxL)
+
+            wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[level.rho_buf], device=device)
+            wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[level.rTr_buf], device=device)
+
+            _ipcga_in = [
+                level.x_wp, level.b_wp, level.T_wp, level.active_wp, level.bc_mask_wp,
+                level.gh_mask_wp, level.ghb_factor_wp,
+            ]
+            if storage_diag_wp is not None and level is lvl0:
+                _ipcga_k = init_pcg_with_A_kernel
+                _ipcga_in.append(storage_diag_wp)
+            elif getattr(level, "storage_diag_wp", None) is not None:
+                _ipcga_k = init_pcg_with_A_kernel
+                _ipcga_in.append(level.storage_diag_wp)
+            else:
+                _ipcga_k = init_pcg_with_A_no_storage_kernel
+
+            _ipcga_in += [
+                level.M_inv_wp, level.Ap_wp, level.r_wp, level.z_wp, level.p_wp,
+                level.rho_buf, level.rTr_buf, nxL, nyL,
+            ]
+            wp.launch(kernel=_ipcga_k, dim=dimL, inputs=_ipcga_in, device=device)
+
+            for _ in range(int(max_iter_level)):
+                wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[level.pAp_buf], device=device)
+
+                _aap_in = [
+                    level.T_wp, level.active_wp, level.bc_mask_wp, level.gh_mask_wp,
+                    level.ghb_factor_wp,
+                ]
+                if storage_diag_wp is not None and level is lvl0:
+                    _aap_k = apply_A_and_pAp_kernel
+                    _aap_in.append(storage_diag_wp)
+                elif getattr(level, "storage_diag_wp", None) is not None:
+                    _aap_k = apply_A_and_pAp_kernel
+                    _aap_in.append(level.storage_diag_wp)
+                else:
+                    _aap_k = apply_A_and_pAp_no_storage_kernel
+                _aap_in += [level.p_wp, level.Ap_wp, level.pAp_buf, nxL, nyL]
+                wp.launch(kernel=_aap_k, dim=dimL, inputs=_aap_in, device=device)
+
+                wp.launch(
+                    kernel=compute_alpha_kernel,
+                    dim=1,
+                    inputs=[level.rho_buf, level.pAp_buf, level.alpha_buf],
+                    device=device,
+                )
+
+                wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[level.rho_new_buf], device=device)
+                wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[level.rTr_buf], device=device)
+
+                wp.launch(
+                    kernel=update_x_r_z_rho_rTr_kernel,
+                    dim=dimL,
+                    inputs=[
+                        level.x_wp,
+                        level.r_wp,
+                        level.z_wp,
+                        level.p_wp,
+                        level.Ap_wp,
+                        level.M_inv_wp,
+                        level.active_wp,
+                        level.bc_mask_wp,
+                        level.alpha_buf,
+                        level.rho_new_buf,
+                        level.rTr_buf,
+                        nxL,
+                        nyL,
+                    ],
+                    device=device,
+                )
+
+                wp.launch(
+                    kernel=compute_beta_and_update_rho_kernel,
+                    dim=1,
+                    inputs=[level.rho_buf, level.rho_new_buf, level.beta_buf],
+                    device=device,
+                )
+
+                wp.launch(
+                    kernel=update_p_kernel,
+                    dim=dimL,
+                    inputs=[
+                        level.p_wp,
+                        level.z_wp,
+                        level.active_wp,
+                        level.bc_mask_wp,
+                        level.beta_buf,
+                        nxL,
+                        nyL,
+                    ],
+                    device=device,
+                )
+
+        def kcycle(level_id: int):
+            level = levels[level_id]
+            nxL = int(level.nx)
+            nyL = int(level.ny)
+            dimL = (nyL, nxL)
+
+            x_tmp_wp = level.Ax_wp
+            x_in = level.x_wp
+            x_out = x_tmp_wp
+
+            for omega_step in pre_omegas:
+                _jac_in = [
+                    level.T_wp, level.active_wp, level.bc_mask_wp, level.gh_mask_wp,
+                    level.ghb_factor_wp,
+                ]
+                if storage_diag_wp is not None and level is lvl0:
+                    _jac_k = jacobi_applyA_fused_kernel
+                    _jac_in.append(storage_diag_wp)
+                elif getattr(level, "storage_diag_wp", None) is not None:
+                    _jac_k = jacobi_applyA_fused_kernel
+                    _jac_in.append(level.storage_diag_wp)
+                else:
+                    _jac_k = jacobi_applyA_fused_no_storage_kernel
+                _jac_in += [
+                    level.b_wp, x_in, level.M_inv_wp, level.bc_values_wp,
+                    float(omega_step), nxL, nyL, x_out,
+                ]
+                wp.launch(kernel=_jac_k, dim=dimL, inputs=_jac_in, device=device)
+                tmp = x_in
+                x_in = x_out
+                x_out = tmp
+
+            if x_in is not level.x_wp:
+                wp.launch(kernel=copy_field_kernel, dim=dimL, inputs=[x_in, level.x_wp, nxL, nyL], device=device)
+
+            wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[level.rTr_buf], device=device)
+            _cr_in = [
+                level.x_wp, level.b_wp, level.T_wp, level.active_wp, level.bc_mask_wp,
+                level.gh_mask_wp, level.ghb_factor_wp,
+            ]
+            if storage_diag_wp is not None and level is lvl0:
+                _cr_k = compute_residual_kernel
+                _cr_in.append(storage_diag_wp)
+            elif getattr(level, "storage_diag_wp", None) is not None:
+                _cr_k = compute_residual_kernel
+                _cr_in.append(level.storage_diag_wp)
+            else:
+                _cr_k = compute_residual_no_storage_kernel
+            _cr_in += [level.r_wp, level.rTr_buf, nxL, nyL]
+            wp.launch(kernel=_cr_k, dim=dimL, inputs=_cr_in, device=device)
+
+            if level_id == (len(levels) - 1):
+                pcg_solve_level(level=level, max_iter_level=int(nu_coarse))
+                return
+
+            coarse = levels[level_id + 1]
+            nxC = int(coarse.nx)
+            nyC = int(coarse.ny)
+            dimC = (nyC, nxC)
+
+            wp.launch(
+                kernel=restrict_blockavg_kernel,
+                dim=dimC,
+                inputs=[level.r_wp, level.active_wp,
+                        level.bc_mask_wp,coarse.b_wp,
+                        nxL, nyL, nxC, nyC],
+                device=device,
+            )
+
+            coarse.x_wp.fill_(WP_FLOAT(0.0))
+            kcycle(level_id + 1)
+
+            coarse_is_coarsest = (level_id + 1) == (len(levels) - 1)
+            if coarse_is_coarsest:
+                wp.launch(kernel=copy_field_kernel, dim=dimC, inputs=[coarse.x_wp, coarse.e_wp, nxC, nyC],
+                          device=device)
+                z1_wp = coarse.e_wp
+            else:
+                wp.launch(kernel=copy_field_kernel, dim=dimC, inputs=[coarse.x_wp, coarse.z_wp, nxC, nyC],
+                          device=device)
+                z1_wp = coarse.z_wp
+
+            wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[coarse.rTr_buf], device=device)
+            _ccr_in = [
+                z1_wp, coarse.b_wp, coarse.T_wp, coarse.active_wp, coarse.bc_mask_wp,
+                coarse.gh_mask_wp, coarse.ghb_factor_wp,
+            ]
+            if getattr(coarse, "storage_diag_wp", None) is not None:
+                _ccr_k = compute_residual_kernel
+                _ccr_in.append(coarse.storage_diag_wp)
+            else:
+                _ccr_k = compute_residual_no_storage_kernel
+            _ccr_in += [coarse.r_wp, coarse.rTr_buf, nxC, nyC]
+            wp.launch(kernel=_ccr_k, dim=dimC, inputs=_ccr_in, device=device)
+
+            wp.launch(kernel=copy_field_kernel, dim=dimC, inputs=[coarse.r_wp, coarse.b_wp, nxC, nyC], device=device)
+            r1_wp = coarse.b_wp
+
+            coarse.x_wp.fill_(WP_FLOAT(0.0))
+            kcycle(level_id + 1)
+
+            wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[coarse.rho_buf], device=device)
+            wp.launch(
+                kernel=dot_active_kernel,
+                dim=dimC,
+                inputs=[r1_wp, coarse.x_wp, coarse.active_wp, coarse.bc_mask_wp, coarse.rho_buf, nxC, nyC],
+                device=device,
+            )
+
+            wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[coarse.pAp_buf], device=device)
+            _caap_in = [
+                coarse.T_wp, coarse.active_wp, coarse.bc_mask_wp, coarse.gh_mask_wp,
+                coarse.ghb_factor_wp,
+            ]
+            if getattr(coarse, "storage_diag_wp", None) is not None:
+                _caap_k = apply_A_and_pAp_kernel
+                _caap_in.append(coarse.storage_diag_wp)
+            else:
+                _caap_k = apply_A_and_pAp_no_storage_kernel
+            _caap_in += [coarse.x_wp, coarse.Ax_wp, coarse.pAp_buf, nxC, nyC]
+            wp.launch(kernel=_caap_k, dim=dimC, inputs=_caap_in, device=device)
+
+            wp.launch(
+                kernel=compute_safe_alpha_kernel,
+                dim=1,
+                inputs=[coarse.rho_buf, coarse.pAp_buf, coarse.alpha_buf],
+                device=device,
+            )
+
+            active_is_1d = (len(coarse.active_wp.shape) == 1)
+            if active_is_1d:
+                wp.launch(
+                    kernel=axpy_active_scalar_kernel,
+                    dim=dimC,
+                    inputs=[z1_wp, coarse.x_wp, coarse.active_wp, coarse.bc_mask_wp, coarse.alpha_buf, nxC, nyC],
+                    device=device,
+                )
+            else:
+                wp.launch(
+                    kernel=axpy_active_scalar_2dmask_kernel,
+                    dim=dimC,
+                    inputs=[z1_wp, coarse.x_wp, coarse.active_wp, coarse.bc_mask_wp, coarse.alpha_buf, nxC, nyC],
+                    device=device,
+                )
+
+            wp.launch(
+                kernel=prolong_bilinear_any_kernel,
+                dim=dimL,
+                inputs=[z1_wp, level.e_wp, nxL, nyL, nxC, nyC],
+                device=device,
+            )
+            wp.launch(
+                kernel=add_correction_kernel,
+                dim=dimL,
+                inputs=[level.x_wp, level.e_wp, level.active_wp, level.bc_mask_wp, level.bc_values_wp, nxL, nyL],
+                device=device,
+            )
+
+            x_tmp_wp = level.Ax_wp
+            x_in = level.x_wp
+            x_out = x_tmp_wp
+
+            for omega_step in post_omegas:
+                _jac_in = [
+                    level.T_wp, level.active_wp, level.bc_mask_wp, level.gh_mask_wp,
+                    level.ghb_factor_wp,
+                ]
+                if storage_diag_wp is not None and level is lvl0:
+                    _jac_k = jacobi_applyA_fused_kernel
+                    _jac_in.append(storage_diag_wp)
+                elif getattr(level, "storage_diag_wp", None) is not None:
+                    _jac_k = jacobi_applyA_fused_kernel
+                    _jac_in.append(level.storage_diag_wp)
+                else:
+                    _jac_k = jacobi_applyA_fused_no_storage_kernel
+                _jac_in += [
+                    level.b_wp, x_in, level.M_inv_wp, level.bc_values_wp,
+                    float(omega_step), nxL, nyL, x_out,
+                ]
+                wp.launch(kernel=_jac_k, dim=dimL, inputs=_jac_in, device=device)
+                tmp = x_in
+                x_in = x_out
+                x_out = tmp
+
+            if x_in is not level.x_wp:
+                wp.launch(kernel=copy_field_kernel, dim=dimL, inputs=[x_in, level.x_wp, nxL, nyL], device=device)
+
+        n_cycles_used = 0
+        converged = False
+        check_every = solve_controls.get("check_every_no", 10)
+
+        dh_rms_lastcheck = 0.0
+        dh_max_lastcheck = 0.0
+
+        if rTr0 <= float(thr_rTr):
+            converged = True
+            n_cycles_used = 0
+            # Also populate buffers so check is okay
+            wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[lvl0.dh_max_buf], device=device)
+            wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[lvl0.rho_buf], device=device)
+            return {
+                "converged": True,
+                "n_cycles_used": 0,
+                "r_rms_end": r_rms0,
+                "h_rms_end": 0.0,
+                "dh_rms_lastcheck": 0.0,
+                "dh_max_lastcheck": 0.0,
+                "tol_abs": tol_abs,
+            }
+
+        if not return_scalar_info:
+            for cyc in range(max_cycles_i):
+                n_cycles_used = cyc + 1
+                kcycle(0)
+            return {
+                "converged": False,
+                "n_cycles_used": int(n_cycles_used),
+                "r_rms_end": None,
+                "h_rms_end": None,
+                "dh_rms_lastcheck": None,
+                "dh_max_lastcheck": None,
+                "tol_abs": None,
+                "gpu_scalar_synchronization_count": 0,
+                "coarse_operator_mode": coarse_operator_mode,
+                "fine_operator_residual_checked": True,
+            }
+
+        for cyc in range(max_cycles_i):
+            n_cycles_used = cyc + 1
+            kcycle(0)
+
+            if (cyc % int(check_every)) != (int(check_every) - 1):
+                continue
+
+            wp.launch(
+                kernel=reset_kcycle_check_buffers_kernel,
+                dim=1,
+                inputs=[lvl0.rho_buf, lvl0.dh_max_buf, lvl0.rTr_buf, lvl0.converged_flag],
+                device=device,
+            )
+            _kc_in = [
+                lvl0.x_wp, lvl0.x_prev_wp, lvl0.b_wp, lvl0.T_wp, lvl0.active_wp,
+                lvl0.bc_mask_wp, lvl0.gh_mask_wp, lvl0.ghb_factor_wp,
+            ]
+            if storage_diag_wp is not None:
+                _kc_k = kcycle_check_dh_and_residual_kernel
+                _kc_in.append(storage_diag_wp)
+            else:
+                _kc_k = kcycle_check_dh_and_residual_no_storage_kernel
+            _kc_in += [lvl0.rho_buf, lvl0.dh_max_buf, lvl0.rTr_buf, int(1 if self.use_ghb else 0), nx0, ny0]
+            wp.launch(kernel=_kc_k, dim=dim0, inputs=_kc_in, device=device)
+            wp.launch(
+                kernel=check_rtr_converged_kernel,
+                dim=1,
+                inputs=[lvl0.rTr_buf, thr_rTr, lvl0.converged_flag],
+                device=device,
+            )
+
+            dh2 = float(lvl0.rho_buf.numpy()[0])
+            gpu_scalar_sync_count += 1
+            dh_rms_lastcheck = float(np.sqrt(max(dh2, 0.0) / float(n_free0)))
+            dh_max_lastcheck = float(lvl0.dh_max_buf.numpy()[0])
+            gpu_scalar_sync_count += 1
+
+            dh_ok = True
+            if dh_max_tol is not None and dh_rms_tol_f is not None:
+                dh_ok = dh_max_lastcheck <= float(dh_max_tol) and dh_rms_lastcheck <= float(dh_rms_tol_f)
+
+            res_ok = int(lvl0.converged_flag.numpy()[0]) != 0
+            gpu_scalar_sync_count += 1
+
+            if res_ok and dh_ok:
+                converged = True
+                break
+
+        wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[lvl0.rTr_buf], device=device)
+        if storage_diag_wp is not None:
+            _cr_k = compute_residual_kernel
+            _cr_in = [
+                lvl0.x_wp, lvl0.b_wp, lvl0.T_wp, lvl0.active_wp, lvl0.bc_mask_wp,
+                lvl0.gh_mask_wp, lvl0.ghb_factor_wp, storage_diag_wp,
+                lvl0.r_wp, lvl0.rTr_buf, nx0, ny0
+            ]
+        else:
+            _cr_k = compute_residual_no_storage_kernel
+            _cr_in = [
+                lvl0.x_wp, lvl0.b_wp, lvl0.T_wp, lvl0.active_wp, lvl0.bc_mask_wp,
+                lvl0.gh_mask_wp, lvl0.ghb_factor_wp,
+                lvl0.r_wp, lvl0.rTr_buf, nx0, ny0
+            ]
+        wp.launch(kernel=_cr_k, dim=dim0, inputs=_cr_in, device=device)
+        rTr_end = float(lvl0.rTr_buf.numpy()[0])
+        gpu_scalar_sync_count += 1
+        r_rms_end = float(np.sqrt(max(rTr_end, 0.0) / float(n_free0)))
+
+        # Also get head residual
+        wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[lvl0.rTr_buf], device=device)
+        if storage_diag_wp is not None:
+            _hr_k = compute_head_residual_kernel
+            _hr_in = [
+                lvl0.x_wp, lvl0.b_wp, lvl0.T_wp, lvl0.active_wp, lvl0.bc_mask_wp,
+                lvl0.gh_mask_wp, lvl0.ghb_factor_wp, storage_diag_wp,
+                lvl0.r_wp, lvl0.rTr_buf, nx0, ny0
+            ]
+        else:
+            _hr_k = compute_head_residual_no_storage_kernel
+            _hr_in = [
+                lvl0.x_wp, lvl0.b_wp, lvl0.T_wp, lvl0.active_wp, lvl0.bc_mask_wp,
+                lvl0.gh_mask_wp, lvl0.ghb_factor_wp,
+                lvl0.r_wp, lvl0.rTr_buf, nx0, ny0
+            ]
+        wp.launch(kernel=_hr_k, dim=dim0, inputs=_hr_in, device=device)
+        hrTr_end = float(lvl0.rTr_buf.numpy()[0])
+        gpu_scalar_sync_count += 1
+        h_rms_end = float(np.sqrt(max(hrTr_end, 0.0) / float(n_free0)))
+
+        info = {
+            "converged": bool(converged),
+            "n_cycles_used": int(n_cycles_used),
+            "r_rms_end": float(r_rms_end),
+            "h_rms_end": float(h_rms_end),
+            "dh_rms_lastcheck": float(dh_rms_lastcheck),
+            "dh_max_lastcheck": float(dh_max_lastcheck),
+            "tol_abs": float(tol_abs),
+            "gpu_scalar_synchronization_count": int(gpu_scalar_sync_count),
+            "coarse_operator_mode": coarse_operator_mode,
+            "fine_operator_residual_checked": True,
+        }
+        return info
 
 
     def solve_multigrid_kcycle(
@@ -8243,7 +9350,7 @@ class WarpDarcySolver:
             ]
             if self._storage_active:
                 _kc_in.append(lvl0.storage_diag_wp)
-            _kc_in += [lvl0.rho_buf, lvl0.dh_max_buf, lvl0.rTr_buf, nx0, ny0]  # rho_buf=dh2, rTr_buf=residual
+            _kc_in += [lvl0.rho_buf, lvl0.dh_max_buf, lvl0.rTr_buf, int(1 if self.use_ghb else 0), nx0, ny0]  # rho_buf=dh2, rTr_buf=residual
             wp.launch(kernel=_kc_k, dim=dim0, inputs=_kc_in, device=device)
             wp.launch(
                 kernel=check_rtr_converged_kernel,
@@ -8491,6 +9598,7 @@ class WarpDarcySolver:
 
         controls = {} if solve_controls is None else dict(solve_controls)
         save_diagnostics_b = bool(controls.pop("save_transient_diagnostics", save_diagnostics))
+        fast_path_controls = dict(controls)
         # The ``storage_*`` controls are forwarded to ``solve()`` as explicit
         # keyword arguments below, and the ``predictor_*`` keys are replay-level
         # controls that ``solve()`` does not accept. Drop both groups from the
@@ -8505,6 +9613,16 @@ class WarpDarcySolver:
             "predictor_max_outer_iterations",
             "corrector_max_outer_iterations",
             "predictor_corrector_corrector_strategy",
+            "strict_head_residual_tol",
+            "practical_head_residual_tol",
+            "unconfined_inner_max_cycles_early",
+            "unconfined_inner_max_cycles_middle",
+            "unconfined_inner_max_cycles_late",
+            "unconfined_inner_middle_dh",
+            "unconfined_inner_late_dh",
+            "allow_unaccepted_transient_period",
+            "use_device_transient_fast_path",
+            "profile_transient_fast_path",
         ):
             controls.pop(_control_key, None)
         min_sat = float(controls.get("min_saturated_thickness", min_saturated_thickness))
@@ -8550,11 +9668,23 @@ class WarpDarcySolver:
             "full_grid_allocations_inside_period_loop": 0,
             "full_grid_allocations_inside_outer_loop": 0,
             "hierarchy_rebuilds": 0,
+            "hierarchy_rebuilds_inside_picard": 0,
+            "hierarchy_device_coarse_value_refreshes": 0,
             "T_device_updates": 0,
             "storage_device_updates": 0,
             "R_device_updates": 0,
+            "rhs_device_updates": 0,
+            "scalar_reductions": 0,
+            "gpu_scalar_synchronizations": 0,
             "head_downloads": 0,
+            "full_head_downloads_inside_picard": 0,
+            "host_T_builds_inside_picard": 0,
+            "host_storage_builds_inside_picard": 0,
+            "host_rhs_builds_inside_picard": 0,
+            "host_to_device_T_uploads_inside_picard": 0,
+            "host_to_device_storage_uploads_inside_picard": 0,
             "diagnostic_full_grid_arrays_saved": int(save_diagnostics_b),
+            "device_side_picard_fast_path_active": 0,
         }
         if save_diagnostics_b:
             counters["full_grid_allocations_inside_period_loop"] += 9
@@ -8562,88 +9692,729 @@ class WarpDarcySolver:
         head_prev = np.asarray(h0, dtype=np.float64).copy()
         total_t0 = time.perf_counter()
         last_info: dict = {}
-        for period_index in range(n_periods):
-            self.update_uniform_recharge_in_place(float(rates[period_index]))
-            counters["R_device_updates"] += 1
-            if save_diagnostics_b:
-                period_head_old = np.asarray(head_prev, dtype=np.float64).copy()
-            else:
-                period_head_old = head_prev
-            period_t0 = time.perf_counter()
-            head, info = self.solve(
-                formulation="unconfined",
-                initial_head=head_prev,
-                K_field=k,
-                zbot_field=bottom,
-                ztop_field=top,
-                transient=True,
-                storage_coeff=None,
-                dt=dt_f,
-                head_prev=head_prev,
-                return_info=True,
-                storage_reference=storage_reference,
-                unconfined_storage_mode_2d=storage_mode,
-                storage_top_threshold=storage_top_threshold,
-                storage_active_set_strategy=storage_active_set_strategy,
-                storage_hysteresis_eps=storage_hysteresis_eps,
-                storage_freeze_after_stable_iterations=storage_freeze_after_stable_iterations,
-                storage_freeze_after_outer=storage_freeze_after_outer,
-                storage_switch_fraction_tol=storage_switch_fraction_tol,
-                save_transient_diagnostics=save_diagnostics_b,
-                sy=float(sy),
-                ss=float(ss),
-                **controls,
+
+        use_device_fast_path = bool(fast_path_controls.get("use_device_transient_fast_path", False))
+        fast_path = (
+            use_device_fast_path
+            and storage_mode == "mf6_convertible_secant_sy"
+            and storage_reference == "current_picard"
+            and storage_top_threshold == "ge"
+            and storage_active_set_strategy == "none"
+        )
+        if fast_path:
+            controls = fast_path_controls
+            if self.use_ghb:
+                raise NotImplementedError("device transient fast path does not yet support GHB RHS assembly")
+            counters["device_side_picard_fast_path_active"] = 1
+            device = self.device_str
+            n_free = int(np.count_nonzero((active_i != 0) & (bc_i == 0)))
+
+            h_prev_wp = wp.array(head_prev, dtype=WP_FLOAT, device=device)
+            h_iter_wp = wp.array(head_prev, dtype=WP_FLOAT, device=device)
+            h_snapshot_wp = wp.array(head_prev, dtype=WP_FLOAT, device=device)
+            bottom_wp = wp.array(bottom, dtype=WP_FLOAT, device=device)
+            top_wp = wp.array(top, dtype=WP_FLOAT, device=device)
+            k_field_wp = wp.array(k, dtype=WP_FLOAT, device=device)
+
+            storage_diag_wp = wp.zeros((self.ny, self.nx), dtype=WP_FLOAT, device=device)
+            storage_diag_prev_wp = wp.zeros((self.ny, self.nx), dtype=WP_FLOAT, device=device)
+            storage_coeff_wp = wp.zeros((self.ny, self.nx), dtype=WP_FLOAT, device=device)
+            sy_coeff_wp = wp.zeros((self.ny, self.nx), dtype=WP_FLOAT, device=device)
+            ss_coeff_wp = wp.zeros((self.ny, self.nx), dtype=WP_FLOAT, device=device)
+            rhs_eff_wp = wp.zeros((self.ny, self.nx), dtype=WP_FLOAT, device=device)
+
+            storage_change_sum_sq_buf = wp.zeros(1, dtype=wp.float64, device=device)
+            storage_change_max_buf = wp.zeros(1, dtype=wp.float64, device=device)
+            dh_max_buf = wp.zeros(1, dtype=wp.float64, device=device)
+            dh_rms_buf = wp.zeros(1, dtype=wp.float64, device=device)
+            flow_rTr_buf = wp.zeros(1, dtype=wp.float64, device=device)
+            head_rTr_buf = wp.zeros(1, dtype=wp.float64, device=device)
+            converged_flag_buf = wp.zeros(1, dtype=wp.int32, device=device)
+
+            self.storage_diag_wp = storage_diag_wp
+            self._storage_active = True
+
+            if not hasattr(self, "storage_diag_host") or self.storage_diag_host is None:
+                self.storage_diag_host = np.zeros_like(self.T_field_host)
+
+            if self.mg_levels is None:
+                self.build_hierarchy(
+                    max_levels=int(controls.get("max_levels", 5)),
+                    min_coarse_n=4,
+                    min_coarse_cells=controls.get("min_coarse_cells", 500),
+                )
+            if self.mg_levels:
+                self.mg_levels[0].T_wp = self.T_wp
+                self.mg_levels[0].storage_diag_wp = storage_diag_wp
+            fast_path_coarse_operator_mode = "device_refreshed_dynamic_coarse_operator"
+
+            max_outer = int(controls.get("unconfined_max_picard_iter", controls.get("max_outer_iterations", 100)))
+            hclose = float(controls.get("unconfined_head_tol", controls.get("hclose", 1.0e-4)))
+            strict_head_residual_tol_f = float(controls.get("strict_head_residual_tol", hclose))
+            min_practical_outer_iterations_i = int(controls.get("min_practical_outer_iterations", 8))
+            practical_head_residual_tol_f = float(
+                controls.get("practical_head_residual_tol", controls.get("practical_residual_tol", 1.0e-4))
             )
-            period_times[period_index] = time.perf_counter() - period_t0
-            counters["device_to_host_full_grid_copies"] += 1
-            counters["head_downloads"] += 1
-            head_arr = np.asarray(head, dtype=np.float64)
-            info_out = dict(info) if isinstance(info, dict) else {}
-            storage_ref = info_out.pop("storage_reference_head_last_linearization_array", None)
-            storage_coeff = info_out.pop("storage_coeff_last_linearization_array", None)
-            sy_coeff = info_out.pop("sy_storage_coeff_last_linearization_array", None)
-            ss_coeff = info_out.pop("ss_storage_coeff_last_linearization_array", None)
-            update_profile = info_out.get("update_T_profile_totals")
-            if isinstance(update_profile, dict):
-                counters["T_device_updates"] += int(update_profile.get("count", 0) or 0)
-            else:
-                counters["T_device_updates"] += int(info_out.get("outer_iterations", 0) or 0)
-            counters["storage_device_updates"] += int(info_out.get("outer_iterations", 0) or 0)
-            if bool(info_out.get("cuda_graph_built_this_call", False)):
-                counters["hierarchy_rebuilds"] += 1
+            practical_residual_tol_alias_used = "practical_head_residual_tol" not in controls and "practical_residual_tol" in controls
+            practical_dh_rms_tol_f = float(controls.get("practical_dh_rms_tol", 3.0e-3))
+            practical_storage_diag_change_rms_tol_f = float(
+                controls.get("practical_storage_diag_change_rms_tol", 30.0)
+            )
+            omega_current_f = float(controls.get("unconfined_relax", controls.get("omega", 0.8)))
+            omega_min_f = float(controls.get("omega_min", 0.05))
+            omega_max_f = float(controls.get("omega_max", 0.75))
+            if not (0.0 < omega_min_f <= omega_max_f):
+                raise ValueError("omega_min and omega_max must satisfy 0 < omega_min <= omega_max.")
+            omega_current_f = min(max(omega_current_f, omega_min_f), omega_max_f)
+            max_update_f = float(controls.get("max_head_change_per_outer_iteration", 5.0))
+            if max_update_f <= 0.0 or not np.isfinite(max_update_f):
+                raise ValueError("max_head_change_per_outer_iteration must be positive and finite.")
+            inner_max_cycles_early_i = int(controls.get("unconfined_inner_max_cycles_early", 10))
+            inner_max_cycles_middle_i = int(controls.get("unconfined_inner_max_cycles_middle", 25))
+            inner_max_cycles_late_i = int(controls.get("unconfined_inner_max_cycles_late", 60))
+            inner_middle_dh_f = float(controls.get("unconfined_inner_middle_dh", 1.0))
+            inner_late_dh_f = float(controls.get("unconfined_inner_late_dh", 1.0e-2))
+            allow_unaccepted_transient_period_b = bool(controls.get("allow_unaccepted_transient_period", False))
+            startup_mode = str(controls.get("unconfined_startup_mode", "initial_head")).strip().lower()
+            if startup_mode not in {"initial_head", "confined_pre_solve"}:
+                raise ValueError("device transient fast path supports startup modes 'initial_head' and 'confined_pre_solve'.")
+            profile_fast_path_b = bool(controls.get("profile_transient_fast_path", False))
+            min_sat_f = float(min_sat)
+            sy_f = float(sy)
+            ss_f = float(ss)
+            dx_f = float(self.dx)
+            dt_f_val = float(dt_f)
 
-            heads_per_period[period_index] = head_arr
-            if save_diagnostics_b:
-                if storage_ref is None:
-                    storage_ref = head_arr if storage_reference == "current_picard" else period_head_old
-                if storage_coeff is None:
-                    storage_coeff = np.zeros_like(head_arr)
-                if sy_coeff is None:
-                    sy_coeff = np.zeros_like(head_arr)
-                if ss_coeff is None:
-                    ss_coeff = np.asarray(storage_coeff, dtype=np.float64) - np.asarray(sy_coeff, dtype=np.float64)
+            dim2d = (self.ny, self.nx)
 
-                storage_ref_arr = np.asarray(storage_ref, dtype=np.float64)
-                storage_coeff_arr = np.asarray(storage_coeff, dtype=np.float64)
-                sy_coeff_arr = np.asarray(sy_coeff, dtype=np.float64)
-                ss_coeff_arr = np.asarray(ss_coeff, dtype=np.float64)
-                delta_head = head_arr - period_head_old
+            def _fast_path_phase_start() -> float:
+                if profile_fast_path_b and str(device).startswith("cuda"):
+                    wp.synchronize_device(device)
+                return time.perf_counter()
 
-                full_thickness = np.maximum(top - bottom, min_sat).astype(np.float64, copy=False)
-                sat_ref = np.clip(storage_ref_arr - bottom, 0.0, full_thickness)
-                sat_old = np.clip(period_head_old - bottom, 0.0, full_thickness)
-                heads_old_per_period[period_index] = period_head_old
-                storage_reference_heads[period_index] = storage_ref_arr
-                storage_coeffs[period_index] = storage_coeff_arr
-                sy_coeffs[period_index] = sy_coeff_arr
-                ss_coeffs[period_index] = ss_coeff_arr
-                storage_terms[period_index] = storage_coeff_arr * delta_head / dt_f
-                sy_terms[period_index] = sy_coeff_arr * delta_head / dt_f
-                ss_terms[period_index] = ss_coeff_arr * delta_head / dt_f
-                sy_crossing_terms[period_index] = float(sy) * (sat_ref - sat_old) / dt_f
-            period_infos.append(info_out)
-            last_info = info_out
-            head_prev = head_arr
+            def _fast_path_phase_elapsed(t_start: float) -> float:
+                if profile_fast_path_b and str(device).startswith("cuda"):
+                    wp.synchronize_device(device)
+                return float(time.perf_counter() - t_start)
+
+            for period_index in range(n_periods):
+                self.update_uniform_recharge_in_place(float(rates[period_index]))
+                counters["R_device_updates"] += 1
+                if save_diagnostics_b:
+                    period_head_old = np.asarray(head_prev, dtype=np.float64).copy()
+
+                period_t0 = time.perf_counter()
+                T_update_seconds = 0.0
+                storage_kernel_seconds = 0.0
+                fine_m_inv_refresh_seconds = 0.0
+                dynamic_coarse_refresh_seconds = 0.0
+                rhs_assembly_seconds = 0.0
+                storage_assembly_seconds = 0.0
+                inner_solver_seconds = 0.0
+                outer_convergence_check_seconds = 0.0
+                final_nonlinear_residual_check_seconds = 0.0
+                head_download_seconds = 0.0
+                startup_inner_cycles = 0
+                startup_converged = None
+
+                if startup_mode == "confined_pre_solve":
+                    startup_t0 = _fast_path_phase_start()
+                    phase_t0 = _fast_path_phase_start()
+                    wp.launch(
+                        kernel=update_unconfined_transmissivity_from_head_kernel,
+                        dim=dim2d,
+                        inputs=[h_iter_wp, k_field_wp, bottom_wp, top_wp, self.active_wp, min_sat_f, self.nx, self.ny, self.T_wp],
+                        device=device,
+                    )
+                    T_update_seconds += _fast_path_phase_elapsed(phase_t0)
+                    counters["T_device_updates"] += 1
+                    phase_t0 = _fast_path_phase_start()
+                    wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[storage_change_sum_sq_buf], device=device)
+                    wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[storage_change_max_buf], device=device)
+                    wp.launch(
+                        kernel=update_secant_sy_storage_kernel,
+                        dim=dim2d,
+                        inputs=[
+                            h_iter_wp, h_prev_wp, bottom_wp, top_wp, self.active_wp, self.bc_mask_wp,
+                            sy_f, ss_f, dx_f, dt_f_val, min_sat_f, 1.0e-12, self.nx, self.ny,
+                            storage_coeff_wp, sy_coeff_wp, ss_coeff_wp, storage_diag_wp, storage_diag_prev_wp,
+                            storage_change_sum_sq_buf, storage_change_max_buf,
+                        ],
+                        device=device,
+                    )
+                    storage_kernel_seconds += _fast_path_phase_elapsed(phase_t0)
+                    counters["storage_device_updates"] += 1
+                    if hasattr(self, "_update_diag_preconditioner_device"):
+                        phase_t0 = _fast_path_phase_start()
+                        self._update_diag_preconditioner_device(
+                            T_wp=self.T_wp,
+                            active_wp=self.active_wp,
+                            bc_mask_wp=self.bc_mask_wp,
+                            gh_mask_wp=self.mg_levels[0].gh_mask_wp,
+                            ghb_factor_wp=self.mg_levels[0].ghb_factor_wp,
+                            M_inv_wp=self.mg_levels[0].M_inv_wp,
+                            nx=self.nx,
+                            ny=self.ny,
+                            use_ghb=bool(self.use_ghb),
+                            storage_diag_wp=storage_diag_wp,
+                        )
+                        fine_m_inv_refresh_seconds += _fast_path_phase_elapsed(phase_t0)
+                    phase_t0 = _fast_path_phase_start()
+                    self._refresh_transient_device_hierarchy_values(levels=self.mg_levels)
+                    dynamic_coarse_refresh_seconds += _fast_path_phase_elapsed(phase_t0)
+                    counters["hierarchy_device_coarse_value_refreshes"] += 1
+                    counters["rhs_device_updates"] += 1
+                    phase_t0 = _fast_path_phase_start()
+                    wp.launch(
+                        kernel=build_transient_rhs_from_storage_kernel,
+                        dim=dim2d,
+                        inputs=[
+                            self.R_wp,
+                            storage_diag_wp,
+                            h_prev_wp,
+                            self.active_wp,
+                            self.bc_mask_wp,
+                            self.bc_values_wp,
+                            dx_f,
+                            self.nx,
+                            self.ny,
+                            rhs_eff_wp,
+                        ],
+                        device=device,
+                    )
+                    rhs_assembly_seconds += _fast_path_phase_elapsed(phase_t0)
+                    startup_controls = dict(controls)
+                    startup_controls["max_cycles"] = int(controls.get("max_cycles", 200))
+                    startup_controls["coarse_operator_mode"] = fast_path_coarse_operator_mode
+                    phase_t0 = _fast_path_phase_start()
+                    startup_info = self._solve_multigrid_kcycle_device_buffers(
+                        x_wp=h_iter_wp,
+                        rhs_wp=rhs_eff_wp,
+                        T_wp=self.T_wp,
+                        storage_diag_wp=storage_diag_wp,
+                        active_wp=self.active_wp,
+                        bc_mask_wp=self.bc_mask_wp,
+                        bc_values_wp=self.bc_values_wp,
+                        levels=self.mg_levels,
+                        solve_controls=startup_controls,
+                        return_scalar_info=True,
+                    )
+                    inner_solver_seconds += _fast_path_phase_elapsed(phase_t0)
+                    startup_inner_cycles = int(startup_info.get("n_cycles_used", 0) or 0)
+                    startup_converged = bool(startup_info.get("converged", False))
+                    phase_t0 = _fast_path_phase_start()
+                    wp.launch(
+                        kernel=clamp_unconfined_head_kernel,
+                        dim=dim2d,
+                        inputs=[
+                            h_iter_wp,
+                            bottom_wp,
+                            top_wp,
+                            self.active_wp,
+                            self.bc_mask_wp,
+                            self.bc_values_wp,
+                            min_sat_f,
+                            self.nx,
+                            self.ny,
+                        ],
+                        device=device,
+                    )
+                    storage_diag_prev_wp.fill_(WP_FLOAT(0.0))
+                    inner_solver_seconds += _fast_path_phase_elapsed(phase_t0)
+                last_dh_max = float("nan")
+                last_dh_rms = float("nan")
+                last_flow_residual_rms = float("nan")
+                last_head_residual_rms = float("nan")
+                last_storage_diag_change_max = float("nan")
+                last_storage_diag_change_rms = float("nan")
+                strict_picard_convergence_passed = False
+                practical_picard_acceptance_passed = False
+                production_acceptance_passed = False
+                previous_dh_measure = None
+                total_inner_kcycles = 0
+                maximum_inner_kcycles_in_one_outer_iteration = 0
+                inner_kcycle_caps: list[int] = []
+                inner_kcycle_used: list[int] = []
+                period_gpu_scalar_syncs = 0
+                info_lin = {
+                    "converged": False,
+                    "coarse_operator_mode": fast_path_coarse_operator_mode,
+                    "fine_operator_residual_checked": True,
+                }
+
+                for outer_iter in range(max_outer):
+                    storage_t0 = _fast_path_phase_start()
+                    phase_t0 = _fast_path_phase_start()
+                    wp.launch(
+                        kernel=update_unconfined_transmissivity_from_head_kernel,
+                        dim=dim2d,
+                        inputs=[h_iter_wp, k_field_wp, bottom_wp, top_wp, self.active_wp, min_sat_f, self.nx, self.ny, self.T_wp],
+                        device=device
+                    )
+                    T_update_seconds += _fast_path_phase_elapsed(phase_t0)
+                    counters["T_device_updates"] += 1
+
+                    phase_t0 = _fast_path_phase_start()
+                    wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[storage_change_sum_sq_buf], device=device)
+                    wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[storage_change_max_buf], device=device)
+
+                    wp.launch(
+                        kernel=update_secant_sy_storage_kernel,
+                        dim=dim2d,
+                        inputs=[
+                            h_iter_wp, h_prev_wp, bottom_wp, top_wp, self.active_wp, self.bc_mask_wp,
+                            sy_f, ss_f, dx_f, dt_f_val, min_sat_f, 1.0e-12, self.nx, self.ny,
+                            storage_coeff_wp, sy_coeff_wp, ss_coeff_wp, storage_diag_wp, storage_diag_prev_wp,
+                            storage_change_sum_sq_buf, storage_change_max_buf
+                        ],
+                        device=device
+                    )
+                    wp.launch(kernel=copy_field_kernel, dim=dim2d, inputs=[storage_diag_wp, storage_diag_prev_wp, self.nx, self.ny], device=device)
+                    storage_kernel_seconds += _fast_path_phase_elapsed(phase_t0)
+                    counters["storage_device_updates"] += 1
+                    storage_assembly_seconds += _fast_path_phase_elapsed(storage_t0)
+
+                    if hasattr(self, "_update_diag_preconditioner_device"):
+                        phase_t0 = _fast_path_phase_start()
+                        self._update_diag_preconditioner_device(
+                            T_wp=self.T_wp,
+                            active_wp=self.active_wp,
+                            bc_mask_wp=self.bc_mask_wp,
+                            gh_mask_wp=self.mg_levels[0].gh_mask_wp,
+                            ghb_factor_wp=self.mg_levels[0].ghb_factor_wp,
+                            M_inv_wp=self.mg_levels[0].M_inv_wp,
+                            nx=self.nx,
+                            ny=self.ny,
+                            use_ghb=bool(self.use_ghb),
+                            storage_diag_wp=storage_diag_wp
+                        )
+                        fine_m_inv_refresh_seconds += _fast_path_phase_elapsed(phase_t0)
+                    phase_t0 = _fast_path_phase_start()
+                    self._refresh_transient_device_hierarchy_values(levels=self.mg_levels)
+                    dynamic_coarse_refresh_seconds += _fast_path_phase_elapsed(phase_t0)
+                    counters["hierarchy_device_coarse_value_refreshes"] += 1
+
+                    rhs_t0 = _fast_path_phase_start()
+                    counters["rhs_device_updates"] += 1
+                    wp.launch(
+                        kernel=build_transient_rhs_from_storage_kernel,
+                        dim=dim2d,
+                        inputs=[
+                            self.R_wp,
+                            storage_diag_wp,
+                            h_prev_wp,
+                            self.active_wp,
+                            self.bc_mask_wp,
+                            self.bc_values_wp,
+                            dx_f,
+                            self.nx,
+                            self.ny,
+                            rhs_eff_wp,
+                        ],
+                        device=device
+                    )
+                    rhs_assembly_seconds += _fast_path_phase_elapsed(rhs_t0)
+
+                    wp.launch(kernel=copy_field_kernel, dim=dim2d, inputs=[h_iter_wp, h_snapshot_wp, self.nx, self.ny], device=device)
+                    inner_max_cycles_i = _select_unconfined_inner_max_cycles(
+                        previous_dh_measure=previous_dh_measure,
+                        early_cycles=inner_max_cycles_early_i,
+                        middle_cycles=inner_max_cycles_middle_i,
+                        late_cycles=inner_max_cycles_late_i,
+                        middle_dh=inner_middle_dh_f,
+                        late_dh=inner_late_dh_f,
+                    )
+                    inner_controls = dict(controls)
+                    inner_controls["max_cycles"] = int(inner_max_cycles_i)
+                    inner_controls["coarse_operator_mode"] = fast_path_coarse_operator_mode
+                    inner_kcycle_caps.append(int(inner_max_cycles_i))
+
+                    inner_t0 = _fast_path_phase_start()
+                    info_lin = self._solve_multigrid_kcycle_device_buffers(
+                        x_wp=h_iter_wp,
+                        rhs_wp=rhs_eff_wp,
+                        T_wp=self.T_wp,
+                        storage_diag_wp=storage_diag_wp,
+                        active_wp=self.active_wp,
+                        bc_mask_wp=self.bc_mask_wp,
+                        bc_values_wp=self.bc_values_wp,
+                        levels=self.mg_levels,
+                        solve_controls=inner_controls,
+                        return_scalar_info=False
+                    )
+                    inner_solver_seconds += _fast_path_phase_elapsed(inner_t0)
+                    inner_cycles_used_i = int(info_lin.get("n_cycles_used", inner_max_cycles_i) or inner_max_cycles_i)
+                    inner_kcycle_used.append(inner_cycles_used_i)
+                    total_inner_kcycles += inner_cycles_used_i
+                    maximum_inner_kcycles_in_one_outer_iteration = max(
+                        maximum_inner_kcycles_in_one_outer_iteration,
+                        inner_cycles_used_i,
+                    )
+                    wp.launch(
+                        kernel=apply_relaxed_clipped_picard_update_kernel,
+                        dim=dim2d,
+                        inputs=[
+                            h_iter_wp,
+                            h_snapshot_wp,
+                            self.active_wp,
+                            self.bc_mask_wp,
+                            self.bc_values_wp,
+                            WP_FLOAT(omega_current_f),
+                            WP_FLOAT(max_update_f),
+                            self.nx,
+                            self.ny,
+                            h_iter_wp,
+                        ],
+                        device=device,
+                    )
+
+                    outer_check_t0 = _fast_path_phase_start()
+                    wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[dh_rms_buf], device=device)
+                    wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[dh_max_buf], device=device)
+                    wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[flow_rTr_buf], device=device)
+                    wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[head_rTr_buf], device=device)
+                    wp.launch(
+                        kernel=kcycle_check_dh_and_dual_residual_kernel,
+                        dim=dim2d,
+                        inputs=[
+                            h_iter_wp,
+                            h_snapshot_wp,
+                            rhs_eff_wp,
+                            self.T_wp,
+                            self.active_wp,
+                            self.bc_mask_wp,
+                            self.mg_levels[0].gh_mask_wp,
+                            self.mg_levels[0].ghb_factor_wp,
+                            storage_diag_wp,
+                            dh_rms_buf,
+                            dh_max_buf,
+                            flow_rTr_buf,
+                            head_rTr_buf,
+                            int(1 if self.use_ghb else 0),
+                            self.nx,
+                            self.ny,
+                        ],
+                        device=device
+                    )
+                    counters["scalar_reductions"] += 1
+                    counters["gpu_scalar_synchronizations"] += 6
+                    period_gpu_scalar_syncs += 6
+                    last_dh_max = float(dh_max_buf.numpy()[0])
+                    last_dh_rms = float(np.sqrt(max(float(dh_rms_buf.numpy()[0]), 0.0) / float(max(n_free, 1))))
+                    last_flow_residual_rms = float(
+                        np.sqrt(max(float(flow_rTr_buf.numpy()[0]), 0.0) / float(max(n_free, 1)))
+                    )
+                    last_head_residual_rms = float(
+                        np.sqrt(max(float(head_rTr_buf.numpy()[0]), 0.0) / float(max(n_free, 1)))
+                    )
+                    last_storage_diag_change_max = float(storage_change_max_buf.numpy()[0])
+                    last_storage_diag_change_rms = float(
+                        np.sqrt(max(float(storage_change_sum_sq_buf.numpy()[0]), 0.0) / float(max(n_free, 1)))
+                    )
+                    outer_convergence_check_seconds += _fast_path_phase_elapsed(outer_check_t0)
+                    previous_dh_measure = float(last_dh_max)
+
+                    strict_picard_convergence_passed = bool(
+                        last_dh_max <= hclose
+                        and last_head_residual_rms <= strict_head_residual_tol_f
+                    )
+                    practical_picard_acceptance_passed = bool(
+                        int(outer_iter + 1) >= min_practical_outer_iterations_i
+                        and np.isfinite(last_head_residual_rms)
+                        and last_head_residual_rms <= practical_head_residual_tol_f
+                        and np.isfinite(last_dh_rms)
+                        and last_dh_rms <= practical_dh_rms_tol_f
+                        and np.isfinite(last_storage_diag_change_rms)
+                        and last_storage_diag_change_rms <= practical_storage_diag_change_rms_tol_f
+                    )
+                    production_acceptance_passed = bool(
+                        strict_picard_convergence_passed or practical_picard_acceptance_passed
+                    )
+                    if production_acceptance_passed:
+                        break
+
+                phase_t0 = _fast_path_phase_start()
+                wp.launch(kernel=copy_field_kernel, dim=dim2d, inputs=[storage_diag_wp, storage_diag_prev_wp, self.nx, self.ny], device=device)
+                wp.launch(
+                    kernel=update_unconfined_transmissivity_from_head_kernel,
+                    dim=dim2d,
+                    inputs=[h_iter_wp, k_field_wp, bottom_wp, top_wp, self.active_wp, min_sat_f, self.nx, self.ny, self.T_wp],
+                    device=device
+                )
+                T_update_seconds += _fast_path_phase_elapsed(phase_t0)
+                counters["T_device_updates"] += 1
+                phase_t0 = _fast_path_phase_start()
+                wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[storage_change_sum_sq_buf], device=device)
+                wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[storage_change_max_buf], device=device)
+                wp.launch(
+                    kernel=update_secant_sy_storage_kernel,
+                    dim=dim2d,
+                    inputs=[
+                        h_iter_wp, h_prev_wp, bottom_wp, top_wp, self.active_wp, self.bc_mask_wp,
+                        sy_f, ss_f, dx_f, dt_f_val, min_sat_f, 1.0e-12, self.nx, self.ny,
+                        storage_coeff_wp, sy_coeff_wp, ss_coeff_wp, storage_diag_wp, storage_diag_prev_wp,
+                        storage_change_sum_sq_buf, storage_change_max_buf
+                    ],
+                    device=device
+                )
+                storage_kernel_seconds += _fast_path_phase_elapsed(phase_t0)
+                counters["storage_device_updates"] += 1
+                counters["rhs_device_updates"] += 1
+                phase_t0 = _fast_path_phase_start()
+                wp.launch(
+                    kernel=build_transient_rhs_from_storage_kernel,
+                    dim=dim2d,
+                    inputs=[
+                        self.R_wp,
+                        storage_diag_wp,
+                        h_prev_wp,
+                        self.active_wp,
+                        self.bc_mask_wp,
+                        self.bc_values_wp,
+                        dx_f,
+                        self.nx,
+                        self.ny,
+                        rhs_eff_wp,
+                    ],
+                    device=device
+                )
+                rhs_assembly_seconds += _fast_path_phase_elapsed(phase_t0)
+                phase_t0 = _fast_path_phase_start()
+                wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[flow_rTr_buf], device=device)
+                wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[head_rTr_buf], device=device)
+                wp.launch(
+                    kernel=compute_dual_residual_kernel,
+                    dim=dim2d,
+                    inputs=[
+                        h_iter_wp,
+                        rhs_eff_wp,
+                        self.T_wp,
+                        self.active_wp,
+                        self.bc_mask_wp,
+                        self.mg_levels[0].gh_mask_wp,
+                        self.mg_levels[0].ghb_factor_wp,
+                        storage_diag_wp,
+                        flow_rTr_buf,
+                        head_rTr_buf,
+                        self.nx,
+                        self.ny,
+                    ],
+                    device=device,
+                )
+                final_nonlinear_residual_check_seconds += _fast_path_phase_elapsed(phase_t0)
+                counters["scalar_reductions"] += 1
+                counters["gpu_scalar_synchronizations"] += 4
+                period_gpu_scalar_syncs += 4
+                last_flow_residual_rms = float(
+                    np.sqrt(max(float(flow_rTr_buf.numpy()[0]), 0.0) / float(max(n_free, 1)))
+                )
+                last_head_residual_rms = float(
+                    np.sqrt(max(float(head_rTr_buf.numpy()[0]), 0.0) / float(max(n_free, 1)))
+                )
+                last_storage_diag_change_max = float(storage_change_max_buf.numpy()[0])
+                last_storage_diag_change_rms = float(
+                    np.sqrt(max(float(storage_change_sum_sq_buf.numpy()[0]), 0.0) / float(max(n_free, 1)))
+                )
+                strict_picard_convergence_passed = bool(
+                    last_dh_max <= hclose
+                    and last_head_residual_rms <= strict_head_residual_tol_f
+                )
+                practical_picard_acceptance_passed = bool(
+                    int(min(max_outer, outer_iter + 1)) >= min_practical_outer_iterations_i
+                    and np.isfinite(last_head_residual_rms)
+                    and last_head_residual_rms <= practical_head_residual_tol_f
+                    and np.isfinite(last_dh_rms)
+                    and last_dh_rms <= practical_dh_rms_tol_f
+                    and np.isfinite(last_storage_diag_change_rms)
+                    and last_storage_diag_change_rms <= practical_storage_diag_change_rms_tol_f
+                )
+                production_acceptance_passed = bool(
+                    strict_picard_convergence_passed or practical_picard_acceptance_passed
+                )
+
+                if (not production_acceptance_passed) and (not allow_unaccepted_transient_period_b):
+                    raise RuntimeError(
+                        _format_unaccepted_transient_period_error(
+                            period_index=period_index,
+                            outer_iterations=int(min(max_outer, outer_iter + 1)),
+                            final_max_abs_head_change=last_dh_max,
+                            final_rms_head_change=last_dh_rms,
+                            final_head_residual_rms=last_head_residual_rms,
+                            final_flow_residual_rms=last_flow_residual_rms,
+                            storage_diag_change_max=last_storage_diag_change_max,
+                            storage_diag_change_rms=last_storage_diag_change_rms,
+                            storage_mode=str(storage_mode),
+                            storage_reference=str(storage_reference),
+                        )
+                    )
+
+                wp.launch(kernel=copy_field_kernel, dim=dim2d, inputs=[h_iter_wp, h_prev_wp, self.nx, self.ny], device=device)
+
+                period_times[period_index] = time.perf_counter() - period_t0
+                counters["device_to_host_full_grid_copies"] += 1
+                counters["head_downloads"] += 1
+                head_download_t0 = _fast_path_phase_start()
+                head_arr = np.asarray(h_iter_wp.numpy(), dtype=np.float64)
+                head_download_seconds += _fast_path_phase_elapsed(head_download_t0)
+                heads_per_period[period_index] = head_arr
+                if save_diagnostics_b:
+                    counters["device_to_host_full_grid_copies"] += 3
+                    storage_ref_arr = head_arr.copy()
+                    storage_coeff_arr = np.asarray(storage_coeff_wp.numpy(), dtype=np.float64)
+                    sy_coeff_arr = np.asarray(sy_coeff_wp.numpy(), dtype=np.float64)
+                    ss_coeff_arr = np.asarray(ss_coeff_wp.numpy(), dtype=np.float64)
+                    delta_head = head_arr - period_head_old
+                    full_thickness = np.maximum(top - bottom, min_sat).astype(np.float64, copy=False)
+                    sat_ref = np.clip(storage_ref_arr - bottom, 0.0, full_thickness)
+                    sat_old = np.clip(period_head_old - bottom, 0.0, full_thickness)
+                    heads_old_per_period[period_index] = period_head_old
+                    storage_reference_heads[period_index] = storage_ref_arr
+                    storage_coeffs[period_index] = storage_coeff_arr
+                    sy_coeffs[period_index] = sy_coeff_arr
+                    ss_coeffs[period_index] = ss_coeff_arr
+                    storage_terms[period_index] = storage_coeff_arr * delta_head / dt_f
+                    sy_terms[period_index] = sy_coeff_arr * delta_head / dt_f
+                    ss_terms[period_index] = ss_coeff_arr * delta_head / dt_f
+                    sy_crossing_terms[period_index] = float(sy) * (sat_ref - sat_old) / dt_f
+                info_period = dict(info_lin) if isinstance(info_lin, dict) else {}
+                info_period.update(
+                    {
+                        "solver_type": "kcycle_unconfined_picard_device_fast_path",
+                        "converged": bool(production_acceptance_passed),
+                        "outer_iterations": int(min(max_outer, outer_iter + 1)),
+                        "strict_picard_convergence_passed": bool(strict_picard_convergence_passed),
+                        "practical_picard_acceptance_passed": bool(practical_picard_acceptance_passed),
+                        "production_acceptance_passed": bool(production_acceptance_passed),
+                        "final_max_abs_head_change": float(last_dh_max),
+                        "final_rms_head_change": float(last_dh_rms),
+                        "final_flow_residual_rms": float(last_flow_residual_rms),
+                        "final_head_residual_rms": float(last_head_residual_rms),
+                        "final_residual": float(last_head_residual_rms),
+                        "storage_diag_change_max": float(last_storage_diag_change_max),
+                        "storage_diag_change_rms": float(last_storage_diag_change_rms),
+                        "storage_mode": str(storage_mode),
+                        "unconfined_storage_mode_2d": str(storage_mode),
+                        "storage_reference": str(storage_reference),
+                        "storage_top_threshold": str(storage_top_threshold),
+                        "storage_active_set_strategy": str(storage_active_set_strategy),
+                        "storage_freeze_after_outer": storage_freeze_after_outer,
+                        "device_side_picard_fast_path_active": True,
+                        "unconfined_startup_mode": str(startup_mode),
+                        "startup_inner_kcycles": int(startup_inner_cycles),
+                        "startup_converged": startup_converged,
+                        "practical_picard_acceptance_enabled": True,
+                        "picard_relax": float(omega_current_f),
+                        "max_head_change_per_outer_iteration": float(max_update_f),
+                        "strict_head_residual_tol": float(strict_head_residual_tol_f),
+                        "min_practical_outer_iterations": int(min_practical_outer_iterations_i),
+                        "practical_head_residual_tol": float(practical_head_residual_tol_f),
+                        "practical_residual_tol": float(practical_head_residual_tol_f),
+                        "practical_residual_tol_deprecated_alias_used": bool(practical_residual_tol_alias_used),
+                        "practical_dh_rms_tol": float(practical_dh_rms_tol_f),
+                        "practical_storage_diag_change_rms_tol": float(practical_storage_diag_change_rms_tol_f),
+                        "total_inner_kcycles": int(total_inner_kcycles),
+                        "maximum_inner_kcycles_in_one_outer_iteration": int(maximum_inner_kcycles_in_one_outer_iteration),
+                        "inner_solver_gpu_scalar_synchronization_count": int(
+                            info_lin.get("gpu_scalar_synchronization_count", 0) or 0
+                        ),
+                        "gpu_scalar_synchronization_count": int(period_gpu_scalar_syncs),
+                        "T_update_seconds": float(T_update_seconds),
+                        "storage_kernel_seconds": float(storage_kernel_seconds),
+                        "fine_m_inv_refresh_seconds": float(fine_m_inv_refresh_seconds),
+                        "dynamic_coarse_refresh_seconds": float(dynamic_coarse_refresh_seconds),
+                        "rhs_assembly_seconds": float(rhs_assembly_seconds),
+                        "storage_assembly_seconds": float(storage_assembly_seconds),
+                        "inner_solver_seconds": float(inner_solver_seconds),
+                        "outer_convergence_check_seconds": float(outer_convergence_check_seconds),
+                        "final_nonlinear_residual_check_seconds": float(final_nonlinear_residual_check_seconds),
+                        "head_download_seconds": float(head_download_seconds),
+                        "period_total_seconds": float(period_times[period_index]),
+                    }
+                )
+                if save_diagnostics_b:
+                    info_period["inner_kcycle_caps"] = [int(v) for v in inner_kcycle_caps]
+                    info_period["inner_kcycle_used"] = [int(v) for v in inner_kcycle_used]
+                period_infos.append(info_period)
+                last_info = info_period
+                head_prev = head_arr
+
+        else:
+            for period_index in range(n_periods):
+                self.update_uniform_recharge_in_place(float(rates[period_index]))
+                counters["R_device_updates"] += 1
+                if save_diagnostics_b:
+                    period_head_old = np.asarray(head_prev, dtype=np.float64).copy()
+                else:
+                    period_head_old = head_prev
+                period_t0 = time.perf_counter()
+                head, info = self.solve(
+                    formulation="unconfined",
+                    initial_head=head_prev,
+                    K_field=k,
+                    zbot_field=bottom,
+                    ztop_field=top,
+                    transient=True,
+                    storage_coeff=None,
+                    dt=dt_f,
+                    head_prev=head_prev,
+                    return_info=True,
+                    storage_reference=storage_reference,
+                    unconfined_storage_mode_2d=storage_mode,
+                    storage_top_threshold=storage_top_threshold,
+                    storage_active_set_strategy=storage_active_set_strategy,
+                    storage_hysteresis_eps=storage_hysteresis_eps,
+                    storage_freeze_after_stable_iterations=storage_freeze_after_stable_iterations,
+                    storage_freeze_after_outer=storage_freeze_after_outer,
+                    storage_switch_fraction_tol=storage_switch_fraction_tol,
+                    save_transient_diagnostics=save_diagnostics_b,
+                    sy=float(sy),
+                    ss=float(ss),
+                    **controls,
+                )
+                period_times[period_index] = time.perf_counter() - period_t0
+                counters["device_to_host_full_grid_copies"] += 1
+                counters["head_downloads"] += 1
+                head_arr = np.asarray(head, dtype=np.float64)
+                info_out = dict(info) if isinstance(info, dict) else {}
+                storage_ref = info_out.pop("storage_reference_head_last_linearization_array", None)
+                storage_coeff = info_out.pop("storage_coeff_last_linearization_array", None)
+                sy_coeff = info_out.pop("sy_storage_coeff_last_linearization_array", None)
+                ss_coeff = info_out.pop("ss_storage_coeff_last_linearization_array", None)
+                if bool(info_out.get("cuda_graph_built_this_call", False)):
+                    counters["hierarchy_rebuilds"] += 1
+
+                heads_per_period[period_index] = head_arr
+                if save_diagnostics_b:
+                    if storage_ref is None:
+                        storage_ref = head_arr if storage_reference == "current_picard" else period_head_old
+                    if storage_coeff is None:
+                        storage_coeff = np.zeros_like(head_arr)
+                    if sy_coeff is None:
+                        sy_coeff = np.zeros_like(head_arr)
+                    if ss_coeff is None:
+                        ss_coeff = np.asarray(storage_coeff, dtype=np.float64) - np.asarray(sy_coeff, dtype=np.float64)
+
+                    storage_ref_arr = np.asarray(storage_ref, dtype=np.float64)
+                    storage_coeff_arr = np.asarray(storage_coeff, dtype=np.float64)
+                    sy_coeff_arr = np.asarray(sy_coeff, dtype=np.float64)
+                    ss_coeff_arr = np.asarray(ss_coeff, dtype=np.float64)
+                    delta_head = head_arr - period_head_old
+
+                    full_thickness = np.maximum(top - bottom, min_sat).astype(np.float64, copy=False)
+                    sat_ref = np.clip(storage_ref_arr - bottom, 0.0, full_thickness)
+                    sat_old = np.clip(period_head_old - bottom, 0.0, full_thickness)
+                    heads_old_per_period[period_index] = period_head_old
+                    storage_reference_heads[period_index] = storage_ref_arr
+                    storage_coeffs[period_index] = storage_coeff_arr
+                    sy_coeffs[period_index] = sy_coeff_arr
+                    ss_coeffs[period_index] = ss_coeff_arr
+                    storage_terms[period_index] = storage_coeff_arr * delta_head / dt_f
+                    sy_terms[period_index] = sy_coeff_arr * delta_head / dt_f
+                    ss_terms[period_index] = ss_coeff_arr * delta_head / dt_f
+                    sy_crossing_terms[period_index] = float(sy) * (sat_ref - sat_old) / dt_f
+                period_infos.append(info_out)
+                last_info = info_out
+                head_prev = head_arr
 
         info_all = {
             "heads_per_period": heads_per_period,

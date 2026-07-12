@@ -100,6 +100,55 @@ def _warp_device(preferred: str = "auto") -> str:
         return "cuda:0"
 
 
+def _build_transient_fast_path_profile(
+    *,
+    period_infos: list[dict],
+    mass_balance_runtime: float | None,
+) -> dict:
+    """
+    Aggregate transient fast-path timing fields from period diagnostics.
+
+    :param period_infos: Per-period solver info dictionaries.
+    :param mass_balance_runtime: Optional mass-balance runtime outside the solver.
+    :return: Profile summary for replay reporting.
+    """
+    timing_keys = (
+        "T_update_seconds",
+        "storage_kernel_seconds",
+        "fine_m_inv_refresh_seconds",
+        "dynamic_coarse_refresh_seconds",
+        "rhs_assembly_seconds",
+        "storage_assembly_seconds",
+        "inner_solver_seconds",
+        "outer_convergence_check_seconds",
+        "final_nonlinear_residual_check_seconds",
+        "head_download_seconds",
+        "period_total_seconds",
+    )
+    rows = [row for row in period_infos if isinstance(row, dict)]
+    totals: dict[str, float] = {}
+    means: dict[str, float] = {}
+    maxima: dict[str, float] = {}
+    for key in timing_keys:
+        values = [float(row.get(key, 0.0) or 0.0) for row in rows]
+        totals[key] = float(np.sum(values)) if values else 0.0
+        means[key] = float(np.mean(values)) if values else 0.0
+        maxima[key] = float(np.max(values)) if values else 0.0
+    period_total = totals.get("period_total_seconds", 0.0)
+    fractions = {
+        key: (float(value / period_total) if period_total > 0.0 else None)
+        for key, value in totals.items()
+    }
+    return {
+        "period_count": int(len(rows)),
+        "totals": totals,
+        "means": means,
+        "maxima": maxima,
+        "fractions_of_period_total": fractions,
+        "mass_balance_runtime": None if mass_balance_runtime is None else float(mass_balance_runtime),
+    }
+
+
 def run_warp_transient_replay(
     spatial: dict,
     recharge_rates: np.ndarray,
@@ -433,6 +482,10 @@ def run_replay_from_artifact(
         merged = default_run_config(device=device)
         merged.update({str(k): v for k, v in run_config.items()})
         run_config = merged
+    replay_solve_controls = dict(solve_controls or {})
+    if run_config.get("profile_performance", False):
+        replay_solve_controls["profile_transient_fast_path"] = True
+        effective_controls["profile_transient_fast_path"] = True
     print(f"  run_mode={run_config['run_mode']} device={run_config['device']} "
           f"compute_mass_balance={run_config['compute_mass_balance']} "
           f"profile_performance={run_config['profile_performance']} "
@@ -455,7 +508,7 @@ def run_replay_from_artifact(
         n_periods=n_periods,
         device=device,
         diag_preconditioner_backend=diag_preconditioner_backend,
-        solve_controls=solve_controls,
+        solve_controls=replay_solve_controls,
         warm_start_mode=warm_start_used,
         warm_start_head=warm_start_head,
         formulation=formulation,
@@ -727,12 +780,18 @@ def run_replay_from_artifact(
         mass_balance=mass_balance,
         period_convergence=summary["period_convergence"],
     )
+    profile_summary = None
+    if run_config.get("profile_performance", False):
+        profile_summary = _build_transient_fast_path_profile(
+            period_infos=period_infos,
+            mass_balance_runtime=mass_balance_runtime,
+        )
     summary["performance"] = build_performance_summary(
         timing=summary["timing"],
         period_convergence=summary["period_convergence"],
         solve_settings=solve_settings_recorded,
         mass_balance_runtime=mass_balance_runtime,
-        profile=None,
+        profile=profile_summary,
     )
 
     save_heavy = bool(

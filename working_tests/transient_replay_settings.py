@@ -104,10 +104,19 @@ def default_solve_controls() -> dict:
         "corrector_max_outer_iterations": 100,
         "predictor_corrector_corrector_strategy": STORAGE_ACTIVE_SET_NONE,
         "practical_picard_acceptance_enabled": True,
+        "strict_head_residual_tol": 1.0e-4,
         "min_practical_outer_iterations": 8,
+        "practical_head_residual_tol": 1.0e-4,
         "practical_residual_tol": 1.0e-4,
         "practical_dh_rms_tol": 3.0e-3,
         "practical_storage_diag_change_rms_tol": 30.0,
+        "unconfined_inner_max_cycles_early": 2,
+        "unconfined_inner_max_cycles_middle": 4,
+        "unconfined_inner_max_cycles_late": 8,
+        "unconfined_inner_middle_dh": 1.0,
+        "unconfined_inner_late_dh": 1.0e-2,
+        "allow_unaccepted_transient_period": False,
+        "use_device_transient_fast_path": True,
     }
 
 

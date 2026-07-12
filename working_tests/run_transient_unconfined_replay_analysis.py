@@ -5,8 +5,10 @@ Focused 2D transient-unconfined replay mismatch analysis.
 This script audits the production secant-Sy Warp-vs-MF6 replay. By default it
 reads the existing MF6 truth artifact and existing Warp replay output, writes an
 analysis JSON next to the replay output, and prints compact numeric tables. With
-``--run-replays`` it runs only the production secant-Sy replay and the
-freeze-after-outer secant-Sy variants.
+``--run-replays`` it runs the production secant-Sy replay and either the
+freeze-after-outer secant-Sy variants, a focused ``nu_pre``/``nu_post`` smoother
+sweep, a focused coarse-solve-count sweep, or a focused light-smoother/hierarchy
+sweep.
 """
 
 from __future__ import annotations
@@ -37,6 +39,7 @@ from working_tests.transient_replay_settings import (  # noqa: E402
     STORAGE_ACTIVE_SET_NONE,
     STORAGE_REFERENCE_CURRENT_PICARD,
     STORAGE_TOP_THRESHOLD_GE,
+    default_run_config,
     default_solve_controls,
     production_secant_sy_settings,
     secant_sy_freeze_settings,
@@ -837,16 +840,61 @@ def _replay_variant_configs(variant_set: str = "full") -> dict:
     The normal harness intentionally exposes only the validated production
     secant-Sy replay and secant-Sy freeze-after-outer variants.
 
-    :param variant_set: ``full`` or ``speed``. Both normal sets expose the same
-        production/freeze secant-Sy matrix.
+    :param variant_set: ``full`` exposes production/freeze secant-Sy variants.
+        ``speed`` exposes a focused smoother sweep. ``coarse`` exposes a
+        focused coarse-solve-count sweep for the two best light smoother counts.
+        ``light`` exposes the next lightweight smoother/hierarchy sweep.
     :return: Ordered mapping of replay variant name to config dict.
     """
     variant_mode = str(variant_set).strip().lower()
-    if variant_mode not in {"full", "speed"}:
-        raise ValueError("variant_set must be 'full' or 'speed'.")
-    variants: dict[str, Any] = {
-        "production_secant_sy": production_secant_sy_settings(),
-    }
+    if variant_mode not in {"full", "speed", "coarse", "light"}:
+        raise ValueError("variant_set must be 'full', 'speed', 'coarse', or 'light'.")
+    variants: dict[str, Any] = {"production_secant_sy": production_secant_sy_settings()}
+    if variant_mode == "speed":
+        for nu_value in (3, 5, 8, 10, 15):
+            cfg = production_secant_sy_settings()
+            controls = dict(cfg["solve_controls"])
+            controls["nu_pre"] = int(nu_value)
+            controls["nu_post"] = int(nu_value)
+            controls["max_levels"] = 6
+            cfg["solve_controls"] = controls
+            variants[f"secant_sy_nu_{nu_value}_max_levels_6"] = cfg
+        return variants
+    if variant_mode == "coarse":
+        for nu_value in (3, 5):
+            for nu_coarse in (1, 2, 3, 5, 8, 10):
+                cfg = production_secant_sy_settings()
+                controls = dict(cfg["solve_controls"])
+                controls["nu_pre"] = int(nu_value)
+                controls["nu_post"] = int(nu_value)
+                controls["nu_coarse"] = int(nu_coarse)
+                controls["max_levels"] = 6
+                cfg["solve_controls"] = controls
+                variants[f"secant_sy_nu_{nu_value}_coarse_{nu_coarse}_max_levels_6"] = cfg
+        return variants
+    if variant_mode == "light":
+        seen: set[tuple[int, int, int, int]] = set()
+        candidates: list[tuple[int, int, int, int]] = []
+        candidates.extend((nu_value, nu_value, 1, 6) for nu_value in (1, 2, 3))
+        candidates.extend((3, 3, 1, max_levels) for max_levels in (4, 5, 6))
+        for nu_value in (1, 2):
+            candidates.extend((nu_value, nu_value, 1, max_levels) for max_levels in (4, 5, 6))
+        for nu_pre, nu_post, nu_coarse, max_levels in candidates:
+            key = (int(nu_pre), int(nu_post), int(nu_coarse), int(max_levels))
+            if key in seen:
+                continue
+            seen.add(key)
+            cfg = production_secant_sy_settings()
+            controls = dict(cfg["solve_controls"])
+            controls["nu_pre"] = int(nu_pre)
+            controls["nu_post"] = int(nu_post)
+            controls["nu_coarse"] = int(nu_coarse)
+            controls["max_levels"] = int(max_levels)
+            cfg["solve_controls"] = controls
+            variants[
+                f"secant_sy_nu_{nu_pre}_coarse_{nu_coarse}_max_levels_{max_levels}"
+            ] = cfg
+        return variants
     for freeze_after_outer in (2, 3, 4, 5, 6, 8, 10):
         variants[f"secant_sy_freeze_after_outer_{freeze_after_outer}"] = secant_sy_freeze_settings(
             freeze_after_outer=freeze_after_outer,
@@ -1011,6 +1059,14 @@ def run_optional_replay_variants(
     results: dict[str, Any] = {}
     for name, cfg in variants.items():
         workspace = output_dir.joinpath(f"replay_{name}")
+        run_config = default_run_config(
+            run_mode="benchmark",
+            device=device,
+            compute_mass_balance=True,
+            profile_performance=(str(variant_set).strip().lower() in {"speed", "coarse", "light"}),
+            save_heavy_diagnostics=False,
+            run_replay_matrix=True,
+        )
         summary = run_replay_from_artifact(
             artifact_path=artifact_path,
             workspace=workspace,
@@ -1028,6 +1084,7 @@ def run_optional_replay_variants(
             storage_freeze_after_outer=cfg.get("storage_freeze_after_outer"),
             storage_switch_fraction_tol=cfg.get("storage_switch_fraction_tol", 0.0),
             allow_warm_start_mismatch=allow_warm_start_mismatch,
+            run_config=run_config,
         )
         comparison = summary.get("comparison", {}) if isinstance(summary, dict) else {}
         variant_rows, variant_pattern, variant_worst_cells, variant_picard, variant_storage = variant_diagnostics_from_workspace(
@@ -1076,6 +1133,7 @@ def run_optional_replay_variants(
             "convergence": summary.get("convergence", {}) if isinstance(summary, dict) else {},
             "period_convergence": summary.get("period_convergence", {}) if isinstance(summary, dict) else {},
             "timing": summary.get("timing", {}) if isinstance(summary, dict) else {},
+            "performance": summary.get("performance", {}) if isinstance(summary, dict) else {},
             "mf6_replay_settings": summary.get("mf6_replay_settings", {}) if isinstance(summary, dict) else {},
             "runtime": finite_scalar((summary.get("timing", {}) if isinstance(summary, dict) else {}).get("warp_total_time")),
         }
@@ -1184,10 +1242,16 @@ def variant_full_metrics(result: dict) -> dict:
     outer_iters = [
         int(p.get("outer_iterations", 0) or 0) for p in periods if isinstance(p, dict)
     ]
+    inner_cycles = [
+        int(p.get("total_inner_kcycles", 0) or 0) for p in periods if isinstance(p, dict)
+    ]
     total_outer_iterations = int(sum(outer_iters)) if outer_iters else None
+    total_inner_kcycles = int(sum(inner_cycles)) if inner_cycles else None
     max_outer_iterations_per_period = int(max(outer_iters)) if outer_iters else None
+    max_inner_kcycles_per_period = int(max(inner_cycles)) if inner_cycles else None
     converged = bool(not nonconverged_periods) if periods else None
     period_1_outer_iterations = int(outer_iters[0]) if outer_iters else None
+    period_1_inner_kcycles = int(inner_cycles[0]) if inner_cycles else None
 
     last_changed = [
         float(p.get("last_top_switch_changed_fraction", 0.0) or 0.0)
@@ -1203,6 +1267,11 @@ def variant_full_metrics(result: dict) -> dict:
     max_top_switch_changed_fraction = max(max_changed) if max_changed else None
 
     timing = result.get("timing") or {}
+    performance = result.get("performance") or {}
+    profile = performance.get("profile") if isinstance(performance, dict) else None
+    profile_totals = profile.get("totals", {}) if isinstance(profile, dict) else {}
+    settings = result.get("settings") or {}
+    solve_controls = settings.get("solve_controls") or {}
     runtime = finite_scalar(result.get("runtime"))
     mean_period_runtime = finite_scalar(timing.get("warp_period_time_mean"))
     max_period_runtime = finite_scalar(timing.get("warp_period_time_max"))
@@ -1224,6 +1293,7 @@ def variant_full_metrics(result: dict) -> dict:
     mass_balance_worst = mass_balance.get("worst_period", {}) if isinstance(mass_balance, dict) else {}
     max_abs_percent_discrepancy = finite_scalar(mass_balance.get("max_abs_percent_discrepancy"))
     max_abs_in_minus_out = finite_scalar(mass_balance.get("max_abs_in_minus_out"))
+    mass_balance_class = mass_balance.get("mass_balance_class")
     all_period_practical_target_passed = bool(
         rows
         and all(float(r["rmse"]) < 0.01 and float(r["max_abs_diff"]) < 0.05 for r in rows)
@@ -1237,6 +1307,10 @@ def variant_full_metrics(result: dict) -> dict:
 
     return {
         "variant_name": result.get("variant_name"),
+        "nu_pre": solve_controls.get("nu_pre"),
+        "nu_post": solve_controls.get("nu_post"),
+        "nu_coarse": solve_controls.get("nu_coarse"),
+        "max_levels": solve_controls.get("max_levels"),
         "final_max_abs_diff": final_max_abs,
         "final_rmse": final_rmse,
         "final_bias": final_bias,
@@ -1255,8 +1329,11 @@ def variant_full_metrics(result: dict) -> dict:
         "converged": converged,
         "nonconverged_periods": nonconverged_periods,
         "total_outer_iterations": total_outer_iterations,
+        "total_inner_kcycles": total_inner_kcycles,
         "max_outer_iterations_per_period": max_outer_iterations_per_period,
+        "max_inner_kcycles_per_period": max_inner_kcycles_per_period,
         "period_1_outer_iterations": period_1_outer_iterations,
+        "period_1_inner_kcycles": period_1_inner_kcycles,
         "runtime": runtime,
         "period_1_runtime": period_1_runtime,
         "mean_period_runtime": mean_period_runtime,
@@ -1277,8 +1354,15 @@ def variant_full_metrics(result: dict) -> dict:
         "storage_sign_used": storage_sign_used,
         "mass_balance_max_abs_percent_discrepancy": max_abs_percent_discrepancy,
         "mass_balance_max_abs_in_minus_out": max_abs_in_minus_out,
+        "mass_balance_class": mass_balance_class,
         "mass_balance_worst_period": mass_balance_worst.get("period"),
         "mass_balance_worst_period_percent_discrepancy": mass_balance_worst.get("percent_discrepancy"),
+        "profile_inner_solver_seconds": finite_scalar(profile_totals.get("inner_solver_seconds")),
+        "profile_dynamic_coarse_refresh_seconds": finite_scalar(profile_totals.get("dynamic_coarse_refresh_seconds")),
+        "profile_fine_m_inv_refresh_seconds": finite_scalar(profile_totals.get("fine_m_inv_refresh_seconds")),
+        "profile_T_update_seconds": finite_scalar(profile_totals.get("T_update_seconds")),
+        "profile_storage_kernel_seconds": finite_scalar(profile_totals.get("storage_kernel_seconds")),
+        "profile_rhs_assembly_seconds": finite_scalar(profile_totals.get("rhs_assembly_seconds")),
     }
 
 
@@ -1312,6 +1396,71 @@ def best_variant_summary(variant_results: dict | None) -> dict | None:
     out.update(variant_worst_period_metrics(result=result))
     out["best_variant_passes_practical_target"] = bool(rmse < 0.01 and max_abs < 0.05)
     return out
+
+
+def speed_candidate_passes(metrics: dict) -> bool:
+    """
+    Evaluate whether a variant is eligible for speed-sweep recommendation.
+
+    :param metrics: Output of :func:`variant_full_metrics`.
+    :return: ``True`` when the variant passes production, head, and mass-balance gates.
+    """
+    final_rmse = finite_scalar(metrics.get("final_rmse"))
+    final_max_abs = finite_scalar(metrics.get("final_max_abs_diff"))
+    worst_rmse = finite_scalar(metrics.get("worst_period_rmse"))
+    worst_max_abs = finite_scalar(metrics.get("worst_period_max_abs_diff"))
+    mass_balance_class = str(metrics.get("mass_balance_class", "")).strip().lower()
+    return bool(
+        metrics.get("production_acceptance_passed") is True
+        and final_rmse is not None
+        and final_rmse < 0.001
+        and final_max_abs is not None
+        and final_max_abs < 0.005
+        and worst_rmse is not None
+        and worst_rmse < 0.005
+        and worst_max_abs is not None
+        and worst_max_abs < 0.02
+        and mass_balance_class in {"excellent", "good"}
+    )
+
+
+def fastest_speed_variant_summary(rows: list[dict]) -> dict | None:
+    """
+    Select the fastest accepted speed-sweep variant.
+
+    :param rows: Variant metric rows from :func:`variant_full_metrics`.
+    :return: Fastest accepted variant summary, or ``None`` when no candidate passes.
+    """
+    candidates = [
+        row for row in rows
+        if finite_scalar(row.get("runtime")) is not None and speed_candidate_passes(metrics=row)
+    ]
+    if not candidates:
+        return None
+    best = min(candidates, key=speed_candidate_runtime_key)
+    return {
+        "variant_name": best.get("variant_name"),
+        "runtime": finite_scalar(best.get("runtime")),
+        "nu_pre": best.get("nu_pre"),
+        "nu_post": best.get("nu_post"),
+        "nu_coarse": best.get("nu_coarse"),
+        "max_levels": best.get("max_levels"),
+        "final_rmse": finite_scalar(best.get("final_rmse")),
+        "final_max_abs_diff": finite_scalar(best.get("final_max_abs_diff")),
+        "worst_period_rmse": finite_scalar(best.get("worst_period_rmse")),
+        "worst_period_max_abs_diff": finite_scalar(best.get("worst_period_max_abs_diff")),
+        "mass_balance_class": best.get("mass_balance_class"),
+        "mass_balance_max_abs_percent_discrepancy": finite_scalar(
+            best.get("mass_balance_max_abs_percent_discrepancy")
+        ),
+        "production_acceptance_passed": best.get("production_acceptance_passed"),
+    }
+
+
+def speed_candidate_runtime_key(row: dict) -> float:
+    """:param row: Speed-sweep metric row. :return: runtime sort key."""
+    value = finite_scalar(row.get("runtime"))
+    return float(value) if value is not None else math.inf
 
 
 def diagnose(
@@ -1674,18 +1823,22 @@ def print_freeze_metrics_table(rows: list[dict]) -> None:
 
 
 SPEED_TABLE_COLUMNS = (
-    "variant_name", "runtime", "period_1_runtime", "total_outer_iterations", "period_1_outer_iterations",
+    "variant_name", "nu_pre", "nu_post", "nu_coarse", "max_levels",
+    "runtime", "period_1_runtime", "mean_period_runtime",
+    "total_outer_iterations", "total_inner_kcycles", "period_1_outer_iterations", "period_1_inner_kcycles",
     "strict_picard_convergence_passed", "practical_picard_acceptance_passed", "production_acceptance_passed",
     "final_rmse", "final_max_abs_diff", "worst_period_rmse", "worst_period_max_abs_diff",
     "all_period_practical_target_passed", "mass_balance_max_abs_in_minus_out", "mass_balance_max_abs_percent_discrepancy",
+    "mass_balance_class", "profile_inner_solver_seconds", "profile_dynamic_coarse_refresh_seconds",
+    "profile_fine_m_inv_refresh_seconds",
 )
 
 
 def print_speed_sweep_table(rows: list[dict]) -> None:
-    """:param rows: secant-Sy speed sweep metric rows."""
+    """:param rows: secant-Sy speed/coarse sweep metric rows."""
     if not rows:
         return
-    print("\nSecant-Sy speed sweep")
+    print("\nSecant-Sy performance sweep")
     header = "  ".join(col for col in SPEED_TABLE_COLUMNS)
     print("-" * len(header))
     print(header)
@@ -1694,6 +1847,26 @@ def print_speed_sweep_table(rows: list[dict]) -> None:
         cells = [_fmt_metric(row.get(col)) for col in SPEED_TABLE_COLUMNS]
         print("  ".join(cell.rjust(len(col)) for cell, col in zip(cells, SPEED_TABLE_COLUMNS)))
     print("-" * len(header))
+
+
+def print_fastest_speed_variant(summary: dict | None) -> None:
+    """:param summary: output of :func:`fastest_speed_variant_summary`."""
+    if not summary:
+        print("\nFastest accepted speed variant: not_available")
+        return
+    print(f"\nFastest accepted speed variant: {summary.get('variant_name')}")
+    print("Recommended speed setting:")
+    print(f"  nu_pre = {summary.get('nu_pre')}")
+    print(f"  nu_post = {summary.get('nu_post')}")
+    print(f"  nu_coarse = {summary.get('nu_coarse')}")
+    print(f"  max_levels = {summary.get('max_levels')}")
+    print(
+        "  runtime = "
+        f"{_fmt_metric(summary.get('runtime'))} s; "
+        f"final_rmse = {_fmt_metric(summary.get('final_rmse'))}; "
+        f"final_max_abs_diff = {_fmt_metric(summary.get('final_max_abs_diff'))}; "
+        f"mass_balance_class = {_fmt_metric(summary.get('mass_balance_class'))}"
+    )
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -1713,7 +1886,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--worst-period", type=int, default=None)
     parser.add_argument("--top-n", type=int, default=20)
     parser.add_argument("--run-replays", action="store_true")
-    parser.add_argument("--variant-set", choices=("full", "speed"), default="full")
+    parser.add_argument("--variant-set", choices=("full", "speed", "coarse", "light"), default="full")
     parser.add_argument("--variant-workspace", type=Path, default=None)
     parser.add_argument("--variant-name", default="selected_variant")
     parser.add_argument("--ignore-existing-variant-results", action="store_true")
@@ -1848,8 +2021,13 @@ def main(argv: list[str] | None = None) -> int:
                 full_result["converged"] = convergence.get("converged")
                 full_result["runtime"] = result.get("runtime")
                 secant_freeze_metrics.append(full_result)
-            if str(name).startswith("mf6_secant_sy_speed_outer_"):
+            if str(name) == "production_secant_sy" or str(name).startswith("secant_sy_nu_"):
                 speed_sweep_metrics.append(full_result)
+    fastest_speed_variant = (
+        fastest_speed_variant_summary(rows=speed_sweep_metrics)
+        if str(args.variant_set).strip().lower() in {"speed", "coarse", "light"}
+        else None
+    )
 
     summary = {
         "artifact_path": str(args.artifact),
@@ -1870,6 +2048,7 @@ def main(argv: list[str] | None = None) -> int:
         "winning_variant_full_metrics": winning_full_metrics,
         "secant_sy_freeze_metrics": secant_freeze_metrics,
         "speed_sweep_metrics": speed_sweep_metrics,
+        "fastest_accepted_speed_variant": fastest_speed_variant,
         "default_replay": {
             "final": final_metrics,
             "runtime": finite_scalar(warp.get("total_time")),
@@ -1928,6 +2107,8 @@ def main(argv: list[str] | None = None) -> int:
         print_variant_full_metrics(WINNING_VARIANT_NAME, winning_full_metrics)
     print_freeze_metrics_table(secant_freeze_metrics)
     print_speed_sweep_table(speed_sweep_metrics)
+    if str(args.variant_set).strip().lower() in {"speed", "coarse", "light"}:
+        print_fastest_speed_variant(summary=fastest_speed_variant)
     print("\nDiagnosis")
     print(json.dumps(diagnosis, indent=2, default=str))
     print(f"\nAnalysis JSON: {args.output_json}")
