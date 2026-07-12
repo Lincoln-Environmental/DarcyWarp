@@ -57,13 +57,15 @@ from DARCY_WARP_PACKAGE.project_base import data_store, require_mf6  # noqa: E40
 
 
 # ---- defaults --------------------------------------------------------------
-N_WEEKS = 52
+N_WEEKS = 10
+RECHARGE_SCHEDULE_WEEKS = 52
 DT_DAYS = 7.0
 ANNUAL_RECHARGE_M = 0.3
-DEFAULT_NX = DEFAULT_NY = 500
+DEFAULT_NX = 1000
+DEFAULT_NY = 1000
 DEFAULT_DX = 100.0
 DEFAULT_K = 100.0
-DEFAULT_SY = 0.20           # specific yield (unconfined storage)
+DEFAULT_SY = 0.10           # specific yield (unconfined storage)
 DEFAULT_SS = 1.0e-5         # specific storage (1/m), confined/saturated portion
 DEFAULT_INIT_SAT_THICKNESS = 100.0
 MF6_MODEL_NAME = "tr2d_truth"
@@ -83,7 +85,8 @@ WARM_START_MODES = {
 def build_seasonal_recharge(
     n_weeks: int = N_WEEKS,
     annual_depth_m: float = ANNUAL_RECHARGE_M,
-    peak_week: float = N_WEEKS / 2.0,
+    recharge_schedule_weeks: int = RECHARGE_SCHEDULE_WEEKS,
+    peak_week: float | None = None,
     floor: float = 0.05,
     dt_days: float = DT_DAYS,
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -91,20 +94,34 @@ def build_seasonal_recharge(
     Build a winter-dominated recharge time series for transient MF6 runs.
 
     A single-peak cosine shape floored so summer recharge is small but
-    positive, then scaled so the weekly DEPTHS sum to exactly
-    ``annual_depth_m``. Returns ``(depths_m, rates_m_per_day)`` each of length
-    ``n_weeks``; ``rate_k = depth_k / dt_days``.
+    positive, then scaled over ``recharge_schedule_weeks`` so the full schedule
+    depths sum to exactly ``annual_depth_m``. Returns the first ``n_weeks``
+    entries as ``(depths_m, rates_m_per_day)``; ``rate_k = depth_k / dt_days``.
 
     Parameters
     ----------
     annual_depth_m : total recharge depth applied over the year (m).
-    peak_week : week index of maximum recharge (default mid-year).
+    recharge_schedule_weeks : number of weekly periods represented by the
+        annual recharge total. Use 52 when running a shorter transient sample.
+    peak_week : week index of maximum recharge on the full schedule.
     floor : minimum recharge as a fraction of the peak (summer floor).
     dt_days : days per stress period (used to convert depth -> rate).
     """
-    weeks = np.arange(n_weeks, dtype=np.float64)
-    shape = floor + (1.0 - floor) * 0.5 * (1.0 + np.cos(2.0 * np.pi * (weeks - peak_week) / n_weeks))
-    depths = shape * (float(annual_depth_m) / float(shape.sum()))
+    n_weeks = int(n_weeks)
+    recharge_schedule_weeks = int(recharge_schedule_weeks)
+    if n_weeks < 1:
+        raise ValueError("n_weeks must be positive.")
+    if recharge_schedule_weeks < n_weeks:
+        raise ValueError("recharge_schedule_weeks must be at least n_weeks.")
+    if peak_week is None:
+        peak_week = float(recharge_schedule_weeks) / 2.0
+
+    weeks = np.arange(recharge_schedule_weeks, dtype=np.float64)
+    shape = floor + (1.0 - floor) * 0.5 * (
+        1.0 + np.cos(2.0 * np.pi * (weeks - float(peak_week)) / float(recharge_schedule_weeks))
+    )
+    schedule_depths = shape * (float(annual_depth_m) / float(shape.sum()))
+    depths = schedule_depths[:n_weeks].copy()
     rates = depths / float(dt_days)
     return depths, rates
 
@@ -124,7 +141,9 @@ class TransientCase:
     sy: float
     ss: float
     n_weeks: int
+    recharge_schedule_weeks: int
     dt_days: float
+    steady_recharge_rate: float
     recharge_depths: np.ndarray   # (n_weeks,) m
     recharge_rates: np.ndarray    # (n_weeks,) m/day
 
@@ -139,6 +158,7 @@ def build_transient_unconfined_case(
     ss: float = DEFAULT_SS,
     n_weeks: int = N_WEEKS,
     annual_recharge_m: float = ANNUAL_RECHARGE_M,
+    recharge_schedule_weeks: int = RECHARGE_SCHEDULE_WEEKS,
     dt_days: float = DT_DAYS,
     workspace: str | Path | None = None,
 ) -> TransientCase:
@@ -175,8 +195,10 @@ def build_transient_unconfined_case(
     depths, rates = build_seasonal_recharge(
         n_weeks=n_weeks,
         annual_depth_m=annual_recharge_m,
+        recharge_schedule_weeks=recharge_schedule_weeks,
         dt_days=dt_days,
     )
+    steady_recharge_rate = float(annual_recharge_m) / (float(recharge_schedule_weeks) * float(dt_days))
     return TransientCase(
         nx=int(nx),
         ny=int(ny),
@@ -191,7 +213,9 @@ def build_transient_unconfined_case(
         sy=float(sy),
         ss=float(ss),
         n_weeks=int(n_weeks),
+        recharge_schedule_weeks=int(recharge_schedule_weeks),
         dt_days=float(dt_days),
+        steady_recharge_rate=float(steady_recharge_rate),
         recharge_depths=depths,
         recharge_rates=rates,
     )
@@ -209,6 +233,57 @@ def _save_compressed_npz(out_path: Path, arrays: dict[str, np.ndarray], preset: 
     buf = io.BytesIO()
     np.savez(buf, **arrays)
     out_path.write_bytes(lzma.compress(buf.getvalue(), preset=preset))
+
+
+def _load_mf6_last_head(
+    *,
+    hds_path: Path,
+    case: TransientCase,
+    label: str,
+) -> np.ndarray | None:
+    """
+    Load a completed MF6 head file when it matches the requested case shape.
+    """
+    if not hds_path.exists():
+        return None
+    heads = flopy.utils.HeadFile(str(hds_path)).get_alldata()
+    if heads.size == 0:
+        return None
+    head = np.asarray(heads[-1, 0, :, :], dtype=np.float64)
+    if head.shape != (case.ny, case.nx):
+        print(
+            f"Existing {label} warm-start head has shape {head.shape}; "
+            f"expected {(case.ny, case.nx)}. Recomputing warm start."
+        )
+        return None
+    head[case.active == 0] = 0.0
+    head[case.bc_mask != 0] = case.bc_values[case.bc_mask != 0]
+    if not np.all(np.isfinite(head)):
+        print(f"Existing {label} warm-start head contains non-finite values. Recomputing warm start.")
+        return None
+    print(f"Reusing existing {label} warm-start head: {hds_path}")
+    return head
+
+
+def _transient_failure_message(*, mf6_ws: Path, name: str) -> str:
+    """
+    Include the useful MF6 listing-file failure line without requiring reruns.
+    """
+    listing_paths = [mf6_ws.joinpath(f"{name}.lst"), mf6_ws.joinpath("mfsim.lst")]
+    markers: list[str] = []
+    for path in listing_paths:
+        if not path.exists():
+            continue
+        for line in path.read_text(errors="replace").splitlines():
+            text = line.strip()
+            if (
+                "FAILED TO MEET SOLVER CONVERGENCE" in text
+                or "did not converge" in text
+                or "Simulation convergence failure" in text
+            ):
+                markers.append(f"{path.name}: {text}")
+    detail = "; ".join(markers[-4:])
+    return "MF6 transient run failed." if not detail else f"MF6 transient run failed: {detail}"
 
 
 def _decode_budget_record_name(name: object) -> str:
@@ -420,7 +495,7 @@ def run_mf6_confined_steady_warm_start(
     mf6_ws.mkdir(parents=True, exist_ok=True)
 
     recharge_rate = (
-        float(np.mean(case.recharge_rates))
+        float(case.steady_recharge_rate)
         if recharge_rate is None
         else float(recharge_rate)
     )
@@ -538,7 +613,7 @@ def run_mf6_unconfined_steady_warm_start(
     mf6_ws.mkdir(parents=True, exist_ok=True)
 
     recharge_rate = (
-        float(np.mean(case.recharge_rates))
+        float(case.steady_recharge_rate)
         if recharge_rate is None
         else float(recharge_rate)
     )
@@ -641,6 +716,8 @@ def run_mf6_transient(
     case: TransientCase,
     out_path: str | Path | None = None,
     mf6_workspace: str | Path | None = None,
+    warm_start_workspace: str | Path | None = None,
+    reuse_existing_warm_start: bool = False,
     warm_start_mode: str = WARM_START_CONFINED_STEADY_MF6,
     confined_steady_head: np.ndarray | None = None,
     unconfined_steady_head: np.ndarray | None = None,
@@ -677,13 +754,26 @@ def run_mf6_transient(
     out_path = Path(out_path)
     mf6_ws = Path(mf6_workspace) if mf6_workspace is not None else out_path.parent.joinpath("mf6")
     mf6_ws.mkdir(parents=True, exist_ok=True)
+    warm_start_ws = Path(warm_start_workspace) if warm_start_workspace is not None else out_path.parent
 
     warm_start_mode = str(warm_start_mode).strip().lower()
     if warm_start_mode not in WARM_START_MODES:
         raise ValueError(f"warm_start_mode must be one of {sorted(WARM_START_MODES)}.")
     confined_steady_engine_time = float("nan")
     unconfined_steady_engine_time = float("nan")
+    warm_start_transmissivity_mode = "not_used"
     if warm_start_mode == WARM_START_CONFINED_STEADY_MF6:
+        confined_workspace = warm_start_ws.joinpath("mf6_confined_steady_warm_start")
+        if confined_steady_head is None:
+            if bool(reuse_existing_warm_start):
+                confined_steady_head = _load_mf6_last_head(
+                    hds_path=confined_workspace.joinpath("tr2d_c_ss.hds"),
+                    case=case,
+                    label="confined steady",
+                )
+                if confined_steady_head is not None:
+                    confined_steady_engine_time = 0.0
+                    warm_start_transmissivity_mode = "reused_existing"
         if confined_steady_head is None:
             warm_start_transmissivity_mode = (
                 "full_thickness"
@@ -692,13 +782,14 @@ def run_mf6_transient(
             )
             confined_steady_head, confined_steady_engine_time = run_mf6_confined_steady_warm_start(
                 case=case,
-                recharge_rate=float(np.mean(case.recharge_rates)),
-                mf6_workspace=out_path.parent.joinpath("mf6_confined_steady_warm_start"),
+                recharge_rate=float(case.steady_recharge_rate),
+                mf6_workspace=confined_workspace,
                 transmissivity_mode=warm_start_transmissivity_mode,
             )
         else:
             confined_steady_head = np.asarray(confined_steady_head, dtype=np.float64)
-            warm_start_transmissivity_mode = "provided"
+            if warm_start_transmissivity_mode == "not_used":
+                warm_start_transmissivity_mode = "provided"
         if confined_steady_head.shape != (case.ny, case.nx):
             raise ValueError(
                 f"confined_steady_head shape {confined_steady_head.shape} expected {(case.ny, case.nx)}."
@@ -710,12 +801,22 @@ def run_mf6_transient(
     elif warm_start_mode == WARM_START_UNCONFINED_STEADY_MF6:
         if formulation != FORMULATION_UNCONFINED:
             raise ValueError("warm_start_mode='unconfined_steady_mf6' requires formulation='unconfined'.")
+        unconfined_workspace = warm_start_ws.joinpath("mf6_unconfined_steady_warm_start")
         if unconfined_steady_head is None:
-            unconfined_steady_head, unconfined_steady_engine_time = run_mf6_unconfined_steady_warm_start(
-                case=case,
-                recharge_rate=float(np.mean(case.recharge_rates)),
-                mf6_workspace=out_path.parent.joinpath("mf6_unconfined_steady_warm_start"),
-            )
+            if bool(reuse_existing_warm_start):
+                unconfined_steady_head = _load_mf6_last_head(
+                    hds_path=unconfined_workspace.joinpath("tr2d_u_ss.hds"),
+                    case=case,
+                    label="unconfined steady",
+                )
+                if unconfined_steady_head is not None:
+                    unconfined_steady_engine_time = 0.0
+            if unconfined_steady_head is None:
+                unconfined_steady_head, unconfined_steady_engine_time = run_mf6_unconfined_steady_warm_start(
+                    case=case,
+                    recharge_rate=float(case.steady_recharge_rate),
+                    mf6_workspace=unconfined_workspace,
+                )
         else:
             unconfined_steady_head = np.asarray(unconfined_steady_head, dtype=np.float64)
         if unconfined_steady_head.shape != (case.ny, case.nx):
@@ -831,7 +932,7 @@ def run_mf6_transient(
     engine_time = time.perf_counter() - t_engine_start
     total_time = time.perf_counter() - t_total_start
     if not ok:
-        raise RuntimeError("MF6 transient run failed.")
+        raise RuntimeError(_transient_failure_message(mf6_ws=mf6_ws, name=name))
 
     hds_path = mf6_ws.joinpath(f"{name}.hds")
     heads_all = flopy.utils.HeadFile(str(hds_path)).get_alldata()  # (ntimes, nlay, ny, nx)
@@ -845,6 +946,7 @@ def run_mf6_transient(
         formulation=formulation,
     )
 
+    annual_recharge_schedule_m = float(case.steady_recharge_rate) * float(case.recharge_schedule_weeks) * float(case.dt_days)
     arrays = {
         "heads_per_period": heads_per_period,
         "heads_final": heads_per_period[-1],
@@ -860,6 +962,8 @@ def run_mf6_transient(
         "k_field": np.asarray(case.hydraulic_conductivity, dtype=np.float64),
         "recharge_depths": np.asarray(case.recharge_depths, dtype=np.float64),
         "recharge_rates": np.asarray(case.recharge_rates, dtype=np.float64),
+        "recharge_schedule_weeks": np.asarray(case.recharge_schedule_weeks, dtype=np.int32),
+        "steady_recharge_rate": np.asarray(case.steady_recharge_rate, dtype=np.float64),
         "sy": np.asarray(case.sy, dtype=np.float64),
         "ss": np.asarray(case.ss, dtype=np.float64),
         "formulation": np.asarray(formulation),
@@ -880,8 +984,11 @@ def run_mf6_transient(
             "warm_start_mode": warm_start_mode,
             "confined_steady_transmissivity_mode": warm_start_transmissivity_mode,
             "n_weeks": case.n_weeks,
+            "recharge_schedule_weeks": case.recharge_schedule_weeks,
             "dt_days": case.dt_days,
-            "annual_recharge_m": float(case.recharge_depths.sum()),
+            "annual_recharge_m": float(annual_recharge_schedule_m),
+            "simulated_recharge_m": float(case.recharge_depths.sum()),
+            "steady_recharge_rate": float(case.steady_recharge_rate),
             "sy": case.sy,
             "ss": case.ss,
             "hydraulic_conductivity": case.hydraulic_conductivity.flat[0],
@@ -891,11 +998,12 @@ def run_mf6_transient(
     }
     _save_compressed_npz(out_path, arrays)
 
-    annual = float(case.recharge_depths.sum())
+    simulated_recharge = float(case.recharge_depths.sum())
     print(f"MF6 transient heads saved to {out_path} ({out_path.stat().st_size / 1e6:.2f} MB)")
     print(
-        f"  n_weeks={case.n_weeks} dt={case.dt_days}d  recharge annual sum={annual:.4f} m "
-        f"(target {ANNUAL_RECHARGE_M}); Sy={case.sy} Ss={case.ss}"
+        f"  n_weeks={case.n_weeks} dt={case.dt_days}d  simulated recharge={simulated_recharge:.4f} m "
+        f"from {case.recharge_schedule_weeks}-week annual schedule target {annual_recharge_schedule_m:.4f}; "
+        f"steady recharge rate={case.steady_recharge_rate:.8g} m/d; Sy={case.sy} Ss={case.ss}"
     )
     print(f"  formulation: {formulation}")
     print(f"  warm start: {warm_start_mode}")
@@ -918,7 +1026,11 @@ def main(
     ss: float = DEFAULT_SS,
     n_weeks: int = N_WEEKS,
     annual_recharge_m: float = ANNUAL_RECHARGE_M,
+    recharge_schedule_weeks: int = RECHARGE_SCHEDULE_WEEKS,
     out_path: str | Path | None = None,
+    mf6_workspace: str | Path | None = None,
+    warm_start_workspace: str | Path | None = None,
+    reuse_existing_warm_start: bool = False,
     warm_start_mode: str = WARM_START_UNCONFINED_STEADY_MF6,
     formulation: str = FORMULATION_UNCONFINED,
 ) -> Path:
@@ -941,11 +1053,15 @@ def main(
         ss=ss,
         n_weeks=n_weeks,
         annual_recharge_m=annual_recharge_m,
+        recharge_schedule_weeks=recharge_schedule_weeks,
     )
     print(f"Transient 2D {formulation} MF6 truth: {nx}x{ny}, {n_weeks} weekly steps, K={hydraulic_conductivity}")
     return run_mf6_transient(
         case=case,
         out_path=out_path,
+        mf6_workspace=mf6_workspace,
+        warm_start_workspace=warm_start_workspace,
+        reuse_existing_warm_start=reuse_existing_warm_start,
         warm_start_mode=warm_start_mode,
         formulation=formulation,
     )
@@ -961,9 +1077,17 @@ if __name__ == "__main__":
     ss = DEFAULT_SS
     n_weeks = N_WEEKS
     annual_recharge_m = ANNUAL_RECHARGE_M
-    out_path = None
+    recharge_schedule_weeks = RECHARGE_SCHEDULE_WEEKS
     warm_start_mode = WARM_START_UNCONFINED_STEADY_MF6
     formulation = FORMULATION_UNCONFINED
+    out_path = data_store.joinpath(
+        "working_tests",
+        f"mf6_transient_2d_{formulation}_{nx}x{ny}_{n_weeks}w",
+        "mf6_transient_heads.npz.lzma",
+    )
+    mf6_workspace = None
+    warm_start_workspace = data_store.joinpath("working_tests", f"mf6_transient_2d_{formulation}")
+    reuse_existing_warm_start = True
 
     main(
         nx=nx,
@@ -974,7 +1098,11 @@ if __name__ == "__main__":
         ss=ss,
         n_weeks=n_weeks,
         annual_recharge_m=annual_recharge_m,
+        recharge_schedule_weeks=recharge_schedule_weeks,
         out_path=out_path,
+        mf6_workspace=mf6_workspace,
+        warm_start_workspace=warm_start_workspace,
+        reuse_existing_warm_start=reuse_existing_warm_start,
         warm_start_mode=warm_start_mode,
         formulation=formulation,
     )

@@ -843,6 +843,7 @@ def main(
     storage_freeze_after_outer: int | None = None,
     storage_switch_fraction_tol: float = 0.0,
     allow_warm_start_mismatch: bool = False,
+    solve_controls: dict | None = None,
     run_config: dict | None = None,
 ) -> dict:
     """
@@ -882,6 +883,7 @@ def main(
         storage_freeze_after_outer=storage_freeze_after_outer,
         storage_switch_fraction_tol=storage_switch_fraction_tol,
         allow_warm_start_mismatch=allow_warm_start_mismatch,
+        solve_controls=solve_controls,
         run_config=run_config,
     )
 
