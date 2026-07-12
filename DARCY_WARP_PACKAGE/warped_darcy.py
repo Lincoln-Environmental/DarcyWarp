@@ -99,6 +99,141 @@ def _normalize_scalar_or_grid_to_shape(
     raise ValueError(f"{name} must be a scalar or shape {shape}. Got {arr.shape}.")
 
 
+def specific_storage_potential(
+    *,
+    head: np.ndarray,
+    bottom: np.ndarray,
+    top: np.ndarray,
+    specific_storage: float,
+) -> np.ndarray:
+    """
+    Specific-storage potential per unit plan area for a convertible layer.
+    """
+    head_arr = np.asarray(head, dtype=np.float64)
+    bottom_arr = np.asarray(bottom, dtype=np.float64)
+    top_arr = np.asarray(top, dtype=np.float64)
+    thickness = np.maximum(top_arr - bottom_arr, 0.0)
+    rel = head_arr - bottom_arr
+    ss = float(specific_storage)
+
+    phi = np.zeros(np.broadcast_shapes(head_arr.shape, bottom_arr.shape, top_arr.shape), dtype=np.float64)
+    rel_b = np.broadcast_to(rel, phi.shape)
+    thickness_b = np.broadcast_to(thickness, phi.shape)
+
+    partial = (rel_b > 0.0) & (rel_b < thickness_b)
+    full = rel_b >= thickness_b
+    phi[partial] = 0.5 * ss * rel_b[partial] * rel_b[partial]
+    phi[full] = (
+        0.5 * ss * thickness_b[full] * thickness_b[full]
+        + ss * thickness_b[full] * (rel_b[full] - thickness_b[full])
+    )
+    return phi
+
+
+def secant_specific_yield_coeff(
+    *,
+    head_ref: np.ndarray,
+    head_old: np.ndarray,
+    bottom: np.ndarray,
+    top: np.ndarray,
+    specific_yield: float,
+    secant_eps: float = 1.0e-12,
+) -> np.ndarray:
+    head_ref_arr = np.asarray(head_ref, dtype=np.float64)
+    head_old_arr = np.asarray(head_old, dtype=np.float64)
+    bottom_arr = np.asarray(bottom, dtype=np.float64)
+    top_arr = np.asarray(top, dtype=np.float64)
+    thickness = np.maximum(top_arr - bottom_arr, 0.0)
+    sat_ref = np.clip(head_ref_arr - bottom_arr, 0.0, thickness)
+    sat_old = np.clip(head_old_arr - bottom_arr, 0.0, thickness)
+    dh = head_ref_arr - head_old_arr
+
+    coeff = np.zeros_like(np.broadcast_to(dh, np.broadcast_shapes(dh.shape, thickness.shape)), dtype=np.float64)
+    moving = np.abs(dh) > float(secant_eps)
+    coeff[moving] = float(specific_yield) * ((sat_ref[moving] - sat_old[moving]) / dh[moving])
+    fallback = (~moving) & (head_ref_arr > bottom_arr) & (head_ref_arr < top_arr)
+    coeff[fallback] = float(specific_yield)
+    return np.clip(coeff, 0.0, float(specific_yield))
+
+
+def secant_specific_storage_coeff(
+    *,
+    head_ref: np.ndarray,
+    head_old: np.ndarray,
+    bottom: np.ndarray,
+    top: np.ndarray,
+    specific_storage: float,
+    secant_eps: float = 1.0e-12,
+) -> np.ndarray:
+    head_ref_arr = np.asarray(head_ref, dtype=np.float64)
+    head_old_arr = np.asarray(head_old, dtype=np.float64)
+    bottom_arr = np.asarray(bottom, dtype=np.float64)
+    top_arr = np.asarray(top, dtype=np.float64)
+    thickness = np.maximum(top_arr - bottom_arr, 0.0)
+    dh = head_ref_arr - head_old_arr
+    phi_ref = specific_storage_potential(
+        head=head_ref_arr,
+        bottom=bottom_arr,
+        top=top_arr,
+        specific_storage=float(specific_storage),
+    )
+    phi_old = specific_storage_potential(
+        head=head_old_arr,
+        bottom=bottom_arr,
+        top=top_arr,
+        specific_storage=float(specific_storage),
+    )
+    coeff = np.zeros_like(phi_ref, dtype=np.float64)
+    moving = np.abs(dh) > float(secant_eps)
+    coeff[moving] = (phi_ref[moving] - phi_old[moving]) / dh[moving]
+    fallback = ~moving
+    if np.any(fallback):
+        saturated_thickness = np.clip(head_ref_arr - bottom_arr, 0.0, thickness)
+        coeff[fallback] = float(specific_storage) * saturated_thickness[fallback]
+    return np.maximum(coeff, 0.0)
+
+
+def exact_unconfined_storage_terms(
+    *,
+    head_new: np.ndarray,
+    head_old: np.ndarray,
+    bottom: np.ndarray,
+    top: np.ndarray,
+    specific_yield: float,
+    specific_storage: float,
+    dt: float,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Return storage, Sy, and Ss terms per unit plan area per time.
+
+    Positive values mean water has entered storage; mass-balance release is the
+    negative of the returned total term.
+    """
+    head_new_arr = np.asarray(head_new, dtype=np.float64)
+    head_old_arr = np.asarray(head_old, dtype=np.float64)
+    bottom_arr = np.asarray(bottom, dtype=np.float64)
+    top_arr = np.asarray(top, dtype=np.float64)
+    thickness = np.maximum(top_arr - bottom_arr, 0.0)
+    sat_new = np.clip(head_new_arr - bottom_arr, 0.0, thickness)
+    sat_old = np.clip(head_old_arr - bottom_arr, 0.0, thickness)
+    sy_term = float(specific_yield) * (sat_new - sat_old) / float(dt)
+    ss_term = (
+        specific_storage_potential(
+            head=head_new_arr,
+            bottom=bottom_arr,
+            top=top_arr,
+            specific_storage=float(specific_storage),
+        )
+        - specific_storage_potential(
+            head=head_old_arr,
+            bottom=bottom_arr,
+            top=top_arr,
+            specific_storage=float(specific_storage),
+        )
+    ) / float(dt)
+    return sy_term + ss_term, sy_term, ss_term
+
+
 def _chebyshev_update_weights(
     order: int,
     lambda_min_fraction: float,
@@ -962,6 +1097,9 @@ def _format_unaccepted_transient_period_error(
     storage_diag_change_rms: float,
     storage_mode: str,
     storage_reference: str,
+    coarse_operator_mode: str,
+    coarse_krylov_method: str,
+    total_inner_cycles: int,
 ) -> str:
     """
     Format a compact transient period production-acceptance failure message.
@@ -977,7 +1115,10 @@ def _format_unaccepted_transient_period_error(
         f"storage_diag_change_max={float(storage_diag_change_max):.6g} "
         f"storage_diag_change_rms={float(storage_diag_change_rms):.6g} "
         f"storage_mode={storage_mode} "
-        f"storage_reference={storage_reference}"
+        f"storage_reference={storage_reference} "
+        f"coarse_operator_mode={coarse_operator_mode} "
+        f"coarse_krylov_method={coarse_krylov_method} "
+        f"total_inner_cycles={int(total_inner_cycles)}"
     )
 
 
@@ -3087,7 +3228,7 @@ def compute_alpha_kernel(
     rho64 = rho_buf[0]
     pAp64 = pAp_buf[0]
 
-    if pAp64 != wp.float64(0.0):
+    if rho64 > wp.float64(0.0) and pAp64 > wp.float64(1.0e-30):
         alpha_buf[0] = rho64 / pAp64
 
     else:
@@ -3106,7 +3247,7 @@ def compute_beta_and_update_rho_kernel(
     rho_old = rho_buf[0]
     rho_new = rho_new_buf[0]
 
-    if rho_old > wp.float64(0.0):
+    if rho_old > wp.float64(0.0) and rho_new > wp.float64(0.0):
         beta_buf[0] = rho_new / rho_old
     else:
         beta_buf[0] = wp.float64(0.0)
@@ -3216,7 +3357,7 @@ def compute_safe_alpha_kernel(
         return
 
     den = den_buf[0]
-    if den != WP_FLOAT(0.0):
+    if wp.float64(num_buf[0]) > wp.float64(0.0) and wp.float64(den) > wp.float64(1.0e-30):
         alpha_buf[0] = wp.float64(num_buf[0] / wp.float64(den))
     else:
         alpha_buf[0] = wp.float64(0.0)
@@ -3376,10 +3517,9 @@ def update_secant_sy_storage_kernel(
         storage_diag_out[j, i] = WP_FLOAT(0.0)
         return
 
-    full = wp.max(top[j, i] - bottom[j, i], min_sat)
+    full = wp.max(top[j, i] - bottom[j, i], WP_FLOAT(0.0))
     sat_old = wp.min(wp.max(head_prev[j, i] - bottom[j, i], WP_FLOAT(0.0)), full)
     sat_ref_zero = wp.min(wp.max(head_ref[j, i] - bottom[j, i], WP_FLOAT(0.0)), full)
-    sat_ref_ss = wp.min(wp.max(head_ref[j, i] - bottom[j, i], min_sat), full)
     dh = head_ref[j, i] - head_prev[j, i]
 
     sy_coeff = WP_FLOAT(0.0)
@@ -3389,7 +3529,27 @@ def update_secant_sy_storage_kernel(
         sy_coeff = sy
 
     sy_coeff = wp.min(wp.max(sy_coeff, WP_FLOAT(0.0)), sy)
-    ss_coeff = ss * sat_ref_ss
+
+    rel_old = head_prev[j, i] - bottom[j, i]
+    rel_ref = head_ref[j, i] - bottom[j, i]
+    phi_old = WP_FLOAT(0.0)
+    phi_ref = WP_FLOAT(0.0)
+    if rel_old > WP_FLOAT(0.0) and rel_old < full:
+        phi_old = WP_FLOAT(0.5) * ss * rel_old * rel_old
+    elif rel_old >= full:
+        phi_old = WP_FLOAT(0.5) * ss * full * full + ss * full * (rel_old - full)
+    if rel_ref > WP_FLOAT(0.0) and rel_ref < full:
+        phi_ref = WP_FLOAT(0.5) * ss * rel_ref * rel_ref
+    elif rel_ref >= full:
+        phi_ref = WP_FLOAT(0.5) * ss * full * full + ss * full * (rel_ref - full)
+
+    ss_coeff = WP_FLOAT(0.0)
+    if wp.abs(dh) > eps:
+        ss_coeff = (phi_ref - phi_old) / dh
+    else:
+        sat_ref_ss = wp.min(wp.max(rel_ref, WP_FLOAT(0.0)), full)
+        ss_coeff = ss * sat_ref_ss
+    ss_coeff = wp.max(ss_coeff, WP_FLOAT(0.0))
     storage_coeff = sy_coeff + ss_coeff
     storage_diag = storage_coeff * dx * dx / dt
     delta = wp.float64(storage_diag - storage_diag_prev[j, i])
@@ -10245,6 +10405,9 @@ class WarpDarcySolver:
                             storage_diag_change_rms=last_storage_diag_change_rms,
                             storage_mode=str(storage_mode),
                             storage_reference=str(storage_reference),
+                            coarse_operator_mode="stale_approximate_preconditioner",
+                            coarse_krylov_method="recursive_kcycle_safe_alpha",
+                            total_inner_cycles=int(total_inner_kcycles),
                         )
                     )
 
@@ -10264,18 +10427,24 @@ class WarpDarcySolver:
                     sy_coeff_arr = np.asarray(sy_coeff_wp.numpy(), dtype=np.float64)
                     ss_coeff_arr = np.asarray(ss_coeff_wp.numpy(), dtype=np.float64)
                     delta_head = head_arr - period_head_old
-                    full_thickness = np.maximum(top - bottom, min_sat).astype(np.float64, copy=False)
-                    sat_ref = np.clip(storage_ref_arr - bottom, 0.0, full_thickness)
-                    sat_old = np.clip(period_head_old - bottom, 0.0, full_thickness)
+                    exact_storage_term, exact_sy_term, exact_ss_term = exact_unconfined_storage_terms(
+                        head_new=storage_ref_arr,
+                        head_old=period_head_old,
+                        bottom=bottom,
+                        top=top,
+                        specific_yield=float(sy),
+                        specific_storage=float(ss),
+                        dt=dt_f,
+                    )
                     heads_old_per_period[period_index] = period_head_old
                     storage_reference_heads[period_index] = storage_ref_arr
                     storage_coeffs[period_index] = storage_coeff_arr
                     sy_coeffs[period_index] = sy_coeff_arr
                     ss_coeffs[period_index] = ss_coeff_arr
-                    storage_terms[period_index] = storage_coeff_arr * delta_head / dt_f
-                    sy_terms[period_index] = sy_coeff_arr * delta_head / dt_f
-                    ss_terms[period_index] = ss_coeff_arr * delta_head / dt_f
-                    sy_crossing_terms[period_index] = float(sy) * (sat_ref - sat_old) / dt_f
+                    storage_terms[period_index] = exact_storage_term
+                    sy_terms[period_index] = exact_sy_term
+                    ss_terms[period_index] = exact_ss_term
+                    sy_crossing_terms[period_index] = exact_sy_term
                 info_period = dict(info_lin) if isinstance(info_lin, dict) else {}
                 info_period.update(
                     {
@@ -10293,6 +10462,7 @@ class WarpDarcySolver:
                         "storage_diag_change_max": float(last_storage_diag_change_max),
                         "storage_diag_change_rms": float(last_storage_diag_change_rms),
                         "storage_mode": str(storage_mode),
+                        "storage_specific_storage_formulation": "secant_potential",
                         "unconfined_storage_mode_2d": str(storage_mode),
                         "storage_reference": str(storage_reference),
                         "storage_top_threshold": str(storage_top_threshold),
@@ -10314,6 +10484,9 @@ class WarpDarcySolver:
                         "practical_storage_diag_change_rms_tol": float(practical_storage_diag_change_rms_tol_f),
                         "total_inner_kcycles": int(total_inner_kcycles),
                         "maximum_inner_kcycles_in_one_outer_iteration": int(maximum_inner_kcycles_in_one_outer_iteration),
+                        "coarse_operator_mode": "stale_approximate_preconditioner",
+                        "fine_operator_residual_checked": True,
+                        "coarse_krylov_method": "recursive_kcycle_safe_alpha",
                         "inner_solver_gpu_scalar_synchronization_count": int(
                             info_lin.get("gpu_scalar_synchronization_count", 0) or 0
                         ),
@@ -10400,18 +10573,24 @@ class WarpDarcySolver:
                     ss_coeff_arr = np.asarray(ss_coeff, dtype=np.float64)
                     delta_head = head_arr - period_head_old
 
-                    full_thickness = np.maximum(top - bottom, min_sat).astype(np.float64, copy=False)
-                    sat_ref = np.clip(storage_ref_arr - bottom, 0.0, full_thickness)
-                    sat_old = np.clip(period_head_old - bottom, 0.0, full_thickness)
+                    exact_storage_term, exact_sy_term, exact_ss_term = exact_unconfined_storage_terms(
+                        head_new=storage_ref_arr,
+                        head_old=period_head_old,
+                        bottom=bottom,
+                        top=top,
+                        specific_yield=float(sy),
+                        specific_storage=float(ss),
+                        dt=dt_f,
+                    )
                     heads_old_per_period[period_index] = period_head_old
                     storage_reference_heads[period_index] = storage_ref_arr
                     storage_coeffs[period_index] = storage_coeff_arr
                     sy_coeffs[period_index] = sy_coeff_arr
                     ss_coeffs[period_index] = ss_coeff_arr
-                    storage_terms[period_index] = storage_coeff_arr * delta_head / dt_f
-                    sy_terms[period_index] = sy_coeff_arr * delta_head / dt_f
-                    ss_terms[period_index] = ss_coeff_arr * delta_head / dt_f
-                    sy_crossing_terms[period_index] = float(sy) * (sat_ref - sat_old) / dt_f
+                    storage_terms[period_index] = exact_storage_term
+                    sy_terms[period_index] = exact_sy_term
+                    ss_terms[period_index] = exact_ss_term
+                    sy_crossing_terms[period_index] = exact_sy_term
                 period_infos.append(info_out)
                 last_info = info_out
                 head_prev = head_arr

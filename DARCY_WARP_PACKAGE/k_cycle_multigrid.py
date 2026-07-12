@@ -6,6 +6,9 @@ class DarcyMultigridKCycle:
         :param n_levels: number of MG levels, 0 is finest, n_levels-1 is coarsest
         """
         self.n_levels = n_levels
+        self.coarse_krylov_method = "fgmres"
+        self.breakdown_detected = False
+        self.fallback_used = False
         # you will already have level specific data attached somewhere:
         # self.dx_levels, self.T_levels, self.active_levels, etc
 
@@ -45,19 +48,37 @@ class DarcyMultigridKCycle:
         else:
             x0 = initial_head.reshape(ny * nx).copy()
 
-        b_norm = float(np.linalg.norm(b0))
-        if b_norm == 0.0:
+        n_unknowns = int(max(b0.size, 1))
+        b_l2_norm = float(np.linalg.norm(b0))
+        b_rms = b_l2_norm / np.sqrt(float(n_unknowns))
+        if b_rms == 0.0:
             b_norm = 1.0
+        else:
+            b_norm = b_rms
 
-        res_hist = []
+        self.breakdown_detected = False
+        self.fallback_used = False
+        residual_history = []
 
         x = x0
+        n_cycles_applied = 0
+        converged = False
         for cycle in range(max_cycles):
             r = b0 - self._apply_A_level(level, x)
-            res_norm = float(np.linalg.norm(r))
-            res_hist.append(res_norm)
+            flow_l2 = float(np.linalg.norm(r))
+            flow_rms = flow_l2 / np.sqrt(float(n_unknowns))
+            residual_history.append(
+                {
+                    "cycle": int(cycle),
+                    "flow_l2_norm": flow_l2,
+                    "flow_residual_rms": flow_rms,
+                    "head_residual_rms": flow_rms,
+                    "relative_residual": flow_rms / b_norm,
+                }
+            )
 
-            if res_norm <= max(rel_tol * b_norm, abs_tol_min):
+            if flow_rms <= max(rel_tol * b_norm, abs_tol_min):
+                converged = True
                 break
 
             x = self._k_cycle_level(
@@ -69,6 +90,18 @@ class DarcyMultigridKCycle:
                 n_krylov_coarse=n_krylov_coarse,
                 omega=omega,
             )
+            n_cycles_applied += 1
+
+        r_final = b0 - self._apply_A_level(level, x)
+        final_l2 = float(np.linalg.norm(r_final))
+        final_rms = final_l2 / np.sqrt(float(n_unknowns))
+        if not residual_history:
+            initial_l2 = final_l2
+            initial_rms = final_rms
+        else:
+            initial_l2 = float(residual_history[0]["flow_l2_norm"])
+            initial_rms = float(residual_history[0]["flow_residual_rms"])
+        converged = bool(converged or final_rms <= max(rel_tol * b_norm, abs_tol_min))
 
         head_fine = x.reshape(ny, nx)
 
@@ -76,8 +109,21 @@ class DarcyMultigridKCycle:
             return head_fine
 
         info = {
-            "n_cycles": cycle + 1,
-            "res_hist": np.array(res_hist),
+            "converged": converged,
+            "n_cycles_applied": int(n_cycles_applied),
+            "n_cycles": int(n_cycles_applied),
+            "initial_flow_l2_norm": initial_l2,
+            "final_flow_l2_norm": final_l2,
+            "initial_flow_residual_rms": initial_rms,
+            "final_flow_residual_rms": final_rms,
+            "initial_head_residual_rms": initial_rms,
+            "final_head_residual_rms": final_rms,
+            "relative_residual": final_rms / b_norm,
+            "residual_history": residual_history,
+            "res_hist": np.asarray([row["flow_residual_rms"] for row in residual_history], dtype=float),
+            "breakdown_detected": bool(self.breakdown_detected),
+            "fallback_used": bool(self.fallback_used),
+            "coarse_krylov_method": self.coarse_krylov_method,
         }
         return head_fine, info
 
@@ -124,8 +170,8 @@ class DarcyMultigridKCycle:
         # restrict residual to coarse grid
         r_c = self._restrict_residual_level(level, r)
 
-        # coarse grid correction via PCG with MG preconditioner (recursive)
-        e_c = self._coarse_pcg_with_mg(
+        # FGMRES permits the recursive K-cycle/V-cycle preconditioner to vary.
+        e_c = self._coarse_fgmres_with_mg(
             level=level + 1,
             rhs=r_c,
             n_krylov=n_krylov_coarse,
@@ -150,7 +196,7 @@ class DarcyMultigridKCycle:
 
         return x
 
-    def _coarse_pcg_with_mg(
+    def _coarse_fgmres_with_mg(
         self,
         level: int,
         rhs: np.ndarray,
@@ -160,55 +206,143 @@ class DarcyMultigridKCycle:
         omega: float,
     ) -> np.ndarray:
         """
-        Solve A_level e = rhs on coarse level using n_krylov steps of PCG.
-        Preconditioner is one K cycle on the *next* level (unless already
-        at coarsest level).
+        Solve A_level e = rhs on a coarse level using restart-free FGMRES.
+
+        The multigrid preconditioner may be variable because recursive K-cycle
+        coefficients depend on the current residual, so ordinary PCG is not a
+        valid wrapper here.
         """
+        self.coarse_krylov_method = "fgmres"
         n = rhs.shape[0]
-        e = np.zeros(n, dtype=rhs.dtype)
+        if n == 0:
+            return np.zeros_like(rhs)
+        max_it = int(max(n_krylov, 0))
+        if max_it == 0:
+            return np.zeros_like(rhs)
 
-        A_e = self._apply_A_level(level, e)
-        res = rhs - A_e
+        beta = float(np.linalg.norm(rhs))
+        if (not np.isfinite(beta)) or beta <= 0.0:
+            if not np.isfinite(beta):
+                self.breakdown_detected = True
+            return np.zeros(n, dtype=rhs.dtype)
 
-        # preconditioned residual z = M^{-1} res
-        z = self._apply_mg_preconditioner(
-            level=level,
-            rhs=res,
-            nu_pre=nu_pre,
-            nu_post=nu_post,
-            omega=omega,
-        )
-        p = z.copy()
-        rho_old = float(res @ z)
-
-        for it in range(n_krylov):
-            A_p = self._apply_A_level(level, p)
-            denom = float(p @ A_p)
-            if denom == 0.0:
-                break
-            alpha = rho_old / denom
-
-            e = e + alpha * p
-            res = res - alpha * A_p
-
-            if it == n_krylov - 1:
-                break
-
-            z = self._apply_mg_preconditioner(
+        v0 = rhs / beta
+        if not np.all(np.isfinite(v0)):
+            self.breakdown_detected = True
+            self.fallback_used = True
+            return self._safe_smoothing_fallback(
                 level=level,
-                rhs=res,
+                rhs=rhs,
                 nu_pre=nu_pre,
                 nu_post=nu_post,
                 omega=omega,
             )
-            rho_new = float(res @ z)
-            if rho_old == 0.0:
-                break
-            beta = rho_new / rho_old
-            p = z + beta * p
-            rho_old = rho_new
 
+        V = [v0]
+        Z: list[np.ndarray] = []
+        H = np.zeros((max_it + 1, max_it), dtype=float)
+        eps = np.finfo(float).eps
+        k_done = 0
+
+        for j in range(max_it):
+            z = self._apply_mg_preconditioner(
+                level=level,
+                rhs=V[j],
+                nu_pre=nu_pre,
+                nu_post=nu_post,
+                omega=omega,
+            )
+            if not np.all(np.isfinite(z)):
+                self.breakdown_detected = True
+                self.fallback_used = True
+                return self._safe_smoothing_fallback(
+                    level=level,
+                    rhs=rhs,
+                    nu_pre=nu_pre,
+                    nu_post=nu_post,
+                    omega=omega,
+                )
+            Z.append(z)
+            w = self._apply_A_level(level, z)
+            if not np.all(np.isfinite(w)):
+                self.breakdown_detected = True
+                self.fallback_used = True
+                return self._safe_smoothing_fallback(
+                    level=level,
+                    rhs=rhs,
+                    nu_pre=nu_pre,
+                    nu_post=nu_post,
+                    omega=omega,
+                )
+
+            for i in range(j + 1):
+                H[i, j] = float(np.dot(w, V[i]))
+                w = w - H[i, j] * V[i]
+            h_next = float(np.linalg.norm(w))
+            scale = max(float(np.linalg.norm(z)) * float(np.linalg.norm(w)), 1.0)
+            H[j + 1, j] = h_next
+            k_done = j + 1
+            if h_next <= eps * scale:
+                break
+            V.append(w / h_next)
+
+        if k_done == 0:
+            return np.zeros(n, dtype=rhs.dtype)
+        rhs_ls = np.zeros(k_done + 1, dtype=float)
+        rhs_ls[0] = beta
+        try:
+            y, *_ = np.linalg.lstsq(H[: k_done + 1, :k_done], rhs_ls, rcond=None)
+        except np.linalg.LinAlgError:
+            self.breakdown_detected = True
+            self.fallback_used = True
+            return self._safe_smoothing_fallback(
+                level=level,
+                rhs=rhs,
+                nu_pre=nu_pre,
+                nu_post=nu_post,
+                omega=omega,
+            )
+        if not np.all(np.isfinite(y)):
+            self.breakdown_detected = True
+            self.fallback_used = True
+            return self._safe_smoothing_fallback(
+                level=level,
+                rhs=rhs,
+                nu_pre=nu_pre,
+                nu_post=nu_post,
+                omega=omega,
+            )
+        e = np.zeros(n, dtype=rhs.dtype)
+        for i in range(k_done):
+            e = e + y[i] * Z[i]
+        if not np.all(np.isfinite(e)):
+            self.breakdown_detected = True
+            self.fallback_used = True
+            return self._safe_smoothing_fallback(
+                level=level,
+                rhs=rhs,
+                nu_pre=nu_pre,
+                nu_post=nu_post,
+                omega=omega,
+            )
         return e
+
+    def _safe_smoothing_fallback(
+        self,
+        level: int,
+        rhs: np.ndarray,
+        nu_pre: int,
+        nu_post: int,
+        omega: float,
+    ) -> np.ndarray:
+        z = np.zeros_like(rhs)
+        return self._jacobi_smooth_level(
+            level=level,
+            x=z,
+            b=rhs,
+            n_sweeps=max(1, int(nu_pre) + int(nu_post)),
+            omega=omega,
+        )
 
     def _apply_mg_preconditioner(
         self,
@@ -246,4 +380,3 @@ class DarcyMultigridKCycle:
             omega=omega,
         )
         return z
-

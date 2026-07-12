@@ -64,11 +64,11 @@ def default_solve_controls() -> dict:
     """Default Warp solve controls for the transient replay (kcycle)."""
     return {
         "max_cycles": 200,
-        "max_levels": 6,
+        "max_levels": 4,
         "min_coarse_cells": 500,
-        "nu_pre": 15,
-        "nu_post": 15,
-        "nu_coarse": 3,
+        "nu_pre": 3,
+        "nu_post": 3,
+        "nu_coarse": 1,
         "check_every_no": 1,
         "max_outer_iterations": 100,
         "hclose": 1.0e-4,

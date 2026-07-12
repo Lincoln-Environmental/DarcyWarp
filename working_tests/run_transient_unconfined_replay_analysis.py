@@ -902,6 +902,17 @@ def _replay_variant_configs(variant_set: str = "full") -> dict:
     return variants
 
 
+def legacy_storage_variant_matrix_for_manual_debug_only(variant_set: str = "full") -> dict:
+    """
+    Manual-only placeholder for retired storage-variant sweeps.
+
+    Normal replay analysis must use :func:`_replay_variant_configs`; this hook
+    remains so tests can assert the legacy matrix is not called accidentally.
+    """
+    _ = variant_set
+    return {}
+
+
 WINNING_VARIANT_NAME = "production_secant_sy"
 
 # Fields the direct MF6 replay and the winning variant must agree on (Task 2).
@@ -1411,7 +1422,7 @@ def speed_candidate_passes(metrics: dict) -> bool:
     worst_max_abs = finite_scalar(metrics.get("worst_period_max_abs_diff"))
     mass_balance_class = str(metrics.get("mass_balance_class", "")).strip().lower()
     return bool(
-        metrics.get("production_acceptance_passed") is True
+        bool(metrics.get("production_acceptance_passed"))
         and final_rmse is not None
         and final_rmse < 0.001
         and final_max_abs is not None

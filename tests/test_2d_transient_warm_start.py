@@ -95,11 +95,11 @@ def test_default_solve_controls_include_full_kcycle_and_unconfined_settings():
 
     expected = {
         "max_cycles": 200,
-        "max_levels": 6,
+        "max_levels": 4,
         "min_coarse_cells": 500,
-        "nu_pre": 15,
-        "nu_post": 15,
-        "nu_coarse": 3,
+        "nu_pre": 3,
+        "nu_post": 3,
+        "nu_coarse": 1,
         "check_every_no": 1,
         "max_outer_iterations": 100,
         "hclose": 1.0e-4,
@@ -135,10 +135,19 @@ def test_default_solve_controls_include_full_kcycle_and_unconfined_settings():
         "corrector_max_outer_iterations": 100,
         "predictor_corrector_corrector_strategy": "none",
         "practical_picard_acceptance_enabled": True,
+        "strict_head_residual_tol": 1.0e-4,
         "min_practical_outer_iterations": 8,
+        "practical_head_residual_tol": 1.0e-4,
         "practical_residual_tol": 1.0e-4,
         "practical_dh_rms_tol": 3.0e-3,
         "practical_storage_diag_change_rms_tol": 30.0,
+        "unconfined_inner_max_cycles_early": 2,
+        "unconfined_inner_max_cycles_middle": 4,
+        "unconfined_inner_max_cycles_late": 8,
+        "unconfined_inner_middle_dh": 1.0,
+        "unconfined_inner_late_dh": 1.0e-2,
+        "allow_unaccepted_transient_period": False,
+        "use_device_transient_fast_path": True,
     }
     assert controls == expected
 
@@ -264,7 +273,7 @@ def test_build_unconfined_storativity_mf6_convertible_adds_ss_term():
     assert np.all(sat_ref[~free] == 0.0)
 
 
-def test_build_unconfined_storativity_clips_saturated_thickness():
+def test_build_unconfined_storativity_uses_physical_saturated_thickness():
     ny, nx = 1, 3
     active = np.ones((ny, nx), dtype=np.int32)
     bc_mask = np.zeros((ny, nx), dtype=np.int32)
@@ -284,7 +293,7 @@ def test_build_unconfined_storativity_clips_saturated_thickness():
         include_specific_storage=True,
     )
 
-    np.testing.assert_allclose(sat_ref[0, 0], replay_settings.DEFAULT_MIN_SAT)  # clipped to min_sat
+    np.testing.assert_allclose(sat_ref[0, 0], 0.0)                     # physically dry
     np.testing.assert_allclose(sat_ref[0, 1], 50.0)                    # head - bottom
     np.testing.assert_allclose(sat_ref[0, 2], 100.0)                   # clipped to top-bottom
 
@@ -379,7 +388,7 @@ def test_build_unconfined_top_switch_storage_below_top_uses_sy_plus_elastic_sat(
     np.testing.assert_allclose(sat_ref[0, 0], 50.0)
 
 
-def test_build_unconfined_top_switch_storage_near_bottom_uses_min_sat_with_sy():
+def test_build_unconfined_top_switch_storage_near_bottom_uses_zero_ss_with_sy():
     active = np.ones((1, 1), dtype=np.int32)
     bc_mask = np.zeros((1, 1), dtype=np.int32)
     bottom = np.array([[10.0]], dtype=np.float64)
@@ -397,8 +406,8 @@ def test_build_unconfined_top_switch_storage_near_bottom_uses_min_sat_with_sy():
         storage_mode=artifact_helpers.UNCONFINED_STORAGE_MF6_CONVERTIBLE_TOP_SWITCH,
     )
 
-    np.testing.assert_allclose(sat_ref[0, 0], replay_settings.DEFAULT_MIN_SAT)
-    np.testing.assert_allclose(storativity[0, 0], 0.2 + 1.0e-5 * replay_settings.DEFAULT_MIN_SAT)
+    np.testing.assert_allclose(sat_ref[0, 0], 0.0)
+    np.testing.assert_allclose(storativity[0, 0], 0.2)
 
 
 def test_build_unconfined_top_switch_storage_zeroes_inactive_and_dirichlet():
@@ -981,6 +990,43 @@ def test_production_secant_sy_settings_match_validated_defaults():
     assert settings["storage_freeze_after_outer"] is None
     assert settings["warm_start_mode"] == artifact_helpers.WARM_START_UNCONFINED_STEADY_MF6
     assert settings["solve_controls"]["unconfined_startup_mode"] == "confined_pre_solve"
+    assert settings["solve_controls"]["nu_pre"] == 3
+    assert settings["solve_controls"]["nu_post"] == 3
+    assert settings["solve_controls"]["nu_coarse"] == 1
+    assert settings["solve_controls"]["max_levels"] == 4
+
+
+def test_fastest_speed_variant_accepts_json_truthy_production_flag():
+    """Speed-sweep recommendation accepts bool-like values from JSON summaries."""
+    analysis = _load_analysis_module()
+
+    rows = [
+        {
+            "variant_name": "slow",
+            "runtime": 20.0,
+            "production_acceptance_passed": True,
+            "final_rmse": 5.0e-5,
+            "final_max_abs_diff": 2.0e-4,
+            "worst_period_rmse": 7.0e-5,
+            "worst_period_max_abs_diff": 3.0e-4,
+            "mass_balance_class": "excellent",
+        },
+        {
+            "variant_name": "secant_sy_nu_3_coarse_1_max_levels_4",
+            "runtime": 14.0,
+            "production_acceptance_passed": 1,
+            "final_rmse": 6.0e-5,
+            "final_max_abs_diff": 3.0e-4,
+            "worst_period_rmse": 7.0e-5,
+            "worst_period_max_abs_diff": 3.0e-4,
+            "mass_balance_class": "excellent",
+        },
+    ]
+
+    fastest = analysis.fastest_speed_variant_summary(rows=rows)
+
+    assert fastest is not None
+    assert fastest["variant_name"] == "secant_sy_nu_3_coarse_1_max_levels_4"
 
 
 def test_secant_freeze_settings_differ_only_by_freeze_after_outer():

@@ -4,6 +4,7 @@ from pathlib import Path
 
 import numpy as np
 
+from working_tests.transient_replay_storage import _specific_storage_potential
 from working_tests.transient_replay_settings import (
     MASS_BALANCE_ACCEPTABLE_PCT,
     MASS_BALANCE_EXCELLENT_PCT,
@@ -317,6 +318,7 @@ def compute_replay_mass_balance(
     unconfined_storage_mode: str | None,
     warp_result: dict,
     min_sat: float,
+    ss: float = 0.0,
 ) -> dict:
     active = np.asarray(spatial["active"], dtype=np.int32)
     bc_mask = np.asarray(spatial["bc_mask"], dtype=np.int32)
@@ -335,7 +337,7 @@ def compute_replay_mass_balance(
     recharge_series = np.asarray(recharge_rates, dtype=np.float64).reshape(-1)
     linearized_rows: list[dict] = []
     volume_sy_rows: list[dict] = []
-    full_thickness = np.maximum(top - bottom, float(min_sat))
+    full_thickness = np.maximum(top - bottom, 0.0)
     for period_index in range(n_periods):
         head_new = heads_new[period_index]
         head_old = heads_old[period_index]
@@ -362,8 +364,21 @@ def compute_replay_mass_balance(
         sat_old = np.clip(head_old - bottom, 0.0, full_thickness)
         sat_new = np.clip(head_new - bottom, 0.0, full_thickness)
         sy_storage_release_volume = -float(sy) * (sat_new - sat_old) * area / float(dt)
+        phi_old = _specific_storage_potential(
+            head=head_old,
+            bottom=bottom,
+            top=top,
+            ss=float(ss),
+        )
+        phi_new = _specific_storage_potential(
+            head=head_new,
+            bottom=bottom,
+            top=top,
+            ss=float(ss),
+        )
+        ss_storage_release_volume = -(phi_new - phi_old) * area / float(dt)
         ss_storage_release_linearized = -np.asarray(ss_coeffs[period_index], dtype=np.float64) * delta_head * area / float(dt)
-        storage_release_volume = sy_storage_release_volume + ss_storage_release_linearized
+        storage_release_volume = sy_storage_release_volume + ss_storage_release_volume
         linearized_row = finalize_mass_balance_row(
             period_number=period_index + 1,
             base_terms=base_terms,
@@ -378,6 +393,7 @@ def compute_replay_mass_balance(
         )
         volume_sy_row["storage_release_total"] = float(np.sum(storage_release_volume))
         volume_sy_row["sy_storage_release_volume_total"] = float(np.sum(sy_storage_release_volume))
+        volume_sy_row["ss_storage_release_volume_total"] = float(np.sum(ss_storage_release_volume))
         volume_sy_row["ss_storage_release_linearized_total"] = float(np.sum(ss_storage_release_linearized))
         volume_sy_rows.append(volume_sy_row)
     linearized_cumulative, linearized_worst = summarize_mass_balance_rows(linearized_rows)

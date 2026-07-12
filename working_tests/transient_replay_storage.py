@@ -72,6 +72,29 @@ def _confined_storage_coeff(
     return storage.astype(np.float64, copy=False)
 
 
+def _specific_storage_potential(
+    *,
+    head: np.ndarray,
+    bottom: np.ndarray,
+    top: np.ndarray,
+    ss: float,
+) -> np.ndarray:
+    head_arr = np.asarray(head, dtype=np.float64)
+    bottom_arr = np.asarray(bottom, dtype=np.float64)
+    top_arr = np.asarray(top, dtype=np.float64)
+    thickness = np.maximum(top_arr - bottom_arr, 0.0)
+    rel = head_arr - bottom_arr
+    phi = np.zeros_like(head_arr, dtype=np.float64)
+    partial = (rel > 0.0) & (rel < thickness)
+    full = rel >= thickness
+    phi[partial] = 0.5 * float(ss) * rel[partial] * rel[partial]
+    phi[full] = (
+        0.5 * float(ss) * thickness[full] * thickness[full]
+        + float(ss) * thickness[full] * (rel[full] - thickness[full])
+    )
+    return phi
+
+
 def build_unconfined_storativity(
     *,
     sy: float,
@@ -187,19 +210,27 @@ def compute_unconfined_storage_components(
     head_ref_arr = np.asarray(head_ref, dtype=np.float64)
     bottom_arr = np.asarray(bottom, dtype=np.float64)
     top_arr = np.asarray(top, dtype=np.float64)
-    full_thickness = np.maximum(top_arr - bottom_arr, float(min_sat))
+    full_thickness = np.maximum(top_arr - bottom_arr, 0.0)
     sat_ref_zero = np.clip(head_ref_arr - bottom_arr, 0.0, full_thickness)
-    sat_ref_ss = np.clip(head_ref_arr - bottom_arr, float(min_sat), full_thickness)
+    sat_ref_ss = np.clip(head_ref_arr - bottom_arr, 0.0, full_thickness)
 
     if head_old is None:
         head_old_arr = head_ref_arr
     else:
         head_old_arr = np.asarray(head_old, dtype=np.float64)
     sat_old_zero = np.clip(head_old_arr - bottom_arr, 0.0, full_thickness)
+    dh_ref = head_ref_arr - head_old_arr
+    phi_ref = _specific_storage_potential(head=head_ref_arr, bottom=bottom_arr, top=top_arr, ss=float(ss))
+    phi_old = _specific_storage_potential(head=head_old_arr, bottom=bottom_arr, top=top_arr, ss=float(ss))
+    ss_secant = np.zeros(shape, dtype=np.float64)
+    ss_moving = np.abs(dh_ref) > float(secant_eps)
+    ss_secant[ss_moving] = (phi_ref[ss_moving] - phi_old[ss_moving]) / dh_ref[ss_moving]
+    ss_secant[~ss_moving] = float(ss) * sat_ref_ss[~ss_moving]
+    ss_secant = np.maximum(ss_secant, 0.0)
 
     if mode in {UNCONFINED_STORAGE_INTEGRATED_SY_SS, UNCONFINED_STORAGE_MF6_CONVERTIBLE}:
         sy_coeff[free] = float(sy)
-        ss_coeff[free] = float(ss) * sat_ref_ss[free]
+        ss_coeff[free] = ss_secant[free]
     elif mode == UNCONFINED_STORAGE_MF6_CONVERTIBLE_TOP_SWITCH:
         raw_above_top = top_switch_above_mask(
             head_ref=head_ref_arr,
@@ -216,10 +247,9 @@ def compute_unconfined_storage_components(
         effective_above_top = effective_above_top & free
         sy_coeff[free] = float(sy)
         sy_coeff[effective_above_top] = 0.0
-        ss_coeff[free] = float(ss) * sat_ref_ss[free]
+        ss_coeff[free] = ss_secant[free]
         ss_coeff[effective_above_top] = float(ss) * full_thickness[effective_above_top]
     elif mode == UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY:
-        dh_ref = head_ref_arr - head_old_arr
         sy_coeff_calc = np.zeros(shape, dtype=np.float64)
         moving = np.abs(dh_ref) > float(secant_eps)
         sy_coeff_calc[moving] = float(sy) * ((sat_ref_zero[moving] - sat_old_zero[moving]) / dh_ref[moving])
@@ -229,9 +259,8 @@ def compute_unconfined_storage_components(
         sy_coeff_calc[fallback_below_top] = float(sy)
         sy_coeff_calc = np.clip(sy_coeff_calc, 0.0, float(sy))
         sy_coeff[free] = sy_coeff_calc[free]
-        ss_coeff[free] = float(ss) * sat_ref_ss[free]
+        ss_coeff[free] = ss_secant[free]
     elif mode == UNCONFINED_STORAGE_MF6_CONVERTIBLE_CROSSING_VOLUME_SY:
-        dh_ref = head_ref_arr - head_old_arr
         sy_coeff_calc = np.zeros(shape, dtype=np.float64)
         moving = np.abs(dh_ref) > float(secant_eps)
         sy_coeff_calc[moving] = float(sy) * ((sat_ref_zero[moving] - sat_old_zero[moving]) / dh_ref[moving])
@@ -241,7 +270,7 @@ def compute_unconfined_storage_components(
         sy_coeff_calc[fallback_below_top] = float(sy)
         sy_coeff_calc = np.clip(sy_coeff_calc, 0.0, float(sy))
         sy_coeff[free] = sy_coeff_calc[free]
-        ss_coeff[free] = float(ss) * sat_ref_ss[free]
+        ss_coeff[free] = ss_secant[free]
     else:
         raise ValueError(f"unsupported storage_mode '{mode}'.")
 

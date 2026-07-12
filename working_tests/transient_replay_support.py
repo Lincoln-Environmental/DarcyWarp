@@ -535,6 +535,7 @@ def run_replay_from_artifact(
             spatial=spatial,
             recharge_rates=recharge_rates,
             sy=sy,
+            ss=ss,
             dt=dt,
             formulation=formulation,
             unconfined_storage_mode=warp_result["unconfined_storage_mode"],

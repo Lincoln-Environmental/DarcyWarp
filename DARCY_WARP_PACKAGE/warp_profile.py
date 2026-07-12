@@ -101,21 +101,69 @@ def print_warp_bottlenecks(results: list[wp.TimingResult], indent: str = "", top
         print(f"{indent}  {i:2d}. {kname:50s}  {ms:12.3f} ms  {pct:6.2f}%  (count={cnt})")
 
 
+def summarize_warp_timing_results(results: list[wp.TimingResult]) -> dict:
+    aggregated_kernel_time_ms = 0.0
+    memcpy_time_ms = 0.0
+    kernel_launch_count = 0
+    for result in results:
+        filt = int(result.filter)
+        elapsed = float(result.elapsed)
+        if filt in (wp.TIMING_KERNEL, wp.TIMING_KERNEL_BUILTIN):
+            aggregated_kernel_time_ms += elapsed
+            kernel_launch_count += 1
+        elif filt == wp.TIMING_MEMCPY:
+            memcpy_time_ms += elapsed
+    return {
+        "aggregated_kernel_time_seconds": aggregated_kernel_time_ms / 1000.0,
+        "memcpy_time_seconds": memcpy_time_ms / 1000.0,
+        "kernel_launch_count": int(kernel_launch_count),
+    }
+
+
 def profile_one_solve(
-    solve_callable,
+    solve_callable=None,
     out_csv: Path | None = None,
     warmup_runs: int = 1,
-) -> list[wp.TimingResult]:
-    # Warmup to exclude JIT compilation and first time allocations
+    solve_factory=None,
+    reset_callable=None,
+) -> dict:
+    if solve_factory is None and solve_callable is None:
+        raise ValueError("profile_one_solve requires solve_factory or solve_callable.")
+    if solve_factory is None and reset_callable is None and int(warmup_runs) > 0:
+        raise ValueError(
+            "Stateful profiling with warm-up runs requires solve_factory or reset_callable. "
+            "Set warmup_runs=0 only when the callable is known to be stateless."
+        )
+
+    def _fresh_solve_callable():
+        if solve_factory is not None:
+            return solve_factory()
+        if reset_callable is not None:
+            reset_callable()
+        return solve_callable
+
     for _ in range(warmup_runs):
-        solve_callable()
+        callable_for_run = _fresh_solve_callable()
+        callable_for_run()
         wp.synchronize()
 
     wp.timing_begin(cuda_filter=wp.TIMING_ALL, synchronize=True)  #
-    solve_callable()
+    callable_for_timed_run = _fresh_solve_callable()
+    wp.synchronize()
+    start = time.perf_counter()
+    callable_for_timed_run()
+    wp.synchronize()
+    wall_seconds = time.perf_counter() - start
     results = wp.timing_end(synchronize=True)  #
+    summary = summarize_warp_timing_results(results)
+    summary["synchronized_wall_seconds"] = float(wall_seconds)
+    summary["timing_results"] = results
 
     print_warp_bottlenecks(results, indent="", top_k=30)
+    print(f"\nSynchronized wall time: {wall_seconds:.6f} s")
+    print(f"Aggregated kernel time: {summary['aggregated_kernel_time_seconds']:.6f} s")
+    print(f"Memcpy time: {summary['memcpy_time_seconds']:.6f} s")
+    print(f"Kernel launch count: {summary['kernel_launch_count']}")
 
     if out_csv is not None:
         out_csv.parent.mkdir(exist_ok=True)
@@ -129,4 +177,4 @@ def profile_one_solve(
 
         print(f"\nWrote raw timing events to: {out_csv}")
 
-    return results
+    return summary
