@@ -420,7 +420,7 @@ if __name__ == "__main__":
     use_grid_qualified_artifact = True
     mf6_nx = 1000
     mf6_ny = 1000
-    mf6_n_periods = 10
+    mf6_n_periods = 30
 
     explicit_artifact_path = None
     workspace = None
