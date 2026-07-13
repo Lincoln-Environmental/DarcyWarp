@@ -507,42 +507,42 @@ if __name__ == "__main__":
 
     # Use genuinely small cycle blocks so the controller can observe
     # contraction and alter the next allocation without oversolving.
-    adaptive_inner_initial_block_cycles = 4
-    adaptive_inner_min_block_cycles = 2
-    adaptive_inner_max_block_cycles = 16
-    adaptive_inner_min_total_cycles = 2
+    adaptive_inner_initial_block_cycles = 5
+    adaptive_inner_min_block_cycles = 5
+    adaptive_inner_max_block_cycles = 20
+    adaptive_inner_min_total_cycles = 5
 
     # Inexact-solve forcing term.
     #
     # These values deliberately permit relatively loose early Picard
     # linear solves. The target tightens as nonlinear convergence improves.
-    adaptive_inner_eta_initial = 0.25
-    adaptive_inner_eta_min = 0.025
-    adaptive_inner_eta_max = 0.35
-    adaptive_inner_eta_gamma = 0.50
-    adaptive_inner_eta_power = 1.25
+    adaptive_inner_eta_initial = 0.05
+    adaptive_inner_eta_min = 0.005
+    adaptive_inner_eta_max = 0.10
+    adaptive_inner_eta_gamma = 0.25
+    adaptive_inner_eta_power = 1.5
 
     # Block residual-contraction classification.
-    adaptive_inner_good_contraction_ratio = 0.45
+    adaptive_inner_good_contraction_ratio = 0.40
     adaptive_inner_weak_contraction_ratio = 0.90
 
     # Permit slow but useful contraction. A block is not considered stalled
     # merely because it reduces the residual by only a few percent.
-    adaptive_inner_stall_contraction_ratio = 0.995
+    adaptive_inner_stall_contraction_ratio = 0.9995
 
     # Roll back only when the residual clearly worsens.
-    adaptive_inner_divergence_contraction_ratio = 1.15
+    adaptive_inner_divergence_contraction_ratio = 1.10
 
     # Require repeated stalled blocks before terminating the inner solve.
-    adaptive_inner_stall_patience = 5
+    adaptive_inner_stall_patience = 8
 
     # This is interpreted as:
     #
     #   final_residual / initial_residual <= threshold
     #
-    # A value of 0.95 therefore requires at least a 5 percent reduction
-    # before a non-target-achieving inner solve can be considered useful.
-    adaptive_inner_minimum_usable_reduction_ratio = 0.95
+    # Validation uses target achievement, not incomplete usability, for
+    # acceptance; retain the accepted candidate setting for diagnostics.
+    adaptive_inner_minimum_usable_reduction_ratio = 0.10
 
     adaptive_inner_residual_floor = 1.0e-12
 
@@ -553,7 +553,7 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------
     # Optional K-cycle optimization sweep
     # ------------------------------------------------------------------
-    optimize_kcycle = True
+    optimize_kcycle = False
     stop_after_first_accepted = False
 
     kcycle_candidate_settings = [
@@ -573,10 +573,10 @@ if __name__ == "__main__":
     # These values are relevant to legacy fallback runs. They do not control
     # the normal residual-driven path unless adaptation is disabled or fails.
     inner_cycle_candidate_settings = [
-        (10, 20, 40, 1.0, 1.0e-2),
-        (10, 25, 60, 1.0, 1.0e-2),
-        (10, 30, 80, 1.0, 1.0e-2),
-        (15, 30, 80, 1.0, 1.0e-2),
+        (5, 20, 40, 1.0, 1.0e-2),
+        (5, 25, 60, 1.0, 1.0e-2),
+        (5, 30, 80, 1.0, 1.0e-2),
+        (5, 30, 80, 1.0, 1.0e-2),
     ]
 
     adaptive_inner_candidate_settings = [
@@ -591,7 +591,7 @@ if __name__ == "__main__":
             "adaptive_inner_initial_block_cycles": 5,
             "adaptive_inner_min_block_cycles": 5,
             "adaptive_inner_max_block_cycles": 20,
-            "adaptive_inner_min_total_cycles": 10,
+            "adaptive_inner_min_total_cycles": 5,
             "adaptive_inner_eta_initial": 0.05,
             "adaptive_inner_eta_min": 0.005,
             "adaptive_inner_eta_max": 0.10,

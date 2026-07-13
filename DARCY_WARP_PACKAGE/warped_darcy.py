@@ -1258,23 +1258,23 @@ def _build_adaptive_inner_solve_config_from_controls(
     max_cycles: int,
 ) -> AdaptiveInnerSolveConfig:
     config = AdaptiveInnerSolveConfig(
-        enabled=bool(controls.get("adaptive_unconfined_inner_enabled", False)),
-        initial_block_cycles=int(controls.get("adaptive_inner_initial_block_cycles", 4)),
-        min_block_cycles=int(controls.get("adaptive_inner_min_block_cycles", 2)),
-        max_block_cycles=int(controls.get("adaptive_inner_max_block_cycles", 16)),
-        min_total_cycles=int(controls.get("adaptive_inner_min_total_cycles", 2)),
-        eta_initial=float(controls.get("adaptive_inner_eta_initial", 0.25)),
-        eta_min=float(controls.get("adaptive_inner_eta_min", 0.02)),
-        eta_max=float(controls.get("adaptive_inner_eta_max", 0.30)),
-        eta_gamma=float(controls.get("adaptive_inner_eta_gamma", 0.5)),
+        enabled=bool(controls.get("adaptive_unconfined_inner_enabled", True)),
+        initial_block_cycles=int(controls.get("adaptive_inner_initial_block_cycles", 5)),
+        min_block_cycles=int(controls.get("adaptive_inner_min_block_cycles", 5)),
+        max_block_cycles=int(controls.get("adaptive_inner_max_block_cycles", 20)),
+        min_total_cycles=int(controls.get("adaptive_inner_min_total_cycles", 5)),
+        eta_initial=float(controls.get("adaptive_inner_eta_initial", 0.05)),
+        eta_min=float(controls.get("adaptive_inner_eta_min", 0.005)),
+        eta_max=float(controls.get("adaptive_inner_eta_max", 0.10)),
+        eta_gamma=float(controls.get("adaptive_inner_eta_gamma", 0.25)),
         eta_power=float(controls.get("adaptive_inner_eta_power", 1.5)),
-        good_contraction_ratio=float(controls.get("adaptive_inner_good_contraction_ratio", 0.35)),
-        weak_contraction_ratio=float(controls.get("adaptive_inner_weak_contraction_ratio", 0.85)),
-        stall_contraction_ratio=float(controls.get("adaptive_inner_stall_contraction_ratio", 0.98)),
-        divergence_contraction_ratio=float(controls.get("adaptive_inner_divergence_contraction_ratio", 1.05)),
-        stall_patience=int(controls.get("adaptive_inner_stall_patience", 2)),
+        good_contraction_ratio=float(controls.get("adaptive_inner_good_contraction_ratio", 0.40)),
+        weak_contraction_ratio=float(controls.get("adaptive_inner_weak_contraction_ratio", 0.90)),
+        stall_contraction_ratio=float(controls.get("adaptive_inner_stall_contraction_ratio", 0.9995)),
+        divergence_contraction_ratio=float(controls.get("adaptive_inner_divergence_contraction_ratio", 1.10)),
+        stall_patience=int(controls.get("adaptive_inner_stall_patience", 8)),
         minimum_usable_reduction_ratio=float(
-            controls.get("adaptive_inner_minimum_usable_reduction_ratio", 0.80)
+            controls.get("adaptive_inner_minimum_usable_reduction_ratio", 0.10)
         ),
         residual_floor=float(controls.get("adaptive_inner_residual_floor", 1.0e-12)),
         relative_flow_residual_target=float(
