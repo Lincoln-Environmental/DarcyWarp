@@ -103,7 +103,36 @@ def variant_workspace_name(
         f"nu_pre_{int(candidate['nu_pre'])}_post_{int(candidate['nu_post'])}"
         f"_coarse_{int(candidate['nu_coarse'])}_max_levels_{int(candidate['max_levels'])}"
         f"_inner_{int(candidate['inner_early'])}_{int(candidate['inner_middle'])}_{int(candidate['inner_late'])}"
+        f"_adaptive_{adaptive_candidate_name_suffix(candidate=candidate)}"
     )
+
+
+def adaptive_candidate_name_suffix(
+    *,
+    candidate: dict,
+) -> str:
+    """
+    Build the workspace-name suffix for adaptive inner-controller controls.
+    """
+    controls = dict(candidate.get("adaptive_controls") or {})
+    if not controls:
+        return "default"
+    enabled = int(bool(controls.get("adaptive_unconfined_inner_enabled", True)))
+    if enabled == 0:
+        return "legacy_dh"
+    initial = int(controls.get("adaptive_inner_initial_block_cycles", 4))
+    minimum = int(controls.get("adaptive_inner_min_block_cycles", 2))
+    maximum = int(controls.get("adaptive_inner_max_block_cycles", 16))
+    eta_initial = float(controls.get("adaptive_inner_eta_initial", 0.25))
+    eta_min = float(controls.get("adaptive_inner_eta_min", 0.02))
+    eta_max = float(controls.get("adaptive_inner_eta_max", 0.30))
+    stall = float(controls.get("adaptive_inner_stall_contraction_ratio", 0.98))
+    divergence = float(controls.get("adaptive_inner_divergence_contraction_ratio", 1.05))
+    return (
+        f"en_{enabled}_block_{initial}_{minimum}_{maximum}"
+        f"_eta_{eta_initial:g}_{eta_min:g}_{eta_max:g}"
+        f"_stall_{stall:g}_div_{divergence:g}"
+    ).replace(".", "p").replace("-", "m")
 
 
 def candidate_solve_controls(
@@ -124,6 +153,7 @@ def candidate_solve_controls(
     controls["unconfined_inner_max_cycles_late"] = int(candidate["inner_late"])
     controls["unconfined_inner_middle_dh"] = float(candidate["inner_middle_dh"])
     controls["unconfined_inner_late_dh"] = float(candidate["inner_late_dh"])
+    controls.update(dict(candidate.get("adaptive_controls") or {}))
     return controls
 
 
@@ -138,6 +168,7 @@ def make_optimization_candidate(
     inner_late: int,
     inner_middle_dh: float,
     inner_late_dh: float,
+    adaptive_controls: dict | None = None,
     name: str | None = None,
 ) -> dict:
     """
@@ -154,6 +185,7 @@ def make_optimization_candidate(
         "inner_late": int(inner_late),
         "inner_middle_dh": float(inner_middle_dh),
         "inner_late_dh": float(inner_late_dh),
+        "adaptive_controls": dict(adaptive_controls or {}),
     }
 
 
@@ -161,37 +193,47 @@ def build_optimization_candidates(
     *,
     kcycle_settings: list[tuple[int, int, int, int]],
     inner_cycle_settings: list[tuple[int, int, int, float, float]],
+    adaptive_inner_settings: list[dict] | None = None,
 ) -> list[dict]:
     """
-    Build an ordered cross-product of K-cycle and adaptive inner-cycle settings.
+    Build candidate settings without multiplying adaptive sweeps by legacy schedules.
     """
     candidates: list[dict] = []
     seen_names: set[str] = set()
+    adaptive_settings = list(adaptive_inner_settings or [{}])
     for nu_pre, nu_post, nu_coarse, max_levels in kcycle_settings:
-        for inner_early, inner_middle, inner_late, inner_middle_dh, inner_late_dh in inner_cycle_settings:
-            name = (
-                f"nu_{int(nu_pre)}_{int(nu_post)}_coarse_{int(nu_coarse)}"
-                f"_levels_{int(max_levels)}"
-                f"_inner_{int(inner_early)}_{int(inner_middle)}_{int(inner_late)}"
-                f"_dh_{float(inner_middle_dh):g}_{float(inner_late_dh):g}"
-            ).replace(".", "p").replace("-", "m")
-            if name in seen_names:
-                continue
-            seen_names.add(name)
-            candidates.append(
-                make_optimization_candidate(
-                    name=name,
-                    nu_pre=nu_pre,
-                    nu_post=nu_post,
-                    nu_coarse=nu_coarse,
-                    max_levels=max_levels,
-                    inner_early=inner_early,
-                    inner_middle=inner_middle,
-                    inner_late=inner_late,
-                    inner_middle_dh=inner_middle_dh,
-                    inner_late_dh=inner_late_dh,
+        for adaptive_controls in adaptive_settings:
+            adaptive_enabled = bool(adaptive_controls.get("adaptive_unconfined_inner_enabled", False))
+            cycle_settings = inner_cycle_settings[:1] if adaptive_enabled else inner_cycle_settings
+            for inner_early, inner_middle, inner_late, inner_middle_dh, inner_late_dh in cycle_settings:
+                adaptive_suffix = adaptive_candidate_name_suffix(
+                    candidate={"adaptive_controls": adaptive_controls},
                 )
-            )
+                name = (
+                    f"nu_{int(nu_pre)}_{int(nu_post)}_coarse_{int(nu_coarse)}"
+                    f"_levels_{int(max_levels)}"
+                    f"_inner_{int(inner_early)}_{int(inner_middle)}_{int(inner_late)}"
+                    f"_dh_{float(inner_middle_dh):g}_{float(inner_late_dh):g}"
+                    f"_adaptive_{adaptive_suffix}"
+                ).replace(".", "p").replace("-", "m")
+                if name in seen_names:
+                    continue
+                seen_names.add(name)
+                candidates.append(
+                    make_optimization_candidate(
+                        name=name,
+                        nu_pre=nu_pre,
+                        nu_post=nu_post,
+                        nu_coarse=nu_coarse,
+                        max_levels=max_levels,
+                        inner_early=inner_early,
+                        inner_middle=inner_middle,
+                        inner_late=inner_late,
+                        inner_middle_dh=inner_middle_dh,
+                        inner_late_dh=inner_late_dh,
+                        adaptive_controls=adaptive_controls,
+                    )
+                )
     return candidates
 
 
@@ -288,6 +330,7 @@ def optimize_kcycle_settings(
             "inner_late": int(candidate["inner_late"]),
             "inner_middle_dh": float(candidate["inner_middle_dh"]),
             "inner_late_dh": float(candidate["inner_late_dh"]),
+            "adaptive_controls": dict(candidate.get("adaptive_controls") or {}),
             "accepted": bool(accepted),
             "warp_total_time": replay_wall_time(summary),
             "summary": summary,
@@ -320,6 +363,7 @@ def optimize_kcycle_settings(
         "best_inner_late": best["inner_late"],
         "best_inner_middle_dh": best["inner_middle_dh"],
         "best_inner_late_dh": best["inner_late_dh"],
+        "best_adaptive_controls": dict(best.get("adaptive_controls") or {}),
         "optimization_workspace": str(optimization_workspace),
         "candidates": [
             {
@@ -334,6 +378,7 @@ def optimize_kcycle_settings(
                 "inner_late": result["inner_late"],
                 "inner_middle_dh": result["inner_middle_dh"],
                 "inner_late_dh": result["inner_late_dh"],
+                "adaptive_controls": dict(result.get("adaptive_controls") or {}),
                 "accepted": result["accepted"],
                 "warp_total_time": result["warp_total_time"],
             }
@@ -355,6 +400,7 @@ def optimize_kcycle_settings(
         f"inner=({best['inner_early']}, {best['inner_middle']}, {best['inner_late']}), "
         f"dh=({best['inner_middle_dh']}, {best['inner_late_dh']})"
     )
+    print(f"  adaptive: {dict(best.get('adaptive_controls') or {})}")
     print(f"  workspace: {best['workspace']}")
     print(f"  summary: {optimization_summary_path}")
     return {
@@ -367,64 +413,258 @@ def optimize_kcycle_settings(
 
 if __name__ == "__main__":
     formulation = FORMULATION_UNCONFINED
+
+    # ------------------------------------------------------------------
+    # Replay artifact
+    # ------------------------------------------------------------------
     use_grid_qualified_artifact = True
     mf6_nx = 1000
     mf6_ny = 1000
     mf6_n_periods = 10
+
     explicit_artifact_path = None
     workspace = None
+
+    # ------------------------------------------------------------------
+    # Runtime
+    # ------------------------------------------------------------------
     device = "auto"
     diag_preconditioner_backend = "device"
-
-    max_outer_iterations = 100
-    max_cycles = 200
-    max_levels = 4
-    min_coarse_cells = 500
-    nu_pre = 3
-    nu_post = 3
-    nu_coarse = 1
-    check_every_no = 1
-
-    unconfined_inner_max_cycles_early = 2
-    unconfined_inner_max_cycles_middle = 4
-    unconfined_inner_max_cycles_late = 8
-    unconfined_inner_middle_dh = 1.0
-    unconfined_inner_late_dh = 1.0e-2
-
-    optimize_kcycle = True
-    stop_after_first_accepted = False
-    kcycle_candidate_settings = [
-        (1, 1, 1, 4),
-        (2, 2, 1, 4),
-        (3, 3, 1, 4),
-        (1, 1, 1, 5),
-        (2, 2, 1, 5),
-        (3, 3, 1, 5),
-        (1, 1, 1, 6),
-        (2, 2, 1, 6),
-        (3, 3, 1, 6),
-        (4, 4, 1, 4),
-        (4, 4, 1, 5),
-        (4, 4, 1, 6),
-    ]
-    inner_cycle_candidate_settings = [
-        (2, 4, 8, 1.0, 1.0e-2),
-        (4, 8, 16, 1.0, 1.0e-2),
-        (10, 25, 60, 1.0, 1.0e-2),
-    ]
-    kcycle_candidates = build_optimization_candidates(
-        kcycle_settings=kcycle_candidate_settings,
-        inner_cycle_settings=inner_cycle_candidate_settings,
-    )
-    accepted_mass_balance_classes = {"excellent", "good", "acceptable"}
 
     allow_warm_start_mismatch = False
     profile_performance = False
     save_heavy_diagnostics = False
     run_replay_matrix = False
 
+    # ------------------------------------------------------------------
+    # Global safety ceilings
+    # ------------------------------------------------------------------
+    # These are hard failure ceilings, not normal iteration targets.
+    max_outer_iterations = 100
+    max_cycles = 200
+
+    # ------------------------------------------------------------------
+    # Multigrid hierarchy
+    # ------------------------------------------------------------------
+    max_levels = 4
+    min_coarse_cells = 500
+
+    nu_pre = 1
+    nu_post = 1
+    nu_coarse = 1
+
+    # The adaptive fast path should normally check between cycle blocks,
+    # rather than synchronizing after every individual K-cycle.
+    check_every_no = 1
+
+    # ------------------------------------------------------------------
+    # Legacy head-change-driven inner schedule
+    # ------------------------------------------------------------------
+    # These controls remain available when:
+    #
+    #   adaptive_unconfined_inner_enabled = False
+    #
+    # or if the adaptive controller explicitly falls back because a valid
+    # head-equivalent residual cannot be calculated.
+    unconfined_inner_max_cycles_early = 10
+    unconfined_inner_max_cycles_middle = 20
+    unconfined_inner_max_cycles_late = 40
+
+    unconfined_inner_middle_dh = 1.0
+    unconfined_inner_late_dh = 1.0e-2
+
+    # ------------------------------------------------------------------
+    # Final nonlinear convergence and acceptance
+    # ------------------------------------------------------------------
+    hclose = 1.0e-4
+
+    strict_head_residual_tol = 1.0e-6
+    practical_head_residual_tol = 1.0e-5
+
+    # Deprecated compatibility alias if still accepted by the solver.
+    practical_residual_tol = practical_head_residual_tol
+
+    practical_dh_rms_tol = 3.0e-3
+    practical_storage_diag_change_rms_tol = 30.0
+    min_practical_outer_iterations = 8
+
+    # ------------------------------------------------------------------
+    # Inexact inner linear-solve bounds
+    # ------------------------------------------------------------------
+    # Early Picard linearisations do not need to be solved as accurately
+    # as the final nonlinear state.
+    inner_head_residual_tol_min = 2.5e-6
+    inner_head_residual_tol_max = 2.0e-4
+
+    # Prevent the inner linear tolerance from becoming disproportionately
+    # tight relative to the current nonlinear Picard update.
+    inner_picard_scale_max_fraction = 0.10
+
+    # ------------------------------------------------------------------
+    # Residual-driven adaptive inner controller
+    # ------------------------------------------------------------------
+    adaptive_unconfined_inner_enabled = True
+
+    # Use genuinely small cycle blocks so the controller can observe
+    # contraction and alter the next allocation without oversolving.
+    adaptive_inner_initial_block_cycles = 4
+    adaptive_inner_min_block_cycles = 2
+    adaptive_inner_max_block_cycles = 16
+    adaptive_inner_min_total_cycles = 2
+
+    # Inexact-solve forcing term.
+    #
+    # These values deliberately permit relatively loose early Picard
+    # linear solves. The target tightens as nonlinear convergence improves.
+    adaptive_inner_eta_initial = 0.25
+    adaptive_inner_eta_min = 0.025
+    adaptive_inner_eta_max = 0.35
+    adaptive_inner_eta_gamma = 0.50
+    adaptive_inner_eta_power = 1.25
+
+    # Block residual-contraction classification.
+    adaptive_inner_good_contraction_ratio = 0.45
+    adaptive_inner_weak_contraction_ratio = 0.90
+
+    # Permit slow but useful contraction. A block is not considered stalled
+    # merely because it reduces the residual by only a few percent.
+    adaptive_inner_stall_contraction_ratio = 0.995
+
+    # Roll back only when the residual clearly worsens.
+    adaptive_inner_divergence_contraction_ratio = 1.15
+
+    # Require repeated stalled blocks before terminating the inner solve.
+    adaptive_inner_stall_patience = 5
+
+    # This is interpreted as:
+    #
+    #   final_residual / initial_residual <= threshold
+    #
+    # A value of 0.95 therefore requires at least a 5 percent reduction
+    # before a non-target-achieving inner solve can be considered useful.
+    adaptive_inner_minimum_usable_reduction_ratio = 0.95
+
+    adaptive_inner_residual_floor = 1.0e-12
+
+    # Enable temporarily while diagnosing the adaptive controller.
+    # Disable after the controller has been validated if the history is large.
+    adaptive_inner_save_block_history = True
+
+    # ------------------------------------------------------------------
+    # Optional K-cycle optimization sweep
+    # ------------------------------------------------------------------
+    optimize_kcycle = True
+    stop_after_first_accepted = False
+
+    kcycle_candidate_settings = [
+        # Current light production configuration.
+        (1, 1, 1, 4),]
+    #
+    #     # Stronger smoothing with the same hierarchy.
+    #     (2, 2, 1, 4),
+    #     (3, 3, 1, 4),
+    #
+    #     # Deeper hierarchy candidates.
+    #     (1, 1, 1, 5),
+    #     (2, 2, 1, 5),
+    #     (3, 3, 1, 5),
+    # ]
+
+    # These values are relevant to legacy fallback runs. They do not control
+    # the normal residual-driven path unless adaptation is disabled or fails.
+    inner_cycle_candidate_settings = [
+        (10, 20, 40, 1.0, 1.0e-2),
+        (10, 25, 60, 1.0, 1.0e-2),
+        (10, 30, 80, 1.0, 1.0e-2),
+        (15, 30, 80, 1.0, 1.0e-2),
+    ]
+
+    adaptive_inner_candidate_settings = [
+        # # Always retain a validated legacy control in an optimization run.
+        # {
+        #     "adaptive_unconfined_inner_enabled": False,
+        # },
+
+        # Conservative adaptive controller
+        {
+            "adaptive_unconfined_inner_enabled": True,
+            "adaptive_inner_initial_block_cycles": 5,
+            "adaptive_inner_min_block_cycles": 5,
+            "adaptive_inner_max_block_cycles": 20,
+            "adaptive_inner_min_total_cycles": 10,
+            "adaptive_inner_eta_initial": 0.05,
+            "adaptive_inner_eta_min": 0.005,
+            "adaptive_inner_eta_max": 0.10,
+            "adaptive_inner_eta_gamma": 0.25,
+            "adaptive_inner_eta_power": 1.5,
+            "adaptive_inner_good_contraction_ratio": 0.40,
+            "adaptive_inner_weak_contraction_ratio": 0.90,
+            "adaptive_inner_stall_contraction_ratio": 0.9995,
+            "adaptive_inner_divergence_contraction_ratio": 1.10,
+            "adaptive_inner_stall_patience": 8,
+            "adaptive_inner_minimum_usable_reduction_ratio": 0.10,
+            "adaptive_inner_save_block_history": True,
+        },
+
+        # Stricter residual reduction
+        {
+            "adaptive_unconfined_inner_enabled": True,
+            "adaptive_inner_initial_block_cycles": 5,
+            "adaptive_inner_min_block_cycles": 5,
+            "adaptive_inner_max_block_cycles": 20,
+            "adaptive_inner_min_total_cycles": 10,
+            "adaptive_inner_eta_initial": 0.025,
+            "adaptive_inner_eta_min": 0.0025,
+            "adaptive_inner_eta_max": 0.05,
+            "adaptive_inner_eta_gamma": 0.20,
+            "adaptive_inner_eta_power": 1.5,
+            "adaptive_inner_good_contraction_ratio": 0.40,
+            "adaptive_inner_weak_contraction_ratio": 0.90,
+            "adaptive_inner_stall_contraction_ratio": 0.9995,
+            "adaptive_inner_divergence_contraction_ratio": 1.10,
+            "adaptive_inner_stall_patience": 10,
+            "adaptive_inner_minimum_usable_reduction_ratio": 0.05,
+            "adaptive_inner_save_block_history": True,
+        },
+
+        # Adaptive blocks, but require target rather than incomplete usability
+        {
+            "adaptive_unconfined_inner_enabled": True,
+            "adaptive_inner_initial_block_cycles": 5,
+            "adaptive_inner_min_block_cycles": 5,
+            "adaptive_inner_max_block_cycles": 20,
+            "adaptive_inner_min_total_cycles": 10,
+            "adaptive_inner_eta_initial": 0.05,
+            "adaptive_inner_eta_min": 0.005,
+            "adaptive_inner_eta_max": 0.10,
+            "adaptive_inner_eta_gamma": 0.25,
+            "adaptive_inner_eta_power": 1.5,
+            "adaptive_inner_stall_contraction_ratio": 0.9995,
+            "adaptive_inner_divergence_contraction_ratio": 1.10,
+            "adaptive_inner_stall_patience": 10,
+            "adaptive_inner_minimum_usable_reduction_ratio": 0.01,
+            "adaptive_inner_save_block_history": True,
+        },
+    ]
+
+    kcycle_candidates = build_optimization_candidates(
+        kcycle_settings=kcycle_candidate_settings,
+        inner_cycle_settings=inner_cycle_candidate_settings,
+        adaptive_inner_settings=adaptive_inner_candidate_settings,
+    )
+
+    accepted_mass_balance_classes = {
+        "excellent",
+        "good",
+        "acceptable",
+    }
+
+    # ------------------------------------------------------------------
+    # Resolve artifact
+    # ------------------------------------------------------------------
     if explicit_artifact_path is not None:
         artifact_path = Path(explicit_artifact_path)
+
     elif use_grid_qualified_artifact:
         artifact_path = build_grid_artifact_path(
             formulation=formulation,
@@ -432,25 +672,107 @@ if __name__ == "__main__":
             ny=mf6_ny,
             n_weeks=mf6_n_periods,
         )
+
     else:
         artifact_path = None
 
+    # ------------------------------------------------------------------
+    # Solver control overrides
+    # ------------------------------------------------------------------
     solve_control_overrides = {
+        # Hard ceilings
         "max_outer_iterations": max_outer_iterations,
         "max_cycles": max_cycles,
+
+        # Hierarchy and smoothing
         "max_levels": max_levels,
         "min_coarse_cells": min_coarse_cells,
         "nu_pre": nu_pre,
         "nu_post": nu_post,
         "nu_coarse": nu_coarse,
         "check_every_no": check_every_no,
-        "unconfined_inner_max_cycles_early": unconfined_inner_max_cycles_early,
-        "unconfined_inner_max_cycles_middle": unconfined_inner_max_cycles_middle,
-        "unconfined_inner_max_cycles_late": unconfined_inner_max_cycles_late,
+
+        # Final nonlinear acceptance
+        "hclose": hclose,
+        "strict_head_residual_tol": strict_head_residual_tol,
+        "practical_head_residual_tol": practical_head_residual_tol,
+        "practical_residual_tol": practical_residual_tol,
+        "practical_dh_rms_tol": practical_dh_rms_tol,
+        "practical_storage_diag_change_rms_tol": (
+            practical_storage_diag_change_rms_tol
+        ),
+        "min_practical_outer_iterations": min_practical_outer_iterations,
+
+        # Inexact linear solve
+        "inner_head_residual_tol_min": inner_head_residual_tol_min,
+        "inner_head_residual_tol_max": inner_head_residual_tol_max,
+        "inner_picard_scale_max_fraction": (
+            inner_picard_scale_max_fraction
+        ),
+
+        # Legacy head-change fallback
+        "unconfined_inner_max_cycles_early": (
+            unconfined_inner_max_cycles_early
+        ),
+        "unconfined_inner_max_cycles_middle": (
+            unconfined_inner_max_cycles_middle
+        ),
+        "unconfined_inner_max_cycles_late": (
+            unconfined_inner_max_cycles_late
+        ),
         "unconfined_inner_middle_dh": unconfined_inner_middle_dh,
         "unconfined_inner_late_dh": unconfined_inner_late_dh,
+
+        # Residual-driven adaptive controller
+        "adaptive_unconfined_inner_enabled": (
+            adaptive_unconfined_inner_enabled
+        ),
+        "adaptive_inner_initial_block_cycles": (
+            adaptive_inner_initial_block_cycles
+        ),
+        "adaptive_inner_min_block_cycles": (
+            adaptive_inner_min_block_cycles
+        ),
+        "adaptive_inner_max_block_cycles": (
+            adaptive_inner_max_block_cycles
+        ),
+        "adaptive_inner_min_total_cycles": (
+            adaptive_inner_min_total_cycles
+        ),
+        "adaptive_inner_eta_initial": adaptive_inner_eta_initial,
+        "adaptive_inner_eta_min": adaptive_inner_eta_min,
+        "adaptive_inner_eta_max": adaptive_inner_eta_max,
+        "adaptive_inner_eta_gamma": adaptive_inner_eta_gamma,
+        "adaptive_inner_eta_power": adaptive_inner_eta_power,
+        "adaptive_inner_good_contraction_ratio": (
+            adaptive_inner_good_contraction_ratio
+        ),
+        "adaptive_inner_weak_contraction_ratio": (
+            adaptive_inner_weak_contraction_ratio
+        ),
+        "adaptive_inner_stall_contraction_ratio": (
+            adaptive_inner_stall_contraction_ratio
+        ),
+        "adaptive_inner_divergence_contraction_ratio": (
+            adaptive_inner_divergence_contraction_ratio
+        ),
+        "adaptive_inner_stall_patience": (
+            adaptive_inner_stall_patience
+        ),
+        "adaptive_inner_minimum_usable_reduction_ratio": (
+            adaptive_inner_minimum_usable_reduction_ratio
+        ),
+        "adaptive_inner_residual_floor": (
+            adaptive_inner_residual_floor
+        ),
+        "adaptive_inner_save_block_history": (
+            adaptive_inner_save_block_history
+        ),
     }
 
+    # ------------------------------------------------------------------
+    # Execute
+    # ------------------------------------------------------------------
     if optimize_kcycle:
         optimize_kcycle_settings(
             artifact_path=artifact_path,
@@ -465,6 +787,7 @@ if __name__ == "__main__":
             profile_performance=profile_performance,
             save_heavy_diagnostics=save_heavy_diagnostics,
         )
+
     else:
         run_production_replay(
             artifact_path=artifact_path,

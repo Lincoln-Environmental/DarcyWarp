@@ -1,7 +1,7 @@
 from __future__ import annotations
 import warp as wp
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass, field
+from typing import Any, Callable, Optional
 import gc
 import numpy as np
 import os
@@ -1085,6 +1085,604 @@ def _select_unconfined_inner_max_cycles(
     return int(late_cycles)
 
 
+@dataclass
+class AdaptiveInnerSolveConfig:
+    enabled: bool = False
+    initial_block_cycles: int = 4
+    min_block_cycles: int = 2
+    max_block_cycles: int = 16
+    min_total_cycles: int = 2
+    eta_initial: float = 0.25
+    eta_min: float = 0.02
+    eta_max: float = 0.30
+    eta_gamma: float = 0.5
+    eta_power: float = 1.5
+    good_contraction_ratio: float = 0.35
+    weak_contraction_ratio: float = 0.85
+    stall_contraction_ratio: float = 0.98
+    divergence_contraction_ratio: float = 1.05
+    stall_patience: int = 2
+    minimum_usable_reduction_ratio: float = 0.80
+    residual_floor: float = 1.0e-12
+    relative_flow_residual_target: float = 1.0e-4
+    save_block_history: bool = False
+
+
+@dataclass
+class AdaptiveInnerSolveState:
+    total_cycles: int = 0
+    block_index: int = 0
+    previous_residual_rms: float = float("nan")
+    initial_residual_rms: float = float("nan")
+    target_residual_rms: float = float("nan")
+    initial_relative_flow_residual_rms: float = float("nan")
+    target_relative_flow_residual_rms: float = float("inf")
+    final_relative_flow_residual_rms: float = float("nan")
+    previous_relative_flow_residual_rms: float = float("nan")
+    previous_outer_residual_rms: float = float("nan")
+    previous_outer_dh_rms: float = float("nan")
+    consecutive_stall_blocks: int = 0
+    converged: bool = False
+    stalled: bool = False
+    diverged: bool = False
+    fallback_used: bool = False
+    legacy_fallback_used: bool = False
+    target_achieved: bool = False
+    usable_for_picard: bool = False
+    rollback_count: int = 0
+    residual_check_count: int = 0
+    termination_reason: str = ""
+    fallback_reason: str = ""
+    forcing_eta: float = float("nan")
+    final_residual_rms: float = float("nan")
+    cycles_per_block: list[int] = field(default_factory=list)
+    residuals_per_block: list[float] = field(default_factory=list)
+    contraction_ratios: list[float] = field(default_factory=list)
+    per_cycle_convergence_factors: list[float] = field(default_factory=list)
+    flow_contraction_ratios: list[float] = field(default_factory=list)
+    head_per_cycle_convergence_factors: list[float] = field(default_factory=list)
+    flow_per_cycle_convergence_factors: list[float] = field(default_factory=list)
+    controller_per_cycle_convergence_factors: list[float] = field(default_factory=list)
+    head_reduction_ratios: list[float] = field(default_factory=list)
+    flow_reduction_ratios: list[float] = field(default_factory=list)
+    predicted_cycles_per_block: list[int | None] = field(default_factory=list)
+    block_classifications: list[str] = field(default_factory=list)
+
+
+def _select_legacy_unconfined_inner_max_cycles_from_dh(
+    *,
+    previous_dh_measure: float | None,
+    early_cycles: int,
+    middle_cycles: int,
+    late_cycles: int,
+    middle_dh: float,
+    late_dh: float,
+) -> int:
+    """
+    Choose the legacy DH-threshold inner K-cycle cap for the transient fast path.
+    """
+    return _select_unconfined_inner_max_cycles(
+        previous_dh_measure=previous_dh_measure,
+        early_cycles=early_cycles,
+        middle_cycles=middle_cycles,
+        late_cycles=late_cycles,
+        middle_dh=middle_dh,
+        late_dh=late_dh,
+    )
+
+
+def _adaptive_state_requires_legacy_fallback(state: AdaptiveInnerSolveState) -> bool:
+    """An adaptive result may update Picard only when it is explicitly usable."""
+    return bool(state.fallback_used or state.diverged or not state.usable_for_picard)
+
+
+def _remaining_legacy_fallback_cycles(*, max_cycles: int, adaptive_cycles_used: int, selected_legacy_cycles: int) -> int:
+    return min(
+        max(int(max_cycles) - int(adaptive_cycles_used), 0),
+        max(int(selected_legacy_cycles), 0),
+    )
+
+
+def _should_continue_picard_after_refreshed_acceptance(
+    *,
+    provisional_picard_acceptance: bool,
+    refreshed_picard_acceptance: bool,
+) -> bool:
+    """A provisional linearised check never ends a period without refresh."""
+    return bool(not (provisional_picard_acceptance and refreshed_picard_acceptance))
+
+
+def _adaptive_practical_acceptance_allowed(
+    *,
+    practical_acceptance_enabled: bool,
+    adaptive_controller_used: bool,
+    inner_target_achieved: bool,
+    final_relative_flow_residual_rms: float | None = None,
+    relative_flow_target: float | None = None,
+) -> bool:
+    return bool(
+        practical_acceptance_enabled
+        and (not adaptive_controller_used or inner_target_achieved)
+    )
+
+
+def _validate_adaptive_inner_solve_config(
+    *,
+    config: AdaptiveInnerSolveConfig,
+    max_cycles: int,
+) -> None:
+    if int(config.min_block_cycles) < 1:
+        raise ValueError("adaptive_inner_min_block_cycles must be >= 1.")
+    if int(config.max_block_cycles) < int(config.min_block_cycles):
+        raise ValueError("adaptive_inner_max_block_cycles must be >= adaptive_inner_min_block_cycles.")
+    if not (int(config.min_block_cycles) <= int(config.initial_block_cycles) <= int(config.max_block_cycles)):
+        raise ValueError(
+            "adaptive_inner_initial_block_cycles must satisfy "
+            "adaptive_inner_min_block_cycles <= initial <= adaptive_inner_max_block_cycles."
+        )
+    if int(config.max_block_cycles) > int(max_cycles):
+        raise ValueError("adaptive_inner_max_block_cycles must be <= max_cycles.")
+    if int(config.min_total_cycles) < 0:
+        raise ValueError("adaptive_inner_min_total_cycles must be >= 0.")
+    if int(config.min_total_cycles) > int(max_cycles):
+        raise ValueError("adaptive_inner_min_total_cycles must be <= max_cycles.")
+    if not (0.0 < float(config.eta_min) <= float(config.eta_initial) <= float(config.eta_max) < 1.0):
+        raise ValueError("adaptive inner eta controls must satisfy 0 < eta_min <= eta_initial <= eta_max < 1.")
+    if float(config.eta_gamma) <= 0.0 or not np.isfinite(float(config.eta_gamma)):
+        raise ValueError("adaptive_inner_eta_gamma must be finite and > 0.")
+    if float(config.eta_power) <= 0.0 or not np.isfinite(float(config.eta_power)):
+        raise ValueError("adaptive_inner_eta_power must be finite and > 0.")
+    good = float(config.good_contraction_ratio)
+    weak = float(config.weak_contraction_ratio)
+    stall = float(config.stall_contraction_ratio)
+    divergence = float(config.divergence_contraction_ratio)
+    if not (0.0 < good <= weak <= stall < divergence):
+        raise ValueError(
+            "adaptive inner contraction ratios must satisfy "
+            "0 < good <= weak <= stall < divergence."
+        )
+    if int(config.stall_patience) < 1:
+        raise ValueError("adaptive_inner_stall_patience must be >= 1.")
+    usable_ratio = float(config.minimum_usable_reduction_ratio)
+    if not (0.0 < usable_ratio <= 1.0):
+        raise ValueError("adaptive_inner_minimum_usable_reduction_ratio must be in (0, 1].")
+    if float(config.residual_floor) <= 0.0 or not np.isfinite(float(config.residual_floor)):
+        raise ValueError("adaptive_inner_residual_floor must be finite and > 0.")
+    if float(config.relative_flow_residual_target) < 0.0 or not np.isfinite(float(config.relative_flow_residual_target)):
+        raise ValueError("adaptive_inner_relative_flow_residual_target must be finite and >= 0.")
+
+
+def _build_adaptive_inner_solve_config_from_controls(
+    *,
+    controls: dict,
+    max_cycles: int,
+) -> AdaptiveInnerSolveConfig:
+    config = AdaptiveInnerSolveConfig(
+        enabled=bool(controls.get("adaptive_unconfined_inner_enabled", False)),
+        initial_block_cycles=int(controls.get("adaptive_inner_initial_block_cycles", 4)),
+        min_block_cycles=int(controls.get("adaptive_inner_min_block_cycles", 2)),
+        max_block_cycles=int(controls.get("adaptive_inner_max_block_cycles", 16)),
+        min_total_cycles=int(controls.get("adaptive_inner_min_total_cycles", 2)),
+        eta_initial=float(controls.get("adaptive_inner_eta_initial", 0.25)),
+        eta_min=float(controls.get("adaptive_inner_eta_min", 0.02)),
+        eta_max=float(controls.get("adaptive_inner_eta_max", 0.30)),
+        eta_gamma=float(controls.get("adaptive_inner_eta_gamma", 0.5)),
+        eta_power=float(controls.get("adaptive_inner_eta_power", 1.5)),
+        good_contraction_ratio=float(controls.get("adaptive_inner_good_contraction_ratio", 0.35)),
+        weak_contraction_ratio=float(controls.get("adaptive_inner_weak_contraction_ratio", 0.85)),
+        stall_contraction_ratio=float(controls.get("adaptive_inner_stall_contraction_ratio", 0.98)),
+        divergence_contraction_ratio=float(controls.get("adaptive_inner_divergence_contraction_ratio", 1.05)),
+        stall_patience=int(controls.get("adaptive_inner_stall_patience", 2)),
+        minimum_usable_reduction_ratio=float(
+            controls.get("adaptive_inner_minimum_usable_reduction_ratio", 0.80)
+        ),
+        residual_floor=float(controls.get("adaptive_inner_residual_floor", 1.0e-12)),
+        relative_flow_residual_target=float(
+            controls.get("adaptive_inner_relative_flow_residual_target", 1.0e-4)
+        ),
+        save_block_history=bool(controls.get("adaptive_inner_save_block_history", False)),
+    )
+    _validate_adaptive_inner_solve_config(config=config, max_cycles=int(max_cycles))
+    return config
+
+
+def _compute_inner_forcing_eta(
+    *,
+    current_outer_residual_rms: float,
+    previous_outer_residual_rms: float | None,
+    config: AdaptiveInnerSolveConfig,
+) -> float:
+    current = float(current_outer_residual_rms)
+    if not np.isfinite(current) or current < 0.0:
+        raise ValueError("current_outer_residual_rms must be finite and >= 0.")
+    if current <= float(config.residual_floor):
+        return float(np.clip(float(config.eta_initial), float(config.eta_min), float(config.eta_max)))
+
+    previous = float(previous_outer_residual_rms) if previous_outer_residual_rms is not None else float("nan")
+    if not np.isfinite(previous) or previous <= float(config.residual_floor):
+        return float(np.clip(float(config.eta_initial), float(config.eta_min), float(config.eta_max)))
+
+    eta = float(config.eta_gamma) * (current / max(previous, float(config.residual_floor))) ** float(config.eta_power)
+    return float(np.clip(eta, float(config.eta_min), float(config.eta_max)))
+
+
+def _compute_inner_target_residual(
+    *,
+    initial_residual_rms: float,
+    forcing_eta: float,
+    residual_floor: float,
+    inner_head_residual_tol_min: float,
+    inner_head_residual_tol_max: float,
+    inner_picard_scale_max_fraction: float,
+    previous_outer_dh_rms: float | None,
+    hclose: float,
+) -> float:
+    initial_residual = float(initial_residual_rms)
+    if not np.isfinite(initial_residual) or initial_residual < 0.0:
+        raise ValueError("initial_residual_rms must be finite and >= 0.")
+
+    # Adaptive forcing targets are governed by the solve residual and a
+    # numerical floor, not the production Picard tolerance.
+    lower = float(residual_floor)
+    upper = max(lower, float(inner_head_residual_tol_max))
+    target = float(forcing_eta) * initial_residual
+
+    previous_dh = float(previous_outer_dh_rms) if previous_outer_dh_rms is not None else float("nan")
+    if np.isfinite(previous_dh):
+        picard_bound = float(inner_picard_scale_max_fraction) * max(float(hclose), previous_dh)
+        target = min(target, picard_bound)
+
+    return float(min(upper, max(lower, target)))
+
+
+def _classify_inner_contraction(
+    *,
+    residual_before: float,
+    residual_after: float,
+    block_cycles: int,
+    config: AdaptiveInnerSolveConfig,
+) -> dict[str, Any]:
+    before = max(float(residual_before), float(config.residual_floor))
+    after = float(residual_after)
+    block_cycles_i = max(int(block_cycles), 1)
+
+    if not np.isfinite(after) or not np.isfinite(before):
+        return {
+            "rho": float("nan"),
+            "q": float("nan"),
+            "classification": "nonfinite",
+        }
+
+    rho = after / before
+    q = float("nan")
+    if rho > 0.0 and np.isfinite(rho):
+        q = float(rho ** (1.0 / float(block_cycles_i)))
+
+    if not np.isfinite(rho):
+        classification = "nonfinite"
+    elif rho > float(config.divergence_contraction_ratio):
+        classification = "divergent"
+    elif q >= float(config.stall_contraction_ratio):
+        classification = "stalled"
+    elif q > float(config.weak_contraction_ratio):
+        classification = "weak"
+    elif q > float(config.good_contraction_ratio):
+        classification = "useful"
+    else:
+        classification = "strong"
+
+    return {
+        "rho": float(rho),
+        "q": float(q),
+        "classification": classification,
+    }
+
+
+def _classify_dual_inner_contraction(
+    *,
+    head_before: float,
+    head_after: float,
+    flow_before: float,
+    flow_after: float,
+    block_cycles: int,
+    config: AdaptiveInnerSolveConfig,
+    head_target: float | None = None,
+    flow_target: float | None = None,
+) -> dict[str, Any]:
+    """Classify a block by its slower residual while retaining per-residual diagnostics."""
+    floor = float(config.residual_floor)
+    cycles = max(int(block_cycles), 1)
+    values = (head_before, head_after, flow_before, flow_after)
+    if not all(np.isfinite(float(value)) for value in values):
+        return {
+            "rho_head": float("nan"), "rho_flow": float("nan"),
+            "q_head": float("nan"), "q_flow": float("nan"),
+            "q_controller": float("nan"), "classification": "nonfinite",
+        }
+
+    rho_head = float(head_after) / max(float(head_before), floor)
+    rho_flow = float(flow_after) / max(float(flow_before), floor)
+    q_head = float(rho_head ** (1.0 / float(cycles))) if rho_head >= 0.0 else float("nan")
+    q_flow = float(rho_flow ** (1.0 / float(cycles))) if rho_flow >= 0.0 else float("nan")
+    head_active = head_target is None or float(head_after) > float(head_target)
+    flow_active = flow_target is None or float(flow_after) > float(flow_target)
+    active_q = []
+    if head_active:
+        active_q.append(q_head)
+    if flow_active:
+        active_q.append(q_flow)
+    q_controller = max(active_q) if active_q else 0.0
+    if (
+        (head_active and rho_head > float(config.divergence_contraction_ratio))
+        or (flow_active and rho_flow > float(config.divergence_contraction_ratio))
+    ):
+        classification = "divergent"
+    elif q_controller >= float(config.stall_contraction_ratio):
+        classification = "stalled"
+    elif q_controller > float(config.weak_contraction_ratio):
+        classification = "weak"
+    elif q_controller > float(config.good_contraction_ratio):
+        classification = "useful"
+    else:
+        classification = "strong"
+    return {
+        "rho_head": rho_head, "rho_flow": rho_flow,
+        "q_head": q_head, "q_flow": q_flow,
+        "q_controller": q_controller, "classification": classification,
+        "head_active": head_active, "flow_active": flow_active,
+    }
+
+
+def _predict_next_inner_block_size(
+    *,
+    current_block_cycles: int,
+    residual_after: float,
+    target_residual: float,
+    contraction_ratio: float,
+    per_cycle_factor: float,
+    classification: str,
+    remaining_cycles: int,
+    config: AdaptiveInnerSolveConfig,
+    flow_residual_after: float | None = None,
+    flow_target: float | None = None,
+) -> int | None:
+    if remaining_cycles <= 0:
+        return None
+
+    min_block = int(config.min_block_cycles)
+    max_block = min(int(config.max_block_cycles), int(remaining_cycles))
+    if max_block < 1:
+        return None
+
+    if not np.isfinite(float(residual_after)) or not np.isfinite(float(target_residual)):
+        return min(max_block, max(1, min_block))
+
+    residual_after_f = float(residual_after)
+    target_f = max(float(target_residual), float(config.residual_floor))
+    flow_after_f = float(flow_residual_after) if flow_residual_after is not None else residual_after_f
+    flow_target_f = max(
+        float(flow_target) if flow_target is not None else target_f,
+        float(config.residual_floor),
+    )
+    if not np.isfinite(flow_after_f):
+        return min(max_block, max(1, min_block))
+    controller_gap = max(residual_after_f / target_f, flow_after_f / flow_target_f)
+    if controller_gap <= 1.0:
+        return min(max_block, 1 if max_block >= 1 else 0)
+
+    q = float(per_cycle_factor)
+    predicted_cycles: int | None = None
+    if np.isfinite(q) and 0.0 < q < 1.0:
+        numerator = np.log(1.0 / controller_gap)
+        denominator = np.log(q)
+        if np.isfinite(numerator) and np.isfinite(denominator) and denominator != 0.0:
+            predicted_cycles = max(1, int(np.ceil(numerator / denominator)))
+
+    if classification == "strong":
+        if predicted_cycles is None:
+            predicted_cycles = min(max_block, max(current_block_cycles * 2, min_block))
+        else:
+            predicted_cycles = max(predicted_cycles, min(current_block_cycles * 2, max_block))
+    elif classification == "useful":
+        if predicted_cycles is None:
+            predicted_cycles = current_block_cycles
+    elif classification == "weak":
+        predicted_cycles = min(max_block, max(1, min_block))
+    else:
+        predicted_cycles = min(max_block, max(1, min_block))
+
+    if controller_gap <= 2.0:
+        predicted_cycles = min(predicted_cycles, 2)
+        predicted_cycles = max(predicted_cycles, 1)
+
+    return int(np.clip(predicted_cycles, 1, max_block))
+
+
+def _run_adaptive_inner_kcycle_blocks(
+    *,
+    initial_residual_rms: float,
+    target_residual_rms: float,
+    forcing_eta: float,
+    previous_outer_residual_rms: float | None,
+    previous_outer_dh_rms: float | None,
+    max_cycles: int,
+    config: AdaptiveInnerSolveConfig,
+    run_block: Callable[[int], dict[str, Any]],
+    rollback_block: Callable[[], None] | None = None,
+    initial_relative_flow_residual_rms: float | None = None,
+    target_relative_flow_residual_rms: float | None = None,
+) -> AdaptiveInnerSolveState:
+    state = AdaptiveInnerSolveState(
+        previous_residual_rms=float(initial_residual_rms),
+        initial_residual_rms=float(initial_residual_rms),
+        target_residual_rms=float(target_residual_rms),
+        previous_outer_residual_rms=(
+            float(previous_outer_residual_rms) if previous_outer_residual_rms is not None else float("nan")
+        ),
+        previous_outer_dh_rms=(float(previous_outer_dh_rms) if previous_outer_dh_rms is not None else float("nan")),
+        forcing_eta=float(forcing_eta),
+        initial_relative_flow_residual_rms=(
+            float(initial_relative_flow_residual_rms)
+            if initial_relative_flow_residual_rms is not None else 0.0
+        ),
+        target_relative_flow_residual_rms=(
+            float(target_relative_flow_residual_rms)
+            if target_relative_flow_residual_rms is not None else float("inf")
+        ),
+        previous_relative_flow_residual_rms=(
+            float(initial_relative_flow_residual_rms)
+            if initial_relative_flow_residual_rms is not None else 0.0
+        ),
+    )
+
+    initial_residual = float(initial_residual_rms)
+    target_residual = float(target_residual_rms)
+    initial_relative = float(state.initial_relative_flow_residual_rms)
+    target_relative = float(state.target_relative_flow_residual_rms)
+    if not np.isfinite(initial_residual) or not np.isfinite(initial_relative):
+        state.fallback_used = True
+        state.legacy_fallback_used = True
+        state.fallback_reason = "nonfinite_initial_head_residual"
+        state.termination_reason = "legacy_dh_fallback"
+        return state
+
+    if initial_residual <= target_residual and initial_relative <= target_relative:
+        state.converged = True
+        state.target_achieved = True
+        state.usable_for_picard = True
+        state.final_residual_rms = float(initial_residual)
+        state.final_relative_flow_residual_rms = float(initial_relative)
+        state.termination_reason = "initial_residual_already_below_target"
+        return state
+
+    current_block_cycles = int(np.clip(int(config.initial_block_cycles), 1, int(max_cycles)))
+    while state.total_cycles < int(max_cycles):
+        remaining_cycles = int(max_cycles) - state.total_cycles
+        block_cycles = int(min(current_block_cycles, remaining_cycles))
+        if block_cycles <= 0:
+            break
+
+        block_result = dict(run_block(int(block_cycles)))
+        actual_cycles = int(block_result.get("actual_cycles", block_cycles))
+        residual_after = float(block_result.get("residual_after_rms", float("nan")))
+        relative_after = float(block_result.get("relative_flow_residual_rms", 0.0))
+        rollback_required = bool(block_result.get("rollback_required", False))
+        numerical_breakdown = bool(block_result.get("numerical_breakdown", False))
+        head_nonfinite = bool(block_result.get("head_nonfinite", False))
+
+        if actual_cycles <= 0:
+            state.fallback_used = True
+            state.legacy_fallback_used = True
+            state.fallback_reason = "zero_cycle_block_without_initial_target"
+            state.termination_reason = "legacy_dh_fallback"
+            state.usable_for_picard = False
+            return state
+
+        state.total_cycles += actual_cycles
+        state.block_index += 1
+        state.residual_check_count += 1
+        state.cycles_per_block.append(int(actual_cycles))
+        state.residuals_per_block.append(float(residual_after))
+
+        contraction = _classify_dual_inner_contraction(
+            head_before=state.previous_residual_rms,
+            head_after=residual_after,
+            flow_before=state.previous_relative_flow_residual_rms,
+            flow_after=relative_after,
+            block_cycles=actual_cycles,
+            config=config,
+            head_target=target_residual,
+            flow_target=target_relative,
+        )
+        rho = float(contraction["rho_head"])
+        rho_flow = float(contraction["rho_flow"])
+        q = float(contraction["q_controller"])
+        q_head = float(contraction["q_head"])
+        q_flow = float(contraction["q_flow"])
+        classification = str(contraction["classification"])
+        state.contraction_ratios.append(rho)
+        state.per_cycle_convergence_factors.append(q)
+        state.flow_contraction_ratios.append(rho_flow)
+        state.head_per_cycle_convergence_factors.append(q_head)
+        state.flow_per_cycle_convergence_factors.append(q_flow)
+        state.controller_per_cycle_convergence_factors.append(q)
+        state.block_classifications.append(classification)
+
+        if rollback_required or numerical_breakdown or head_nonfinite or not np.isfinite(relative_after) or classification in {"divergent", "nonfinite"}:
+            if rollback_block is not None:
+                rollback_block()
+            state.rollback_count += 1
+            state.diverged = True
+            state.termination_reason = "block_divergence_rolled_back"
+            state.final_residual_rms = state.previous_residual_rms
+            state.usable_for_picard = False
+            state.predicted_cycles_per_block.append(None)
+            return state
+
+        state.final_residual_rms = residual_after
+        state.final_relative_flow_residual_rms = relative_after
+        state.previous_residual_rms = residual_after
+        state.previous_relative_flow_residual_rms = relative_after
+
+        if (
+            residual_after <= target_residual
+            and relative_after <= target_relative
+            and state.total_cycles >= int(config.min_total_cycles)
+        ):
+            state.converged = True
+            state.target_achieved = True
+            state.termination_reason = "target_residual_reached"
+            break
+
+        if q >= float(config.stall_contraction_ratio):
+            state.consecutive_stall_blocks += 1
+        else:
+            state.consecutive_stall_blocks = 0
+
+        if state.consecutive_stall_blocks >= int(config.stall_patience):
+            state.stalled = True
+            state.termination_reason = "residual_stagnation"
+            state.predicted_cycles_per_block.append(None)
+            break
+
+        predicted_cycles = _predict_next_inner_block_size(
+            current_block_cycles=block_cycles,
+            residual_after=residual_after,
+            target_residual=target_residual,
+            contraction_ratio=rho,
+            per_cycle_factor=q,
+            classification=classification,
+            remaining_cycles=int(max_cycles) - state.total_cycles,
+            config=config,
+            flow_residual_after=relative_after,
+            flow_target=target_relative,
+        )
+        state.predicted_cycles_per_block.append(predicted_cycles)
+        if predicted_cycles is None:
+            break
+        current_block_cycles = int(predicted_cycles)
+
+    if not state.termination_reason:
+        state.termination_reason = (
+            "max_cycles_hard_ceiling" if state.total_cycles >= int(max_cycles) else "completed_without_target"
+        )
+
+    head_reduction = float(state.final_residual_rms) / max(float(state.initial_residual_rms), float(config.residual_floor))
+    flow_reduction = float(state.final_relative_flow_residual_rms) / max(
+        float(state.initial_relative_flow_residual_rms), float(config.residual_floor)
+    )
+    state.head_reduction_ratios.append(head_reduction)
+    state.flow_reduction_ratios.append(flow_reduction)
+    state.usable_for_picard = bool(
+        np.isfinite(float(state.final_residual_rms))
+        and np.isfinite(float(state.final_relative_flow_residual_rms))
+        and not state.diverged
+        and head_reduction <= float(config.minimum_usable_reduction_ratio)
+        and flow_reduction <= float(config.minimum_usable_reduction_ratio)
+    )
+    return state
+
+
 def _format_unaccepted_transient_period_error(
     *,
     period_index: int,
@@ -1100,6 +1698,14 @@ def _format_unaccepted_transient_period_error(
     coarse_operator_mode: str,
     coarse_krylov_method: str,
     total_inner_cycles: int,
+    inner_controller_mode: str | None = None,
+    last_inner_termination_reason: str | None = None,
+    last_inner_initial_residual: float | None = None,
+    last_inner_target_residual: float | None = None,
+    last_inner_final_residual: float | None = None,
+    last_inner_block_count: int | None = None,
+    stalled_inner_solve_count: int | None = None,
+    divergent_inner_solve_count: int | None = None,
 ) -> str:
     """
     Format a compact transient period production-acceptance failure message.
@@ -1118,7 +1724,15 @@ def _format_unaccepted_transient_period_error(
         f"storage_reference={storage_reference} "
         f"coarse_operator_mode={coarse_operator_mode} "
         f"coarse_krylov_method={coarse_krylov_method} "
-        f"total_inner_cycles={int(total_inner_cycles)}"
+        f"total_inner_cycles={int(total_inner_cycles)} "
+        f"inner_controller_mode={inner_controller_mode} "
+        f"last_inner_termination_reason={last_inner_termination_reason} "
+        f"last_inner_initial_residual={last_inner_initial_residual} "
+        f"last_inner_target_residual={last_inner_target_residual} "
+        f"last_inner_final_residual={last_inner_final_residual} "
+        f"last_inner_block_count={last_inner_block_count} "
+        f"stalled_inner_solve_count={stalled_inner_solve_count} "
+        f"divergent_inner_solve_count={divergent_inner_solve_count}"
     )
 
 
@@ -1528,6 +2142,38 @@ def compute_dual_residual_kernel(
 
     wp.atomic_add(flow_rTr_buf, 0, flow_residual * flow_residual)
     wp.atomic_add(head_rTr_buf, 0, head_residual * head_residual)
+
+
+@wp.kernel
+def compute_active_rhs_l2_kernel(
+    rhs: wp.array(dtype=WP_FLOAT, ndim=2),
+    active: wp.array(dtype=wp.int32, ndim=2),
+    bc_mask: wp.array(dtype=wp.int32, ndim=2),
+    rhs_rTr_buf: wp.array(dtype=wp.float64, ndim=1),
+    nx: int,
+    ny: int,
+):
+    j, i = wp.tid()
+    if j < ny and i < nx and active[j, i] != 0 and bc_mask[j, i] == 0:
+        value = wp.float64(rhs[j, i])
+        wp.atomic_add(rhs_rTr_buf, 0, value * value)
+
+
+@wp.kernel
+def detect_nonfinite_field_kernel(
+    field: wp.array(dtype=WP_FLOAT, ndim=2),
+    nonfinite_flag: wp.array(dtype=wp.int32, ndim=1),
+    nx: int,
+    ny: int,
+):
+    j, i = wp.tid()
+    if j >= ny or i >= nx:
+        return
+
+    value = wp.float64(field[j, i])
+    delta = value - value
+    if delta != delta:
+        wp.atomic_max(nonfinite_flag, 0, 1)
 
 
 @wp.kernel
@@ -3198,6 +3844,19 @@ def zero_scalar_kernel(
     if k >= buf.shape[0]:
         return
     buf[k] = wp.float64(0.0)
+
+
+@wp.kernel
+def zero_int_scalar_kernel(
+    buf: wp.array(dtype=wp.int32, ndim=1),
+):
+    """
+    Zero a 1D Warp int32 array (length >= 1).
+    """
+    k = wp.tid()
+    if k >= buf.shape[0]:
+        return
+    buf[k] = wp.int32(0)
 
 
 @wp.kernel
@@ -9780,6 +10439,25 @@ class WarpDarcySolver:
             "unconfined_inner_max_cycles_late",
             "unconfined_inner_middle_dh",
             "unconfined_inner_late_dh",
+            "adaptive_unconfined_inner_enabled",
+            "adaptive_inner_initial_block_cycles",
+            "adaptive_inner_min_block_cycles",
+            "adaptive_inner_max_block_cycles",
+            "adaptive_inner_min_total_cycles",
+            "adaptive_inner_eta_initial",
+            "adaptive_inner_eta_min",
+            "adaptive_inner_eta_max",
+            "adaptive_inner_eta_gamma",
+            "adaptive_inner_eta_power",
+            "adaptive_inner_good_contraction_ratio",
+            "adaptive_inner_weak_contraction_ratio",
+            "adaptive_inner_stall_contraction_ratio",
+            "adaptive_inner_divergence_contraction_ratio",
+            "adaptive_inner_stall_patience",
+            "adaptive_inner_minimum_usable_reduction_ratio",
+            "adaptive_inner_residual_floor",
+            "adaptive_inner_relative_flow_residual_target",
+            "adaptive_inner_save_block_history",
             "allow_unaccepted_transient_period",
             "use_device_transient_fast_path",
             "profile_transient_fast_path",
@@ -9872,6 +10550,7 @@ class WarpDarcySolver:
             h_prev_wp = wp.array(head_prev, dtype=WP_FLOAT, device=device)
             h_iter_wp = wp.array(head_prev, dtype=WP_FLOAT, device=device)
             h_snapshot_wp = wp.array(head_prev, dtype=WP_FLOAT, device=device)
+            h_inner_snapshot_wp = wp.array(head_prev, dtype=WP_FLOAT, device=device)
             bottom_wp = wp.array(bottom, dtype=WP_FLOAT, device=device)
             top_wp = wp.array(top, dtype=WP_FLOAT, device=device)
             k_field_wp = wp.array(k, dtype=WP_FLOAT, device=device)
@@ -9889,7 +10568,9 @@ class WarpDarcySolver:
             dh_rms_buf = wp.zeros(1, dtype=wp.float64, device=device)
             flow_rTr_buf = wp.zeros(1, dtype=wp.float64, device=device)
             head_rTr_buf = wp.zeros(1, dtype=wp.float64, device=device)
+            rhs_rTr_buf = wp.zeros(1, dtype=wp.float64, device=device)
             converged_flag_buf = wp.zeros(1, dtype=wp.int32, device=device)
+            head_nonfinite_flag_buf = wp.zeros(1, dtype=wp.int32, device=device)
 
             self.storage_diag_wp = storage_diag_wp
             self._storage_active = True
@@ -9909,6 +10590,7 @@ class WarpDarcySolver:
             fast_path_coarse_operator_mode = "device_refreshed_dynamic_coarse_operator"
 
             max_outer = int(controls.get("unconfined_max_picard_iter", controls.get("max_outer_iterations", 100)))
+            max_cycles_hard_i = int(controls.get("max_cycles", 200))
             hclose = float(controls.get("unconfined_head_tol", controls.get("hclose", 1.0e-4)))
             strict_head_residual_tol_f = float(controls.get("strict_head_residual_tol", hclose))
             min_practical_outer_iterations_i = int(controls.get("min_practical_outer_iterations", 8))
@@ -9919,6 +10601,9 @@ class WarpDarcySolver:
             practical_dh_rms_tol_f = float(controls.get("practical_dh_rms_tol", 3.0e-3))
             practical_storage_diag_change_rms_tol_f = float(
                 controls.get("practical_storage_diag_change_rms_tol", 30.0)
+            )
+            practical_picard_acceptance_enabled_b = bool(
+                controls.get("practical_picard_acceptance_enabled", False)
             )
             omega_current_f = float(controls.get("unconfined_relax", controls.get("omega", 0.8)))
             omega_min_f = float(controls.get("omega_min", 0.05))
@@ -9934,16 +10619,32 @@ class WarpDarcySolver:
             inner_max_cycles_late_i = int(controls.get("unconfined_inner_max_cycles_late", 60))
             inner_middle_dh_f = float(controls.get("unconfined_inner_middle_dh", 1.0))
             inner_late_dh_f = float(controls.get("unconfined_inner_late_dh", 1.0e-2))
+            inner_head_residual_tol_min_f = float(
+                controls.get("inner_head_residual_tol_min", controls.get("inner_head_residual_tol", hclose))
+            )
+            inner_head_residual_tol_max_f = float(controls.get("inner_head_residual_tol_max", 1.0e-2))
+            inner_picard_scale_max_fraction_f = float(controls.get("inner_picard_scale_max_fraction", 0.10))
             allow_unaccepted_transient_period_b = bool(controls.get("allow_unaccepted_transient_period", False))
             startup_mode = str(controls.get("unconfined_startup_mode", "initial_head")).strip().lower()
             if startup_mode not in {"initial_head", "confined_pre_solve"}:
                 raise ValueError("device transient fast path supports startup modes 'initial_head' and 'confined_pre_solve'.")
             profile_fast_path_b = bool(controls.get("profile_transient_fast_path", False))
+            adaptive_inner_config = _build_adaptive_inner_solve_config_from_controls(
+                controls=controls,
+                max_cycles=max_cycles_hard_i,
+            )
             min_sat_f = float(min_sat)
             sy_f = float(sy)
             ss_f = float(ss)
             dx_f = float(self.dx)
             dt_f_val = float(dt_f)
+
+            if inner_head_residual_tol_min_f < 0.0 or not np.isfinite(inner_head_residual_tol_min_f):
+                raise ValueError("inner_head_residual_tol_min must be non-negative and finite.")
+            if inner_head_residual_tol_max_f < inner_head_residual_tol_min_f:
+                raise ValueError("inner_head_residual_tol_max must be >= inner_head_residual_tol_min.")
+            if inner_picard_scale_max_fraction_f < 0.0 or inner_picard_scale_max_fraction_f > 1.0:
+                raise ValueError("inner_picard_scale_max_fraction must be in [0, 1].")
 
             dim2d = (self.ny, self.nx)
 
@@ -9956,6 +10657,125 @@ class WarpDarcySolver:
                 if profile_fast_path_b and str(device).startswith("cuda"):
                     wp.synchronize_device(device)
                 return float(time.perf_counter() - t_start)
+
+            def _fast_path_head_residual_check() -> tuple[float, float, float, bool]:
+                wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[flow_rTr_buf], device=device)
+                wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[head_rTr_buf], device=device)
+                wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[rhs_rTr_buf], device=device)
+                wp.launch(kernel=zero_int_scalar_kernel, dim=1, inputs=[head_nonfinite_flag_buf], device=device)
+                wp.launch(
+                    kernel=compute_dual_residual_kernel,
+                    dim=dim2d,
+                    inputs=[
+                        h_iter_wp,
+                        rhs_eff_wp,
+                        self.T_wp,
+                        self.active_wp,
+                        self.bc_mask_wp,
+                        self.mg_levels[0].gh_mask_wp,
+                        self.mg_levels[0].ghb_factor_wp,
+                        storage_diag_wp,
+                        flow_rTr_buf,
+                        head_rTr_buf,
+                        self.nx,
+                        self.ny,
+                    ],
+                    device=device,
+                )
+                wp.launch(
+                    kernel=detect_nonfinite_field_kernel,
+                    dim=dim2d,
+                    inputs=[h_iter_wp, head_nonfinite_flag_buf, self.nx, self.ny],
+                    device=device,
+                )
+                wp.launch(
+                    kernel=compute_active_rhs_l2_kernel,
+                    dim=dim2d,
+                    inputs=[rhs_eff_wp, self.active_wp, self.bc_mask_wp, rhs_rTr_buf, self.nx, self.ny],
+                    device=device,
+                )
+                counters["scalar_reductions"] += 1
+                head_rtr = float(head_rTr_buf.numpy()[0])
+                flow_rtr = float(flow_rTr_buf.numpy()[0])
+                head_nonfinite = bool(int(head_nonfinite_flag_buf.numpy()[0]) != 0)
+                head_rms = float(np.sqrt(max(head_rtr, 0.0) / float(max(n_free, 1))))
+                flow_rms = float(np.sqrt(max(flow_rtr, 0.0) / float(max(n_free, 1))))
+                rhs_rms = float(np.sqrt(max(float(rhs_rTr_buf.numpy()[0]), 0.0) / float(max(n_free, 1))))
+                relative_flow_rms = flow_rms / max(rhs_rms, float(adaptive_inner_config.residual_floor))
+                return head_rms, flow_rms, relative_flow_rms, head_nonfinite
+
+            def evaluate_refreshed_nonlinear_candidate(
+                *,
+                outer_iteration: int,
+                info_lin: dict[str, Any],
+                dh_max: float,
+                dh_rms: float,
+            ) -> dict[str, Any]:
+                """Refresh the nonlinear operator and evaluate authoritative acceptance."""
+                wp.launch(kernel=copy_field_kernel, dim=dim2d, inputs=[storage_diag_wp, storage_diag_prev_wp, self.nx, self.ny], device=device)
+                wp.launch(
+                    kernel=update_unconfined_transmissivity_from_head_kernel,
+                    dim=dim2d,
+                    inputs=[h_iter_wp, k_field_wp, bottom_wp, top_wp, self.active_wp, min_sat_f, self.nx, self.ny, self.T_wp],
+                    device=device,
+                )
+                wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[storage_change_sum_sq_buf], device=device)
+                wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[storage_change_max_buf], device=device)
+                wp.launch(
+                    kernel=update_secant_sy_storage_kernel,
+                    dim=dim2d,
+                    inputs=[
+                        h_iter_wp, h_prev_wp, bottom_wp, top_wp, self.active_wp, self.bc_mask_wp,
+                        sy_f, ss_f, dx_f, dt_f_val, min_sat_f, 1.0e-12, self.nx, self.ny,
+                        storage_coeff_wp, sy_coeff_wp, ss_coeff_wp, storage_diag_wp, storage_diag_prev_wp,
+                        storage_change_sum_sq_buf, storage_change_max_buf,
+                    ],
+                    device=device,
+                )
+                wp.launch(
+                    kernel=build_transient_rhs_from_storage_kernel,
+                    dim=dim2d,
+                    inputs=[self.R_wp, storage_diag_wp, h_prev_wp, self.active_wp, self.bc_mask_wp, self.bc_values_wp, dx_f, self.nx, self.ny, rhs_eff_wp],
+                    device=device,
+                )
+                head_rms, flow_rms, relative_flow_rms, _ = _fast_path_head_residual_check()
+                storage_change_rms = float(
+                    np.sqrt(max(float(storage_change_sum_sq_buf.numpy()[0]), 0.0) / float(max(n_free, 1)))
+                )
+                storage_change_max = float(storage_change_max_buf.numpy()[0])
+                adaptive_used = bool(
+                    adaptive_inner_config.enabled and info_lin.get("adaptive_inner_controller_used", False)
+                )
+                inner_solved = _adaptive_practical_acceptance_allowed(
+                    practical_acceptance_enabled=True,
+                    adaptive_controller_used=adaptive_used,
+                    inner_target_achieved=bool(info_lin.get("inner_target_achieved", False)),
+                )
+                strict = bool(
+                    inner_solved and dh_max <= hclose and head_rms <= strict_head_residual_tol_f
+                )
+                practical = bool(
+                    _adaptive_practical_acceptance_allowed(
+                        practical_acceptance_enabled=practical_picard_acceptance_enabled_b,
+                        adaptive_controller_used=adaptive_used,
+                        inner_target_achieved=bool(info_lin.get("inner_target_achieved", False)),
+                    )
+                    and int(outer_iteration) >= min_practical_outer_iterations_i
+                    and np.isfinite(head_rms) and head_rms <= practical_head_residual_tol_f
+                    and np.isfinite(dh_rms) and dh_rms <= practical_dh_rms_tol_f
+                    and np.isfinite(storage_change_rms)
+                    and storage_change_rms <= practical_storage_diag_change_rms_tol_f
+                )
+                return {
+                    "head_residual_rms": float(head_rms),
+                    "flow_residual_rms": float(flow_rms),
+                    "relative_flow_residual_rms": float(relative_flow_rms),
+                    "storage_diag_change_max": storage_change_max,
+                    "storage_diag_change_rms": storage_change_rms,
+                    "strict_acceptance_passed": strict,
+                    "practical_acceptance_passed": practical,
+                    "production_acceptance_passed": bool(strict or practical),
+                }
 
             for period_index in range(n_periods):
                 self.update_uniform_recharge_in_place(float(rates[period_index]))
@@ -10091,10 +10911,21 @@ class WarpDarcySolver:
                 practical_picard_acceptance_passed = False
                 production_acceptance_passed = False
                 previous_dh_measure = None
+                previous_outer_head_residual_rms = None
+                previous_initial_head_residual_rms = None
+                previous_outer_dh_rms = None
                 total_inner_kcycles = 0
                 maximum_inner_kcycles_in_one_outer_iteration = 0
                 inner_kcycle_caps: list[int] = []
                 inner_kcycle_used: list[int] = []
+                inner_block_counts: list[int] = []
+                inner_residual_check_count = 0
+                adaptive_target_achievement_count = 0
+                legacy_dh_fallback_count = 0
+                stalled_inner_solve_count = 0
+                divergent_inner_solve_count = 0
+                rolled_back_block_count = 0
+                outer_iteration_summaries: list[dict[str, Any]] = []
                 period_gpu_scalar_syncs = 0
                 info_lin = {
                     "converged": False,
@@ -10176,34 +11007,319 @@ class WarpDarcySolver:
                     rhs_assembly_seconds += _fast_path_phase_elapsed(rhs_t0)
 
                     wp.launch(kernel=copy_field_kernel, dim=dim2d, inputs=[h_iter_wp, h_snapshot_wp, self.nx, self.ny], device=device)
-                    inner_max_cycles_i = _select_unconfined_inner_max_cycles(
-                        previous_dh_measure=previous_dh_measure,
-                        early_cycles=inner_max_cycles_early_i,
-                        middle_cycles=inner_max_cycles_middle_i,
-                        late_cycles=inner_max_cycles_late_i,
-                        middle_dh=inner_middle_dh_f,
-                        late_dh=inner_late_dh_f,
-                    )
-                    inner_controls = dict(controls)
-                    inner_controls["max_cycles"] = int(inner_max_cycles_i)
-                    inner_controls["coarse_operator_mode"] = fast_path_coarse_operator_mode
-                    inner_kcycle_caps.append(int(inner_max_cycles_i))
+                    adaptive_fallback_reason = ""
+                    adaptive_controller_used = bool(adaptive_inner_config.enabled)
+                    legacy_dh_fallback_used = False
+                    forcing_eta_used = float("nan")
+                    inner_initial_head_residual_rms = float("nan")
+                    inner_initial_flow_residual_rms = float("nan")
+                    inner_initial_relative_flow_residual_rms = float("nan")
+                    inner_target_head_residual_rms = float("nan")
+                    inner_target_relative_flow_residual_rms = float("nan")
+                    inner_final_head_residual_rms = float("nan")
+                    adaptive_state: AdaptiveInnerSolveState | None = None
+                    adaptive_pre_fallback_cycles = 0
+                    adaptive_pre_fallback_blocks = 0
 
-                    inner_t0 = _fast_path_phase_start()
-                    info_lin = self._solve_multigrid_kcycle_device_buffers(
-                        x_wp=h_iter_wp,
-                        rhs_wp=rhs_eff_wp,
-                        T_wp=self.T_wp,
-                        storage_diag_wp=storage_diag_wp,
-                        active_wp=self.active_wp,
-                        bc_mask_wp=self.bc_mask_wp,
-                        bc_values_wp=self.bc_values_wp,
-                        levels=self.mg_levels,
-                        solve_controls=inner_controls,
-                        return_scalar_info=False
-                    )
-                    inner_solver_seconds += _fast_path_phase_elapsed(inner_t0)
-                    inner_cycles_used_i = int(info_lin.get("n_cycles_used", inner_max_cycles_i) or inner_max_cycles_i)
+                    if adaptive_inner_config.enabled:
+                        residual_check_t0 = _fast_path_phase_start()
+                        (
+                            initial_head_residual_rms,
+                            initial_flow_residual_rms,
+                            initial_relative_flow_residual_rms,
+                            initial_head_nonfinite,
+                        ) = _fast_path_head_residual_check()
+                        inner_solver_seconds += _fast_path_phase_elapsed(residual_check_t0)
+                        inner_residual_check_count += 1
+                        inner_initial_head_residual_rms = float(initial_head_residual_rms)
+                        inner_initial_flow_residual_rms = float(initial_flow_residual_rms)
+                        inner_initial_relative_flow_residual_rms = float(
+                            initial_relative_flow_residual_rms
+                        )
+
+                        if initial_head_nonfinite or not np.isfinite(initial_head_residual_rms):
+                            adaptive_fallback_reason = "nonfinite_initial_head_residual"
+                            adaptive_controller_used = False
+                            legacy_dh_fallback_used = True
+                        else:
+                            forcing_eta_used = _compute_inner_forcing_eta(
+                                current_outer_residual_rms=initial_head_residual_rms,
+                                previous_outer_residual_rms=previous_initial_head_residual_rms,
+                                config=adaptive_inner_config,
+                            )
+                            inner_target_head_residual_rms = _compute_inner_target_residual(
+                                initial_residual_rms=initial_head_residual_rms,
+                                forcing_eta=forcing_eta_used,
+                                residual_floor=float(adaptive_inner_config.residual_floor),
+                                inner_head_residual_tol_min=inner_head_residual_tol_min_f,
+                                inner_head_residual_tol_max=inner_head_residual_tol_max_f,
+                                inner_picard_scale_max_fraction=inner_picard_scale_max_fraction_f,
+                                previous_outer_dh_rms=previous_outer_dh_rms,
+                                hclose=hclose,
+                            )
+                            inner_target_relative_flow_residual_rms = max(
+                                float(adaptive_inner_config.residual_floor),
+                                float(forcing_eta_used) * float(initial_flow_residual_rms),
+                            )
+
+                            def _run_adaptive_block(block_cycles: int) -> dict[str, Any]:
+                                nonlocal inner_solver_seconds
+                                wp.launch(
+                                    kernel=copy_field_kernel,
+                                    dim=dim2d,
+                                    inputs=[h_iter_wp, h_inner_snapshot_wp, self.nx, self.ny],
+                                    device=device,
+                                )
+                                block_controls = dict(controls)
+                                block_controls["max_cycles"] = int(block_cycles)
+                                block_controls["check_every_no"] = int(block_cycles)
+                                block_controls["coarse_operator_mode"] = fast_path_coarse_operator_mode
+                                block_t0 = _fast_path_phase_start()
+                                block_info = self._solve_multigrid_kcycle_device_buffers(
+                                    x_wp=h_iter_wp,
+                                    rhs_wp=rhs_eff_wp,
+                                    T_wp=self.T_wp,
+                                    storage_diag_wp=storage_diag_wp,
+                                    active_wp=self.active_wp,
+                                    bc_mask_wp=self.bc_mask_wp,
+                                    bc_values_wp=self.bc_values_wp,
+                                    levels=self.mg_levels,
+                                    solve_controls=block_controls,
+                                    return_scalar_info=False,
+                                )
+                                inner_solver_seconds += _fast_path_phase_elapsed(block_t0)
+                                residual_t0 = _fast_path_phase_start()
+                                head_rms_after, flow_rms_after, _, head_nonfinite_after = _fast_path_head_residual_check()
+                                inner_solver_seconds += _fast_path_phase_elapsed(residual_t0)
+                                return {
+                                    "actual_cycles": int(
+                                        block_info["n_cycles_used"]
+                                        if block_info.get("n_cycles_used") is not None else block_cycles
+                                    ),
+                                    "residual_after_rms": float(head_rms_after),
+                                    "relative_flow_residual_rms": float(flow_rms_after),
+                                    "rollback_required": bool(
+                                        head_nonfinite_after or (not np.isfinite(head_rms_after))
+                                    ),
+                                    "head_nonfinite": bool(head_nonfinite_after),
+                                    "numerical_breakdown": False,
+                                }
+
+                            def _rollback_adaptive_block() -> None:
+                                wp.launch(
+                                    kernel=copy_field_kernel,
+                                    dim=dim2d,
+                                    inputs=[h_inner_snapshot_wp, h_iter_wp, self.nx, self.ny],
+                                    device=device,
+                                )
+
+                            adaptive_state = _run_adaptive_inner_kcycle_blocks(
+                                initial_residual_rms=initial_head_residual_rms,
+                                target_residual_rms=inner_target_head_residual_rms,
+                                forcing_eta=forcing_eta_used,
+                                previous_outer_residual_rms=previous_outer_head_residual_rms,
+                                previous_outer_dh_rms=previous_outer_dh_rms,
+                                max_cycles=max_cycles_hard_i,
+                                config=adaptive_inner_config,
+                                run_block=_run_adaptive_block,
+                                rollback_block=_rollback_adaptive_block,
+                                initial_relative_flow_residual_rms=initial_flow_residual_rms,
+                                target_relative_flow_residual_rms=inner_target_relative_flow_residual_rms,
+                            )
+                            previous_initial_head_residual_rms = float(initial_head_residual_rms)
+                            inner_residual_check_count += int(adaptive_state.residual_check_count)
+                            inner_cycles_used_i = int(adaptive_state.total_cycles)
+                            adaptive_pre_fallback_cycles = int(adaptive_state.total_cycles)
+                            adaptive_pre_fallback_blocks = int(adaptive_state.block_index)
+                            inner_block_counts.append(int(adaptive_state.block_index))
+                            if adaptive_state.target_achieved:
+                                adaptive_target_achievement_count += 1
+                            if adaptive_state.stalled:
+                                stalled_inner_solve_count += 1
+                            if adaptive_state.diverged:
+                                divergent_inner_solve_count += 1
+                            if adaptive_state.rollback_count:
+                                rolled_back_block_count += int(adaptive_state.rollback_count)
+                            inner_final_head_residual_rms = float(adaptive_state.final_residual_rms)
+                            info_lin = {
+                                "converged": bool(adaptive_state.converged),
+                                "n_cycles_used": int(adaptive_state.total_cycles),
+                                "h_rms_end": (
+                                    float(adaptive_state.final_residual_rms)
+                                    if np.isfinite(float(adaptive_state.final_residual_rms))
+                                    else None
+                                ),
+                                "adaptive_inner_residual_check_count": int(adaptive_state.residual_check_count),
+                                "coarse_operator_mode": fast_path_coarse_operator_mode,
+                                "fine_operator_residual_checked": True,
+                                "adaptive_inner_controller_enabled": True,
+                                "adaptive_inner_controller_used": True,
+                                "adaptive_inner_fallback_to_legacy_dh": False,
+                                "adaptive_inner_fallback_reason": "",
+                                "inner_target_achieved": bool(adaptive_state.target_achieved),
+                                "inner_usable_for_picard": bool(adaptive_state.usable_for_picard),
+                                "inner_stalled": bool(adaptive_state.stalled),
+                                "inner_diverged": bool(adaptive_state.diverged),
+                                "inner_rollback_count": int(adaptive_state.rollback_count),
+                                "inner_termination_reason": str(adaptive_state.termination_reason),
+                                "initial_head_residual_rms": float(initial_head_residual_rms),
+                                "initial_relative_flow_residual_rms": float(initial_relative_flow_residual_rms),
+                                "initial_flow_residual_rms": float(initial_flow_residual_rms),
+                                "target_head_residual_rms": float(inner_target_head_residual_rms),
+                                "target_relative_flow_residual_rms": float(inner_target_relative_flow_residual_rms),
+                                "final_flow_residual_rms": float(adaptive_state.final_relative_flow_residual_rms),
+                                "head_reduction_ratio": (
+                                    float(adaptive_state.final_residual_rms)
+                                    / max(float(adaptive_state.initial_residual_rms), float(adaptive_inner_config.residual_floor))
+                                ),
+                                "flow_reduction_ratio": (
+                                    float(adaptive_state.final_relative_flow_residual_rms)
+                                    / max(float(adaptive_state.initial_relative_flow_residual_rms), float(adaptive_inner_config.residual_floor))
+                                ),
+                                "head_q": list(adaptive_state.head_per_cycle_convergence_factors),
+                                "flow_q": list(adaptive_state.flow_per_cycle_convergence_factors),
+                                "controller_q": list(adaptive_state.controller_per_cycle_convergence_factors),
+                                "head_target_gap": (
+                                    float(adaptive_state.final_residual_rms)
+                                    / max(float(inner_target_head_residual_rms), float(adaptive_inner_config.residual_floor))
+                                ),
+                                "flow_target_gap": (
+                                    float(adaptive_state.final_relative_flow_residual_rms)
+                                    / max(float(inner_target_relative_flow_residual_rms), float(adaptive_inner_config.residual_floor))
+                                ),
+                                "controller_target_gap": max(
+                                    float(adaptive_state.final_residual_rms)
+                                    / max(float(inner_target_head_residual_rms), float(adaptive_inner_config.residual_floor)),
+                                    float(adaptive_state.final_relative_flow_residual_rms)
+                                    / max(float(inner_target_relative_flow_residual_rms), float(adaptive_inner_config.residual_floor)),
+                                ),
+                                "final_head_residual_rms": (
+                                    float(adaptive_state.final_residual_rms)
+                                    if np.isfinite(float(adaptive_state.final_residual_rms))
+                                    else None
+                                ),
+                                "forcing_eta": float(forcing_eta_used),
+                                "controller_mode": "adaptive_residual_blocks",
+                                "inner_block_count": int(adaptive_state.block_index),
+                                "inner_cycles_per_block": list(adaptive_state.cycles_per_block),
+                            }
+                            if adaptive_inner_config.save_block_history:
+                                info_lin.update(
+                                    {
+                                        "inner_cycles_per_block": list(adaptive_state.cycles_per_block),
+                                        "inner_residuals_per_block": list(adaptive_state.residuals_per_block),
+                                        "inner_contraction_ratios": list(adaptive_state.contraction_ratios),
+                                        "inner_per_cycle_convergence_factors": list(
+                                            adaptive_state.per_cycle_convergence_factors
+                                        ),
+                                        "inner_predicted_cycles_per_block": list(
+                                            adaptive_state.predicted_cycles_per_block
+                                        ),
+                                    }
+                                )
+
+                            if not adaptive_state.target_achieved:
+                                adaptive_fallback_reason = (
+                                    adaptive_state.fallback_reason or adaptive_state.termination_reason
+                                )
+                                adaptive_controller_used = False
+                                legacy_dh_fallback_used = True
+
+                    if not adaptive_controller_used:
+                        legacy_dh_fallback_count += 1 if legacy_dh_fallback_used else 0
+                        inner_max_cycles_i = _select_legacy_unconfined_inner_max_cycles_from_dh(
+                            previous_dh_measure=previous_dh_measure,
+                            early_cycles=inner_max_cycles_early_i,
+                            middle_cycles=inner_max_cycles_middle_i,
+                            late_cycles=inner_max_cycles_late_i,
+                            middle_dh=inner_middle_dh_f,
+                            late_dh=inner_late_dh_f,
+                        )
+                        legacy_cycles_requested_i = int(inner_max_cycles_i)
+                        inner_max_cycles_i = _remaining_legacy_fallback_cycles(
+                            max_cycles=max_cycles_hard_i,
+                            adaptive_cycles_used=adaptive_pre_fallback_cycles,
+                            selected_legacy_cycles=inner_max_cycles_i,
+                        )
+                        inner_controls = dict(controls)
+                        inner_controls["max_cycles"] = int(inner_max_cycles_i)
+                        inner_controls["coarse_operator_mode"] = fast_path_coarse_operator_mode
+                        inner_kcycle_caps.append(int(inner_max_cycles_i))
+
+                        if inner_max_cycles_i > 0:
+                            inner_t0 = _fast_path_phase_start()
+                            info_lin = self._solve_multigrid_kcycle_device_buffers(
+                                x_wp=h_iter_wp,
+                                rhs_wp=rhs_eff_wp,
+                                T_wp=self.T_wp,
+                                storage_diag_wp=storage_diag_wp,
+                                active_wp=self.active_wp,
+                                bc_mask_wp=self.bc_mask_wp,
+                                bc_values_wp=self.bc_values_wp,
+                                levels=self.mg_levels,
+                                solve_controls=inner_controls,
+                                return_scalar_info=False
+                            )
+                            inner_solver_seconds += _fast_path_phase_elapsed(inner_t0)
+                            inner_cycles_used_i = int(
+                                info_lin["n_cycles_used"]
+                                if info_lin.get("n_cycles_used") is not None else inner_max_cycles_i
+                            )
+                        else:
+                            info_lin = {
+                                "n_cycles_used": 0,
+                                "converged": False,
+                                "inner_termination_reason": "hard_cycle_ceiling_before_legacy_fallback",
+                            }
+                            inner_cycles_used_i = 0
+                        legacy_cycles_used_i = int(inner_cycles_used_i)
+                        if adaptive_pre_fallback_blocks > 0 and inner_block_counts:
+                            inner_block_counts.pop()
+                        inner_cycles_used_i += int(adaptive_pre_fallback_cycles)
+                        inner_block_counts.append(int(1 + adaptive_pre_fallback_blocks))
+                        inner_final_head_residual_rms = float("nan")
+                        info_lin.update(
+                            {
+                                "adaptive_inner_controller_enabled": bool(adaptive_inner_config.enabled),
+                                "adaptive_inner_controller_used": False,
+                                "adaptive_inner_fallback_to_legacy_dh": bool(legacy_dh_fallback_used),
+                                "adaptive_inner_fallback_reason": str(adaptive_fallback_reason),
+                                "controller_mode": "legacy_dh_schedule",
+                                "inner_block_count": int(1 + adaptive_pre_fallback_blocks),
+                                "inner_cycles_per_block": (
+                                    list(adaptive_state.cycles_per_block)
+                                    if adaptive_state is not None else []
+                                ) + [legacy_cycles_used_i],
+                                "adaptive_cycles_before_fallback": int(adaptive_pre_fallback_cycles),
+                                "legacy_fallback_cycles": int(legacy_cycles_used_i),
+                                "legacy_fallback_cycles_requested": int(legacy_cycles_requested_i),
+                                "inner_termination_reason": (
+                                    "legacy_fixed_cycle_cap"
+                                    if inner_max_cycles_i > 0
+                                    else "hard_cycle_ceiling_before_legacy_fallback"
+                                ),
+                                "initial_head_residual_rms": (
+                                    float(inner_initial_head_residual_rms)
+                                    if np.isfinite(inner_initial_head_residual_rms)
+                                    else None
+                                ),
+                                "target_head_residual_rms": (
+                                    float(inner_target_head_residual_rms)
+                                    if np.isfinite(inner_target_head_residual_rms)
+                                    else None
+                                ),
+                                "final_head_residual_rms": (
+                                    float(inner_final_head_residual_rms)
+                                    if np.isfinite(inner_final_head_residual_rms)
+                                    else None
+                                ),
+                                "forcing_eta": float(forcing_eta_used) if np.isfinite(forcing_eta_used) else None,
+                            }
+                        )
+                    else:
+                        inner_kcycle_caps.append(int(max_cycles_hard_i))
+                        inner_cycles_used_i = int(info_lin.get("n_cycles_used", 0))
+
                     inner_kcycle_used.append(inner_cycles_used_i)
                     total_inner_kcycles += inner_cycles_used_i
                     maximum_inner_kcycles_in_one_outer_iteration = max(
@@ -10272,14 +11388,33 @@ class WarpDarcySolver:
                         np.sqrt(max(float(storage_change_sum_sq_buf.numpy()[0]), 0.0) / float(max(n_free, 1)))
                     )
                     outer_convergence_check_seconds += _fast_path_phase_elapsed(outer_check_t0)
+                    previous_outer_head_residual_rms_before = previous_outer_head_residual_rms
+                    previous_outer_dh_rms_before = previous_outer_dh_rms
                     previous_dh_measure = float(last_dh_max)
+                    previous_outer_head_residual_rms = float(last_head_residual_rms)
+                    previous_outer_dh_rms = float(last_dh_rms)
 
+                    adaptive_final_linearisation = bool(
+                        adaptive_inner_config.enabled
+                        and info_lin.get("adaptive_inner_controller_used", False)
+                    )
+                    final_linearisation_solved = _adaptive_practical_acceptance_allowed(
+                        practical_acceptance_enabled=True,
+                        adaptive_controller_used=adaptive_final_linearisation,
+                        inner_target_achieved=bool(info_lin.get("inner_target_achieved", False)),
+                    )
                     strict_picard_convergence_passed = bool(
-                        last_dh_max <= hclose
+                        final_linearisation_solved
+                        and last_dh_max <= hclose
                         and last_head_residual_rms <= strict_head_residual_tol_f
                     )
                     practical_picard_acceptance_passed = bool(
-                        int(outer_iter + 1) >= min_practical_outer_iterations_i
+                        _adaptive_practical_acceptance_allowed(
+                            practical_acceptance_enabled=practical_picard_acceptance_enabled_b,
+                            adaptive_controller_used=adaptive_final_linearisation,
+                            inner_target_achieved=bool(info_lin.get("inner_target_achieved", False)),
+                        )
+                        and int(outer_iter + 1) >= min_practical_outer_iterations_i
                         and np.isfinite(last_head_residual_rms)
                         and last_head_residual_rms <= practical_head_residual_tol_f
                         and np.isfinite(last_dh_rms)
@@ -10290,8 +11425,120 @@ class WarpDarcySolver:
                     production_acceptance_passed = bool(
                         strict_picard_convergence_passed or practical_picard_acceptance_passed
                     )
+                    outer_summary = {
+                        "outer_iteration": int(outer_iter + 1),
+                        "controller_mode": str(info_lin.get("controller_mode", "legacy_dh_schedule")),
+                        "initial_head_residual_rms": (
+                            float(inner_initial_head_residual_rms)
+                            if np.isfinite(inner_initial_head_residual_rms)
+                            else None
+                        ),
+                        "target_head_residual_rms": (
+                            float(inner_target_head_residual_rms)
+                            if np.isfinite(inner_target_head_residual_rms)
+                            else None
+                        ),
+                        "initial_relative_flow_residual_rms": (
+                            float(inner_initial_relative_flow_residual_rms)
+                            if np.isfinite(inner_initial_relative_flow_residual_rms) else None
+                        ),
+                        "initial_flow_residual_rms": (
+                            float(inner_initial_flow_residual_rms)
+                            if np.isfinite(inner_initial_flow_residual_rms) else None
+                        ),
+                        "target_flow_residual_rms": (
+                            float(inner_target_relative_flow_residual_rms)
+                            if np.isfinite(inner_target_relative_flow_residual_rms) else None
+                        ),
+                        "final_flow_residual_rms": info_lin.get("final_flow_residual_rms"),
+                        "target_relative_flow_residual_rms": (
+                            float(inner_target_relative_flow_residual_rms)
+                            if np.isfinite(inner_target_relative_flow_residual_rms) else None
+                        ),
+                        "final_head_residual_rms": float(last_head_residual_rms),
+                        "final_relative_flow_residual_rms": info_lin.get(
+                            "final_relative_flow_residual_rms"
+                        ),
+                        "head_reduction_ratio": info_lin.get("head_reduction_ratio"),
+                        "flow_reduction_ratio": info_lin.get("flow_reduction_ratio"),
+                        "head_q": list(info_lin.get("head_q", [])),
+                        "flow_q": list(info_lin.get("flow_q", [])),
+                        "controller_q": list(info_lin.get("controller_q", [])),
+                        "head_target_gap": info_lin.get("head_target_gap"),
+                        "flow_target_gap": info_lin.get("flow_target_gap"),
+                        "controller_target_gap": info_lin.get("controller_target_gap"),
+                        "adaptive_cycles_before_fallback": int(
+                            info_lin.get("adaptive_cycles_before_fallback", adaptive_pre_fallback_cycles)
+                        ),
+                        "legacy_fallback_cycles": int(info_lin.get("legacy_fallback_cycles", 0)),
+                        "total_cycles": int(inner_cycles_used_i),
+                        "refreshed_acceptance_passed": None,
+                        "refreshed_acceptance_checked": False,
+                        "provisional_picard_acceptance_passed": bool(production_acceptance_passed),
+                        "outer_iteration_of_acceptance": None,
+                        "termination_reason": "continuing_picard",
+                        "forcing_eta": float(forcing_eta_used) if np.isfinite(forcing_eta_used) else None,
+                        "previous_outer_head_residual_rms": (
+                            float(previous_outer_head_residual_rms_before)
+                            if previous_outer_head_residual_rms_before is not None
+                            and np.isfinite(previous_outer_head_residual_rms_before)
+                            else None
+                        ),
+                        "previous_outer_dh_rms": (
+                            float(previous_outer_dh_rms_before)
+                            if previous_outer_dh_rms_before is not None and np.isfinite(previous_outer_dh_rms_before)
+                            else None
+                        ),
+                        "total_inner_kcycles": int(inner_cycles_used_i),
+                        "inner_block_count": int(info_lin.get("inner_block_count", 1)),
+                        "inner_target_achieved": bool(info_lin.get("inner_target_achieved", False)),
+                        "inner_usable_for_picard": bool(info_lin.get("inner_usable_for_picard", True)),
+                        "inner_stalled": bool(info_lin.get("inner_stalled", False)),
+                        "inner_diverged": bool(info_lin.get("inner_diverged", False)),
+                        "inner_rollback_count": int(info_lin.get("inner_rollback_count", 0) or 0),
+                        "inner_termination_reason": str(
+                            info_lin.get("inner_termination_reason", "legacy_fixed_cycle_cap")
+                        ),
+                        "legacy_dh_fallback_used": bool(info_lin.get("adaptive_inner_fallback_to_legacy_dh", False)),
+                        "inner_cycles_per_block": list(info_lin.get("inner_cycles_per_block", [])),
+                    }
+                    if adaptive_inner_config.save_block_history:
+                        outer_summary["inner_cycles_per_block"] = list(info_lin.get("inner_cycles_per_block", []))
+                        outer_summary["inner_residuals_per_block"] = list(info_lin.get("inner_residuals_per_block", []))
+                        outer_summary["inner_contraction_ratios"] = list(info_lin.get("inner_contraction_ratios", []))
+                        outer_summary["inner_per_cycle_convergence_factors"] = list(
+                            info_lin.get("inner_per_cycle_convergence_factors", [])
+                        )
+                        outer_summary["inner_predicted_cycles_per_block"] = list(
+                            info_lin.get("inner_predicted_cycles_per_block", [])
+                        )
+                    outer_iteration_summaries.append(outer_summary)
                     if production_acceptance_passed:
-                        break
+                        refreshed_result = evaluate_refreshed_nonlinear_candidate(
+                            outer_iteration=int(outer_iter + 1),
+                            info_lin=info_lin,
+                            dh_max=last_dh_max,
+                            dh_rms=last_dh_rms,
+                        )
+                        outer_summary["refreshed_acceptance_checked"] = True
+                        outer_summary["refreshed_acceptance_passed"] = bool(
+                            refreshed_result["production_acceptance_passed"]
+                        )
+                        if refreshed_result["production_acceptance_passed"]:
+                            last_head_residual_rms = float(refreshed_result["head_residual_rms"])
+                            last_flow_residual_rms = float(refreshed_result["flow_residual_rms"])
+                            last_storage_diag_change_max = float(refreshed_result["storage_diag_change_max"])
+                            last_storage_diag_change_rms = float(refreshed_result["storage_diag_change_rms"])
+                            strict_picard_convergence_passed = bool(refreshed_result["strict_acceptance_passed"])
+                            practical_picard_acceptance_passed = bool(refreshed_result["practical_acceptance_passed"])
+                            production_acceptance_passed = True
+                            outer_summary["termination_reason"] = (
+                                "refreshed_strict_acceptance"
+                                if strict_picard_convergence_passed else "refreshed_practical_acceptance"
+                            )
+                            outer_summary["outer_iteration_of_acceptance"] = int(outer_iter + 1)
+                            break
+                        production_acceptance_passed = False
 
                 phase_t0 = _fast_path_phase_start()
                 wp.launch(kernel=copy_field_kernel, dim=dim2d, inputs=[storage_diag_wp, storage_diag_prev_wp, self.nx, self.ny], device=device)
@@ -10342,6 +11589,7 @@ class WarpDarcySolver:
                 phase_t0 = _fast_path_phase_start()
                 wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[flow_rTr_buf], device=device)
                 wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[head_rTr_buf], device=device)
+                wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[rhs_rTr_buf], device=device)
                 wp.launch(
                     kernel=compute_dual_residual_kernel,
                     dim=dim2d,
@@ -10361,6 +11609,12 @@ class WarpDarcySolver:
                     ],
                     device=device,
                 )
+                wp.launch(
+                    kernel=compute_active_rhs_l2_kernel,
+                    dim=dim2d,
+                    inputs=[rhs_eff_wp, self.active_wp, self.bc_mask_wp, rhs_rTr_buf, self.nx, self.ny],
+                    device=device,
+                )
                 final_nonlinear_residual_check_seconds += _fast_path_phase_elapsed(phase_t0)
                 counters["scalar_reductions"] += 1
                 counters["gpu_scalar_synchronizations"] += 4
@@ -10371,16 +11625,30 @@ class WarpDarcySolver:
                 last_head_residual_rms = float(
                     np.sqrt(max(float(head_rTr_buf.numpy()[0]), 0.0) / float(max(n_free, 1)))
                 )
+                final_rhs_rms = float(
+                    np.sqrt(max(float(rhs_rTr_buf.numpy()[0]), 0.0) / float(max(n_free, 1)))
+                )
+                final_relative_flow_residual_rms = last_flow_residual_rms / max(
+                    final_rhs_rms, float(adaptive_inner_config.residual_floor)
+                )
                 last_storage_diag_change_max = float(storage_change_max_buf.numpy()[0])
                 last_storage_diag_change_rms = float(
                     np.sqrt(max(float(storage_change_sum_sq_buf.numpy()[0]), 0.0) / float(max(n_free, 1)))
                 )
                 strict_picard_convergence_passed = bool(
-                    last_dh_max <= hclose
+                    final_linearisation_solved
+                    and last_dh_max <= hclose
                     and last_head_residual_rms <= strict_head_residual_tol_f
                 )
                 practical_picard_acceptance_passed = bool(
-                    int(min(max_outer, outer_iter + 1)) >= min_practical_outer_iterations_i
+                    _adaptive_practical_acceptance_allowed(
+                        practical_acceptance_enabled=practical_picard_acceptance_enabled_b,
+                        adaptive_controller_used=adaptive_final_linearisation,
+                        inner_target_achieved=bool(info_lin.get("inner_target_achieved", False)),
+                        final_relative_flow_residual_rms=final_relative_flow_residual_rms,
+                        relative_flow_target=float(adaptive_inner_config.relative_flow_residual_target),
+                    )
+                    and int(min(max_outer, outer_iter + 1)) >= min_practical_outer_iterations_i
                     and np.isfinite(last_head_residual_rms)
                     and last_head_residual_rms <= practical_head_residual_tol_f
                     and np.isfinite(last_dh_rms)
@@ -10391,6 +11659,29 @@ class WarpDarcySolver:
                 production_acceptance_passed = bool(
                     strict_picard_convergence_passed or practical_picard_acceptance_passed
                 )
+                if outer_iteration_summaries:
+                    outer_iteration_summaries[-1]["refreshed_acceptance_passed"] = bool(
+                        production_acceptance_passed
+                    )
+
+                refreshed_result = evaluate_refreshed_nonlinear_candidate(
+                    outer_iteration=int(min(max_outer, outer_iter + 1)),
+                    info_lin=info_lin,
+                    dh_max=last_dh_max,
+                    dh_rms=last_dh_rms,
+                )
+                strict_picard_convergence_passed = bool(refreshed_result["strict_acceptance_passed"])
+                practical_picard_acceptance_passed = bool(refreshed_result["practical_acceptance_passed"])
+                production_acceptance_passed = bool(refreshed_result["production_acceptance_passed"])
+                last_head_residual_rms = float(refreshed_result["head_residual_rms"])
+                last_flow_residual_rms = float(refreshed_result["flow_residual_rms"])
+                last_storage_diag_change_max = float(refreshed_result["storage_diag_change_max"])
+                last_storage_diag_change_rms = float(refreshed_result["storage_diag_change_rms"])
+                if outer_iteration_summaries:
+                    outer_iteration_summaries[-1]["refreshed_acceptance_checked"] = True
+                    outer_iteration_summaries[-1]["refreshed_acceptance_passed"] = bool(production_acceptance_passed)
+                    if not production_acceptance_passed:
+                        outer_iteration_summaries[-1]["termination_reason"] = "max_outer_iterations"
 
                 if (not production_acceptance_passed) and (not allow_unaccepted_transient_period_b):
                     raise RuntimeError(
@@ -10405,9 +11696,19 @@ class WarpDarcySolver:
                             storage_diag_change_rms=last_storage_diag_change_rms,
                             storage_mode=str(storage_mode),
                             storage_reference=str(storage_reference),
-                            coarse_operator_mode="stale_approximate_preconditioner",
+                            coarse_operator_mode=str(fast_path_coarse_operator_mode),
                             coarse_krylov_method="recursive_kcycle_safe_alpha",
                             total_inner_cycles=int(total_inner_kcycles),
+                            inner_controller_mode=str(info_lin.get("controller_mode", "legacy_dh_schedule")),
+                            last_inner_termination_reason=str(
+                                info_lin.get("inner_termination_reason", "legacy_fixed_cycle_cap")
+                            ),
+                            last_inner_initial_residual=info_lin.get("initial_head_residual_rms"),
+                            last_inner_target_residual=info_lin.get("target_head_residual_rms"),
+                            last_inner_final_residual=info_lin.get("final_head_residual_rms"),
+                            last_inner_block_count=info_lin.get("inner_block_count"),
+                            stalled_inner_solve_count=int(stalled_inner_solve_count),
+                            divergent_inner_solve_count=int(divergent_inner_solve_count),
                         )
                     )
 
@@ -10457,8 +11758,19 @@ class WarpDarcySolver:
                         "final_max_abs_head_change": float(last_dh_max),
                         "final_rms_head_change": float(last_dh_rms),
                         "final_flow_residual_rms": float(last_flow_residual_rms),
+                        "final_rhs_rms": float(final_rhs_rms),
+                        "final_relative_flow_residual_rms": float(final_relative_flow_residual_rms),
+                        "refreshed_acceptance_passed": bool(production_acceptance_passed),
                         "final_head_residual_rms": float(last_head_residual_rms),
                         "final_residual": float(last_head_residual_rms),
+                        "adaptive_inner_controller_enabled": bool(adaptive_inner_config.enabled),
+                        "adaptive_inner_controller_used": bool(info_lin.get("adaptive_inner_controller_used", False)),
+                        "adaptive_inner_fallback_to_legacy_dh": bool(
+                            info_lin.get("adaptive_inner_fallback_to_legacy_dh", False)
+                        ),
+                        "adaptive_inner_fallback_reason": str(
+                            info_lin.get("adaptive_inner_fallback_reason", "")
+                        ),
                         "storage_diag_change_max": float(last_storage_diag_change_max),
                         "storage_diag_change_rms": float(last_storage_diag_change_rms),
                         "storage_mode": str(storage_mode),
@@ -10472,7 +11784,7 @@ class WarpDarcySolver:
                         "unconfined_startup_mode": str(startup_mode),
                         "startup_inner_kcycles": int(startup_inner_cycles),
                         "startup_converged": startup_converged,
-                        "practical_picard_acceptance_enabled": True,
+                        "practical_picard_acceptance_enabled": bool(practical_picard_acceptance_enabled_b),
                         "picard_relax": float(omega_current_f),
                         "max_head_change_per_outer_iteration": float(max_update_f),
                         "strict_head_residual_tol": float(strict_head_residual_tol_f),
@@ -10484,13 +11796,24 @@ class WarpDarcySolver:
                         "practical_storage_diag_change_rms_tol": float(practical_storage_diag_change_rms_tol_f),
                         "total_inner_kcycles": int(total_inner_kcycles),
                         "maximum_inner_kcycles_in_one_outer_iteration": int(maximum_inner_kcycles_in_one_outer_iteration),
-                        "coarse_operator_mode": "stale_approximate_preconditioner",
+                        "mean_inner_kcycles_per_outer_iteration": float(
+                            total_inner_kcycles / float(max(int(min(max_outer, outer_iter + 1)), 1))
+                        ),
+                        "total_inner_blocks": int(sum(inner_block_counts)),
+                        "mean_cycles_per_block": float(
+                            total_inner_kcycles / float(max(sum(inner_block_counts), 1))
+                        ),
+                        "stalled_inner_solve_count": int(stalled_inner_solve_count),
+                        "divergent_inner_solve_count": int(divergent_inner_solve_count),
+                        "rolled_back_block_count": int(rolled_back_block_count),
+                        "legacy_dh_fallback_count": int(legacy_dh_fallback_count),
+                        "adaptive_target_achievement_count": int(adaptive_target_achievement_count),
+                        "adaptive_inner_residual_check_count": int(inner_residual_check_count),
+                        "coarse_operator_mode": str(fast_path_coarse_operator_mode),
                         "fine_operator_residual_checked": True,
                         "coarse_krylov_method": "recursive_kcycle_safe_alpha",
-                        "inner_solver_gpu_scalar_synchronization_count": int(
-                            info_lin.get("gpu_scalar_synchronization_count", 0) or 0
-                        ),
                         "gpu_scalar_synchronization_count": int(period_gpu_scalar_syncs),
+                        "outer_iteration_summaries": outer_iteration_summaries,
                         "T_update_seconds": float(T_update_seconds),
                         "storage_kernel_seconds": float(storage_kernel_seconds),
                         "fine_m_inv_refresh_seconds": float(fine_m_inv_refresh_seconds),
@@ -10507,6 +11830,7 @@ class WarpDarcySolver:
                 if save_diagnostics_b:
                     info_period["inner_kcycle_caps"] = [int(v) for v in inner_kcycle_caps]
                     info_period["inner_kcycle_used"] = [int(v) for v in inner_kcycle_used]
+                    info_period["inner_block_counts"] = [int(v) for v in inner_block_counts]
                 period_infos.append(info_period)
                 last_info = info_period
                 head_prev = head_arr
