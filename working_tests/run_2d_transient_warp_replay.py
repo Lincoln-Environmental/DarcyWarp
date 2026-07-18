@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -17,6 +18,7 @@ from working_tests.transient_artifacts import FORMULATION_UNCONFINED  # noqa: E4
 from working_tests.transient_replay_settings import (  # noqa: E402
     PRODUCTION_RUN_MODE,
     default_run_config,
+    default_solve_controls,
     production_secant_sy_settings,
 )
 from working_tests.transient_replay_support import main as run_transient_replay  # noqa: E402
@@ -501,21 +503,47 @@ if __name__ == "__main__":
     formulation = FORMULATION_UNCONFINED
 
     # ------------------------------------------------------------------
-    # Replay artifact
+    # Case selection and runtime
     # ------------------------------------------------------------------
-    # The case setup (grid, hard-T field, periods, warm start) is owned here;
-    # the generator pulls it when run standalone, and the MF6 truth artifact
-    # is generated on first use when missing.
-    use_grid_qualified_artifact = True
-    case_setup = build_case_setup()
+    # Solve controls come from the production settings in
+    # working_tests/transient_replay_settings.py (default_solve_controls via
+    # production_secant_sy_settings) — they are intentionally not duplicated
+    # here. The case setup (grid, T field, periods, warm start) is owned by
+    # build_case_setup(); the generator pulls it when run standalone, and the
+    # MF6 truth artifact is generated on first use when missing.
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--t-field-kind",
+        choices=("ugly_t", "homogeneous"),
+        default="ugly_t",
+        help="transmissivity field: 'ugly_t' = hard heterogeneous benchmark field "
+             "(model_builder.make_ugly_T_field, K = T/100 m); "
+             "'homogeneous' = legacy uniform K=100 m/day",
+    )
+    parser.add_argument("--t-field-seed", type=int, default=42, help="ugly_t field random seed")
+    parser.add_argument("--nx", type=int, default=1000)
+    parser.add_argument("--ny", type=int, default=1000)
+    parser.add_argument("--n-periods", type=int, default=30)
+    parser.add_argument("--artifact", default=None, help="explicit artifact path (bypasses the case setup)")
+    parser.add_argument("--workspace", default=None)
+    parser.add_argument("--device", default="auto")
+    parser.add_argument(
+        "--optimize-kcycle",
+        action="store_true",
+        help="run the K-cycle candidate sweep instead of the production replay",
+    )
+    args = parser.parse_args()
 
-    explicit_artifact_path = None
-    workspace = None
+    case_setup = build_case_setup(
+        nx=args.nx,
+        ny=args.ny,
+        n_periods=args.n_periods,
+        t_field_kind=args.t_field_kind,
+        t_field_seed=args.t_field_seed,
+    )
+    workspace = Path(args.workspace) if args.workspace else None
 
-    # ------------------------------------------------------------------
-    # Runtime
-    # ------------------------------------------------------------------
-    device = "auto"
+    device = args.device
     diag_preconditioner_backend = "device"
 
     allow_warm_start_mismatch = False
@@ -523,128 +551,15 @@ if __name__ == "__main__":
     save_heavy_diagnostics = False
     run_replay_matrix = False
 
-    # ------------------------------------------------------------------
-    # Global safety ceilings
-    # ------------------------------------------------------------------
-    # These are hard failure ceilings, not normal iteration targets.
-    max_outer_iterations = 100
-    max_cycles = 200
-
-    # ------------------------------------------------------------------
-    # Multigrid hierarchy
-    # ------------------------------------------------------------------
-    max_levels = 4
-    min_coarse_cells = 500
-
-    nu_pre = 1
-    nu_post = 1
-    nu_coarse = 1
-
-    # The adaptive fast path should normally check between cycle blocks,
-    # rather than synchronizing after every individual K-cycle.
-    check_every_no = 1
-
-    # ------------------------------------------------------------------
-    # Legacy head-change-driven inner schedule
-    # ------------------------------------------------------------------
-    # These controls remain available when:
-    #
-    #   adaptive_unconfined_inner_enabled = False
-    #
-    # or if the adaptive controller explicitly falls back because a valid
-    # head-equivalent residual cannot be calculated.
-    unconfined_inner_max_cycles_early = 10
-    unconfined_inner_max_cycles_middle = 20
-    unconfined_inner_max_cycles_late = 40
-
-    unconfined_inner_middle_dh = 1.0
-    unconfined_inner_late_dh = 1.0e-2
-
-    # ------------------------------------------------------------------
-    # Final nonlinear convergence and acceptance
-    # ------------------------------------------------------------------
-    hclose = 1.0e-4
-
-    strict_head_residual_tol = 1.0e-6
-    practical_head_residual_tol = 1.0e-5
-
-    # Deprecated compatibility alias if still accepted by the solver.
-    practical_residual_tol = practical_head_residual_tol
-
-    practical_dh_rms_tol = 3.0e-3
-    practical_storage_diag_change_rms_tol = 30.0
-    # Practical acceptance is a fallback, not the normal path: strict Picard
-    # converges in 10-12 outer iterations on the 1000x1000 production case, so
-    # the practical gate must not fire earlier than that (the old value 8
-    # short-circuited every period just before strict success).
-    min_practical_outer_iterations = 20
-
-    # ------------------------------------------------------------------
-    # Inexact inner linear-solve bounds
-    # ------------------------------------------------------------------
-    # Early Picard linearisations do not need to be solved as accurately
-    # as the final nonlinear state.
-    inner_head_residual_tol_min = 2.5e-6
-    inner_head_residual_tol_max = 2.0e-4
-
-    # Prevent the inner linear tolerance from becoming disproportionately
-    # tight relative to the current nonlinear Picard update.
-    inner_picard_scale_max_fraction = 0.10
-
-    # ------------------------------------------------------------------
-    # Residual-driven adaptive inner controller
-    # ------------------------------------------------------------------
-    adaptive_unconfined_inner_enabled = True
-
-    # Use genuinely small cycle blocks so the controller can observe
-    # contraction and alter the next allocation without oversolving.
-    adaptive_inner_initial_block_cycles = 5
-    adaptive_inner_min_block_cycles = 5
-    adaptive_inner_max_block_cycles = 20
-    adaptive_inner_min_total_cycles = 5
-
-    # Inexact-solve forcing term.
-    #
-    # These values deliberately permit relatively loose early Picard
-    # linear solves. The target tightens as nonlinear convergence improves.
-    adaptive_inner_eta_initial = 0.05
-    adaptive_inner_eta_min = 0.005
-    adaptive_inner_eta_max = 0.10
-    adaptive_inner_eta_gamma = 0.25
-    adaptive_inner_eta_power = 1.5
-
-    # Block residual-contraction classification.
-    adaptive_inner_good_contraction_ratio = 0.40
-    adaptive_inner_weak_contraction_ratio = 0.90
-
-    # Permit slow but useful contraction. A block is not considered stalled
-    # merely because it reduces the residual by only a few percent.
-    adaptive_inner_stall_contraction_ratio = 0.9995
-
-    # Roll back only when the residual clearly worsens.
-    adaptive_inner_divergence_contraction_ratio = 1.10
-
-    # Require repeated stalled blocks before terminating the inner solve.
-    adaptive_inner_stall_patience = 8
-
-    # This is interpreted as:
-    #
-    #   final_residual / initial_residual <= threshold
-    #
-    # Validation uses target achievement, not incomplete usability, for
-    # acceptance; retain the accepted candidate setting for diagnostics.
-    adaptive_inner_minimum_usable_reduction_ratio = 0.10
-
-    adaptive_inner_residual_floor = 1.0e-12
-
-    # Enable temporarily while diagnosing the adaptive controller.
-    # Disable after the controller has been validated if the history is large.
-    adaptive_inner_save_block_history = True
+    # Production solve controls are the current settings from
+    # transient_replay_settings.py, applied inside run_production_replay via
+    # production_secant_sy_settings. Add entries here only for genuine
+    # one-off experiments.
+    solve_control_overrides: dict = {}
 
     # ------------------------------------------------------------------
     # Optional K-cycle optimization sweep
     # ------------------------------------------------------------------
-    optimize_kcycle = False
     stop_after_first_accepted = False
 
     kcycle_candidate_settings = [
@@ -751,121 +666,23 @@ if __name__ == "__main__":
     }
 
     # ------------------------------------------------------------------
-    # Resolve artifact
+    # Resolve artifact (generated on first use from the case setup)
     # ------------------------------------------------------------------
-    if explicit_artifact_path is not None:
-        artifact_path = Path(explicit_artifact_path)
-
-    elif use_grid_qualified_artifact:
-        artifact_path = ensure_case_artifact(case_setup)
-
+    if args.artifact is not None:
+        artifact_path = Path(args.artifact)
     else:
-        artifact_path = None
-
-    # ------------------------------------------------------------------
-    # Solver control overrides
-    # ------------------------------------------------------------------
-    solve_control_overrides = {
-        # Hard ceilings
-        "max_outer_iterations": max_outer_iterations,
-        "max_cycles": max_cycles,
-
-        # Hierarchy and smoothing
-        "max_levels": max_levels,
-        "min_coarse_cells": min_coarse_cells,
-        "nu_pre": nu_pre,
-        "nu_post": nu_post,
-        "nu_coarse": nu_coarse,
-        "check_every_no": check_every_no,
-
-        # Final nonlinear acceptance
-        "hclose": hclose,
-        "strict_head_residual_tol": strict_head_residual_tol,
-        "practical_head_residual_tol": practical_head_residual_tol,
-        "practical_residual_tol": practical_residual_tol,
-        "practical_dh_rms_tol": practical_dh_rms_tol,
-        "practical_storage_diag_change_rms_tol": (
-            practical_storage_diag_change_rms_tol
-        ),
-        "min_practical_outer_iterations": min_practical_outer_iterations,
-
-        # Inexact linear solve
-        "inner_head_residual_tol_min": inner_head_residual_tol_min,
-        "inner_head_residual_tol_max": inner_head_residual_tol_max,
-        "inner_picard_scale_max_fraction": (
-            inner_picard_scale_max_fraction
-        ),
-
-        # Legacy head-change fallback
-        "unconfined_inner_max_cycles_early": (
-            unconfined_inner_max_cycles_early
-        ),
-        "unconfined_inner_max_cycles_middle": (
-            unconfined_inner_max_cycles_middle
-        ),
-        "unconfined_inner_max_cycles_late": (
-            unconfined_inner_max_cycles_late
-        ),
-        "unconfined_inner_middle_dh": unconfined_inner_middle_dh,
-        "unconfined_inner_late_dh": unconfined_inner_late_dh,
-
-        # Residual-driven adaptive controller
-        "adaptive_unconfined_inner_enabled": (
-            adaptive_unconfined_inner_enabled
-        ),
-        "adaptive_inner_initial_block_cycles": (
-            adaptive_inner_initial_block_cycles
-        ),
-        "adaptive_inner_min_block_cycles": (
-            adaptive_inner_min_block_cycles
-        ),
-        "adaptive_inner_max_block_cycles": (
-            adaptive_inner_max_block_cycles
-        ),
-        "adaptive_inner_min_total_cycles": (
-            adaptive_inner_min_total_cycles
-        ),
-        "adaptive_inner_eta_initial": adaptive_inner_eta_initial,
-        "adaptive_inner_eta_min": adaptive_inner_eta_min,
-        "adaptive_inner_eta_max": adaptive_inner_eta_max,
-        "adaptive_inner_eta_gamma": adaptive_inner_eta_gamma,
-        "adaptive_inner_eta_power": adaptive_inner_eta_power,
-        "adaptive_inner_good_contraction_ratio": (
-            adaptive_inner_good_contraction_ratio
-        ),
-        "adaptive_inner_weak_contraction_ratio": (
-            adaptive_inner_weak_contraction_ratio
-        ),
-        "adaptive_inner_stall_contraction_ratio": (
-            adaptive_inner_stall_contraction_ratio
-        ),
-        "adaptive_inner_divergence_contraction_ratio": (
-            adaptive_inner_divergence_contraction_ratio
-        ),
-        "adaptive_inner_stall_patience": (
-            adaptive_inner_stall_patience
-        ),
-        "adaptive_inner_minimum_usable_reduction_ratio": (
-            adaptive_inner_minimum_usable_reduction_ratio
-        ),
-        "adaptive_inner_residual_floor": (
-            adaptive_inner_residual_floor
-        ),
-        "adaptive_inner_save_block_history": (
-            adaptive_inner_save_block_history
-        ),
-    }
+        artifact_path = ensure_case_artifact(case_setup)
 
     # ------------------------------------------------------------------
     # Execute
     # ------------------------------------------------------------------
-    if optimize_kcycle:
+    if args.optimize_kcycle:
         optimize_kcycle_settings(
             artifact_path=artifact_path,
             workspace=workspace,
             device=device,
             diag_preconditioner_backend=diag_preconditioner_backend,
-            base_solve_controls=solve_control_overrides,
+            base_solve_controls=dict(default_solve_controls(), **solve_control_overrides),
             candidates=kcycle_candidates,
             accepted_mass_balance_classes=accepted_mass_balance_classes,
             stop_after_first_accepted=stop_after_first_accepted,

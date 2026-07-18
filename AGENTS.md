@@ -218,8 +218,16 @@ Artifact contains: per-period heads, final heads, initial/warm-start heads, mask
 ### Running replay
 
 ```bash
-python working_tests/run_2d_transient_warp_replay.py   # auto-generates the artifact when missing
+python working_tests/run_2d_transient_warp_replay.py                          # hard-T default, auto-generates artifact
+python working_tests/run_2d_transient_warp_replay.py --t-field-kind homogeneous  # legacy uniform K=100 case
+python working_tests/run_2d_transient_warp_replay.py --nx 500 --ny 500 --n-periods 10 --t-field-seed 7
 ```
+
+The replay is a thin harness: production solve controls come from
+`transient_replay_settings.py::default_solve_controls()` (no duplicated
+control lists in the script). CLI switches: `--t-field-kind {ugly_t,homogeneous}`,
+`--t-field-seed`, `--nx/--ny/--n-periods`, `--artifact`, `--workspace`,
+`--device`, `--optimize-kcycle`.
 
 - Loads artifact via `transient_artifacts.py`.
 - Calls `run_replay_from_artifact()` in `transient_replay_support.py`.
