@@ -21,7 +21,7 @@ def __getattr__(name: str):
 
         return create_solver
     if name == "WarpDarcySolver":
-        from DARCY_WARP_PACKAGE.warped_darcy import WarpDarcySolver
+        from DARCY_WARP_PACKAGE.model import WarpDarcySolver
 
         return WarpDarcySolver
     if name == "WarpDarcySolver3D":

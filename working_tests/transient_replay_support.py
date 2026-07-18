@@ -265,6 +265,7 @@ def run_warp_transient_replay(
             bc_values=bc_values,
         )
         heads_api, info_api = solver.solve_transient_2d_unconfined(
+            solver="unconfined_picard_kcycle",
             initial_head=replay_start_head,
             recharge_rates=rates[:n_periods],
             k_field=k,

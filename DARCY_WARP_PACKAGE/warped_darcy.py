@@ -16,6 +16,36 @@ from DARCY_WARP_PACKAGE.model_builder import (
     build_base_fields,
     build_truth_inputs,
 )
+from DARCY_WARP_PACKAGE.physics.operator_data import (
+    BoundaryFields,
+    GridSpec,
+    OperatorFields,
+    StorageState,
+    compute_ghb_factor_from_raw_fields as _physics_compute_ghb_factor_from_raw_fields,
+)
+from DARCY_WARP_PACKAGE.physics.budgets_2d import (
+    compute_mass_balance_budget as _physics_compute_mass_balance_budget,
+)
+from DARCY_WARP_PACKAGE.physics.storage_2d import (
+    exact_unconfined_storage_terms as _physics_exact_unconfined_storage_terms,
+    secant_specific_storage_coeff as _physics_secant_specific_storage_coeff,
+    secant_specific_yield_coeff as _physics_secant_specific_yield_coeff,
+    specific_storage_potential as _physics_specific_storage_potential,
+)
+from DARCY_WARP_PACKAGE.solvers import (
+    ConvergenceControls,
+    MultigridHierarchy,
+    SolverContext,
+    SolverResourceOwner,
+    SolverWorkspace,
+    canonical_solver_name,
+    solve_selected,
+)
+from DARCY_WARP_PACKAGE.solvers.transient_unconfined import solve_transient_unconfined
+from DARCY_WARP_PACKAGE.solvers.hierarchy import (
+    LinearGridLevel,
+    MGLevel as SharedMGLevel,
+)
 
 import ctypes.util
 
@@ -99,139 +129,11 @@ def _normalize_scalar_or_grid_to_shape(
     raise ValueError(f"{name} must be a scalar or shape {shape}. Got {arr.shape}.")
 
 
-def specific_storage_potential(
-    *,
-    head: np.ndarray,
-    bottom: np.ndarray,
-    top: np.ndarray,
-    specific_storage: float,
-) -> np.ndarray:
-    """
-    Specific-storage potential per unit plan area for a convertible layer.
-    """
-    head_arr = np.asarray(head, dtype=np.float64)
-    bottom_arr = np.asarray(bottom, dtype=np.float64)
-    top_arr = np.asarray(top, dtype=np.float64)
-    thickness = np.maximum(top_arr - bottom_arr, 0.0)
-    rel = head_arr - bottom_arr
-    ss = float(specific_storage)
-
-    phi = np.zeros(np.broadcast_shapes(head_arr.shape, bottom_arr.shape, top_arr.shape), dtype=np.float64)
-    rel_b = np.broadcast_to(rel, phi.shape)
-    thickness_b = np.broadcast_to(thickness, phi.shape)
-
-    partial = (rel_b > 0.0) & (rel_b < thickness_b)
-    full = rel_b >= thickness_b
-    phi[partial] = 0.5 * ss * rel_b[partial] * rel_b[partial]
-    phi[full] = (
-        0.5 * ss * thickness_b[full] * thickness_b[full]
-        + ss * thickness_b[full] * (rel_b[full] - thickness_b[full])
-    )
-    return phi
-
-
-def secant_specific_yield_coeff(
-    *,
-    head_ref: np.ndarray,
-    head_old: np.ndarray,
-    bottom: np.ndarray,
-    top: np.ndarray,
-    specific_yield: float,
-    secant_eps: float = 1.0e-12,
-) -> np.ndarray:
-    head_ref_arr = np.asarray(head_ref, dtype=np.float64)
-    head_old_arr = np.asarray(head_old, dtype=np.float64)
-    bottom_arr = np.asarray(bottom, dtype=np.float64)
-    top_arr = np.asarray(top, dtype=np.float64)
-    thickness = np.maximum(top_arr - bottom_arr, 0.0)
-    sat_ref = np.clip(head_ref_arr - bottom_arr, 0.0, thickness)
-    sat_old = np.clip(head_old_arr - bottom_arr, 0.0, thickness)
-    dh = head_ref_arr - head_old_arr
-
-    coeff = np.zeros_like(np.broadcast_to(dh, np.broadcast_shapes(dh.shape, thickness.shape)), dtype=np.float64)
-    moving = np.abs(dh) > float(secant_eps)
-    coeff[moving] = float(specific_yield) * ((sat_ref[moving] - sat_old[moving]) / dh[moving])
-    fallback = (~moving) & (head_ref_arr > bottom_arr) & (head_ref_arr < top_arr)
-    coeff[fallback] = float(specific_yield)
-    return np.clip(coeff, 0.0, float(specific_yield))
-
-
-def secant_specific_storage_coeff(
-    *,
-    head_ref: np.ndarray,
-    head_old: np.ndarray,
-    bottom: np.ndarray,
-    top: np.ndarray,
-    specific_storage: float,
-    secant_eps: float = 1.0e-12,
-) -> np.ndarray:
-    head_ref_arr = np.asarray(head_ref, dtype=np.float64)
-    head_old_arr = np.asarray(head_old, dtype=np.float64)
-    bottom_arr = np.asarray(bottom, dtype=np.float64)
-    top_arr = np.asarray(top, dtype=np.float64)
-    thickness = np.maximum(top_arr - bottom_arr, 0.0)
-    dh = head_ref_arr - head_old_arr
-    phi_ref = specific_storage_potential(
-        head=head_ref_arr,
-        bottom=bottom_arr,
-        top=top_arr,
-        specific_storage=float(specific_storage),
-    )
-    phi_old = specific_storage_potential(
-        head=head_old_arr,
-        bottom=bottom_arr,
-        top=top_arr,
-        specific_storage=float(specific_storage),
-    )
-    coeff = np.zeros_like(phi_ref, dtype=np.float64)
-    moving = np.abs(dh) > float(secant_eps)
-    coeff[moving] = (phi_ref[moving] - phi_old[moving]) / dh[moving]
-    fallback = ~moving
-    if np.any(fallback):
-        saturated_thickness = np.clip(head_ref_arr - bottom_arr, 0.0, thickness)
-        coeff[fallback] = float(specific_storage) * saturated_thickness[fallback]
-    return np.maximum(coeff, 0.0)
-
-
-def exact_unconfined_storage_terms(
-    *,
-    head_new: np.ndarray,
-    head_old: np.ndarray,
-    bottom: np.ndarray,
-    top: np.ndarray,
-    specific_yield: float,
-    specific_storage: float,
-    dt: float,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """
-    Return storage, Sy, and Ss terms per unit plan area per time.
-
-    Positive values mean water has entered storage; mass-balance release is the
-    negative of the returned total term.
-    """
-    head_new_arr = np.asarray(head_new, dtype=np.float64)
-    head_old_arr = np.asarray(head_old, dtype=np.float64)
-    bottom_arr = np.asarray(bottom, dtype=np.float64)
-    top_arr = np.asarray(top, dtype=np.float64)
-    thickness = np.maximum(top_arr - bottom_arr, 0.0)
-    sat_new = np.clip(head_new_arr - bottom_arr, 0.0, thickness)
-    sat_old = np.clip(head_old_arr - bottom_arr, 0.0, thickness)
-    sy_term = float(specific_yield) * (sat_new - sat_old) / float(dt)
-    ss_term = (
-        specific_storage_potential(
-            head=head_new_arr,
-            bottom=bottom_arr,
-            top=top_arr,
-            specific_storage=float(specific_storage),
-        )
-        - specific_storage_potential(
-            head=head_old_arr,
-            bottom=bottom_arr,
-            top=top_arr,
-            specific_storage=float(specific_storage),
-        )
-    ) / float(dt)
-    return sy_term + ss_term, sy_term, ss_term
+# Public compatibility aliases for storage relations extracted to physics.
+specific_storage_potential = _physics_specific_storage_potential
+secant_specific_yield_coeff = _physics_secant_specific_yield_coeff
+secant_specific_storage_coeff = _physics_secant_specific_storage_coeff
+exact_unconfined_storage_terms = _physics_exact_unconfined_storage_terms
 
 
 def _chebyshev_update_weights(
@@ -577,6 +479,9 @@ def _compute_ghb_factor_from_raw_fields(
     )
 
 
+_compute_ghb_factor_from_raw_fields = _physics_compute_ghb_factor_from_raw_fields
+
+
 def compute_mass_balance_budget(
     T_field: np.ndarray,
     R_field: np.ndarray,
@@ -780,6 +685,10 @@ def compute_mass_balance_budget(
     }
 
     return pd.DataFrame([row])
+
+
+# Public compatibility alias for the extracted solver-level budget evaluator.
+compute_mass_balance_budget = _physics_compute_mass_balance_budget
 
 
 def build_coarse_level_from_fine(
@@ -4513,262 +4422,16 @@ def head_update_rms_and_snapshot_kernel(
     wp.atomic_max(dh_max_buf, 0, abs_dh)
 
 
-@dataclass(slots=True)
-class MGLevel:
-    level_id: int
-    nx: int
-    ny: int
-    dx: float
-    n_active: int
-
-    # Host fields (always 2D)
-    T_host: np.ndarray
-    R_host: np.ndarray
-    active_host: np.ndarray
-    bc_mask_host: np.ndarray
-    bc_values_host: np.ndarray
-    gh_mask_host: Optional[np.ndarray]
-    gh_head_host: Optional[np.ndarray]
-    gh_width_host: Optional[np.ndarray]
-    ghb_factor_host: Optional[np.ndarray]
-    storage_diag_host: np.ndarray | None
-
-    # Device fields (always 2D)
-    T_wp: wp.array
-    R_wp: wp.array
-    active_wp: wp.array
-    bc_mask_wp: wp.array
-    bc_values_wp: wp.array
-    gh_mask_wp: Optional[wp.array]
-    gh_head_wp: Optional[wp.array]
-    gh_width_wp: Optional[wp.array]
-    ghb_factor_wp: Optional[wp.array]
-    storage_diag_wp: wp.array | None
-
-    # Diagonal preconditioner for this level
-    M_inv_wp: wp.array
-
-    # Persistent work buffers (ready for V, W, K cycles)
-    x_wp: wp.array
-    b_wp: wp.array
-    r_wp: wp.array
-    Ax_wp: wp.array
-    e_wp: wp.array
-
-    # PCG buffers (K-cycle will often use inner Krylov on coarse levels)
-    z_wp: wp.array
-    p_wp: wp.array
-    Ap_wp: wp.array
-
-    # Scalar buffers
-    rTr_buf: wp.array
-    rho_buf: wp.array
-    rho_new_buf: wp.array
-    pAp_buf: wp.array
-    alpha_buf: wp.array
-    beta_buf: wp.array
-    converged_flag: wp.array
-
-
-
 class WarpDarcySolver:
     """
     GPU based solver for 2D steady Darcy flow using Warp.
     Supports PCG and a 2-level multigrid V cycle (Jacobi on fine, PCG on coarse).
     """
 
-    # ----------------------------
-    # Small internal container for level-specific operator data (2-level MG path)
-    # ----------------------------
-    class _GridLevel:
-        __slots__ = (
-            "T_wp",
-            "active_wp",
-            "bc_mask_wp",
-            "gh_mask_wp",
-            "gh_width_wp",
-            "ghb_factor_wp",
-            "storage_diag_wp",
-            "M_inv_wp",
-            "nx",
-            "ny",
-            "dx",
-        )
-
-        def __init__(
-            self,
-            T_wp,
-            active_wp,
-            bc_mask_wp,
-            gh_mask_wp,
-            gh_width_wp,
-            ghb_factor_wp,
-            storage_diag_wp=None,
-            M_inv_wp=None,
-            nx: int = 0,
-            ny: int = 0,
-            dx: float = 0.0,
-        ):
-            self.T_wp = T_wp
-            self.active_wp = active_wp
-            self.bc_mask_wp = bc_mask_wp
-            self.gh_mask_wp = gh_mask_wp
-            self.gh_width_wp = gh_width_wp
-            self.ghb_factor_wp = ghb_factor_wp
-            self.storage_diag_wp = storage_diag_wp
-            self.M_inv_wp = M_inv_wp
-            self.nx = int(nx)
-            self.ny = int(ny)
-            self.dx = float(dx)
-
-
-    # ----------------------------
-    # Level container for build_hierarchy (ready for K cycle)
-    # ----------------------------
-    class _MGLevel:
-        __slots__ = (
-            "level_id",
-            "nx",
-            "ny",
-            "dx",
-            "n_active",
-            # host fields
-            "T_host",
-            "R_host",
-            "active_host",
-            "bc_mask_host",
-            "bc_values_host",
-            "gh_mask_host",
-            "gh_head_host",
-            "gh_width_host",
-            "ghb_factor_host",
-            "storage_diag_host",
-            # device fields
-            "T_wp",
-            "R_wp",
-            "active_wp",
-            "bc_mask_wp",
-            "bc_values_wp",
-            "gh_mask_wp",
-            "gh_head_wp",
-            "gh_width_wp",
-            "ghb_factor_wp",
-            "storage_diag_wp",
-            "M_inv_wp",
-            # persistent work buffers (MG + PCG)
-            "x_wp",
-            "b_wp",
-            "r_wp",
-            "Ax_wp",
-            "e_wp",
-            "z_wp",
-            "p_wp",
-            "Ap_wp",
-            "rTr_buf",
-            "rho_buf",
-            "rho_new_buf",
-            "pAp_buf",
-            "alpha_buf",
-            "beta_buf",
-            "converged_flag",
-            "x_prev_wp",
-            "dh_max_buf",
-        )
-
-        def __init__(
-            self,
-            level_id: int,
-            nx: int,
-            ny: int,
-            dx: float,
-            n_active: int,
-            T_host,
-            R_host,
-            active_host,
-            bc_mask_host,
-            bc_values_host,
-            gh_mask_host,
-            gh_head_host,
-            gh_width_host,
-            ghb_factor_host,
-            storage_diag_host,
-            T_wp,
-            R_wp,
-            active_wp,
-            bc_mask_wp,
-            bc_values_wp,
-            gh_mask_wp,
-            gh_head_wp,
-            gh_width_wp,
-            ghb_factor_wp,
-            storage_diag_wp,
-            M_inv_wp,
-            x_wp,
-            b_wp,
-            r_wp,
-            Ax_wp,
-            e_wp,
-            z_wp,
-            p_wp,
-            Ap_wp,
-            rTr_buf,
-            rho_buf,
-            rho_new_buf,
-            pAp_buf,
-            alpha_buf,
-            beta_buf,
-            converged_flag,
-            x_prev_wp,
-            dh_max_buf,
-        ):
-            self.level_id = int(level_id)
-            self.nx = int(nx)
-            self.ny = int(ny)
-            self.dx = float(dx)
-            self.n_active = int(n_active)
-
-            self.T_host = T_host
-            self.R_host = R_host
-            self.active_host = active_host
-            self.bc_mask_host = bc_mask_host
-            self.bc_values_host = bc_values_host
-            self.gh_mask_host = gh_mask_host
-            self.gh_head_host = gh_head_host
-            self.gh_width_host = gh_width_host
-            self.ghb_factor_host = ghb_factor_host
-            self.storage_diag_host = storage_diag_host
-
-            self.T_wp = T_wp
-            self.R_wp = R_wp
-            self.active_wp = active_wp
-            self.bc_mask_wp = bc_mask_wp
-            self.bc_values_wp = bc_values_wp
-            self.gh_mask_wp = gh_mask_wp
-            self.gh_head_wp = gh_head_wp
-            self.gh_width_wp = gh_width_wp
-            self.ghb_factor_wp = ghb_factor_wp
-            self.storage_diag_wp = storage_diag_wp
-            self.M_inv_wp = M_inv_wp
-
-            self.x_wp = x_wp
-            self.b_wp = b_wp
-            self.r_wp = r_wp
-            self.Ax_wp = Ax_wp
-            self.e_wp = e_wp
-
-            self.z_wp = z_wp
-            self.p_wp = p_wp
-            self.Ap_wp = Ap_wp
-
-            self.rTr_buf = rTr_buf
-            self.rho_buf = rho_buf
-            self.rho_new_buf = rho_new_buf
-            self.pAp_buf = pAp_buf
-            self.alpha_buf = alpha_buf
-            self.beta_buf = beta_buf
-            self.converged_flag = converged_flag
-            self.x_prev_wp = x_prev_wp
-            self.dh_max_buf = dh_max_buf
+    # Shared hierarchy data containers are not model state.
+    _GridLevel = LinearGridLevel
+    # The hierarchy level container is shared infrastructure, not model state.
+    _MGLevel = SharedMGLevel
 
     def __init__(
         self,
@@ -4798,6 +4461,9 @@ class WarpDarcySolver:
         self.ny = int(ny)
         self.dx = float(dx)
         self.device_str = str(device)
+        # The model is the sole owner of Warp arrays, the hierarchy, and graph
+        # cache. Backends only receive borrowed references through SolverContext.
+        self._resource_owner = SolverResourceOwner(device=self.device_str)
         self.use_ghb = bool(use_ghb)
         self.solver_type = str(solver_type)
         self.trust_ghb_params_for_graph = bool(trust_ghb_params_for_graph)
@@ -8501,7 +8167,7 @@ class WarpDarcySolver:
         return info
 
 
-    def solve_multigrid_kcycle(
+    def _solve_multigrid_kcycle_legacy(
             self,
             max_cycles: int = 20,
             nu_pre: int = 2,
@@ -10276,7 +9942,96 @@ class WarpDarcySolver:
 
         return (head_out, info) if return_info else head_out
 
-    def solve_transient_2d_unconfined(
+    def _make_solver_context(self, *, formulation: str, transient: bool) -> SolverContext:
+        """Expose model-owned numerical resources through the solver boundary.
+
+        The callbacks intentionally target the pre-refactor implementations.
+        They retain the same Warp arrays, hierarchy, CUDA graph, and execution
+        order; the backend boundary therefore has no allocation or transfer
+        cost.  The legacy methods are private compatibility anchors while the
+        algorithms are progressively separated from this model container.
+        """
+        self._resource_owner.refresh(
+            hierarchy=self.mg_levels,
+            work=self._mg_work,
+            cuda_graph=self._kcycle_graph,
+        )
+        return SolverContext(
+            grid=GridSpec(
+                nx=int(self.nx),
+                ny=int(self.ny),
+                dx=float(self.dx),
+                device=self.device_str,
+            ),
+            fields=OperatorFields(
+                transmissivity=self.T_wp,
+                recharge=self.R_wp,
+                head=self.x_wp,
+                rhs=self.b_wp,
+            ),
+            boundaries=BoundaryFields(
+                active=self.active_wp,
+                dirichlet_mask=self.bc_mask_wp,
+                dirichlet_values=self.bc_values_wp,
+                ghb_mask=self.gh_mask_wp,
+                ghb_factor=self.ghb_factor_wp,
+            ),
+            storage=StorageState(
+                diagonal=self.storage_diag_wp,
+                active=bool(self._storage_active),
+            ),
+            hierarchy=MultigridHierarchy(
+                levels=self.mg_levels,
+                work=self._mg_work,
+                coarsening_diagnostics=self._mg_coarsening_diagnostics,
+            ),
+            workspace=SolverWorkspace(
+                pcg_buffers={
+                    "x": self.x_wp,
+                    "b": self.b_wp,
+                    "r": self.r_wp,
+                    "z": self.z_wp,
+                    "p": self.p_wp,
+                    "Ap": self.Ap_wp,
+                },
+                cuda_graph=self._kcycle_graph,
+                transient_replay_counters=self._transient_replay_counters,
+            ),
+            convergence=ConvergenceControls(
+                formulation=str(formulation),
+                transient=bool(transient),
+            ),
+            run_pcg_legacy=self._solve_pcg_device_loop,
+            run_kcycle_legacy=self._solve_multigrid_kcycle_legacy,
+            run_transient_legacy=self._solve_transient_2d_unconfined_legacy,
+        )
+
+    def solve_multigrid_kcycle(self, *args, **kwargs):
+        """Compatibility entry point for the K-cycle family.
+
+        New callers should use :meth:`solve` with ``confined_kcycle`` or
+        ``unconfined_picard_kcycle``.  Positional calls retain the exact legacy
+        invocation path because their argument mapping predates the registry.
+        """
+        if args:
+            return self._solve_multigrid_kcycle_legacy(*args, **kwargs)
+        unconfined = bool(kwargs.get("unconfined", False))
+        formulation = "unconfined" if unconfined else "confined"
+        context = self._make_solver_context(
+            formulation=formulation,
+            transient=bool(kwargs.get("transient", False)),
+        )
+        backend_name = (
+            "unconfined_picard_kcycle" if unconfined else "confined_kcycle"
+        )
+        return solve_selected(
+            context,
+            solver=backend_name,
+            default=backend_name,
+            **kwargs,
+        )
+
+    def _solve_transient_2d_unconfined_legacy(
             self,
             *,
             initial_head: np.ndarray,
@@ -12292,6 +12047,23 @@ class WarpDarcySolver:
         self._transient_replay_counters = dict(counters)
         return (heads_per_period, info_all) if return_info else heads_per_period
 
+    def solve_transient_2d_unconfined(
+        self,
+        *args,
+        solver: str | None = "unconfined_picard_kcycle",
+        **kwargs,
+    ):
+        """Run the registered production transient-unconfined backend.
+
+        The public keyword-only contract is unchanged.  The extracted driver
+        module owns the backend boundary while this compatibility wrapper keeps
+        model construction and resource ownership local to the model.
+        """
+        if args:
+            raise TypeError("solve_transient_2d_unconfined accepts keyword arguments only.")
+        context = self._make_solver_context(formulation="unconfined", transient=True)
+        return solve_transient_unconfined(context, solver=solver, **kwargs)
+
     def solve(
         self,
         formulation: str = "confined",
@@ -12317,10 +12089,12 @@ class WarpDarcySolver:
             ``"confined"`` for the fixed-transmissivity 5-point operator or
             ``"unconfined"`` for the Picard saturated-thickness update path.
         solver:
-            Optional solver selector. ``"kcycle"`` runs the multigrid K-cycle
-            path and supports confined and unconfined transient solves.
-            ``"pcg"`` is confined steady-state only; transient PCG calls raise
-            ``NotImplementedError`` so storage terms cannot be silently ignored.
+            Optional backend selector. ``"confined_pcg"``,
+            ``"confined_kcycle"``, and ``"unconfined_picard_kcycle"`` are
+            explicit names. Legacy ``"pcg"``, ``"kcycle"``, ``"multigrid"``,
+            and ``"mg"`` remain supported. PCG is confined steady-state only;
+            transient PCG calls raise ``NotImplementedError`` so storage terms
+            cannot be silently ignored.
         initial_head:
             Optional starting head field. For transient solves, this is also
             used as the previous-time head when ``head_prev`` is not supplied.
@@ -12352,55 +12126,48 @@ class WarpDarcySolver:
         if form_mode not in {"confined", "unconfined"}:
             raise ValueError("formulation must be 'confined' or 'unconfined'.")
 
-        solver_mode = self.solver_type if solver is None else str(solver)
-        solver_mode = str(solver_mode).strip().lower()
-        if solver_mode in {"multigrid", "mg"}:
-            solver_mode = "kcycle"
-        if solver_mode not in {"pcg", "kcycle"}:
-            raise ValueError("solver must be 'pcg' or 'kcycle'.")
-        if form_mode == "unconfined" and solver_mode != "kcycle":
-            raise ValueError("2D unconfined solves currently require solver='kcycle'.")
-        if solver_mode == "pcg" and bool(transient):
-            raise NotImplementedError(
-                "Transient storage is implemented for solver='kcycle' only; "
-                "use solver='kcycle' for transient 2D solves."
-            )
-
-        if solver_mode == "pcg":
-            head, info = self._solve_pcg_device_loop(
-                max_iter=int(kwargs.pop("pcg_max_iter", kwargs.pop("max_iter", 250))),
-                rel_tol=float(kwargs.pop("rel_tol", 5.0e-7)),
-                abs_tol_min=float(kwargs.pop("abs_tol_min", 5.0e-7)),
-                initial_head=initial_head,
-                history_every=kwargs.pop("history_every", None),
-            )
-            if kwargs:
-                raise TypeError(f"unused solve kwargs for solver='pcg': {sorted(kwargs.keys())}")
-            if return_info:
-                info_out = dict(info) if isinstance(info, dict) else {}
-                info_out["formulation"] = "confined"
-                return head, info_out
-            return head
-
-        head_info = self.solve_multigrid_kcycle(
-            initial_head=initial_head,
-            return_info=return_info,
-            unconfined=(form_mode == "unconfined"),
-            K_field=K_field,
-            zbot_field=zbot_field,
-            ztop_field=ztop_field,
-            transient=transient,
-            storage_coeff=storage_coeff,
-            dt=dt,
-            head_prev=head_prev,
-            refresh_diag_with_transient_storage=refresh_diag_with_transient_storage,
-            **kwargs,
+        backend_name = canonical_solver_name(
+            solver,
+            formulation=form_mode,
+            default=str(self.solver_type),
         )
+        context = self._make_solver_context(
+            formulation=form_mode,
+            transient=bool(transient),
+        )
+        if backend_name == "confined_pcg":
+            head_info = solve_selected(
+                context,
+                solver=backend_name,
+                default=backend_name,
+                initial_head=initial_head,
+                **kwargs,
+            )
+        else:
+            head_info = solve_selected(
+                context,
+                solver=backend_name,
+                default=backend_name,
+                initial_head=initial_head,
+                return_info=return_info,
+                K_field=K_field,
+                zbot_field=zbot_field,
+                ztop_field=ztop_field,
+                transient=transient,
+                storage_coeff=storage_coeff,
+                dt=dt,
+                head_prev=head_prev,
+                refresh_diag_with_transient_storage=refresh_diag_with_transient_storage,
+                **kwargs,
+            )
         if return_info:
             head, info = head_info
             info_out = dict(info) if isinstance(info, dict) else {}
             info_out["formulation"] = form_mode
+            info_out["solver_backend"] = backend_name
             return head, info_out
+        if backend_name == "confined_pcg":
+            return head_info[0]
         return head_info
 
     def __enter__(self):
@@ -12534,6 +12301,11 @@ class WarpDarcySolver:
         # per-level copies above; release the solver-level mirrors too.
         self.storage_diag_host = None
         self.storage_diag_c_host = None
+
+        # Keep ownership accounting in step with the released model fields.
+        # Backends never own these resources and cannot release them directly.
+        if getattr(self, "_resource_owner", None) is not None:
+            self._resource_owner.release()
 
         # 7) Optionally keep host arrays for reuse, but if you want to drop everything:
         # self.T_field_host = None
