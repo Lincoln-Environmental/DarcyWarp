@@ -483,7 +483,11 @@ if __name__ == "__main__":
 
     practical_dh_rms_tol = 3.0e-3
     practical_storage_diag_change_rms_tol = 30.0
-    min_practical_outer_iterations = 8
+    # Practical acceptance is a fallback, not the normal path: strict Picard
+    # converges in 10-12 outer iterations on the 1000x1000 production case, so
+    # the practical gate must not fire earlier than that (the old value 8
+    # short-circuited every period just before strict success).
+    min_practical_outer_iterations = 20
 
     # ------------------------------------------------------------------
     # Inexact inner linear-solve bounds

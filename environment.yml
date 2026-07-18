@@ -1,24 +1,33 @@
-# Conda environment for DarcyWarp benchmark scripts.
-# Project license: GNU AGPL v3.0 or later (see LICENSE).
+# Conda environment for the DarcyWarp project.
+# Covers the GPU solver, the test suite, the transient MF6 replay, and the
+# Canterbury case study (GIS + torch plotting).
+# Project license: AGPL-3.0-or-later (see LICENSE).
+#
+#   conda env create -f environment.yml     # creates env `darcywarp` (conda + pip)
+#   conda activate darcywarp
+#
+# Python is pinned to 3.12 (stable, supported by warp-lang / flopy / torch).
+# warp-lang is pinned to 1.11.0 via pip (the validated version; conda-forge ships
+# 1.15.x). Other packages are left to resolve to a current compatible build.
 name: darcywarp
 channels:
   - conda-forge
-  - https://repo.anaconda.com/pkgs/main
-  - https://repo.anaconda.com/pkgs/r
 dependencies:
+  - python=3.12
+  - pip
+  # --- core solver, tests, transient replay (MF6 benchmarking) ---
   - numpy
-  - pandas
-  - python
-  - sphinx
-  - openpyxl
-  - pytables
-  - gdal
-  - py7zr
   - scipy
+  - pandas
   - matplotlib
-  - pysheds
+  - pytest
+  - flopy            # MODFLOW 6 Python API (truth models / replay artifacts)
+  - modflow6         # puts the `mf6` binary on PATH so the env is self-contained
+  # --- Canterbury case study / plotting (optional; only canterbury_case_study/ imports these) ---
   - rasterio
-  - scikit-learn
-  - pyemu
-  - scipy-stubs==1.16.3.1
-  - pandas-stubs==2.3.2.250926
+  - pyproj
+  - contextily
+  - pip:
+      - warp-lang==1.11.0   # NVIDIA Warp GPU solver core (validated version)
+      - torch               # Canterbury case study only; for a CPU-only build use:
+                            #   pip install torch --index-url https://download.pytorch.org/whl/cpu

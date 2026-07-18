@@ -4,12 +4,23 @@ This repo contains scripts to run ensemble benchmarks (Warp solver, MODFLOW 6, o
 
 ## Environment setup
 
-Create the conda environment from `environment.yml`:
+The project uses a dedicated conda environment named **`darcywarp`**, defined in
+`environment.yml`. It installs the full stack in one step (Warp + CUDA via a `pip:`
+subsection, MF6, flopy, plus the Canterbury case-study/plotting deps):
 
 ```bash
 conda env create -f environment.yml
 conda activate darcywarp
 ```
+
+To update an existing `darcywarp` env after the spec changes:
+
+```bash
+conda env update -f environment.yml --prune
+```
+
+The env is self-contained: `mf6` (MODFLOW 6) is on PATH via the `modflow6` package,
+and `warp` is GPU-enabled when an NVIDIA GPU + driver are present.
 
 ## Documentation (Sphinx)
 

@@ -11,10 +11,12 @@ kimi --model kimi-code/k3
 DarcyWarp is a **GPU-accelerated groundwater-flow solver** built on NVIDIA Warp (`warp-lang`). It solves structured-grid Darcy flow (5-point in 2D, 7-point in 3D) and is benchmarked against **MODFLOW 6** via FloPy, plus an optional CPU finite-difference reference.
 
 - Repo root: `/home/patrickdurney/PycharmProjects/DarcyWarp`
-- Conda env: `quick_flow_env` (has Warp + CUDA; `darcywarp` also exists but is not the active dev env)
+- Conda env: `darcywarp` — the project's dedicated environment (Warp 1.11.0 + CUDA, MF6,
+  flopy; created from `environment.yml` via `conda env create -f environment.yml`).
+  `quick_flow_env` is a borrowed env from another repo and is **no longer used** here.
 - License: AGPL-3.0-or-later
 - Precision: set via `DARCY_FLOAT` env (`float32` | `float64`); default is currently `float64` in `warped_darcy.py` and `float32` in `config.py` — **check both**.
-- MF6 binary: discovered in `DARCY_WARP_PACKAGE/project_base.py`; default `/bin/modflow/mf6`, fallback `which mf6`.
+- MF6 binary: discovered in `DARCY_WARP_PACKAGE/project_base.py`; default `/bin/modflow/mf6`, fallback `which mf6`. The `darcywarp` env also ships `modflow6`, so `mf6` is on PATH when the env is active.
 
 The code has two eras:
 
@@ -110,17 +112,21 @@ tests/
   path — it matches direct to ~machine precision but does **not** improve the 1M-cell
   case, because the adaptive inner controller drives both forms to the same residual
   target (hence the same iterate). Kept off by default.
-- Optional `adaptive_dt_enabled` (default **False**): per-period sub-stepping with
-  strict-first acceptance, shrink-to-`dt_min` and practical fallback at `dt_min`
-  (controls `adaptive_dt_*` in `transient_replay_settings.py`). Audited 2026-07-18:
-  the driver is mechanically correct (reproduces fixed-small-dt integration; no-op
-  on easy problems) but **cannot fix the 1M-cell accuracy failure** — sub-stepping
-  converges to the true transient while the MF6 artifact is one backward-Euler step
-  per period, so accuracy-vs-MF6 degrades to ~0.1 m RMSE. Kept off by default.
+- Optional `adaptive_dt_enabled` (default **True**): MIKE-SHE-style safety net
+  with strict-first acceptance, shrink-to-`dt_min` and practical fallback at
+  `dt_min` (controls `adaptive_dt_*` in `transient_replay_settings.py`).
+  RESOLVED 2026-07-19: the "1M-cell strict-Picard / accuracy failure" was
+  premature practical acceptance — the old `min_practical_outer_iterations=8`
+  fired ~3 outer iterations before strict success (strict needs 10-12; dh_max
+  contracts ~0.31x/outer). With `min_practical_outer_iterations=20` and
+  `adaptive_dt_strict_max_outer=20`, strict Picard passes on every period at
+  full dt (1000x1000 30w: RMSE 5.5e-05, mass balance excellent, 69 s) and the
+  adaptive net is a verified no-op (1 full-dt sub-step/period, 0 retries).
+  Sub-stepping engages only when strict genuinely fails within the budget.
   Mass-balance reporting for sub-stepped runs carries
   `endpoint_flux_budget_approximation: true` (endpoint-flux budget is a metric
-  artifact there, not non-conservation). See `TRANSIENT_STATUS.md` § Adaptive
-  timestepping.
+  artifact there, not non-conservation). See `TRANSIENT_STATUS.md` § 2D
+  transient unconfined convergence.
 
 ### Adaptive inner controller
 
@@ -132,9 +138,14 @@ tests/
 
 ### Convergence / acceptance
 
-- Strict Picard: `max_abs_head_change < hclose` AND head-equivalent residual RMS < strict tol.
-- Practical acceptance (production gate): min outer iters, head residual < practical tol, `dh_rms` < practical tol, storage-diag change RMS < practical tol.
-- Production result is **practical acceptance**, not strict Picard.
+- Strict Picard (**production gate**): `max_abs_head_change < hclose` AND
+  head-equivalent residual RMS < strict tol AND inner linearisation solved to
+  target. Converges in 10-12 outer iterations on the 1000x1000 production case.
+- Practical acceptance (**fallback only**): fires no earlier than
+  `min_practical_outer_iterations=20`, head residual < practical tol, `dh_rms`
+  < practical tol, storage-diag change RMS < practical tol. Only engages when
+  strict genuinely stalls.
+- Production result is **strict Picard on all periods**.
 
 ---
 
@@ -230,9 +241,13 @@ Usually means `sat = h - bottom` (saturated thickness of the aquifer), not soil 
 
 ### 2D transient unconfined
 
-- **Strict Picard convergence often fails**; runs pass via practical acceptance.
-- Root cause identified in `run_transient_unconfined_diagnostics.py`: transient storage diagonal destabilises the iterative solver when large relative to diffusion diagonal.
-- 500×500 10-period replay: Warp ~27 s vs MF6 ~106 s (still ~4× faster), but strict Picard failed and period-1 mass balance is elevated (~0.1 %, classed `startup_warning`).
+- RESOLVED 2026-07-19: **strict Picard "failures" and the 1M-cell accuracy
+  failure were premature practical acceptance**, not solver deficiencies (see
+  §3 Convergence / acceptance). 1000x1000 30w: 30/30 strict, RMSE 5.5e-05,
+  69.4 s (18.5x MF6). 500x500 52w: 52/52 strict, RMSE 1.2e-05, 19.7 s (5.5x
+  MF6), period-1 `startup_warning` mass-balance class eliminated.
+- 1000x1000 strict-everywhere runtime (~2.3 s/period) exceeds the 30 s stretch
+  target; inner-cycle tuning is the lever if that matters.
 
 ### 3D transient unconfined
 
@@ -263,7 +278,7 @@ Usually means `sat = h - bottom` (saturated thickness of the aquifer), not soil 
 
 ### Important caveats
 
-- Many tests skip if `warp` missing. In this environment `warp` is **not installed**.
+- Many tests skip if `warp` missing. In the `darcywarp` env `warp` **is** installed (1.11.0, CUDA-enabled).
 - Truth fixtures under `tests/fixtures/unconfined_2d/` are git-untracked; clean clone must run `working_tests/regenerate_unconfined_2d_truth.py`.
 - 3000×3000 comparison fails on 16 GB GPUs (memory, not correctness).
 - `test_2d_transient_warm_start.py` has no explicit warp skip guard; collection can fail if warp missing.
@@ -313,10 +328,15 @@ python working_tests/run_2d_transient_warp_replay.py
 
 ### "The transient unconfined replay is slow / fails"
 
-1. Run `working_tests/run_transient_unconfined_diagnostics.py` first — it gives the canonical verdict.
-2. Check whether strict or practical acceptance failed in the replay summary JSON.
-3. Inspect `mass_balance_class`, `strict_picard_convergence_passed`, `practical_picard_acceptance_passed`.
-4. Look at per-period inner-cycle counts; if huge, the adaptive controller or storage-diagonal scaling is the issue.
+1. Check whether strict or practical acceptance fired in the replay summary
+   JSON (`strict_picard_convergence_passed` per period). Strict is the
+   production gate; practical firing before outer iteration 20 means custom
+   controls overrode the corrected defaults.
+2. Run `working_tests/run_transient_unconfined_diagnostics.py` for the
+   canonical verdict on solver-machinery failures.
+3. Inspect `mass_balance_class`, per-period inner-cycle counts, and
+   `adaptive_dt_retry_count`/`adaptive_dt_substep_count` — nonzero retries mean
+   strict genuinely failed somewhere and the safety net engaged.
 
 ### "I need to change a storage formulation"
 
@@ -349,5 +369,6 @@ python working_tests/run_2d_transient_warp_replay.py
 - **PCG + transient**: explicitly `NotImplementedError`.
 - **Steady-state no-storage kernels exist** and are not polluted with storage terms.
 - **Coarse operators are approximate preconditioners**, not exact Galerkin representations.
-- **Mass balance target**: cumulative < 0.1 %, worst non-startup period < 0.01 %, startup period < 0.2 %.
-- **Head accuracy target**: final RMSE < 0.001 m, final max abs diff < 0.005 m, worst-period RMSE < 0.005 m.
+- **Mass balance target**: cumulative < 0.1 %, worst non-startup period < 0.01 %, startup period < 0.2 % — met with class `excellent` on both production grids as of 2026-07-19.
+- **Head accuracy target**: final RMSE < 0.001 m, final max abs diff < 0.005 m, worst-period RMSE < 0.005 m — met (1000x1000 30w: RMSE 5.5e-05; 500x500 52w: RMSE 1.2e-05).
+- **Production convergence**: strict Picard on all periods; practical acceptance is fallback-only (`min_practical_outer_iterations=20`).

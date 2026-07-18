@@ -75,7 +75,13 @@ def default_solve_controls() -> dict:
         "max_head_change_per_outer_iteration": 10.0,
         "practical_picard_acceptance_enabled": True,
         "strict_head_residual_tol": 1.0e-6,
-        "min_practical_outer_iterations": 8,
+        # Practical acceptance is a FALLBACK, not the normal path: it may only
+        # fire after strict Picard has had a genuine chance. Strict converges
+        # in 10-12 outer iterations on the 1000x1000 production case (dh_max
+        # contracts ~0.31x/iteration); the old value (8) short-circuited every
+        # period ~3 iterations before strict success and was the root cause of
+        # the 1M-cell accuracy failure (RMSE 0.0025 -> 5.5e-05 when fixed).
+        "min_practical_outer_iterations": 20,
         "practical_head_residual_tol": 1.0e-5,
         "practical_residual_tol": 1.0e-5,
         "practical_dh_rms_tol": 3.0e-3,
@@ -110,11 +116,20 @@ def default_solve_controls() -> dict:
         # A*delta = r^k (delta=0 on Dirichlet cells) instead of the full head.
         # Default False until 1M-cell validation confirms the improvement.
         "use_incremental_picard": False,
-        "adaptive_dt_enabled": False,
+        # Adaptive dt is a MIKE-SHE-style safety net, not the primary path.
+        # With the corrected strict budget below, full-dt strict Picard passes
+        # in <=12 outer iterations on the production case, so the net is a
+        # verified no-op there (single full-dt sub-step per period, identical
+        # heads). It only shrinks dt when strict genuinely fails within the
+        # budget, with practical acceptance as the floor at dt_min.
+        "adaptive_dt_enabled": True,
         "adaptive_dt_min_fraction": 0.0625,
         "adaptive_dt_shrink_factor": 0.5,
         "adaptive_dt_grow_factor": 2.0,
-        "adaptive_dt_strict_max_outer": 6,
+        # Must exceed the natural full-dt strict iteration count (~12 max on
+        # the 1000x1000 production case). The old value (6) sat below it and
+        # guaranteed shrink/retry storms on every period.
+        "adaptive_dt_strict_max_outer": 20,
         "adaptive_dt_max_growth_steps": 2,
     }
 

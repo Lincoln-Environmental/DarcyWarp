@@ -1,4 +1,9 @@
-warp-lang==1.10.0
-warp
-nvtx
-flopy
+# Pip-installed dependencies. The canonical source of truth is environment.yml
+# (its `pip:` subsection mirrors this list). Use this file only when adding the
+# Warp/torch dependencies to an existing conda environment.
+#
+# Core GPU solver (validated version; conda-forge ships a newer 1.15.x):
+warp-lang==1.11.0
+# Canterbury case study only (omit for a solver-only env; for CPU-only torch use
+# `pip install torch --index-url https://download.pytorch.org/whl/cpu`):
+torch

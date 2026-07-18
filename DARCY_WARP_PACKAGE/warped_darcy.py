@@ -8477,7 +8477,7 @@ class WarpDarcySolver:
             ss: float | None = None,
             accept_on_head_change_only: bool = False,
             practical_picard_acceptance_enabled: bool = False,
-            min_practical_outer_iterations: int = 8,
+            min_practical_outer_iterations: int = 20,
             practical_residual_tol: float = 1.0e-4,
             practical_dh_rms_tol: float = 3.0e-3,
             practical_storage_diag_change_rms_tol: float = 30.0,
@@ -10442,7 +10442,7 @@ class WarpDarcySolver:
             max_cycles_hard_i = int(controls.get("max_cycles", 200))
             hclose = float(controls.get("unconfined_head_tol", controls.get("hclose", 1.0e-4)))
             strict_head_residual_tol_f = float(controls.get("strict_head_residual_tol", hclose))
-            min_practical_outer_iterations_i = int(controls.get("min_practical_outer_iterations", 8))
+            min_practical_outer_iterations_i = int(controls.get("min_practical_outer_iterations", 20))
             practical_head_residual_tol_f = float(
                 controls.get("practical_head_residual_tol", controls.get("practical_residual_tol", 1.0e-4))
             )
@@ -10491,7 +10491,7 @@ class WarpDarcySolver:
             adaptive_dt_min_fraction_f = float(controls.get("adaptive_dt_min_fraction", 0.0625))
             adaptive_dt_shrink_factor_f = float(controls.get("adaptive_dt_shrink_factor", 0.5))
             adaptive_dt_grow_factor_f = float(controls.get("adaptive_dt_grow_factor", 2.0))
-            adaptive_dt_strict_max_outer_i = int(controls.get("adaptive_dt_strict_max_outer", 6))
+            adaptive_dt_strict_max_outer_i = int(controls.get("adaptive_dt_strict_max_outer", 20))
             adaptive_dt_max_growth_steps_i = int(controls.get("adaptive_dt_max_growth_steps", 2))
             if adaptive_dt_enabled_b:
                 if not (0.0 < adaptive_dt_min_fraction_f <= 1.0):
@@ -11475,6 +11475,8 @@ class WarpDarcySolver:
                             if np.isfinite(inner_target_relative_flow_residual_rms) else None
                         ),
                         "final_head_residual_rms": float(last_head_residual_rms),
+                        "final_max_abs_head_change": float(last_dh_max),
+                        "final_rms_head_change": float(last_dh_rms),
                         "final_relative_flow_residual_rms": info_lin.get(
                             "final_relative_flow_residual_rms"
                         ),

@@ -658,6 +658,30 @@ def test_adaptive_dt_is_noop_when_strict_passes_at_full_dt():
 
 
 @pytest.mark.skipif(not _cuda_available(), reason="CUDA fast path is not available")
+def test_default_controls_converge_strict_not_practical():
+    """Regression test for the 1M-cell premature-acceptance failure.
+
+    The production failure was caused by the practical-acceptance floor firing
+    at outer iteration 8, ~3 iterations before strict Picard success (strict
+    needs ~11 outer iterations worst-case; dh_max contracts ~0.31x/outer).
+    With the corrected defaults (min_practical_outer_iterations=20,
+    adaptive_dt_strict_max_outer=20), every period must converge via STRICT
+    Picard at full dt: single sub-step, dh_max <= hclose, no practical
+    fallback anywhere."""
+    heads, info = _run_adaptive_dt_case(
+        recharge=5.0e-9, adaptive_controls={}  # production defaults verbatim
+    )
+    period_infos = info.get("period_infos") or []
+    assert len(period_infos) == 2
+    for pinfo in period_infos:
+        assert pinfo["strict_picard_convergence_passed"] is True
+        assert pinfo["adaptive_dt_substep_count"] == 1
+        assert pinfo["adaptive_dt_practical_fallback_count"] == 0
+        assert pinfo["final_max_abs_head_change"] <= 1.0e-4
+    assert np.all(np.isfinite(heads))
+
+
+@pytest.mark.skipif(not _cuda_available(), reason="CUDA fast path is not available")
 def test_adaptive_dt_shrink_fallback_bookkeeping_and_reference_match():
     """With a strict budget of 1 outer iteration and a strong transient, strict
     acceptance is impossible at any dt. The driver must shrink dt by the shrink
