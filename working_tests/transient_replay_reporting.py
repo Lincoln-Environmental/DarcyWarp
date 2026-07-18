@@ -43,16 +43,12 @@ def evaluate_method_settings(
     *,
     unconfined_storage_mode: str,
     storage_reference: str,
-    storage_top_threshold: str,
-    storage_active_set_strategy: str,
     unconfined_startup_mode: str,
     warm_start: str,
 ) -> dict:
     actual = {
         "unconfined_storage_mode": str(unconfined_storage_mode),
         "storage_reference": str(storage_reference),
-        "storage_top_threshold": str(storage_top_threshold),
-        "storage_active_set_strategy": str(storage_active_set_strategy),
         "unconfined_startup_mode": str(unconfined_startup_mode),
         "warm_start": str(warm_start),
     }

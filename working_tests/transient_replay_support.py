@@ -73,10 +73,8 @@ from working_tests.transient_replay_reporting import (
 from working_tests.transient_replay_settings import (
     DIAGNOSTICS_RUN_MODE,
     PRODUCTION_RUN_MODE,
-    STORAGE_ACTIVE_SET_NONE,
     DEFAULT_MIN_SAT,
     STORAGE_REFERENCE_CURRENT_PICARD,
-    STORAGE_TOP_THRESHOLD_GE,
     default_run_config,
     default_solve_controls,
     production_secant_sy_settings,
@@ -165,12 +163,6 @@ def run_warp_transient_replay(
     formulation: str = FORMULATION_UNCONFINED,
     unconfined_storage_mode: str = UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
     storage_reference: str = STORAGE_REFERENCE_CURRENT_PICARD,
-    storage_top_threshold: str = STORAGE_TOP_THRESHOLD_GE,
-    storage_active_set_strategy: str = STORAGE_ACTIVE_SET_NONE,
-    storage_hysteresis_eps: float = 0.0,
-    storage_freeze_after_stable_iterations: int = 0,
-    storage_freeze_after_outer: int | None = None,
-    storage_switch_fraction_tol: float = 0.0,
     _warp_solver_class_fn=None,
     _warp_device_fn=None,
 ) -> dict:
@@ -181,9 +173,6 @@ def run_warp_transient_replay(
     storage_reference = str(storage_reference).strip().lower()
     if storage_reference != STORAGE_REFERENCE_CURRENT_PICARD:
         raise ValueError("transient replay support now requires storage_reference='current_picard'")
-    storage_top_threshold = str(storage_top_threshold).strip().lower()
-    if storage_top_threshold != STORAGE_TOP_THRESHOLD_GE:
-        raise ValueError("transient replay support now requires storage_top_threshold='ge'")
 
     warm_start_mode = str(warm_start_mode).strip().lower()
     allowed_warm_start_modes = {
@@ -202,9 +191,6 @@ def run_warp_transient_replay(
             "transient replay support now requires "
             "unconfined_storage_mode='mf6_convertible_secant_sy'"
         )
-    storage_active_set_strategy = str(storage_active_set_strategy).strip().lower()
-    if storage_active_set_strategy != STORAGE_ACTIVE_SET_NONE:
-        raise ValueError("transient replay support now requires storage_active_set_strategy='none'")
 
     controls = dict(default_solve_controls())
     if solve_controls:
@@ -292,12 +278,6 @@ def run_warp_transient_replay(
             bc_values=bc_values,
             storage_mode=unconfined_storage_mode,
             storage_reference=storage_reference,
-            storage_top_threshold=storage_top_threshold,
-            storage_active_set_strategy=storage_active_set_strategy,
-            storage_hysteresis_eps=float(storage_hysteresis_eps),
-            storage_freeze_after_stable_iterations=int(storage_freeze_after_stable_iterations),
-            storage_freeze_after_outer=storage_freeze_after_outer,
-            storage_switch_fraction_tol=float(storage_switch_fraction_tol),
             solve_controls=controls,
             min_saturated_thickness=float(min_sat),
             return_info=True,
@@ -311,15 +291,6 @@ def run_warp_transient_replay(
         else "unconfined_storativity"
     )
     solve_controls_used = dict(controls)
-    solve_controls_used.update(
-        {
-            "storage_active_set_strategy": storage_active_set_strategy,
-            "storage_hysteresis_eps": float(storage_hysteresis_eps),
-            "storage_freeze_after_stable_iterations": int(storage_freeze_after_stable_iterations),
-            "storage_freeze_after_outer": storage_freeze_after_outer,
-            "storage_switch_fraction_tol": float(storage_switch_fraction_tol),
-        }
-    )
     return {
         "heads_per_period": heads_per_period,
         "heads_old_per_period": np.asarray(info_api["heads_old_per_period"], dtype=np.float64),
@@ -345,12 +316,6 @@ def run_warp_transient_replay(
         "saturated_thickness_reference": None,
         "saturated_thickness_reference_source": storage_reference,
         "storage_reference": storage_reference,
-        "storage_top_threshold": storage_top_threshold,
-        "storage_active_set_strategy": storage_active_set_strategy,
-        "storage_hysteresis_eps": float(storage_hysteresis_eps),
-        "storage_freeze_after_stable_iterations": int(storage_freeze_after_stable_iterations),
-        "storage_freeze_after_outer": storage_freeze_after_outer,
-        "storage_switch_fraction_tol": float(storage_switch_fraction_tol),
         "dt": float(dt),
         "formulation": formulation,
         "solve_controls": solve_controls_used,
@@ -368,16 +333,11 @@ def run_replay_from_artifact(
     device: str = "auto",
     diag_preconditioner_backend: str = "auto",
     solve_controls: dict | None = None,
+    n_periods: int | None = None,
     warm_start_mode: str = WARM_START_UNCONFINED_STEADY_MF6,
     formulation: str = FORMULATION_UNCONFINED,
     unconfined_storage_mode: str = UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
     storage_reference: str = STORAGE_REFERENCE_CURRENT_PICARD,
-    storage_top_threshold: str = STORAGE_TOP_THRESHOLD_GE,
-    storage_active_set_strategy: str = STORAGE_ACTIVE_SET_NONE,
-    storage_hysteresis_eps: float = 0.0,
-    storage_freeze_after_stable_iterations: int = 0,
-    storage_freeze_after_outer: int | None = None,
-    storage_switch_fraction_tol: float = 0.0,
     allow_warm_start_mismatch: bool = False,
     run_config: dict | None = None,
     load_transient_artifact_fn=None,
@@ -432,12 +392,6 @@ def run_replay_from_artifact(
     storage_reference = str(storage_reference).strip().lower()
     if storage_reference != STORAGE_REFERENCE_CURRENT_PICARD:
         raise ValueError("transient replay support now requires storage_reference='current_picard'")
-    storage_top_threshold = str(storage_top_threshold).strip().lower()
-    if storage_top_threshold != STORAGE_TOP_THRESHOLD_GE:
-        raise ValueError("transient replay support now requires storage_top_threshold='ge'")
-    storage_active_set_strategy = str(storage_active_set_strategy).strip().lower()
-    if storage_active_set_strategy != STORAGE_ACTIVE_SET_NONE:
-        raise ValueError("transient replay support now requires storage_active_set_strategy='none'")
 
     artifact_warm_start = artifact_warm_start_provenance(artifact)
     validate_warm_start_comparability(
@@ -455,13 +409,14 @@ def run_replay_from_artifact(
     ss = float(artifact["ss"])
     dt = float(artifact["dt_days"])
     recharge_rates = np.asarray(artifact["recharge_rates"], dtype=np.float64)
-    n_periods = int(recharge_rates.shape[0])
+    n_periods = int(recharge_rates.shape[0]) if n_periods is None else int(n_periods)
+    if n_periods < 1 or n_periods > recharge_rates.shape[0]:
+        raise ValueError(f"n_periods={n_periods} out of range [1, {recharge_rates.shape[0]}]")
 
     print(f"Transient replay: {spatial['nx']}x{spatial['ny']}, {n_periods} periods, dt={dt}")
     print(
         f"  formulation: unconfined; storativity S = secant(Sy crossing) + Ss*saturated_thickness "
-        f"(Sy={sy}, Ss={ss}, reference={storage_reference}, "
-        f"active_set_strategy={storage_active_set_strategy})"
+        f"(Sy={sy}, Ss={ss}, reference={storage_reference})"
     )
     print(f"  warm start: {warm_start_used} (artifact provenance: {artifact_warm_start})")
     print(f"  artifact: {artifact_path}")
@@ -494,8 +449,6 @@ def run_replay_from_artifact(
     print("  MF6 replay settings:")
     print(f"    unconfined_storage_mode={unconfined_storage_mode}")
     print(f"    storage_reference={storage_reference}")
-    print(f"    storage_top_threshold={storage_top_threshold}")
-    print(f"    storage_active_set_strategy={storage_active_set_strategy}")
     print(f"    unconfined_startup_mode={effective_startup_mode}")
     print(f"    warm_start={warm_start_used}")
 
@@ -514,17 +467,14 @@ def run_replay_from_artifact(
         formulation=formulation,
         unconfined_storage_mode=unconfined_storage_mode,
         storage_reference=storage_reference,
-        storage_top_threshold=storage_top_threshold,
-        storage_active_set_strategy=storage_active_set_strategy,
-        storage_hysteresis_eps=storage_hysteresis_eps,
-        storage_freeze_after_stable_iterations=storage_freeze_after_stable_iterations,
-        storage_freeze_after_outer=storage_freeze_after_outer,
-        storage_switch_fraction_tol=storage_switch_fraction_tol,
     )
 
+    artifact_heads_per_period = np.asarray(artifact["heads_per_period"], dtype=np.float64)
+    if n_periods < artifact_heads_per_period.shape[0]:
+        artifact_heads_per_period = artifact_heads_per_period[:n_periods]
     comparison = compare_transient(
         warp_result,
-        np.asarray(artifact["heads_per_period"], dtype=np.float64),
+        artifact_heads_per_period,
         np.asarray(artifact["heads_final"], dtype=np.float64),
         spatial["active"],
     )
@@ -595,23 +545,6 @@ def run_replay_from_artifact(
             else "none"
         ),
         storage_reference=np.asarray(warp_result.get("storage_reference", STORAGE_REFERENCE_CURRENT_PICARD)),
-        storage_top_threshold=np.asarray(warp_result.get("storage_top_threshold", STORAGE_TOP_THRESHOLD_GE)),
-        storage_active_set_strategy=np.asarray(
-            warp_result.get("storage_active_set_strategy", STORAGE_ACTIVE_SET_NONE)
-        ),
-        storage_hysteresis_eps=np.asarray(
-            warp_result.get("storage_hysteresis_eps", 0.0), dtype=np.float64
-        ),
-        storage_freeze_after_stable_iterations=np.asarray(
-            warp_result.get("storage_freeze_after_stable_iterations", 0), dtype=np.int32
-        ),
-        storage_freeze_after_outer=np.asarray(
-            -1 if warp_result.get("storage_freeze_after_outer") is None else warp_result.get("storage_freeze_after_outer"),
-            dtype=np.int32,
-        ),
-        storage_switch_fraction_tol=np.asarray(
-            warp_result.get("storage_switch_fraction_tol", 0.0), dtype=np.float64
-        ),
         storage_reference_heads_per_period=np.asarray(storage_budget_arrays["storage_reference_heads_per_period"], dtype=np.float64),
         storage_coeffs_per_period=np.asarray(storage_budget_arrays["storage_coeffs_per_period"], dtype=np.float64),
         sy_storage_coeffs_per_period=np.asarray(storage_budget_arrays["sy_storage_coeffs_per_period"], dtype=np.float64),
@@ -666,8 +599,6 @@ def run_replay_from_artifact(
         {
             "unconfined_storage_mode": warp_result["unconfined_storage_mode"],
             "storage_reference": warp_result.get("storage_reference", STORAGE_REFERENCE_CURRENT_PICARD),
-            "storage_top_threshold": warp_result.get("storage_top_threshold", STORAGE_TOP_THRESHOLD_GE),
-            "storage_active_set_strategy": warp_result.get("storage_active_set_strategy", STORAGE_ACTIVE_SET_NONE),
             "warm_start": warp_result["warm_start_used"],
         }
     )
@@ -684,8 +615,6 @@ def run_replay_from_artifact(
         "mf6_replay_settings": {
             "unconfined_storage_mode": warp_result["unconfined_storage_mode"],
             "storage_reference": warp_result.get("storage_reference", STORAGE_REFERENCE_CURRENT_PICARD),
-            "storage_top_threshold": warp_result.get("storage_top_threshold", STORAGE_TOP_THRESHOLD_GE),
-            "storage_active_set_strategy": warp_result.get("storage_active_set_strategy", STORAGE_ACTIVE_SET_NONE),
             "unconfined_startup_mode": warp_result["solve_controls"].get(
                 "unconfined_startup_mode", "confined_pre_solve"
             ),
@@ -696,14 +625,6 @@ def run_replay_from_artifact(
             "ss": ss,
             "unconfined_storage_mode": warp_result["unconfined_storage_mode"],
             "storage_reference": warp_result.get("storage_reference", STORAGE_REFERENCE_CURRENT_PICARD),
-            "storage_top_threshold": warp_result.get("storage_top_threshold", STORAGE_TOP_THRESHOLD_GE),
-            "storage_active_set_strategy": warp_result.get("storage_active_set_strategy", STORAGE_ACTIVE_SET_NONE),
-            "storage_hysteresis_eps": warp_result.get("storage_hysteresis_eps", 0.0),
-            "storage_freeze_after_stable_iterations": warp_result.get(
-                "storage_freeze_after_stable_iterations", 0
-            ),
-            "storage_freeze_after_outer": warp_result.get("storage_freeze_after_outer"),
-            "storage_switch_fraction_tol": warp_result.get("storage_switch_fraction_tol", 0.0),
             "warp_storativity": _field_stats(warp_result["storativity"], free_mask),
             "warp_storativity_kind": warp_result["storativity_kind"],
             "include_specific_storage": warp_result["include_specific_storage"],
@@ -766,8 +687,6 @@ def run_replay_from_artifact(
     method_settings = evaluate_method_settings(
         unconfined_storage_mode=warp_result["unconfined_storage_mode"],
         storage_reference=storage_reference,
-        storage_top_threshold=storage_top_threshold,
-        storage_active_set_strategy=storage_active_set_strategy,
         unconfined_startup_mode=effective_startup_mode,
         warm_start=warm_start_used,
     )
@@ -836,12 +755,6 @@ def main(
     formulation: str = FORMULATION_UNCONFINED,
     unconfined_storage_mode: str = UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
     storage_reference: str = STORAGE_REFERENCE_CURRENT_PICARD,
-    storage_top_threshold: str = STORAGE_TOP_THRESHOLD_GE,
-    storage_active_set_strategy: str = STORAGE_ACTIVE_SET_NONE,
-    storage_hysteresis_eps: float = 0.0,
-    storage_freeze_after_stable_iterations: int = 0,
-    storage_freeze_after_outer: int | None = None,
-    storage_switch_fraction_tol: float = 0.0,
     allow_warm_start_mismatch: bool = False,
     solve_controls: dict | None = None,
     run_config: dict | None = None,
@@ -876,12 +789,6 @@ def main(
         formulation=formulation,
         unconfined_storage_mode=unconfined_storage_mode,
         storage_reference=storage_reference,
-        storage_top_threshold=storage_top_threshold,
-        storage_active_set_strategy=storage_active_set_strategy,
-        storage_hysteresis_eps=storage_hysteresis_eps,
-        storage_freeze_after_stable_iterations=storage_freeze_after_stable_iterations,
-        storage_freeze_after_outer=storage_freeze_after_outer,
-        storage_switch_fraction_tol=storage_switch_fraction_tol,
         allow_warm_start_mismatch=allow_warm_start_mismatch,
         solve_controls=solve_controls,
         run_config=run_config,
@@ -902,12 +809,6 @@ if __name__ == "__main__":
     formulation = FORMULATION_UNCONFINED
     unconfined_storage_mode = production_settings["unconfined_storage_mode"]
     storage_reference = production_settings["storage_reference"]
-    storage_top_threshold = production_settings["storage_top_threshold"]
-    storage_active_set_strategy = production_settings["storage_active_set_strategy"]
-    storage_hysteresis_eps = production_settings.get("storage_hysteresis_eps", 0.0)
-    storage_freeze_after_stable_iterations = production_settings.get("storage_freeze_after_stable_iterations", 0)
-    storage_freeze_after_outer = production_settings["storage_freeze_after_outer"]
-    storage_switch_fraction_tol = production_settings.get("storage_switch_fraction_tol", 0.0)
     allow_warm_start_mismatch = False
     # Explicit production configuration variables (no argparse required).
     #   RUN_MODE:              production | benchmark | diagnostics
@@ -938,12 +839,6 @@ if __name__ == "__main__":
         formulation=formulation,
         unconfined_storage_mode=unconfined_storage_mode,
         storage_reference=storage_reference,
-        storage_top_threshold=storage_top_threshold,
-        storage_active_set_strategy=storage_active_set_strategy,
-        storage_hysteresis_eps=storage_hysteresis_eps,
-        storage_freeze_after_stable_iterations=storage_freeze_after_stable_iterations,
-        storage_freeze_after_outer=storage_freeze_after_outer,
-        storage_switch_fraction_tol=storage_switch_fraction_tol,
         allow_warm_start_mismatch=allow_warm_start_mismatch,
         run_config=run_config,
     )

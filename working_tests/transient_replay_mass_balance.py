@@ -11,7 +11,6 @@ from working_tests.transient_replay_settings import (
     MASS_BALANCE_GOOD_PCT,
     MASS_BALANCE_STARTUP_PERIOD,
     MASS_BALANCE_STARTUP_WARN_PCT,
-    STORAGE_ACTIVE_SET_NONE,
     STORAGE_REFERENCE_CURRENT_PICARD,
 )
 
@@ -300,8 +299,6 @@ def save_warp_storage_budget_terms(
         unconfined_storage_mode=np.asarray(
             "none" if warp_result["unconfined_storage_mode"] is None else warp_result["unconfined_storage_mode"]
         ),
-        storage_top_threshold=np.asarray(warp_result.get("storage_top_threshold", "ge")),
-        storage_active_set_strategy=np.asarray(warp_result.get("storage_active_set_strategy", STORAGE_ACTIVE_SET_NONE)),
         dt=np.asarray(warp_result["dt"], dtype=np.float64),
         warm_start_head=np.asarray(warp_result["warm_start_head"], dtype=np.float64),
     )

@@ -10,7 +10,7 @@
 DarcyWarp is a **GPU-accelerated groundwater-flow solver** built on NVIDIA Warp (`warp-lang`). It solves structured-grid Darcy flow (5-point in 2D, 7-point in 3D) and is benchmarked against **MODFLOW 6** via FloPy, plus an optional CPU finite-difference reference.
 
 - Repo root: `/home/patrickdurney/PycharmProjects/DarcyWarp`
-- Conda env: `darcywarp` (from `environment.yml`)
+- Conda env: `quick_flow_env` (has Warp + CUDA; `darcywarp` also exists but is not the active dev env)
 - License: AGPL-3.0-or-later
 - Precision: set via `DARCY_FLOAT` env (`float32` | `float64`); default is currently `float64` in `warped_darcy.py` and `float32` in `config.py` — **check both**.
 - MF6 binary: discovered in `DARCY_WARP_PACKAGE/project_base.py`; default `/bin/modflow/mf6`, fallback `which mf6`.
@@ -102,8 +102,6 @@ tests/
 - Production fast path (device-side Picard loop) requires exactly:
   - `unconfined_storage_mode="mf6_convertible_secant_sy"`
   - `storage_reference="current_picard"`
-  - `storage_top_threshold="ge"`
-  - `storage_active_set_strategy="none"`
   - GHB disabled.
 
 ### Adaptive inner controller
@@ -179,8 +177,6 @@ The production replay only accepts:
 
 - `unconfined_storage_mode="mf6_convertible_secant_sy"`
 - `storage_reference="current_picard"`
-- `storage_top_threshold="ge"`
-- `storage_active_set_strategy="none"`
 - `warm_start="unconfined_steady_mf6"`
 - `unconfined_startup_mode="confined_pre_solve"`
 

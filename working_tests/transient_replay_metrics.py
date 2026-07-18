@@ -119,19 +119,6 @@ def _summarize_last_info(info: dict) -> dict:
         "practical_residual_tol",
         "practical_dh_rms_tol",
         "practical_storage_diag_change_rms_tol",
-        "storage_active_set_strategy",
-        "storage_hysteresis_eps",
-        "storage_freeze_after_stable_iterations",
-        "storage_freeze_after_outer",
-        "storage_switch_fraction_tol",
-        "max_top_switch_changed_count",
-        "max_top_switch_changed_fraction",
-        "last_top_switch_changed_count",
-        "last_top_switch_changed_fraction",
-        "last_above_top_count",
-        "last_above_top_fraction",
-        "top_switch_frozen",
-        "top_switch_frozen_outer_iteration",
         "max_storage_diag_change_max",
         "max_storage_diag_change_rms",
         "storage_diag_change_max",
@@ -200,19 +187,6 @@ def _summarize_period_infos(period_infos: list[dict]) -> dict:
         "total_inner_kcycles",
         "maximum_inner_kcycles_in_one_outer_iteration",
         "effectively_dry_cell_count",
-        "storage_active_set_strategy",
-        "storage_hysteresis_eps",
-        "storage_freeze_after_stable_iterations",
-        "storage_freeze_after_outer",
-        "storage_switch_fraction_tol",
-        "max_top_switch_changed_count",
-        "max_top_switch_changed_fraction",
-        "last_top_switch_changed_count",
-        "last_top_switch_changed_fraction",
-        "last_above_top_count",
-        "last_above_top_fraction",
-        "top_switch_frozen",
-        "top_switch_frozen_outer_iteration",
         "max_storage_diag_change_max",
         "max_storage_diag_change_rms",
         "storage_diag_change_max",
@@ -248,17 +222,7 @@ def _summarize_period_infos(period_infos: list[dict]) -> dict:
         period_summary["practical_accepted"] = practical_accepted
         if not production_accepted and first_nonconverged_period is None:
             first_nonconverged_period = int(period_index)
-        diagnosis = "stable"
-        if (
-            period_summary.get("storage_active_set_strategy") in {"hysteresis", "freeze_when_stable"}
-            and bool(period_summary.get("top_switch_frozen", False))
-        ):
-            diagnosis = "top_switch_frozen"
-        if float(period_summary.get("last_top_switch_changed_fraction", 0.0) or 0.0) > 0.0:
-            diagnosis = "active_set_still_changing"
-        if not production_accepted and float(period_summary.get("max_top_switch_changed_fraction", 0.0) or 0.0) > 0.0:
-            diagnosis = "active_set_cycling_suspected"
-        period_summary["diagnosis"] = diagnosis
+        period_summary["diagnosis"] = "stable"
         periods.append(period_summary)
     strict_fail_period = None
     practical_fail_period = None

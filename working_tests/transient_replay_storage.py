@@ -3,20 +3,10 @@ from __future__ import annotations
 import numpy as np
 
 from working_tests.transient_artifacts import (
-    UNCONFINED_STORAGE_INTEGRATED_SY_SS,
-    UNCONFINED_STORAGE_MF6_CONVERTIBLE,
-    UNCONFINED_STORAGE_MF6_CONVERTIBLE_CROSSING_VOLUME_SY,
     UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
-    UNCONFINED_STORAGE_MF6_CONVERTIBLE_TOP_SWITCH,
     UNCONFINED_STORAGE_MODES,
-    UNCONFINED_STORAGE_PHREATIC_ONLY,
 )
-from working_tests.transient_replay_settings import (
-    DEFAULT_MIN_SAT,
-    STORAGE_TOP_THRESHOLD_GE,
-    STORAGE_TOP_THRESHOLD_GT,
-    STORAGE_TOP_THRESHOLD_MODES,
-)
+from working_tests.transient_replay_settings import DEFAULT_MIN_SAT
 
 
 def _initial_transmissivity(
@@ -108,27 +98,14 @@ def build_unconfined_storativity(
     min_sat: float = DEFAULT_MIN_SAT,
     include_specific_storage: bool = False,
     storage_mode: str | None = None,
-    storage_top_threshold: str = STORAGE_TOP_THRESHOLD_GE,
     secant_eps: float = 1.0e-12,
 ) -> tuple[np.ndarray, np.ndarray | None]:
-    mode = (
-        UNCONFINED_STORAGE_MF6_CONVERTIBLE
-        if storage_mode is None and include_specific_storage
-        else (
-            UNCONFINED_STORAGE_PHREATIC_ONLY
-            if storage_mode is None
-            else str(storage_mode).strip().lower()
-        )
-    )
-    if mode not in UNCONFINED_STORAGE_MODES:
-        raise ValueError(f"storage_mode must be one of {sorted(UNCONFINED_STORAGE_MODES)}.")
-    threshold_mode = str(storage_top_threshold).strip().lower()
-    if threshold_mode not in STORAGE_TOP_THRESHOLD_MODES:
-        raise ValueError(f"storage_top_threshold must be one of {sorted(STORAGE_TOP_THRESHOLD_MODES)}.")
+    mode = UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY
+    if storage_mode is not None and str(storage_mode).strip().lower() != mode:
+        raise ValueError(f"storage_mode must be '{mode}'.")
 
     active_i = np.asarray(active, dtype=np.int32)
     bcm = np.asarray(bc_mask, dtype=np.int32)
-    free = (active_i != 0) & (bcm == 0)
     components = compute_unconfined_storage_components(
         sy=float(sy),
         ss=float(ss),
@@ -140,14 +117,13 @@ def build_unconfined_storativity(
         bc_mask=bcm,
         min_sat=float(min_sat),
         storage_mode=mode,
-        storage_top_threshold=threshold_mode,
         secant_eps=float(secant_eps),
     )
     storativity = np.asarray(components["storage_coeff"], dtype=np.float64)
-    sat_ref = np.asarray(components["sat_ref_ss"], dtype=np.float64) if components["sat_ref_ss"] is not None else None
+    sat_ref = np.asarray(components["sat_ref_ss"], dtype=np.float64)
     return (
         storativity.astype(np.float64, copy=False),
-        None if sat_ref is None else sat_ref.astype(np.float64, copy=False),
+        sat_ref.astype(np.float64, copy=False),
     )
 
 
@@ -163,16 +139,14 @@ def compute_unconfined_storage_components(
     bc_mask: np.ndarray,
     min_sat: float,
     storage_mode: str,
-    storage_top_threshold: str = STORAGE_TOP_THRESHOLD_GE,
     secant_eps: float = 1.0e-12,
-    above_top_mask_override: np.ndarray | None = None,
 ) -> dict[str, np.ndarray | None]:
     mode = str(storage_mode).strip().lower()
-    threshold_mode = str(storage_top_threshold).strip().lower()
-    if mode not in UNCONFINED_STORAGE_MODES:
-        raise ValueError(f"storage_mode must be one of {sorted(UNCONFINED_STORAGE_MODES)}.")
-    if threshold_mode not in STORAGE_TOP_THRESHOLD_MODES:
-        raise ValueError(f"storage_top_threshold must be one of {sorted(STORAGE_TOP_THRESHOLD_MODES)}.")
+    if mode != UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY:
+        raise ValueError(f"storage_mode must be '{UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY}'.")
+
+    if head_ref is None or bottom is None or top is None:
+        raise ValueError("secant-Sy storage requires head_ref, bottom, and top.")
 
     active_i = np.asarray(active, dtype=np.int32)
     bc_i = np.asarray(bc_mask, dtype=np.int32)
@@ -185,27 +159,6 @@ def compute_unconfined_storage_components(
     sat_old_zero = np.zeros(shape, dtype=np.float64)
     sat_ref_zero = np.zeros(shape, dtype=np.float64)
     sat_ref_ss = np.zeros(shape, dtype=np.float64)
-    full_thickness = None
-    raw_above_top = None
-    effective_above_top = None
-
-    if mode == UNCONFINED_STORAGE_PHREATIC_ONLY:
-        sy_coeff[free] = float(sy)
-        storage_coeff[free] = float(sy)
-        return {
-            "storage_coeff": storage_coeff,
-            "sy_coeff": sy_coeff,
-            "ss_coeff": ss_coeff,
-            "sat_old_zero": sat_old_zero,
-            "sat_ref_zero": sat_ref_zero,
-            "sat_ref_ss": None,
-            "full_thickness": None,
-            "raw_above_top": None,
-            "effective_above_top": None,
-        }
-
-    if head_ref is None or bottom is None or top is None:
-        raise ValueError(f"storage_mode='{mode}' requires head_ref, bottom, and top.")
 
     head_ref_arr = np.asarray(head_ref, dtype=np.float64)
     bottom_arr = np.asarray(bottom, dtype=np.float64)
@@ -228,51 +181,16 @@ def compute_unconfined_storage_components(
     ss_secant[~ss_moving] = float(ss) * sat_ref_ss[~ss_moving]
     ss_secant = np.maximum(ss_secant, 0.0)
 
-    if mode in {UNCONFINED_STORAGE_INTEGRATED_SY_SS, UNCONFINED_STORAGE_MF6_CONVERTIBLE}:
-        sy_coeff[free] = float(sy)
-        ss_coeff[free] = ss_secant[free]
-    elif mode == UNCONFINED_STORAGE_MF6_CONVERTIBLE_TOP_SWITCH:
-        raw_above_top = top_switch_above_mask(
-            head_ref=head_ref_arr,
-            top=top_arr,
-            threshold_mode=threshold_mode,
-            active=active_i,
-            bc_mask=bc_i,
-        )
-        effective_above_top = (
-            np.asarray(above_top_mask_override, dtype=bool)
-            if above_top_mask_override is not None
-            else raw_above_top.copy()
-        )
-        effective_above_top = effective_above_top & free
-        sy_coeff[free] = float(sy)
-        sy_coeff[effective_above_top] = 0.0
-        ss_coeff[free] = ss_secant[free]
-        ss_coeff[effective_above_top] = float(ss) * full_thickness[effective_above_top]
-    elif mode == UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY:
-        sy_coeff_calc = np.zeros(shape, dtype=np.float64)
-        moving = np.abs(dh_ref) > float(secant_eps)
-        sy_coeff_calc[moving] = float(sy) * ((sat_ref_zero[moving] - sat_old_zero[moving]) / dh_ref[moving])
-        fallback_below_top = (
-            (np.abs(dh_ref) <= float(secant_eps)) & (head_ref_arr < top_arr) & (head_ref_arr > bottom_arr)
-        )
-        sy_coeff_calc[fallback_below_top] = float(sy)
-        sy_coeff_calc = np.clip(sy_coeff_calc, 0.0, float(sy))
-        sy_coeff[free] = sy_coeff_calc[free]
-        ss_coeff[free] = ss_secant[free]
-    elif mode == UNCONFINED_STORAGE_MF6_CONVERTIBLE_CROSSING_VOLUME_SY:
-        sy_coeff_calc = np.zeros(shape, dtype=np.float64)
-        moving = np.abs(dh_ref) > float(secant_eps)
-        sy_coeff_calc[moving] = float(sy) * ((sat_ref_zero[moving] - sat_old_zero[moving]) / dh_ref[moving])
-        fallback_below_top = (
-            (np.abs(dh_ref) <= float(secant_eps)) & (head_ref_arr < top_arr) & (head_ref_arr > bottom_arr)
-        )
-        sy_coeff_calc[fallback_below_top] = float(sy)
-        sy_coeff_calc = np.clip(sy_coeff_calc, 0.0, float(sy))
-        sy_coeff[free] = sy_coeff_calc[free]
-        ss_coeff[free] = ss_secant[free]
-    else:
-        raise ValueError(f"unsupported storage_mode '{mode}'.")
+    sy_coeff_calc = np.zeros(shape, dtype=np.float64)
+    moving = np.abs(dh_ref) > float(secant_eps)
+    sy_coeff_calc[moving] = float(sy) * ((sat_ref_zero[moving] - sat_old_zero[moving]) / dh_ref[moving])
+    fallback_below_top = (
+        (np.abs(dh_ref) <= float(secant_eps)) & (head_ref_arr < top_arr) & (head_ref_arr > bottom_arr)
+    )
+    sy_coeff_calc[fallback_below_top] = float(sy)
+    sy_coeff_calc = np.clip(sy_coeff_calc, 0.0, float(sy))
+    sy_coeff[free] = sy_coeff_calc[free]
+    ss_coeff[free] = ss_secant[free]
 
     storage_coeff = sy_coeff + ss_coeff
     storage_coeff[~free] = 0.0
@@ -289,73 +207,6 @@ def compute_unconfined_storage_components(
         "sat_ref_zero": sat_ref_zero,
         "sat_ref_ss": sat_ref_ss,
         "full_thickness": full_thickness,
-        "raw_above_top": raw_above_top,
-        "effective_above_top": effective_above_top,
+        "raw_above_top": None,
+        "effective_above_top": None,
     }
-
-
-def top_switch_above_mask(
-    *,
-    head_ref: np.ndarray,
-    top: np.ndarray,
-    threshold_mode: str = STORAGE_TOP_THRESHOLD_GE,
-    active: np.ndarray | None = None,
-    bc_mask: np.ndarray | None = None,
-) -> np.ndarray:
-    head_ref_arr = np.asarray(head_ref, dtype=np.float64)
-    top_arr = np.asarray(top, dtype=np.float64)
-    mode = str(threshold_mode).strip().lower()
-    if mode == STORAGE_TOP_THRESHOLD_GE:
-        above = head_ref_arr >= top_arr
-    elif mode == STORAGE_TOP_THRESHOLD_GT:
-        above = head_ref_arr > top_arr
-    else:
-        raise ValueError(f"threshold_mode must be one of {sorted(STORAGE_TOP_THRESHOLD_MODES)}.")
-    if active is not None:
-        above = above & (np.asarray(active, dtype=np.int32) != 0)
-    if bc_mask is not None:
-        above = above & (np.asarray(bc_mask, dtype=np.int32) == 0)
-    return above
-
-
-def apply_top_switch_hysteresis(
-    *,
-    raw_above_top: np.ndarray,
-    head_ref: np.ndarray,
-    top: np.ndarray,
-    previous_above_top: np.ndarray | None,
-    hysteresis_eps: float,
-    active: np.ndarray | None = None,
-    bc_mask: np.ndarray | None = None,
-) -> np.ndarray:
-    raw_mask = np.asarray(raw_above_top, dtype=bool)
-    if previous_above_top is None:
-        out = raw_mask.copy()
-    else:
-        head_ref_arr = np.asarray(head_ref, dtype=np.float64)
-        top_arr = np.asarray(top, dtype=np.float64)
-        prev_mask = np.asarray(previous_above_top, dtype=bool)
-        eps = max(float(hysteresis_eps), 0.0)
-        out = raw_mask.copy()
-        out[prev_mask & (head_ref_arr >= (top_arr - eps))] = True
-        out[(~prev_mask) & (head_ref_arr < (top_arr + eps))] = False
-    if active is not None:
-        out = out & (np.asarray(active, dtype=np.int32) != 0)
-    if bc_mask is not None:
-        out = out & (np.asarray(bc_mask, dtype=np.int32) == 0)
-    return out
-
-
-def should_freeze_top_switch(
-    *,
-    changed_fraction: float,
-    stable_iteration_count: int,
-    fraction_tol: float,
-    freeze_after_stable_iterations: int,
-) -> bool:
-    if int(freeze_after_stable_iterations) <= 0:
-        return False
-    return (
-        float(changed_fraction) <= float(fraction_tol)
-        and int(stable_iteration_count) >= int(freeze_after_stable_iterations)
-    )

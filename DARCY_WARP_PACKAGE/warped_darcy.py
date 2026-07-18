@@ -8428,12 +8428,6 @@ class WarpDarcySolver:
             refresh_diag_with_transient_storage: bool = True,
             storage_reference: str = "previous_period",
             unconfined_storage_mode_2d: str | None = None,
-            storage_top_threshold: str = "ge",
-            storage_active_set_strategy: str = "none",
-            storage_hysteresis_eps: float = 0.0,
-            storage_freeze_after_stable_iterations: int = 0,
-            storage_freeze_after_outer: int | None = None,
-            storage_switch_fraction_tol: float = 0.0,
             sy: float | None = None,
             ss: float | None = None,
             accept_on_head_change_only: bool = False,
@@ -8681,42 +8675,13 @@ class WarpDarcySolver:
             storage_reference_mode = str(storage_reference).strip().lower()
             if storage_reference_mode not in {"previous_period", "current_picard"}:
                 raise ValueError("storage_reference must be 'previous_period' or 'current_picard'.")
-            storage_top_threshold_mode = str(storage_top_threshold).strip().lower()
-            if storage_top_threshold_mode not in {"ge", "gt"}:
-                raise ValueError("storage_top_threshold must be 'ge' or 'gt'.")
-            storage_active_set_strategy_mode = str(storage_active_set_strategy).strip().lower()
-            if storage_active_set_strategy_mode not in {"none", "hysteresis", "freeze_when_stable"}:
-                raise ValueError(
-                    "storage_active_set_strategy must be 'none', 'hysteresis', or 'freeze_when_stable'."
-                )
-            storage_hysteresis_eps_f = float(storage_hysteresis_eps)
-            if storage_hysteresis_eps_f < 0.0 or not np.isfinite(storage_hysteresis_eps_f):
-                raise ValueError("storage_hysteresis_eps must be finite and >= 0.")
-            storage_freeze_after_stable_iterations_i = int(storage_freeze_after_stable_iterations)
-            if storage_freeze_after_stable_iterations_i < 0:
-                raise ValueError("storage_freeze_after_stable_iterations must be >= 0.")
-            if storage_freeze_after_outer is None:
-                storage_freeze_after_outer_i = None
-            else:
-                storage_freeze_after_outer_i = int(storage_freeze_after_outer)
-                if storage_freeze_after_outer_i < 1:
-                    raise ValueError("storage_freeze_after_outer must be >= 1 when provided.")
-            storage_switch_fraction_tol_f = float(storage_switch_fraction_tol)
-            if storage_switch_fraction_tol_f < 0.0 or not np.isfinite(storage_switch_fraction_tol_f):
-                raise ValueError("storage_switch_fraction_tol must be finite and >= 0.")
             storage_mode_2d = None if unconfined_storage_mode_2d is None else str(unconfined_storage_mode_2d).strip().lower()
             current_picard_storage = bool(transient) and storage_reference_mode == "current_picard"
             if current_picard_storage:
-                if storage_mode_2d not in {
-                    "integrated_sy_ss",
-                    "mf6_convertible",
-                    "mf6_convertible_top_switch",
-                    "mf6_convertible_secant_sy",
-                }:
+                if storage_mode_2d != "mf6_convertible_secant_sy":
                     raise ValueError(
                         "current_picard storage requires unconfined_storage_mode_2d to be "
-                        "'integrated_sy_ss', 'mf6_convertible', 'mf6_convertible_top_switch', "
-                        "or 'mf6_convertible_secant_sy'."
+                        "'mf6_convertible_secant_sy'."
                     )
                 if sy is None or ss is None:
                     raise ValueError("current_picard storage requires sy and ss.")
@@ -8729,11 +8694,6 @@ class WarpDarcySolver:
             else:
                 sy_f = float("nan")
                 ss_f = float("nan")
-                storage_active_set_strategy_mode = "none"
-                storage_hysteresis_eps_f = 0.0
-                storage_freeze_after_stable_iterations_i = 0
-                storage_freeze_after_outer_i = None
-                storage_switch_fraction_tol_f = 0.0
 
             max_update_f = float(max_head_change_per_outer_iteration)
             if max_update_f <= 0.0 or not np.isfinite(max_update_f):
@@ -8810,10 +8770,7 @@ class WarpDarcySolver:
 
             def _storage_from_picard_head(
                     head_ref_arr: np.ndarray,
-                    *,
-                    previous_above_top_mask: np.ndarray | None = None,
-                    frozen_above_top_mask: np.ndarray | None = None,
-            ) -> dict[str, np.ndarray | None]:
+            ) -> dict[str, np.ndarray]:
                 head_ref64 = np.asarray(head_ref_arr, dtype=np.float64)
                 if ztop_arr is None:
                     raise ValueError("ztop_field is required for current Picard storage.")
@@ -8822,46 +8779,15 @@ class WarpDarcySolver:
                 sat_ref_zero = np.clip(head_ref64 - zbot_arr, 0.0, full_thickness)
                 sat_old_zero = np.clip(head_old64 - zbot_arr, 0.0, full_thickness)
                 sat_ref_ss = np.clip(head_ref64 - zbot_arr, min_sat, full_thickness)
-                raw_above_top = None
-                effective_above_top = None
                 sy_coeff = np.zeros(shape0, dtype=np.float64)
                 ss_coeff = np.zeros(shape0, dtype=np.float64)
-                if storage_mode_2d == "mf6_convertible_top_switch":
-                    raw_above_top = _top_switch_above_mask(
-                        head_ref=head_ref64,
-                        top=ztop_arr,
-                        threshold_mode=storage_top_threshold_mode,
-                        free_mask=free_mask0,
-                    )
-                    if frozen_above_top_mask is not None:
-                        effective_above_top = np.asarray(frozen_above_top_mask, dtype=bool).copy()
-                        effective_above_top[~free_mask0] = False
-                    elif storage_active_set_strategy_mode == "hysteresis":
-                        effective_above_top = _apply_top_switch_hysteresis(
-                            raw_above_top=raw_above_top,
-                            head_ref=head_ref64,
-                            top=ztop_arr,
-                            previous_above_top=previous_above_top_mask,
-                            hysteresis_eps=storage_hysteresis_eps_f,
-                            free_mask=free_mask0,
-                        )
-                    else:
-                        effective_above_top = raw_above_top
-                    sy_coeff[:, :] = sy_f
-                    sy_coeff[effective_above_top] = 0.0
-                    ss_coeff[:, :] = ss_f * sat_ref_ss
-                    ss_coeff[effective_above_top] = ss_f * full_thickness[effective_above_top]
-                elif storage_mode_2d == "mf6_convertible_secant_sy":
-                    dh_ref = head_ref64 - head_old64
-                    moving = np.abs(dh_ref) > 1.0e-12
-                    sy_coeff[moving] = sy_f * ((sat_ref_zero[moving] - sat_old_zero[moving]) / dh_ref[moving])
-                    fallback = (~moving) & (head_ref64 < ztop_arr) & (head_ref64 > zbot_arr)
-                    sy_coeff[fallback] = sy_f
-                    sy_coeff = np.clip(sy_coeff, 0.0, sy_f)
-                    ss_coeff[:, :] = ss_f * sat_ref_ss
-                else:
-                    sy_coeff[:, :] = sy_f
-                    ss_coeff[:, :] = ss_f * sat_ref_ss
+                dh_ref = head_ref64 - head_old64
+                moving = np.abs(dh_ref) > 1.0e-12
+                sy_coeff[moving] = sy_f * ((sat_ref_zero[moving] - sat_old_zero[moving]) / dh_ref[moving])
+                fallback = (~moving) & (head_ref64 < ztop_arr) & (head_ref64 > zbot_arr)
+                sy_coeff[fallback] = sy_f
+                sy_coeff = np.clip(sy_coeff, 0.0, sy_f)
+                ss_coeff[:, :] = ss_f * sat_ref_ss
                 storage = sy_coeff + ss_coeff
                 storage = storage.astype(NP_FLOAT, copy=False)
                 storage[~free_mask0] = NP_FLOAT(0.0)
@@ -8877,8 +8803,6 @@ class WarpDarcySolver:
                 sat_ref_ss[~free_mask0] = 0.0
                 return {
                     "storage": storage,
-                    "raw_above_top": raw_above_top,
-                    "effective_above_top": effective_above_top,
                     "sy_coeff": sy_coeff,
                     "ss_coeff": ss_coeff,
                     "sat_ref_zero": sat_ref_zero,
@@ -9001,12 +8925,6 @@ class WarpDarcySolver:
             T_previous: np.ndarray | None = None
             T_relax = float("nan")
             previous_storage_diag_arr: np.ndarray | None = None
-            previous_top_switch_mask: np.ndarray | None = None
-            frozen_top_switch_mask: np.ndarray | None = None
-            frozen_top_switch_outer_iteration: int | None = None
-            stable_top_switch_iterations = 0
-            max_top_switch_changed_count = 0
-            max_top_switch_changed_fraction = 0.0
             max_storage_diag_change_max = 0.0
             max_storage_diag_change_rms = 0.0
             last_storage_coeff_array: np.ndarray | None = None
@@ -9062,20 +8980,12 @@ class WarpDarcySolver:
 
                 self.update_T_in_place(T_pic)
                 T_previous = T_pic.copy()
-                top_switch_raw_mask = None
-                top_switch_effective_mask = None
                 storage_sy_coeff_arr = None
                 storage_ss_coeff_arr = None
                 storage_reference_head_arr = None
                 if current_picard_storage:
-                    storage_state = _storage_from_picard_head(
-                        h_iter,
-                        previous_above_top_mask=previous_top_switch_mask,
-                        frozen_above_top_mask=frozen_top_switch_mask,
-                    )
+                    storage_state = _storage_from_picard_head(h_iter)
                     storage_coeff_inner = storage_state["storage"]
-                    top_switch_raw_mask = storage_state["raw_above_top"]
-                    top_switch_effective_mask = storage_state["effective_above_top"]
                     storage_sy_coeff_arr = np.asarray(storage_state["sy_coeff"], dtype=np.float64)
                     storage_ss_coeff_arr = np.asarray(storage_state["ss_coeff"], dtype=np.float64)
                     storage_reference_head_arr = np.asarray(storage_state["head_ref"], dtype=np.float64)
@@ -9117,26 +9027,6 @@ class WarpDarcySolver:
                     storage_coeff_mean = None
                     storage_diag_change_max = None
                     storage_diag_change_rms = None
-
-                if top_switch_effective_mask is not None:
-                    free_count = int(np.count_nonzero(free_mask0))
-                    above_top_count = int(np.count_nonzero(top_switch_effective_mask & free_mask0))
-                    above_top_fraction = float(above_top_count / free_count) if free_count > 0 else 0.0
-                    top_switch_changed_count, top_switch_changed_fraction = _storage_active_set_change_metrics(
-                        current_mask=top_switch_effective_mask,
-                        previous_mask=previous_top_switch_mask,
-                        free_mask=free_mask0,
-                    )
-                    max_top_switch_changed_count = max(max_top_switch_changed_count, top_switch_changed_count)
-                    max_top_switch_changed_fraction = max(
-                        max_top_switch_changed_fraction,
-                        top_switch_changed_fraction,
-                    )
-                else:
-                    above_top_count = 0
-                    above_top_fraction = 0.0
-                    top_switch_changed_count = 0
-                    top_switch_changed_fraction = 0.0
 
                 head_lin, info_lin = self.solve_multigrid_kcycle(
                     max_cycles=int(inner_max_cycles),
@@ -9348,32 +9238,6 @@ class WarpDarcySolver:
                 if storage_diag_change_rms is not None:
                     max_storage_diag_change_rms = max(max_storage_diag_change_rms, float(storage_diag_change_rms))
 
-                if top_switch_effective_mask is not None:
-                    if top_switch_changed_fraction <= storage_switch_fraction_tol_f:
-                        stable_top_switch_iterations += 1
-                    else:
-                        stable_top_switch_iterations = 0
-
-                    if (
-                        storage_active_set_strategy_mode == "freeze_when_stable"
-                        and frozen_top_switch_mask is None
-                        and storage_freeze_after_stable_iterations_i > 0
-                        and stable_top_switch_iterations >= storage_freeze_after_stable_iterations_i
-                    ):
-                        frozen_top_switch_mask = np.asarray(top_switch_effective_mask, dtype=bool).copy()
-                        frozen_top_switch_outer_iteration = int(outer_idx + 1)
-
-                    if (
-                        storage_active_set_strategy_mode == "freeze_when_stable"
-                        and frozen_top_switch_mask is None
-                        and storage_freeze_after_outer_i is not None
-                        and int(outer_idx + 1) >= storage_freeze_after_outer_i
-                    ):
-                        frozen_top_switch_mask = np.asarray(top_switch_effective_mask, dtype=bool).copy()
-                        frozen_top_switch_outer_iteration = int(outer_idx + 1)
-                else:
-                    stable_top_switch_iterations = 0
-
                 outer_history.append(
                     {
                         "outer_iteration": int(outer_idx + 1),
@@ -9407,29 +9271,8 @@ class WarpDarcySolver:
                         "mean_saturated_thickness": float(np.nanmean(sat[free_mask0])) if np.any(free_mask0) else float("nan"),
                         "min_transmissivity": float(np.nanmin(T_pic[active_mask])) if np.any(active_mask) else float("nan"),
                         "max_transmissivity": float(np.nanmax(T_pic[active_mask])) if np.any(active_mask) else float("nan"),
-                        "above_top_count": int(above_top_count),
-                        "above_top_fraction": float(above_top_fraction),
-                        "top_switch_changed_count": int(top_switch_changed_count),
-                        "top_switch_changed_fraction": float(top_switch_changed_fraction),
-                        "top_switch_frozen": bool(frozen_top_switch_mask is not None),
-                        "top_switch_frozen_outer_iteration": (
-                            int(frozen_top_switch_outer_iteration)
-                            if frozen_top_switch_outer_iteration is not None
-                            else None
-                        ),
-                        "stable_top_switch_iterations": int(stable_top_switch_iterations),
-                        "storage_active_set_strategy": str(storage_active_set_strategy_mode),
-                        "storage_hysteresis_eps": float(storage_hysteresis_eps_f),
-                        "storage_freeze_after_stable_iterations": int(storage_freeze_after_stable_iterations_i),
-                        "storage_freeze_after_outer": (
-                            int(storage_freeze_after_outer_i)
-                            if storage_freeze_after_outer_i is not None
-                            else None
-                        ),
-                        "storage_switch_fraction_tol": float(storage_switch_fraction_tol_f),
                         "storage_reference": str(storage_reference_mode),
                         "unconfined_storage_mode_2d": storage_mode_2d,
-                        "storage_top_threshold": storage_top_threshold_mode,
                         "storage_coeff_min": storage_coeff_min,
                         "storage_coeff_max": storage_coeff_max,
                         "storage_coeff_mean": storage_coeff_mean,
@@ -9444,8 +9287,6 @@ class WarpDarcySolver:
                 )
 
                 previous_storage_diag_arr = None if storage_coeff_inner is None else np.asarray(storage_inner_diag, dtype=np.float64).copy()
-                if top_switch_effective_mask is not None:
-                    previous_top_switch_mask = np.asarray(top_switch_effective_mask, dtype=bool).copy()
                 if save_transient_diagnostics_b:
                     last_storage_coeff_array = (
                         None if storage_coeff_inner is None else np.asarray(storage_inner_arr, dtype=np.float64).copy()
@@ -9565,44 +9406,6 @@ class WarpDarcySolver:
                     "unconfined_pre_solve_iterations": int(unconfined_pre_solve_iterations_i),
                     "storage_reference": str(storage_reference_mode),
                     "unconfined_storage_mode_2d": storage_mode_2d,
-                    "storage_top_threshold": storage_top_threshold_mode,
-                    "storage_active_set_strategy": str(storage_active_set_strategy_mode),
-                    "storage_hysteresis_eps": float(storage_hysteresis_eps_f),
-                    "storage_freeze_after_stable_iterations": int(storage_freeze_after_stable_iterations_i),
-                    "storage_freeze_after_outer": (
-                        int(storage_freeze_after_outer_i)
-                        if storage_freeze_after_outer_i is not None
-                        else None
-                    ),
-                    "storage_switch_fraction_tol": float(storage_switch_fraction_tol_f),
-                    "top_switch_frozen": bool(frozen_top_switch_mask is not None),
-                    "top_switch_frozen_outer_iteration": (
-                        int(frozen_top_switch_outer_iteration)
-                        if frozen_top_switch_outer_iteration is not None
-                        else None
-                    ),
-                    "max_top_switch_changed_count": int(max_top_switch_changed_count),
-                    "max_top_switch_changed_fraction": float(max_top_switch_changed_fraction),
-                    "last_top_switch_changed_count": (
-                        int(outer_history[-1]["top_switch_changed_count"])
-                        if outer_history
-                        else 0
-                    ),
-                    "last_top_switch_changed_fraction": (
-                        float(outer_history[-1]["top_switch_changed_fraction"])
-                        if outer_history
-                        else 0.0
-                    ),
-                    "last_above_top_count": (
-                        int(outer_history[-1]["above_top_count"])
-                        if outer_history
-                        else 0
-                    ),
-                    "last_above_top_fraction": (
-                        float(outer_history[-1]["above_top_fraction"])
-                        if outer_history
-                        else 0.0
-                    ),
                     "max_storage_diag_change_max": float(max_storage_diag_change_max),
                     "max_storage_diag_change_rms": float(max_storage_diag_change_rms),
                     "save_transient_diagnostics": bool(save_transient_diagnostics_b),
@@ -10340,12 +10143,6 @@ class WarpDarcySolver:
             bc_values: np.ndarray | None = None,
             storage_mode: str = "mf6_convertible_secant_sy",
             storage_reference: str = "current_picard",
-            storage_top_threshold: str = "ge",
-            storage_active_set_strategy: str = "none",
-            storage_hysteresis_eps: float = 0.0,
-            storage_freeze_after_stable_iterations: int = 0,
-            storage_freeze_after_outer: int | None = None,
-            storage_switch_fraction_tol: float = 0.0,
             solve_controls: dict | None = None,
             min_saturated_thickness: float = 0.1,
             save_diagnostics: bool = False,
@@ -10370,12 +10167,6 @@ class WarpDarcySolver:
         :param bc_values: Optional Dirichlet values; defaults to initial heads.
         :param storage_mode: 2D unconfined storage mode passed to the Picard solver.
         :param storage_reference: ``current_picard`` or ``previous_period``.
-        :param storage_top_threshold: ``ge`` or ``gt`` for top-switch semantics.
-        :param storage_active_set_strategy: Active-set strategy for current-Picard storage.
-        :param storage_hysteresis_eps: Hysteresis half-band.
-        :param storage_freeze_after_stable_iterations: Stable-iteration freeze trigger.
-        :param storage_freeze_after_outer: Forced freeze-after-outer trigger.
-        :param storage_switch_fraction_tol: Stable-switch fraction tolerance.
         :param solve_controls: Extra controls forwarded to :meth:`solve`.
         :param min_saturated_thickness: Minimum saturated thickness.
         :param save_diagnostics: Save full-grid storage/reference arrays.
@@ -10418,20 +10209,10 @@ class WarpDarcySolver:
         controls = {} if solve_controls is None else dict(solve_controls)
         save_diagnostics_b = bool(controls.pop("save_transient_diagnostics", save_diagnostics))
         fast_path_controls = dict(controls)
-        # The ``storage_*`` controls are forwarded to ``solve()`` as explicit
-        # keyword arguments below, and the ``predictor_*`` keys are replay-level
-        # controls that ``solve()`` does not accept. Drop both groups from the
-        # forwarded controls so the ``**controls`` spread neither duplicates an
-        # explicit keyword nor injects an unexpected one.
+        # Drop keys consumed by this wrapper or the device fast path so the
+        # ``**controls`` spread forwarded to ``solve()`` does not inject unexpected
+        # keywords.
         for _control_key in (
-            "storage_active_set_strategy",
-            "storage_hysteresis_eps",
-            "storage_freeze_after_stable_iterations",
-            "storage_freeze_after_outer",
-            "storage_switch_fraction_tol",
-            "predictor_max_outer_iterations",
-            "corrector_max_outer_iterations",
-            "predictor_corrector_corrector_strategy",
             "strict_head_residual_tol",
             "practical_head_residual_tol",
             "unconfined_inner_max_cycles_early",
@@ -10536,8 +10317,6 @@ class WarpDarcySolver:
             use_device_fast_path
             and storage_mode == "mf6_convertible_secant_sy"
             and storage_reference == "current_picard"
-            and storage_top_threshold == "ge"
-            and storage_active_set_strategy == "none"
         )
         if fast_path:
             controls = fast_path_controls
@@ -11777,9 +11556,6 @@ class WarpDarcySolver:
                         "storage_specific_storage_formulation": "secant_potential",
                         "unconfined_storage_mode_2d": str(storage_mode),
                         "storage_reference": str(storage_reference),
-                        "storage_top_threshold": str(storage_top_threshold),
-                        "storage_active_set_strategy": str(storage_active_set_strategy),
-                        "storage_freeze_after_outer": storage_freeze_after_outer,
                         "device_side_picard_fast_path_active": True,
                         "unconfined_startup_mode": str(startup_mode),
                         "startup_inner_kcycles": int(startup_inner_cycles),
@@ -11857,12 +11633,6 @@ class WarpDarcySolver:
                     return_info=True,
                     storage_reference=storage_reference,
                     unconfined_storage_mode_2d=storage_mode,
-                    storage_top_threshold=storage_top_threshold,
-                    storage_active_set_strategy=storage_active_set_strategy,
-                    storage_hysteresis_eps=storage_hysteresis_eps,
-                    storage_freeze_after_stable_iterations=storage_freeze_after_stable_iterations,
-                    storage_freeze_after_outer=storage_freeze_after_outer,
-                    storage_switch_fraction_tol=storage_switch_fraction_tol,
                     save_transient_diagnostics=save_diagnostics_b,
                     sy=float(sy),
                     ss=float(ss),
@@ -11928,12 +11698,6 @@ class WarpDarcySolver:
             "total_time": float(time.perf_counter() - total_t0),
             "n_periods": n_periods,
             "storage_reference": storage_reference,
-            "storage_top_threshold": storage_top_threshold,
-            "storage_active_set_strategy": storage_active_set_strategy,
-            "storage_hysteresis_eps": float(storage_hysteresis_eps),
-            "storage_freeze_after_stable_iterations": int(storage_freeze_after_stable_iterations),
-            "storage_freeze_after_outer": storage_freeze_after_outer,
-            "storage_switch_fraction_tol": float(storage_switch_fraction_tol),
             "dt": dt_f,
             "solve_controls": controls,
             "save_diagnostics": bool(save_diagnostics_b),

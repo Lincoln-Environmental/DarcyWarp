@@ -35,14 +35,10 @@ from working_tests.transient_artifacts import (  # noqa: E402
     load_transient_artifact,
 )
 from working_tests.transient_replay_settings import (  # noqa: E402
-    STORAGE_ACTIVE_SET_FREEZE_WHEN_STABLE,
-    STORAGE_ACTIVE_SET_NONE,
     STORAGE_REFERENCE_CURRENT_PICARD,
-    STORAGE_TOP_THRESHOLD_GE,
     default_run_config,
     default_solve_controls,
     production_secant_sy_settings,
-    secant_sy_freeze_settings,
 )
 from working_tests.transient_replay_support import run_replay_from_artifact  # noqa: E402
 
@@ -895,10 +891,6 @@ def _replay_variant_configs(variant_set: str = "full") -> dict:
                 f"secant_sy_nu_{nu_pre}_coarse_{nu_coarse}_max_levels_{max_levels}"
             ] = cfg
         return variants
-    for freeze_after_outer in (2, 3, 4, 5, 6, 8, 10):
-        variants[f"secant_sy_freeze_after_outer_{freeze_after_outer}"] = secant_sy_freeze_settings(
-            freeze_after_outer=freeze_after_outer,
-        )
     return variants
 
 
@@ -919,8 +911,6 @@ WINNING_VARIANT_NAME = "production_secant_sy"
 CONSISTENCY_FIELDS = (
     "unconfined_storage_mode",
     "storage_reference",
-    "storage_top_threshold",
-    "storage_active_set_strategy",
     "unconfined_startup_mode",
     "warm_start",
     "max_cycles",
@@ -950,8 +940,6 @@ def direct_replay_settings() -> dict:
     return {
         "unconfined_storage_mode": production["unconfined_storage_mode"],
         "storage_reference": production["storage_reference"],
-        "storage_top_threshold": production["storage_top_threshold"],
-        "storage_active_set_strategy": production["storage_active_set_strategy"],
         "unconfined_startup_mode": controls["unconfined_startup_mode"],
         "warm_start": production["warm_start_mode"],
         "max_cycles": controls["max_cycles"],
@@ -980,8 +968,6 @@ def winning_variant_settings_from_config(cfg: dict) -> dict:
     return {
         "unconfined_storage_mode": cfg["unconfined_storage_mode"],
         "storage_reference": cfg["storage_reference"],
-        "storage_top_threshold": cfg["storage_top_threshold"],
-        "storage_active_set_strategy": cfg.get("storage_active_set_strategy", STORAGE_ACTIVE_SET_NONE),
         "unconfined_startup_mode": controls["unconfined_startup_mode"],
         "warm_start": cfg.get("warm_start_mode", WARM_START_UNCONFINED_STEADY_MF6),
         "max_cycles": controls["max_cycles"],
@@ -1049,12 +1035,12 @@ def _effective_solver_active_set_strategy(cfg: dict) -> str:
     """
     Return the lower-level solver active-set strategy for a replay config.
 
-    :param cfg: Replay variant config.
-    :return: Strategy passed into the solver.
+    The validated production path always uses ``none``.
+
+    :param cfg: Replay variant config (kept for compatibility).
+    :return: ``none``.
     """
-    if cfg.get("storage_freeze_after_outer") is not None:
-        return STORAGE_ACTIVE_SET_FREEZE_WHEN_STABLE
-    return cfg.get("storage_active_set_strategy", STORAGE_ACTIVE_SET_NONE)
+    return "none"
 
 
 def run_optional_replay_variants(
@@ -1088,12 +1074,6 @@ def run_optional_replay_variants(
             formulation=FORMULATION_UNCONFINED,
             unconfined_storage_mode=cfg["unconfined_storage_mode"],
             storage_reference=cfg["storage_reference"],
-            storage_top_threshold=cfg["storage_top_threshold"],
-            storage_active_set_strategy=_effective_solver_active_set_strategy(cfg),
-            storage_hysteresis_eps=cfg.get("storage_hysteresis_eps", 0.0),
-            storage_freeze_after_stable_iterations=cfg.get("storage_freeze_after_stable_iterations", 0),
-            storage_freeze_after_outer=cfg.get("storage_freeze_after_outer"),
-            storage_switch_fraction_tol=cfg.get("storage_switch_fraction_tol", 0.0),
             allow_warm_start_mismatch=allow_warm_start_mismatch,
             run_config=run_config,
         )
@@ -1113,14 +1093,6 @@ def run_optional_replay_variants(
                 "solve_controls": cfg["solve_controls"],
                 "unconfined_storage_mode": cfg["unconfined_storage_mode"],
                 "storage_reference": cfg["storage_reference"],
-                "storage_top_threshold": cfg["storage_top_threshold"],
-                "storage_active_set_strategy": cfg.get("storage_active_set_strategy", STORAGE_ACTIVE_SET_NONE),
-                "storage_hysteresis_eps": cfg.get("storage_hysteresis_eps", 0.0),
-                "storage_freeze_after_stable_iterations": cfg.get(
-                    "storage_freeze_after_stable_iterations", 0
-                ),
-                "storage_freeze_after_outer": cfg.get("storage_freeze_after_outer"),
-                "storage_switch_fraction_tol": cfg.get("storage_switch_fraction_tol", 0.0),
                 "warm_start_mode": cfg.get("warm_start_mode", WARM_START_UNCONFINED_STEADY_MF6),
             },
             "final": summary.get("comparison", {}).get("final", {}),
@@ -1264,19 +1236,6 @@ def variant_full_metrics(result: dict) -> dict:
     period_1_outer_iterations = int(outer_iters[0]) if outer_iters else None
     period_1_inner_kcycles = int(inner_cycles[0]) if inner_cycles else None
 
-    last_changed = [
-        float(p.get("last_top_switch_changed_fraction", 0.0) or 0.0)
-        for p in periods
-        if isinstance(p, dict)
-    ]
-    max_changed = [
-        float(p.get("max_top_switch_changed_fraction", 0.0) or 0.0)
-        for p in periods
-        if isinstance(p, dict)
-    ]
-    last_top_switch_changed_fraction = last_changed[-1] if last_changed else None
-    max_top_switch_changed_fraction = max(max_changed) if max_changed else None
-
     timing = result.get("timing") or {}
     performance = result.get("performance") or {}
     profile = performance.get("profile") if isinstance(performance, dict) else None
@@ -1349,10 +1308,6 @@ def variant_full_metrics(result: dict) -> dict:
         "period_1_runtime": period_1_runtime,
         "mean_period_runtime": mean_period_runtime,
         "max_period_runtime": max_period_runtime,
-        "last_top_switch_changed_fraction": last_top_switch_changed_fraction,
-        "max_top_switch_changed_fraction": max_top_switch_changed_fraction,
-        "top_switch_frozen": convergence.get("top_switch_frozen"),
-        "top_switch_frozen_outer_iteration": convergence.get("top_switch_frozen_outer_iteration"),
         "strict_picard_convergence_passed": strict_picard_convergence_passed,
         "practical_picard_acceptance_passed": practical_picard_acceptance_passed,
         "production_acceptance_passed": production_acceptance_passed,
@@ -1795,42 +1750,11 @@ def print_variant_full_metrics(name: str, metrics: dict) -> None:
         "period_of_max_rmse", "period_of_max_abs",
         "converged", "nonconverged_periods", "total_outer_iterations", "max_outer_iterations_per_period",
         "period_1_outer_iterations", "runtime", "period_1_runtime", "mean_period_runtime", "max_period_runtime",
-        "last_top_switch_changed_fraction", "max_top_switch_changed_fraction",
-        "top_switch_frozen", "top_switch_frozen_outer_iteration",
         "storage_budget_diagnostics_available", "storage_sign_used",
         "mass_balance_max_abs_percent_discrepancy", "mass_balance_max_abs_in_minus_out",
         "mass_balance_worst_period", "mass_balance_worst_period_percent_discrepancy",
     ):
         print(f"  {key:<34s} = {_fmt_metric(metrics.get(key))}")
-
-
-FREEZE_TABLE_COLUMNS = (
-    "variant", "storage_freeze_after_outer", "top_switch_frozen",
-    "top_switch_frozen_outer_iteration", "converged", "nonconverged_periods",
-    "total_outer_iterations", "max_outer_iterations_per_period", "runtime",
-    "mean_period_runtime", "max_period_runtime",
-    "final_max_abs_diff", "final_rmse", "final_bias",
-    "final_storage_rmse", "final_storage_max_abs",
-    "worst_period", "worst_period_max_abs_diff", "worst_period_rmse",
-    "worst_period_storage_rmse", "worst_period_storage_max_abs",
-    "last_top_switch_changed_fraction", "max_top_switch_changed_fraction",
-)
-
-
-def print_freeze_metrics_table(rows: list[dict]) -> None:
-    """:param rows: per secant-Sy freeze-after-outer variant metric dicts."""
-    if not rows:
-        print("\nSecant-Sy freeze sweep: none run")
-        return
-    print("\nSecant-Sy freeze sweep")
-    header = "  ".join(col for col in FREEZE_TABLE_COLUMNS)
-    print("-" * len(header))
-    print(header)
-    print("-" * len(header))
-    for row in rows:
-        cells = [_fmt_metric(row.get(col)) for col in FREEZE_TABLE_COLUMNS]
-        print("  ".join(cell.rjust(len(col)) for cell, col in zip(cells, FREEZE_TABLE_COLUMNS)))
-    print("-" * len(header))
 
 
 SPEED_TABLE_COLUMNS = (
@@ -1971,7 +1895,6 @@ def main(argv: list[str] | None = None) -> int:
                 "settings": {
                     "unconfined_storage_mode": scalar_string(warp.get("unconfined_storage_mode", NOT_AVAILABLE)),
                     "storage_reference": scalar_string(warp.get("storage_reference", NOT_AVAILABLE)),
-                    "storage_top_threshold": scalar_string(warp.get("storage_top_threshold", STORAGE_TOP_THRESHOLD_GE)),
                 },
                 "final": final_metrics,
                 "worst_period": int(worst_period),
@@ -2008,9 +1931,8 @@ def main(argv: list[str] | None = None) -> int:
         variant_results=variant_results,
     )
 
-    # Full metrics for the production secant-Sy baseline and its freeze sweep.
+    # Full metrics for the production secant-Sy baseline and the speed sweep.
     winning_full_metrics = None
-    secant_freeze_metrics: list[dict] = []
     speed_sweep_metrics: list[dict] = []
     if variant_results:
         winning_result = variant_results.get(WINNING_VARIANT_NAME)
@@ -2020,18 +1942,6 @@ def main(argv: list[str] | None = None) -> int:
             if not isinstance(result, dict) or result.get("skipped"):
                 continue
             full_result = variant_full_metrics(result)
-            if name.startswith("secant_sy_freeze_after_outer_"):
-                settings = result.get("settings") or {}
-                convergence = result.get("convergence") or {}
-                full_result["variant"] = name
-                full_result["storage_freeze_after_outer"] = settings.get("storage_freeze_after_outer")
-                full_result["top_switch_frozen"] = convergence.get("top_switch_frozen")
-                full_result["top_switch_frozen_outer_iteration"] = convergence.get(
-                    "top_switch_frozen_outer_iteration"
-                )
-                full_result["converged"] = convergence.get("converged")
-                full_result["runtime"] = result.get("runtime")
-                secant_freeze_metrics.append(full_result)
             if str(name) == "production_secant_sy" or str(name).startswith("secant_sy_nu_"):
                 speed_sweep_metrics.append(full_result)
     fastest_speed_variant = (
@@ -2057,7 +1967,6 @@ def main(argv: list[str] | None = None) -> int:
         "mf6_semantics": semantics,
         "direct_vs_winning_variant": consistency,
         "winning_variant_full_metrics": winning_full_metrics,
-        "secant_sy_freeze_metrics": secant_freeze_metrics,
         "speed_sweep_metrics": speed_sweep_metrics,
         "fastest_accepted_speed_variant": fastest_speed_variant,
         "default_replay": {
@@ -2070,10 +1979,6 @@ def main(argv: list[str] | None = None) -> int:
             "warm_start_used": scalar_string(warp.get("warm_start_used", NOT_AVAILABLE)),
             "unconfined_storage_mode": scalar_string(warp.get("unconfined_storage_mode", NOT_AVAILABLE)),
             "storage_reference": scalar_string(warp.get("storage_reference", NOT_AVAILABLE)),
-            "storage_top_threshold": scalar_string(warp.get("storage_top_threshold", STORAGE_TOP_THRESHOLD_GE)),
-            "storage_active_set_strategy": scalar_string(
-                warp.get("storage_active_set_strategy", STORAGE_ACTIVE_SET_NONE)
-            ),
         },
         "variant_results": variant_results,
         "diagnosis": diagnosis,
@@ -2116,7 +2021,6 @@ def main(argv: list[str] | None = None) -> int:
     print(json.dumps(semantics, indent=2, default=str))
     if winning_full_metrics is not None:
         print_variant_full_metrics(WINNING_VARIANT_NAME, winning_full_metrics)
-    print_freeze_metrics_table(secant_freeze_metrics)
     print_speed_sweep_table(speed_sweep_metrics)
     if str(args.variant_set).strip().lower() in {"speed", "coarse", "light"}:
         print_fastest_speed_variant(summary=fastest_speed_variant)

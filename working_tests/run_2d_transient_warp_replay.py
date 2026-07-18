@@ -82,9 +82,6 @@ def run_production_replay(
         solve_controls=production_solve_controls,
         unconfined_storage_mode=production_settings["unconfined_storage_mode"],
         storage_reference=production_settings["storage_reference"],
-        storage_top_threshold=production_settings["storage_top_threshold"],
-        storage_active_set_strategy=production_settings["storage_active_set_strategy"],
-        storage_freeze_after_outer=production_settings["storage_freeze_after_outer"],
         allow_warm_start_mismatch=allow_warm_start_mismatch,
         run_config=run_config,
     )

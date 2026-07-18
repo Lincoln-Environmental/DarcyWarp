@@ -27,34 +27,11 @@ PRODUCTION_RUNTIME_TARGET_S = 30.0
 PRODUCTION_RUNTIME_STRETCH_TARGET_S = 20.0
 
 DEFAULT_MIN_SAT = 0.1
-STORAGE_REFERENCE_PREVIOUS_PERIOD = "previous_period"
 STORAGE_REFERENCE_CURRENT_PICARD = "current_picard"
-STORAGE_REFERENCE_MODES = {
-    STORAGE_REFERENCE_PREVIOUS_PERIOD,
-    STORAGE_REFERENCE_CURRENT_PICARD,
-}
-STORAGE_TOP_THRESHOLD_GE = "ge"
-STORAGE_TOP_THRESHOLD_GT = "gt"
-STORAGE_TOP_THRESHOLD_MODES = {
-    STORAGE_TOP_THRESHOLD_GE,
-    STORAGE_TOP_THRESHOLD_GT,
-}
-STORAGE_ACTIVE_SET_NONE = "none"
-STORAGE_ACTIVE_SET_HYSTERESIS = "hysteresis"
-STORAGE_ACTIVE_SET_FREEZE_WHEN_STABLE = "freeze_when_stable"
-STORAGE_ACTIVE_SET_PREDICTOR_CORRECTOR = "predictor_corrector"
-STORAGE_ACTIVE_SET_STRATEGIES = {
-    STORAGE_ACTIVE_SET_NONE,
-    STORAGE_ACTIVE_SET_HYSTERESIS,
-    STORAGE_ACTIVE_SET_FREEZE_WHEN_STABLE,
-    STORAGE_ACTIVE_SET_PREDICTOR_CORRECTOR,
-}
 
 VALIDATED_METHOD_SETTINGS = {
     "unconfined_storage_mode": "mf6_convertible_secant_sy",
     "storage_reference": STORAGE_REFERENCE_CURRENT_PICARD,
-    "storage_top_threshold": STORAGE_TOP_THRESHOLD_GE,
-    "storage_active_set_strategy": STORAGE_ACTIVE_SET_NONE,
     "unconfined_startup_mode": "confined_pre_solve",
     "warm_start": "unconfined_steady_mf6",
 }
@@ -96,14 +73,6 @@ def default_solve_controls() -> dict:
         "min_saturated_thickness": DEFAULT_MIN_SAT,
         "initial_saturated_thickness": 100.0,
         "max_head_change_per_outer_iteration": 10.0,
-        "storage_active_set_strategy": STORAGE_ACTIVE_SET_NONE,
-        "storage_hysteresis_eps": 0.0,
-        "storage_freeze_after_stable_iterations": 0,
-        "storage_freeze_after_outer": None,
-        "storage_switch_fraction_tol": 0.0,
-        "predictor_max_outer_iterations": 5,
-        "corrector_max_outer_iterations": 100,
-        "predictor_corrector_corrector_strategy": STORAGE_ACTIVE_SET_NONE,
         "practical_picard_acceptance_enabled": True,
         "strict_head_residual_tol": 1.0e-6,
         "min_practical_outer_iterations": 8,
@@ -145,20 +114,8 @@ def production_secant_sy_settings() -> dict:
         "solve_controls": default_solve_controls(),
         "unconfined_storage_mode": "mf6_convertible_secant_sy",
         "storage_reference": STORAGE_REFERENCE_CURRENT_PICARD,
-        "storage_top_threshold": STORAGE_TOP_THRESHOLD_GE,
-        "storage_active_set_strategy": STORAGE_ACTIVE_SET_NONE,
-        "storage_freeze_after_outer": None,
         "warm_start_mode": "unconfined_steady_mf6",
     }
-
-
-def secant_sy_freeze_settings(freeze_after_outer: int) -> dict:
-    freeze_after_outer_i = int(freeze_after_outer)
-    if freeze_after_outer_i < 1:
-        raise ValueError("freeze_after_outer must be >= 1.")
-    settings = production_secant_sy_settings()
-    settings["storage_freeze_after_outer"] = freeze_after_outer_i
-    return settings
 
 
 def default_run_config(
