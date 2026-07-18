@@ -110,6 +110,12 @@ def default_solve_controls() -> dict:
         # A*delta = r^k (delta=0 on Dirichlet cells) instead of the full head.
         # Default False until 1M-cell validation confirms the improvement.
         "use_incremental_picard": False,
+        "adaptive_dt_enabled": False,
+        "adaptive_dt_min_fraction": 0.0625,
+        "adaptive_dt_shrink_factor": 0.5,
+        "adaptive_dt_grow_factor": 2.0,
+        "adaptive_dt_strict_max_outer": 6,
+        "adaptive_dt_max_growth_steps": 2,
     }
 
 

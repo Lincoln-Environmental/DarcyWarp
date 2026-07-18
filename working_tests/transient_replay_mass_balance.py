@@ -395,6 +395,17 @@ def compute_replay_mass_balance(
         volume_sy_rows.append(volume_sy_row)
     linearized_cumulative, linearized_worst = summarize_mass_balance_rows(linearized_rows)
     volume_sy_cumulative, volume_sy_worst = summarize_mass_balance_rows(volume_sy_rows)
+    # The endpoint budget evaluates boundary (CHD/GHB) fluxes as instantaneous
+    # rates at the period-end head. That closes exactly for single backward-Euler
+    # steps per period, but NOT for internally sub-stepped periods (adaptive_dt):
+    # the period-average flux is then the mean of sub-step-end fluxes, not the
+    # end-of-period flux. Sub-stepped runs still conserve mass per sub-step; the
+    # endpoint budget simply is not the right integral. Flag it so an apparent
+    # mass-balance failure is not misread as non-conservation.
+    substepped_periods = any(
+        int((info or {}).get("adaptive_dt_substep_count", 0) or 0) > 1
+        for info in (warp_result.get("period_infos") or [])
+    )
     preferred_storage_budget = (
         "volume_sy" if str(unconfined_storage_mode).strip().lower() == "mf6_convertible_secant_sy" else "linearized"
     )
@@ -419,6 +430,14 @@ def compute_replay_mass_balance(
         "worst_period": preferred_worst,
         "max_abs_percent_discrepancy": max_abs_percent_discrepancy,
         "max_abs_in_minus_out": max_abs_in_minus_out,
+        "endpoint_flux_budget_approximation": bool(substepped_periods),
+        "endpoint_flux_budget_note": (
+            "boundary fluxes are instantaneous end-of-period rates, not sub-step-integrated "
+            "period averages; with adaptive_dt sub-stepping the endpoint budget does not close "
+            "even though each sub-step conserves mass"
+            if substepped_periods
+            else ""
+        ),
         "mass_balance_linearized": {
             "per_period": linearized_rows,
             "cumulative": linearized_cumulative,

@@ -611,3 +611,113 @@ def test_incremental_picard_matches_direct_head_path():
     # The two inner-solve strategies must produce the same head field.
     max_abs_diff = float(np.max(np.abs(heads_inc - heads_direct)))
     assert max_abs_diff < 1.0e-5, f"incremental vs direct max abs diff {max_abs_diff}"
+
+
+def _run_adaptive_dt_case(*, recharge: float, adaptive_controls: dict, n_periods: int = 2, dt: float = 86400.0, startup_mode: str = "confined_pre_solve"):
+    from working_tests.transient_replay_settings import default_solve_controls
+
+    solver, k, zbot, ztop, h0, *_ = _build_fast_path_unconfined_solver()
+    sc = default_solve_controls()
+    sc["use_device_transient_fast_path"] = True
+    sc["allow_unaccepted_transient_period"] = True
+    sc["unconfined_startup_mode"] = startup_mode
+    sc.update(adaptive_controls)
+    heads, info = solver.solve_transient_2d_unconfined(
+        initial_head=h0,
+        recharge_rates=np.full(n_periods, recharge, dtype=np.float64),
+        k_field=k, zbot_field=zbot, ztop_field=ztop,
+        sy=0.2, ss=1.0e-4, dt=dt,
+        storage_mode="mf6_convertible_secant_sy",
+        storage_reference="current_picard",
+        solve_controls=sc,
+        return_info=True,
+    )
+    return heads, info
+
+
+@pytest.mark.skipif(not _cuda_available(), reason="CUDA fast path is not available")
+def test_adaptive_dt_is_noop_when_strict_passes_at_full_dt():
+    """On an easy (near-linear) problem strict Picard converges within the strict
+    outer budget at the full period dt, so adaptive sub-stepping must never engage:
+    exactly one sub-step per period at full dt, and heads identical to the
+    adaptive-off run (acceptance point is the same iterate)."""
+    heads_off, info_off = _run_adaptive_dt_case(
+        recharge=5.0e-9, adaptive_controls={"adaptive_dt_enabled": False}
+    )
+    heads_on, info_on = _run_adaptive_dt_case(
+        recharge=5.0e-9, adaptive_controls={"adaptive_dt_enabled": True}
+    )
+    for info in (info_on.get("period_infos") or []):
+        assert info["adaptive_dt_enabled"] is True
+        assert info["adaptive_dt_substep_count"] == 1
+        assert info["adaptive_dt_substep_dts"] == [86400.0]
+        assert info["adaptive_dt_retry_count"] == 0
+    assert np.all(np.isfinite(heads_on))
+    max_abs_diff = float(np.max(np.abs(heads_on - heads_off)))
+    assert max_abs_diff < 1.0e-6, f"adaptive on/off max abs diff {max_abs_diff}"
+
+
+@pytest.mark.skipif(not _cuda_available(), reason="CUDA fast path is not available")
+def test_adaptive_dt_shrink_fallback_bookkeeping_and_reference_match():
+    """With a strict budget of 1 outer iteration and a strong transient, strict
+    acceptance is impossible at any dt. The driver must shrink dt by the shrink
+    factor down to dt_min = period/16 (4 shrinks), then accept each sub-step via
+    practical acceptance at dt_min WITHOUT re-growing afterwards (no retry storm),
+    and the sub-stepped trajectory must match a fixed small-dt reference run."""
+    heads, info = _run_adaptive_dt_case(
+        recharge=5.0e-7,
+        adaptive_controls={
+            "adaptive_dt_enabled": True,
+            "adaptive_dt_strict_max_outer": 1,
+        },
+        # initial_head startup (no confined pre-solve): keeps the first Picard
+        # iteration's residual large so strict acceptance inside the strict budget
+        # genuinely fails, exercising the sub-step machinery.
+        startup_mode="initial_head",
+    )
+    period_infos = info.get("period_infos") or []
+    assert len(period_infos) == 2
+    dt_min = 86400.0 / 16.0
+    for pinfo in period_infos:
+        assert pinfo["adaptive_dt_substep_count"] == 16
+        assert pinfo["adaptive_dt_substep_dts"] == pytest.approx([dt_min] * 16)
+        assert sum(pinfo["adaptive_dt_substep_dts"]) == pytest.approx(86400.0)
+        # 4 shrinks (dt -> dt/2 -> dt/4 -> dt/8 -> dt/16) on the first sub-step only;
+        # a pre-fix regression grew dt again after every practical acceptance and
+        # logged ~18 retries per period (retry storm).
+        assert pinfo["adaptive_dt_retry_count"] == 4
+        assert pinfo["adaptive_dt_practical_fallback_count"] == 16
+        assert pinfo["adaptive_dt_total_outer_iterations"] > 16
+        assert pinfo["strict_picard_convergence_passed"] or pinfo["practical_picard_acceptance_passed"]
+    assert np.all(np.isfinite(heads))
+
+    # Reference: identical physics as 32 fixed periods of dt/16, adaptive off.
+    heads_ref, _ = _run_adaptive_dt_case(
+        recharge=5.0e-7,
+        adaptive_controls={"adaptive_dt_enabled": False},
+        n_periods=32,
+        dt=86400.0 / 16.0,
+        startup_mode="initial_head",
+    )
+    diff = np.abs(heads[-1] - heads_ref[-1])
+    assert float(np.max(diff)) < 1.0e-8, f"sub-stepped vs fixed-dt reference max abs diff {float(np.max(diff))}"
+
+
+@pytest.mark.skipif(not _cuda_available(), reason="CUDA fast path is not available")
+def test_adaptive_dt_rejects_invalid_controls():
+    """Adaptive-dt control validation must reject inconsistent budgets and factors."""
+    with pytest.raises(ValueError, match="adaptive_dt_strict_max_outer must be <="):
+        _run_adaptive_dt_case(
+            recharge=5.0e-9,
+            adaptive_controls={"adaptive_dt_enabled": True, "adaptive_dt_strict_max_outer": 10000},
+        )
+    with pytest.raises(ValueError, match="adaptive_dt_min_fraction"):
+        _run_adaptive_dt_case(
+            recharge=5.0e-9,
+            adaptive_controls={"adaptive_dt_enabled": True, "adaptive_dt_min_fraction": 0.0},
+        )
+    with pytest.raises(ValueError, match="adaptive_dt_shrink_factor"):
+        _run_adaptive_dt_case(
+            recharge=5.0e-9,
+            adaptive_controls={"adaptive_dt_enabled": True, "adaptive_dt_shrink_factor": 1.0},
+        )

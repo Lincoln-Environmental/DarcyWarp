@@ -10288,6 +10288,12 @@ class WarpDarcySolver:
             "use_device_transient_fast_path",
             "profile_transient_fast_path",
             "use_incremental_picard",
+            "adaptive_dt_enabled",
+            "adaptive_dt_min_fraction",
+            "adaptive_dt_shrink_factor",
+            "adaptive_dt_grow_factor",
+            "adaptive_dt_strict_max_outer",
+            "adaptive_dt_max_growth_steps",
         ):
             controls.pop(_control_key, None)
         min_sat = float(controls.get("min_saturated_thickness", min_saturated_thickness))
@@ -10380,6 +10386,7 @@ class WarpDarcySolver:
 
             h_prev_wp = wp.array(head_prev, dtype=WP_FLOAT, device=device)
             h_iter_wp = wp.array(head_prev, dtype=WP_FLOAT, device=device)
+            h_substep_start_wp = wp.array(head_prev, dtype=WP_FLOAT, device=device)
             h_snapshot_wp = wp.array(head_prev, dtype=WP_FLOAT, device=device)
             h_inner_snapshot_wp = wp.array(head_prev, dtype=WP_FLOAT, device=device)
             bottom_wp = wp.array(bottom, dtype=WP_FLOAT, device=device)
@@ -10480,6 +10487,27 @@ class WarpDarcySolver:
             ss_f = float(ss)
             dx_f = float(self.dx)
             dt_f_val = float(dt_f)
+            adaptive_dt_enabled_b = bool(controls.get("adaptive_dt_enabled", False))
+            adaptive_dt_min_fraction_f = float(controls.get("adaptive_dt_min_fraction", 0.0625))
+            adaptive_dt_shrink_factor_f = float(controls.get("adaptive_dt_shrink_factor", 0.5))
+            adaptive_dt_grow_factor_f = float(controls.get("adaptive_dt_grow_factor", 2.0))
+            adaptive_dt_strict_max_outer_i = int(controls.get("adaptive_dt_strict_max_outer", 6))
+            adaptive_dt_max_growth_steps_i = int(controls.get("adaptive_dt_max_growth_steps", 2))
+            if adaptive_dt_enabled_b:
+                if not (0.0 < adaptive_dt_min_fraction_f <= 1.0):
+                    raise ValueError("adaptive_dt_min_fraction must be in (0, 1].")
+                if not (0.0 < adaptive_dt_shrink_factor_f < 1.0):
+                    raise ValueError("adaptive_dt_shrink_factor must be in (0, 1).")
+                if adaptive_dt_grow_factor_f < 1.0:
+                    raise ValueError("adaptive_dt_grow_factor must be >= 1.")
+                if adaptive_dt_strict_max_outer_i < 1:
+                    raise ValueError("adaptive_dt_strict_max_outer must be >= 1.")
+                if adaptive_dt_strict_max_outer_i > max_outer:
+                    raise ValueError(
+                        "adaptive_dt_strict_max_outer must be <= unconfined_max_picard_iter/max_outer."
+                    )
+                if adaptive_dt_max_growth_steps_i < 0:
+                    raise ValueError("adaptive_dt_max_growth_steps must be >= 0.")
 
             if inner_head_residual_tol_min_f < 0.0 or not np.isfinite(inner_head_residual_tol_min_f):
                 raise ValueError("inner_head_residual_tol_min must be non-negative and finite.")
@@ -10552,6 +10580,8 @@ class WarpDarcySolver:
                 info_lin: dict[str, Any],
                 dh_max: float,
                 dh_rms: float,
+                substep_dt: float,
+                require_strict: bool = False,
             ) -> dict[str, Any]:
                 """Refresh the nonlinear operator and evaluate authoritative acceptance."""
                 wp.launch(kernel=copy_field_kernel, dim=dim2d, inputs=[storage_diag_wp, storage_diag_prev_wp, self.nx, self.ny], device=device)
@@ -10568,7 +10598,7 @@ class WarpDarcySolver:
                     dim=dim2d,
                     inputs=[
                         h_iter_wp, h_prev_wp, bottom_wp, top_wp, self.active_wp, self.bc_mask_wp,
-                        sy_f, ss_f, dx_f, dt_f_val, min_sat_f, 1.0e-12, self.nx, self.ny,
+                        sy_f, ss_f, dx_f, substep_dt, min_sat_f, 1.0e-12, self.nx, self.ny,
                         storage_coeff_wp, sy_coeff_wp, ss_coeff_wp, storage_diag_wp, storage_diag_prev_wp,
                         storage_change_sum_sq_buf, storage_change_max_buf,
                     ],
@@ -10597,7 +10627,8 @@ class WarpDarcySolver:
                     inner_solved and dh_max <= hclose and head_rms <= strict_head_residual_tol_f
                 )
                 practical = bool(
-                    _adaptive_practical_acceptance_allowed(
+                    (not require_strict)
+                    and _adaptive_practical_acceptance_allowed(
                         practical_acceptance_enabled=practical_picard_acceptance_enabled_b,
                         adaptive_controller_used=adaptive_used,
                         inner_target_achieved=bool(info_lin.get("inner_target_achieved", False)),
@@ -10622,6 +10653,12 @@ class WarpDarcySolver:
             for period_index in range(n_periods):
                 self.update_uniform_recharge_in_place(float(rates[period_index]))
                 counters["R_device_updates"] += 1
+                wp.launch(
+                    kernel=copy_field_kernel,
+                    dim=dim2d,
+                    inputs=[h_prev_wp, h_substep_start_wp, self.nx, self.ny],
+                    device=device,
+                )
                 if save_diagnostics_b:
                     period_head_old = np.asarray(head_prev, dtype=np.float64).copy()
 
@@ -10775,7 +10812,23 @@ class WarpDarcySolver:
                     "fine_operator_residual_checked": True,
                 }
 
-                for outer_iter in range(max_outer):
+                period_dt_f = dt_f_val
+                remaining_dt_f = period_dt_f
+                current_dt_f = period_dt_f
+                actual_dt_f = period_dt_f
+                dt_min_f = period_dt_f * adaptive_dt_min_fraction_f
+                adaptive_dt_growth_steps_i = 0
+                adaptive_dt_substep_dts: list[float] = []
+                adaptive_dt_retry_count = 0
+                adaptive_dt_practical_fallback_count = 0
+                adaptive_dt_total_outer_iterations_i = 0
+                adaptive_dt_practical_at_min_b = not adaptive_dt_enabled_b
+                substep_outer_limit_i = (
+                    adaptive_dt_strict_max_outer_i if adaptive_dt_enabled_b else max_outer
+                )
+                outer_iter = 0
+                while outer_iter < substep_outer_limit_i:
+                    adaptive_dt_total_outer_iterations_i += 1
                     storage_t0 = _fast_path_phase_start()
                     phase_t0 = _fast_path_phase_start()
                     wp.launch(
@@ -10796,7 +10849,7 @@ class WarpDarcySolver:
                         dim=dim2d,
                         inputs=[
                             h_iter_wp, h_prev_wp, bottom_wp, top_wp, self.active_wp, self.bc_mask_wp,
-                            sy_f, ss_f, dx_f, dt_f_val, min_sat_f, 1.0e-12, self.nx, self.ny,
+                            sy_f, ss_f, dx_f, actual_dt_f, min_sat_f, 1.0e-12, self.nx, self.ny,
                             storage_coeff_wp, sy_coeff_wp, ss_coeff_wp, storage_diag_wp, storage_diag_prev_wp,
                             storage_change_sum_sq_buf, storage_change_max_buf
                         ],
@@ -11467,6 +11520,9 @@ class WarpDarcySolver:
                         ),
                         "legacy_dh_fallback_used": bool(info_lin.get("adaptive_inner_fallback_to_legacy_dh", False)),
                         "inner_cycles_per_block": list(info_lin.get("inner_cycles_per_block", [])),
+                        "adaptive_dt_substep_index": int(len(adaptive_dt_substep_dts)),
+                        "adaptive_dt_substep_dt": float(actual_dt_f),
+                        "adaptive_dt_practical_at_min": bool(adaptive_dt_practical_at_min_b),
                     }
                     if adaptive_inner_config.save_block_history:
                         outer_summary["inner_cycles_per_block"] = list(info_lin.get("inner_cycles_per_block", []))
@@ -11479,12 +11535,18 @@ class WarpDarcySolver:
                             info_lin.get("inner_predicted_cycles_per_block", [])
                         )
                     outer_iteration_summaries.append(outer_summary)
-                    if production_acceptance_passed:
+                    if production_acceptance_passed and (
+                        not adaptive_dt_enabled_b
+                        or strict_picard_convergence_passed
+                        or adaptive_dt_practical_at_min_b
+                    ):
                         refreshed_result = evaluate_refreshed_nonlinear_candidate(
                             outer_iteration=int(outer_iter + 1),
                             info_lin=info_lin,
                             dh_max=last_dh_max,
                             dh_rms=last_dh_rms,
+                            substep_dt=actual_dt_f,
+                            require_strict=bool(adaptive_dt_enabled_b and not adaptive_dt_practical_at_min_b),
                         )
                         outer_summary["refreshed_acceptance_checked"] = True
                         outer_summary["refreshed_acceptance_passed"] = bool(
@@ -11503,8 +11565,104 @@ class WarpDarcySolver:
                                 if strict_picard_convergence_passed else "refreshed_practical_acceptance"
                             )
                             outer_summary["outer_iteration_of_acceptance"] = int(outer_iter + 1)
-                            break
+                            if not adaptive_dt_enabled_b:
+                                break
+                            adaptive_dt_substep_dts.append(float(actual_dt_f))
+                            remaining_dt_f = max(0.0, remaining_dt_f - actual_dt_f)
+                            wp.launch(
+                                kernel=copy_field_kernel,
+                                dim=dim2d,
+                                inputs=[h_iter_wp, h_substep_start_wp, self.nx, self.ny],
+                                device=device,
+                            )
+                            if remaining_dt_f <= max(1.0e-12, period_dt_f * 1.0e-12):
+                                break
+                            wp.launch(
+                                kernel=copy_field_kernel,
+                                dim=dim2d,
+                                inputs=[h_substep_start_wp, h_prev_wp, self.nx, self.ny],
+                                device=device,
+                            )
+                            if refreshed_result["strict_acceptance_passed"] and not adaptive_dt_practical_at_min_b:
+                                # Grow only after a clean strict acceptance (no practical
+                                # fallback touched this sub-step). A sub-step that fell back
+                                # keeps dt at dt_min for the next sub-step instead of
+                                # re-attempting strict at a larger dt and shrinking straight
+                                # back (retry storm / grow-shrink oscillation).
+                                if adaptive_dt_growth_steps_i < adaptive_dt_max_growth_steps_i:
+                                    current_dt_f = min(
+                                        period_dt_f,
+                                        current_dt_f * adaptive_dt_grow_factor_f,
+                                    )
+                                    adaptive_dt_growth_steps_i += 1
+                            actual_dt_f = min(current_dt_f, remaining_dt_f)
+                            if remaining_dt_f - actual_dt_f < dt_min_f:
+                                # Absorb a sub-dt_min sliver into the final sub-step.
+                                actual_dt_f = remaining_dt_f
+                            substep_outer_limit_i = adaptive_dt_strict_max_outer_i
+                            adaptive_dt_practical_at_min_b = False
+                            previous_dh_measure = None
+                            previous_outer_head_residual_rms = None
+                            previous_initial_head_residual_rms = None
+                            previous_outer_dh_rms = None
+                            storage_diag_prev_wp.fill_(WP_FLOAT(0.0))
+                            outer_iter = 0
+                            continue
                         production_acceptance_passed = False
+
+                    if adaptive_dt_enabled_b and outer_iter + 1 >= substep_outer_limit_i:
+                        if actual_dt_f > dt_min_f + max(1.0e-12, period_dt_f * 1.0e-12):
+                            current_dt_f = max(dt_min_f, actual_dt_f * adaptive_dt_shrink_factor_f)
+                            actual_dt_f = min(current_dt_f, remaining_dt_f)
+                            if remaining_dt_f - actual_dt_f < dt_min_f:
+                                # Absorb a sub-dt_min sliver into the final sub-step.
+                                actual_dt_f = remaining_dt_f
+                            adaptive_dt_growth_steps_i = 0
+                            adaptive_dt_retry_count += 1
+                            wp.launch(
+                                kernel=copy_field_kernel,
+                                dim=dim2d,
+                                inputs=[h_substep_start_wp, h_prev_wp, self.nx, self.ny],
+                                device=device,
+                            )
+                            wp.launch(
+                                kernel=copy_field_kernel,
+                                dim=dim2d,
+                                inputs=[h_substep_start_wp, h_iter_wp, self.nx, self.ny],
+                                device=device,
+                            )
+                            storage_diag_prev_wp.fill_(WP_FLOAT(0.0))
+                            previous_dh_measure = None
+                            previous_outer_head_residual_rms = None
+                            previous_initial_head_residual_rms = None
+                            previous_outer_dh_rms = None
+                            outer_iter = 0
+                            continue
+                        if not adaptive_dt_practical_at_min_b:
+                            adaptive_dt_practical_at_min_b = True
+                            adaptive_dt_practical_fallback_count += 1
+                            substep_outer_limit_i = max_outer
+                            wp.launch(
+                                kernel=copy_field_kernel,
+                                dim=dim2d,
+                                inputs=[h_substep_start_wp, h_prev_wp, self.nx, self.ny],
+                                device=device,
+                            )
+                            wp.launch(
+                                kernel=copy_field_kernel,
+                                dim=dim2d,
+                                inputs=[h_substep_start_wp, h_iter_wp, self.nx, self.ny],
+                                device=device,
+                            )
+                            storage_diag_prev_wp.fill_(WP_FLOAT(0.0))
+                            previous_dh_measure = None
+                            previous_outer_head_residual_rms = None
+                            previous_initial_head_residual_rms = None
+                            previous_outer_dh_rms = None
+                            outer_iter = 0
+                            continue
+
+                    outer_iter += 1
 
                 phase_t0 = _fast_path_phase_start()
                 wp.launch(kernel=copy_field_kernel, dim=dim2d, inputs=[storage_diag_wp, storage_diag_prev_wp, self.nx, self.ny], device=device)
@@ -11524,7 +11682,7 @@ class WarpDarcySolver:
                     dim=dim2d,
                     inputs=[
                         h_iter_wp, h_prev_wp, bottom_wp, top_wp, self.active_wp, self.bc_mask_wp,
-                        sy_f, ss_f, dx_f, dt_f_val, min_sat_f, 1.0e-12, self.nx, self.ny,
+                        sy_f, ss_f, dx_f, actual_dt_f, min_sat_f, 1.0e-12, self.nx, self.ny,
                         storage_coeff_wp, sy_coeff_wp, ss_coeff_wp, storage_diag_wp, storage_diag_prev_wp,
                         storage_change_sum_sq_buf, storage_change_max_buf
                     ],
@@ -11635,6 +11793,8 @@ class WarpDarcySolver:
                     info_lin=info_lin,
                     dh_max=last_dh_max,
                     dh_rms=last_dh_rms,
+                    substep_dt=actual_dt_f,
+                    require_strict=bool(adaptive_dt_enabled_b and not adaptive_dt_practical_at_min_b),
                 )
                 strict_picard_convergence_passed = bool(refreshed_result["strict_acceptance_passed"])
                 practical_picard_acceptance_passed = bool(refreshed_result["practical_acceptance_passed"])
@@ -11650,6 +11810,11 @@ class WarpDarcySolver:
                         outer_iteration_summaries[-1]["termination_reason"] = "max_outer_iterations"
 
                 if (not production_acceptance_passed) and (not allow_unaccepted_transient_period_b):
+                    if adaptive_dt_enabled_b and actual_dt_f <= dt_min_f + max(
+                        1.0e-12,
+                        period_dt_f * 1.0e-12,
+                    ):
+                        raise RuntimeError(f"adaptive dt failed at dt_min={dt_min_f}")
                     raise RuntimeError(
                         _format_unaccepted_transient_period_error(
                             period_index=period_index,
@@ -11744,6 +11909,13 @@ class WarpDarcySolver:
                         "unconfined_storage_mode_2d": str(storage_mode),
                         "storage_reference": str(storage_reference),
                         "incremental_picard_enabled": bool(use_incremental_picard),
+                        "adaptive_dt_enabled": bool(adaptive_dt_enabled_b),
+                        "adaptive_dt_min_fraction": float(adaptive_dt_min_fraction_f),
+                        "adaptive_dt_retry_count": int(adaptive_dt_retry_count),
+                        "adaptive_dt_practical_fallback_count": int(adaptive_dt_practical_fallback_count),
+                        "adaptive_dt_total_outer_iterations": int(adaptive_dt_total_outer_iterations_i),
+                        "adaptive_dt_substep_count": int(len(adaptive_dt_substep_dts)),
+                        "adaptive_dt_substep_dts": [float(value) for value in adaptive_dt_substep_dts],
                         "device_side_picard_fast_path_active": True,
                         "unconfined_startup_mode": str(startup_mode),
                         "startup_inner_kcycles": int(startup_inner_cycles),
@@ -11831,6 +12003,8 @@ class WarpDarcySolver:
                 counters["head_downloads"] += 1
                 head_arr = np.asarray(head, dtype=np.float64)
                 info_out = dict(info) if isinstance(info, dict) else {}
+                info_out.setdefault("incremental_picard_enabled", False)
+                info_out.setdefault("adaptive_dt_enabled", False)
                 storage_ref = info_out.pop("storage_reference_head_last_linearization_array", None)
                 storage_coeff = info_out.pop("storage_coeff_last_linearization_array", None)
                 sy_coeff = info_out.pop("sy_storage_coeff_last_linearization_array", None)

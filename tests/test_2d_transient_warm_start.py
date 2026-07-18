@@ -161,6 +161,12 @@ def test_default_solve_controls_include_full_kcycle_and_unconfined_settings():
         "allow_unaccepted_transient_period": False,
         "use_device_transient_fast_path": True,
         "use_incremental_picard": False,
+        "adaptive_dt_enabled": False,
+        "adaptive_dt_min_fraction": 0.0625,
+        "adaptive_dt_shrink_factor": 0.5,
+        "adaptive_dt_grow_factor": 2.0,
+        "adaptive_dt_strict_max_outer": 6,
+        "adaptive_dt_max_growth_steps": 2,
     }
     assert controls == expected
 

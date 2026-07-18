@@ -1,5 +1,5 @@
-
-g# DarcyWarp — Agent System Memory
+kimi --model kimi-code/k3
+# DarcyWarp — Agent System Memory
 
 > Last updated: 2026-07-18 by ingest of the full repo.
 > Purpose: prevent re-ingesting the project from scratch. Read this first, then grep/read the specific files listed below.
@@ -110,6 +110,17 @@ tests/
   path — it matches direct to ~machine precision but does **not** improve the 1M-cell
   case, because the adaptive inner controller drives both forms to the same residual
   target (hence the same iterate). Kept off by default.
+- Optional `adaptive_dt_enabled` (default **False**): per-period sub-stepping with
+  strict-first acceptance, shrink-to-`dt_min` and practical fallback at `dt_min`
+  (controls `adaptive_dt_*` in `transient_replay_settings.py`). Audited 2026-07-18:
+  the driver is mechanically correct (reproduces fixed-small-dt integration; no-op
+  on easy problems) but **cannot fix the 1M-cell accuracy failure** — sub-stepping
+  converges to the true transient while the MF6 artifact is one backward-Euler step
+  per period, so accuracy-vs-MF6 degrades to ~0.1 m RMSE. Kept off by default.
+  Mass-balance reporting for sub-stepped runs carries
+  `endpoint_flux_budget_approximation: true` (endpoint-flux budget is a metric
+  artifact there, not non-conservation). See `TRANSIENT_STATUS.md` § Adaptive
+  timestepping.
 
 ### Adaptive inner controller
 
