@@ -1,4 +1,5 @@
-# DarcyWarp — Agent System Memory
+
+g# DarcyWarp — Agent System Memory
 
 > Last updated: 2026-07-18 by ingest of the full repo.
 > Purpose: prevent re-ingesting the project from scratch. Read this first, then grep/read the specific files listed below.
