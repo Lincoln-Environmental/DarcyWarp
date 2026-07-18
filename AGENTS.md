@@ -104,6 +104,12 @@ tests/
   - `unconfined_storage_mode="mf6_convertible_secant_sy"`
   - `storage_reference="current_picard"`
   - GHB disabled.
+- Optional `use_incremental_picard` (default **False**): solve the inner system for the
+  correction `A·δ = r^k` (δ=0 on Dirichlet cells) instead of the full head
+  (`apply_relaxed_correction_kernel`). Validated **accuracy-neutral** vs the direct
+  path — it matches direct to ~machine precision but does **not** improve the 1M-cell
+  case, because the adaptive inner controller drives both forms to the same residual
+  target (hence the same iterate). Kept off by default.
 
 ### Adaptive inner controller
 

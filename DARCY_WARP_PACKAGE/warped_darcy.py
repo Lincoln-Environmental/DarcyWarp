@@ -4070,6 +4070,51 @@ def apply_relaxed_clipped_picard_update_kernel(
 
 
 @wp.kernel
+def apply_relaxed_correction_kernel(
+    previous_head: wp.array(dtype=WP_FLOAT, ndim=2),
+    correction: wp.array(dtype=WP_FLOAT, ndim=2),
+    active: wp.array(dtype=wp.int32, ndim=2),
+    bc_mask: wp.array(dtype=wp.int32, ndim=2),
+    bc_values: wp.array(dtype=WP_FLOAT, ndim=2),
+    omega: WP_FLOAT,
+    max_head_change: WP_FLOAT,
+    nx: int,
+    ny: int,
+    output_head: wp.array(dtype=WP_FLOAT, ndim=2),
+):
+    """Incremental-Picard relaxed correction.
+
+    ``output = previous + omega * clip(correction)`` for active non-BC cells,
+    ``bc_values`` for Dirichlet cells, 0 for inactive cells. Mirrors
+    :func:`apply_relaxed_clipped_picard_update_kernel` but consumes the
+    correction ``delta`` directly (the inner solve already produced
+    ``h_lin - h^k``). With ``omega = 1`` and a very large ``max_head_change``
+    this also serves as the per-block ``h_iter = h^k + delta`` sync used by
+    the adaptive inner controller while it solves for ``delta``.
+    """
+    j, i = wp.tid()
+    if j >= ny or i >= nx:
+        return
+
+    if active[j, i] == 0:
+        output_head[j, i] = WP_FLOAT(0.0)
+        return
+
+    if bc_mask[j, i] != 0:
+        output_head[j, i] = bc_values[j, i]
+        return
+
+    raw_update = omega * correction[j, i]
+    if wp.isnan(raw_update):
+        raw_update = WP_FLOAT(0.0)
+    if raw_update > max_head_change:
+        raw_update = max_head_change
+    elif raw_update < -max_head_change:
+        raw_update = -max_head_change
+    output_head[j, i] = previous_head[j, i] + raw_update
+
+
+@wp.kernel
 def clamp_unconfined_head_kernel(
     head: wp.array(dtype=WP_FLOAT, ndim=2),
     bottom: wp.array(dtype=WP_FLOAT, ndim=2),
@@ -10242,6 +10287,7 @@ class WarpDarcySolver:
             "allow_unaccepted_transient_period",
             "use_device_transient_fast_path",
             "profile_transient_fast_path",
+            "use_incremental_picard",
         ):
             controls.pop(_control_key, None)
         min_sat = float(controls.get("min_saturated_thickness", min_saturated_thickness))
@@ -10313,6 +10359,12 @@ class WarpDarcySolver:
         last_info: dict = {}
 
         use_device_fast_path = bool(fast_path_controls.get("use_device_transient_fast_path", False))
+        use_incremental_picard = bool(fast_path_controls.get("use_incremental_picard", False))
+        # Per-block h_iter = h^k + delta sync clip: large enough to be a no-op so
+        # the residual check sees the true current head iterate (delta is a head
+        # correction, bounded by the domain scale; the final relaxed update does
+        # the real clipping via max_head_change_per_outer_iteration).
+        incremental_picard_sync_max_change = 1.0e9
         fast_path = (
             use_device_fast_path
             and storage_mode == "mf6_convertible_secant_sy"
@@ -10340,6 +10392,17 @@ class WarpDarcySolver:
             sy_coeff_wp = wp.zeros((self.ny, self.nx), dtype=WP_FLOAT, device=device)
             ss_coeff_wp = wp.zeros((self.ny, self.nx), dtype=WP_FLOAT, device=device)
             rhs_eff_wp = wp.zeros((self.ny, self.nx), dtype=WP_FLOAT, device=device)
+
+            # Incremental-Picard (correction) scratch buffers. ``delta_wp`` holds
+            # the per-outer-iteration correction solved from ``A*delta = r^k``;
+            # ``residual_wp`` holds the nonlinear residual field ``b - A*h^k``;
+            # ``zero_bc_values_wp`` pins the correction to 0 on Dirichlet cells;
+            # ``delta_snapshot_wp`` supports adaptive-block rollback. Allocated
+            # unconditionally (cheap) and only touched when ``use_incremental_picard``.
+            delta_wp = wp.zeros((self.ny, self.nx), dtype=WP_FLOAT, device=device)
+            residual_wp = wp.zeros((self.ny, self.nx), dtype=WP_FLOAT, device=device)
+            zero_bc_values_wp = wp.zeros((self.ny, self.nx), dtype=WP_FLOAT, device=device)
+            delta_snapshot_wp = wp.zeros((self.ny, self.nx), dtype=WP_FLOAT, device=device)
 
             storage_change_sum_sq_buf = wp.zeros(1, dtype=wp.float64, device=device)
             storage_change_max_buf = wp.zeros(1, dtype=wp.float64, device=device)
@@ -10786,6 +10849,33 @@ class WarpDarcySolver:
                     rhs_assembly_seconds += _fast_path_phase_elapsed(rhs_t0)
 
                     wp.launch(kernel=copy_field_kernel, dim=dim2d, inputs=[h_iter_wp, h_snapshot_wp, self.nx, self.ny], device=device)
+                    # Incremental Picard: materialise the nonlinear residual field
+                    # r^k = b - A*h^k (h_snapshot == h^k here) and reset the correction
+                    # to zero, so the inner solve targets A*delta = r^k with delta=0 on
+                    # Dirichlet cells. rhs_rTr_buf is reused as an unread scratch for the
+                    # kernel's rTr reduction; it is re-zeroed before any later read.
+                    if use_incremental_picard:
+                        wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[rhs_rTr_buf], device=device)
+                        wp.launch(
+                            kernel=compute_residual_kernel,
+                            dim=dim2d,
+                            inputs=[
+                                h_snapshot_wp,
+                                rhs_eff_wp,
+                                self.T_wp,
+                                self.active_wp,
+                                self.bc_mask_wp,
+                                self.mg_levels[0].gh_mask_wp,
+                                self.mg_levels[0].ghb_factor_wp,
+                                storage_diag_wp,
+                                residual_wp,
+                                rhs_rTr_buf,
+                                self.nx,
+                                self.ny,
+                            ],
+                            device=device,
+                        )
+                        wp.launch(kernel=zero_field_kernel, dim=dim2d, inputs=[delta_wp, self.nx, self.ny], device=device)
                     adaptive_fallback_reason = ""
                     adaptive_controller_used = bool(adaptive_inner_config.enabled)
                     legacy_dh_fallback_used = False
@@ -10843,6 +10933,68 @@ class WarpDarcySolver:
 
                             def _run_adaptive_block(block_cycles: int) -> dict[str, Any]:
                                 nonlocal inner_solver_seconds
+                                if use_incremental_picard:
+                                    # Snapshot the running correction so a divergent
+                                    # block can be rolled back; continue delta in place.
+                                    wp.launch(
+                                        kernel=copy_field_kernel,
+                                        dim=dim2d,
+                                        inputs=[delta_wp, delta_snapshot_wp, self.nx, self.ny],
+                                        device=device,
+                                    )
+                                    block_controls = dict(controls)
+                                    block_controls["max_cycles"] = int(block_cycles)
+                                    block_controls["check_every_no"] = int(block_cycles)
+                                    block_controls["coarse_operator_mode"] = fast_path_coarse_operator_mode
+                                    block_t0 = _fast_path_phase_start()
+                                    block_info = self._solve_multigrid_kcycle_device_buffers(
+                                        x_wp=delta_wp,
+                                        rhs_wp=residual_wp,
+                                        T_wp=self.T_wp,
+                                        storage_diag_wp=storage_diag_wp,
+                                        active_wp=self.active_wp,
+                                        bc_mask_wp=self.bc_mask_wp,
+                                        bc_values_wp=zero_bc_values_wp,
+                                        levels=self.mg_levels,
+                                        solve_controls=block_controls,
+                                        return_scalar_info=False,
+                                    )
+                                    inner_solver_seconds += _fast_path_phase_elapsed(block_t0)
+                                    # Sync h_iter = h^k + delta so the (unchanged) residual
+                                    # check measures ||b - A*(h^k + delta)|| = ||r^k - A*delta||.
+                                    wp.launch(
+                                        kernel=apply_relaxed_correction_kernel,
+                                        dim=dim2d,
+                                        inputs=[
+                                            h_snapshot_wp,
+                                            delta_wp,
+                                            self.active_wp,
+                                            self.bc_mask_wp,
+                                            self.bc_values_wp,
+                                            WP_FLOAT(1.0),
+                                            WP_FLOAT(incremental_picard_sync_max_change),
+                                            self.nx,
+                                            self.ny,
+                                            h_iter_wp,
+                                        ],
+                                        device=device,
+                                    )
+                                    residual_t0 = _fast_path_phase_start()
+                                    head_rms_after, flow_rms_after, _, head_nonfinite_after = _fast_path_head_residual_check()
+                                    inner_solver_seconds += _fast_path_phase_elapsed(residual_t0)
+                                    return {
+                                        "actual_cycles": int(
+                                            block_info["n_cycles_used"]
+                                            if block_info.get("n_cycles_used") is not None else block_cycles
+                                        ),
+                                        "residual_after_rms": float(head_rms_after),
+                                        "relative_flow_residual_rms": float(flow_rms_after),
+                                        "rollback_required": bool(
+                                            head_nonfinite_after or (not np.isfinite(head_rms_after))
+                                        ),
+                                        "head_nonfinite": bool(head_nonfinite_after),
+                                        "numerical_breakdown": False,
+                                    }
                                 wp.launch(
                                     kernel=copy_field_kernel,
                                     dim=dim2d,
@@ -10885,6 +11037,14 @@ class WarpDarcySolver:
                                 }
 
                             def _rollback_adaptive_block() -> None:
+                                if use_incremental_picard:
+                                    wp.launch(
+                                        kernel=copy_field_kernel,
+                                        dim=dim2d,
+                                        inputs=[delta_snapshot_wp, delta_wp, self.nx, self.ny],
+                                        device=device,
+                                    )
+                                    return
                                 wp.launch(
                                     kernel=copy_field_kernel,
                                     dim=dim2d,
@@ -11027,14 +11187,22 @@ class WarpDarcySolver:
 
                         if inner_max_cycles_i > 0:
                             inner_t0 = _fast_path_phase_start()
+                            if use_incremental_picard:
+                                _legacy_x_wp = delta_wp
+                                _legacy_rhs_wp = residual_wp
+                                _legacy_bc_values_wp = zero_bc_values_wp
+                            else:
+                                _legacy_x_wp = h_iter_wp
+                                _legacy_rhs_wp = rhs_eff_wp
+                                _legacy_bc_values_wp = self.bc_values_wp
                             info_lin = self._solve_multigrid_kcycle_device_buffers(
-                                x_wp=h_iter_wp,
-                                rhs_wp=rhs_eff_wp,
+                                x_wp=_legacy_x_wp,
+                                rhs_wp=_legacy_rhs_wp,
                                 T_wp=self.T_wp,
                                 storage_diag_wp=storage_diag_wp,
                                 active_wp=self.active_wp,
                                 bc_mask_wp=self.bc_mask_wp,
-                                bc_values_wp=self.bc_values_wp,
+                                bc_values_wp=_legacy_bc_values_wp,
                                 levels=self.mg_levels,
                                 solve_controls=inner_controls,
                                 return_scalar_info=False
@@ -11105,23 +11273,42 @@ class WarpDarcySolver:
                         maximum_inner_kcycles_in_one_outer_iteration,
                         inner_cycles_used_i,
                     )
-                    wp.launch(
-                        kernel=apply_relaxed_clipped_picard_update_kernel,
-                        dim=dim2d,
-                        inputs=[
-                            h_iter_wp,
-                            h_snapshot_wp,
-                            self.active_wp,
-                            self.bc_mask_wp,
-                            self.bc_values_wp,
-                            WP_FLOAT(omega_current_f),
-                            WP_FLOAT(max_update_f),
-                            self.nx,
-                            self.ny,
-                            h_iter_wp,
-                        ],
-                        device=device,
-                    )
+                    if use_incremental_picard:
+                        wp.launch(
+                            kernel=apply_relaxed_correction_kernel,
+                            dim=dim2d,
+                            inputs=[
+                                h_snapshot_wp,
+                                delta_wp,
+                                self.active_wp,
+                                self.bc_mask_wp,
+                                self.bc_values_wp,
+                                WP_FLOAT(omega_current_f),
+                                WP_FLOAT(max_update_f),
+                                self.nx,
+                                self.ny,
+                                h_iter_wp,
+                            ],
+                            device=device,
+                        )
+                    else:
+                        wp.launch(
+                            kernel=apply_relaxed_clipped_picard_update_kernel,
+                            dim=dim2d,
+                            inputs=[
+                                h_iter_wp,
+                                h_snapshot_wp,
+                                self.active_wp,
+                                self.bc_mask_wp,
+                                self.bc_values_wp,
+                                WP_FLOAT(omega_current_f),
+                                WP_FLOAT(max_update_f),
+                                self.nx,
+                                self.ny,
+                                h_iter_wp,
+                            ],
+                            device=device,
+                        )
 
                     outer_check_t0 = _fast_path_phase_start()
                     wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[dh_rms_buf], device=device)
@@ -11556,6 +11743,7 @@ class WarpDarcySolver:
                         "storage_specific_storage_formulation": "secant_potential",
                         "unconfined_storage_mode_2d": str(storage_mode),
                         "storage_reference": str(storage_reference),
+                        "incremental_picard_enabled": bool(use_incremental_picard),
                         "device_side_picard_fast_path_active": True,
                         "unconfined_startup_mode": str(startup_mode),
                         "startup_inner_kcycles": int(startup_inner_cycles),

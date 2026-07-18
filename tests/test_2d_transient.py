@@ -526,3 +526,88 @@ def test_2d_transient_replay_steps_periods_and_responds_to_recharge(monkeypatch)
     )
     active = spatial["active"] != 0
     assert float(high["heads_final"][active].mean()) > float(low["heads_final"][active].mean())
+
+
+def _cuda_available() -> bool:
+    if not _warp_available():
+        return False
+    try:
+        import warp as wp
+
+        return bool(wp.is_cuda_available())
+    except Exception:
+        return False
+
+
+def _build_fast_path_unconfined_solver(nx=64, ny=48):
+    from DARCY_WARP_PACKAGE.warped_darcy import WarpDarcySolver
+
+    solver = WarpDarcySolver(
+        nx=nx, ny=ny, dx=100.0, device="cuda:0",
+        use_ghb=False, solver_type="kcycle", diag_preconditioner_backend="host",
+    )
+    active = np.ones((ny, nx), dtype=np.int32)
+    bc_mask = np.zeros((ny, nx), dtype=np.int32)
+    bc_values = np.zeros((ny, nx), dtype=np.float64)
+    bc_mask[:, 0] = 1
+    bc_mask[:, -1] = 1
+    bc_values[:, 0] = 12.0
+    bc_values[:, -1] = 11.0
+    solver.build_from_fields(
+        T_field=np.full((ny, nx), 10.0, dtype=np.float64),
+        R_field=np.full((ny, nx), 1.0e-5, dtype=np.float64),
+        active=active, bc_mask=bc_mask, bc_values=bc_values,
+    )
+    zbot = np.zeros((ny, nx), dtype=np.float64)
+    ztop = np.full((ny, nx), 20.0, dtype=np.float64)
+    k = np.full((ny, nx), 1.0, dtype=np.float64)
+    h0 = np.full((ny, nx), 11.5, dtype=np.float64)
+    h0[:, 0] = 12.0
+    h0[:, -1] = 11.0
+    return solver, k, zbot, ztop, h0
+
+
+def _run_fast_path(inc: bool):
+    from working_tests.transient_replay_settings import default_solve_controls
+
+    solver, k, zbot, ztop, h0, *_ = _build_fast_path_unconfined_solver()
+    sc = default_solve_controls()
+    sc["use_device_transient_fast_path"] = True
+    sc["use_incremental_picard"] = inc
+    sc["allow_unaccepted_transient_period"] = True
+    heads, info = solver.solve_transient_2d_unconfined(
+        initial_head=h0,
+        # Near-linear: tiny recharge, 1-day step -> dh tiny, T/storage_diag ~constant,
+        # Picard converges in ~1 outer iteration so the incremental (correction) and
+        # direct-head inner solves must agree to ~machine precision.
+        recharge_rates=np.array([5.0e-9, 5.0e-9], dtype=np.float64),
+        k_field=k, zbot_field=zbot, ztop_field=ztop,
+        sy=0.2, ss=1.0e-4, dt=86400.0,
+        storage_mode="mf6_convertible_secant_sy",
+        storage_reference="current_picard",
+        solve_controls=sc,
+        return_info=True,
+    )
+    return heads, info
+
+
+@pytest.mark.skipif(not _cuda_available(), reason="CUDA fast path is not available")
+def test_incremental_picard_matches_direct_head_path():
+    """The incremental Picard form (solve A*delta = r^k, delta=0 on Dirichlet) is
+    mathematically equivalent to the direct-head form when the inner solve is exact.
+    On a near-linear problem both must agree to ~machine precision, and the
+    ``incremental_picard_enabled`` flag must be reported per period."""
+    heads_direct, info_direct = _run_fast_path(inc=False)
+    heads_inc, info_inc = _run_fast_path(inc=True)
+
+    assert np.all(np.isfinite(heads_direct)) and np.all(np.isfinite(heads_inc))
+
+    period_infos_direct = info_direct.get("period_infos") or []
+    period_infos_inc = info_inc.get("period_infos") or []
+    assert period_infos_direct and period_infos_inc
+    assert period_infos_direct[0]["incremental_picard_enabled"] is False
+    assert period_infos_inc[0]["incremental_picard_enabled"] is True
+
+    # The two inner-solve strategies must produce the same head field.
+    max_abs_diff = float(np.max(np.abs(heads_inc - heads_direct)))
+    assert max_abs_diff < 1.0e-5, f"incremental vs direct max abs diff {max_abs_diff}"

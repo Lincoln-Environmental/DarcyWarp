@@ -160,6 +160,7 @@ def test_default_solve_controls_include_full_kcycle_and_unconfined_settings():
         "adaptive_inner_save_block_history": False,
         "allow_unaccepted_transient_period": False,
         "use_device_transient_fast_path": True,
+        "use_incremental_picard": False,
     }
     assert controls == expected
 

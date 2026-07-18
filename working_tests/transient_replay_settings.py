@@ -106,6 +106,10 @@ def default_solve_controls() -> dict:
         "adaptive_inner_save_block_history": False,
         "allow_unaccepted_transient_period": False,
         "use_device_transient_fast_path": True,
+        # Incremental Picard: solve the inner system for the correction
+        # A*delta = r^k (delta=0 on Dirichlet cells) instead of the full head.
+        # Default False until 1M-cell validation confirms the improvement.
+        "use_incremental_picard": False,
     }
 
 
