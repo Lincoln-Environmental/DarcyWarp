@@ -52,6 +52,7 @@ from DARCY_WARP_PACKAGE.model_builder import (  # noqa: E402
     _build_domain,
     _create_chd_single_period,
     _model_bottom,
+    make_ugly_T_field,
 )
 from DARCY_WARP_PACKAGE.project_base import data_store, require_mf6  # noqa: E402
 
@@ -72,6 +73,16 @@ MF6_MODEL_NAME = "tr2d_truth"
 FORMULATION_CONFINED = "confined"
 FORMULATION_UNCONFINED = "unconfined"
 FORMULATION_MODES = {FORMULATION_CONFINED, FORMULATION_UNCONFINED}
+# Transmissivity/conductivity field specification. ``ugly_t`` adopts the hard
+# heterogeneous T field from the confined steady-state benchmarks
+# (``model_builder.make_ugly_T_field``), converted to K via
+# ``K = T / initial_saturated_thickness`` — the same convention as
+# ``export_mf6_truth_npz.py`` (``hk = t_field / thickness``).
+T_FIELD_HOMOGENEOUS = "homogeneous"
+T_FIELD_UGLY = "ugly_t"
+T_FIELD_MODES = {T_FIELD_HOMOGENEOUS, T_FIELD_UGLY}
+DEFAULT_T_FIELD_KIND = T_FIELD_HOMOGENEOUS
+DEFAULT_T_FIELD_SEED = 42
 WARM_START_ARTIFACT_INITIAL = "artifact_initial"
 WARM_START_CONFINED_STEADY_MF6 = "confined_steady_mf6"
 WARM_START_UNCONFINED_STEADY_MF6 = "unconfined_steady_mf6"
@@ -146,6 +157,8 @@ class TransientCase:
     steady_recharge_rate: float
     recharge_depths: np.ndarray   # (n_weeks,) m
     recharge_rates: np.ndarray    # (n_weeks,) m/day
+    t_field_kind: str = T_FIELD_HOMOGENEOUS
+    t_field_seed: int = DEFAULT_T_FIELD_SEED
 
 
 def build_transient_unconfined_case(
@@ -160,6 +173,8 @@ def build_transient_unconfined_case(
     annual_recharge_m: float = ANNUAL_RECHARGE_M,
     recharge_schedule_weeks: int = RECHARGE_SCHEDULE_WEEKS,
     dt_days: float = DT_DAYS,
+    t_field_kind: str = DEFAULT_T_FIELD_KIND,
+    t_field_seed: int = DEFAULT_T_FIELD_SEED,
     workspace: str | Path | None = None,
 ) -> TransientCase:
     """
@@ -184,7 +199,19 @@ def build_transient_unconfined_case(
     bc_values = np.zeros((int(ny), int(nx)), dtype=np.float64)
     bc_values[bc_bool] = top[bc_bool]
 
-    k_field = np.full((int(ny), int(nx)), float(hydraulic_conductivity), dtype=np.float64)
+    t_field_kind = str(t_field_kind).strip().lower()
+    if t_field_kind not in T_FIELD_MODES:
+        raise ValueError(f"t_field_kind must be one of {sorted(T_FIELD_MODES)}.")
+    if t_field_kind == T_FIELD_UGLY:
+        # Hard heterogeneous T from the confined steady-state benchmarks
+        # (make_ugly_T_field: lognormal correlated noise, high-T diagonal
+        # channel, low-T lenses, clipped to [1, 1e5] m2/d), converted to K
+        # with the benchmark convention hk = T / thickness.
+        t_field = make_ugly_T_field(nx=int(nx), ny=int(ny), domain=active, seed=int(t_field_seed))
+        thickness = max(float(initial_saturated_thickness), 0.1)
+        k_field = np.asarray(t_field, dtype=np.float64) / thickness
+    else:
+        k_field = np.full((int(ny), int(nx)), float(hydraulic_conductivity), dtype=np.float64)
     k_field[active == 0] = 0.0
 
     initial_head = bottom + max(float(initial_saturated_thickness), 0.1)
@@ -218,6 +245,8 @@ def build_transient_unconfined_case(
         steady_recharge_rate=float(steady_recharge_rate),
         recharge_depths=depths,
         recharge_rates=rates,
+        t_field_kind=t_field_kind,
+        t_field_seed=int(t_field_seed),
     )
 
 
@@ -991,6 +1020,8 @@ def run_mf6_transient(
             "steady_recharge_rate": float(case.steady_recharge_rate),
             "sy": case.sy,
             "ss": case.ss,
+            "t_field_kind": case.t_field_kind,
+            "t_field_seed": case.t_field_seed,
             "hydraulic_conductivity": case.hydraulic_conductivity.flat[0],
             "initial_saturated_thickness": DEFAULT_INIT_SAT_THICKNESS,
             "generator": "working_tests/run_2d_transient_vs_mf6.py",
@@ -1027,6 +1058,9 @@ def main(
     n_weeks: int = N_WEEKS,
     annual_recharge_m: float = ANNUAL_RECHARGE_M,
     recharge_schedule_weeks: int = RECHARGE_SCHEDULE_WEEKS,
+    initial_saturated_thickness: float = DEFAULT_INIT_SAT_THICKNESS,
+    t_field_kind: str = DEFAULT_T_FIELD_KIND,
+    t_field_seed: int = DEFAULT_T_FIELD_SEED,
     out_path: str | Path | None = None,
     mf6_workspace: str | Path | None = None,
     warm_start_workspace: str | Path | None = None,
@@ -1049,13 +1083,21 @@ def main(
         ny=ny,
         dx=dx,
         hydraulic_conductivity=hydraulic_conductivity,
+        initial_saturated_thickness=initial_saturated_thickness,
         sy=sy,
         ss=ss,
         n_weeks=n_weeks,
         annual_recharge_m=annual_recharge_m,
         recharge_schedule_weeks=recharge_schedule_weeks,
+        t_field_kind=t_field_kind,
+        t_field_seed=t_field_seed,
     )
-    print(f"Transient 2D {formulation} MF6 truth: {nx}x{ny}, {n_weeks} weekly steps, K={hydraulic_conductivity}")
+    k_desc = (
+        f"ugly_t(seed={t_field_seed}) K=T/{initial_saturated_thickness:g}"
+        if str(t_field_kind).strip().lower() == T_FIELD_UGLY
+        else f"K={hydraulic_conductivity}"
+    )
+    print(f"Transient 2D {formulation} MF6 truth: {nx}x{ny}, {n_weeks} weekly steps, {k_desc}")
     return run_mf6_transient(
         case=case,
         out_path=out_path,
@@ -1068,41 +1110,18 @@ def main(
 
 
 if __name__ == "__main__":
-    # Configuration parameters
-    nx = DEFAULT_NX
-    ny = DEFAULT_NY
-    dx = DEFAULT_DX
-    hydraulic_conductivity = DEFAULT_K
-    sy = DEFAULT_SY
-    ss = DEFAULT_SS
-    n_weeks = N_WEEKS
-    annual_recharge_m = ANNUAL_RECHARGE_M
-    recharge_schedule_weeks = RECHARGE_SCHEDULE_WEEKS
-    warm_start_mode = WARM_START_UNCONFINED_STEADY_MF6
-    formulation = FORMULATION_UNCONFINED
-    out_path = data_store.joinpath(
-        "working_tests",
-        f"mf6_transient_2d_{formulation}_{nx}x{ny}_{n_weeks}w",
-        "mf6_transient_heads.npz.lzma",
+    # The replay script owns the case setup (single source of truth): pull it
+    # and generate exactly the artifact the replay expects. Standalone usage
+    # with explicit parameters remains available via ``main(...)`` above.
+    from working_tests.run_2d_transient_warp_replay import (
+        build_case_setup,
+        ensure_case_artifact,
     )
-    mf6_workspace = None
-    warm_start_workspace = data_store.joinpath("working_tests", f"mf6_transient_2d_{formulation}")
-    reuse_existing_warm_start = True
 
-    main(
-        nx=nx,
-        ny=ny,
-        dx=dx,
-        hydraulic_conductivity=hydraulic_conductivity,
-        sy=sy,
-        ss=ss,
-        n_weeks=n_weeks,
-        annual_recharge_m=annual_recharge_m,
-        recharge_schedule_weeks=recharge_schedule_weeks,
-        out_path=out_path,
-        mf6_workspace=mf6_workspace,
-        warm_start_workspace=warm_start_workspace,
-        reuse_existing_warm_start=reuse_existing_warm_start,
-        warm_start_mode=warm_start_mode,
-        formulation=formulation,
+    case_setup = build_case_setup()
+    print(
+        f"Generator pulled case setup from run_2d_transient_warp_replay: "
+        f"{case_setup['nx']}x{case_setup['ny']} {case_setup['n_periods']}w "
+        f"t_field={case_setup['t_field_kind']}(seed={case_setup['t_field_seed']})"
     )
+    ensure_case_artifact(case_setup)

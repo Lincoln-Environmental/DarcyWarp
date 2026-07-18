@@ -1206,6 +1206,110 @@ def _adaptive_practical_acceptance_allowed(
     )
 
 
+def _adaptive_dt_dh_contraction_estimate(
+    dh_history: list[float | None],
+) -> tuple[float, float] | None:
+    """Estimate (geometric-mean contraction ratio, last dh) from dh_max history.
+
+    Uses up to the last four finite positive values (three ratios). Returns
+    None when fewer than two usable values are available.
+    """
+    values = [
+        float(v)
+        for v in dh_history
+        if v is not None and np.isfinite(float(v)) and float(v) > 0.0
+    ]
+    if len(values) < 2:
+        return None
+    window = values[-4:]
+    ratios = [cur / prev for prev, cur in zip(window[:-1], window[1:]) if prev > 0.0]
+    if not ratios:
+        return None
+    ratio = float(np.exp(np.mean(np.log(np.clip(ratios, 1.0e-12, None)))))
+    return ratio, values[-1]
+
+
+def _adaptive_dt_projected_outer_to_tol(
+    dh_history: list[float | None],
+    *,
+    tol: float,
+) -> float | None:
+    """Project additional outer iterations for dh_max <= tol from contraction.
+
+    Returns 0.0 when already at/below tol, inf when not contracting, and None
+    when the history is insufficient for a projection.
+    """
+    estimate = _adaptive_dt_dh_contraction_estimate(dh_history)
+    if estimate is None:
+        return None
+    ratio, current = estimate
+    if current <= tol:
+        return 0.0
+    if ratio >= 1.0:
+        return float("inf")
+    return float(np.log(tol / current) / np.log(ratio))
+
+
+def _adaptive_dt_should_early_shrink(
+    dh_history: list[float | None],
+    *,
+    tol: float,
+    outer_iterations_done: int,
+    budget: int,
+    min_outer: int,
+) -> bool:
+    """True when the contraction projection says strict cannot make budget.
+
+    Only meaningful while dh_max is the binding strict constraint: when dh is
+    already <= tol the blocker is the residual, which contracts on its own
+    schedule, so no early shrink is signalled.
+    """
+    if int(outer_iterations_done) < int(min_outer):
+        return False
+    estimate = _adaptive_dt_dh_contraction_estimate(dh_history)
+    if estimate is None:
+        return False
+    _, current = estimate
+    if current <= tol:
+        return False
+    needed = _adaptive_dt_projected_outer_to_tol(dh_history, tol=tol)
+    if needed is None:
+        return False
+    return float(outer_iterations_done) + needed > float(budget)
+
+
+def _adaptive_dt_should_extend_budget(
+    dh_history: list[float | None],
+    *,
+    tol: float,
+    extension_factor: float,
+    extension_contraction_ratio: float,
+) -> bool:
+    """True when strict is close enough that extending the budget beats a shrink.
+
+    Qualifies when dh_max is within ``extension_factor`` of tol and is either
+    already below tol (residual is the remaining blocker) or still contracting
+    faster than ``extension_contraction_ratio``.
+    """
+    estimate = _adaptive_dt_dh_contraction_estimate(dh_history)
+    if estimate is None:
+        # A single finite value still qualifies on closeness alone.
+        values = [
+            float(v)
+            for v in dh_history
+            if v is not None and np.isfinite(float(v)) and float(v) > 0.0
+        ]
+        if not values:
+            return False
+        return bool(values[-1] <= float(extension_factor) * tol)
+    ratio, current = estimate
+    if current > float(extension_factor) * tol:
+        return False
+    if current <= tol:
+        return True
+    return bool(ratio < float(extension_contraction_ratio))
+
+
 def _validate_adaptive_inner_solve_config(
     *,
     config: AdaptiveInnerSolveConfig,
@@ -10294,6 +10398,13 @@ class WarpDarcySolver:
             "adaptive_dt_grow_factor",
             "adaptive_dt_strict_max_outer",
             "adaptive_dt_max_growth_steps",
+            "adaptive_dt_early_shrink_enabled",
+            "adaptive_dt_early_shrink_min_outer",
+            "adaptive_dt_early_shrink_patience",
+            "adaptive_dt_extension_enabled",
+            "adaptive_dt_extension_factor",
+            "adaptive_dt_extension_max_outer",
+            "adaptive_dt_extension_contraction_ratio",
         ):
             controls.pop(_control_key, None)
         min_sat = float(controls.get("min_saturated_thickness", min_saturated_thickness))
@@ -10493,6 +10604,15 @@ class WarpDarcySolver:
             adaptive_dt_grow_factor_f = float(controls.get("adaptive_dt_grow_factor", 2.0))
             adaptive_dt_strict_max_outer_i = int(controls.get("adaptive_dt_strict_max_outer", 20))
             adaptive_dt_max_growth_steps_i = int(controls.get("adaptive_dt_max_growth_steps", 2))
+            adaptive_dt_early_shrink_enabled_b = bool(controls.get("adaptive_dt_early_shrink_enabled", True))
+            adaptive_dt_early_shrink_min_outer_i = int(controls.get("adaptive_dt_early_shrink_min_outer", 6))
+            adaptive_dt_early_shrink_patience_i = int(controls.get("adaptive_dt_early_shrink_patience", 3))
+            adaptive_dt_extension_enabled_b = bool(controls.get("adaptive_dt_extension_enabled", True))
+            adaptive_dt_extension_factor_f = float(controls.get("adaptive_dt_extension_factor", 5.0))
+            adaptive_dt_extension_max_outer_i = int(controls.get("adaptive_dt_extension_max_outer", 4))
+            adaptive_dt_extension_contraction_ratio_f = float(
+                controls.get("adaptive_dt_extension_contraction_ratio", 0.8)
+            )
             if adaptive_dt_enabled_b:
                 if not (0.0 < adaptive_dt_min_fraction_f <= 1.0):
                     raise ValueError("adaptive_dt_min_fraction must be in (0, 1].")
@@ -10508,6 +10628,16 @@ class WarpDarcySolver:
                     )
                 if adaptive_dt_max_growth_steps_i < 0:
                     raise ValueError("adaptive_dt_max_growth_steps must be >= 0.")
+                if adaptive_dt_early_shrink_min_outer_i < 1:
+                    raise ValueError("adaptive_dt_early_shrink_min_outer must be >= 1.")
+                if adaptive_dt_early_shrink_patience_i < 1:
+                    raise ValueError("adaptive_dt_early_shrink_patience must be >= 1.")
+                if adaptive_dt_extension_factor_f < 1.0:
+                    raise ValueError("adaptive_dt_extension_factor must be >= 1.")
+                if adaptive_dt_extension_max_outer_i < 1:
+                    raise ValueError("adaptive_dt_extension_max_outer must be >= 1.")
+                if not (0.0 < adaptive_dt_extension_contraction_ratio_f < 1.0):
+                    raise ValueError("adaptive_dt_extension_contraction_ratio must be in (0, 1).")
 
             if inner_head_residual_tol_min_f < 0.0 or not np.isfinite(inner_head_residual_tol_min_f):
                 raise ValueError("inner_head_residual_tol_min must be non-negative and finite.")
@@ -10823,6 +10953,11 @@ class WarpDarcySolver:
                 adaptive_dt_practical_fallback_count = 0
                 adaptive_dt_total_outer_iterations_i = 0
                 adaptive_dt_practical_at_min_b = not adaptive_dt_enabled_b
+                adaptive_dt_dh_history: list[float] = []
+                adaptive_dt_extension_used_b = False
+                adaptive_dt_early_shrink_streak_i = 0
+                adaptive_dt_early_shrink_count = 0
+                adaptive_dt_extension_count = 0
                 substep_outer_limit_i = (
                     adaptive_dt_strict_max_outer_i if adaptive_dt_enabled_b else max_outer
                 )
@@ -11396,6 +11531,8 @@ class WarpDarcySolver:
                     period_gpu_scalar_syncs += 6
                     last_dh_max = float(dh_max_buf.numpy()[0])
                     last_dh_rms = float(np.sqrt(max(float(dh_rms_buf.numpy()[0]), 0.0) / float(max(n_free, 1))))
+                    if adaptive_dt_enabled_b:
+                        adaptive_dt_dh_history.append(float(last_dh_max))
                     last_flow_residual_rms = float(
                         np.sqrt(max(float(flow_rTr_buf.numpy()[0]), 0.0) / float(max(n_free, 1)))
                     )
@@ -11585,12 +11722,12 @@ class WarpDarcySolver:
                                 inputs=[h_substep_start_wp, h_prev_wp, self.nx, self.ny],
                                 device=device,
                             )
-                            if refreshed_result["strict_acceptance_passed"] and not adaptive_dt_practical_at_min_b:
+                            if refreshed_result["strict_acceptance_passed"] and not adaptive_dt_practical_at_min_b and not adaptive_dt_extension_used_b:
                                 # Grow only after a clean strict acceptance (no practical
-                                # fallback touched this sub-step). A sub-step that fell back
-                                # keeps dt at dt_min for the next sub-step instead of
-                                # re-attempting strict at a larger dt and shrinking straight
-                                # back (retry storm / grow-shrink oscillation).
+                                # fallback or budget extension touched this sub-step). A
+                                # sub-step that needed assistance keeps dt instead of
+                                # re-attempting strict at a larger dt and shrinking
+                                # straight back (retry storm / grow-shrink oscillation).
                                 if adaptive_dt_growth_steps_i < adaptive_dt_max_growth_steps_i:
                                     current_dt_f = min(
                                         period_dt_f,
@@ -11603,6 +11740,9 @@ class WarpDarcySolver:
                                 actual_dt_f = remaining_dt_f
                             substep_outer_limit_i = adaptive_dt_strict_max_outer_i
                             adaptive_dt_practical_at_min_b = False
+                            adaptive_dt_dh_history = []
+                            adaptive_dt_extension_used_b = False
+                            adaptive_dt_early_shrink_streak_i = 0
                             previous_dh_measure = None
                             previous_outer_head_residual_rms = None
                             previous_initial_head_residual_rms = None
@@ -11612,7 +11752,65 @@ class WarpDarcySolver:
                             continue
                         production_acceptance_passed = False
 
-                    if adaptive_dt_enabled_b and outer_iter + 1 >= substep_outer_limit_i:
+                    adaptive_dt_budget_exhausted_b = bool(
+                        adaptive_dt_enabled_b and outer_iter + 1 >= substep_outer_limit_i
+                    )
+                    adaptive_dt_early_shrink_b = False
+                    if (
+                        adaptive_dt_enabled_b
+                        and not adaptive_dt_budget_exhausted_b
+                        and not adaptive_dt_practical_at_min_b
+                        and adaptive_dt_early_shrink_enabled_b
+                        and actual_dt_f > dt_min_f + max(1.0e-12, period_dt_f * 1.0e-12)
+                    ):
+                        # Early shrink: the dh contraction projection says strict
+                        # cannot reach hclose within the remaining budget — but the
+                        # comparison is against budget + available extension, since an
+                        # extension at exhaustion finishes a near-miss far cheaper
+                        # than a shrink + full retry. Only genuinely hopeless
+                        # sub-steps shrink early, and only after the pessimistic
+                        # projection persists for early_shrink_patience consecutive
+                        # checks (early-iteration contraction is often pessimistic;
+                        # it accelerates as the Picard iterate settles).
+                        adaptive_dt_effective_budget_i = int(substep_outer_limit_i)
+                        if adaptive_dt_extension_enabled_b and not adaptive_dt_extension_used_b:
+                            adaptive_dt_effective_budget_i += adaptive_dt_extension_max_outer_i
+                        if _adaptive_dt_should_early_shrink(
+                            adaptive_dt_dh_history,
+                            tol=hclose,
+                            outer_iterations_done=int(outer_iter + 1),
+                            budget=int(adaptive_dt_effective_budget_i),
+                            min_outer=adaptive_dt_early_shrink_min_outer_i,
+                        ):
+                            adaptive_dt_early_shrink_streak_i += 1
+                            adaptive_dt_early_shrink_b = bool(
+                                adaptive_dt_early_shrink_streak_i >= adaptive_dt_early_shrink_patience_i
+                            )
+                        else:
+                            adaptive_dt_early_shrink_streak_i = 0
+                            adaptive_dt_early_shrink_b = False
+                    if adaptive_dt_budget_exhausted_b or adaptive_dt_early_shrink_b:
+                        if (
+                            adaptive_dt_budget_exhausted_b
+                            and not adaptive_dt_early_shrink_b
+                            and not adaptive_dt_practical_at_min_b
+                            and adaptive_dt_extension_enabled_b
+                            and not adaptive_dt_extension_used_b
+                            and _adaptive_dt_should_extend_budget(
+                                adaptive_dt_dh_history,
+                                tol=hclose,
+                                extension_factor=adaptive_dt_extension_factor_f,
+                                extension_contraction_ratio=adaptive_dt_extension_contraction_ratio_f,
+                            )
+                        ):
+                            # Budget extension: strict is close and still contracting,
+                            # so a few extra iterations are cheaper than a shrink and
+                            # a full retry of the sub-step. At most one per sub-step.
+                            substep_outer_limit_i += adaptive_dt_extension_max_outer_i
+                            adaptive_dt_extension_used_b = True
+                            adaptive_dt_extension_count += 1
+                            outer_iter += 1
+                            continue
                         if actual_dt_f > dt_min_f + max(1.0e-12, period_dt_f * 1.0e-12):
                             current_dt_f = max(dt_min_f, actual_dt_f * adaptive_dt_shrink_factor_f)
                             actual_dt_f = min(current_dt_f, remaining_dt_f)
@@ -11621,6 +11819,8 @@ class WarpDarcySolver:
                                 actual_dt_f = remaining_dt_f
                             adaptive_dt_growth_steps_i = 0
                             adaptive_dt_retry_count += 1
+                            if adaptive_dt_early_shrink_b:
+                                adaptive_dt_early_shrink_count += 1
                             wp.launch(
                                 kernel=copy_field_kernel,
                                 dim=dim2d,
@@ -11634,6 +11834,9 @@ class WarpDarcySolver:
                                 device=device,
                             )
                             storage_diag_prev_wp.fill_(WP_FLOAT(0.0))
+                            adaptive_dt_dh_history = []
+                            adaptive_dt_extension_used_b = False
+                            adaptive_dt_early_shrink_streak_i = 0
                             previous_dh_measure = None
                             previous_outer_head_residual_rms = None
                             previous_initial_head_residual_rms = None
@@ -11657,6 +11860,9 @@ class WarpDarcySolver:
                                 device=device,
                             )
                             storage_diag_prev_wp.fill_(WP_FLOAT(0.0))
+                            adaptive_dt_dh_history = []
+                            adaptive_dt_extension_used_b = False
+                            adaptive_dt_early_shrink_streak_i = 0
                             previous_dh_measure = None
                             previous_outer_head_residual_rms = None
                             previous_initial_head_residual_rms = None
@@ -11915,6 +12121,8 @@ class WarpDarcySolver:
                         "adaptive_dt_min_fraction": float(adaptive_dt_min_fraction_f),
                         "adaptive_dt_retry_count": int(adaptive_dt_retry_count),
                         "adaptive_dt_practical_fallback_count": int(adaptive_dt_practical_fallback_count),
+                        "adaptive_dt_early_shrink_count": int(adaptive_dt_early_shrink_count),
+                        "adaptive_dt_extension_count": int(adaptive_dt_extension_count),
                         "adaptive_dt_total_outer_iterations": int(adaptive_dt_total_outer_iterations_i),
                         "adaptive_dt_substep_count": int(len(adaptive_dt_substep_dts)),
                         "adaptive_dt_substep_dts": [float(value) for value in adaptive_dt_substep_dts],

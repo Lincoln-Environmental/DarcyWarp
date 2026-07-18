@@ -745,3 +745,65 @@ def test_adaptive_dt_rejects_invalid_controls():
             recharge=5.0e-9,
             adaptive_controls={"adaptive_dt_enabled": True, "adaptive_dt_shrink_factor": 1.0},
         )
+
+
+def test_adaptive_dt_projection_helper_geometric_contraction():
+    """Projection math: geometric dh contraction -> exact iterations-to-tol."""
+    from DARCY_WARP_PACKAGE.warped_darcy import _adaptive_dt_projected_outer_to_tol
+
+    history = [1.0, 0.31, 0.0961]
+    needed = _adaptive_dt_projected_outer_to_tol(history, tol=1.0e-4)
+    expected = float(np.log(1.0e-4 / 0.0961) / np.log(0.31))
+    assert needed == pytest.approx(expected, rel=1.0e-6)
+    assert _adaptive_dt_projected_outer_to_tol([1.0e-5, 9.0e-6], tol=1.0e-4) == 0.0
+    assert _adaptive_dt_projected_outer_to_tol([1.0, 1.1, 1.2], tol=1.0e-4) == float("inf")
+    assert _adaptive_dt_projected_outer_to_tol([1.0], tol=1.0e-4) is None
+    assert _adaptive_dt_projected_outer_to_tol([], tol=1.0e-4) is None
+    assert _adaptive_dt_projected_outer_to_tol([1.0, float("nan"), 0.5], tol=1.0e-4) is not None
+
+
+def test_adaptive_dt_early_shrink_decision():
+    """Early shrink fires iff projected strict iterations exceed remaining budget."""
+    from DARCY_WARP_PACKAGE.warped_darcy import _adaptive_dt_should_early_shrink
+
+    slow = [1.0, 0.9, 0.81, 0.729, 0.656, 0.590]  # ratio ~0.9: ~82 more iters needed
+    fast = [1.0, 0.31, 0.096, 0.0298, 0.00924, 0.00286]  # ratio ~0.31: ~3 more
+    assert _adaptive_dt_should_early_shrink(
+        slow, tol=1.0e-4, outer_iterations_done=6, budget=20, min_outer=6
+    ) is True
+    assert _adaptive_dt_should_early_shrink(
+        fast, tol=1.0e-4, outer_iterations_done=6, budget=20, min_outer=6
+    ) is False
+    # Below min_outer no projection is attempted even on a stalled history.
+    assert _adaptive_dt_should_early_shrink(
+        slow[:3], tol=1.0e-4, outer_iterations_done=3, budget=20, min_outer=6
+    ) is False
+    # dh already <= tol means the residual is the blocker: never early-shrink.
+    assert _adaptive_dt_should_early_shrink(
+        [1.0e-5, 9.0e-6, 8.0e-6], tol=1.0e-4, outer_iterations_done=6, budget=20, min_outer=6
+    ) is False
+
+
+def test_adaptive_dt_extension_decision():
+    """Budget extension requires closeness plus contraction (or dh already <= tol)."""
+    from DARCY_WARP_PACKAGE.warped_darcy import _adaptive_dt_should_extend_budget
+
+    # Close (<=5x tol) and contracting at 0.3: extend.
+    assert _adaptive_dt_should_extend_budget(
+        [0.3, 0.09, 3.0e-4], tol=1.0e-4, extension_factor=5.0, extension_contraction_ratio=0.8
+    ) is True
+    # Beyond extension_factor x tol: no extension.
+    assert _adaptive_dt_should_extend_budget(
+        [0.3, 0.09, 6.0e-4], tol=1.0e-4, extension_factor=5.0, extension_contraction_ratio=0.8
+    ) is False
+    # Close but stalled (ratio ~1.0): no extension.
+    assert _adaptive_dt_should_extend_budget(
+        [3.0e-4, 3.1e-4, 3.0e-4], tol=1.0e-4, extension_factor=5.0, extension_contraction_ratio=0.8
+    ) is False
+    # dh already <= tol (residual is the blocker): extend.
+    assert _adaptive_dt_should_extend_budget(
+        [1.0e-5], tol=1.0e-4, extension_factor=5.0, extension_contraction_ratio=0.8
+    ) is True
+    assert _adaptive_dt_should_extend_budget(
+        [], tol=1.0e-4, extension_factor=5.0, extension_contraction_ratio=0.8
+    ) is False

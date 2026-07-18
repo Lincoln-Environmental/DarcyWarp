@@ -167,6 +167,13 @@ def test_default_solve_controls_include_full_kcycle_and_unconfined_settings():
         "adaptive_dt_grow_factor": 2.0,
         "adaptive_dt_strict_max_outer": 20,
         "adaptive_dt_max_growth_steps": 2,
+        "adaptive_dt_early_shrink_enabled": True,
+        "adaptive_dt_early_shrink_min_outer": 6,
+        "adaptive_dt_early_shrink_patience": 3,
+        "adaptive_dt_extension_enabled": True,
+        "adaptive_dt_extension_factor": 5.0,
+        "adaptive_dt_extension_max_outer": 4,
+        "adaptive_dt_extension_contraction_ratio": 0.8,
     }
     assert controls == expected
 

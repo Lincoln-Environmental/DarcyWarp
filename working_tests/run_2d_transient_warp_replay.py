@@ -28,17 +28,106 @@ def build_grid_artifact_path(
     nx: int,
     ny: int,
     n_weeks: int,
+    t_field_kind: str = "homogeneous",
+    t_field_seed: int = 42,
 ) -> Path:
     """
     Build the grid-qualified MF6 truth artifact path used by the generator.
+
+    Heterogeneous-T cases get a ``_ugly_t_s<seed>`` suffix so they never
+    collide with the legacy homogeneous-artifact directories at the same grid.
     """
     if int(n_weeks) <= 0:
         raise ValueError("n_weeks must be positive.")
+    t_field_kind = str(t_field_kind).strip().lower()
+    suffix = f"_ugly_t_s{int(t_field_seed)}" if t_field_kind == "ugly_t" else ""
     return data_store.joinpath(
         "working_tests",
-        f"mf6_transient_2d_{formulation}_{int(nx)}x{int(ny)}_{int(n_weeks)}w",
+        f"mf6_transient_2d_{formulation}_{int(nx)}x{int(ny)}_{int(n_weeks)}w{suffix}",
         "mf6_transient_heads.npz.lzma",
     )
+
+
+def build_case_setup(
+    *,
+    nx: int = 1000,
+    ny: int = 1000,
+    n_periods: int = 30,
+    dx: float = 100.0,
+    t_field_kind: str = "ugly_t",
+    t_field_seed: int = 42,
+) -> dict:
+    """
+    Single source of truth for the transient replay case.
+
+    Defaults adopt the hard heterogeneous-T example from the confined
+    steady-state benchmarks (``model_builder.make_ugly_T_field``, K = T / 100 m
+    following the ``export_mf6_truth_npz`` convention). The generator script
+    ``run_2d_transient_vs_mf6.py`` pulls this setup when run standalone, and
+    ``ensure_case_artifact`` generates the MF6 artifact when it is missing.
+    """
+    formulation = FORMULATION_UNCONFINED
+    setup = {
+        "formulation": formulation,
+        "nx": int(nx),
+        "ny": int(ny),
+        "dx": float(dx),
+        "n_periods": int(n_periods),
+        "dt_days": 7.0,
+        "sy": 0.10,
+        "ss": 1.0e-5,
+        "annual_recharge_m": 0.3,
+        "recharge_schedule_weeks": 52,
+        "initial_saturated_thickness": 100.0,
+        "t_field_kind": str(t_field_kind).strip().lower(),
+        "t_field_seed": int(t_field_seed),
+        "warm_start_mode": "unconfined_steady_mf6",
+    }
+    setup["artifact_path"] = build_grid_artifact_path(
+        formulation=formulation,
+        nx=nx,
+        ny=ny,
+        n_weeks=n_periods,
+        t_field_kind=setup["t_field_kind"],
+        t_field_seed=setup["t_field_seed"],
+    )
+    return setup
+
+
+def ensure_case_artifact(case_setup: dict) -> Path:
+    """
+    Return the case artifact path, generating the MF6 truth when missing.
+
+    The generator is imported lazily so the replay stays Flopy-free until a
+    truth artifact actually has to be built.
+    """
+    artifact_path = Path(case_setup["artifact_path"])
+    if artifact_path.exists():
+        return artifact_path
+    from working_tests import run_2d_transient_vs_mf6 as truth_generator
+
+    print(f"MF6 truth artifact missing; generating (this can take a while):")
+    print(f"  {artifact_path}")
+    truth_generator.main(
+        nx=case_setup["nx"],
+        ny=case_setup["ny"],
+        dx=case_setup["dx"],
+        sy=case_setup["sy"],
+        ss=case_setup["ss"],
+        n_weeks=case_setup["n_periods"],
+        annual_recharge_m=case_setup["annual_recharge_m"],
+        recharge_schedule_weeks=case_setup["recharge_schedule_weeks"],
+        initial_saturated_thickness=case_setup["initial_saturated_thickness"],
+        t_field_kind=case_setup["t_field_kind"],
+        t_field_seed=case_setup["t_field_seed"],
+        out_path=artifact_path,
+        reuse_existing_warm_start=True,
+        warm_start_mode=case_setup["warm_start_mode"],
+        formulation=case_setup["formulation"],
+    )
+    if not artifact_path.exists():
+        raise RuntimeError(f"MF6 truth generation did not produce {artifact_path}")
+    return artifact_path
 
 
 def run_production_replay(
@@ -414,10 +503,11 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------
     # Replay artifact
     # ------------------------------------------------------------------
+    # The case setup (grid, hard-T field, periods, warm start) is owned here;
+    # the generator pulls it when run standalone, and the MF6 truth artifact
+    # is generated on first use when missing.
     use_grid_qualified_artifact = True
-    mf6_nx = 1000
-    mf6_ny = 1000
-    mf6_n_periods = 30
+    case_setup = build_case_setup()
 
     explicit_artifact_path = None
     workspace = None
@@ -667,12 +757,7 @@ if __name__ == "__main__":
         artifact_path = Path(explicit_artifact_path)
 
     elif use_grid_qualified_artifact:
-        artifact_path = build_grid_artifact_path(
-            formulation=formulation,
-            nx=mf6_nx,
-            ny=mf6_ny,
-            n_weeks=mf6_n_periods,
-        )
+        artifact_path = ensure_case_artifact(case_setup)
 
     else:
         artifact_path = None

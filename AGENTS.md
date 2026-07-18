@@ -123,6 +123,15 @@ tests/
   full dt (1000x1000 30w: RMSE 5.5e-05, mass balance excellent, 69 s) and the
   adaptive net is a verified no-op (1 full-dt sub-step/period, 0 retries).
   Sub-stepping engages only when strict genuinely fails within the budget.
+  The failure path is priced: **early shrink** projects dh contraction and
+  shrinks dt as soon as strict provably cannot make budget+extension (with
+  `early_shrink_patience` hysteresis — the projection must persist 3
+  consecutive checks, since early-iteration contraction is pessimistic on
+  hard-but-convergent periods); **budget extension** grants one 4-iteration
+  extension when dh_max is within 5x of hclose and still contracting
+  (finishes near-misses without a shrink; extension-assisted accepts don't
+  qualify for dt growth). Both are verified no-ops on the homogeneous AND
+  hard-T (`ugly_t` seed 42, K ~ 4-535 m/day) 1000x1000 30w production cases.
   Mass-balance reporting for sub-stepped runs carries
   `endpoint_flux_budget_approximation: true` (endpoint-flux budget is a metric
   artifact there, not non-conservation). See `TRANSIENT_STATUS.md` § 2D
@@ -177,20 +186,39 @@ tests/
 
 ## 5. Transient replay infrastructure
 
+### Case setup ownership (single source of truth)
+
+`working_tests/run_2d_transient_warp_replay.py::build_case_setup()` owns the
+replay case: grid, periods, storage, recharge, warm start, and the T-field
+spec. Default T field is the **hard heterogeneous benchmark field**
+(`t_field_kind="ugly_t"`, seed 42) adopted from the confined steady-state
+benchmarks (`model_builder.make_ugly_T_field`, K = T / 100 m per the
+`export_mf6_truth_npz` convention, K ~ 4-535 m/day);
+`t_field_kind="homogeneous"` reproduces the legacy K=100 case.
+
+- `ensure_case_artifact(setup)` returns the artifact path, generating the MF6
+  truth via a lazy call to `run_2d_transient_vs_mf6.py::main(...)` when the
+  artifact is missing.
+- `run_2d_transient_vs_mf6.py` run standalone pulls the same setup from the
+  replay (`build_case_setup` + `ensure_case_artifact`), so both entry points
+  always agree.
+- Hard-T artifacts get a `_ugly_t_s<seed>` directory suffix; homogeneous paths
+  are unchanged (backwards compatible with existing artifacts).
+
 ### Generating truth
 
 ```bash
-python working_tests/run_2d_transient_vs_mf6.py
+python working_tests/run_2d_transient_vs_mf6.py   # pulls case setup from the replay
 ```
 
-Produces `DARCY_WARP_PACKAGE/data/working_tests/mf6_transient_2d_unconfined_<nx>x<ny>_<n_weeks>w/mf6_transient_heads.npz.lzma`.
+Produces `DARCY_WARP_PACKAGE/data/working_tests/mf6_transient_2d_unconfined_<nx>x<ny>_<n_weeks>w[_ugly_t_s<seed>]/mf6_transient_heads.npz.lzma`.
 
 Artifact contains: per-period heads, final heads, initial/warm-start heads, masks, DEM, bottom, K, Sy, Ss, recharge rates, provenance.
 
 ### Running replay
 
 ```bash
-python working_tests/run_2d_transient_warp_replay.py
+python working_tests/run_2d_transient_warp_replay.py   # auto-generates the artifact when missing
 ```
 
 - Loads artifact via `transient_artifacts.py`.

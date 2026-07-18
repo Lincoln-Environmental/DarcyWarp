@@ -131,6 +131,29 @@ def default_solve_controls() -> dict:
         # guaranteed shrink/retry storms on every period.
         "adaptive_dt_strict_max_outer": 20,
         "adaptive_dt_max_growth_steps": 2,
+        # Failure-path economics. Early shrink: once min_outer iterations give
+        # a reliable dh contraction estimate, project iterations-to-hclose and
+        # shrink immediately when the projection cannot make the remaining
+        # budget (avoids paying the full budget on a doomed sub-step).
+        # Extension: at budget exhaustion, if dh_max is within
+        # extension_factor of hclose and still contracting, grant one extension
+        # of extension_max_outer iterations instead of shrinking (cheaper than
+        # a full retry). Neither fires on the production case (strict passes
+        # well inside budget); they only price the genuinely-hard-case path.
+        "adaptive_dt_early_shrink_enabled": True,
+        "adaptive_dt_early_shrink_min_outer": 6,
+        # Pessimistic-projection hysteresis: early-iteration contraction is
+        # often pessimistic (it accelerates as the Picard iterate settles), so
+        # the projection must say "won't make budget" on this many consecutive
+        # checks before the driver actually shrinks dt. Prevents misfires on
+        # hard-but-convergent periods (observed on the 1M hard-T case: strict
+        # lands at 15-16 within budget 20 while the iteration-6 projection
+        # still says no).
+        "adaptive_dt_early_shrink_patience": 3,
+        "adaptive_dt_extension_enabled": True,
+        "adaptive_dt_extension_factor": 5.0,
+        "adaptive_dt_extension_max_outer": 4,
+        "adaptive_dt_extension_contraction_ratio": 0.8,
     }
 
 
