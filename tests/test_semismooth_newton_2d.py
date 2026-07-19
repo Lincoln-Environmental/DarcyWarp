@@ -576,3 +576,121 @@ def test_repeated_cuda_newton_memory_is_stable_after_warmup():
     finally:
         solver.close()
         gc.collect()
+
+
+def test_newton_operator_workspace_refreshes_across_timesteps():
+    """The cached operator workspace is reused (not rebuilt) across timesteps."""
+    solver, K, bottom, top = _build_solver()
+    try:
+        controls = _newton_controls()
+        previous = bottom + 8.0
+        workspace_ids = []
+        refresh_counts = []
+        reused_flags = []
+        for dt in (2.0, 0.75, 1.5):
+            head, info = solver.solve(
+                formulation="unconfined",
+                solver="unconfined_semismooth_newton_kcycle",
+                initial_head=previous,
+                K_field=K,
+                zbot_field=bottom,
+                ztop_field=top,
+                transient=True,
+                storage_coeff=0.2,
+                sy=0.2,
+                ss=1.0e-4,
+                dt=dt,
+                head_prev=previous,
+                **controls,
+            )
+            assert info["converged"], info
+            workspace = solver._resource_owner.get_experimental_workspace(
+                "semismooth_newton_operator"
+            )
+            assert workspace is not None
+            workspace_ids.append(id(workspace))
+            refresh_counts.append(info["newton_workspace_refresh_count"])
+            reused_flags.append(info["newton_workspace_reused"])
+            previous = head
+        # One workspace object, built once, refreshed on every solve.
+        assert len(set(workspace_ids)) == 1
+        assert reused_flags == [False, True, True]
+        assert refresh_counts == [1, 2, 3]
+    finally:
+        solver.close()
+
+
+def test_newton_operator_workspace_rebuilds_only_on_structural_change():
+    """Timestep state refreshes in place; structural changes force a rebuild."""
+    solver, K, bottom, top = _build_solver()
+    try:
+        controls = _newton_controls()
+        previous = bottom + 8.0
+        head, first_info = solver.solve(
+            formulation="unconfined",
+            solver="unconfined_semismooth_newton_kcycle",
+            initial_head=previous,
+            K_field=K,
+            zbot_field=bottom,
+            ztop_field=top,
+            transient=True,
+            storage_coeff=0.2,
+            sy=0.2,
+            ss=1.0e-4,
+            dt=2.0,
+            head_prev=previous,
+            **controls,
+        )
+        assert first_info["converged"], first_info
+        first_workspace = solver._resource_owner.get_experimental_workspace(
+            "semismooth_newton_operator"
+        )
+        assert first_workspace is not None
+
+        # New dt and previous head (timestep state): refresh, same object.
+        head, refresh_info = solver.solve(
+            formulation="unconfined",
+            solver="unconfined_semismooth_newton_kcycle",
+            initial_head=head,
+            K_field=K,
+            zbot_field=bottom,
+            ztop_field=top,
+            transient=True,
+            storage_coeff=0.2,
+            sy=0.2,
+            ss=1.0e-4,
+            dt=1.25,
+            head_prev=head,
+            **controls,
+        )
+        assert refresh_info["converged"], refresh_info
+        assert refresh_info["newton_workspace_reused"] is True
+        assert (
+            solver._resource_owner.get_experimental_workspace("semismooth_newton_operator")
+            is first_workspace
+        )
+
+        # Changed conductivity (structural): rebuild, new object.
+        _, rebuild_info = solver.solve(
+            formulation="unconfined",
+            solver="unconfined_semismooth_newton_kcycle",
+            initial_head=head,
+            K_field=K * 1.5,
+            zbot_field=bottom,
+            ztop_field=top,
+            transient=True,
+            storage_coeff=0.2,
+            sy=0.2,
+            ss=1.0e-4,
+            dt=1.25,
+            head_prev=head,
+            **controls,
+        )
+        assert rebuild_info["converged"], rebuild_info
+        assert rebuild_info["newton_workspace_reused"] is False
+        assert (
+            solver._resource_owner.get_experimental_workspace("semismooth_newton_operator")
+            is not first_workspace
+        )
+    finally:
+        solver.close()

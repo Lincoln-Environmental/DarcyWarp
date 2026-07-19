@@ -50,6 +50,7 @@ DARCY_WARP_PACKAGE/
     fas.py               # experimental FAS V-cycle backend
     fas_hierarchy.py, fas_kernels.py, fas_state.py  # FAS rediscretized hierarchy/state/kernels
     fgmres.py, kcycle_preconditioner.py, newton_kernels.py  # Newton machinery
+    newton_state.py        # cached Newton operator workspace (reuse/refresh split)
     capabilities.py      # shim re-exporting solver_capabilities.py
     context.py, base.py, hierarchy.py, convergence.py, resources.py, regression.py
   solver_capabilities.py # CAPABILITIES/ALIASES metadata (experimental,

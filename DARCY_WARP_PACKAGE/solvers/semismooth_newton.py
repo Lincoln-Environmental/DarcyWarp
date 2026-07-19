@@ -18,6 +18,7 @@ from .kcycle_preconditioner import (
     FixedWorkKCyclePreconditioner2D,
     KCyclePreconditionerWorkspace2D,
 )
+from .newton_state import NewtonOperatorWorkspace2D
 from . import newton_kernels as _k
 
 
@@ -260,7 +261,36 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
         cheby_lambda_max=float(kwargs.get("cheby_lambda_max", 1.95)),
     )
 
-    operator = NonlinearOperator2D(nonlinear_context)
+    # The authoritative operator is cached on the resource owner and reused
+    # across solves: structural inputs decide reuse, and per-timestep state
+    # (previous head, dt, source field, Sy, Ss) is refreshed in place via
+    # update_transient_state.  This mirrors the FAS workspace pattern and
+    # removes the ~29 device allocations + ~12 field uploads the backend
+    # previously paid every solve.  ``set_experimental_workspace`` closes the
+    # previous workspace on rebuild and ``release`` closes it on model close.
+    operator_workspace = owner.get_experimental_workspace("semismooth_newton_operator")
+    workspace_reused = operator_workspace is not None and operator_workspace.compatible(
+        context=nonlinear_context,
+        transient=transient,
+        min_sat=min_sat,
+        device=model.device_str,
+    )
+    if not workspace_reused:
+        operator_workspace = NewtonOperatorWorkspace2D(
+            context=nonlinear_context,
+            transient=transient,
+            min_sat=min_sat,
+            device=model.device_str,
+        )
+        owner.set_experimental_workspace("semismooth_newton_operator", operator_workspace)
+    operator_workspace.refresh(
+        head_prev=head_prev if transient else None,
+        dt=dt if transient else None,
+        source_rate=np.asarray(model.R_field_host, dtype=np.float64),
+        sy=sy,
+        ss=ss,
+    )
+    operator = operator_workspace.operator
     history: list[dict[str, Any]] = []
     failure_reason: str | None = None
     converged = False
@@ -482,6 +512,8 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
             "gpu_scalar_synchronization_count": int(total_reductions + 3 * (accepted_updates + total_backtracks + 1)),
             "persistent_memory_before_bytes": start_memory,
             "persistent_memory_after_bytes": end_memory,
+            "newton_workspace_reused": bool(workspace_reused),
+            "newton_workspace_refresh_count": int(operator_workspace.refresh_count),
             "storage_total_array": None if storage_terms is None else storage_terms.total,
             "storage_sy_array": None if storage_terms is None else storage_terms.sy,
             "storage_ss_array": None if storage_terms is None else storage_terms.ss,
@@ -513,7 +545,11 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
             )
         return (head, info) if return_info else head
     finally:
-        operator.close()
+        # The operator is owned by the cached NewtonOperatorWorkspace2D and is
+        # reused across solves; do not close it here.  It is closed automatically
+        # when an incompatible workspace replaces it (set_experimental_workspace)
+        # and when the model is released.
+        pass
 
 
 class UnconfinedSemismoothNewtonKCycleBackend:
