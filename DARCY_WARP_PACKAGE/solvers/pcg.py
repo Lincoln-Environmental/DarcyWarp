@@ -27,7 +27,8 @@ class ConfinedPCGBackend:
                 "unused solve kwargs for solver='confined_pcg': "
                 f"{sorted(kwargs.keys())}"
             )
-        return context.run_pcg(
+        return solve_pcg_device_loop(
+            model=context.model,
             max_iter=max_iter,
             rel_tol=rel_tol,
             abs_tol_min=abs_tol_min,

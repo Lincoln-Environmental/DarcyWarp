@@ -11,12 +11,12 @@ multigrid hierarchy, CUDA graph cache, and `close()` cleanup.  It creates a
 | `confined_kcycle` | confined | steady or transient |
 | `unconfined_picard_kcycle` | unconfined Picard | steady or transient |
 
-The backend adapters call the established numerical kernels through explicit
-context hooks. This intentionally keeps execution order, hierarchy reuse,
-diagnostics, and resource lifetime unchanged while the large K-cycle and
-Picard bodies are moved. PCG is already a standalone implementation. The
-remaining K-cycle and Picard bodies are still private backend hooks on the
-model; they are not duplicated in the new package.
+The backend adapters invoke the extracted implementations directly through
+the typed, model-owned context. PCG, K-cycle orchestration/device buffers,
+Picard, and the transient period driver live in this package; the model keeps
+only construction, resource ownership, public compatibility wrappers, and
+dispatch preparation. Execution order, hierarchy reuse, diagnostics, and
+resource lifetime remain unchanged.
 
 Future nonlinear backends should consume `SolverContext`, use the K-cycle
 callback for linear work, and return the existing `(head, info)` contract.  They

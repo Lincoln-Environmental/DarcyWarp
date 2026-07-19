@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Mapping
+from typing import Any, Mapping
 
 from DARCY_WARP_PACKAGE.physics.operator_data import (
     BoundaryFields,
@@ -42,12 +42,11 @@ class ConvergenceControls:
 
 @dataclass(frozen=True, slots=True)
 class SolverContext:
-    """Zero-copy solver input and backend implementation hooks.
+    """Zero-copy solver input and explicit model ownership.
 
-    Fields are borrowed model-owned references.  The hooks name the active
-    implementation without granting resource ownership to a backend.  They are
-    deliberately narrow compatibility seams while algorithm bodies move out of
-    the model container.
+    Fields are borrowed model-owned references. ``model`` exists only for the
+    small set of established assembly/resource methods that must remain owned
+    by the model; solver implementations never release or replace it.
     """
 
     grid: GridSpec
@@ -57,9 +56,7 @@ class SolverContext:
     hierarchy: MultigridHierarchy
     workspace: SolverWorkspace
     convergence: ConvergenceControls
-    run_pcg: Callable[..., Any]
-    run_kcycle: Callable[..., Any]
-    run_transient: Callable[..., Any] | None = None
+    model: Any
 
     @property
     def formulation(self) -> str:
