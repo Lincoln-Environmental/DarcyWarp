@@ -4245,6 +4245,7 @@ class WarpDarcySolver:
         self._stage_M0 = None
         self._stage_R0_host = None
         self._stage_R0 = None
+        self._stage_bc_values = None
 
         self._stage_Tc_2lvl = None
         self._stage_Mc_2lvl = None
@@ -6986,6 +6987,31 @@ class WarpDarcySolver:
             ],
             device=self.device_str,
         )
+
+    def update_bc_in_place(self, bc_values) -> None:
+        """
+        Update prescribed-head (Dirichlet) values in place (host + device).
+
+        Only prescribed-head *values* may change between stress periods; the
+        prescribed-cell mask is structural.  Coarse multigrid levels carry
+        homogeneous Dirichlet values for the error equation, so no hierarchy
+        rebuild is required; the fine hierarchy level shares this device
+        array.  Experimental nonlinear backends read the host mirror fresh at
+        every solve.
+        """
+        if self.bc_values_host is None or self.bc_values_wp is None:
+            raise RuntimeError("Call build_from_fields() once before update_bc_in_place().")
+
+        bc_arr = np.asarray(bc_values, dtype=NP_FLOAT, order="C")
+        if bc_arr.shape != tuple(self.bc_values_host.shape):
+            raise ValueError(f"bc_values shape {bc_arr.shape} expected {self.bc_values_host.shape}")
+        np.copyto(self.bc_values_host, bc_arr)
+
+        if self._stage_bc_values is None or tuple(self._stage_bc_values.shape) != tuple(self.bc_values_host.shape):
+            self._stage_bc_values = wp.zeros(tuple(self.bc_values_host.shape), dtype=WP_FLOAT, device="cpu")
+
+        self._stage_bc_values.numpy()[:, :] = self.bc_values_host
+        wp.copy(self.bc_values_wp, self._stage_bc_values)
 
     def update_T_in_place_fast(self, T_truth, update_diag_preconditioner: bool = False) -> None:
         """

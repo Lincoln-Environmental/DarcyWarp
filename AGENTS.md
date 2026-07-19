@@ -44,6 +44,7 @@ DARCY_WARP_PACKAGE/
     multigrid_kcycle.py  # confined K-cycle backend + device-buffers inner solve
     picard_unconfined.py # unconfined Picard/K-cycle backend (host fallback path)
     transient_unconfined.py # transient period driver incl. production device fast path
+    transient_experimental.py # experimental multi-period/timestep driver (FAS/Newton)
     pcg.py               # confined PCG backend
     semismooth_newton.py # experimental Newton backend (FGMRES + K-cycle preconditioner)
     fas.py               # experimental FAS V-cycle backend
@@ -111,9 +112,13 @@ Canonical backends live in `solvers/registry.py` + `solver_capabilities.py`:
   `NotImplementedError`), `confined_kcycle`, `unconfined_picard_kcycle`
   (production default; the only backend allowed in the multi-period transient
   driver — gated via `supports_production_period_driver`).
-- Experimental (`select_backend` emits a runtime warning; steady or
-  single-period transient `solve(...)` only): `unconfined_semismooth_newton_kcycle`,
-  `unconfined_fas`.
+- Experimental (`select_backend` emits a runtime warning):
+  `unconfined_semismooth_newton_kcycle`, `unconfined_fas`. Single solves cover
+  steady or one transient timestep; when explicitly selected they may also drive
+  complete multi-timestep/multi-period transient simulations through
+  `solvers/transient_experimental.py` (capability-gated via
+  `supports_production_period_driver`; per-timestep state refresh, retry with
+  dt shrink, per-timestep fallback, budgets, full histories).
 - Legacy aliases `pcg`, `kcycle`, `multigrid`, `mg`, `picard`, `picard_kcycle`;
   for unconfined solves, `kcycle` still means the Picard/K-cycle backend.
 
@@ -349,6 +354,8 @@ Usually means `sat = h - bottom` (saturated thickness of the aquifer), not soil 
 | `test_nonlinear_operator_2d.py` | warp | Stage-1 nonlinear operator vs host reference, Jv, exact storage |
 | `test_semismooth_newton_2d.py` | warp | experimental Newton backend (steady/transient/GHB/fallbacks) |
 | `test_fas_2d.py` | warp | experimental FAS backend (hierarchy, cycles, fallbacks, workspace reuse) |
+| `test_fas_transient_multistep.py` | warp | FAS multi-timestep/multi-period transient: retry, fallback, state reset, FAS vs Picard histories |
+| `test_unconfined_solvers_500x500.py` | warp + CUDA + MF6 artifact | all 3 unconfined backends on the 500x500 52w homogeneous case: runtime + MF6 head-accuracy validation |
 | `test_comparison_results.py` | warp + fixtures | end-to-end Warp vs MF6 truth |
 
 ### Important caveats

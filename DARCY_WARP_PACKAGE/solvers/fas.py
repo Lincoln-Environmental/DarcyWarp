@@ -537,28 +537,44 @@ def solve_unconfined_fas(*, context: SolverContext, **kwargs: Any):
         previous_head=previous_array,
         dx=float(model.dx),
     )
-    physical_levels = build_fas_physical_hierarchy(
-        fine_physical,
-        max_levels=max_levels,
-        min_coarse_cells=min_coarse_cells,
-        min_sat=min_sat,
-    )
     owner = model._resource_owner
     owner.refresh(hierarchy=model.mg_levels, work=model._mg_work, cuda_graph=model._kcycle_graph)
     workspace = owner.get_experimental_workspace("unconfined_fas")
-    if workspace is None or not workspace.compatible(
-        physical_levels=physical_levels,
+    # Reuse the workspace whenever only timestep state changed (previous head,
+    # source field, dt, Sy, Ss): refresh it in place instead of rebuilding the
+    # physical hierarchy.  A full rebuild happens only for structural changes.
+    workspace_reused = False
+    if workspace is not None and workspace.static_compatible(
+        fine_physical=fine_physical,
         transient=transient,
-        dt=dt,
         min_sat=min_sat,
         device=model.device_str,
+        max_levels=max_levels,
+        min_coarse_cells=min_coarse_cells,
     ):
+        workspace.refresh_timestep(
+            previous_head=previous_array if transient else None,
+            dt=dt if transient else None,
+            source_rate=np.asarray(model.R_field_host, dtype=np.float64),
+            sy=sy,
+            ss=ss,
+        )
+        workspace_reused = True
+    else:
+        physical_levels = build_fas_physical_hierarchy(
+            fine_physical,
+            max_levels=max_levels,
+            min_coarse_cells=min_coarse_cells,
+            min_sat=min_sat,
+        )
         workspace = FASWorkspace(
             physical_levels=physical_levels,
             transient=transient,
             dt=dt,
             min_sat=min_sat,
             device=model.device_str,
+            max_levels=max_levels,
+            min_coarse_cells=min_coarse_cells,
         )
         owner.set_experimental_workspace("unconfined_fas", workspace)
     workspace.reset_counters()
@@ -732,6 +748,8 @@ def solve_unconfined_fas(*, context: SolverContext, **kwargs: Any):
         "fas_failure_reason": failure_reason,
         "fas_fallback_used": False,
         "fallback_state": "not_used",
+        "fas_workspace_reused": bool(workspace_reused),
+        "fas_workspace_refresh_count": int(workspace.refresh_count),
         "n_levels": len(workspace.levels),
         "level_shapes": [level.shape for level in workspace.levels],
         "coarse_operator": "nonlinear_physical_rediscretization",

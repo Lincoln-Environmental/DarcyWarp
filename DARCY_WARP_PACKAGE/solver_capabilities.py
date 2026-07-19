@@ -28,11 +28,13 @@ CAPABILITIES: dict[str, SolverCapabilities] = {
         frozenset({"unconfined"}),
         True,
         experimental=True,
+        supports_production_period_driver=True,
     ),
     "unconfined_fas": SolverCapabilities(
         frozenset({"unconfined"}),
         True,
         experimental=True,
+        supports_production_period_driver=True,
     ),
 }
 

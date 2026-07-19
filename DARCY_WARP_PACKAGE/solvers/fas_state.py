@@ -174,12 +174,16 @@ class FASWorkspace:
         dt: float | None,
         min_sat: float,
         device: str,
+        max_levels: int | None = None,
+        min_coarse_cells: int | None = None,
     ):
         self.device = str(device)
         self.signature = tuple(level.shape for level in physical_levels)
         self.transient = bool(transient)
         self.dt = None if dt is None else float(dt)
         self.min_sat = float(min_sat)
+        self.max_levels = None if max_levels is None else int(max_levels)
+        self.min_coarse_cells = None if min_coarse_cells is None else int(min_coarse_cells)
         self.levels = [
             self._allocate_level(
                 physical=physical,
@@ -190,6 +194,30 @@ class FASWorkspace:
             )
             for physical in physical_levels
         ]
+        # Static (structural) inputs captured from the fine level.  Only these
+        # decide whether the workspace may be reused; timestep-dependent state
+        # (previous head, source field, dt, Sy, Ss) is refreshed in place by
+        # refresh_timestep instead of forcing a rebuild.  Note the per-level
+        # ``physical`` host mirrors keep their build-time dynamic fields — the
+        # device arrays are authoritative after a refresh.
+        fine = physical_levels[0]
+        self.static_inputs = {
+            "dx": float(fine.dx),
+            "has_top": bool(fine.has_top),
+            "conductivity": np.array(fine.conductivity, dtype=np.float64, copy=True),
+            "bottom": np.array(fine.bottom, dtype=np.float64, copy=True),
+            "top": np.array(fine.top, dtype=np.float64, copy=True) if fine.has_top else None,
+            "active": np.array(fine.active, dtype=np.int32, copy=True),
+            "dirichlet_mask": np.array(fine.dirichlet_mask, dtype=np.int32, copy=True),
+            "dirichlet_values": np.array(fine.dirichlet_values, dtype=np.float64, copy=True),
+            "ghb_mask": np.array(fine.ghb_mask, dtype=np.int32, copy=True),
+            "ghb_factor": np.array(fine.ghb_factor, dtype=np.float64, copy=True),
+            "ghb_external_head": np.array(fine.ghb_external_head, dtype=np.float64, copy=True),
+            "sy": np.array(fine.sy, dtype=np.float64, copy=True),
+            "ss": np.array(fine.ss, dtype=np.float64, copy=True),
+        }
+        self._forcing_stage = wp.zeros(fine.shape, dtype=WP_FLOAT, device="cpu")
+        self.refresh_count = 0
         self.closed = False
         self.reset_counters()
 
@@ -246,35 +274,168 @@ class FASWorkspace:
             n_free=int(np.count_nonzero(free)),
         )
 
-    def compatible(
+    def static_compatible(
         self,
         *,
-        physical_levels: list[FASPhysicalLevel2D],
+        fine_physical: FASPhysicalLevel2D,
         transient: bool,
-        dt: float | None,
         min_sat: float,
         device: str,
+        max_levels: int | None = None,
+        min_coarse_cells: int | None = None,
     ) -> bool:
-        basic = (
-            not self.closed
-            and self.signature == tuple(level.shape for level in physical_levels)
-            and self.transient == bool(transient)
-            and self.dt == (None if dt is None else float(dt))
-            and self.min_sat == float(min_sat)
-            and self.device == str(device)
-        )
-        if not basic:
+        """True when every structural (non-timestep) input is unchanged.
+
+        Only static data decides reuse: grid/hierarchy signature, dx,
+        conductivity, geometry, active and prescribed masks, prescribed-head
+        and GHB fields, and the hierarchy build controls.  Previous head,
+        source field, dt, Sy and Ss are timestep state and are handled by
+        :meth:`refresh_timestep`, never by a rebuild.
+        """
+        if self.closed or self.transient != bool(transient):
+            return False
+        if self.min_sat != float(min_sat) or self.device != str(device):
+            return False
+        if self.max_levels is not None and max_levels is not None and self.max_levels != int(max_levels):
+            return False
+        if (
+            self.min_coarse_cells is not None
+            and min_coarse_cells is not None
+            and self.min_coarse_cells != int(min_coarse_cells)
+        ):
+            return False
+        if self.signature[0] != tuple(fine_physical.shape):
+            return False
+        static = self.static_inputs
+        if float(static["dx"]) != float(fine_physical.dx):
+            return False
+        if bool(static["has_top"]) != bool(fine_physical.has_top):
             return False
         names = (
-            "conductivity", "top", "bottom", "active", "active_fraction",
-            "dirichlet_mask", "dirichlet_values", "source_rate", "ghb_mask",
-            "ghb_factor", "ghb_external_head", "sy", "ss", "previous_head",
+            "conductivity", "bottom", "active", "dirichlet_mask",
+            "dirichlet_values", "ghb_mask", "ghb_factor", "ghb_external_head",
         )
-        return all(
-            np.array_equal(getattr(old.physical, name), getattr(new, name))
-            for old, new in zip(self.levels, physical_levels)
-            for name in names
+        for name in names:
+            if not np.array_equal(static[name], getattr(fine_physical, name)):
+                return False
+        if static["has_top"] and not np.array_equal(static["top"], fine_physical.top):
+            return False
+        return True
+
+    def refresh_timestep(
+        self,
+        *,
+        previous_head: Any | None = None,
+        dt: float | None = None,
+        source_rate: Any | None = None,
+        sy: float | None = None,
+        ss: float | None = None,
+    ) -> None:
+        """Refresh all timestep-dependent state for a new FAS timestep.
+
+        Uploads the previous accepted head and restricts it down the
+        hierarchy, rebuilds level forcing from the current source field,
+        updates dt/Sy/Ss on every level operator, and resets all cycle
+        scratch (tau, defect, restricted, correction, candidate and coarse
+        initial-approximation arrays) so nothing carries between timesteps.
+        Static hierarchy data (topology, transfers, conductivity, geometry,
+        masks, persistent buffers) is preserved.
+        """
+        if self.closed:
+            raise RuntimeError("cannot refresh a closed FASWorkspace.")
+        if not self.transient and (previous_head is not None or dt is not None):
+            raise ValueError("previous_head/dt refresh requires a transient FASWorkspace.")
+        dt_f: float | None = None
+        if dt is not None:
+            dt_f = float(dt)
+            if not np.isfinite(dt_f) or dt_f <= 0.0:
+                raise ValueError("dt must be positive and finite.")
+            self.dt = dt_f
+        sy_f = None if sy is None else float(sy)
+        ss_f = None if ss is None else float(ss)
+        if sy_f is not None:
+            self.static_inputs["sy"][...] = sy_f
+        if ss_f is not None:
+            self.static_inputs["ss"][...] = ss_f
+
+        fine = self.levels[0]
+        fine_op = fine.nonlinear_operator.operator
+        fine_op.update_transient_state(
+            head_prev=previous_head,
+            dt=dt_f,
+            source_rate=source_rate,
+            sy=sy_f,
+            ss=ss_f,
         )
+        if source_rate is not None:
+            # Fine physical forcing: source * area on free cells.
+            physical = fine.physical
+            source_host = np.asarray(source_rate, dtype=np.float64)
+            if source_host.shape != physical.shape:
+                raise ValueError(f"source_rate must have shape {physical.shape}, got {source_host.shape}.")
+            free = (physical.active != 0) & (physical.dirichlet_mask == 0)
+            stage = self._forcing_stage.numpy()
+            stage[...] = 0.0
+            stage[free] = source_host[free] * float(physical.area)
+            wp.copy(fine.physical_forcing, self._forcing_stage)
+
+        # Coarse levels: restrict previous head and physical forcing down the
+        # hierarchy with the same kernels the V-cycle transfer path uses.
+        for level_index in range(1, len(self.levels)):
+            parent = self.levels[level_index - 1]
+            level = self.levels[level_index]
+            parent_op = parent.nonlinear_operator.operator
+            level_op = level.nonlinear_operator.operator
+            level_op.update_transient_state(dt=dt_f, sy=sy_f, ss=ss_f)
+            if previous_head is not None:
+                wp.launch(
+                    kernel=_k.fas_restrict_head_kernel,
+                    dim=level.shape,
+                    inputs=[
+                        parent_op.head_prev_device,
+                        parent_op.active_device,
+                        level_op.active_device,
+                        level_op.dirichlet_mask_device,
+                        level_op.dirichlet_values_device,
+                        level_op.head_prev_device,
+                        parent.physical.nx,
+                        parent.physical.ny,
+                        level.physical.nx,
+                        level.physical.ny,
+                    ],
+                    device=self.device,
+                )
+            if source_rate is not None:
+                wp.launch(
+                    kernel=_k.fas_restrict_integrated_kernel,
+                    dim=level.shape,
+                    inputs=[
+                        parent.physical_forcing,
+                        parent_op.active_device,
+                        parent_op.dirichlet_mask_device,
+                        level_op.active_device,
+                        level_op.dirichlet_mask_device,
+                        level.physical_forcing,
+                        parent.physical.nx,
+                        parent.physical.ny,
+                        level.physical.nx,
+                        level.physical.ny,
+                    ],
+                    device=self.device,
+                )
+
+        # Timestep-local scratch must not carry across timesteps.
+        for level_index, level in enumerate(self.levels):
+            for name in (
+                "physical_residual", "defect", "tau", "restricted_defect",
+                "restricted_forcing", "correction", "prolonged_correction",
+                "candidate", "candidate_residual", "candidate_defect",
+                "head_initial", "head_cycle_start",
+            ):
+                getattr(level, name).fill_(WP_FLOAT(0.0))
+            if level_index > 0:
+                level.head.fill_(WP_FLOAT(0.0))
+        self.refresh_count += 1
 
     def reset_counters(self) -> None:
         self.kernel_launches = 0
@@ -284,6 +445,8 @@ class FASWorkspace:
         self.post_sweeps = [0 for _ in self.levels]
         self.coarse_sweeps = [0 for _ in self.levels]
         self.smoothing_history: list[dict[str, Any]] = []
+        for level in self.levels:
+            level.nonlinear_operator.kernel_launches = 0
 
     def close(self) -> None:
         if self.closed:

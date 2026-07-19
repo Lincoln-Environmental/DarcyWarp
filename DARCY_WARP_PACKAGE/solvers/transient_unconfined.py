@@ -8,6 +8,7 @@ from typing import Any
 from .context import SolverContext
 from .registry import select_backend
 from .capabilities import CAPABILITIES
+from .transient_experimental import solve_transient_unconfined_experimental
 
 def solve_transient_unconfined_backend(
         *,
@@ -2056,7 +2057,18 @@ def solve_transient_unconfined(
             f"solver={backend.name!r} cannot drive the multi-period transient "
             f"production driver; choose one of: {capable}."
         )
-    result = solve_transient_unconfined_backend(model=context.model, **kwargs)
+    if backend.name == "unconfined_picard_kcycle":
+        # Production default: the Picard period driver, byte-for-byte unchanged.
+        result = solve_transient_unconfined_backend(model=context.model, **kwargs)
+    else:
+        # Explicitly selected experimental nonlinear backends run through the
+        # capability-gated experimental driver (per-timestep solves, retry,
+        # fallback, budgets, full histories).
+        result = solve_transient_unconfined_experimental(
+            model=context.model,
+            backend_name=backend.name,
+            **kwargs,
+        )
     if kwargs.get("return_info", True):
         heads, info = result
         info_out = dict(info)

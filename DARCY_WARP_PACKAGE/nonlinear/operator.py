@@ -320,9 +320,65 @@ class NonlinearOperator2D:
         """Stage a finite host head as the current accepted device iterate."""
         self._stage_head(head)
 
+    def _stage_field_into(self, values: Any, target: Any, name: str) -> None:
+        a = np.asarray(values, dtype=self.ctx.grid.np_dtype)
+        if a.shape != self._dim:
+            raise ValueError(f"{name} must have shape {self._dim}, got {a.shape}.")
+        if not np.all(np.isfinite(a)):
+            raise ValueError(f"{name} must be finite.")
+        self._head_stage.numpy()[...] = a
+        wp.copy(target, self._head_stage)
+
+    def update_transient_state(
+        self,
+        *,
+        head_prev: Any | None = None,
+        dt: float | None = None,
+        source_rate: Any | None = None,
+        dirichlet_values: Any | None = None,
+        ghb_external_head: Any | None = None,
+        ghb_factor: Any | None = None,
+        sy: float | None = None,
+        ss: float | None = None,
+    ) -> None:
+        """Re-point the operator at a new timestep without reallocation.
+
+        Overwrites the persistent device mirrors every kernel launch reads
+        (previous accepted head, source field, prescribed-head values, GHB
+        fields) and the per-launch scalars (``dt``, ``Sy``, ``Ss``).  Only
+        timestep-dependent state may change here; geometry, masks and
+        conductivity are structural and require a fresh operator.
+        """
+        if dt is not None:
+            if not self._has_storage:
+                raise ValueError("cannot convert a steady operator to transient via update_transient_state.")
+            dt_f = float(dt)
+            if not np.isfinite(dt_f) or dt_f <= 0.0:
+                raise ValueError("dt must be positive and finite.")
+            self._dt = dt_f
+            self._inv_dt = 1.0 / dt_f
+        if sy is not None:
+            self._sy = float(sy)
+        if ss is not None:
+            self._ss = float(ss)
+        if head_prev is not None:
+            self._stage_field_into(head_prev, self._head_prev_wp, "head_prev")
+        if source_rate is not None:
+            self._stage_field_into(source_rate, self._R_field_wp, "source_rate")
+        if dirichlet_values is not None:
+            self._stage_field_into(dirichlet_values, self._dirichlet_values_wp, "dirichlet_values")
+        if ghb_external_head is not None:
+            self._stage_field_into(ghb_external_head, self._gh_head_wp, "ghb_external_head")
+        if ghb_factor is not None:
+            self._stage_field_into(ghb_factor, self._ghb_factor_wp, "ghb_factor")
+
     @property
     def head_device(self) -> Any:
         return self._head_wp
+
+    @property
+    def head_prev_device(self) -> Any:
+        return self._head_prev_wp
 
     @property
     def residual_device_array(self) -> Any:
