@@ -436,6 +436,33 @@ def test_14_rejected_trial_heads_are_not_propagated(monkeypatch):
     assert float(np.min(heads)) > 0.0
 
 
+def test_14b_retry_first_policy_defers_backend_fallback_to_dt_min(monkeypatch):
+    """Default policy: backend fallback disabled in the retry window, offered
+    only on the last-resort attempt at dt_min."""
+    case = _case_fields()
+    solver = _make_solver()
+    original_solve = solver.solve
+    seen_flags = []
+
+    def failing_solve(**kwargs):
+        seen_flags.append(kwargs.get("fas_fallback_enabled", "unset"))
+        head, info = original_solve(**kwargs)
+        bad = dict(info)
+        bad["converged"] = False
+        bad["fas_failure_reason"] = "forced_test_failure"
+        return head, bad
+
+    monkeypatch.setattr(solver, "solve", failing_solve)
+    try:
+        with pytest.raises(RuntimeError, match="dt_min"):
+            _run_transient(solver, case, rates=(1.0e-4,), dt=7.0)
+    finally:
+        solver.close()
+    # dt shrinks 7 -> 3.5 -> 1.75 -> 0.875 -> 0.4375 (= dt_min = 7/16):
+    # fallback disabled for the retry window, enabled only at dt_min.
+    assert seen_flags == [False, False, False, False, True]
+
+
 def test_15_timestep_local_state_is_reset_between_solves():
     case = _case_fields()
     solver = _make_solver()

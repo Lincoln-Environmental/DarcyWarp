@@ -112,6 +112,12 @@ def _fallback_to_picard(
         default="unconfined_picard_kcycle",
     )
     fallback_kwargs["return_info"] = True
+    # The fallback must satisfy the same acceptance bar the caller applies to
+    # a converged solve (per-timestep budget closure); the monolith's default
+    # hclose=1e-4 is too loose in residual terms on stiff transient steps, so
+    # tighten it unless the caller already supplied Picard controls.
+    fallback_kwargs.setdefault("hclose", 1.0e-6)
+    fallback_kwargs.setdefault("max_outer_iterations", 60)
     head, picard_info = backend.solve(context, **fallback_kwargs)
     merged = dict(picard_info)
     merged.update(
@@ -164,8 +170,27 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
 
     restart = int(kwargs.pop("newton_fgmres_restart", 20))
     max_krylov = int(kwargs.pop("newton_fgmres_max_iterations", max(40, 3 * restart)))
+    krylov_rtol_explicit = "newton_fgmres_relative_tolerance" in kwargs
     krylov_rtol = float(kwargs.pop("newton_fgmres_relative_tolerance", 1.0e-5))
     krylov_atol = float(kwargs.pop("newton_fgmres_absolute_tolerance", 1.0e-10))
+    # Inexact-Newton forcing sequence (Eisenstat-Walker style): unless the
+    # inner tolerance is fixed explicitly, loosen it while the outer residual
+    # is large and tighten as it contracts.  Early Newton steps stop paying
+    # full-Krylov price for accuracy the outer iteration discards, and
+    # borderline first-attempt inner solves stop "failing" into fallback.
+    forcing_enabled = bool(kwargs.pop("newton_inexact_forcing_enabled", not krylov_rtol_explicit))
+    forcing_eta_initial = float(kwargs.pop("newton_forcing_eta_initial", 0.1))
+    forcing_eta_min = float(kwargs.pop("newton_forcing_eta_min", 1.0e-7))
+    forcing_eta_max = float(kwargs.pop("newton_forcing_eta_max", 0.5))
+    forcing_eta_power = float(kwargs.pop("newton_forcing_eta_power", 1.0))
+    # Eisenstat-Walker safeguard: when the previous accepted step needed more
+    # than this many line-search backtracks, the inexact direction was too
+    # crude — halve the next inner tolerance (floored at eta_min).
+    forcing_safeguard_backtracks = int(kwargs.pop("newton_forcing_safeguard_backtracks", 3))
+    # Final-step tightening: once the outer residual is within this multiple
+    # of the outer tolerance, solve the inner system to the eta floor so the
+    # accepted result keeps full final accuracy.
+    forcing_final_tighten_ratio = float(kwargs.pop("newton_forcing_final_tighten_ratio", 100.0))
     max_newton = int(kwargs.pop("newton_max_iterations", 20))
     residual_tol = float(kwargs.pop("newton_residual_rms_tolerance", 1.0e-6))
     head_residual_tol = float(kwargs.pop("newton_head_equivalent_rms_tolerance", kwargs.get("hclose", 1.0e-4) or 1.0e-4))
@@ -180,6 +205,12 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
 
     if restart < 2 or max_krylov < 1 or max_newton < 1:
         raise ValueError("Newton iteration limits and FGMRES restart must be positive (restart >= 2).")
+    if not (0.0 < forcing_eta_min <= forcing_eta_initial <= forcing_eta_max < 1.0):
+        raise ValueError(
+            "newton forcing etas must satisfy 0 < eta_min <= eta_initial <= eta_max < 1."
+        )
+    if forcing_eta_power <= 0.0:
+        raise ValueError("newton_forcing_eta_power must be positive.")
     if not (0.0 < min_step <= 1.0) or max_backtracks < 0:
         raise ValueError("Newton line-search controls require 0 < min_step <= 1 and max_backtracks >= 0.")
     if max_head_change <= 0.0:
@@ -326,9 +357,22 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
         if norms.rms <= residual_tol and head_equivalent <= head_residual_tol:
             converged = True
 
+        previous_backtracks = 0
         for newton_iteration in range(max_newton):
             if converged:
                 break
+            if forcing_enabled:
+                ratio = norms.rms / max(float(initial_residual), 1.0e-300)
+                iteration_rtol = min(
+                    forcing_eta_max,
+                    max(forcing_eta_min, forcing_eta_initial * ratio ** forcing_eta_power),
+                )
+                if previous_backtracks > forcing_safeguard_backtracks and iteration_rtol > forcing_eta_min:
+                    iteration_rtol = max(forcing_eta_min, 0.5 * iteration_rtol)
+                if norms.rms <= forcing_final_tighten_ratio * residual_tol:
+                    iteration_rtol = forcing_eta_min
+            else:
+                iteration_rtol = krylov_rtol
             wp.launch(
                 kernel=_k.masked_copy_kernel,
                 dim=shape,
@@ -355,7 +399,7 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
                 rhs=fgmres_workspace.rhs,
                 apply_jacobian=lambda vector, out: operator.jacobian_vector_device(operator.head_device, vector, out=out),
                 apply_preconditioner=lambda rhs, out: preconditioner.apply(rhs, out),
-                relative_tolerance=krylov_rtol,
+                relative_tolerance=iteration_rtol,
                 absolute_tolerance=krylov_atol,
                 max_iterations=max_krylov,
             )
@@ -422,6 +466,7 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
                     "fgmres_iterations": int(result.iterations),
                     "fgmres_restarts": int(result.restarts),
                     "fgmres_final_residual": float(result.final_residual),
+                    "fgmres_relative_tolerance": float(iteration_rtol),
                     "fgmres_breakdown": bool(result.breakdown),
                     "fgmres_breakdown_reason": result.breakdown_reason,
                 }
@@ -430,6 +475,7 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
                 failure_reason = "line_search_failed"
                 break
 
+            previous_backtracks = backtracks
             operator.set_head_device(vector_workspace.candidate)
             wp.copy(operator.residual_device_array, vector_workspace.candidate_residual)
             norms = candidate_norms
@@ -489,6 +535,7 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
             "experimental_backend": True,
             "newton_iterations": int(accepted_updates),
             "outer_picard_iterations": 0,
+            "inexact_forcing_enabled": bool(forcing_enabled),
             "outer_history": history,
             "nonlinear_residual_history": [float(initial_residual)] + [
                 float(item["residual_rms_after"]) for item in history if item["residual_rms_after"] is not None

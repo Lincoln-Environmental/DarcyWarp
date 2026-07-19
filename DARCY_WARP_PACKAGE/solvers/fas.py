@@ -416,6 +416,10 @@ def _run_fallback(
         fallback_kwargs["return_info"] = True
         if backend_name == "unconfined_semismooth_newton_kcycle":
             fallback_kwargs["newton_fallback_to_picard"] = False
+            # A fallback leg is the rescue path for hard solves: give it the
+            # full-accuracy inner solve rather than the inexact-Newton
+            # forcing sequence used on the primary path.
+            fallback_kwargs["newton_inexact_forcing_enabled"] = False
         backend = select_backend(
             solver=backend_name,
             formulation="unconfined",

@@ -199,6 +199,18 @@ def solve_transient_unconfined_experimental(
     allow_unaccepted = bool(controls.pop("allow_unaccepted_transient_period", False))
     prefix = _BACKEND_CONTROL_PREFIX[backend_name]
     backend_kwargs = {key: value for key, value in controls.items() if str(key).startswith(prefix)}
+    # Retry-first fallback policy: unless the caller explicitly configures the
+    # backend's own fallback (newton_fallback_to_picard / fas_fallback_enabled),
+    # attempts inside the retry window run with that fallback disabled so a
+    # failed timestep shrinks dt and retries with the SAME backend (a loosely
+    # converged fallback head both wastes a solve and contaminates later
+    # periods).  The backend fallback chain is offered only on the last-resort
+    # attempt at dt_min, where it is recorded as usual.
+    _fallback_control_key = {
+        "unconfined_fas": "fas_fallback_enabled",
+        "unconfined_semismooth_newton_kcycle": "newton_fallback_to_picard",
+    }[backend_name]
+    fallback_explicitly_configured = _fallback_control_key in backend_kwargs
 
     h0 = np.asarray(initial_head, dtype=np.float64)
     k = np.asarray(k_field, dtype=np.float64)
@@ -338,6 +350,10 @@ def solve_transient_unconfined_experimental(
             dt_try = min(current_dt, remaining_dt)
             if remaining_dt - dt_try < dt_min:
                 dt_try = remaining_dt  # absorb sliver
+            at_dt_min = dt_try <= dt_min + max(1.0e-12, period_dt * 1.0e-12)
+            attempt_kwargs = dict(backend_kwargs)
+            if not fallback_explicitly_configured:
+                attempt_kwargs[_fallback_control_key] = bool(at_dt_min)
             solve_t0 = time.perf_counter()
             head_trial, info = model.solve(
                 formulation="unconfined",
@@ -353,7 +369,7 @@ def solve_transient_unconfined_experimental(
                 dt=dt_try,
                 head_prev=head_accepted,
                 return_info=True,
-                **backend_kwargs,
+                **attempt_kwargs,
             )
             try:
                 wp.synchronize_device(model.device_str)
@@ -466,7 +482,6 @@ def solve_transient_unconfined_experimental(
             rejected_this_period += 1
             counters["experimental_retry_count"] += 1
             counters["experimental_rejected_attempt_count"] += 1
-            at_dt_min = dt_try <= dt_min + max(1.0e-12, period_dt * 1.0e-12)
             if retry_enabled and not at_dt_min and retries_for_timestep <= max_retries:
                 current_dt = max(dt_min, dt_try * shrink_factor)
                 growth_steps = 0

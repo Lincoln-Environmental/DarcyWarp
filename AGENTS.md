@@ -118,8 +118,14 @@ Canonical backends live in `solvers/registry.py` + `solver_capabilities.py`:
   steady or one transient timestep; when explicitly selected they may also drive
   complete multi-timestep/multi-period transient simulations through
   `solvers/transient_experimental.py` (capability-gated via
-  `supports_production_period_driver`; per-timestep state refresh, retry with
-  dt shrink, per-timestep fallback, budgets, full histories).
+  `supports_production_period_driver`; per-timestep state refresh, retry-first
+  fallback policy — backend fallback chains are deferred to the last-resort
+  attempt at dt_min unless explicitly configured — budgets, full histories).
+  Newton additionally uses inexact-Newton forcing (Eisenstat–Walker style
+  inner-tolerance schedule with backtrack safeguard and final-step tightening,
+  `newton_inexact_forcing_enabled` default on unless
+  `newton_fgmres_relative_tolerance` is set explicitly) and a cached operator
+  workspace (`solvers/newton_state.py`).
 - Legacy aliases `pcg`, `kcycle`, `multigrid`, `mg`, `picard`, `picard_kcycle`;
   for unconfined solves, `kcycle` still means the Picard/K-cycle backend.
 
