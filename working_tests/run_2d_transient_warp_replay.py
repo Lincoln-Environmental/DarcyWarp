@@ -185,8 +185,9 @@ def variant_workspace_name(
     """
     Build a stable workspace name for one optimization candidate.
     """
-    if "name" in candidate and str(candidate["name"]).strip():
-        return str(candidate["name"]).strip()
+    name = candidate.get("name")
+    if name is not None and str(name).strip():
+        return str(name).strip()
     return (
         f"nu_pre_{int(candidate['nu_pre'])}_post_{int(candidate['nu_post'])}"
         f"_coarse_{int(candidate['nu_coarse'])}_max_levels_{int(candidate['max_levels'])}"
@@ -562,35 +563,23 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------
     stop_after_first_accepted = False
 
+    # K-cycle hierarchy/smoothing candidates: (nu_pre, nu_post, nu_coarse, max_levels).
+    # (1, 1, 1, 4) is the current light production configuration.
     kcycle_candidate_settings = [
-        # Current light production configuration.
-        (1, 1, 1, 4),]
-    #
-    #     # Stronger smoothing with the same hierarchy.
-    #     (2, 2, 1, 4),
-    #     (3, 3, 1, 4),
-    #
-    #     # Deeper hierarchy candidates.
-    #     (1, 1, 1, 5),
-    #     (2, 2, 1, 5),
-    #     (3, 3, 1, 5),
-    # ]
+        (1, 1, 1, 4),
+    ]
 
-    # These values are relevant to legacy fallback runs. They do not control
-    # the normal residual-driven path unless adaptation is disabled or fails.
+    # Legacy dh-schedule inner-cycle caps: (early, middle, late, middle_dh, late_dh).
+    # These are relevant to legacy fallback runs only; they do not control the
+    # normal residual-driven path. build_optimization_candidates uses just the
+    # first entry for adaptive candidates — the full list only multiplies the
+    # sweep when a legacy {"adaptive_unconfined_inner_enabled": False} entry is
+    # present in adaptive_inner_candidate_settings.
     inner_cycle_candidate_settings = [
         (5, 20, 40, 1.0, 1.0e-2),
-        (5, 25, 60, 1.0, 1.0e-2),
-        (5, 30, 80, 1.0, 1.0e-2),
-        (5, 30, 80, 1.0, 1.0e-2),
     ]
 
     adaptive_inner_candidate_settings = [
-        # # Always retain a validated legacy control in an optimization run.
-        # {
-        #     "adaptive_unconfined_inner_enabled": False,
-        # },
-
         # Conservative adaptive controller
         {
             "adaptive_unconfined_inner_enabled": True,

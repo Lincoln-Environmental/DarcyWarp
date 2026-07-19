@@ -22,6 +22,7 @@ The code has two eras:
 
 1. **Original hand-written core**: steady 2D K-cycle/PCG, `model_builder.py`, `sparse_operator.py`, benchmark scaffolding.
 2. **AI-expanded layers** (GPT/Codex): transient 2D unconfined, adaptive inner controller, 3D transient unconfined, replay infrastructure, mass-budget diagnostics.
+3. **Solver-extraction migration** (Codex, 2026-07, `dev` branch): 2D algorithm bodies moved out of the `warped_darcy.py` monolith into `DARCY_WARP_PACKAGE/solvers/` (registry + backends) and `physics/`. `warped_darcy.py` retains the `@wp.kernel` definitions, hierarchy construction, BC/field ownership, and thin compatibility wrappers; backends re-import the model module's globals at call time (`globals().update(...)`) as a deliberate lazy bridge.
 
 ---
 
@@ -35,7 +36,17 @@ DARCY_WARP_PACKAGE/
   model_builder.py       # synthetic domains, DEM, BC masks, T/R fields
   sparse_operator.py     # CPU scipy reference matrix Ah=b mirroring GPU kernels
   modflow_truth.py       # FloPy MF6 truth models + persistent batch workers
-  warped_darcy.py        # 2D solver: ~12k lines, monolith
+  model.py               # public 2D facade re-exporting WarpDarcySolver
+  warped_darcy.py        # 2D model: ~7.5k lines — @wp.kernel defs, hierarchy build,
+                         # BC/field/array ownership, compatibility wrappers -> solvers/
+  solvers/               # extracted 2D backends (post-migration)
+    registry.py          # backend selection + legacy aliases (pcg/kcycle/mg/picard)
+    multigrid_kcycle.py  # confined K-cycle backend + device-buffers inner solve
+    picard_unconfined.py # unconfined Picard/K-cycle backend (host fallback path)
+    transient_unconfined.py # transient period driver incl. production device fast path
+    pcg.py               # confined PCG backend
+    context.py, base.py, hierarchy.py, convergence.py, resources.py, regression.py
+  physics/               # extracted operator/storage/budget helpers
   warped_darcy_3d.py     # thin 3D wrapper class
   solvers_3d.py          # 3D algorithms: K-cycle, Chebyshev, Picard
   kernels_3d.py          # all 3D @wp.kernel definitions
@@ -71,18 +82,23 @@ tests/
 
 ### Entry points
 
-- `WarpDarcySolver.__init__` (~l. 4624)
-- `build_from_truth_inputs` (~l. 5730)
-- `build_from_fields` (~l. 5901)
-- `solve` (~l. 11959) — public dispatcher
-- `solve_transient_2d_unconfined` (~l. 10327) — multi-period API
-- `solve_multigrid_kcycle` (~l. 8355) — core nonlinear solve
-- `update_T_in_place` (~l. 7001) — ensemble T-change fast path
+- `WarpDarcySolver.__init__` (~l. 4100)
+- `build_from_truth_inputs` (~l. 5208)
+- `build_from_fields` (~l. 5379)
+- `solve` (~l. 7250) — public dispatcher (thin delegate to `solvers/registry.py`)
+- `solve_transient_2d_unconfined` (~l. 7233) — multi-period API (thin delegate to
+  `solvers/transient_unconfined.py::solve_transient_unconfined`, ~l. 2030)
+- `solve_multigrid_kcycle` (~l. 7208) — thin delegate; real bodies:
+  `solvers/multigrid_kcycle.py::solve_multigrid_kcycle_backend` (~l. 607, host) and
+  `solve_kcycle_device_buffers` (~l. 21, device inner solve)
+- `update_T_in_place` (~l. 6254) — ensemble T-change fast path
 
 ### Solvers
 
-- `solver="pcg"`: steady confined only. `transient=True` raises `NotImplementedError`.
-- `solver="kcycle"`: geometric multigrid, supports confined/unconfined, steady/transient.
+Canonical backends live in `solvers/registry.py`:
+
+- `solver="pcg"` (alias of `confined_pcg`): steady confined only. `transient=True` raises `NotImplementedError`.
+- `solver="kcycle"`: geometric multigrid. Confined solves map to `confined_kcycle`; unconfined solves map to `unconfined_picard_kcycle` (legacy meaning retained). Other aliases: `multigrid`, `mg`, `picard`, `picard_kcycle`.
 
 ### Unconfined physics
 
@@ -295,7 +311,7 @@ Usually means `sat = h - bottom` (saturated thickness of the aquifer), not soil 
 
 - Per-iteration host sync for scalar reductions in PCG/K-cycle convergence checks.
 - Memory management: explicit `gc.collect()` calls to break Warp array reference cycles during hierarchy rebuilds.
-- `warped_darcy.py` is ~12k lines and heavily branched; small changes can have non-obvious interactions between storage modes, active-set strategies, and adaptive controller fallback.
+- `warped_darcy.py` is still ~7.5k lines post-migration and the `solvers/*` backends re-import its globals at call time (`globals().update(...)`); small changes can have non-obvious interactions between storage modes, active-set strategies, and adaptive controller fallback.
 
 ---
 
@@ -346,9 +362,10 @@ python working_tests/run_2d_transient_warp_replay.py
 | MF6 binary path | `project_base.py` | `MF6`, `require_mf6()` |
 | CPU reference matrix | `sparse_operator.py` | `build_sparse_system_fd_like` |
 | 2D kernels | `warped_darcy.py` | inlined `@wp.kernel` functions |
+| 2D backends/registry | `solvers/registry.py`, `solvers/*.py` | post-migration backend dispatch |
 | 3D kernels | `kernels_3d.py` | all 3D kernels |
 | 3D algorithms | `solvers_3d.py` | K-cycle, Chebyshev, Picard |
-| Adaptive inner controller | `warped_darcy.py` ~l. 1088-1500+ | `_run_adaptive_inner_kcycle_blocks` |
+| Adaptive inner controller | `warped_darcy.py` ~l. 631-1363 | `_run_adaptive_inner_kcycle_blocks` ~l. 1178 |
 | Production replay | `working_tests/run_2d_transient_warp_replay.py` | |
 | Replay core | `working_tests/transient_replay_support.py` | `run_replay_from_artifact` |
 | Storage formulations | `working_tests/transient_replay_storage.py` | `compute_unconfined_storage_components` |

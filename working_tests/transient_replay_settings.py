@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import math
-
 import numpy as np
 
 PRODUCTION_RUN_MODE = "production"
@@ -52,6 +50,13 @@ def default_solve_controls() -> dict:
         "rel_tol": 5.0e-7,
         "abs_tol_min": 5.0e-7,
         "dh_rms_tol": 1.0e-4,
+        # Host-fallback-only knobs: residual_floor_tol, the chebyshev_* outer
+        # acceleration controls, inner_forcing_eta,
+        # transmissivity_relaxation_enabled, unconfined_pre_solve_iterations,
+        # and initial_saturated_thickness are consumed by the host Picard solve
+        # (use_device_transient_fast_path=False). The production device fast
+        # path does not read them — it drives smoothing through "smoother" /
+        # "cheby_lambda_*" and the adaptive_inner_* controller below.
         "residual_floor_tol": 1.0e-4,
         "smoother": "chebyshev",
         "omega": 0.7,
@@ -195,139 +200,3 @@ def representative_recharge_rate(recharge_rates: np.ndarray) -> float:
     if not np.all(np.isfinite(rates)):
         raise ValueError("recharge_rates must be finite.")
     return float(np.mean(rates))
-
-
-def classify_period_mass_balance(percent_discrepancy: float, is_startup_period: bool) -> str:
-    value = abs(float(percent_discrepancy or 0.0))
-    if value < MASS_BALANCE_EXCELLENT_PCT:
-        return "excellent"
-    if value < MASS_BALANCE_GOOD_PCT:
-        return "good"
-    if is_startup_period:
-        if value < MASS_BALANCE_STARTUP_WARN_PCT:
-            return "startup_warning"
-        return "fail"
-    if value < MASS_BALANCE_ACCEPTABLE_PCT:
-        return "acceptable"
-    return "fail"
-
-
-def classify_replay_mass_balance(
-    mass_balance: dict,
-    startup_period: int = MASS_BALANCE_STARTUP_PERIOD,
-) -> dict:
-    rows = mass_balance.get("per_period") or []
-    cumulative = mass_balance.get("cumulative") or {}
-    cumulative_pct = float(cumulative.get("percent_discrepancy", 0.0) or 0.0)
-    warnings: list[str] = []
-    failures: list[str] = []
-    if not rows:
-        return {
-            "mass_balance_class": "fail",
-            "mass_balance_passed": False,
-            "cumulative_percent_discrepancy": cumulative_pct,
-            "startup_percent_discrepancy": None,
-            "worst_nonstartup_percent_discrepancy": None,
-            "warnings": warnings,
-            "failures": ["mass balance has no per-period rows"],
-        }
-    startup_row = next((row for row in rows if int(row.get("period", 0)) == int(startup_period)), None)
-    startup_pct = abs(float(startup_row.get("percent_discrepancy", 0.0) or 0.0)) if startup_row is not None else 0.0
-    nonstartup_values = [
-        abs(float(row.get("percent_discrepancy", 0.0) or 0.0))
-        for row in rows
-        if int(row.get("period", 0)) != int(startup_period)
-    ]
-    worst_nonstartup = max(nonstartup_values) if nonstartup_values else 0.0
-    cum_abs = abs(cumulative_pct)
-    failed = False
-    if cum_abs >= MASS_BALANCE_ACCEPTABLE_PCT:
-        failed = True
-        failures.append(
-            f"cumulative percent discrepancy {cum_abs:.5g}% >= {MASS_BALANCE_ACCEPTABLE_PCT}%"
-        )
-    if nonstartup_values and worst_nonstartup >= MASS_BALANCE_GOOD_PCT:
-        failed = True
-        failures.append(
-            f"a non-startup period has percent discrepancy {worst_nonstartup:.5g}% >= "
-            f"{MASS_BALANCE_GOOD_PCT}%"
-        )
-    if startup_pct >= MASS_BALANCE_STARTUP_WARN_PCT:
-        failed = True
-        failures.append(
-            f"startup period {startup_period} percent discrepancy {startup_pct:.5g}% >= "
-            f"{MASS_BALANCE_STARTUP_WARN_PCT}%"
-        )
-    if failed:
-        return {
-            "mass_balance_class": "fail",
-            "mass_balance_passed": False,
-            "cumulative_percent_discrepancy": cumulative_pct,
-            "startup_percent_discrepancy": startup_pct,
-            "worst_nonstartup_percent_discrepancy": worst_nonstartup,
-            "warnings": warnings,
-            "failures": failures,
-        }
-    startup_elevated = (
-        startup_pct >= MASS_BALANCE_GOOD_PCT
-        and cum_abs < MASS_BALANCE_ACCEPTABLE_PCT
-        and (not nonstartup_values or worst_nonstartup < MASS_BALANCE_GOOD_PCT)
-    )
-    if startup_elevated:
-        warnings.append(
-            f"Period {startup_period} has a slightly elevated mass-balance discrepancy "
-            f"({startup_pct:.5g}%) during the confined_pre_solve / warm-start startup transient. "
-            "Cumulative closure is acceptable and non-startup periods close tightly."
-        )
-        return {
-            "mass_balance_class": "startup_warning",
-            "mass_balance_passed": True,
-            "cumulative_percent_discrepancy": cumulative_pct,
-            "startup_percent_discrepancy": startup_pct,
-            "worst_nonstartup_percent_discrepancy": worst_nonstartup,
-            "warnings": warnings,
-            "failures": failures,
-        }
-    worst_overall = max(abs(float(row.get("percent_discrepancy", 0.0) or 0.0)) for row in rows)
-    if worst_overall < MASS_BALANCE_EXCELLENT_PCT:
-        overall_class = "excellent"
-    elif worst_overall < MASS_BALANCE_GOOD_PCT:
-        overall_class = "good"
-    else:
-        overall_class = "acceptable"
-    return {
-        "mass_balance_class": overall_class,
-        "mass_balance_passed": True,
-        "cumulative_percent_discrepancy": cumulative_pct,
-        "startup_percent_discrepancy": startup_pct,
-        "worst_nonstartup_percent_discrepancy": worst_nonstartup,
-        "warnings": warnings,
-        "failures": failures,
-    }
-
-
-def annotate_mass_balance_classification(
-    mass_balance: dict,
-    startup_period: int = MASS_BALANCE_STARTUP_PERIOD,
-) -> dict:
-    classification = classify_replay_mass_balance(mass_balance, startup_period=startup_period)
-    mass_balance["mass_balance_class"] = classification["mass_balance_class"]
-    mass_balance["mass_balance_passed"] = classification["mass_balance_passed"]
-    mass_balance["cumulative_percent_discrepancy"] = classification["cumulative_percent_discrepancy"]
-    mass_balance["startup_percent_discrepancy"] = classification["startup_percent_discrepancy"]
-    mass_balance["worst_nonstartup_percent_discrepancy"] = classification["worst_nonstartup_percent_discrepancy"]
-    mass_balance["mass_balance_warnings"] = classification["warnings"]
-    mass_balance["mass_balance_failures"] = classification["failures"]
-    for row in mass_balance.get("per_period") or []:
-        row["mass_balance_class"] = classify_period_mass_balance(
-            row.get("percent_discrepancy", 0.0),
-            is_startup_period=(int(row.get("period", 0)) == int(startup_period)),
-        )
-    for variant_key in ("mass_balance_linearized", "mass_balance_volume_sy"):
-        variant = mass_balance.get(variant_key) or {}
-        for row in variant.get("per_period") or []:
-            row["mass_balance_class"] = classify_period_mass_balance(
-                row.get("percent_discrepancy", 0.0),
-                is_startup_period=(int(row.get("period", 0)) == int(startup_period)),
-            )
-    return mass_balance
