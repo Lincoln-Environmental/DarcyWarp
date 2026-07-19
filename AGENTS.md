@@ -54,7 +54,8 @@ DARCY_WARP_PACKAGE/
 
 working_tests/
   run_2d_transient_vs_mf6.py        # MF6 truth artifact generator
-  run_2d_transient_warp_replay.py   # production replay + K-cycle optimizer
+  run_2d_transient_warp_replay.py   # thin production replay harness
+  optimize_2d_transient_kcycle.py   # K-cycle tuning sweep (experiment harness, not production)
   transient_replay_support.py       # core replay harness
   transient_replay_settings.py      # production settings / defaults
   transient_replay_storage.py       # storage-formulation helpers
@@ -243,7 +244,9 @@ The replay is a thin harness: production solve controls come from
 `transient_replay_settings.py::default_solve_controls()` (no duplicated
 control lists in the script). CLI switches: `--t-field-kind {ugly_t,homogeneous}`,
 `--t-field-seed`, `--nx/--ny/--n-periods`, `--artifact`, `--workspace`,
-`--device`, `--optimize-kcycle`.
+`--device`. The K-cycle tuning sweep is a separate experiment harness:
+`python working_tests/optimize_2d_transient_kcycle.py` (same case CLI, plus
+`--stop-after-first-accepted`).
 
 - Loads artifact via `transient_artifacts.py`.
 - Calls `run_replay_from_artifact()` in `transient_replay_support.py`.
