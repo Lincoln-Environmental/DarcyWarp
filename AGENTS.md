@@ -45,7 +45,16 @@ DARCY_WARP_PACKAGE/
     picard_unconfined.py # unconfined Picard/K-cycle backend (host fallback path)
     transient_unconfined.py # transient period driver incl. production device fast path
     pcg.py               # confined PCG backend
+    semismooth_newton.py # experimental Newton backend (FGMRES + K-cycle preconditioner)
+    fas.py               # experimental FAS V-cycle backend
+    fas_hierarchy.py, fas_kernels.py, fas_state.py  # FAS rediscretized hierarchy/state/kernels
+    fgmres.py, kcycle_preconditioner.py, newton_kernels.py  # Newton machinery
+    capabilities.py      # shim re-exporting solver_capabilities.py
     context.py, base.py, hierarchy.py, convergence.py, resources.py, regression.py
+  solver_capabilities.py # CAPABILITIES/ALIASES metadata (experimental,
+                         # supports_transient, supports_production_period_driver)
+  nonlinear/             # authoritative 2D unconfined nonlinear operator
+                         # (context/kernels/operator/reference) — Newton/FAS foundation
   physics/               # extracted operator/storage/budget helpers
   warped_darcy_3d.py     # thin 3D wrapper class
   solvers_3d.py          # 3D algorithms: K-cycle, Chebyshev, Picard
@@ -96,10 +105,17 @@ tests/
 
 ### Solvers
 
-Canonical backends live in `solvers/registry.py`:
+Canonical backends live in `solvers/registry.py` + `solver_capabilities.py`:
 
-- `solver="pcg"` (alias of `confined_pcg`): steady confined only. `transient=True` raises `NotImplementedError`.
-- `solver="kcycle"`: geometric multigrid. Confined solves map to `confined_kcycle`; unconfined solves map to `unconfined_picard_kcycle` (legacy meaning retained). Other aliases: `multigrid`, `mg`, `picard`, `picard_kcycle`.
+- Production: `confined_pcg` (steady only; `transient=True` raises
+  `NotImplementedError`), `confined_kcycle`, `unconfined_picard_kcycle`
+  (production default; the only backend allowed in the multi-period transient
+  driver — gated via `supports_production_period_driver`).
+- Experimental (`select_backend` emits a runtime warning; steady or
+  single-period transient `solve(...)` only): `unconfined_semismooth_newton_kcycle`,
+  `unconfined_fas`.
+- Legacy aliases `pcg`, `kcycle`, `multigrid`, `mg`, `picard`, `picard_kcycle`;
+  for unconfined solves, `kcycle` still means the Picard/K-cycle backend.
 
 ### Unconfined physics
 
@@ -329,6 +345,10 @@ Usually means `sat = h - bottom` (saturated thickness of the aquifer), not soil 
 | `test_2d_unconfined.py` | warp | host/device parity, dry cells, MF6 truth fixtures |
 | `test_3d_solver.py` | warp | 3D transient unconfined smoke, vertical-line reference, scipy reference |
 | `test_adaptive_inner_controller.py` | — | pure-Python adaptive block controller |
+| `test_solver_registry_2d.py` | — | backend registry, aliases, capability flags |
+| `test_nonlinear_operator_2d.py` | warp | Stage-1 nonlinear operator vs host reference, Jv, exact storage |
+| `test_semismooth_newton_2d.py` | warp | experimental Newton backend (steady/transient/GHB/fallbacks) |
+| `test_fas_2d.py` | warp | experimental FAS backend (hierarchy, cycles, fallbacks, workspace reuse) |
 | `test_comparison_results.py` | warp + fixtures | end-to-end Warp vs MF6 truth |
 
 ### Important caveats

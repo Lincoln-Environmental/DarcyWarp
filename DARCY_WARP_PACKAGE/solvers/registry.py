@@ -3,27 +3,24 @@
 
 from __future__ import annotations
 
+import warnings
 from typing import Any
 
 from .base import SolverBackend, SolverContext
 from .multigrid_kcycle import ConfinedKCycleBackend
 from .pcg import ConfinedPCGBackend
 from .picard_unconfined import UnconfinedPicardKCycleBackend
+from .semismooth_newton import UnconfinedSemismoothNewtonKCycleBackend
+from .fas import UnconfinedFASBackend
+from .capabilities import CAPABILITIES, canonical_name
 
 
 _BACKENDS: dict[str, SolverBackend] = {
     "confined_pcg": ConfinedPCGBackend(),
     "confined_kcycle": ConfinedKCycleBackend(),
     "unconfined_picard_kcycle": UnconfinedPicardKCycleBackend(),
-}
-
-_ALIASES = {
-    "pcg": "confined_pcg",
-    "kcycle": "confined_kcycle",
-    "multigrid": "confined_kcycle",
-    "mg": "confined_kcycle",
-    "picard": "unconfined_picard_kcycle",
-    "picard_kcycle": "unconfined_picard_kcycle",
+    "unconfined_semismooth_newton_kcycle": UnconfinedSemismoothNewtonKCycleBackend(),
+    "unconfined_fas": UnconfinedFASBackend(),
 }
 
 
@@ -34,27 +31,7 @@ def available_backends() -> tuple[str, ...]:
 
 def canonical_solver_name(solver: str | None, *, formulation: str, default: str) -> str:
     """Resolve compatibility aliases and choose the formulation-safe default."""
-    requested = default if solver is None else str(solver)
-    name = str(requested).strip().lower()
-    # ``kcycle`` historically meant the Picard/K-cycle path for unconfined
-    # calls.  Retain that interpretation while exposing the explicit name.
-    if formulation == "unconfined" and name in {"kcycle", "multigrid", "mg"}:
-        name = "unconfined_picard_kcycle"
-    else:
-        name = _ALIASES.get(name, name)
-    if name not in _BACKENDS:
-        choices = ", ".join(available_backends())
-        raise ValueError(f"unknown 2D solver backend {requested!r}; choose one of: {choices}.")
-    if formulation == "confined" and name == "unconfined_picard_kcycle":
-        raise ValueError(
-            "solver='unconfined_picard_kcycle' requires formulation='unconfined'."
-        )
-    if formulation == "unconfined" and name != "unconfined_picard_kcycle":
-        raise ValueError(
-            "unconfined flow currently requires solver='unconfined_picard_kcycle' "
-            "(legacy alias: 'kcycle')."
-        )
-    return name
+    return canonical_name(solver, formulation=formulation, default=default)
 
 
 def select_backend(
@@ -66,10 +43,16 @@ def select_backend(
 ) -> SolverBackend:
     """Validate the requested formulation/mode and return its backend."""
     name = canonical_solver_name(solver, formulation=formulation, default=default)
-    if transient and name == "confined_pcg":
+    capability = CAPABILITIES[name]
+    if capability.experimental:
+        warnings.warn(
+            f"solver={name!r} is experimental and not validated for production runs.",
+            stacklevel=2,
+        )
+    if transient and not capability.supports_transient:
         raise NotImplementedError(
-            "Transient storage is implemented for solver='kcycle' only; use "
-            "'confined_kcycle' or 'unconfined_picard_kcycle'."
+            f"solver={name!r} does not support transient storage; select a "
+            "backend whose capability metadata declares supports_transient=True."
         )
     return _BACKENDS[name]
 

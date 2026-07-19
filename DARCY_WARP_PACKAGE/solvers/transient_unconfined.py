@@ -7,6 +7,7 @@ from typing import Any
 
 from .context import SolverContext
 from .registry import select_backend
+from .capabilities import CAPABILITIES
 
 def solve_transient_unconfined_backend(
         *,
@@ -2047,8 +2048,14 @@ def solve_transient_unconfined(
         transient=True,
         default="unconfined_picard_kcycle",
     )
-    if backend.name != "unconfined_picard_kcycle":
-        raise ValueError("transient unconfined flow requires unconfined_picard_kcycle.")
+    if not CAPABILITIES[backend.name].supports_production_period_driver:
+        capable = ", ".join(
+            name for name, item in CAPABILITIES.items() if item.supports_production_period_driver
+        )
+        raise ValueError(
+            f"solver={backend.name!r} cannot drive the multi-period transient "
+            f"production driver; choose one of: {capable}."
+        )
     result = solve_transient_unconfined_backend(model=context.model, **kwargs)
     if kwargs.get("return_info", True):
         heads, info = result

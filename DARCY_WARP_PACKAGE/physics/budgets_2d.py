@@ -134,3 +134,37 @@ def compute_mass_balance_budget(
         "chd_net_out_positive": chd_net_out_positive,
         "ghb_net_out_positive": ghb_net_out_positive,
     }])
+
+
+def add_exact_storage_to_budget(
+    budget: pd.DataFrame,
+    storage_flux: np.ndarray,
+) -> pd.DataFrame:
+    """Add exact nonlinear storage uptake/release to a steady package budget.
+
+    Positive Stage-1 storage flux is water retained in the aquifer (an outflow
+    from the flow balance); negative storage flux is release (an inflow).
+    """
+    if len(budget) != 1:
+        raise ValueError("budget must contain exactly one aggregate row.")
+    storage = np.asarray(storage_flux, dtype=np.float64)
+    storage_out = float(np.sum(np.maximum(storage, 0.0)))
+    storage_in = float(np.sum(np.maximum(-storage, 0.0)))
+    result = budget.copy()
+    result.loc[result.index[0], "storage_in"] = storage_in
+    result.loc[result.index[0], "storage_out"] = storage_out
+    total_in = float(result.iloc[0]["total_in"]) + storage_in
+    total_out = float(result.iloc[0]["total_out"]) + storage_out
+    imbalance = total_in - total_out
+    denominator = abs(total_in) + abs(total_out)
+    result.loc[result.index[0], "total_in"] = total_in
+    result.loc[result.index[0], "total_out"] = total_out
+    result.loc[result.index[0], "in_minus_out"] = imbalance
+    result.loc[result.index[0], "percent_discrepancy"] = (
+        0.0 if denominator == 0.0 else 100.0 * imbalance / denominator
+    )
+    result.loc[result.index[0], "throughflow"] = 0.5 * (total_in + total_out)
+    result.loc[result.index[0], "imbalance_fraction"] = (
+        0.0 if (total_in + total_out) == 0.0 else imbalance / (0.5 * (total_in + total_out))
+    )
+    return result

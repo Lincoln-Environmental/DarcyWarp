@@ -412,6 +412,115 @@ def compare_results(
     return metrics
 
 
+def seasonal_recharge_rates(
+    recharge_base: float = 1.0e-4,
+    n_periods: int = 12,
+    peak_fraction: float = 0.25,
+    floor_fraction: float = 0.2,
+) -> np.ndarray:
+    """
+    Seasonal (single-peak cosine) recharge-rate series around ``recharge_base``.
+
+    The series is floored at ``floor_fraction`` of the base rate and rescaled
+    so its mean equals ``recharge_base`` exactly.
+    """
+    n_periods = int(n_periods)
+    if n_periods < 1:
+        raise ValueError("n_periods must be positive.")
+    recharge_base = float(recharge_base)
+    if not np.isfinite(recharge_base) or recharge_base <= 0.0:
+        raise ValueError("recharge_base must be positive and finite.")
+    phase = 2.0 * np.pi * (np.arange(n_periods, dtype=np.float64) / float(n_periods) - float(peak_fraction))
+    shape = float(floor_fraction) + (1.0 - float(floor_fraction)) * 0.5 * (1.0 + np.cos(phase))
+    rates = recharge_base * shape
+    rates *= recharge_base / float(np.mean(rates))
+    return rates
+
+
+def _transient_head_metrics(
+    *,
+    warp_heads: np.ndarray,
+    mf6_heads: np.ndarray,
+    active: np.ndarray,
+) -> dict:
+    """
+    Head-difference metrics between Warp and MF6 for one stress period.
+    """
+    warp = np.asarray(warp_heads, dtype=np.float64)
+    mf6 = np.asarray(mf6_heads, dtype=np.float64)
+    mask = np.asarray(active) != 0
+    if warp.shape != mf6.shape or warp.shape != mask.shape:
+        raise ValueError(
+            f"warp_heads {warp.shape}, mf6_heads {mf6_heads.shape}, and active {mask.shape} must match"
+        )
+    n_active = int(mask.sum())
+    if n_active == 0:
+        return {"n_active": 0, "max_abs_diff": 0.0, "rmse": 0.0, "mean_abs_diff": 0.0}
+    diff = warp - mf6
+    abs_diff = np.abs(diff)[mask]
+    return {
+        "n_active": n_active,
+        "max_abs_diff": float(np.max(abs_diff)),
+        "rmse": float(np.sqrt(np.mean(diff[mask] ** 2))),
+        "mean_abs_diff": float(np.mean(abs_diff)),
+    }
+
+
+def compare_transient_results(
+    *,
+    mf6_path: str | Path,
+    warp_path: str | Path,
+    active_3d: np.ndarray,
+) -> dict:
+    """
+    Compare saved transient MF6 and Warp head series (per-period and final).
+    """
+    mf6_path = Path(mf6_path)
+    warp_path = Path(warp_path)
+    with np.load(mf6_path, allow_pickle=False) as mf6_npz:
+        mf6_per_period = np.asarray(mf6_npz["heads_per_period"], dtype=np.float64)
+        mf6_final = (
+            np.asarray(mf6_npz["heads_final"], dtype=np.float64)
+            if "heads_final" in mf6_npz.files
+            else mf6_per_period[-1]
+        )
+    with np.load(warp_path, allow_pickle=False) as warp_npz:
+        warp_per_period = np.asarray(warp_npz["heads_per_period"], dtype=np.float64)
+        warp_final = (
+            np.asarray(warp_npz["heads_final"], dtype=np.float64)
+            if "heads_final" in warp_npz.files
+            else warp_per_period[-1]
+        )
+    if mf6_per_period.shape != warp_per_period.shape:
+        raise ValueError(
+            f"Shape mismatch: MF6 {mf6_per_period.shape}, Warp {warp_per_period.shape}"
+        )
+
+    active = np.asarray(active_3d)
+    n_periods = int(mf6_per_period.shape[0])
+    per_period = []
+    for period in range(n_periods):
+        metrics = _transient_head_metrics(
+            warp_heads=warp_per_period[period],
+            mf6_heads=mf6_per_period[period],
+            active=active,
+        )
+        metrics["period"] = period
+        per_period.append(metrics)
+    worst = max(per_period, key=lambda row: row["max_abs_diff"]) if per_period else None
+    return {
+        "n_periods": n_periods,
+        "per_period": per_period,
+        "worst_period": worst["period"] if worst is not None else None,
+        "final": _transient_head_metrics(warp_heads=warp_final, mf6_heads=mf6_final, active=active),
+        "timing": {
+            "mf6_engine_time": _load_npz_scalar(mf6_path, "engine_time"),
+            "mf6_total_time": _load_npz_scalar(mf6_path, "total_time"),
+            "warp_total_time": _load_npz_scalar(warp_path, "total_time"),
+        },
+    }
+
+
 def _load_npz_scalar(npz_path: Path, name: str, default: float | None = None) -> float | None:
     if not npz_path.exists():
         return default

@@ -136,7 +136,7 @@ def test_pcg_transient_is_rejected_instead_of_ignored():
         solver_type="pcg",
     )
 
-    with pytest.raises(NotImplementedError, match="Transient storage is implemented"):
+    with pytest.raises(NotImplementedError, match="does not support transient storage"):
         solver.solve(
             solver="pcg",
             transient=True,

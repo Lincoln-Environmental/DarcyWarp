@@ -31,6 +31,7 @@ def solve_kcycle_device_buffers(
     levels,
     solve_controls,
     return_scalar_info=True,
+    fixed_work_no_scalar_reads=False,
 ):
     from DARCY_WARP_PACKAGE import warped_darcy as kernel_module
     self = model
@@ -153,30 +154,39 @@ def solve_kcycle_device_buffers(
             "fine_operator_residual_checked": True,
         }
 
-    wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[lvl0.rTr_buf], device=device)
-    if storage_diag_wp is not None:
-        _cr_k = compute_residual_kernel
-        _cr_in = [
-            lvl0.x_wp, lvl0.b_wp, lvl0.T_wp, lvl0.active_wp, lvl0.bc_mask_wp,
-            lvl0.gh_mask_wp, lvl0.ghb_factor_wp, storage_diag_wp,
-            lvl0.r_wp, lvl0.rTr_buf, nx0, ny0
-        ]
-    else:
-        _cr_k = compute_residual_no_storage_kernel
-        _cr_in = [
-            lvl0.x_wp, lvl0.b_wp, lvl0.T_wp, lvl0.active_wp, lvl0.bc_mask_wp,
-            lvl0.gh_mask_wp, lvl0.ghb_factor_wp,
-            lvl0.r_wp, lvl0.rTr_buf, nx0, ny0
-        ]
-    wp.launch(kernel=_cr_k, dim=dim0, inputs=_cr_in, device=device)
-    rTr0 = float(lvl0.rTr_buf.numpy()[0])
-    gpu_scalar_sync_count += 1
-    r_rms0 = float(np.sqrt(max(rTr0, 0.0) / float(n_free0)))
-    tol_abs = float(max(abs_tol_min, rel_tol * r_rms0))
-    thr_rTr = float((tol_abs * tol_abs) * float(n_free0))
+    if return_scalar_info or not fixed_work_no_scalar_reads:
+        wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[lvl0.rTr_buf], device=device)
+        if storage_diag_wp is not None:
+            _cr_k = compute_residual_kernel
+            _cr_in = [
+                lvl0.x_wp, lvl0.b_wp, lvl0.T_wp, lvl0.active_wp, lvl0.bc_mask_wp,
+                lvl0.gh_mask_wp, lvl0.ghb_factor_wp, storage_diag_wp,
+                lvl0.r_wp, lvl0.rTr_buf, nx0, ny0
+            ]
+        else:
+            _cr_k = compute_residual_no_storage_kernel
+            _cr_in = [
+                lvl0.x_wp, lvl0.b_wp, lvl0.T_wp, lvl0.active_wp, lvl0.bc_mask_wp,
+                lvl0.gh_mask_wp, lvl0.ghb_factor_wp,
+                lvl0.r_wp, lvl0.rTr_buf, nx0, ny0
+            ]
+        wp.launch(kernel=_cr_k, dim=dim0, inputs=_cr_in, device=device)
+        rTr0 = float(lvl0.rTr_buf.numpy()[0])
+        gpu_scalar_sync_count += 1
+        r_rms0 = float(np.sqrt(max(rTr0, 0.0) / float(n_free0)))
+        tol_abs = float(max(abs_tol_min, rel_tol * r_rms0))
+        thr_rTr = float((tol_abs * tol_abs) * float(n_free0))
 
-    if rTr0 <= thr_rTr:
-        return {"converged": True, "n_cycles_used": 0, "r_rms_end": r_rms0}
+        if rTr0 <= thr_rTr:
+            return {"converged": True, "n_cycles_used": 0, "r_rms_end": r_rms0}
+    else:
+        # Fixed-work preconditioner mode: deliberately avoid device scalar
+        # reads and convergence decisions.  The caller requested exactly
+        # ``max_cycles_i`` K-cycles.
+        rTr0 = float("inf")
+        r_rms0 = float("inf")
+        tol_abs = float("nan")
+        thr_rTr = float("nan")
 
     def pcg_solve_level(level, max_iter_level: int):
         nxL = int(level.nx)

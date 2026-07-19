@@ -34,9 +34,11 @@ def create_solver(
     solver
         Solver preference. 2D accepts canonical backend names
         ``'confined_pcg'``, ``'confined_kcycle'``, and
-        ``'unconfined_picard_kcycle'`` plus legacy ``'pcg'``, ``'kcycle'``,
-        ``'multigrid'``, and ``'mg'``.  Formulation is selected at ``solve``
-        time.  3D accepts ``'kcycle'`` or ``'chebyshev'``.
+        ``'unconfined_picard_kcycle'``. The experimental
+        ``'unconfined_semismooth_newton_kcycle'`` and ``'unconfined_fas'``
+        backends are explicit-only. Legacy aliases ``'pcg'``, ``'kcycle'``,
+        ``'multigrid'``, and ``'mg'`` remain available. Formulation is selected
+        at ``solve`` time. 3D accepts ``'kcycle'`` or ``'chebyshev'``.
     nx, ny
         Number of columns and rows.
     nz
@@ -65,23 +67,13 @@ def create_solver(
     # Validate dimension-specific arguments before importing any solver module,
     # so callers get clear ValueError messages even if warp is not installed.
     if dim == 2:
-        solver_aliases = {
-            "pcg": "confined_pcg",
-            "kcycle": "confined_kcycle",
-            "multigrid": "confined_kcycle",
-            "mg": "confined_kcycle",
-            "picard": "unconfined_picard_kcycle",
-            "picard_kcycle": "unconfined_picard_kcycle",
-        }
+        from DARCY_WARP_PACKAGE.solver_capabilities import ALIASES, CAPABILITIES
+
+        solver_aliases = ALIASES
         solver_norm = solver_aliases.get(solver_norm, solver_norm)
-        if solver_norm not in {
-            "confined_pcg",
-            "confined_kcycle",
-            "unconfined_picard_kcycle",
-        }:
+        if solver_norm not in CAPABILITIES:
             raise ValueError(
-                "2D solver must be a supported backend: confined_pcg, "
-                "confined_kcycle, or unconfined_picard_kcycle"
+                "2D solver must be a supported backend: " + ", ".join(CAPABILITIES)
             )
     else:
         if solver_norm not in {"kcycle", "chebyshev"}:
