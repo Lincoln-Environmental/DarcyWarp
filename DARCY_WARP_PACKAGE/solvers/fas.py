@@ -484,10 +484,10 @@ def solve_unconfined_fas(*, context: SolverContext, **kwargs: Any):
     max_levels = int(kwargs.get("fas_max_levels", kwargs.get("max_levels", 5)))
     min_coarse_cells = int(kwargs.get("fas_min_coarse_cells", 4))
     controls = {
-        "pre_sweeps": int(kwargs.get("fas_pre_smoothing_sweeps", 3)),
-        "post_sweeps": int(kwargs.get("fas_post_smoothing_sweeps", 3)),
+        "pre_sweeps": int(kwargs.get("fas_pre_smoothing_sweeps", 4)),
+        "post_sweeps": int(kwargs.get("fas_post_smoothing_sweeps", 4)),
         "coarse_sweeps": int(kwargs.get("fas_coarse_smoothing_sweeps", 40)),
-        "damping": float(kwargs.get("fas_damping", 0.65)),
+        "damping": float(kwargs.get("fas_damping", 0.8)),
         "coarse_damping": float(kwargs.get("fas_coarse_damping", 0.7)),
         "smoothing_limit": float(kwargs.get("fas_smoothing_head_change_limit", 5.0)),
         "correction_limit": float(kwargs.get("fas_correction_head_change_limit", 10.0)),

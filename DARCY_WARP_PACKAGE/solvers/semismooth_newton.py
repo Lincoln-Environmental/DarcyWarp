@@ -199,7 +199,7 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
     armijo = float(kwargs.pop("newton_armijo_coefficient", 1.0e-4))
     max_head_change = float(kwargs.pop("newton_max_head_change", kwargs.get("max_head_change_per_outer_iteration", 5.0)))
     fallback_enabled = bool(kwargs.pop("newton_fallback_to_picard", True))
-    preconditioner_cycles = int(kwargs.pop("newton_preconditioner_kcycles", 1))
+    preconditioner_cycles = int(kwargs.pop("newton_preconditioner_kcycles", 2))
     max_levels = int(kwargs.get("max_levels", 5))
     min_coarse_cells = kwargs.get("min_coarse_cells", 500)
 
