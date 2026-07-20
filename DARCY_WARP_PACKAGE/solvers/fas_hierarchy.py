@@ -40,13 +40,6 @@ class FASPhysicalLevel2D:
         return float(self.dx) * float(self.dx)
 
 
-def _blocks(shape: tuple[int, int]):
-    ny, nx = shape
-    for cj in range((ny + 1) // 2):
-        for ci in range((nx + 1) // 2):
-            yield cj, ci, slice(2 * cj, min(2 * cj + 2, ny)), slice(2 * ci, min(2 * ci + 2, nx))
-
-
 def _as_field(value: Any, *, shape: tuple[int, int], dtype: Any) -> np.ndarray:
     array = np.asarray(value, dtype=dtype)
     if array.ndim == 0:
@@ -102,76 +95,86 @@ def make_fine_physical_level(
     )
 
 
+def _pad_to_even(array: np.ndarray, even_shape: tuple[int, int]) -> np.ndarray:
+    """Zero-pad a 2D field to even dimensions (padded cells are inactive)."""
+    pad_y = even_shape[0] - array.shape[0]
+    pad_x = even_shape[1] - array.shape[1]
+    if pad_y == 0 and pad_x == 0:
+        return array
+    return np.pad(array, ((0, pad_y), (0, pad_x)), mode="constant", constant_values=0)
+
+
 def coarsen_physical_level(fine: FASPhysicalLevel2D, *, min_sat: float) -> FASPhysicalLevel2D:
-    """Rediscretize one level with explicit intensive/extensive conventions."""
+    """Rediscretize one level with explicit intensive/extensive conventions.
+
+    Vectorized 2x2 block reduction: fine fields are zero-padded to even
+    dimensions (padded cells are inactive and drop out of every masked
+    reduction), reshaped to (ny_c, 2, nx_c, 2) blocks and reduced over the
+    block axes in row-major order — the same summation order and semantics as
+    the original per-block loop.
+    """
     ny_c = (fine.ny + 1) // 2
     nx_c = (fine.nx + 1) // 2
     shape_c = (ny_c, nx_c)
-    zeros = np.zeros(shape_c, dtype=np.float64)
-    K_c = zeros.copy()
-    top_c = zeros.copy()
-    bottom_c = zeros.copy()
-    active_c = np.zeros(shape_c, dtype=np.int32)
-    fraction_c = zeros.copy()
-    bc_c = np.zeros(shape_c, dtype=np.int32)
-    bc_values_c = zeros.copy()
-    source_c = zeros.copy()
-    gh_mask_c = np.zeros(shape_c, dtype=np.int32)
-    gh_factor_c = zeros.copy()
-    gh_head_c = zeros.copy()
-    sy_c = zeros.copy()
-    ss_c = zeros.copy()
-    previous_c = zeros.copy()
+    even = (2 * ny_c, 2 * nx_c)
 
-    for cj, ci, js, is_ in _blocks(fine.shape):
-        active_block = fine.active[js, is_] != 0
-        count = int(np.count_nonzero(active_block))
-        fraction_c[cj, ci] = float(count) / 4.0
-        if count == 0:
-            continue
-        active_c[cj, ci] = 1
-        K_values = fine.conductivity[js, is_][active_block]
-        # The active-weighted harmonic mean is zero if any participating
-        # active cell is impermeable; silently dropping K=0 would create an
-        # artificial coarse connection.
-        if np.all(K_values > 0.0):
-            K_c[cj, ci] = float(count) / float(np.sum(1.0 / K_values))
-        top_c[cj, ci] = float(np.mean(fine.top[js, is_][active_block])) if fine.has_top else 0.0
-        bottom_c[cj, ci] = float(np.mean(fine.bottom[js, is_][active_block]))
-        sy_c[cj, ci] = float(np.mean(fine.sy[js, is_][active_block]))
-        ss_c[cj, ci] = float(np.mean(fine.ss[js, is_][active_block]))
-        previous_c[cj, ci] = float(np.mean(fine.previous_head[js, is_][active_block]))
+    def padded(field: np.ndarray) -> np.ndarray:
+        return _pad_to_even(np.asarray(field), even).reshape(ny_c, 2, nx_c, 2)
 
-        # Source is an extensive transfer: coarse_rate * (2dx)^2 equals
-        # the sum of active/free fine rates * dx^2, including odd edge blocks.
-        free_block = active_block & (fine.dirichlet_mask[js, is_] == 0)
-        source_c[cj, ci] = float(np.sum(fine.source_rate[js, is_][free_block])) / 4.0
+    def reduce_sum(blocks: np.ndarray) -> np.ndarray:
+        return blocks.sum(axis=(1, 3))
 
-        bc_block = active_block & (fine.dirichlet_mask[js, is_] != 0)
-        if np.any(bc_block):
-            bc_c[cj, ci] = 1
-            bc_values_c[cj, ci] = float(np.mean(fine.dirichlet_values[js, is_][bc_block]))
+    active_b = padded(fine.active != 0)
+    count = reduce_sum(active_b)
+    fraction_c = count.astype(np.float64) / 4.0
+    active_c = (count > 0).astype(np.int32)
+    safe_count = np.maximum(count, 1)
 
-        gh_block = active_block & (fine.ghb_mask[js, is_] != 0) & (fine.ghb_factor[js, is_] > 0.0)
-        if np.any(gh_block):
-            if fine.has_top:
-                sat_ref = np.maximum(fine.top[js, is_] - fine.bottom[js, is_], float(min_sat))
-            else:
-                sat_ref = np.ones_like(fine.bottom[js, is_])
-            conductance = fine.conductivity[js, is_] * sat_ref * fine.ghb_factor[js, is_]
-            conductance = np.where(gh_block, conductance, 0.0)
-            aggregate = float(np.sum(conductance))
-            coarse_sat_ref = (
-                max(top_c[cj, ci] - bottom_c[cj, ci], float(min_sat))
-                if fine.has_top else 1.0
-            )
-            coarse_T_ref = K_c[cj, ci] * coarse_sat_ref
-            if aggregate > 0.0 and coarse_T_ref > 0.0:
-                gh_mask_c[cj, ci] = 1
-                gh_factor_c[cj, ci] = aggregate / coarse_T_ref
-                gh_head_c[cj, ci] = float(
-                    np.sum(conductance * fine.ghb_external_head[js, is_]) / aggregate
-                )
+    def active_mean(field: np.ndarray) -> np.ndarray:
+        total = reduce_sum(padded(field) * active_b)
+        return np.where(count > 0, total / safe_count, 0.0)
+
+    K_b = padded(fine.conductivity)
+    any_zero_K = reduce_sum(active_b & (K_b <= 0.0)) > 0
+    # The active-weighted harmonic mean is zero if any participating
+    # active cell is impermeable; silently dropping K=0 would create an
+    # artificial coarse connection.
+    inv_sum = reduce_sum(np.where(active_b & (K_b > 0.0), 1.0 / np.maximum(K_b, 1.0e-300), 0.0))
+    K_c = np.where((count > 0) & ~any_zero_K, count / np.maximum(inv_sum, 1.0e-300), 0.0)
+
+    top_c = active_mean(fine.top) if fine.has_top else np.zeros(shape_c, dtype=np.float64)
+    bottom_c = active_mean(fine.bottom)
+    sy_c = active_mean(fine.sy)
+    ss_c = active_mean(fine.ss)
+    previous_c = active_mean(fine.previous_head)
+
+    # Source is an extensive transfer: coarse_rate * (2dx)^2 equals
+    # the sum of active/free fine rates * dx^2, including odd edge blocks.
+    free_b = active_b & ~padded(fine.dirichlet_mask != 0)
+    source_c = reduce_sum(padded(fine.source_rate) * free_b) / 4.0
+
+    bc_b = active_b & padded(fine.dirichlet_mask != 0)
+    bc_count = reduce_sum(bc_b)
+    bc_c = (bc_count > 0).astype(np.int32)
+    bc_values_c = np.where(bc_count > 0, reduce_sum(padded(fine.dirichlet_values) * bc_b) / np.maximum(bc_count, 1), 0.0)
+
+    gh_b = active_b & padded(fine.ghb_mask != 0) & (padded(fine.ghb_factor) > 0.0)
+    if fine.has_top:
+        sat_ref_b = np.maximum(padded(fine.top) - padded(fine.bottom), float(min_sat))
+    else:
+        sat_ref_b = np.ones((ny_c, 2, nx_c, 2), dtype=np.float64)
+    conductance_b = np.where(gh_b, K_b * sat_ref_b * padded(fine.ghb_factor), 0.0)
+    aggregate = reduce_sum(conductance_b)
+    coarse_sat_ref = np.maximum(top_c - bottom_c, float(min_sat)) if fine.has_top else 1.0
+    coarse_T_ref = K_c * coarse_sat_ref
+    gh_ok = (aggregate > 0.0) & (coarse_T_ref > 0.0)
+    gh_mask_c = gh_ok.astype(np.int32)
+    gh_factor_c = np.where(gh_ok, aggregate / np.maximum(coarse_T_ref, 1.0e-300), 0.0)
+    gh_head_c = np.where(
+        aggregate > 0.0,
+        reduce_sum(conductance_b * padded(fine.ghb_external_head)) / np.maximum(aggregate, 1.0e-300),
+        0.0,
+    )
 
     return FASPhysicalLevel2D(
         level_id=fine.level_id + 1,
