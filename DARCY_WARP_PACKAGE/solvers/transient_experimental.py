@@ -50,6 +50,28 @@ _BACKEND_CONTROL_PREFIX = {
     "unconfined_semismooth_newton_kcycle": "newton_",
 }
 
+# Monolith-Picard parameters (explicit solve_multigrid_kcycle_backend
+# signature) forwarded into the last-resort fallback attempt so a fallback
+# solve runs with production-grade controls and acceptance gates instead of
+# bare monolith defaults.  Values come from the caller's solve_controls (the
+# production replay supplies default_solve_controls()).
+_PICARD_FALLBACK_CONTROL_KEYS = (
+    "nu_pre", "nu_post", "nu_coarse", "max_cycles", "max_levels", "min_coarse_cells",
+    "check_every_no", "omega", "omega_min", "omega_max", "rel_tol", "abs_tol_min",
+    "dh_rms_tol", "residual_floor_tol",
+    "smoother", "cheby_lambda_min", "cheby_lambda_max",
+    "chebyshev_enabled", "chebyshev_order", "chebyshev_reset_factor", "chebyshev_rejection_factor",
+    "max_outer_iterations", "hclose", "max_head_change_per_outer_iteration",
+    "unconfined_inner_max_cycles_early", "unconfined_inner_max_cycles_middle",
+    "unconfined_inner_max_cycles_late", "unconfined_inner_middle_dh", "unconfined_inner_late_dh",
+    "inner_forcing_eta", "inner_head_residual_tol_min", "inner_head_residual_tol_max",
+    "inner_picard_scale_max_fraction",
+    "transmissivity_relaxation_enabled",
+    "unconfined_startup_mode", "unconfined_pre_solve_iterations", "initial_saturated_thickness",
+    "practical_picard_acceptance_enabled", "min_practical_outer_iterations",
+    "practical_residual_tol", "practical_dh_rms_tol", "practical_storage_diag_change_rms_tol",
+)
+
 _BUDGET_RATE_KEYS = (
     "rcha_in", "rcha_out", "chd_in", "chd_out", "ghb_in", "ghb_out",
     "storage_in", "storage_out",
@@ -354,6 +376,13 @@ def solve_transient_unconfined_experimental(
             attempt_kwargs = dict(backend_kwargs)
             if not fallback_explicitly_configured:
                 attempt_kwargs[_fallback_control_key] = bool(at_dt_min)
+            if at_dt_min:
+                # Last-resort attempt: the backend fallback chain may reach
+                # the monolith Picard solve — give it production-grade
+                # controls and acceptance gates when the caller supplied them.
+                for _picard_key in _PICARD_FALLBACK_CONTROL_KEYS:
+                    if _picard_key in controls and _picard_key not in attempt_kwargs:
+                        attempt_kwargs[_picard_key] = controls[_picard_key]
             solve_t0 = time.perf_counter()
             head_trial, info = model.solve(
                 formulation="unconfined",

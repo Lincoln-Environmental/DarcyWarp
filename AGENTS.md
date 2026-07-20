@@ -332,6 +332,36 @@ Usually means `sat = h - bottom` (saturated thickness of the aquifer), not soil 
 - 1000x1000 strict-everywhere runtime (~2.3 s/period) exceeds the 30 s stretch
   target; inner-cycle tuning is the lever if that matters.
 
+### Experimental unconfined backends (500x500 52w homogeneous vs MF6, engine 162.0 s)
+
+| Backend | Time | Speedup vs MF6 | Final RMSE | Worst-period RMSE | Retries/fallbacks |
+|---|---|---|---|---|---|
+| `unconfined_picard_kcycle` (production) | 26.1 s | 6.2x | 3.3e-05 m | 3.3e-05 m | 0 / 0 |
+| `unconfined_fas` | 20.7 s | 7.8x | 5.6e-07 m | 8.6e-07 m | 0 / 0 |
+| `unconfined_semismooth_newton_kcycle` | 167.0 s | 0.97x | 9.3e-05 m | 2.6e-04 m | 1 / 0 |
+
+- Speedup campaign (2026-07-19/20): Newton 328 -> 167 s (operator workspace
+  reuse, inexact-Newton forcing, retry-first fallback policy, kcycles=2
+  preconditioner); FAS 27.1 -> 20.7 s (smoothing 4/4 + damping 0.8, vectorized
+  host hierarchy build 1.35 s -> 0.03 s, defect/diagonal kernel fusion,
+  CUDA-graph coarsest sweep block). Chebyshev smoothing of the nonlinear FAS
+  defect was tried and abandoned (over-relaxes the nonlinear iterate).
+- The experimental backends run complete multi-timestep/multi-period
+  transient simulations through `solvers/transient_experimental.py`
+  (explicitly selected only; Picard remains the production default).
+- 1000x1000 hard-T (ugly_t) status (2026-07-20): the 1M host hierarchy build
+  is 0.12 s after vectorization, but **FAS does not converge on the hard-T 1M
+  case** (`fas_cycle_limit`, residual contraction ~0.85/cycle at every dt), and
+  Newton converges only with retries (~150 s/period). Both fail cleanly through
+  the retry-first policy into the fallback chain with pristine budgets; the
+  last-resort Picard fallback receives production-grade controls (forwarded
+  from solve_controls) because bare monolith defaults once accepted a
+  1.2 m-error head there. Separately, the Stage-1 exact-storage formulation
+  shows a systematic ~0.09 m offset vs MF6 on mostly-confined cases (the
+  1000x1000 ugly_t case has heads far above top over much of the domain);
+  on unconfined-dominant cases (500x500 homogeneous) the formulations agree
+  to ~5.6e-07 m. Hard-T production cases remain Picard territory.
+
 ### 3D transient unconfined
 
 - Phreatic-Sy path exists but full validation/benchmarks not run.
