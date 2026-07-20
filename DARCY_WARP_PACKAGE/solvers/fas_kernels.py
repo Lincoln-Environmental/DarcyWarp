@@ -328,3 +328,84 @@ def fas_copy_kernel(
     if j < ny and i < nx:
         target[j, i] = source[j, i]
 
+
+
+@wp.kernel
+def fas_defect_diagonal_kernel(
+    physical_residual: wp.array(dtype=WP_FLOAT, ndim=2),
+    physical_forcing: wp.array(dtype=WP_FLOAT, ndim=2),
+    fas_forcing: wp.array(dtype=WP_FLOAT, ndim=2),
+    transmissivity: wp.array(dtype=WP_FLOAT, ndim=2),
+    storage_diagonal: wp.array(dtype=WP_FLOAT, ndim=2),
+    active: wp.array(dtype=wp.int32, ndim=2),
+    prescribed: wp.array(dtype=wp.int32, ndim=2),
+    ghb_mask: wp.array(dtype=wp.int32, ndim=2),
+    ghb_factor: wp.array(dtype=WP_FLOAT, ndim=2),
+    defect: wp.array(dtype=WP_FLOAT, ndim=2),
+    diagonal: wp.array(dtype=WP_FLOAT, ndim=2),
+    nx: int,
+    ny: int,
+):
+    # Fused fas_defect_kernel + fas_frozen_diagonal_kernel (verbatim bodies,
+    # one grid pass): defect = forcing - physical_forcing - N(h), and the
+    # frozen Picard diagonal used by the Jacobi update and head-equivalent
+    # norms.
+    j, i = wp.tid()
+    if j >= ny or i >= nx:
+        return
+    if active[j, i] == 0 or prescribed[j, i] != 0:
+        defect[j, i] = WP_FLOAT(0.0)
+        diagonal[j, i] = WP_FLOAT(1.0)
+        return
+    defect[j, i] = WP_FLOAT(
+        wp.float64(fas_forcing[j, i])
+        - wp.float64(physical_forcing[j, i])
+        - wp.float64(physical_residual[j, i])
+    )
+    tc = wp.float64(transmissivity[j, i])
+    value = wp.float64(storage_diagonal[j, i])
+    if i + 1 < nx and active[j, i + 1] != 0:
+        tn = wp.float64(transmissivity[j, i + 1])
+        if tc > wp.float64(0.0) and tn > wp.float64(0.0):
+            value = value + wp.float64(2.0) * tc * tn / (tc + tn + wp.float64(1.0e-12))
+    if i - 1 >= 0 and active[j, i - 1] != 0:
+        tn = wp.float64(transmissivity[j, i - 1])
+        if tc > wp.float64(0.0) and tn > wp.float64(0.0):
+            value = value + wp.float64(2.0) * tc * tn / (tc + tn + wp.float64(1.0e-12))
+    if j + 1 < ny and active[j + 1, i] != 0:
+        tn = wp.float64(transmissivity[j + 1, i])
+        if tc > wp.float64(0.0) and tn > wp.float64(0.0):
+            value = value + wp.float64(2.0) * tc * tn / (tc + tn + wp.float64(1.0e-12))
+    if j - 1 >= 0 and active[j - 1, i] != 0:
+        tn = wp.float64(transmissivity[j - 1, i])
+        if tc > wp.float64(0.0) and tn > wp.float64(0.0):
+            value = value + wp.float64(2.0) * tc * tn / (tc + tn + wp.float64(1.0e-12))
+    if ghb_mask[j, i] != 0:
+        factor = wp.float64(ghb_factor[j, i])
+        if factor > wp.float64(0.0) and not wp.isnan(factor):
+            value = value + tc * factor
+    if value < wp.float64(1.0e-12):
+        value = wp.float64(1.0)
+    diagonal[j, i] = WP_FLOAT(value)
+
+
+@wp.kernel
+def fas_norm_pair_kernel(
+    value_a: wp.array(dtype=WP_FLOAT, ndim=2),
+    value_b: wp.array(dtype=WP_FLOAT, ndim=2),
+    active: wp.array(dtype=wp.int32, ndim=2),
+    prescribed: wp.array(dtype=wp.int32, ndim=2),
+    norms: wp.array(dtype=wp.float64, ndim=1),
+    nx: int,
+    ny: int,
+):
+    # Paired plain (non head-equivalent) norms in one launch:
+    # norms = [sum_sq_a, max_abs_a, sum_sq_b, max_abs_b].
+    j, i = wp.tid()
+    if j < ny and i < nx and active[j, i] != 0 and prescribed[j, i] == 0:
+        va = wp.float64(value_a[j, i])
+        vb = wp.float64(value_b[j, i])
+        wp.atomic_add(norms, 0, va * va)
+        wp.atomic_max(norms, 1, wp.abs(va))
+        wp.atomic_add(norms, 2, vb * vb)
+        wp.atomic_max(norms, 3, wp.abs(vb))

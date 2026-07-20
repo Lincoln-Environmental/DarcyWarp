@@ -60,7 +60,40 @@ def _norm(
     return rms, maximum
 
 
-def _smooth(
+def _norm_pair(
+    *,
+    level: FASLevelState,
+    value_a: Any,
+    value_b: Any,
+    workspace: FASWorkspace,
+) -> tuple[float, float, float, float]:
+    """Paired plain norms in one launch and one host read."""
+    level.norm_pair_buf.fill_(wp.float64(0.0))
+    operator = level.nonlinear_operator.operator
+    wp.launch(
+        kernel=_k.fas_norm_pair_kernel,
+        dim=level.shape,
+        inputs=[
+            value_a,
+            value_b,
+            operator.active_device,
+            operator.dirichlet_mask_device,
+            level.norm_pair_buf,
+            level.physical.nx,
+            level.physical.ny,
+        ],
+        device=workspace.device,
+    )
+    workspace.kernel_launches += 1
+    buf = level.norm_pair_buf.numpy()
+    workspace.synchronizations += 1
+    n_free = float(level.n_free)
+    rms_a = float(np.sqrt(max(float(buf[0]), 0.0) / n_free)) if level.n_free else 0.0
+    rms_b = float(np.sqrt(max(float(buf[2]), 0.0) / n_free)) if level.n_free else 0.0
+    return rms_a, float(buf[1]), rms_b, float(buf[3])
+
+
+def _jacobi_sweep_block(
     *,
     level: FASLevelState,
     level_index: int,
@@ -70,14 +103,11 @@ def _smooth(
     correction_limit: float,
     phase: str,
 ) -> None:
+    """Launch-only damped-Jacobi smoothing loop (graph-capturable)."""
     operator = level.nonlinear_operator
-    before_rms = None
     for _ in range(int(sweeps)):
-        operator.evaluate(head=level.head, state=level)
-        operator.refresh_frozen_diagonal(head=level.head, state=level)
-        workspace.kernel_launches += 4
-        if before_rms is None:
-            before_rms, _ = _norm(level=level, value=level.defect, workspace=workspace)
+        operator.evaluate_smooth_coefficients(head=level.head, state=level)
+        workspace.kernel_launches += 3
         wp.launch(
             kernel=_k.fas_jacobi_update_kernel,
             dim=level.shape,
@@ -102,16 +132,116 @@ def _smooth(
             workspace.post_sweeps[level_index] += 1
         else:
             workspace.coarse_sweeps[level_index] += 1
-    operator.evaluate(head=level.head, state=level)
-    operator.refresh_frozen_diagonal(head=level.head, state=level)
-    workspace.kernel_launches += 4
-    if before_rms is None:
-        before_rms, _ = _norm(level=level, value=level.defect, workspace=workspace)
+
+
+def _smooth(
+    *,
+    level: FASLevelState,
+    level_index: int,
+    workspace: FASWorkspace,
+    sweeps: int,
+    damping: float,
+    correction_limit: float,
+    phase: str,
+) -> None:
+    operator = level.nonlinear_operator
+    operator.evaluate_smooth_coefficients(head=level.head, state=level)
+    workspace.kernel_launches += 3
+    before_rms, _ = _norm(level=level, value=level.defect, workspace=workspace)
+    _jacobi_sweep_block(
+        level=level,
+        level_index=level_index,
+        workspace=workspace,
+        sweeps=sweeps,
+        damping=damping,
+        correction_limit=correction_limit,
+        phase=phase,
+    )
+    operator.evaluate_smooth_coefficients(head=level.head, state=level)
+    workspace.kernel_launches += 3
     after_rms, _ = _norm(level=level, value=level.defect, workspace=workspace)
     workspace.smoothing_history.append(
         {
             "level": int(level_index),
             "phase": str(phase),
+            "sweeps": int(sweeps),
+            "residual_rms_before": float(before_rms),
+            "residual_rms_after": float(after_rms),
+            "smoothing_factor": (
+                float(after_rms / before_rms) if before_rms > 0.0 else 0.0
+            ),
+        }
+    )
+
+
+def _smooth_coarsest(
+    *,
+    level: FASLevelState,
+    level_index: int,
+    workspace: FASWorkspace,
+    sweeps: int,
+    damping: float,
+    correction_limit: float,
+) -> None:
+    """Coarsest-level smoothing with a CUDA-graph-cached sweep block.
+
+    The block is a fixed launch sequence on persistent workspace arrays (no
+    host decisions), so it is captured once per (shape, controls, dt, Sy, Ss)
+    key and replayed every V-cycle; capture never executes, so the first call
+    immediately replays the fresh graph.  Scalars that change on a timestep
+    refresh are part of the key, and the graph dies with the workspace.
+    """
+    operator = level.nonlinear_operator
+    operator.evaluate_smooth_coefficients(head=level.head, state=level)
+    workspace.kernel_launches += 3
+    before_rms, _ = _norm(level=level, value=level.defect, workspace=workspace)
+    if str(workspace.device).startswith("cuda"):
+        inner = operator.operator
+        key = (
+            tuple(level.shape),
+            int(sweeps),
+            float(damping),
+            float(correction_limit),
+            float(getattr(inner, "_sy", 0.0)),
+            float(getattr(inner, "_ss", 0.0)),
+            float(getattr(inner, "_dt", 0.0) or 0.0),
+        )
+        if workspace.coarse_smooth_graph is not None and workspace.coarse_smooth_graph_key == key:
+            wp.capture_launch(workspace.coarse_smooth_graph)
+            workspace.kernel_launches += int(sweeps) * 4
+            operator.kernel_launches += int(sweeps) * 3
+            workspace.coarse_sweeps[level_index] += int(sweeps)
+        else:
+            with wp.ScopedCapture() as cap:
+                _jacobi_sweep_block(
+                    level=level,
+                    level_index=level_index,
+                    workspace=workspace,
+                    sweeps=sweeps,
+                    damping=damping,
+                    correction_limit=correction_limit,
+                    phase="coarse",
+                )
+            workspace.coarse_smooth_graph = cap.graph
+            workspace.coarse_smooth_graph_key = key
+            wp.capture_launch(cap.graph)
+    else:
+        _jacobi_sweep_block(
+            level=level,
+            level_index=level_index,
+            workspace=workspace,
+            sweeps=sweeps,
+            damping=damping,
+            correction_limit=correction_limit,
+            phase="coarse",
+        )
+    operator.evaluate_smooth_coefficients(head=level.head, state=level)
+    workspace.kernel_launches += 3
+    after_rms, _ = _norm(level=level, value=level.defect, workspace=workspace)
+    workspace.smoothing_history.append(
+        {
+            "level": int(level_index),
+            "phase": "coarse",
             "sweeps": int(sweeps),
             "residual_rms_before": float(before_rms),
             "residual_rms_after": float(after_rms),
@@ -275,14 +405,13 @@ def _fas_vcycle(
     )
 
     if level_index == len(workspace.levels) - 1:
-        _smooth(
+        _smooth_coarsest(
             level=level,
             level_index=level_index,
             workspace=workspace,
             sweeps=controls["coarse_sweeps"],
             damping=controls["coarse_damping"],
             correction_limit=controls["smoothing_limit"],
-            phase="coarse",
         )
         return
 
@@ -321,8 +450,12 @@ def _fas_vcycle(
         device=workspace.device,
     )
     workspace.kernel_launches += 3
-    tau_rms, tau_max = _norm(level=coarse, value=coarse.tau, workspace=workspace)
-    defect_rms, defect_max = _norm(level=coarse, value=coarse.restricted_defect, workspace=workspace)
+    tau_rms, tau_max, defect_rms, defect_max = _norm_pair(
+        level=coarse,
+        value_a=coarse.tau,
+        value_b=coarse.restricted_defect,
+        workspace=workspace,
+    )
     cycle_diagnostics["tau_norms"].append(
         {"level": level_index + 1, "rms": tau_rms, "max": tau_max}
     )

@@ -116,6 +116,36 @@ class NonlinearLevelOperator2D:
         )
         self.kernel_launches += 2
 
+    def evaluate_smooth_coefficients(self, *, head: Any, state: "FASLevelState") -> None:
+        """Residual + frozen coefficients + defect/diagonal in 3 launches.
+
+        Same maths as ``evaluate`` followed by ``refresh_frozen_diagonal``;
+        the defect and diagonal are produced by one fused grid pass.
+        """
+        self.operator.residual_device(head, out=state.physical_residual, reduce=False)
+        transmissivity, storage = self.operator.freeze_picard_device(head)
+        wp.launch(
+            kernel=_k.fas_defect_diagonal_kernel,
+            dim=self.dim,
+            inputs=[
+                state.physical_residual,
+                state.physical_forcing,
+                state.forcing,
+                transmissivity,
+                storage,
+                self.operator.active_device,
+                self.operator.dirichlet_mask_device,
+                self.operator.ghb_mask_device,
+                self.operator.ghb_factor_device,
+                state.defect,
+                state.diagonal,
+                self.nx,
+                self.ny,
+            ],
+            device=self.device,
+        )
+        self.kernel_launches += 3
+
     def close(self) -> None:
         self.operator.close()
 
@@ -145,6 +175,7 @@ class FASLevelState:
     change_sq: Any
     change_max: Any
     finite_flag: Any
+    norm_pair_buf: Any
     n_free: int
 
     @property
@@ -158,7 +189,7 @@ class FASLevelState:
             "forcing", "physical_forcing", "tau", "restricted_defect",
             "restricted_forcing", "correction", "prolonged_correction", "candidate",
             "candidate_residual", "candidate_defect", "diagonal", "sum_sq", "max_abs",
-            "change_sq", "change_max", "finite_flag",
+            "change_sq", "change_max", "finite_flag", "norm_pair_buf",
         ):
             setattr(self, name, None)
 
@@ -218,6 +249,8 @@ class FASWorkspace:
         }
         self._forcing_stage = wp.zeros(fine.shape, dtype=WP_FLOAT, device="cpu")
         self.refresh_count = 0
+        self.coarse_smooth_graph = None
+        self.coarse_smooth_graph_key = None
         self.closed = False
         self.reset_counters()
 
@@ -271,6 +304,7 @@ class FASWorkspace:
             change_sq=wp.zeros(1, dtype=wp.float64, device=device),
             change_max=wp.zeros(1, dtype=wp.float64, device=device),
             finite_flag=wp.zeros(1, dtype=wp.int32, device=device),
+            norm_pair_buf=wp.zeros(4, dtype=wp.float64, device=device),
             n_free=int(np.count_nonzero(free)),
         )
 
@@ -451,6 +485,9 @@ class FASWorkspace:
     def close(self) -> None:
         if self.closed:
             return
+        # Drop the CUDA graph first: it references the level device arrays.
+        self.coarse_smooth_graph = None
+        self.coarse_smooth_graph_key = None
         for level in self.levels:
             level.close()
         self.levels = []
