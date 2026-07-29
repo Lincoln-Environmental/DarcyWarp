@@ -51,6 +51,10 @@ DARCY_WARP_PACKAGE/
     fas_hierarchy.py, fas_kernels.py, fas_state.py  # FAS rediscretized hierarchy/state/kernels
     fgmres.py, kcycle_preconditioner.py, newton_kernels.py  # Newton machinery
     newton_state.py        # cached Newton operator workspace (reuse/refresh split)
+    mixed_precision.py     # EXPERIMENTAL FP64-master/FP32-hierarchy defect correction
+                           # (steady confined only; numerically validated on the tested
+                           # cases but no speedup in the current K-cycle implementation
+                           # — see MIXED_PRECISION_PLAN.md §3-4; opt-in, non-default)
     capabilities.py      # shim re-exporting solver_capabilities.py
     context.py, base.py, hierarchy.py, convergence.py, resources.py, regression.py
   solver_capabilities.py # CAPABILITIES/ALIASES metadata (experimental,
@@ -370,6 +374,17 @@ Usually means `sat = h - bottom` (saturated thickness of the aquifer), not soil 
 
 ### General
 
+- Mixed-precision (FP64 master head + FP32 K-cycle defect correction) was built and
+  benchmarked 2026-07-30 (`solvers/mixed_precision.py`,
+  `working_tests/mixed_precision_benchmark.py`, `MIXED_PRECISION_PLAN.md`): numerically
+  validated on the tested steady confined cases (matches FP64 to ≤2.5e-08 m, all 2e-4 m
+  MF6 gates pass) but **not adopted** — in the current K-cycle implementation FP32
+  cycles cost ≈ FP64 cycles (±5 %; launch/sync-dominated, kernels already accumulate
+  rows in FP64), so defect correction only adds overhead. Ordinary
+  `DARCY_FLOAT=float32` also failed the 2e-4 m MF6 gate at 2M cells and never met
+  rel_tol=5e-7 on the tested cases (burns max_cycles) — do not use for production.
+  Revisit only after cycle-execution optimisation (fusion, CUDA graphs, fewer syncs)
+  makes FP32 cycles materially cheaper than FP64.
 - Per-iteration host sync for scalar reductions in PCG/K-cycle convergence checks.
 - Memory management: explicit `gc.collect()` calls to break Warp array reference cycles during hierarchy rebuilds.
 - `warped_darcy.py` is still ~7.5k lines post-migration and the `solvers/*` backends re-import its globals at call time (`globals().update(...)`); small changes can have non-obvious interactions between storage modes, active-set strategies, and adaptive controller fallback.
