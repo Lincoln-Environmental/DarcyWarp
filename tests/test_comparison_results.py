@@ -56,6 +56,8 @@ class TestWarpVsMf6Truth(unittest.TestCase):
         tol_env: str = "WARP_HEAD_TOL",
         tol_override: float | None = None,
         labels_override: list[str] | tuple[str, ...] | None = None,
+        # Run twice to exercise cold/warm runtime state; both numerical solves
+        # independently start from DEM rather than the previous solved head.
         n_solves: int = 2,
         case_prefix: str = "",
     ) -> None:
@@ -119,8 +121,11 @@ class TestWarpVsMf6Truth(unittest.TestCase):
             "abs_tol_min": 1.0e-5,
             "return_info": True,
             "max_levels": 6,
-            "check_every_no": 1,
+            "check_every_no": 5,
             "min_coarse_cells": 500,
+            "smoother": "chebyshev",
+            "cheby_lambda_min": 0.1,
+            "cheby_lambda_max": 2.0,
         }
         if solver_kwargs:
             kcycle_kwargs.update(solver_kwargs)
@@ -203,19 +208,25 @@ class TestWarpVsMf6Truth(unittest.TestCase):
 
                     head_warp = None
                     solve_info = None
-                    head_guess = np.asarray(dem, dtype=np.float64)
                     for _ in range(n_solves_i):
                         solve_kwargs = dict(kcycle_kwargs)
-                        solve_kwargs["initial_head"] = head_guess
+                        solve_kwargs["initial_head"] = np.asarray(
+                            dem,
+                            dtype=np.float64,
+                        ).copy()
                         head_warp, solve_info = solver.solve_multigrid_kcycle(
                             **solve_kwargs,
                         )
                         if hasattr(head_warp, "numpy"):
-                            head_guess = np.asarray(head_warp.numpy(), dtype=np.float64)
+                            head_warp = np.asarray(
+                                head_warp.numpy(),
+                                dtype=np.float64,
+                            )
                         else:
-                            head_guess = np.asarray(head_warp, dtype=np.float64)
-
-                    head_warp = head_guess
+                            head_warp = np.asarray(
+                                head_warp,
+                                dtype=np.float64,
+                            )
 
                 wp.synchronize_device(device)
                 gc.collect()

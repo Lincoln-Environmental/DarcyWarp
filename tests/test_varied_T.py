@@ -63,7 +63,10 @@ class TestUpdateTInPlace(unittest.TestCase):
                     initial_head=dem,
                     return_info=True,
                     max_levels=6,
-                    check_every_no=1,
+                    check_every_no=5,
+                    smoother="chebyshev",
+                    cheby_lambda_min=0.1,
+                    cheby_lambda_max=2.0,
                 )
 
                 if hasattr(head_ref, "numpy"):
@@ -87,7 +90,10 @@ class TestUpdateTInPlace(unittest.TestCase):
                     initial_head=dem,
                     return_info=True,
                     max_levels=6,
-                    check_every_no=1,
+                    check_every_no=5,
+                    smoother="chebyshev",
+                    cheby_lambda_min=0.1,
+                    cheby_lambda_max=2.0,
                 )
 
                 if hasattr(head_upd, "numpy"):

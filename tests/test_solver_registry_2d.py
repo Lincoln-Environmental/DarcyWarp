@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import gc
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -68,6 +69,9 @@ def _kcycle_controls() -> dict:
         max_levels=2,
         min_coarse_cells=1,
         check_every_no=1,
+        nu_coarse=30,
+        cheby_lambda_min=0.05,
+        cheby_lambda_max=1.95,
         rel_tol=1.0e-8,
         abs_tol_min=1.0e-8,
         return_info=True,
@@ -82,6 +86,43 @@ def _assert_equivalent(actual, reference) -> None:
         if key in reference_info:
             assert actual_info[key] == reference_info[key]
     assert set(reference_info).issubset(actual_info)
+
+
+def test_confined_kcycle_backend_applies_tuned_cold_solve_defaults(monkeypatch):
+    """The confined backend owns the tuned defaults without affecting Picard."""
+    from DARCY_WARP_PACKAGE.solvers import multigrid_kcycle
+
+    captured: dict = {}
+
+    def record_backend_call(*, model, **kwargs):
+        captured["model"] = model
+        captured.update(kwargs)
+        return "result"
+
+    monkeypatch.setattr(
+        multigrid_kcycle,
+        "solve_multigrid_kcycle_backend",
+        record_backend_call,
+    )
+    model = object()
+    context = SimpleNamespace(model=model)
+
+    result = multigrid_kcycle.ConfinedKCycleBackend().solve(
+        context,
+        check_every_no=7,
+    )
+
+    assert result == "result"
+    assert captured["model"] is model
+    assert captured["unconfined"] is False
+    assert captured["nu_pre"] == 2
+    assert captured["nu_post"] == 2
+    assert captured["nu_coarse"] == 2
+    assert captured["max_levels"] == 6
+    assert captured["check_every_no"] == 7
+    assert captured["smoother"] == "chebyshev"
+    assert captured["cheby_lambda_min"] == 0.1
+    assert captured["cheby_lambda_max"] == 2.0
 
 
 def test_registry_selection_and_kcycle_backend_are_numerically_equivalent():

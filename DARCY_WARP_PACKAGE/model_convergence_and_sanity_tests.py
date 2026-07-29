@@ -1,6 +1,7 @@
 import time
 import json
 import os
+from pathlib import Path
 import numpy as np
 import gc
 
@@ -25,6 +26,7 @@ from DARCY_WARP_PACKAGE.sanity_case_config import (
     DEFAULT_THICKNESS,
     DEFAULT_GHB,
     DEFAULT_T_SEED,
+    DEFAULT_ISOTROPIC_T,
 )
 
 # Optional GHB helper: use if available
@@ -92,8 +94,201 @@ def log_pool(tag: str, device: str = "cuda:0") -> None:
     )
 
 
+def build_mf6_truth_path(
+    truth_dir: Path,
+    label: str,
+    ghb: bool,
+    isotropic: bool,
+) -> Path:
+    """Return the canonical saved MF6 truth path for one grid/configuration."""
+    filename = (
+        f"mf6_truth_{label}_ghb_{bool(ghb)}_"
+        f"t_isotropic_{bool(isotropic)}.npz"
+    )
+    return truth_dir.joinpath(filename)
+
+
+def load_cached_mf6_truth(
+    truth_path: Path,
+    label: str,
+    nx: int,
+    ny: int,
+    dx: float,
+    ghb: bool,
+    isotropic: bool,
+    t_isotropic_value: float,
+    thickness: float,
+    width: float,
+    recharge: float,
+    seed: int,
+) -> tuple[np.ndarray, float | None] | None:
+    """Load a matching MF6 artifact, returning ``None`` for a cache miss."""
+    if not truth_path.exists():
+        return None
+
+    try:
+        with np.load(truth_path, allow_pickle=False) as truth:
+            expected_scalars = {
+                "nx": int(nx),
+                "ny": int(ny),
+                "ghb": int(bool(ghb)),
+                "t_isotropic": int(bool(isotropic)),
+                "seed": int(seed),
+            }
+            for key, expected in expected_scalars.items():
+                if key not in truth.files or int(truth[key]) != expected:
+                    return None
+
+            expected_floats = {
+                "dx": float(dx),
+                "t_isotropic_value": float(t_isotropic_value),
+                "thickness": float(thickness),
+                "width": float(width),
+                "r_truth": float(recharge),
+            }
+            for key, expected in expected_floats.items():
+                if key not in truth.files or not np.isclose(
+                    float(truth[key]),
+                    expected,
+                    rtol=1.0e-6,
+                    atol=1.0e-12,
+                ):
+                    return None
+
+            if "label" not in truth.files or str(truth["label"]) != str(label):
+                return None
+            if "heads" not in truth.files:
+                return None
+
+            heads = np.asarray(truth["heads"], dtype=np.float64)
+            if heads.shape != (int(ny), int(nx)) or not np.all(np.isfinite(heads)):
+                return None
+
+            mf6_seconds = None
+            if "mf6_seconds" in truth.files:
+                candidate_seconds = float(truth["mf6_seconds"])
+                if np.isfinite(candidate_seconds) and candidate_seconds >= 0.0:
+                    mf6_seconds = candidate_seconds
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+    return heads, mf6_seconds
+
+
+def save_mf6_truth(
+    truth_path: Path,
+    heads: np.ndarray,
+    label: str,
+    nx: int,
+    ny: int,
+    dx: float,
+    ghb: bool,
+    isotropic: bool,
+    t_isotropic_value: float,
+    thickness: float,
+    width: float,
+    recharge: float,
+    seed: int,
+    mf6_seconds: float,
+    output_dtype: np.dtype,
+) -> None:
+    """Atomically save one reusable MF6 truth artifact."""
+    truth_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = truth_path.with_name(f".{truth_path.name}.staging.npz")
+    float_dtype = np.dtype(output_dtype)
+    np.savez_compressed(
+        temporary_path,
+        heads=np.asarray(heads, dtype=float_dtype),
+        nx=np.int32(nx),
+        ny=np.int32(ny),
+        dx=np.asarray(dx, dtype=float_dtype),
+        ghb=np.int32(1 if ghb else 0),
+        t_isotropic=np.int32(1 if isotropic else 0),
+        t_isotropic_value=np.asarray(t_isotropic_value, dtype=float_dtype),
+        thickness=np.asarray(thickness, dtype=float_dtype),
+        width=np.asarray(width, dtype=float_dtype),
+        r_truth=np.asarray(recharge, dtype=float_dtype),
+        seed=np.int32(seed),
+        label=np.array(label),
+        mf6_seconds=np.asarray(mf6_seconds, dtype=np.float64),
+    )
+    temporary_path.replace(truth_path)
+
+
+def load_or_run_mf6_truth(
+    truth_path: Path,
+    workspace: Path,
+    label: str,
+    nx: int,
+    ny: int,
+    dx: float,
+    ghb: bool,
+    isotropic: bool,
+    t_isotropic_value: float,
+    thickness: float,
+    width: float,
+    recharge_rate: float,
+    recharge_field: np.ndarray,
+    seed: int,
+    hk_field: np.ndarray,
+    output_dtype: np.dtype,
+    mf6_runner,
+) -> tuple[np.ndarray, float | None, str]:
+    """Load matching MF6 heads or run MF6 once and populate the cache."""
+    cached = load_cached_mf6_truth(
+        truth_path=truth_path,
+        label=label,
+        nx=nx,
+        ny=ny,
+        dx=dx,
+        ghb=ghb,
+        isotropic=isotropic,
+        t_isotropic_value=t_isotropic_value,
+        thickness=thickness,
+        width=width,
+        recharge=recharge_rate,
+        seed=seed,
+    )
+    if cached is not None:
+        heads, mf6_seconds = cached
+        print(f"Loading cached MF6 truth: {truth_path}")
+        return heads, mf6_seconds, "cache"
+
+    print(f"MF6 truth cache miss; running model for {label}: {truth_path}")
+    heads, mf6_seconds = mf6_runner(
+        nx=nx,
+        ny=ny,
+        grid_size=dx,
+        nper=1,
+        workspace=workspace,
+        hk=hk_field,
+        recharge=recharge_field,
+        run=True,
+        use_ghb=ghb,
+    )
+    save_mf6_truth(
+        truth_path=truth_path,
+        heads=heads,
+        label=label,
+        nx=nx,
+        ny=ny,
+        dx=dx,
+        ghb=ghb,
+        isotropic=isotropic,
+        t_isotropic_value=t_isotropic_value,
+        thickness=thickness,
+        width=width,
+        recharge=recharge_rate,
+        seed=seed,
+        mf6_seconds=float(mf6_seconds),
+        output_dtype=output_dtype,
+    )
+    return np.asarray(heads, dtype=np.float64), float(mf6_seconds), "generated"
+
+
 if __name__ == "__main__":
     ghb = bool(DEFAULT_GHB)
+    isotropic = False
     # Grid cases to benchmark: label -> (nx, ny)
     grid_cases = GRID_CASES
 
@@ -101,6 +296,9 @@ if __name__ == "__main__":
     R_truth = float(DEFAULT_R_TRUTH)
     thickness = float(DEFAULT_THICKNESS)
     width = dx_truth
+    t_isotropic_value = float(DEFAULT_ISOTROPIC_T)
+    truth_dir = data_store.joinpath("mf6_truth_npz")
+    truth_output_dtype = np.dtype(np.float32)
 
     all_results = {}
 
@@ -185,19 +383,35 @@ if __name__ == "__main__":
             width=width
         )
 
-        # 5. MF6 solve (workspace per grid case, same T via hk)
-        ws = data_store.joinpath(f"Paper_mf6_truth_{label}")
+        # 5. MF6 truth: load an exact cached artifact, or run and cache once.
+        ws = data_store.joinpath(
+            f"Paper_mf6_truth_{label}_ghb_{ghb}_t_isotropic_{isotropic}"
+        )
         hk_field = T_field_ugly / thickness
-
-        mf_head, t_mf = make_mf_model(
+        mf6_truth_path = build_mf6_truth_path(
+            truth_dir=truth_dir,
+            label=label,
+            ghb=ghb,
+            isotropic=isotropic,
+        )
+        mf_head, t_mf, mf6_source = load_or_run_mf6_truth(
+            truth_path=mf6_truth_path,
+            workspace=ws,
+            label=label,
             nx=nx_truth,
             ny=ny_truth,
-            grid_size=dx_truth,
-            nper=1,
-            workspace=ws,
-            hk=hk_field,
-            run=True,
-            use_ghb=ghb,
+            dx=dx_truth,
+            ghb=ghb,
+            isotropic=isotropic,
+            t_isotropic_value=t_isotropic_value,
+            thickness=thickness,
+            width=width,
+            recharge_rate=R_truth,
+            recharge_field=R_field_ugly,
+            seed=int(DEFAULT_T_SEED),
+            hk_field=hk_field,
+            output_dtype=truth_output_dtype,
+            mf6_runner=make_mf_model,
         )
 
         print("\nFD vs Warp_k_cycle (should be almost machine identical):")
@@ -263,8 +477,10 @@ if __name__ == "__main__":
                 "fd_seconds": float(t_fd),
                 "warp_seconds_cold_start": float(cold),
                 "warp_seconds_warm_start": float(warm),
-                "mf6_seconds": float(t_mf),
+                "mf6_seconds": None if t_mf is None else float(t_mf),
             },
+            "mf6_result_source": str(mf6_source),
+            "mf6_truth_path": str(mf6_truth_path),
         }
 
     # 7. Save or update JSON log
@@ -285,5 +501,3 @@ if __name__ == "__main__":
         json.dump(existing, f, indent=4)
 
     print(f"\nSaved comparison results to {results_path}")
-
-

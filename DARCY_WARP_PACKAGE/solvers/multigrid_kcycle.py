@@ -8,12 +8,26 @@ from typing import Any
 from .base import SolverContext
 
 
+STEADY_CONFINED_KCYCLE_DEFAULTS = {
+    "nu_pre": 2,
+    "nu_post": 2,
+    "nu_coarse": 2,
+    "max_levels": 6,
+    "check_every_no": 5,
+    "smoother": "chebyshev",
+    "cheby_lambda_min": 0.1,
+    "cheby_lambda_max": 2.0,
+}
+
+
 class ConfinedKCycleBackend:
     """Use the shared K-cycle hierarchy and device work buffers."""
 
     name = "confined_kcycle"
 
     def solve(self, context: SolverContext, **kwargs: Any):
+        for control_name, default_value in STEADY_CONFINED_KCYCLE_DEFAULTS.items():
+            kwargs.setdefault(control_name, default_value)
         kwargs["unconfined"] = False
         return solve_multigrid_kcycle_backend(model=context.model, **kwargs)
 

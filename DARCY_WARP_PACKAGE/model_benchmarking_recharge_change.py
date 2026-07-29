@@ -489,7 +489,10 @@ def _benchmark_warp_multigrid_class_solvers_core(
         "initial_head": dem,
         "return_info": False,
         "max_levels": 6,
-        "check_every_no": 1,
+        "check_every_no": 5,
+        "smoother": "chebyshev",
+        "cheby_lambda_min": 0.1,
+        "cheby_lambda_max": 2.0,
     }
     if mg_min_coarse_cells_norm is not None:
         solve_call_kwargs["min_coarse_cells"] = int(mg_min_coarse_cells_norm)
@@ -833,7 +836,10 @@ def main(argv: list[str] | None = None) -> int:
                 "rel_tol": 1.0e-5,
                 "abs_tol_min": 1.0e-5,
                 "warmup": 1,
-                "check_every_no": 1,
+                "check_every_no": 5,
+                "smoother": "chebyshev",
+                "cheby_lambda_min": 0.1,
+                "cheby_lambda_max": 2.0,
                 "min_coarse_cells": mg_min_coarse_cells,
             },
             "mf6": {
