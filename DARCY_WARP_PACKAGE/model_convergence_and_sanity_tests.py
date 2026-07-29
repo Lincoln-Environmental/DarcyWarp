@@ -36,9 +36,13 @@ except ImportError:
     _build_ghb_boundary_mask = None
 
 
-def run_solve(solver, check_every_no: int = 1):
+def run_solve(solver, check_every_no: int = 5):
+    print(
+        "Both timed solves start from the same DEM input; "
+        "the second solve only reuses CUDA runtime state."
+    )
     t0 = time.perf_counter()
-    with wp.ScopedTimer("kcycle_solve", use_nvtx=True):
+    with wp.ScopedTimer("kcycle_solve", use_nvtx=False):
         head1, info1 = solver.solve_multigrid_kcycle(
             max_cycles=200,
             nu_pre=2,
@@ -53,10 +57,10 @@ def run_solve(solver, check_every_no: int = 1):
             check_every_no=int(check_every_no),
         )
     t1 = time.perf_counter()
-    print("call1 solving time:", t1 - t0)
+    print("CUDA cold-runtime solve time:", t1 - t0)
 
     t2 = time.perf_counter()
-    with wp.ScopedTimer("kcycle_solve", use_nvtx=True):
+    with wp.ScopedTimer("kcycle_solve", use_nvtx=False):
         heads, info = solver.solve_multigrid_kcycle(
             max_cycles=200,
             nu_pre=2,
@@ -71,14 +75,14 @@ def run_solve(solver, check_every_no: int = 1):
             check_every_no=int(check_every_no),
         )
     t3 = time.perf_counter()
-    print("call2 solving time:", t3 - t2)
+    print("CUDA warm-runtime solve time:", t3 - t2)
     print(info)
-    cold = t1-t0
-    warm = t3-t2
-    return heads, info, cold, warm
+    cold_runtime_seconds = t1-t0
+    warm_runtime_seconds = t3-t2
+    return heads, info, cold_runtime_seconds, warm_runtime_seconds
 
 def solve_callable():
-    return run_solve(single_solver)
+    return run_solve(solver=single_solver)
 
 def _mb(nbytes: int) -> float:
     return float(nbytes) / (1024.0 * 1024.0)
@@ -299,6 +303,7 @@ if __name__ == "__main__":
     t_isotropic_value = float(DEFAULT_ISOTROPIC_T)
     truth_dir = data_store.joinpath("mf6_truth_npz")
     truth_output_dtype = np.dtype(np.float32)
+    convergence_check_interval = 5
 
     all_results = {}
 
@@ -347,7 +352,10 @@ if __name__ == "__main__":
             )
 
             print("Running single case Warp-Kcycles solver...")
-            head_k_warp, info_k, cold, warm = run_solve(single_solver)
+            head_k_warp, info_k, cold_runtime, warm_runtime = run_solve(
+                solver=single_solver,
+                check_every_no=convergence_check_interval,
+            )
 
             print("\nK-cycle info:")
             for k in sorted(info_k.keys()):
@@ -475,10 +483,11 @@ if __name__ == "__main__":
             "fd_vs_k_cycle": FD_vs_warp_k_cycle,
             "timings": {
                 "fd_seconds": float(t_fd),
-                "warp_seconds_cold_start": float(cold),
-                "warp_seconds_warm_start": float(warm),
+                "warp_seconds_cuda_cold_runtime": float(cold_runtime),
+                "warp_seconds_cuda_warm_runtime": float(warm_runtime),
                 "mf6_seconds": None if t_mf is None else float(t_mf),
             },
+            "warp_initial_head": "DEM for both timed solves",
             "mf6_result_source": str(mf6_source),
             "mf6_truth_path": str(mf6_truth_path),
         }
