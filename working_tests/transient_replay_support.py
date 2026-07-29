@@ -163,6 +163,7 @@ def run_warp_transient_replay(
     formulation: str = FORMULATION_UNCONFINED,
     unconfined_storage_mode: str = UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
     storage_reference: str = STORAGE_REFERENCE_CURRENT_PICARD,
+    solver_backend: str = "unconfined_picard_kcycle",
     _warp_solver_class_fn=None,
     _warp_device_fn=None,
 ) -> dict:
@@ -265,7 +266,7 @@ def run_warp_transient_replay(
             bc_values=bc_values,
         )
         heads_api, info_api = solver.solve_transient_2d_unconfined(
-            solver="unconfined_picard_kcycle",
+            solver=solver_backend,
             initial_head=replay_start_head,
             recharge_rates=rates[:n_periods],
             k_field=k,
@@ -340,6 +341,7 @@ def run_replay_from_artifact(
     unconfined_storage_mode: str = UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
     storage_reference: str = STORAGE_REFERENCE_CURRENT_PICARD,
     allow_warm_start_mismatch: bool = False,
+    solver_backend: str = "unconfined_picard_kcycle",
     run_config: dict | None = None,
     load_transient_artifact_fn=None,
     run_warp_transient_replay_fn=None,
@@ -757,6 +759,7 @@ def main(
     unconfined_storage_mode: str = UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
     storage_reference: str = STORAGE_REFERENCE_CURRENT_PICARD,
     allow_warm_start_mismatch: bool = False,
+    solver_backend: str = "unconfined_picard_kcycle",
     solve_controls: dict | None = None,
     run_config: dict | None = None,
 ) -> dict:
@@ -791,6 +794,7 @@ def main(
         unconfined_storage_mode=unconfined_storage_mode,
         storage_reference=storage_reference,
         allow_warm_start_mismatch=allow_warm_start_mismatch,
+        solver_backend=solver_backend,
         solve_controls=solve_controls,
         run_config=run_config,
     )

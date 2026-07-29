@@ -382,6 +382,7 @@ def run_warp_unconfined(
     diag_preconditioner_backend: str = "auto",
     check_every_no: int | None = None,
     do_double_solve: bool = True,
+    solver_backend: str | None = None,
 ) -> Path:
     """
     Run the same unconfined problem in the main 2D Warp solver and save heads to NPZ.
@@ -411,6 +412,7 @@ def run_warp_unconfined(
         )
         solve1_kwargs = {
             "formulation": "unconfined",
+            "solver": solver_backend,
             "K_field": case.hydraulic_conductivity,
             "zbot_field": case.bottom,
             "ztop_field": case.top,
@@ -634,6 +636,7 @@ def run_case(
     do_run_mf6: bool = True,
     do_run_warp: bool = True,
     do_double_solve: bool = True,
+    solver_backend: str | None = None,
 ) -> dict:
     case = build_simple_unconfined_case(
         nx=nx,
@@ -671,6 +674,7 @@ def run_case(
             diag_preconditioner_backend=diag_preconditioner_backend,
             check_every_no=check_every_no,
             do_double_solve=do_double_solve,
+            solver_backend=solver_backend,
         )
 
     metrics = {}
@@ -757,6 +761,7 @@ def run_grid_benchmark(
     do_run_mf6: bool = True,
     do_run_warp: bool = True,
     do_double_solve: bool = True,
+    solver_backend: str | None = None,
 ) -> list[dict]:
     """
     Run the 2D unconfined MF6-vs-Warp benchmark over a range of grid sizes.
@@ -826,6 +831,7 @@ def run_grid_benchmark(
             do_run_mf6=do_run_mf6,
             do_run_warp=do_run_warp,
             do_double_solve=do_double_solve,
+            solver_backend=solver_backend,
         )
 
         key = (int(nx), int(ny))
@@ -886,6 +892,7 @@ def run_diag_preconditioner_backend_matrix(
     unconfined_startup_mode: str = "confined_pre_solve",
     do_run_mf6: bool = True,
     do_run_warp: bool = True,
+    solver_backend: str | None = None,
 ) -> list[dict]:
     """
     Run the tuned backend/check-frequency benchmark matrix for unconfined 2D cases.
@@ -943,6 +950,7 @@ def run_diag_preconditioner_backend_matrix(
                 check_every_no=check_every_no,
                 do_run_mf6=do_run_mf6,
                 do_run_warp=do_run_warp,
+                solver_backend=solver_backend,
             )
             row["case_id"] = case_id
             results.append(row)
@@ -984,6 +992,7 @@ def run_chebyshev_lambda_sweep(
     diag_preconditioner_backend: str = "auto",
     check_every_no: int | None = None,
     do_double_solve: bool = True,
+    solver_backend: str | None = None,
 ) -> list[dict]:
     """
     Run a single 2D unconfined case across a range of Chebyshev lambda bounds.
@@ -1146,6 +1155,7 @@ def main(
     run_lambda_sweep=False,
     run_backend_matrix=False,
     do_double_solve=False,
+    solver_backend=None,
 ):
     if run_backend_matrix:
         results = run_diag_preconditioner_backend_matrix(
@@ -1168,6 +1178,7 @@ def main(
             unconfined_startup_mode=unconfined_startup_mode,
             do_run_mf6=do_run_mf6,
             do_run_warp=do_run_warp,
+            solver_backend=solver_backend,
         )
     elif run_lambda_sweep:
         results = run_chebyshev_lambda_sweep(
@@ -1190,6 +1201,7 @@ def main(
             unconfined_startup_mode=unconfined_startup_mode,
             diag_preconditioner_backend=diag_preconditioner_backend,
             check_every_no=check_every_no,
+            solver_backend=solver_backend,
         )
     else:
         results = run_grid_benchmark(
@@ -1215,6 +1227,7 @@ def main(
             do_run_mf6=do_run_mf6,
             do_run_warp=do_run_warp,
             do_double_solve=do_double_solve,
+            solver_backend=solver_backend,
         )
     print(json.dumps(results, indent=4))
 
@@ -1244,6 +1257,7 @@ if __name__ == '__main__':
     run_lambda_sweep = False
     run_backend_matrix = False
     do_double_solve = False
+    solver_backend = None  # Use None for default picard, or "unconfined_fas", or "unconfined_semismooth_newton_kcycle"
 
     main(
         grid_sizes=grid_sizes,
@@ -1270,4 +1284,5 @@ if __name__ == '__main__':
         run_lambda_sweep=run_lambda_sweep,
         run_backend_matrix=run_backend_matrix,
         do_double_solve=do_double_solve,
+        solver_backend=solver_backend,
     )

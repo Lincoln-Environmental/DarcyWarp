@@ -144,6 +144,7 @@ def run_production_replay(
     solve_control_overrides: dict | None = None,
     diag_preconditioner_backend: str = "device",
     allow_warm_start_mismatch: bool = False,
+    solver_backend: str = "unconfined_picard_kcycle",
 ) -> dict:
     """
     Run the production replay with the selected artifact.
@@ -167,6 +168,7 @@ def run_production_replay(
         unconfined_storage_mode=production_settings["unconfined_storage_mode"],
         storage_reference=production_settings["storage_reference"],
         allow_warm_start_mismatch=allow_warm_start_mismatch,
+        solver_backend=solver_backend,
         run_config=run_config,
     )
 
@@ -188,6 +190,11 @@ def main() -> dict:
     parser.add_argument("--artifact", default=None, help="explicit artifact path (bypasses the case setup)")
     parser.add_argument("--workspace", default=None)
     parser.add_argument("--device", default="auto")
+    parser.add_argument(
+        "--solver",
+        default="unconfined_picard_kcycle",
+        help="solver backend (e.g. unconfined_picard_kcycle, unconfined_fas, unconfined_semismooth_newton_kcycle)"
+    )
     args = parser.parse_args()
 
     case_setup = build_case_setup(
@@ -203,6 +210,7 @@ def main() -> dict:
         artifact_path=artifact_path,
         workspace=workspace,
         device=args.device,
+        solver_backend=args.solver,
     )
 
 
