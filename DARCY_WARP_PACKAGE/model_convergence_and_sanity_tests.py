@@ -1,6 +1,8 @@
 import time
 import json
 import os
+import subprocess
+import sys
 from pathlib import Path
 import numpy as np
 import gc
@@ -15,7 +17,12 @@ from DARCY_WARP_PACKAGE.modflow_truth import make_mf_model
 from DARCY_WARP_PACKAGE.CPU_FD import run_fd_truth_forward
 from DARCY_WARP_PACKAGE.project_base import data_store
 
-os.environ["DARCY_FLOAT"] = "float64"
+# DARCY_FLOAT must be pinned before warped_darcy/config are imported.  The
+# experimental mixed-precision path needs a float32-built hierarchy, so the
+# __main__ switch below relaunches this script once with DARCY_MIXED_FP32=1.
+os.environ["DARCY_FLOAT"] = (
+    "float32" if os.environ.get("DARCY_MIXED_FP32") == "1" else "float64"
+)
 from DARCY_WARP_PACKAGE.warped_darcy import WarpDarcySolver as wds
 from DARCY_WARP_PACKAGE.warped_darcy import compute_mass_balance_budget
 import warp as wp
@@ -41,44 +48,91 @@ def run_solve(solver, check_every_no: int = 5):
         "Both timed solves start from the same DEM input; "
         "the second solve only reuses CUDA runtime state."
     )
+    kcycle_impl = os.environ.get("DARCY_KCYCLE_IMPL", "classic").strip().lower()
+    if kcycle_impl == "mixed":
+        return run_solve_mixed(solver)
+    nu_coarse = 10 if kcycle_impl == "fast" else 2
+    solve_kwargs = dict(
+        max_cycles=200,
+        nu_pre=2,
+        nu_post=2,
+        nu_coarse=nu_coarse,
+        omega=0.7,
+        rel_tol=5.0e-7,
+        abs_tol_min=5.0e-7,
+        initial_head=dem,
+        return_info=True,
+        max_levels=6,
+        check_every_no=int(check_every_no),
+    )
+    if kcycle_impl != "classic":
+        solve_kwargs["implementation"] = kcycle_impl
     t0 = time.perf_counter()
     with wp.ScopedTimer("kcycle_solve", use_nvtx=False):
-        head1, info1 = solver.solve_multigrid_kcycle(
-            max_cycles=200,
-            nu_pre=2,
-            nu_post=2,
-            nu_coarse=2,
-            omega=0.7,
-            rel_tol=5.0e-7,
-            abs_tol_min=5.0e-7,
-            initial_head=dem,
-            return_info=True,
-            max_levels=6,
-            check_every_no=int(check_every_no),
-        )
+        head1, info1 = solver.solve_multigrid_kcycle(**solve_kwargs)
     t1 = time.perf_counter()
     print("CUDA cold-runtime solve time:", t1 - t0)
 
     t2 = time.perf_counter()
     with wp.ScopedTimer("kcycle_solve", use_nvtx=False):
-        heads, info = solver.solve_multigrid_kcycle(
-            max_cycles=200,
-            nu_pre=2,
-            nu_post=2,
-            nu_coarse=2,
-            omega=0.7,
-            rel_tol=5.0e-7,
-            abs_tol_min=5.0e-7,
-            initial_head=dem,
-            return_info=True,
-            max_levels=6,
-            check_every_no=int(check_every_no),
-        )
+        heads, info = solver.solve_multigrid_kcycle(**solve_kwargs)
     t3 = time.perf_counter()
     print("CUDA warm-runtime solve time:", t3 - t2)
     print(info)
     cold_runtime_seconds = t1-t0
     warm_runtime_seconds = t3-t2
+    return heads, info, cold_runtime_seconds, warm_runtime_seconds
+
+
+def run_solve_mixed(solver):
+    """Experimental mixed-precision solve (FP64 master + FP32 fast correction).
+
+    Requires the model to have been built under DARCY_FLOAT=float32 (the
+    __main__ switch handles the relaunch).  Uses the validated
+    MixedFastConfig defaults (k=5 inner cycles, nu_coarse=10).
+    """
+    from DARCY_WARP_PACKAGE.solvers.mixed_fast import (
+        MixedFastConfig,
+        solve_mixed_fast,
+    )
+
+    bc_values = np.asarray(solver.bc_values_host, dtype=np.float64)
+    gh_head = (
+        np.asarray(solver.gh_head_host, dtype=np.float64)
+        if getattr(solver, "use_ghb", False)
+        else None
+    )
+    R_field = np.asarray(solver.R_field_host, dtype=np.float64)
+    config = MixedFastConfig()
+
+    t0 = time.perf_counter()
+    with wp.ScopedTimer("mixed_fast_solve", use_nvtx=False):
+        head1, info1 = solve_mixed_fast(
+            solver,
+            dem,
+            bc_values_f64=bc_values,
+            gh_head_f64=gh_head,
+            R_f64=R_field,
+            config=config,
+        )
+    t1 = time.perf_counter()
+    print("CUDA cold-runtime solve time:", t1 - t0)
+
+    t2 = time.perf_counter()
+    with wp.ScopedTimer("mixed_fast_solve", use_nvtx=False):
+        heads, info = solve_mixed_fast(
+            solver,
+            dem,
+            bc_values_f64=bc_values,
+            gh_head_f64=gh_head,
+            R_f64=R_field,
+            config=config,
+        )
+    t3 = time.perf_counter()
+    print("CUDA warm-runtime solve time:", t3 - t2)
+    print(info)
+    cold_runtime_seconds = t1 - t0
+    warm_runtime_seconds = t3 - t2
     return heads, info, cold_runtime_seconds, warm_runtime_seconds
 
 def solve_callable():
@@ -293,6 +347,29 @@ def load_or_run_mf6_truth(
 if __name__ == "__main__":
     ghb = bool(DEFAULT_GHB)
     isotropic = False
+
+    # --- solver implementation switches (production default: both False) ---
+    # Fast FP64 K-cycle: face arrays + block-reduced reductions + graphed
+    # cycles (implementation="fast").  See MIXED_PRECISION_CAMPAIGN.md.
+    use_fast_fp64 = False
+    # Experimental mixed precision: FP64 master head + FP32 fast correction
+    # (solvers/mixed_fast.py).  Overrides use_fast_fp64.  Needs a float32
+    # model hierarchy, so this script relaunches itself once with
+    # DARCY_FLOAT=float32 pinned.
+    use_mixed_precision_fp32 = False
+
+    if use_mixed_precision_fp32:
+        if os.environ.get("DARCY_MIXED_FP32") != "1":
+            env = dict(os.environ, DARCY_MIXED_FP32="1")
+            raise SystemExit(
+                subprocess.call(
+                    [sys.executable, os.path.abspath(__file__)], env=env
+                )
+            )
+        os.environ["DARCY_KCYCLE_IMPL"] = "mixed"
+    elif use_fast_fp64:
+        os.environ["DARCY_KCYCLE_IMPL"] = "fast"
+
     # Grid cases to benchmark: label -> (nx, ny)
     grid_cases = GRID_CASES
 
@@ -477,6 +554,7 @@ if __name__ == "__main__":
             "ny": ny_truth,
             "n_cells_total": n_total,
             "n_cells_active": n_active,
+            "kcycle_implementation": os.environ.get("DARCY_KCYCLE_IMPL", "classic"),
             "diagnostics": info_k,
             "mf_vs_fd": mf_vs_fd,
             "k_cycle_vs_mf": k_cycle_vs_mf,
@@ -493,7 +571,9 @@ if __name__ == "__main__":
         }
 
     # 7. Save or update JSON log
-    results_path = data_store.joinpath(f"comparison_results_ghb_{ghb}hard_vat_t.json")
+    kcycle_impl = os.environ.get("DARCY_KCYCLE_IMPL", "classic").strip().lower()
+    suffix = "hard_vat_t" if kcycle_impl == "classic" else f"hard_vat_t_{kcycle_impl}"
+    results_path = data_store.joinpath(f"comparison_results_ghb_{ghb}{suffix}.json")
 
     try:
         if results_path.exists():

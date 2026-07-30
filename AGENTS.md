@@ -53,8 +53,23 @@ DARCY_WARP_PACKAGE/
     newton_state.py        # cached Newton operator workspace (reuse/refresh split)
     mixed_precision.py     # EXPERIMENTAL FP64-master/FP32-hierarchy defect correction
                            # (steady confined only; numerically validated on the tested
-                           # cases but no speedup in the current K-cycle implementation
-                           # — see MIXED_PRECISION_PLAN.md §3-4; opt-in, non-default)
+                           # cases; opt-in, non-default — see MIXED_PRECISION_PLAN.md)
+    mixed_vcycle.py        # EXPERIMENTAL fixed V-cycle correction (REJECTED 2026-07-30:
+                           # stalls on smooth defects — approximate coarse operators;
+                           # retained to reproduce MIXED_PRECISION_CAMPAIGN.md §2)
+    mixed_fast_kernels.py  # EXPERIMENTAL face-array stencil kernels (explicit f32/f64
+                           # variants), two-stage block reductions, block-reduced FP64
+                           # outer kernels
+    mixed_fast.py          # EXPERIMENTAL fast K-cycle session: face arrays + true-FP32
+                           # arithmetic + CUDA-graphed fixed correction block inside the
+                           # FP64 outer loop.  3.0-4.4× faster than production FP64 with
+                           # all gates passing — adopt-experimentally verdict,
+                           # non-default (MIXED_PRECISION_CAMPAIGN.md).  Callable via
+                           # MixedFastConfig / get_mixed_fast_session / solve_mixed_fast
+    face_kernels_f64.py    # PRODUCTION FP64 face-array kernels (harmonic face build,
+                           # jacobi/residual, two-stage reductions, block-reduced check)
+    fast_confined_kcycle.py # PRODUCTION opt-in fast steady-confined K-cycle
+                           # (implementation="fast"; classic stays default)
     capabilities.py      # shim re-exporting solver_capabilities.py
     context.py, base.py, hierarchy.py, convergence.py, resources.py, regression.py
   solver_capabilities.py # CAPABILITIES/ALIASES metadata (experimental,
@@ -374,17 +389,22 @@ Usually means `sat = h - bottom` (saturated thickness of the aquifer), not soil 
 
 ### General
 
-- Mixed-precision (FP64 master head + FP32 K-cycle defect correction) was built and
-  benchmarked 2026-07-30 (`solvers/mixed_precision.py`,
-  `working_tests/mixed_precision_benchmark.py`, `MIXED_PRECISION_PLAN.md`): numerically
-  validated on the tested steady confined cases (matches FP64 to ≤2.5e-08 m, all 2e-4 m
-  MF6 gates pass) but **not adopted** — in the current K-cycle implementation FP32
-  cycles cost ≈ FP64 cycles (±5 %; launch/sync-dominated, kernels already accumulate
-  rows in FP64), so defect correction only adds overhead. Ordinary
-  `DARCY_FLOAT=float32` also failed the 2e-4 m MF6 gate at 2M cells and never met
-  rel_tol=5e-7 on the tested cases (burns max_cycles) — do not use for production.
-  Revisit only after cycle-execution optimisation (fusion, CUDA graphs, fewer syncs)
-  makes FP32 cycles materially cheaper than FP64.
+- Mixed-precision (FP64 master head + FP32 K-cycle defect correction): Phase-0
+  implementation validated but not faster (`solvers/mixed_precision.py`,
+  `MIXED_PRECISION_PLAN.md`).  The 2026-07-30 optimisation campaign
+  (`MIXED_PRECISION_CAMPAIGN.md`) then delivered a 3.0-4.4× end-to-end win over
+  production FP64 (`solvers/mixed_fast.py` + `mixed_fast_kernels.py`, experimental,
+  opt-in, steady confined only): face-conductance precompute (removes per-call FP64
+  divisions), true-FP32 stencil arithmetic, block-reduced reductions (production's
+  per-thread FP64 atomics serialize — level-0 residual was 2.78 ms vs 0.47 ms
+  smoother), Jacobi-block coarsest, and CUDA-graph capture of the fixed correction
+  block.  Plain V-cycle correction was REJECTED (stalls on smooth defects —
+  approximate coarse operators; the K-cycle's per-level Krylov is load-bearing).
+  ~2/3 of the win is precision-agnostic kernel engineering that could also speed
+  production FP64 (fast-FP64 cycle 5.17 ms vs fast-FP32 3.37 ms); the mixed
+  structure is what makes the FP32 correction safe.  Ordinary
+  `DARCY_FLOAT=float32` still fails the 2e-4 m MF6 gate at 2M cells and never met
+  rel_tol=5e-7 on the tested cases — do not use for production.
 - Per-iteration host sync for scalar reductions in PCG/K-cycle convergence checks.
 - Memory management: explicit `gc.collect()` calls to break Warp array reference cycles during hierarchy rebuilds.
 - `warped_darcy.py` is still ~7.5k lines post-migration and the `solvers/*` backends re-import its globals at call time (`globals().update(...)`); small changes can have non-obvious interactions between storage modes, active-set strategies, and adaptive controller fallback.
@@ -408,6 +428,10 @@ Usually means `sat = h - bottom` (saturated thickness of the aquifer), not soil 
 | `test_fas_2d.py` | warp | experimental FAS backend (hierarchy, cycles, fallbacks, workspace reuse) |
 | `test_fas_transient_multistep.py` | warp | FAS multi-timestep/multi-period transient: retry, fallback, state reset, FAS vs Picard histories |
 | `test_unconfined_solvers_500x500.py` | warp + CUDA + MF6 artifact | all 3 unconfined backends on the 500x500 52w homogeneous case: runtime + MF6 head-accuracy validation |
+| `test_mixed_precision.py` | warp + CUDA | experimental mixed-precision solver: runs/finite on small het+GHB case, agrees with FP64 backend (subprocess-pinned `DARCY_FLOAT`), stays out of registry/aliases |
+| `test_mixed_precision_fast.py` | warp + CUDA | campaign fast kernels vs production/CPU refs, fast session + graph/eager equivalence + FP64 agreement, config defaults, registry exclusion |
+| `test_fast_confined_kcycle.py` | warp + CUDA | production `implementation="fast"`: fast-vs-classic equivalence, graph reuse, face-cache invalidation on T update, transient/unconfined guards, classic-stays-default |
+| `test_model_convergence_mf6_cache.py` | — | MF6 truth-artifact cache (hit/miss/populate) used by the convergence benchmark |
 | `test_comparison_results.py` | warp + fixtures | end-to-end Warp vs MF6 truth |
 
 ### Important caveats
@@ -456,6 +480,7 @@ python working_tests/run_2d_transient_warp_replay.py
 | Diagnostics ladder | `working_tests/run_transient_unconfined_diagnostics.py` | read verdict logic ~l. 1332 |
 | Status docs | `TRANSIENT_STATUS.md`, `transient_progress.md`, `working_tests/darcywarp_transient_unconfined_changes.rst` | |
 | Benchmark entry | `bench_and_plot.py`, `model_benchmarking_recharge_change.py`, `model_benchmarking_T_change.py` | |
+| Steady confined convergence/sanity benchmark | `model_convergence_and_sanity_tests.py` (+ `sanity_case_config.py`) | MF6 heads cached per case in `DARCY_WARP_PACKAGE/data/mf6_truth_npz/` (metadata-validated, atomic write; MF6 runs only on cache miss). Solver switches in the `__main__` block: `use_fast_fp64` (implementation="fast", results JSON `..._fast.json`) and `use_mixed_precision_fp32` (experimental `mixed_fast`; relaunches the script once with `DARCY_FLOAT=float32` pinned, results JSON `..._mixed.json`). `DARCY_KCYCLE_IMPL` env var also honoured |
 
 ---
 

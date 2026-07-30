@@ -647,6 +647,7 @@ def solve_multigrid_kcycle_backend(
         dh_max_tol: float | None = None,
         dh_max_factor: float = 5.0,
         min_coarse_cells: int | None = 500,
+        implementation: str = "classic",
         fallback_to_pcg: bool = True,
         divergence_cycle_start: int = 100,
         divergence_residual_factor: float = 3.0,
@@ -786,6 +787,53 @@ def solve_multigrid_kcycle_backend(
         dh_max_tol = None if dh_rms_tol_f is None else float(dh_max_factor) * dh_rms_tol_f
     else:
         dh_max_tol = float(dh_max_tol)
+
+    implementation_mode = str(implementation).strip().lower()
+    if implementation_mode not in {"classic", "fast"}:
+        raise ValueError(
+            f"implementation must be 'classic' or 'fast', got {implementation!r}."
+        )
+    if implementation_mode == "fast":
+        if bool(unconfined):
+            raise ValueError(
+                "implementation='fast' is steady confined only; use the classic "
+                "implementation (or an unconfined backend) for unconfined solves."
+            )
+        if bool(transient):
+            raise ValueError(
+                "implementation='fast' is steady confined only; use the classic "
+                "implementation for transient solves."
+            )
+        from DARCY_WARP_PACKAGE.solvers.fast_confined_kcycle import (
+            solve_confined_kcycle_fast_backend,
+        )
+
+        return solve_confined_kcycle_fast_backend(
+            model=self,
+            max_cycles=max_cycles,
+            nu_pre=nu_pre,
+            nu_post=nu_post,
+            nu_coarse=nu_coarse,
+            omega=omega,
+            rel_tol=rel_tol,
+            abs_tol_min=abs_tol_min,
+            initial_head=initial_head,
+            max_levels=max_levels,
+            return_info=return_info,
+            check_every_no=check_every_no,
+            dh_rms_tol=dh_rms_tol,
+            dh_max_tol=dh_max_tol,
+            dh_max_factor=dh_max_factor,
+            min_coarse_cells=min_coarse_cells,
+            fallback_to_pcg=fallback_to_pcg,
+            divergence_cycle_start=divergence_cycle_start,
+            divergence_residual_factor=divergence_residual_factor,
+            fallback_pcg_max_iter=fallback_pcg_max_iter,
+            fallback_pcg_history_every=fallback_pcg_history_every,
+            smoother=smoother,
+            cheby_lambda_min=cheby_lambda_min,
+            cheby_lambda_max=cheby_lambda_max,
+        )
 
     if float(self.head_scale) != 1.0:
         raise ValueError(
