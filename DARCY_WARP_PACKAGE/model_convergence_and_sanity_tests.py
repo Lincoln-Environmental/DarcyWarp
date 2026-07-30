@@ -356,7 +356,10 @@ if __name__ == "__main__":
     # (solvers/mixed_fast.py).  Overrides use_fast_fp64.  Needs a float32
     # model hierarchy, so this script relaunches itself once with
     # DARCY_FLOAT=float32 pinned.
-    use_mixed_precision_fp32 = False
+    use_mixed_precision_fp32 = True
+    # Run the CPU FD (numpy) reference solve and its comparisons.  Disable
+    # to skip the slow host solve on large grids.
+    run_fd_reference = False
 
     if use_mixed_precision_fp32:
         if os.environ.get("DARCY_MIXED_FP32") != "1":
@@ -456,17 +459,20 @@ if __name__ == "__main__":
         log_pool("after cleanup")
 
 
-        # 4. FD reference solve (same T, R, no GHB)
-        head_fd, t_fd = run_fd_truth_forward(
-            nx=nx_truth,
-            ny=ny_truth,
-            dx=dx_truth,
-            T_truth=T_field_ugly,
-            R_truth=R_field_ugly,
-            use_ghb=ghb,
-            aq_thickness=thickness,
-            width=width
-        )
+        # 4. FD reference solve (same T, R, no GHB) — optional
+        if run_fd_reference:
+            head_fd, t_fd = run_fd_truth_forward(
+                nx=nx_truth,
+                ny=ny_truth,
+                dx=dx_truth,
+                T_truth=T_field_ugly,
+                R_truth=R_field_ugly,
+                use_ghb=ghb,
+                aq_thickness=thickness,
+                width=width
+            )
+        else:
+            head_fd, t_fd = None, None
 
         # 5. MF6 truth: load an exact cached artifact, or run and cache once.
         ws = data_store.joinpath(
@@ -499,19 +505,23 @@ if __name__ == "__main__":
             mf6_runner=make_mf_model,
         )
 
-        print("\nFD vs Warp_k_cycle (should be almost machine identical):")
-        FD_vs_warp_k_cycle = compare_head_fields(
-            head_ref=head_fd,
-            head_warp=head_k_warp,
-            active_mask=active_mask,
-        )
+        if run_fd_reference:
+            print("\nFD vs Warp_k_cycle (should be almost machine identical):")
+            FD_vs_warp_k_cycle = compare_head_fields(
+                head_ref=head_fd,
+                head_warp=head_k_warp,
+                active_mask=active_mask,
+            )
 
-        print("\nMF6 vs FD:")
-        mf_vs_fd = compare_head_fields(
-            head_ref=mf_head,
-            head_warp=head_fd,
-            active_mask=active_mask,
-        )
+            print("\nMF6 vs FD:")
+            mf_vs_fd = compare_head_fields(
+                head_ref=mf_head,
+                head_warp=head_fd,
+                active_mask=active_mask,
+            )
+        else:
+            FD_vs_warp_k_cycle = None
+            mf_vs_fd = None
 
         print("\nK-cycle Warp vs MF6:")
         k_cycle_vs_mf = compare_head_fields(
@@ -560,7 +570,7 @@ if __name__ == "__main__":
             "k_cycle_vs_mf": k_cycle_vs_mf,
             "fd_vs_k_cycle": FD_vs_warp_k_cycle,
             "timings": {
-                "fd_seconds": float(t_fd),
+                "fd_seconds": None if t_fd is None else float(t_fd),
                 "warp_seconds_cuda_cold_runtime": float(cold_runtime),
                 "warp_seconds_cuda_warm_runtime": float(warm_runtime),
                 "mf6_seconds": None if t_mf is None else float(t_mf),
