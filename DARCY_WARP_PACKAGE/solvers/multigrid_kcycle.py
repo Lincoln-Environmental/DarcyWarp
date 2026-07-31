@@ -648,6 +648,9 @@ def solve_multigrid_kcycle_backend(
         dh_max_factor: float = 5.0,
         min_coarse_cells: int | None = 500,
         implementation: str = "classic",
+        # Inner-solver implementation for the unconfined Picard backend only
+        # ("classic" | "fast"); meaningless — and rejected — otherwise.
+        inner_implementation: str = "classic",
         fallback_to_pcg: bool = True,
         divergence_cycle_start: int = 100,
         divergence_residual_factor: float = 3.0,
@@ -872,6 +875,12 @@ def solve_multigrid_kcycle_backend(
 
     if bool(unconfined):
         return solve_unconfined_picard(model=self, state=locals())
+
+    if str(inner_implementation).strip().lower() not in {"classic", ""}:
+        raise ValueError(
+            "inner_implementation only applies to unconfined Picard solves "
+            "(formulation='unconfined'); use implementation= for confined solves."
+        )
 
 
     if bool(transient):

@@ -216,8 +216,7 @@ def solve_unconfined_picard(*, model: Any, state: dict[str, Any]):
     kc_base_kwargs = {
         "nu_pre": int(nu_pre),
         "nu_post": int(nu_post),
-        "nu_coarse": int(nu_coarse),
-        "omega": float(omega),
+        "nu_coarse": int(nu_coarse),        "omega": float(omega),
         "rel_tol": float(rel_tol),
         "abs_tol_min": float(abs_tol_min),
         "aq_thickness": aq_thickness,
@@ -237,6 +236,32 @@ def solve_unconfined_picard(*, model: Any, state: dict[str, Any]):
         "cheby_lambda_min": float(cheby_lambda_min),
         "cheby_lambda_max": float(cheby_lambda_max),
     }
+
+    # Optional fast inner solver (steady confined face-array K-cycle) for the
+    # per-outer linearised solves.  Steady only: the fast implementation
+    # rejects transient solves, and the Picard T(h) update already refreshes
+    # the fast face arrays in place via update_T_in_place -> _fast_faces_stale,
+    # so captured graphs survive across outer iterations.
+    inner_implementation_mode = (
+        "classic"
+        if inner_implementation is None
+        else str(inner_implementation).strip().lower()
+    )
+    if inner_implementation_mode not in {"classic", "fast"}:
+        raise ValueError(
+            f"inner_implementation must be 'classic' or 'fast', got {inner_implementation!r}."
+        )
+    if inner_implementation_mode == "fast":
+        if bool(transient):
+            raise ValueError(
+                "inner_implementation='fast' is steady only; use 'classic' "
+                "(or the device transient fast path) for transient unconfined solves."
+            )
+        kc_base_kwargs["implementation"] = "fast"
+        # The fast backend's Jacobi-block coarsest solve needs more sweeps
+        # than the classic PCG default for equivalent contraction (the
+        # validated fast configuration uses nu_coarse=10).
+        kc_base_kwargs["nu_coarse"] = max(int(nu_coarse), 10)
 
     def _storage_from_picard_head(
             head_ref_arr: np.ndarray,
@@ -818,6 +843,7 @@ def solve_unconfined_picard(*, model: Any, state: dict[str, Any]):
             {
                 "solver_type": "kcycle_unconfined_picard_chebyshev",
                 "linear_solver_type": str(last_linear_info.get("solver_type", "kcycle")),
+                "inner_implementation": str(inner_implementation_mode),
                 "unconfined": True,
             "converged": bool(production_acceptance_passed),
             "outer_iterations": int(len(outer_history)),

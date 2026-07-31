@@ -24,6 +24,11 @@ def solve_transient_unconfined_backend(
         active: np.ndarray | None = None,
         bc_mask: np.ndarray | None = None,
         bc_values: np.ndarray | None = None,
+        gh_mask: np.ndarray | None = None,
+        gh_head: np.ndarray | None = None,
+        gh_width: np.ndarray | None = None,
+        gh_alpha: float | np.ndarray = 1.0,
+        aq_thickness: float | np.ndarray | None = None,
         storage_mode: str = "mf6_convertible_secant_sy",
         storage_reference: str = "current_picard",
         solve_controls: dict | None = None,
@@ -129,6 +134,9 @@ def solve_transient_unconfined_backend(
         "use_device_transient_fast_path",
         "profile_transient_fast_path",
         "use_incremental_picard",
+        "transient_face_operator_enabled",
+        "transient_face_graphs_enabled",
+        "transient_mixed_precision_enabled",
         "adaptive_dt_enabled",
         "adaptive_dt_min_fraction",
         "adaptive_dt_shrink_factor",
@@ -149,12 +157,27 @@ def solve_transient_unconfined_backend(
     initial_T = np.asarray(k * thickness, dtype=NP_FLOAT)
     initial_T[active_i == 0] = 0.0
     recharge_field = np.zeros(h0.shape, dtype=NP_FLOAT)
+    if bool(self.use_ghb):
+        # Phase D (UNCONFINED_FAST_PLAN.md): GHB state is forwarded to the
+        # model build; ghb_factor is derived from gh_width/gh_alpha/
+        # aq_thickness inside build_from_fields.  The device fast path
+        # supports GHB only with the face operator (see the gate below).
+        for _name, _arr in (("gh_mask", gh_mask), ("gh_head", gh_head), ("gh_width", gh_width)):
+            if _arr is None:
+                raise ValueError(f"{_name} is required when the model has use_ghb=True.")
+            if np.asarray(_arr).shape != h0.shape:
+                raise ValueError(f"{_name} shape {np.asarray(_arr).shape} expected {h0.shape}")
     self.build_from_fields(
         T_field=initial_T,
         R_field=recharge_field,
         active=active_i,
         bc_mask=bc_i,
         bc_values=bc_v,
+        gh_mask=gh_mask,
+        gh_head=gh_head,
+        gh_width=gh_width,
+        gh_alpha=gh_alpha,
+        aq_thickness=aq_thickness,
     )
 
     n_periods = int(rates.size)
@@ -214,6 +237,42 @@ def solve_transient_unconfined_backend(
 
     use_device_fast_path = bool(fast_path_controls.get("use_device_transient_fast_path", False))
     use_incremental_picard = bool(fast_path_controls.get("use_incremental_picard", False))
+    # Face-array operator (Phase A of UNCONFINED_FAST_PLAN.md): precomputed
+    # face conductances + block-reduced reductions replace the per-outer
+    # harmonic-mean M_inv rebuilds and per-thread-atomic check kernels on the
+    # device fast path. Default on; an explicit control wins over the env var.
+    _face_operator_env = str(os.environ.get("DARCY_TRANSIENT_FACE_OPERATOR", "")).strip().lower()
+    _face_operator_env_default = _face_operator_env not in {"0", "false", "off", "no"}
+    transient_face_operator_enabled_b = bool(
+        fast_path_controls.get("transient_face_operator_enabled", _face_operator_env_default)
+    )
+    # CUDA-graph capture for the face-operator path (Phase B of
+    # UNCONFINED_FAST_PLAN.md): one graph per inner K-cycle (replayed per
+    # fixed-work cycle) plus one graph for the per-outer refresh segment.
+    # Default on; an explicit control wins over the env var; requires the
+    # face operator and is disabled while profiling (per-phase syncs).
+    _face_graphs_env = str(os.environ.get("DARCY_TRANSIENT_FACE_GRAPHS", "")).strip().lower()
+    _face_graphs_env_default = _face_graphs_env not in {"0", "false", "off", "no"}
+    transient_face_graphs_enabled_b = bool(
+        transient_face_operator_enabled_b
+        and fast_path_controls.get("transient_face_graphs_enabled", _face_graphs_env_default)
+    )
+    # EXPERIMENTAL FP32 inner correction solve (Phase C of
+    # UNCONFINED_FAST_PLAN.md, Option 1): per Picard outer, the nonlinear
+    # residual is cast to FP32 and the inner correction A32*delta32 = r32 is
+    # solved with fixed-work FP32 K-cycles; the FP64 outer loop, Picard
+    # update, and acceptance checks are unchanged.  Opt-in only; requires
+    # the face operator.
+    _mixed_env = str(os.environ.get("DARCY_TRANSIENT_MIXED", "")).strip().lower()
+    _mixed_env_on = _mixed_env in {"1", "true", "on", "yes"}
+    transient_mixed_precision_enabled_b = bool(
+        fast_path_controls.get("transient_mixed_precision_enabled", _mixed_env_on)
+    )
+    if transient_mixed_precision_enabled_b and not transient_face_operator_enabled_b:
+        raise ValueError(
+            "transient_mixed_precision_enabled requires the face operator "
+            "(transient_face_operator_enabled=True, the default)"
+        )
     # Per-block h_iter = h^k + delta sync clip: large enough to be a no-op so
     # the residual check sees the true current head iterate (delta is a head
     # correction, bounded by the domain scale; the final relaxed update does
@@ -226,8 +285,19 @@ def solve_transient_unconfined_backend(
     )
     if fast_path:
         controls = fast_path_controls
-        if self.use_ghb:
-            raise NotImplementedError("device transient fast path does not yet support GHB RHS assembly")
+        if self.use_ghb and not transient_face_operator_enabled_b:
+            # GHB on the device fast path is implemented via the face
+            # operator (Phase D): C_gh = T_c*ghb_factor lives in the face
+            # build's diag and in the GHB-aware RHS kernel.  The classic
+            # device path keeps its coarse-refresh GHB limitation
+            # (_refresh_transient_device_hierarchy_values), so GHB requires
+            # the face operator here (the default).  Use
+            # use_device_transient_fast_path=False for the host Picard path.
+            raise NotImplementedError(
+                "device transient fast path supports GHB only with the face "
+                "operator enabled (transient_face_operator_enabled=True, the "
+                "default); the classic device path does not support GHB"
+            )
         counters["device_side_picard_fast_path_active"] = 1
         device = self.device_str
         n_free = int(np.count_nonzero((active_i != 0) & (bc_i == 0)))
@@ -285,6 +355,37 @@ def solve_transient_unconfined_backend(
             self.mg_levels[0].T_wp = self.T_wp
             self.mg_levels[0].storage_diag_wp = storage_diag_wp
         fast_path_coarse_operator_mode = "device_refreshed_dynamic_coarse_operator"
+
+        face_levels = None
+        if transient_face_operator_enabled_b:
+            from DARCY_WARP_PACKAGE.solvers.face_kernels_f64 import (
+                _BLOCK as _FACE_BLOCK,
+                combine_partials_kernel,
+                combine_partials_max_kernel,
+                dot_partials_f64_kernel,
+                face_residual_f64_kernel,
+            )
+            from DARCY_WARP_PACKAGE.solvers.face_transient_f64 import (
+                build_transient_rhs_ghb_f64_kernel,
+                ensure_transient_face_levels,
+                face_check_dh_dual_residual_f64_kernel,
+                face_dual_residual_f64_kernel,
+                refresh_transient_face_levels,
+                solve_kcycle_face_transient_device_buffers,
+            )
+            face_levels = ensure_transient_face_levels(self, self.mg_levels)
+
+        mixed_session = None
+        if transient_mixed_precision_enabled_b:
+            from DARCY_WARP_PACKAGE.solvers.mixed_transient_f32 import (
+                MixedTransientInnerSession,
+            )
+            mixed_session = MixedTransientInnerSession(self, self.mg_levels)
+        # Correction-form inner solve (A*delta = r^k) is used by incremental
+        # Picard AND by the mixed-precision inner (which always solves for
+        # the correction in FP32 — see mixed_transient_f32.py).
+        use_correction_form = bool(use_incremental_picard or transient_mixed_precision_enabled_b)
+        n_cells0 = int(self.nx) * int(self.ny)
 
         max_outer = int(controls.get("unconfined_max_picard_iter", controls.get("max_outer_iterations", 100)))
         max_cycles_hard_i = int(controls.get("max_cycles", 200))
@@ -395,42 +496,284 @@ def solve_transient_unconfined_backend(
                 wp.synchronize_device(device)
             return float(time.perf_counter() - t_start)
 
-        def _fast_path_head_residual_check() -> tuple[float, float, float, bool]:
-            wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[flow_rTr_buf], device=device)
-            wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[head_rTr_buf], device=device)
-            wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[rhs_rTr_buf], device=device)
-            wp.launch(kernel=zero_int_scalar_kernel, dim=1, inputs=[head_nonfinite_flag_buf], device=device)
+        # --- Phase B (UNCONFINED_FAST_PLAN.md): CUDA-graph capture ---------
+        # Graph caches are per-solve-call locals: every pointer baked into a
+        # captured graph (h_iter/h_prev/storage/rhs buffers, T_wp, R_wp,
+        # mg-level arrays, face-level arrays) is allocated once above and
+        # lives for the whole period loop, and the caches die with the call.
+        # Recharge changes per period via an in-place device update of
+        # self.R_wp (update_uniform_recharge_in_place), so captured graphs
+        # pick the new values up automatically.
+        face_kcycle_graphs: dict = {}
+        face_refresh_graphs: dict = {}
+        # Profiling wants per-phase device syncs, which fight graph replay;
+        # keep profiling and graphs mutually exclusive.
+        face_graphs_active = bool(
+            transient_face_graphs_enabled_b
+            and transient_face_operator_enabled_b
+            and not profile_fast_path_b
+            and str(device).startswith("cuda")
+        )
+
+        def _launch_rhs_build_face() -> None:
+            """Transient RHS assembly for the current outer iteration.
+
+            GHB mode (Phase D): ``build_transient_rhs_ghb_f64_kernel`` adds
+            the injection term ``C_gh*gh_head`` with ``C_gh = T_c*ghb_factor``
+            from the CURRENT outer T(h) — the identical discretization the
+            host path assembles via ``build_rhs_kernel`` /
+            ``build_rhs_fd_like`` + ``_prepare_5point_transient_terms``
+            (head_scale=1.0).  The matching diag term lives in the face
+            build (``face_build_storage_f64_kernel``), so operator and RHS
+            are rebuilt together every outer.  Launch-stable and
+            pointer-stable (gh arrays fixed for the run) — safe inside the
+            per-outer refresh CUDA graph.  Non-GHB mode launches the original
+            kernel unchanged."""
+            if bool(self.use_ghb):
+                wp.launch(
+                    kernel=build_transient_rhs_ghb_f64_kernel,
+                    dim=dim2d,
+                    inputs=[
+                        self.R_wp,
+                        self.T_wp,
+                        storage_diag_wp,
+                        h_prev_wp,
+                        self.active_wp,
+                        self.bc_mask_wp,
+                        self.bc_values_wp,
+                        self.gh_mask_wp,
+                        self.gh_head_wp,
+                        self.ghb_factor_wp,
+                        wp.float64(dx_f),
+                        self.nx,
+                        self.ny,
+                        rhs_eff_wp,
+                    ],
+                    device=device,
+                )
+            else:
+                wp.launch(
+                    kernel=build_transient_rhs_from_storage_kernel,
+                    dim=dim2d,
+                    inputs=[
+                        self.R_wp,
+                        storage_diag_wp,
+                        h_prev_wp,
+                        self.active_wp,
+                        self.bc_mask_wp,
+                        self.bc_values_wp,
+                        dx_f,
+                        self.nx,
+                        self.ny,
+                        rhs_eff_wp,
+                    ],
+                    device=device,
+                )
+
+
+        def _launch_outer_refresh_face(dt_value: float) -> None:
+            """Per-outer operator refresh, face mode: T(h) update, secant
+            storage diagonal + change stats, storage-diag history copy,
+            dynamic coarse-operator refresh + face builds, RHS assembly.
+
+            Launch-stable and pointer-stable (the only varying value is the
+            by-value ``dt_value``) — safe to CUDA-graph capture.  The storage
+            change scalar buffers are re-zeroed INSIDE the sequence so graph
+            replays are self-cleaning; the face-level partial buffers used by
+            the (uncaptured) check kernels self-clean via combine kernels."""
             wp.launch(
-                kernel=compute_dual_residual_kernel,
+                kernel=update_unconfined_transmissivity_from_head_kernel,
+                dim=dim2d,
+                inputs=[h_iter_wp, k_field_wp, bottom_wp, top_wp, self.active_wp, min_sat_f, self.nx, self.ny, self.T_wp],
+                device=device,
+            )
+            wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[storage_change_sum_sq_buf], device=device)
+            wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[storage_change_max_buf], device=device)
+            wp.launch(
+                kernel=update_secant_sy_storage_kernel,
                 dim=dim2d,
                 inputs=[
-                    h_iter_wp,
-                    rhs_eff_wp,
-                    self.T_wp,
-                    self.active_wp,
-                    self.bc_mask_wp,
-                    self.mg_levels[0].gh_mask_wp,
-                    self.mg_levels[0].ghb_factor_wp,
-                    storage_diag_wp,
-                    flow_rTr_buf,
-                    head_rTr_buf,
-                    self.nx,
-                    self.ny,
+                    h_iter_wp, h_prev_wp, bottom_wp, top_wp, self.active_wp, self.bc_mask_wp,
+                    sy_f, ss_f, dx_f, dt_value, min_sat_f, 1.0e-12, self.nx, self.ny,
+                    storage_coeff_wp, sy_coeff_wp, ss_coeff_wp, storage_diag_wp, storage_diag_prev_wp,
+                    storage_change_sum_sq_buf, storage_change_max_buf,
                 ],
                 device=device,
             )
-            wp.launch(
-                kernel=detect_nonfinite_field_kernel,
-                dim=dim2d,
-                inputs=[h_iter_wp, head_nonfinite_flag_buf, self.nx, self.ny],
-                device=device,
+            wp.launch(kernel=copy_field_kernel, dim=dim2d, inputs=[storage_diag_wp, storage_diag_prev_wp, self.nx, self.ny], device=device)
+            refresh_transient_face_levels(self, self.mg_levels, face_levels)
+            if mixed_session is not None:
+                mixed_session.refresh_faces()  # FP32 operator, in place (graph-safe)
+            _launch_rhs_build_face()
+
+        def _fast_path_outer_refresh(dt_value: float) -> None:
+            """Per-outer refresh as one CUDA graph, keyed on the by-value dt
+            (adaptive-dt retries change it and re-capture — rare) and on the
+            hierarchy/T pointer identities.  Eager fallback on any capture
+            failure (identical launch sequence, identical semantics)."""
+            key = ("face_outer_refresh_v1", float(dt_value), id(self.mg_levels), id(self.T_wp))
+            entry = face_refresh_graphs.get(key)
+            if entry is None:
+                graph = None
+                executed_eagerly = False
+                try:
+                    with wp.ScopedCapture() as cap:
+                        _launch_outer_refresh_face(dt_value)
+                    graph = cap.graph
+                except Exception:
+                    graph = None
+                else:
+                    # Null capture (e.g. profiler): launches already ran
+                    # eagerly inside the capture context (same contract as
+                    # mixed_fast._inner_correction_block).
+                    executed_eagerly = graph is None
+                if graph is not None:
+                    face_refresh_graphs[key] = graph
+                    wp.capture_launch(graph)
+                else:
+                    face_refresh_graphs[key] = False
+                    if not executed_eagerly:
+                        _launch_outer_refresh_face(dt_value)
+            elif entry is False:
+                _launch_outer_refresh_face(dt_value)
+            else:
+                wp.capture_launch(entry)
+
+
+        def _fast_path_inner_kcycle(
+            *,
+            x_wp,
+            rhs_wp,
+            bc_values_wp,
+            solve_controls: dict,
+            return_scalar_info: bool,
+        ) -> dict:
+            """Inner K-cycle dispatch: face operator (default) or classic kernels."""
+            if mixed_session is not None and not return_scalar_info:
+                # Phase C: FP32 fixed-work correction K-cycle (delta32
+                # continues in place across blocks), then cast the
+                # accumulated correction back to the FP64 delta buffer.
+                mixed_session.solve_block(
+                    int(solve_controls.get("max_cycles", 1)),
+                    solve_controls,
+                    graph_cache=(face_kcycle_graphs if face_graphs_active else None),
+                )
+                mixed_session.cast_correction_out(x_wp)
+                return {
+                    "converged": False,
+                    "n_cycles_used": int(solve_controls.get("max_cycles", 1)),
+                    "coarse_operator_mode": fast_path_coarse_operator_mode,
+                    "fine_operator_residual_checked": True,
+                    "implementation": "mixed_f32",
+                }
+            if transient_face_operator_enabled_b:
+                return solve_kcycle_face_transient_device_buffers(
+                    model=self,
+                    x_wp=x_wp,
+                    rhs_wp=rhs_wp,
+                    T_wp=self.T_wp,
+                    storage_diag_wp=storage_diag_wp,
+                    active_wp=self.active_wp,
+                    bc_mask_wp=self.bc_mask_wp,
+                    bc_values_wp=bc_values_wp,
+                    levels=self.mg_levels,
+                    face_levels=face_levels,
+                    solve_controls=solve_controls,
+                    graph_cache=(face_kcycle_graphs if face_graphs_active else None),
+                    return_scalar_info=return_scalar_info,
+                )
+            return self._solve_multigrid_kcycle_device_buffers(
+                x_wp=x_wp,
+                rhs_wp=rhs_wp,
+                T_wp=self.T_wp,
+                storage_diag_wp=storage_diag_wp,
+                active_wp=self.active_wp,
+                bc_mask_wp=self.bc_mask_wp,
+                bc_values_wp=bc_values_wp,
+                levels=self.mg_levels,
+                solve_controls=solve_controls,
+                return_scalar_info=return_scalar_info,
             )
-            wp.launch(
-                kernel=compute_active_rhs_l2_kernel,
-                dim=dim2d,
-                inputs=[rhs_eff_wp, self.active_wp, self.bc_mask_wp, rhs_rTr_buf, self.nx, self.ny],
-                device=device,
-            )
+
+        def _fast_path_head_residual_check() -> tuple[float, float, float, bool]:
+            wp.launch(kernel=zero_int_scalar_kernel, dim=1, inputs=[head_nonfinite_flag_buf], device=device)
+            if transient_face_operator_enabled_b:
+                fl0 = face_levels[0]
+                wp.launch(
+                    kernel=face_dual_residual_f64_kernel,
+                    dim=n_cells0,
+                    inputs=[
+                        h_iter_wp,
+                        rhs_eff_wp,
+                        fl0.Te,
+                        fl0.Tw,
+                        fl0.Tn,
+                        fl0.Ts,
+                        fl0.diag,
+                        self.active_wp,
+                        self.bc_mask_wp,
+                        fl0.partials,
+                        fl0.partials_b,
+                        self.nx,
+                        self.ny,
+                        _FACE_BLOCK,
+                    ],
+                    device=device,
+                )
+                wp.launch(kernel=combine_partials_kernel, dim=1,
+                          inputs=[fl0.partials, flow_rTr_buf, fl0.n_partials], device=device)
+                wp.launch(kernel=combine_partials_kernel, dim=1,
+                          inputs=[fl0.partials_b, head_rTr_buf, fl0.n_partials], device=device)
+                wp.launch(
+                    kernel=detect_nonfinite_field_kernel,
+                    dim=dim2d,
+                    inputs=[h_iter_wp, head_nonfinite_flag_buf, self.nx, self.ny],
+                    device=device,
+                )
+                wp.launch(
+                    kernel=dot_partials_f64_kernel,
+                    dim=n_cells0,
+                    inputs=[rhs_eff_wp, rhs_eff_wp, self.active_wp, self.bc_mask_wp,
+                            fl0.partials, self.nx, self.ny, _FACE_BLOCK],
+                    device=device,
+                )
+                wp.launch(kernel=combine_partials_kernel, dim=1,
+                          inputs=[fl0.partials, rhs_rTr_buf, fl0.n_partials], device=device)
+            else:
+                wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[flow_rTr_buf], device=device)
+                wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[head_rTr_buf], device=device)
+                wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[rhs_rTr_buf], device=device)
+                wp.launch(
+                    kernel=compute_dual_residual_kernel,
+                    dim=dim2d,
+                    inputs=[
+                        h_iter_wp,
+                        rhs_eff_wp,
+                        self.T_wp,
+                        self.active_wp,
+                        self.bc_mask_wp,
+                        self.mg_levels[0].gh_mask_wp,
+                        self.mg_levels[0].ghb_factor_wp,
+                        storage_diag_wp,
+                        flow_rTr_buf,
+                        head_rTr_buf,
+                        self.nx,
+                        self.ny,
+                    ],
+                    device=device,
+                )
+                wp.launch(
+                    kernel=detect_nonfinite_field_kernel,
+                    dim=dim2d,
+                    inputs=[h_iter_wp, head_nonfinite_flag_buf, self.nx, self.ny],
+                    device=device,
+                )
+                wp.launch(
+                    kernel=compute_active_rhs_l2_kernel,
+                    dim=dim2d,
+                    inputs=[rhs_eff_wp, self.active_wp, self.bc_mask_wp, rhs_rTr_buf, self.nx, self.ny],
+                    device=device,
+                )
             counters["scalar_reductions"] += 1
             head_rtr = float(head_rTr_buf.numpy()[0])
             flow_rtr = float(flow_rTr_buf.numpy()[0])
@@ -471,12 +814,12 @@ def solve_transient_unconfined_backend(
                 ],
                 device=device,
             )
-            wp.launch(
-                kernel=build_transient_rhs_from_storage_kernel,
-                dim=dim2d,
-                inputs=[self.R_wp, storage_diag_wp, h_prev_wp, self.active_wp, self.bc_mask_wp, self.bc_values_wp, dx_f, self.nx, self.ny, rhs_eff_wp],
-                device=device,
-            )
+            _launch_rhs_build_face()
+            if transient_face_operator_enabled_b:
+                # Fine-level faces must track the refreshed T/storage before
+                # the face dual-residual check below (coarse faces are not
+                # needed: this evaluation runs no inner solve).
+                refresh_transient_face_levels(self, self.mg_levels, face_levels, level0_only=True)
             head_rms, flow_rms, relative_flow_rms, _ = _fast_path_head_residual_check()
             storage_change_rms = float(
                 np.sqrt(max(float(storage_change_sum_sq_buf.numpy()[0]), 0.0) / float(max(n_free, 1)))
@@ -540,6 +883,7 @@ def solve_transient_unconfined_backend(
             outer_convergence_check_seconds = 0.0
             final_nonlinear_residual_check_seconds = 0.0
             head_download_seconds = 0.0
+            refresh_segment_seconds = 0.0
             startup_inner_cycles = 0
             startup_converged = None
 
@@ -570,58 +914,42 @@ def solve_transient_unconfined_backend(
                 )
                 storage_kernel_seconds += _fast_path_phase_elapsed(phase_t0)
                 counters["storage_device_updates"] += 1
-                if hasattr(self, "_update_diag_preconditioner_device"):
+                if transient_face_operator_enabled_b:
                     phase_t0 = _fast_path_phase_start()
-                    self._update_diag_preconditioner_device(
-                        T_wp=self.T_wp,
-                        active_wp=self.active_wp,
-                        bc_mask_wp=self.bc_mask_wp,
-                        gh_mask_wp=self.mg_levels[0].gh_mask_wp,
-                        ghb_factor_wp=self.mg_levels[0].ghb_factor_wp,
-                        M_inv_wp=self.mg_levels[0].M_inv_wp,
-                        nx=self.nx,
-                        ny=self.ny,
-                        use_ghb=bool(self.use_ghb),
-                        storage_diag_wp=storage_diag_wp,
-                    )
-                    fine_m_inv_refresh_seconds += _fast_path_phase_elapsed(phase_t0)
-                phase_t0 = _fast_path_phase_start()
-                self._refresh_transient_device_hierarchy_values(levels=self.mg_levels)
-                dynamic_coarse_refresh_seconds += _fast_path_phase_elapsed(phase_t0)
+                    refresh_transient_face_levels(self, self.mg_levels, face_levels)
+                    dynamic_coarse_refresh_seconds += _fast_path_phase_elapsed(phase_t0)
+                else:
+                    if hasattr(self, "_update_diag_preconditioner_device"):
+                        phase_t0 = _fast_path_phase_start()
+                        self._update_diag_preconditioner_device(
+                            T_wp=self.T_wp,
+                            active_wp=self.active_wp,
+                            bc_mask_wp=self.bc_mask_wp,
+                            gh_mask_wp=self.mg_levels[0].gh_mask_wp,
+                            ghb_factor_wp=self.mg_levels[0].ghb_factor_wp,
+                            M_inv_wp=self.mg_levels[0].M_inv_wp,
+                            nx=self.nx,
+                            ny=self.ny,
+                            use_ghb=bool(self.use_ghb),
+                            storage_diag_wp=storage_diag_wp,
+                        )
+                        fine_m_inv_refresh_seconds += _fast_path_phase_elapsed(phase_t0)
+                    phase_t0 = _fast_path_phase_start()
+                    self._refresh_transient_device_hierarchy_values(levels=self.mg_levels)
+                    dynamic_coarse_refresh_seconds += _fast_path_phase_elapsed(phase_t0)
                 counters["hierarchy_device_coarse_value_refreshes"] += 1
                 counters["rhs_device_updates"] += 1
                 phase_t0 = _fast_path_phase_start()
-                wp.launch(
-                    kernel=build_transient_rhs_from_storage_kernel,
-                    dim=dim2d,
-                    inputs=[
-                        self.R_wp,
-                        storage_diag_wp,
-                        h_prev_wp,
-                        self.active_wp,
-                        self.bc_mask_wp,
-                        self.bc_values_wp,
-                        dx_f,
-                        self.nx,
-                        self.ny,
-                        rhs_eff_wp,
-                    ],
-                    device=device,
-                )
+                _launch_rhs_build_face()
                 rhs_assembly_seconds += _fast_path_phase_elapsed(phase_t0)
                 startup_controls = dict(controls)
                 startup_controls["max_cycles"] = int(controls.get("max_cycles", 200))
                 startup_controls["coarse_operator_mode"] = fast_path_coarse_operator_mode
                 phase_t0 = _fast_path_phase_start()
-                startup_info = self._solve_multigrid_kcycle_device_buffers(
+                startup_info = _fast_path_inner_kcycle(
                     x_wp=h_iter_wp,
                     rhs_wp=rhs_eff_wp,
-                    T_wp=self.T_wp,
-                    storage_diag_wp=storage_diag_wp,
-                    active_wp=self.active_wp,
-                    bc_mask_wp=self.bc_mask_wp,
                     bc_values_wp=self.bc_values_wp,
-                    levels=self.mg_levels,
                     solve_controls=startup_controls,
                     return_scalar_info=True,
                 )
@@ -701,77 +1029,75 @@ def solve_transient_unconfined_backend(
             outer_iter = 0
             while outer_iter < substep_outer_limit_i:
                 adaptive_dt_total_outer_iterations_i += 1
-                storage_t0 = _fast_path_phase_start()
-                phase_t0 = _fast_path_phase_start()
-                wp.launch(
-                    kernel=update_unconfined_transmissivity_from_head_kernel,
-                    dim=dim2d,
-                    inputs=[h_iter_wp, k_field_wp, bottom_wp, top_wp, self.active_wp, min_sat_f, self.nx, self.ny, self.T_wp],
-                    device=device
-                )
-                T_update_seconds += _fast_path_phase_elapsed(phase_t0)
-                counters["T_device_updates"] += 1
-
-                phase_t0 = _fast_path_phase_start()
-                wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[storage_change_sum_sq_buf], device=device)
-                wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[storage_change_max_buf], device=device)
-
-                wp.launch(
-                    kernel=update_secant_sy_storage_kernel,
-                    dim=dim2d,
-                    inputs=[
-                        h_iter_wp, h_prev_wp, bottom_wp, top_wp, self.active_wp, self.bc_mask_wp,
-                        sy_f, ss_f, dx_f, actual_dt_f, min_sat_f, 1.0e-12, self.nx, self.ny,
-                        storage_coeff_wp, sy_coeff_wp, ss_coeff_wp, storage_diag_wp, storage_diag_prev_wp,
-                        storage_change_sum_sq_buf, storage_change_max_buf
-                    ],
-                    device=device
-                )
-                wp.launch(kernel=copy_field_kernel, dim=dim2d, inputs=[storage_diag_wp, storage_diag_prev_wp, self.nx, self.ny], device=device)
-                storage_kernel_seconds += _fast_path_phase_elapsed(phase_t0)
-                counters["storage_device_updates"] += 1
-                storage_assembly_seconds += _fast_path_phase_elapsed(storage_t0)
-
-                if hasattr(self, "_update_diag_preconditioner_device"):
+                if face_graphs_active:
+                    refresh_t0 = _fast_path_phase_start()
+                    _fast_path_outer_refresh(float(actual_dt_f))
+                    refresh_segment_seconds += _fast_path_phase_elapsed(refresh_t0)
+                    counters["T_device_updates"] += 1
+                    counters["storage_device_updates"] += 1
+                    counters["hierarchy_device_coarse_value_refreshes"] += 1
+                    counters["rhs_device_updates"] += 1
+                else:
+                    storage_t0 = _fast_path_phase_start()
                     phase_t0 = _fast_path_phase_start()
-                    self._update_diag_preconditioner_device(
-                        T_wp=self.T_wp,
-                        active_wp=self.active_wp,
-                        bc_mask_wp=self.bc_mask_wp,
-                        gh_mask_wp=self.mg_levels[0].gh_mask_wp,
-                        ghb_factor_wp=self.mg_levels[0].ghb_factor_wp,
-                        M_inv_wp=self.mg_levels[0].M_inv_wp,
-                        nx=self.nx,
-                        ny=self.ny,
-                        use_ghb=bool(self.use_ghb),
-                        storage_diag_wp=storage_diag_wp
+                    wp.launch(
+                        kernel=update_unconfined_transmissivity_from_head_kernel,
+                        dim=dim2d,
+                        inputs=[h_iter_wp, k_field_wp, bottom_wp, top_wp, self.active_wp, min_sat_f, self.nx, self.ny, self.T_wp],
+                        device=device
                     )
-                    fine_m_inv_refresh_seconds += _fast_path_phase_elapsed(phase_t0)
-                phase_t0 = _fast_path_phase_start()
-                self._refresh_transient_device_hierarchy_values(levels=self.mg_levels)
-                dynamic_coarse_refresh_seconds += _fast_path_phase_elapsed(phase_t0)
-                counters["hierarchy_device_coarse_value_refreshes"] += 1
+                    T_update_seconds += _fast_path_phase_elapsed(phase_t0)
+                    counters["T_device_updates"] += 1
 
-                rhs_t0 = _fast_path_phase_start()
-                counters["rhs_device_updates"] += 1
-                wp.launch(
-                    kernel=build_transient_rhs_from_storage_kernel,
-                    dim=dim2d,
-                    inputs=[
-                        self.R_wp,
-                        storage_diag_wp,
-                        h_prev_wp,
-                        self.active_wp,
-                        self.bc_mask_wp,
-                        self.bc_values_wp,
-                        dx_f,
-                        self.nx,
-                        self.ny,
-                        rhs_eff_wp,
-                    ],
-                    device=device
-                )
-                rhs_assembly_seconds += _fast_path_phase_elapsed(rhs_t0)
+                    phase_t0 = _fast_path_phase_start()
+                    wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[storage_change_sum_sq_buf], device=device)
+                    wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[storage_change_max_buf], device=device)
+
+                    wp.launch(
+                        kernel=update_secant_sy_storage_kernel,
+                        dim=dim2d,
+                        inputs=[
+                            h_iter_wp, h_prev_wp, bottom_wp, top_wp, self.active_wp, self.bc_mask_wp,
+                            sy_f, ss_f, dx_f, actual_dt_f, min_sat_f, 1.0e-12, self.nx, self.ny,
+                            storage_coeff_wp, sy_coeff_wp, ss_coeff_wp, storage_diag_wp, storage_diag_prev_wp,
+                            storage_change_sum_sq_buf, storage_change_max_buf
+                        ],
+                        device=device
+                    )
+                    wp.launch(kernel=copy_field_kernel, dim=dim2d, inputs=[storage_diag_wp, storage_diag_prev_wp, self.nx, self.ny], device=device)
+                    storage_kernel_seconds += _fast_path_phase_elapsed(phase_t0)
+                    counters["storage_device_updates"] += 1
+                    storage_assembly_seconds += _fast_path_phase_elapsed(storage_t0)
+
+                    if transient_face_operator_enabled_b:
+                        phase_t0 = _fast_path_phase_start()
+                        refresh_transient_face_levels(self, self.mg_levels, face_levels)
+                        dynamic_coarse_refresh_seconds += _fast_path_phase_elapsed(phase_t0)
+                    else:
+                        if hasattr(self, "_update_diag_preconditioner_device"):
+                            phase_t0 = _fast_path_phase_start()
+                            self._update_diag_preconditioner_device(
+                                T_wp=self.T_wp,
+                                active_wp=self.active_wp,
+                                bc_mask_wp=self.bc_mask_wp,
+                                gh_mask_wp=self.mg_levels[0].gh_mask_wp,
+                                ghb_factor_wp=self.mg_levels[0].ghb_factor_wp,
+                                M_inv_wp=self.mg_levels[0].M_inv_wp,
+                                nx=self.nx,
+                                ny=self.ny,
+                                use_ghb=bool(self.use_ghb),
+                                storage_diag_wp=storage_diag_wp
+                            )
+                            fine_m_inv_refresh_seconds += _fast_path_phase_elapsed(phase_t0)
+                        phase_t0 = _fast_path_phase_start()
+                        self._refresh_transient_device_hierarchy_values(levels=self.mg_levels)
+                        dynamic_coarse_refresh_seconds += _fast_path_phase_elapsed(phase_t0)
+                    counters["hierarchy_device_coarse_value_refreshes"] += 1
+
+                    rhs_t0 = _fast_path_phase_start()
+                    counters["rhs_device_updates"] += 1
+                    _launch_rhs_build_face()
+                    rhs_assembly_seconds += _fast_path_phase_elapsed(rhs_t0)
 
                 wp.launch(kernel=copy_field_kernel, dim=dim2d, inputs=[h_iter_wp, h_snapshot_wp, self.nx, self.ny], device=device)
                 # Incremental Picard: materialise the nonlinear residual field
@@ -779,28 +1105,52 @@ def solve_transient_unconfined_backend(
                 # to zero, so the inner solve targets A*delta = r^k with delta=0 on
                 # Dirichlet cells. rhs_rTr_buf is reused as an unread scratch for the
                 # kernel's rTr reduction; it is re-zeroed before any later read.
-                if use_incremental_picard:
-                    wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[rhs_rTr_buf], device=device)
-                    wp.launch(
-                        kernel=compute_residual_kernel,
-                        dim=dim2d,
-                        inputs=[
-                            h_snapshot_wp,
-                            rhs_eff_wp,
-                            self.T_wp,
-                            self.active_wp,
-                            self.bc_mask_wp,
-                            self.mg_levels[0].gh_mask_wp,
-                            self.mg_levels[0].ghb_factor_wp,
-                            storage_diag_wp,
-                            residual_wp,
-                            rhs_rTr_buf,
-                            self.nx,
-                            self.ny,
-                        ],
-                        device=device,
-                    )
+                if use_correction_form:
+                    if transient_face_operator_enabled_b:
+                        fl0 = face_levels[0]
+                        wp.launch(
+                            kernel=face_residual_f64_kernel,
+                            dim=dim2d,
+                            inputs=[
+                                h_snapshot_wp,
+                                rhs_eff_wp,
+                                fl0.Te,
+                                fl0.Tw,
+                                fl0.Tn,
+                                fl0.Ts,
+                                fl0.diag,
+                                self.active_wp,
+                                self.bc_mask_wp,
+                                residual_wp,
+                                self.nx,
+                                self.ny,
+                            ],
+                            device=device,
+                        )
+                    else:
+                        wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[rhs_rTr_buf], device=device)
+                        wp.launch(
+                            kernel=compute_residual_kernel,
+                            dim=dim2d,
+                            inputs=[
+                                h_snapshot_wp,
+                                rhs_eff_wp,
+                                self.T_wp,
+                                self.active_wp,
+                                self.bc_mask_wp,
+                                self.mg_levels[0].gh_mask_wp,
+                                self.mg_levels[0].ghb_factor_wp,
+                                storage_diag_wp,
+                                residual_wp,
+                                rhs_rTr_buf,
+                                self.nx,
+                                self.ny,
+                            ],
+                            device=device,
+                        )
                     wp.launch(kernel=zero_field_kernel, dim=dim2d, inputs=[delta_wp, self.nx, self.ny], device=device)
+                    if mixed_session is not None:
+                        mixed_session.begin_outer(residual_wp)
                 adaptive_fallback_reason = ""
                 adaptive_controller_used = bool(adaptive_inner_config.enabled)
                 legacy_dh_fallback_used = False
@@ -858,7 +1208,7 @@ def solve_transient_unconfined_backend(
 
                         def _run_adaptive_block(block_cycles: int) -> dict[str, Any]:
                             nonlocal inner_solver_seconds
-                            if use_incremental_picard:
+                            if use_correction_form:
                                 # Snapshot the running correction so a divergent
                                 # block can be rolled back; continue delta in place.
                                 wp.launch(
@@ -872,15 +1222,10 @@ def solve_transient_unconfined_backend(
                                 block_controls["check_every_no"] = int(block_cycles)
                                 block_controls["coarse_operator_mode"] = fast_path_coarse_operator_mode
                                 block_t0 = _fast_path_phase_start()
-                                block_info = self._solve_multigrid_kcycle_device_buffers(
+                                block_info = _fast_path_inner_kcycle(
                                     x_wp=delta_wp,
                                     rhs_wp=residual_wp,
-                                    T_wp=self.T_wp,
-                                    storage_diag_wp=storage_diag_wp,
-                                    active_wp=self.active_wp,
-                                    bc_mask_wp=self.bc_mask_wp,
                                     bc_values_wp=zero_bc_values_wp,
-                                    levels=self.mg_levels,
                                     solve_controls=block_controls,
                                     return_scalar_info=False,
                                 )
@@ -931,15 +1276,10 @@ def solve_transient_unconfined_backend(
                             block_controls["check_every_no"] = int(block_cycles)
                             block_controls["coarse_operator_mode"] = fast_path_coarse_operator_mode
                             block_t0 = _fast_path_phase_start()
-                            block_info = self._solve_multigrid_kcycle_device_buffers(
+                            block_info = _fast_path_inner_kcycle(
                                 x_wp=h_iter_wp,
                                 rhs_wp=rhs_eff_wp,
-                                T_wp=self.T_wp,
-                                storage_diag_wp=storage_diag_wp,
-                                active_wp=self.active_wp,
-                                bc_mask_wp=self.bc_mask_wp,
                                 bc_values_wp=self.bc_values_wp,
-                                levels=self.mg_levels,
                                 solve_controls=block_controls,
                                 return_scalar_info=False,
                             )
@@ -962,13 +1302,15 @@ def solve_transient_unconfined_backend(
                             }
 
                         def _rollback_adaptive_block() -> None:
-                            if use_incremental_picard:
+                            if use_correction_form:
                                 wp.launch(
                                     kernel=copy_field_kernel,
                                     dim=dim2d,
                                     inputs=[delta_snapshot_wp, delta_wp, self.nx, self.ny],
                                     device=device,
                                 )
+                                if mixed_session is not None:
+                                    mixed_session.sync_correction_in(delta_wp)
                                 return
                             wp.launch(
                                 kernel=copy_field_kernel,
@@ -1112,7 +1454,7 @@ def solve_transient_unconfined_backend(
 
                     if inner_max_cycles_i > 0:
                         inner_t0 = _fast_path_phase_start()
-                        if use_incremental_picard:
+                        if use_correction_form:
                             _legacy_x_wp = delta_wp
                             _legacy_rhs_wp = residual_wp
                             _legacy_bc_values_wp = zero_bc_values_wp
@@ -1120,17 +1462,12 @@ def solve_transient_unconfined_backend(
                             _legacy_x_wp = h_iter_wp
                             _legacy_rhs_wp = rhs_eff_wp
                             _legacy_bc_values_wp = self.bc_values_wp
-                        info_lin = self._solve_multigrid_kcycle_device_buffers(
+                        info_lin = _fast_path_inner_kcycle(
                             x_wp=_legacy_x_wp,
                             rhs_wp=_legacy_rhs_wp,
-                            T_wp=self.T_wp,
-                            storage_diag_wp=storage_diag_wp,
-                            active_wp=self.active_wp,
-                            bc_mask_wp=self.bc_mask_wp,
                             bc_values_wp=_legacy_bc_values_wp,
-                            levels=self.mg_levels,
                             solve_controls=inner_controls,
-                            return_scalar_info=False
+                            return_scalar_info=False,
                         )
                         inner_solver_seconds += _fast_path_phase_elapsed(inner_t0)
                         inner_cycles_used_i = int(
@@ -1198,7 +1535,7 @@ def solve_transient_unconfined_backend(
                     maximum_inner_kcycles_in_one_outer_iteration,
                     inner_cycles_used_i,
                 )
-                if use_incremental_picard:
+                if use_correction_form:
                     wp.launch(
                         kernel=apply_relaxed_correction_kernel,
                         dim=dim2d,
@@ -1236,33 +1573,68 @@ def solve_transient_unconfined_backend(
                     )
 
                 outer_check_t0 = _fast_path_phase_start()
-                wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[dh_rms_buf], device=device)
-                wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[dh_max_buf], device=device)
-                wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[flow_rTr_buf], device=device)
-                wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[head_rTr_buf], device=device)
-                wp.launch(
-                    kernel=kcycle_check_dh_and_dual_residual_kernel,
-                    dim=dim2d,
-                    inputs=[
-                        h_iter_wp,
-                        h_snapshot_wp,
-                        rhs_eff_wp,
-                        self.T_wp,
-                        self.active_wp,
-                        self.bc_mask_wp,
-                        self.mg_levels[0].gh_mask_wp,
-                        self.mg_levels[0].ghb_factor_wp,
-                        storage_diag_wp,
-                        dh_rms_buf,
-                        dh_max_buf,
-                        flow_rTr_buf,
-                        head_rTr_buf,
-                        int(1 if self.use_ghb else 0),
-                        self.nx,
-                        self.ny,
-                    ],
-                    device=device
-                )
+                if transient_face_operator_enabled_b:
+                    fl0 = face_levels[0]
+                    wp.launch(
+                        kernel=face_check_dh_dual_residual_f64_kernel,
+                        dim=n_cells0,
+                        inputs=[
+                            h_iter_wp,
+                            h_snapshot_wp,
+                            rhs_eff_wp,
+                            fl0.Te,
+                            fl0.Tw,
+                            fl0.Tn,
+                            fl0.Ts,
+                            fl0.diag,
+                            self.active_wp,
+                            self.bc_mask_wp,
+                            fl0.partials,
+                            fl0.partials_b,
+                            fl0.partials_c,
+                            fl0.partials_d,
+                            self.nx,
+                            self.ny,
+                            _FACE_BLOCK,
+                        ],
+                        device=device,
+                    )
+                    wp.launch(kernel=combine_partials_kernel, dim=1,
+                              inputs=[fl0.partials, dh_rms_buf, fl0.n_partials], device=device)
+                    wp.launch(kernel=combine_partials_max_kernel, dim=1,
+                              inputs=[fl0.partials_b, dh_max_buf, fl0.n_partials], device=device)
+                    wp.launch(kernel=combine_partials_kernel, dim=1,
+                              inputs=[fl0.partials_c, flow_rTr_buf, fl0.n_partials], device=device)
+                    wp.launch(kernel=combine_partials_kernel, dim=1,
+                              inputs=[fl0.partials_d, head_rTr_buf, fl0.n_partials], device=device)
+                else:
+                    wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[dh_rms_buf], device=device)
+                    wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[dh_max_buf], device=device)
+                    wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[flow_rTr_buf], device=device)
+                    wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[head_rTr_buf], device=device)
+                    wp.launch(
+                        kernel=kcycle_check_dh_and_dual_residual_kernel,
+                        dim=dim2d,
+                        inputs=[
+                            h_iter_wp,
+                            h_snapshot_wp,
+                            rhs_eff_wp,
+                            self.T_wp,
+                            self.active_wp,
+                            self.bc_mask_wp,
+                            self.mg_levels[0].gh_mask_wp,
+                            self.mg_levels[0].ghb_factor_wp,
+                            storage_diag_wp,
+                            dh_rms_buf,
+                            dh_max_buf,
+                            flow_rTr_buf,
+                            head_rTr_buf,
+                            int(1 if self.use_ghb else 0),
+                            self.nx,
+                            self.ny,
+                        ],
+                        device=device
+                    )
                 counters["scalar_reductions"] += 1
                 counters["gpu_scalar_synchronizations"] += 6
                 period_gpu_scalar_syncs += 6
@@ -1637,53 +2009,75 @@ def solve_transient_unconfined_backend(
             counters["storage_device_updates"] += 1
             counters["rhs_device_updates"] += 1
             phase_t0 = _fast_path_phase_start()
-            wp.launch(
-                kernel=build_transient_rhs_from_storage_kernel,
-                dim=dim2d,
-                inputs=[
-                    self.R_wp,
-                    storage_diag_wp,
-                    h_prev_wp,
-                    self.active_wp,
-                    self.bc_mask_wp,
-                    self.bc_values_wp,
-                    dx_f,
-                    self.nx,
-                    self.ny,
-                    rhs_eff_wp,
-                ],
-                device=device
-            )
+            _launch_rhs_build_face()
             rhs_assembly_seconds += _fast_path_phase_elapsed(phase_t0)
             phase_t0 = _fast_path_phase_start()
-            wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[flow_rTr_buf], device=device)
-            wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[head_rTr_buf], device=device)
-            wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[rhs_rTr_buf], device=device)
-            wp.launch(
-                kernel=compute_dual_residual_kernel,
-                dim=dim2d,
-                inputs=[
-                    h_iter_wp,
-                    rhs_eff_wp,
-                    self.T_wp,
-                    self.active_wp,
-                    self.bc_mask_wp,
-                    self.mg_levels[0].gh_mask_wp,
-                    self.mg_levels[0].ghb_factor_wp,
-                    storage_diag_wp,
-                    flow_rTr_buf,
-                    head_rTr_buf,
-                    self.nx,
-                    self.ny,
-                ],
-                device=device,
-            )
-            wp.launch(
-                kernel=compute_active_rhs_l2_kernel,
-                dim=dim2d,
-                inputs=[rhs_eff_wp, self.active_wp, self.bc_mask_wp, rhs_rTr_buf, self.nx, self.ny],
-                device=device,
-            )
+            if transient_face_operator_enabled_b:
+                refresh_transient_face_levels(self, self.mg_levels, face_levels, level0_only=True)
+                fl0 = face_levels[0]
+                wp.launch(
+                    kernel=face_dual_residual_f64_kernel,
+                    dim=n_cells0,
+                    inputs=[
+                        h_iter_wp,
+                        rhs_eff_wp,
+                        fl0.Te,
+                        fl0.Tw,
+                        fl0.Tn,
+                        fl0.Ts,
+                        fl0.diag,
+                        self.active_wp,
+                        self.bc_mask_wp,
+                        fl0.partials,
+                        fl0.partials_b,
+                        self.nx,
+                        self.ny,
+                        _FACE_BLOCK,
+                    ],
+                    device=device,
+                )
+                wp.launch(kernel=combine_partials_kernel, dim=1,
+                          inputs=[fl0.partials, flow_rTr_buf, fl0.n_partials], device=device)
+                wp.launch(kernel=combine_partials_kernel, dim=1,
+                          inputs=[fl0.partials_b, head_rTr_buf, fl0.n_partials], device=device)
+                wp.launch(
+                    kernel=dot_partials_f64_kernel,
+                    dim=n_cells0,
+                    inputs=[rhs_eff_wp, rhs_eff_wp, self.active_wp, self.bc_mask_wp,
+                            fl0.partials, self.nx, self.ny, _FACE_BLOCK],
+                    device=device,
+                )
+                wp.launch(kernel=combine_partials_kernel, dim=1,
+                          inputs=[fl0.partials, rhs_rTr_buf, fl0.n_partials], device=device)
+            else:
+                wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[flow_rTr_buf], device=device)
+                wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[head_rTr_buf], device=device)
+                wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[rhs_rTr_buf], device=device)
+                wp.launch(
+                    kernel=compute_dual_residual_kernel,
+                    dim=dim2d,
+                    inputs=[
+                        h_iter_wp,
+                        rhs_eff_wp,
+                        self.T_wp,
+                        self.active_wp,
+                        self.bc_mask_wp,
+                        self.mg_levels[0].gh_mask_wp,
+                        self.mg_levels[0].ghb_factor_wp,
+                        storage_diag_wp,
+                        flow_rTr_buf,
+                        head_rTr_buf,
+                        self.nx,
+                        self.ny,
+                    ],
+                    device=device,
+                )
+                wp.launch(
+                    kernel=compute_active_rhs_l2_kernel,
+                    dim=dim2d,
+                    inputs=[rhs_eff_wp, self.active_wp, self.bc_mask_wp, rhs_rTr_buf, self.nx, self.ny],
+                    device=device,
+                )
             final_nonlinear_residual_check_seconds += _fast_path_phase_elapsed(phase_t0)
             counters["scalar_reductions"] += 1
             counters["gpu_scalar_synchronizations"] += 4
@@ -1853,6 +2247,7 @@ def solve_transient_unconfined_backend(
                     "storage_specific_storage_formulation": "secant_potential",
                     "unconfined_storage_mode_2d": str(storage_mode),
                     "storage_reference": str(storage_reference),
+                    "transient_mixed_precision": bool(transient_mixed_precision_enabled_b),
                     "incremental_picard_enabled": bool(use_incremental_picard),
                     "adaptive_dt_enabled": bool(adaptive_dt_enabled_b),
                     "adaptive_dt_min_fraction": float(adaptive_dt_min_fraction_f),
@@ -1864,6 +2259,14 @@ def solve_transient_unconfined_backend(
                     "adaptive_dt_substep_count": int(len(adaptive_dt_substep_dts)),
                     "adaptive_dt_substep_dts": [float(value) for value in adaptive_dt_substep_dts],
                     "device_side_picard_fast_path_active": True,
+                    "transient_face_operator": bool(transient_face_operator_enabled_b),
+                    "transient_face_graphs": bool(face_graphs_active),
+                    "transient_face_kcycle_graph_count": int(
+                        sum(1 for v in face_kcycle_graphs.values() if v is not False)
+                    ),
+                    "transient_face_refresh_graph_count": int(
+                        sum(1 for v in face_refresh_graphs.values() if v is not False)
+                    ),
                     "unconfined_startup_mode": str(startup_mode),
                     "startup_inner_kcycles": int(startup_inner_cycles),
                     "startup_converged": startup_converged,
@@ -1903,6 +2306,7 @@ def solve_transient_unconfined_backend(
                     "dynamic_coarse_refresh_seconds": float(dynamic_coarse_refresh_seconds),
                     "rhs_assembly_seconds": float(rhs_assembly_seconds),
                     "storage_assembly_seconds": float(storage_assembly_seconds),
+                    "refresh_segment_seconds": float(refresh_segment_seconds),
                     "inner_solver_seconds": float(inner_solver_seconds),
                     "outer_convergence_check_seconds": float(outer_convergence_check_seconds),
                     "final_nonlinear_residual_check_seconds": float(final_nonlinear_residual_check_seconds),

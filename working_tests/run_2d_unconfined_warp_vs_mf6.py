@@ -383,6 +383,7 @@ def run_warp_unconfined(
     check_every_no: int | None = None,
     do_double_solve: bool = True,
     solver_backend: str | None = None,
+    inner_implementation: str = "classic",
 ) -> Path:
     """
     Run the same unconfined problem in the main 2D Warp solver and save heads to NPZ.
@@ -444,6 +445,7 @@ def run_warp_unconfined(
             "chebyshev_enabled": bool(chebyshev_enabled),
             "chebyshev_order": 3,
             "chebyshev_rejection_factor": 1.2,
+            "inner_implementation": str(inner_implementation),
         }
         if check_every_no is not None:
             solve1_kwargs["check_every_no"] = int(check_every_no)
@@ -637,6 +639,7 @@ def run_case(
     do_run_warp: bool = True,
     do_double_solve: bool = True,
     solver_backend: str | None = None,
+    inner_implementation: str = "classic",
 ) -> dict:
     case = build_simple_unconfined_case(
         nx=nx,
@@ -675,6 +678,7 @@ def run_case(
             check_every_no=check_every_no,
             do_double_solve=do_double_solve,
             solver_backend=solver_backend,
+            inner_implementation=inner_implementation,
         )
 
     metrics = {}
@@ -699,6 +703,7 @@ def run_case(
         "diag_preconditioner_backend": str(diag_preconditioner_backend),
         "check_every_no": None if check_every_no is None else int(check_every_no),
         "unconfined_startup_mode": str(unconfined_startup_mode),
+        "inner_implementation": str(inner_implementation),
         "mf6_engine_time": _load_npz_scalar(mf6_path, "engine_time"),
         "mf6_total_time": _load_npz_scalar(mf6_path, "total_time"),
         "warp_total_time": _load_npz_scalar(warp_path, "total_time"),
@@ -762,6 +767,7 @@ def run_grid_benchmark(
     do_run_warp: bool = True,
     do_double_solve: bool = True,
     solver_backend: str | None = None,
+    inner_implementation: str = "classic",
 ) -> list[dict]:
     """
     Run the 2D unconfined MF6-vs-Warp benchmark over a range of grid sizes.
@@ -832,6 +838,7 @@ def run_grid_benchmark(
             do_run_warp=do_run_warp,
             do_double_solve=do_double_solve,
             solver_backend=solver_backend,
+            inner_implementation=inner_implementation,
         )
 
         key = (int(nx), int(ny))
@@ -1156,6 +1163,7 @@ def main(
     run_backend_matrix=False,
     do_double_solve=False,
     solver_backend=None,
+    inner_implementation="classic",
 ):
     if run_backend_matrix:
         results = run_diag_preconditioner_backend_matrix(
@@ -1228,6 +1236,7 @@ def main(
             do_run_warp=do_run_warp,
             do_double_solve=do_double_solve,
             solver_backend=solver_backend,
+            inner_implementation=inner_implementation,
         )
     print(json.dumps(results, indent=4))
 
@@ -1258,6 +1267,7 @@ if __name__ == '__main__':
     run_backend_matrix = False
     do_double_solve = False
     solver_backend = None  # Use None for default picard, or "unconfined_fas", or "unconfined_semismooth_newton_kcycle"
+    inner_implementation = "fast"  # "classic" or "fast" (face-array inner K-cycle; steady only)
 
     main(
         grid_sizes=grid_sizes,
@@ -1285,4 +1295,5 @@ if __name__ == '__main__':
         run_backend_matrix=run_backend_matrix,
         do_double_solve=do_double_solve,
         solver_backend=solver_backend,
+        inner_implementation=inner_implementation,
     )

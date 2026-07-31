@@ -42,7 +42,15 @@ DARCY_WARP_PACKAGE/
   solvers/               # extracted 2D backends (post-migration)
     registry.py          # backend selection + legacy aliases (pcg/kcycle/mg/picard)
     multigrid_kcycle.py  # confined K-cycle backend + device-buffers inner solve
-    picard_unconfined.py # unconfined Picard/K-cycle backend (host fallback path)
+    picard_unconfined.py # unconfined Picard/K-cycle backend (host fallback path).
+                           # Steady solves accept inner_implementation="fast"
+                           # (2026-07-31): per-outer linearised solves route to the
+                           # production fast confined K-cycle (faces refresh in
+                           # place via update_T_in_place/_fast_faces_stale, graphs
+                           # survive across outer iterations; nu_coarse bumped to
+                           # >=10; transient inner solves reject it). 500x500:
+                           # 2.77 -> 0.94 s; 1000x1000: 6.74 -> 2.46 s, identical
+                           # outer counts and MF6 agreement.
     transient_unconfined.py # transient period driver incl. production device fast path
     transient_experimental.py # experimental multi-period/timestep driver (FAS/Newton)
     pcg.py               # confined PCG backend
@@ -70,6 +78,37 @@ DARCY_WARP_PACKAGE/
                            # jacobi/residual, two-stage reductions, block-reduced check)
     fast_confined_kcycle.py # PRODUCTION opt-in fast steady-confined K-cycle
                            # (implementation="fast"; classic stays default)
+    mixed_transient_f32.py # EXPERIMENTAL opt-in FP32 inner correction K-cycle
+                           # for the transient unconfined device fast path
+                           # (UNCONFINED_FAST_PLAN.md Phase C, 2026-07-30):
+                           # FP64 outer loop unchanged; per outer the FP64
+                           # residual is cast to FP32, fixed-work FP32
+                           # K-cycles solve A32*delta32=r32 (FP32 faces rebuilt
+                           # per outer in the refresh graph; Jacobi-block
+                           # coarsest; graph-captured/replayed like the FP64
+                           # path), correction cast back to FP64.  Enable via
+                           # transient_mixed_precision_enabled /
+                           # DARCY_TRANSIENT_MIXED=1 (default OFF; requires the
+                           # face operator).  1000x1000 30w hard-T: 29.0 s vs
+                           # 33.1 s FP64, strict 30/30, heads <=4.5e-5; 500x500
+                           # 52w: 12.5 s vs 13.8 s; +11% mempool at 1M.
+    face_transient_f64.py  # PRODUCTION face-array operator for the 2D transient
+                           # unconfined device fast path (UNCONFINED_FAST_PLAN.md
+                           # Phase A, 2026-07-30): storage-aware face build (replaces
+                           # per-outer M_inv rebuilds), face dual-residual/dh-check
+                           # kernels with block-reduced partials, per-level in-place
+                           # face refresh (coarsen kernels kept), fast K-cycle on
+                           # caller buffers (classic PCG kept at the coarsest level
+                           # for trajectory parity). Enabled by default via
+                           # transient_face_operator_enabled=True (control or
+                           # DARCY_TRANSIENT_FACE_OPERATOR env var; False -> classic).
+                           # Phase B (2026-07-30): CUDA-graph capture of one
+                           # K-cycle (replayed per fixed-work block cycle, keyed
+                           # on buffer-wiring identity + structure) and of the
+                           # per-outer refresh segment (keyed on dt); default on
+                           # via transient_face_graphs_enabled /
+                           # DARCY_TRANSIENT_FACE_GRAPHS, eager fallback on
+                           # capture failure, off while profiling.
     capabilities.py      # shim re-exporting solver_capabilities.py
     context.py, base.py, hierarchy.py, convergence.py, resources.py, regression.py
   solver_capabilities.py # CAPABILITIES/ALIASES metadata (experimental,
@@ -169,7 +208,7 @@ Canonical backends live in `solvers/registry.py` + `solver_capabilities.py`:
 - Production fast path (device-side Picard loop) requires exactly:
   - `unconfined_storage_mode="mf6_convertible_secant_sy"`
   - `storage_reference="current_picard"`
-  - GHB disabled.
+  - GHB requires the face operator (classic device path raises).
 - Optional `use_incremental_picard` (default **False**): solve the inner system for the
   correction `A·δ = r^k` (δ=0 on Dirichlet cells) instead of the full head
   (`apply_relaxed_correction_kernel`). Validated **accuracy-neutral** vs the direct
@@ -348,8 +387,42 @@ Usually means `sat = h - bottom` (saturated thickness of the aquifer), not soil 
   §3 Convergence / acceptance). 1000x1000 30w: 30/30 strict, RMSE 5.5e-05,
   69.4 s (18.5x MF6). 500x500 52w: 52/52 strict, RMSE 1.2e-05, 19.7 s (5.5x
   MF6), period-1 `startup_warning` mass-balance class eliminated.
-- 1000x1000 strict-everywhere runtime (~2.3 s/period) exceeds the 30 s stretch
-  target; inner-cycle tuning is the lever if that matters.
+- FACE OPERATOR (Phase A, 2026-07-30): the device fast path now defaults to
+  the face-array operator (`transient_face_operator_enabled=True`;
+  `solvers/face_transient_f64.py`). 1000x1000 30w hard-T: **38.3 s vs 92.2 s
+  classic same-session (2.4x)**, 30/30 strict both, RMSE 5.0e-05 both, MB
+  excellent, identical outer counts (441). Parity vs classic path: ~1e-12 m
+  head diff (100x100 3w). Isolated fixed-work K-cycle at 1M cells: 2.78 vs
+  6.96 ms/cycle (2.5x). At 500x500 both paths are Python-launch-bound
+  (~2.8-3.0 s for 10 periods, face within noise of classic) — launch
+  overhead is Phase B (CUDA graphs) territory. Deviation from the plan's
+  Jacobi-block coarsest: the coarsest level keeps the classic PCG sweep
+  (one small M_inv rebuild per outer) because Jacobi-block shifted accepted
+  heads ~6e-6 m (> 1e-6 parity target); PCG-coarsest restores ~1e-12 parity.
+- FACE GRAPHS (Phase B, 2026-07-30): CUDA-graph capture on the face path
+  (`transient_face_graphs_enabled=True` default; `DARCY_TRANSIENT_FACE_GRAPHS`
+  env; eager fallback; off while profiling). One K-cycle captured and
+  replayed per fixed-work block cycle + one per-outer refresh graph keyed on
+  dt. Equivalence vs eager: identical outer counts, heads ~8e-13 m (100x100
+  3w, `working_tests/validate_face_transient_graphs.py`). 500x500 52w
+  homogeneous: **13.8 s vs 21.5 s face-eager vs 20.3 s classic** (the
+  small-grid launch-bound floor is gone; face now beats classic at 500x500);
+  100x100 3w 0.41 s vs 0.72 s; 1000x1000 30w hard-T 33.6 s vs 38.3 s; all
+  acceptance gates PASS (strict everywhere, MB excellent).
+- GHB ON DEVICE FAST PATH (Phase D, 2026-07-30): GHB is supported on the
+  device transient fast path in face-operator mode (the default); the
+  classic device path still raises for GHB.  New
+  `build_transient_rhs_ghb_f64_kernel` adds `C_gh*gh_head` (C_gh from the
+  current outer T(h)) at every RHS site incl. the captured refresh graph;
+  gh fields are forwarded through `solve_transient_unconfined_backend` to
+  `build_from_fields`.  Validated in
+  `working_tests/validate_face_transient_ghb.py`: device-vs-host parity
+  5e-9 m (ss=0; the ss>0 residual difference is a pre-existing host-path
+  Ss-linearisation drift, not GHB), MF6 RMSE 1.9-3.0e-4 m, MB excellent.
+  NOTE (pre-existing, unrelated to Phase D): the host Picard path's Ss
+  coefficient uses endpoint `ss*sat_ref` while the device path implements
+  the authoritative secant Ss potential — device-vs-host head differences
+  of ~1e-5 m on draining cases come from that, not from the GHB port.
 
 ### Experimental unconfined backends (500x500 52w homogeneous vs MF6, engine 162.0 s)
 
@@ -478,7 +551,7 @@ python working_tests/run_2d_transient_warp_replay.py
 | Mass balance | `working_tests/transient_replay_mass_balance.py` | |
 | Acceptance reporting | `working_tests/transient_replay_reporting.py` | |
 | Diagnostics ladder | `working_tests/run_transient_unconfined_diagnostics.py` | read verdict logic ~l. 1332 |
-| Status docs | `TRANSIENT_STATUS.md`, `transient_progress.md`, `working_tests/darcywarp_transient_unconfined_changes.rst` | |
+| Status docs | `TRANSIENT_STATUS.md`, `transient_progress.md`, `working_tests/darcywarp_transient_unconfined_changes.rst`, `UNCONFINED_FAST_PLAN.md` (port of fast-kernel learnings to the unconfined path; all phases landed — A/B/D production-default, C opt-in experimental) | |
 | Benchmark entry | `bench_and_plot.py`, `model_benchmarking_recharge_change.py`, `model_benchmarking_T_change.py` | |
 | Steady confined convergence/sanity benchmark | `model_convergence_and_sanity_tests.py` (+ `sanity_case_config.py`) | MF6 heads cached per case in `DARCY_WARP_PACKAGE/data/mf6_truth_npz/` (metadata-validated, atomic write; MF6 runs only on cache miss). Solver switches in the `__main__` block: `use_fast_fp64` (implementation="fast", results JSON `..._fast.json`) and `use_mixed_precision_fp32` (experimental `mixed_fast`; relaunches the script once with `DARCY_FLOAT=float32` pinned, results JSON `..._mixed.json`). `DARCY_KCYCLE_IMPL` env var also honoured |
 
@@ -525,7 +598,7 @@ python working_tests/run_2d_transient_warp_replay.py
 - **Default solver for production replay**: K-cycle, Chebyshev smoothing.
 - **Production storage mode**: `mf6_convertible_secant_sy`.
 - **Production warm start**: `unconfined_steady_mf6`.
-- **GHB on transient unconfined device fast path**: explicitly `NotImplementedError`.
+- **GHB on transient unconfined device fast path**: supported in face-operator mode (Phase D); the classic device path still raises `NotImplementedError`.
 - **PCG + transient**: explicitly `NotImplementedError`.
 - **Steady-state no-storage kernels exist** and are not polluted with storage terms.
 - **Coarse operators are approximate preconditioners**, not exact Galerkin representations.
