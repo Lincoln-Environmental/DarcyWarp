@@ -23,8 +23,10 @@ from DARCY_WARP_PACKAGE.model_builder import (  # noqa: E402
     _build_dem,
     _build_dirichlet_boundary_mask,
     _build_domain,
+    _build_ghb_boundary_masks,
     _create_chd_single_period,
     _model_bottom,
+    make_ugly_T_field,
 )
 from DARCY_WARP_PACKAGE.project_base import data_store, require_mf6  # noqa: E402
 from DARCY_WARP_PACKAGE.warped_darcy import WarpDarcySolver  # noqa: E402
@@ -51,6 +53,14 @@ class Unconfined2DCase:
     hydraulic_conductivity: np.ndarray
     recharge: np.ndarray
     initial_head: np.ndarray
+    # GHB state (zeros when use_ghb=False) and case-option metadata.
+    gh_mask: np.ndarray | None = None
+    gh_head: np.ndarray | None = None
+    gh_width: np.ndarray | None = None
+    t_field_kind: str = "uniform"
+    t_field_seed: int = 42
+    use_ghb: bool = False
+    ghb_width: float = 100.0
 
 
 def _warp_device(preferred: str = "cuda:0") -> str:
@@ -113,9 +123,26 @@ def build_simple_unconfined_case(
     recharge: float = 1.0e-4,
     initial_saturated_thickness: float = 100.0,
     workspace: str | Path | None = None,
+    t_field_kind: str = "uniform",
+    t_field_seed: int = 42,
+    use_ghb: bool = False,
+    ghb_width: float = 100.0,
 ) -> Unconfined2DCase:
     """
     Build a shared 2D unconfined benchmark case for MF6 and Warp.
+
+    :param t_field_kind: ``"uniform"`` (scalar ``hydraulic_conductivity``) or
+        ``"ugly_t"`` (hard heterogeneous K field:
+        ``make_ugly_T_field(nx, ny, domain, seed) / 100.0`` — the transient
+        replay convention, K ~ 4-535 m/day at dx=100).
+    :param t_field_seed: random seed for the ugly_t field.
+    :param use_ghb: add a center-row GHB boundary (mask from
+        ``model_builder._build_ghb_boundary_masks``, intersected with active).
+    :param ghb_width: GHB river width [m] at GHB cells; the conductance is
+        ``C_gh = T_c * gh_alpha * gh_width * dx / aq_thickness`` with
+        ``gh_alpha=1`` and ``aq_thickness = top - bottom`` (so at full
+        saturation ``C_gh = K * ghb_width * dx``, the MF6
+        ``kriv_factor * hk * grid_size * width`` convention with factor 1).
     """
     if workspace is None:
         workspace = data_store.joinpath("working_tests", "mf6_vs_warp_2d_unconfined")
@@ -131,11 +158,33 @@ def build_simple_unconfined_case(
     bc_values = np.zeros((int(ny), int(nx)), dtype=np.float64)
     bc_values[bc_bool] = top[bc_bool]
 
-    k_field = np.full((int(ny), int(nx)), float(hydraulic_conductivity), dtype=np.float64)
+    t_field_kind = str(t_field_kind).strip().lower()
+    if t_field_kind == "uniform":
+        k_field = np.full((int(ny), int(nx)), float(hydraulic_conductivity), dtype=np.float64)
+    elif t_field_kind == "ugly_t":
+        if _build_ghb_boundary_masks is None and make_ugly_T_field is None:
+            raise RuntimeError("ugly_t field generator unavailable.")
+        k_field = np.asarray(
+            make_ugly_T_field(int(nx), int(ny), active, int(t_field_seed)),
+            dtype=np.float64,
+        ) / 100.0
+    else:
+        raise ValueError(f"t_field_kind must be 'uniform' or 'ugly_t', got {t_field_kind!r}.")
     k_field[active == 0] = 0.0
 
     recharge_field = np.full((int(ny), int(nx)), float(recharge), dtype=np.float64)
     recharge_field[active == 0] = 0.0
+
+    gh_mask = np.zeros((int(ny), int(nx)), dtype=np.int32)
+    gh_head = np.zeros((int(ny), int(nx)), dtype=np.float64)
+    gh_width_field = np.zeros((int(ny), int(nx)), dtype=np.float64)
+    if use_ghb:
+        if _build_ghb_boundary_masks is None:
+            raise RuntimeError("GHB boundary mask builder unavailable (legacy_code import failed).")
+        gh_mask_bool = np.asarray(_build_ghb_boundary_masks(active), dtype=bool) & (active != 0)
+        gh_mask[gh_mask_bool] = 1
+        gh_head[gh_mask_bool] = top[gh_mask_bool]
+        gh_width_field[gh_mask_bool] = float(ghb_width)
 
     initial_head = bottom + max(float(initial_saturated_thickness), 0.1)
     initial_head = np.minimum(initial_head, top)
@@ -155,12 +204,31 @@ def build_simple_unconfined_case(
         hydraulic_conductivity=k_field,
         recharge=recharge_field,
         initial_head=initial_head.astype(np.float64, copy=False),
+        gh_mask=gh_mask,
+        gh_head=gh_head,
+        gh_width=gh_width_field,
+        t_field_kind=str(t_field_kind),
+        t_field_seed=int(t_field_seed),
+        use_ghb=bool(use_ghb),
+        ghb_width=float(ghb_width),
     )
 
 
-def run_mf6_unconfined(case: Unconfined2DCase, out_path: str | Path | None = None) -> Path:
+def run_mf6_unconfined(
+    case: Unconfined2DCase,
+    out_path: str | Path | None = None,
+    ghb_conductance: np.ndarray | None = None,
+) -> Path:
     """
     Run the MF6 single-layer unconfined truth model and save heads to NPZ.
+
+    When ``case.use_ghb`` is set, a GHB package is added at ``case.gh_mask``
+    cells with stage ``case.gh_head`` and FIXED conductance
+    ``ghb_conductance`` (required).  MF6's conductance is head-independent
+    while Warp's ``C_gh = T_c(h) * ghb_factor`` varies with saturation in
+    unconfined mode, so callers use the two-pass approach: solve Warp first,
+    evaluate ``C_gh`` at the converged head, and pass it here (see
+    ``run_case`` and ``_ghb_conductance_from_heads``).
     """
     out_path = Path(out_path) if out_path is not None else case.workspace.joinpath("mf6_heads.npz")
     mf6_ws = case.workspace.joinpath("mf6")
@@ -186,19 +254,40 @@ def run_mf6_unconfined(case: Unconfined2DCase, out_path: str | Path | None = Non
         model_nam_file=f"{name}.nam",
         save_flows=True,
     )
-    ims = flopy.mf6.ModflowIms(
-        sim,
-        pname="ims",
-        print_option="SUMMARY",
-        complexity="MODERATE",
-        linear_acceleration="CG",
-        outer_maximum=100,
-        outer_dvclose=1.0e-6,
-        inner_maximum=500,
-        inner_dvclose=1.0e-8,
-        rcloserecord=[1.0e-6, "RELATIVE_RCLOSE"],
-        scaling_method="DIAGONAL",
-    )
+    # IMS selection: uniform cases converge fine under MODERATE/CG (the
+    # historical configuration, ~7 s at 500x500).  Heterogeneous (ugly_t) K
+    # fields silently stall it — MF6 returns ok=True with a mostly
+    # initial-condition head field and a ~200 % budget discrepancy — so
+    # they get COMPLEX/BICGSTAB with a generous outer budget (~230 s at
+    # 500x500; contraction-limited, insensitive to dvclose/DBD).
+    if str(case.t_field_kind) == "ugly_t":
+        ims = flopy.mf6.ModflowIms(
+            sim,
+            pname="ims",
+            print_option="SUMMARY",
+            complexity="COMPLEX",
+            linear_acceleration="BICGSTAB",
+            outer_maximum=500,
+            outer_dvclose=1.0e-6,
+            inner_maximum=500,
+            inner_dvclose=1.0e-8,
+            rcloserecord=[1.0e-6, "RELATIVE_RCLOSE"],
+            scaling_method="DIAGONAL",
+        )
+    else:
+        ims = flopy.mf6.ModflowIms(
+            sim,
+            pname="ims",
+            print_option="SUMMARY",
+            complexity="MODERATE",
+            linear_acceleration="CG",
+            outer_maximum=100,
+            outer_dvclose=1.0e-6,
+            inner_maximum=500,
+            inner_dvclose=1.0e-8,
+            rcloserecord=[1.0e-6, "RELATIVE_RCLOSE"],
+            scaling_method="DIAGONAL",
+        )
     sim.register_ims_package(ims, [gwf.name])
 
     flopy.mf6.ModflowGwfdis(
@@ -238,6 +327,29 @@ def run_mf6_unconfined(case: Unconfined2DCase, out_path: str | Path | None = Non
         stress_period_data=chd_spd,
         save_flows=True,
     )
+    if case.use_ghb:
+        if ghb_conductance is None:
+            raise ValueError(
+                "ghb_conductance is required when case.use_ghb is set; use the "
+                "two-pass approach (Warp first, then evaluate C_gh at the "
+                "converged head via _ghb_conductance_from_heads)."
+            )
+        gh_cells = (case.gh_mask != 0) & (case.active != 0) & (case.bc_mask == 0)
+        cond = np.asarray(ghb_conductance, dtype=np.float64)
+        if cond.shape != (case.ny, case.nx):
+            raise ValueError(f"ghb_conductance shape {cond.shape} expected {(case.ny, case.nx)}.")
+        ghb_spd = [
+            ((0, int(j), int(i)), float(case.gh_head[j, i]), float(cond[j, i]))
+            for j, i in zip(*np.where(gh_cells))
+            if cond[j, i] > 0.0
+        ]
+        if ghb_spd:
+            flopy.mf6.ModflowGwfghb(
+                gwf,
+                pname="ghb",
+                stress_period_data={0: ghb_spd},
+                save_flows=True,
+            )
     flopy.mf6.ModflowGwfrcha(
         gwf,
         pname="recharge",
@@ -365,6 +477,28 @@ def _solve_summary(info: object, elapsed: float, settings: dict) -> dict:
     return summary
 
 
+def _ghb_conductance_from_heads(case: Unconfined2DCase, heads: np.ndarray) -> np.ndarray:
+    """Warp-consistent GHB conductance evaluated at ``heads``.
+
+    Mirrors the discrete operator: ``C_gh = T_c * ghb_factor`` with
+    ``T_c = K * clip(h - bottom, min_sat, top - bottom)`` (the Picard
+    saturated-thickness update, min_sat=0.1) and
+    ``ghb_factor = gh_alpha * gh_width * dx / aq_thickness`` with
+    ``gh_alpha=1`` and ``aq_thickness = top - bottom`` (the
+    ``physics.operator_data.compute_ghb_factor_from_raw_fields``
+    convention used by ``build_from_fields``).
+    """
+    full = np.maximum(case.top - case.bottom, 0.1)
+    sat = np.clip(np.asarray(heads, dtype=np.float64) - case.bottom, 0.1, full)
+    T_c = case.hydraulic_conductivity * sat
+    ghb_factor = np.asarray(case.gh_width, dtype=np.float64) * float(case.dx) / full
+    cond = T_c * ghb_factor
+    gh_cells = (case.gh_mask != 0) & (case.active != 0) & (case.bc_mask == 0)
+    out = np.zeros((case.ny, case.nx), dtype=np.float64)
+    out[gh_cells] = cond[gh_cells]
+    return out
+
+
 def run_warp_unconfined(
     case: Unconfined2DCase,
     out_path: str | Path | None = None,
@@ -383,7 +517,7 @@ def run_warp_unconfined(
     check_every_no: int | None = None,
     do_double_solve: bool = True,
     solver_backend: str | None = None,
-    inner_implementation: str = "classic",
+    inner_implementation: str = "fast",
 ) -> Path:
     """
     Run the same unconfined problem in the main 2D Warp solver and save heads to NPZ.
@@ -401,8 +535,10 @@ def run_warp_unconfined(
         ny=case.ny,
         dx=case.dx,
         device=device,
+        use_ghb=bool(case.use_ghb),
         solver_type="kcycle",
         diag_preconditioner_backend=diag_preconditioner_backend,
+        aq_thickness=(case.top - case.bottom),
     ) as warp_solver:
         warp_solver.build_from_fields(
             T_field=initial_transmissivity,
@@ -410,6 +546,11 @@ def run_warp_unconfined(
             active=case.active,
             bc_mask=case.bc_mask,
             bc_values=case.bc_values,
+            gh_mask=case.gh_mask,
+            gh_head=case.gh_head,
+            gh_width=case.gh_width,
+            gh_alpha=1.0,
+            aq_thickness=(case.top - case.bottom),
         )
         solve1_kwargs = {
             "formulation": "unconfined",
@@ -639,7 +780,11 @@ def run_case(
     do_run_warp: bool = True,
     do_double_solve: bool = True,
     solver_backend: str | None = None,
-    inner_implementation: str = "classic",
+    inner_implementation: str = "fast",
+    t_field_kind: str = "uniform",
+    t_field_seed: int = 42,
+    use_ghb: bool = False,
+    ghb_width: float = 100.0,
 ) -> dict:
     case = build_simple_unconfined_case(
         nx=nx,
@@ -649,17 +794,21 @@ def run_case(
         recharge=recharge,
         initial_saturated_thickness=initial_saturated_thickness,
         workspace=workspace,
+        t_field_kind=t_field_kind,
+        t_field_seed=t_field_seed,
+        use_ghb=use_ghb,
+        ghb_width=ghb_width,
     )
 
     print(f"Running 2D unconfined case: nx={case.nx}, ny={case.ny}, dx={case.dx}")
-    print(f"Workspace: {case.workspace}\n")
+    print(f"Workspace: {case.workspace}")
+    print(f"Options: t_field_kind={case.t_field_kind} (seed={case.t_field_seed}), "
+          f"use_ghb={case.use_ghb} (width={case.ghb_width})\n")
 
     mf6_path = case.workspace.joinpath("mf6_heads.npz")
     warp_path = case.workspace.joinpath("warp_heads.npz")
 
-    if do_run_mf6:
-        run_mf6_unconfined(case, out_path=mf6_path)
-    if do_run_warp:
+    def _run_warp() -> None:
         run_warp_unconfined(
             case,
             out_path=warp_path,
@@ -680,6 +829,38 @@ def run_case(
             solver_backend=solver_backend,
             inner_implementation=inner_implementation,
         )
+
+    ghb_conductance = None
+    ghb_conductance_note = None
+    if case.use_ghb and do_run_warp and do_run_mf6:
+        # Two-pass GHB: MF6's conductance is FIXED but Warp's
+        # C_gh = T_c(h)*ghb_factor varies with saturation in unconfined mode.
+        # Solve Warp first, evaluate C_gh at the converged head, then run MF6
+        # with that fixed conductance (same approach as
+        # working_tests/validate_face_transient_ghb.py).
+        _run_warp()
+        with np.load(warp_path, allow_pickle=False) as _warp_npz:
+            _warp_heads = np.asarray(_warp_npz["heads"], dtype=np.float64)
+        ghb_conductance = _ghb_conductance_from_heads(case, _warp_heads)
+        ghb_conductance_note = (
+            "two-pass: MF6 fixed conductance = Warp C_gh = T_c(h_converged)*ghb_factor "
+            "at GHB cells (Warp's C_gh is head-dependent in unconfined mode; the "
+            "residual formulation drift is second-order in the head error)"
+        )
+        run_mf6_unconfined(case, out_path=mf6_path, ghb_conductance=ghb_conductance)
+    else:
+        if do_run_mf6:
+            if case.use_ghb:
+                # Warp not run in this invocation: fall back to the initial
+                # head for the fixed conductance (still documented).
+                ghb_conductance = _ghb_conductance_from_heads(case, case.initial_head)
+                ghb_conductance_note = (
+                    "initial-head approximation: MF6 fixed conductance = "
+                    "C_gh(initial_head) (Warp was not run in this invocation)"
+                )
+            run_mf6_unconfined(case, out_path=mf6_path, ghb_conductance=ghb_conductance)
+        if do_run_warp:
+            _run_warp()
 
     metrics = {}
     if mf6_path.exists() and warp_path.exists():
@@ -704,6 +885,20 @@ def run_case(
         "check_every_no": None if check_every_no is None else int(check_every_no),
         "unconfined_startup_mode": str(unconfined_startup_mode),
         "inner_implementation": str(inner_implementation),
+        "t_field_kind": str(case.t_field_kind),
+        "t_field_seed": int(case.t_field_seed),
+        "use_ghb": bool(case.use_ghb),
+        "ghb_width": float(case.ghb_width),
+        "ghb_cell_count": int(np.count_nonzero(case.gh_mask)) if case.use_ghb else 0,
+        "ghb_conductance_note": ghb_conductance_note,
+        "ghb_conductance_min": (
+            float(np.min(ghb_conductance[case.gh_mask != 0]))
+            if ghb_conductance is not None and np.any(case.gh_mask != 0) else None
+        ),
+        "ghb_conductance_max": (
+            float(np.max(ghb_conductance[case.gh_mask != 0]))
+            if ghb_conductance is not None and np.any(case.gh_mask != 0) else None
+        ),
         "mf6_engine_time": _load_npz_scalar(mf6_path, "engine_time"),
         "mf6_total_time": _load_npz_scalar(mf6_path, "total_time"),
         "warp_total_time": _load_npz_scalar(warp_path, "total_time"),
@@ -767,7 +962,11 @@ def run_grid_benchmark(
     do_run_warp: bool = True,
     do_double_solve: bool = True,
     solver_backend: str | None = None,
-    inner_implementation: str = "classic",
+    inner_implementation: str = "fast",
+    t_field_kind: str = "uniform",
+    t_field_seed: int = 42,
+    use_ghb: bool = False,
+    ghb_width: float = 100.0,
 ) -> list[dict]:
     """
     Run the 2D unconfined MF6-vs-Warp benchmark over a range of grid sizes.
@@ -839,6 +1038,10 @@ def run_grid_benchmark(
             do_double_solve=do_double_solve,
             solver_backend=solver_backend,
             inner_implementation=inner_implementation,
+            t_field_kind=t_field_kind,
+            t_field_seed=t_field_seed,
+            use_ghb=use_ghb,
+            ghb_width=ghb_width,
         )
 
         key = (int(nx), int(ny))
@@ -1163,7 +1366,11 @@ def main(
     run_backend_matrix=False,
     do_double_solve=False,
     solver_backend=None,
-    inner_implementation="classic",
+    inner_implementation="fast",
+    t_field_kind="uniform",
+    t_field_seed=42,
+    use_ghb=False,
+    ghb_width=100.0,
 ):
     if run_backend_matrix:
         results = run_diag_preconditioner_backend_matrix(
@@ -1237,6 +1444,10 @@ def main(
             do_double_solve=do_double_solve,
             solver_backend=solver_backend,
             inner_implementation=inner_implementation,
+            t_field_kind=t_field_kind,
+            t_field_seed=t_field_seed,
+            use_ghb=use_ghb,
+            ghb_width=ghb_width,
         )
     print(json.dumps(results, indent=4))
 
@@ -1261,13 +1472,17 @@ if __name__ == '__main__':
     unconfined_startup_mode = "confined_pre_solve"  # or "initial_head"
     diag_preconditioner_backend = "device"
     check_every_no = 5
-    do_run_mf6 = False
+    do_run_mf6 = True
     do_run_warp = True
     run_lambda_sweep = False
     run_backend_matrix = False
     do_double_solve = False
     solver_backend = None  # Use None for default picard, or "unconfined_fas", or "unconfined_semismooth_newton_kcycle"
     inner_implementation = "fast"  # "classic" or "fast" (face-array inner K-cycle; steady only)
+    use_ghb = False  # center-row GHB boundary (gh_head=DEM, width=ghb_width)
+    ghb_width = 100.0
+    t_field_kind = "uniform"  # "uniform" or "ugly_t" (hard heterogeneous K ~ 4-535 m/day)
+    t_field_seed = 42
 
     main(
         grid_sizes=grid_sizes,
@@ -1296,4 +1511,8 @@ if __name__ == '__main__':
         do_double_solve=do_double_solve,
         solver_backend=solver_backend,
         inner_implementation=inner_implementation,
+        t_field_kind=t_field_kind,
+        t_field_seed=t_field_seed,
+        use_ghb=use_ghb,
+        ghb_width=ghb_width,
     )

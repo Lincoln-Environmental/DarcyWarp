@@ -50,7 +50,24 @@ DARCY_WARP_PACKAGE/
                            # survive across outer iterations; nu_coarse bumped to
                            # >=10; transient inner solves reject it). 500x500:
                            # 2.77 -> 0.94 s; 1000x1000: 6.74 -> 2.46 s, identical
-                           # outer counts and MF6 agreement.
+                           # (also GHB-safe: C_gh in face diag per outer, b
+                           # rebuilt per call from current T).
+                           # outer counts and MF6 agreement.  The steady runner
+                           # `working_tests/run_2d_unconfined_warp_vs_mf6.py`
+                           # (2026-07-31) gained use_ghb (center-row GHB, two-pass
+                           # MF6 conductance matched at the Warp-converged head
+                           # since Warp's C_gh=T(h)*ghb_factor is head-dependent)
+                           # and t_field_kind="ugly_t" (hard-T K=make_ugly_T_field
+                           # /100) options, threaded through run_case /
+                           # run_grid_benchmark / main.  MF6 IMS there was
+                           # strengthened to COMPLEX/BICGSTAB/outer_maximum=500:
+                           # the old MODERATE/CG settings SILENTLY stall on
+                           # heterogeneous K (ok=True with a ~200% budget
+                           # discrepancy and mostly-initial-condition heads).
+                           # Note: classic-vs-fast on hard-T differs ~1.5e-6 at
+                           # the default hclose=1e-4 (acceptance-basin width;
+                           # 8.8e-9 at hclose=1e-6).  Validation:
+                           # `working_tests/validate_unconfined_ghb_hardt.py`.
     transient_unconfined.py # transient period driver incl. production device fast path
     transient_experimental.py # experimental multi-period/timestep driver (FAS/Newton)
     pcg.py               # confined PCG backend
@@ -132,6 +149,12 @@ working_tests/
   transient_replay_metrics.py       # head-accuracy metrics
   transient_replay_reporting.py     # acceptance reporting
   run_transient_unconfined_diagnostics.py  # convergence-failure diagnostic ladder
+  run_2d_unconfined_warp_vs_mf6.py  # steady 2D unconfined runner; supports
+                           # use_ghb (center-row GHB, two-pass MF6 conductance),
+                           # t_field_kind="ugly_t" hard-T (make_ugly_T_field/100)
+                           # and inner_implementation="fast" (2026-07-31).
+                           # NOTE: hard-T MF6 truth needs COMPLEX/BICGSTAB IMS
+                           # (~230 s at 500x500; uniform keeps MODERATE ~7 s)
   run_3d_warp_vs_mf6.py             # 3D validation runner
 
 tests/
