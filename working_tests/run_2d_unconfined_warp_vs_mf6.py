@@ -42,7 +42,7 @@ BENCHMARK_GRID_SIZES = [(250, 250), (500, 500), (1000, 1000), (2000, 2000), (300
 
 # Artifact schema version.  Bump whenever the set of fields written to the
 # MF6/Warp NPZ artifacts changes in a way that invalidates older caches.
-ARTIFACT_SCHEMA_VERSION = 2
+ARTIFACT_SCHEMA_VERSION = 3
 
 # MF6 trust gates (Task: "trustworthy MF6").  MF6 can return ok=True with a
 # ~200 % budget discrepancy and mostly-initial-condition heads on hard-T
@@ -87,7 +87,7 @@ class Unconfined2DCase:
     # fixed point of the head-dependent law; independent of Warp) or
     # "warp_matched" (C_gh evaluated at Warp's converged head; a deliberate
     # cross-solver equation-equivalence test, not an independent truth).
-    ghb_conductance_mode: str = "fixed_point"
+    ghb_conductance_mode: str = "warp_matched"
 
 
 def _warp_device(preferred: str = "cuda:0") -> str:
@@ -362,7 +362,7 @@ def build_simple_unconfined_case(
     use_ghb: bool = False,
     ghb_width: float = 100.0,
     ghb_head_elevation: float | None = None,
-    ghb_conductance_mode: str = "fixed_point",
+    ghb_conductance_mode: str = "warp_matched",
 ) -> Unconfined2DCase:
     """
     Build a shared 2D unconfined benchmark case for MF6 and Warp.
@@ -709,6 +709,7 @@ def run_mf6_unconfined(
     ghb_conductance: np.ndarray | None = None,
     mf6_budget_discrepancy_tol: float | None = DEFAULT_MF6_BUDGET_DISCREPANCY_TOL,
     mf6_head_change_min: float | None = DEFAULT_MF6_HEAD_CHANGE_MIN,
+    artifact_extra: dict | None = None,
 ) -> Path:
     """
     Run the MF6 single-layer unconfined truth model once and save heads to NPZ.
@@ -724,7 +725,19 @@ def run_mf6_unconfined(
         ghb_conductance=ghb_conductance,
         mf6_budget_discrepancy_tol=mf6_budget_discrepancy_tol,
     )
-    return _save_mf6_npz(case, out_path, result, mf6_head_change_min=mf6_head_change_min)
+    extra = dict(artifact_extra or {})
+    if ghb_conductance is not None:
+        # Persist the exact fixed array used by MF6. Reconstructing it later
+        # from MF6 heads is only approximately equivalent and weakens cache
+        # provenance in warp-matched equation-equivalence runs.
+        extra["ghb_conductance"] = np.asarray(ghb_conductance, dtype=np.float64)
+    return _save_mf6_npz(
+        case,
+        out_path,
+        result,
+        mf6_head_change_min=mf6_head_change_min,
+        extra=extra or None,
+    )
 
 
 def run_mf6_ghb_fixed_point(
@@ -777,6 +790,9 @@ def run_mf6_ghb_fixed_point(
     terminal_head_change = float("inf")
     iterations = 0
     converged = False
+    cumulative_engine_time = 0.0
+    cumulative_total_time = 0.0
+    fixed_point_start = time.perf_counter()
     for iteration in range(1, int(max_iterations) + 1):
         iterations = iteration
         strt = None
@@ -784,12 +800,15 @@ def run_mf6_ghb_fixed_point(
             # Warm start from the previous iterate (clipped to the model
             # interval for robustness); this does not alter the case.
             strt = np.clip(heads_prev, case.bottom, case.top)
+        print(f"Starting GHB fixed point MF6 solve {iteration}/{int(max_iterations)}...", flush=True)
         result = _build_and_run_mf6(
             case,
             ghb_conductance=conductance,
             strt_override=strt,
             mf6_budget_discrepancy_tol=mf6_budget_discrepancy_tol,
         )
+        cumulative_engine_time += float(result["engine_time"])
+        cumulative_total_time += float(result["total_time"])
         heads = np.asarray(result["heads"], dtype=np.float64)
         cond_new = _ghb_conductance_from_heads(case, heads)
         scale = max(1.0, float(np.max(np.abs(cond_new))))
@@ -850,11 +869,19 @@ def run_mf6_ghb_fixed_point(
         "cond_rtol": float(cond_rtol),
         "head_atol": float(head_atol),
         "max_iterations": int(max_iterations),
+        "cumulative_engine_time": float(cumulative_engine_time),
+        "cumulative_total_time": float(cumulative_total_time),
+        "wall_time": float(time.perf_counter() - fixed_point_start),
+        "terminal_run_engine_time": float(result["engine_time"]),
+        "terminal_run_total_time": float(result["total_time"]),
     }
+    cumulative_result = dict(result)
+    cumulative_result["engine_time"] = float(cumulative_engine_time)
+    cumulative_result["total_time"] = float(cumulative_total_time)
     _save_mf6_npz(
         case,
         out_path,
-        result,
+        cumulative_result,
         mf6_head_change_min=mf6_head_change_min,
         extra={
             "ghb_conductance": np.asarray(conductance, dtype=np.float64),
@@ -1367,7 +1394,7 @@ def run_case(
     use_ghb: bool = False,
     ghb_width: float = 100.0,
     ghb_head_elevation: float | None = None,
-    ghb_conductance_mode: str = "fixed_point",
+    ghb_conductance_mode: str = "warp_matched",
     mf6_budget_discrepancy_tol: float | None = DEFAULT_MF6_BUDGET_DISCREPANCY_TOL,
     mf6_head_change_min: float | None = DEFAULT_MF6_HEAD_CHANGE_MIN,
     ghb_cond_rtol: float = DEFAULT_GHB_COND_RTOL,
@@ -1392,8 +1419,11 @@ def run_case(
 
     print(f"Running 2D unconfined case: nx={case.nx}, ny={case.ny}, dx={case.dx}")
     print(f"Workspace: {case.workspace}")
-    print(f"Options: t_field_kind={case.t_field_kind} (seed={case.t_field_seed}), "
-          f"use_ghb={case.use_ghb} (width={case.ghb_width})\n")
+    print(
+        f"Options: t_field_kind={case.t_field_kind} (seed={case.t_field_seed}), "
+        f"use_ghb={case.use_ghb} (width={case.ghb_width}), "
+        f"ghb_conductance_mode={case.ghb_conductance_mode}\n"
+    )
 
     mf6_path = case.workspace.joinpath("mf6_heads.npz")
     warp_path = case.workspace.joinpath("warp_heads.npz")
@@ -1437,7 +1467,7 @@ def run_case(
         if validate_mf6_artifact(mf6_path, case):
             print(f"Reusing cached MF6 artifact {mf6_path} (schema + case fingerprint match).")
         elif case.use_ghb and conductance_mode == "warp_matched":
-            # Equation-equivalence mode (opt-in): solve Warp FIRST, evaluate
+            # Equation-equivalence mode (benchmark default): solve Warp FIRST, evaluate
             # C_gh at its converged head, and hand MF6 that fixed
             # conductance.  Both solvers then discretise the SAME linearised
             # operator, so head agreement validates numerical consistency of
@@ -1458,13 +1488,6 @@ def run_case(
             with np.load(warp_path, allow_pickle=False) as _warp_npz:
                 _warp_heads = np.asarray(_warp_npz["heads"], dtype=np.float64)
             ghb_conductance = _ghb_conductance_from_heads(case, _warp_heads)
-            run_mf6_unconfined(
-                case,
-                out_path=mf6_path,
-                ghb_conductance=ghb_conductance,
-                mf6_budget_discrepancy_tol=mf6_budget_discrepancy_tol,
-                mf6_head_change_min=mf6_head_change_min,
-            )
             ghb_fixed_point_info = {
                 "method": "warp_matched_equation_equivalence",
                 "initialisation": "C_gh evaluated at Warp's converged head",
@@ -1474,6 +1497,16 @@ def run_case(
                     "physical conductance formulation"
                 ),
             }
+            run_mf6_unconfined(
+                case,
+                out_path=mf6_path,
+                ghb_conductance=ghb_conductance,
+                mf6_budget_discrepancy_tol=mf6_budget_discrepancy_tol,
+                mf6_head_change_min=mf6_head_change_min,
+                artifact_extra={
+                    "ghb_fixed_point": np.asarray(json.dumps(ghb_fixed_point_info)),
+                },
+            )
         elif case.use_ghb:
             # MF6-side fixed point for the head-dependent GHB conductance;
             # Warp heads are NEVER used to build the MF6 truth.
@@ -1683,7 +1716,7 @@ def run_grid_benchmark(
     use_ghb: bool = False,
     ghb_width: float = 100.0,
     ghb_head_elevation: float | None = None,
-    ghb_conductance_mode: str = "fixed_point",
+    ghb_conductance_mode: str = "warp_matched",
     mf6_budget_discrepancy_tol: float | None = DEFAULT_MF6_BUDGET_DISCREPANCY_TOL,
     mf6_head_change_min: float | None = DEFAULT_MF6_HEAD_CHANGE_MIN,
     ghb_cond_rtol: float = DEFAULT_GHB_COND_RTOL,
@@ -2110,7 +2143,7 @@ def main(
     use_ghb=False,
     ghb_width=100.0,
     ghb_head_elevation=None,
-    ghb_conductance_mode="fixed_point",
+    ghb_conductance_mode="warp_matched",
     mf6_budget_discrepancy_tol=DEFAULT_MF6_BUDGET_DISCREPANCY_TOL,
     mf6_head_change_min=DEFAULT_MF6_HEAD_CHANGE_MIN,
     ghb_cond_rtol=DEFAULT_GHB_COND_RTOL,
@@ -2203,7 +2236,7 @@ def main(
         )
     print(json.dumps(results, indent=4))
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Configuration parameters
     grid_sizes = BENCHMARK_GRID_SIZES
     dx = 100.0
@@ -2234,7 +2267,10 @@ if __name__ == '__main__':
     use_ghb = True  # center-row GHB boundary (gh_head=DEM unless ghb_head_elevation is set, width=ghb_width)
     ghb_width = 100.0
     ghb_head_elevation = None  # m above bottom; None -> stage = DEM (historical)
-    ghb_conductance_mode = "fixed_point"  # "fixed_point" (default) or "warp_matched" (equation-equivalence)
+    # Primary benchmark intent: give MF6 the exact conductance evaluated at
+    # Warp's converged head and compare the same discrete operator. Select
+    # "fixed_point" explicitly for the slower independent conductance-law test.
+    ghb_conductance_mode = "warp_matched"
     t_field_kind = "ugly_t"  # "uniform" or "ugly_t" (hard heterogeneous K ~ 4-535 m/day)
     t_field_seed = 42
     mf6_budget_discrepancy_tol = DEFAULT_MF6_BUDGET_DISCREPANCY_TOL
@@ -2275,10 +2311,10 @@ if __name__ == '__main__':
         use_ghb=use_ghb,
         ghb_width=ghb_width,
         ghb_head_elevation=ghb_head_elevation,
+        ghb_conductance_mode=ghb_conductance_mode,
         mf6_budget_discrepancy_tol=mf6_budget_discrepancy_tol,
         mf6_head_change_min=mf6_head_change_min,
         ghb_cond_rtol=ghb_cond_rtol,
         ghb_head_atol=ghb_head_atol,
         ghb_max_fixed_point_iterations=ghb_max_fixed_point_iterations,
     )
-
