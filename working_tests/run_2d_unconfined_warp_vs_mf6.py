@@ -1479,9 +1479,9 @@ if __name__ == '__main__':
     do_double_solve = False
     solver_backend = None  # Use None for default picard, or "unconfined_fas", or "unconfined_semismooth_newton_kcycle"
     inner_implementation = "fast"  # "classic" or "fast" (face-array inner K-cycle; steady only)
-    use_ghb = False  # center-row GHB boundary (gh_head=DEM, width=ghb_width)
+    use_ghb = True  # center-row GHB boundary (gh_head=DEM, width=ghb_width)
     ghb_width = 100.0
-    t_field_kind = "uniform"  # "uniform" or "ugly_t" (hard heterogeneous K ~ 4-535 m/day)
+    t_field_kind = "ugly_t"  # "uniform" or "ugly_t" (hard heterogeneous K ~ 4-535 m/day)
     t_field_seed = 42
 
     main(
