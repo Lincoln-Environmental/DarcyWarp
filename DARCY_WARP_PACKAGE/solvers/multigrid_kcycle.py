@@ -791,6 +791,16 @@ def solve_multigrid_kcycle_backend(
     else:
         dh_max_tol = float(dh_max_tol)
 
+    # Per-call GHB parameter overrides apply to BOTH implementations; this must
+    # run before the implementation branch (the fast backend would otherwise
+    # silently ignore them). update_ghb_factor_in_place sets _fast_faces_stale,
+    # so the fast face arrays are refreshed on the next solve.
+    if (aq_thickness is not None) or (gh_alpha is not None):
+        self.update_ghb_factor_in_place(
+            aq_thickness=aq_thickness,
+            gh_alpha=gh_alpha,
+        )
+
     implementation_mode = str(implementation).strip().lower()
     if implementation_mode not in {"classic", "fast"}:
         raise ValueError(
@@ -842,12 +852,6 @@ def solve_multigrid_kcycle_backend(
         raise ValueError(
             "K-cycle runs in physical head units only. "
             "Set head_scale=1.0 for K-cycle, or use PCG / 2-level MG if you want scaling."
-        )
-
-    if (aq_thickness is not None) or (gh_alpha is not None):
-        self.update_ghb_factor_in_place(
-            aq_thickness=aq_thickness,
-            gh_alpha=gh_alpha,
         )
 
     smoother_mode = str(smoother).strip().lower()
@@ -1409,6 +1413,9 @@ def solve_multigrid_kcycle_backend(
             self._kcycle_graph = cap.graph
             self._kcycle_graph_shape = graph_key
             graph_built_this_call = True
+            # ScopedCapture records without executing; launch immediately so
+            # every counted cycle is an executed cycle.
+            wp.capture_launch(self._kcycle_graph)
         else:
             wp.capture_launch(self._kcycle_graph)
 

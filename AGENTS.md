@@ -94,7 +94,21 @@ DARCY_WARP_PACKAGE/
     face_kernels_f64.py    # PRODUCTION FP64 face-array kernels (harmonic face build,
                            # jacobi/residual, two-stage reductions, block-reduced check)
     fast_confined_kcycle.py # PRODUCTION opt-in fast steady-confined K-cycle
-                           # (implementation="fast"; classic stays default)
+                           # (implementation="fast"; classic stays default).
+                           # 2026-08-03 hardening: _invalidate_kcycle_graph()
+                           # now clears the fast graph too (a classic-driven
+                           # hierarchy rebuild previously left a dangling
+                           # fast CUDA graph keyed only on shapes ->
+                           # stale-buffer replay); close() drops
+                           # _fast_face_cache/_fast_faces_stale; per-call
+                           # aq_thickness/gh_alpha are honoured (GHB update
+                           # hoisted above the implementation branch);
+                           # graph capture has an eager fallback and
+                           # launches immediately after capture (every
+                           # counted cycle is an executed cycle, classic and
+                           # fast alike); GHB arrays are established before
+                           # the face refresh and missing GHB arrays in a
+                           # use_ghb hierarchy raise.
     mixed_transient_f32.py # EXPERIMENTAL opt-in FP32 inner correction K-cycle
                            # for the transient unconfined device fast path
                            # (UNCONFINED_FAST_PLAN.md Phase C, 2026-07-30):
@@ -150,9 +164,34 @@ working_tests/
   transient_replay_reporting.py     # acceptance reporting
   run_transient_unconfined_diagnostics.py  # convergence-failure diagnostic ladder
   run_2d_unconfined_warp_vs_mf6.py  # steady 2D unconfined runner; supports
-                           # use_ghb (center-row GHB, two-pass MF6 conductance),
-                           # t_field_kind="ugly_t" hard-T (make_ugly_T_field/100)
-                           # and inner_implementation="fast" (2026-07-31).
+                           # use_ghb (center-row GHB), t_field_kind="ugly_t"
+                           # hard-T (make_ugly_T_field/100),
+                           # inner_implementation="fast",
+                           # ghb_head_elevation (draining cases).
+                           # 2026-08-03 hardening: every MF6 run is gated on
+                           # normal termination + finite heads + parsed
+                           # PERCENT BUDGET DISCREPANCY <=
+                           # mf6_budget_discrepancy_tol (1.0%) + nontrivial
+                           # head change from the initial condition; NPZ
+                           # artifacts carry ARTIFACT_SCHEMA_VERSION=2 + a
+                           # SHA-256 case_fingerprint (grid/fields/options
+                           # incl. ghb_conductance_mode) validated before any
+                           # cache reuse/copy (mismatch -> regenerate when
+                           # permitted, else raise); grid-benchmark
+                           # carry-forward is fingerprint-keyed; non-converged
+                           # or non-strict Warp solves are REFUSED
+                           # (_require_warp_converged); the green
+                           # non-converged status was removed.  GHB
+                           # conductance: ghb_conductance_mode="fixed_point"
+                           # (default) iterates MF6 with C_gh re-evaluated at
+                           # its own heads until cond_rtol=1e-6 /
+                           # head_atol=1e-6 (Warp heads never used);
+                           # "warp_matched" is the opt-in legacy two-pass
+                           # (C_gh at Warp's converged head) kept as an
+                           # explicit equation-equivalence test.  Reports
+                           # fixed-point iterations/terminal changes,
+                           # GHB-cell-only errors and conductance/neighbour
+                           # coupling ratios.
                            # NOTE: hard-T MF6 truth needs COMPLEX/BICGSTAB IMS
                            # (~230 s at 500x500; uniform keeps MODERATE ~7 s)
   run_3d_warp_vs_mf6.py             # 3D validation runner
@@ -526,7 +565,7 @@ Usually means `sat = h - bottom` (saturated thickness of the aquifer), not soil 
 | `test_unconfined_solvers_500x500.py` | warp + CUDA + MF6 artifact | all 3 unconfined backends on the 500x500 52w homogeneous case: runtime + MF6 head-accuracy validation |
 | `test_mixed_precision.py` | warp + CUDA | experimental mixed-precision solver: runs/finite on small het+GHB case, agrees with FP64 backend (subprocess-pinned `DARCY_FLOAT`), stays out of registry/aliases |
 | `test_mixed_precision_fast.py` | warp + CUDA | campaign fast kernels vs production/CPU refs, fast session + graph/eager equivalence + FP64 agreement, config defaults, registry exclusion |
-| `test_fast_confined_kcycle.py` | warp + CUDA | production `implementation="fast"`: fast-vs-classic equivalence, graph reuse, face-cache invalidation on T update, transient/unconfined guards, classic-stays-default |
+| `test_fast_confined_kcycle.py` | warp + CUDA | production `implementation="fast"`: fast-vs-classic equivalence, graph reuse, face-cache invalidation on T update, fast-graph invalidation on classic hierarchy rebuild, close() release, per-call GHB parameter overrides, transient/unconfined guards, classic-stays-default |
 | `test_model_convergence_mf6_cache.py` | — | MF6 truth-artifact cache (hit/miss/populate) used by the convergence benchmark |
 | `test_comparison_results.py` | warp + fixtures | end-to-end Warp vs MF6 truth |
 

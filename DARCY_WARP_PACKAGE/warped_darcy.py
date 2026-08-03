@@ -4324,6 +4324,12 @@ class WarpDarcySolver:
     def _invalidate_kcycle_graph(self) -> None:
         self._kcycle_graph = None
         self._kcycle_graph_shape = None
+        # The fast confined K-cycle backend keeps its own captured graph keyed
+        # on level shapes/omegas only; it must be dropped whenever the
+        # hierarchy (buffer addresses) may change, or a later fast solve would
+        # replay a graph captured against stale/freed level buffers.
+        self._kcycle_fast_graph = None
+        self._kcycle_fast_graph_shape = None
 
     def _diag_backend_env_or_default(self) -> str:
         if self.diag_preconditioner_backend != "auto":
@@ -7404,8 +7410,11 @@ class WarpDarcySolver:
         "reserved" memory. :contentReference[oaicite:2]{index=2}
         """
         # 1) Break graph references first, because graphs can keep arrays alive.
-        self._kcycle_graph = None
-        self._kcycle_graph_shape = None
+        self._invalidate_kcycle_graph()
+        # Drop the fast backend's face-conductance cache (holds strong refs to
+        # level-0 and per-level face arrays) before releasing the hierarchy.
+        self._fast_face_cache = None
+        self._fast_faces_stale = False
 
         # 2) Drop CPU staging buffers you created for kcycle (they are Warp arrays on CPU).
         if hasattr(self, "_kcycle_stage_b"):
