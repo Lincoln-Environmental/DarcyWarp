@@ -84,14 +84,15 @@ def build_production_acceptance(
         failures.append("practical Picard production acceptance failed for at least one period")
     if not strict_passed:
         first_strict_fail = period_convergence.get("first_strict_nonconverged_period")
-        warnings.append(
+        failures.append(
             "strict Picard convergence failed"
             + (f" first in period {first_strict_fail}" if first_strict_fail else "")
-            + "; practical production acceptance is the production gate"
         )
     for warning in (mass_balance.get("mass_balance_warnings") or []):
         warnings.append(warning)
-    production_passed = method_valid and head_passed and mass_passed and practical_passed
+    # Practical acceptance is diagnostic fallback state only.  Production
+    # promotion requires strict Picard convergence in every period.
+    production_passed = method_valid and head_passed and mass_passed and practical_passed and strict_passed
     return {
         "method_settings_valid": method_valid,
         "head_accuracy_passed": head_passed,
@@ -257,7 +258,7 @@ def _print_production_report(*, summary: dict) -> None:
     else:
         first_strict = (summary.get("period_convergence") or {}).get("first_strict_nonconverged_period")
         suffix = f" first in period {first_strict}" if first_strict else ""
-        print(f"  strict Picard convergence: WARNING: strict Picard convergence failed but practical acceptance passed{suffix}")
+        print(f"  strict Picard convergence: FAIL: strict Picard convergence failed{suffix}")
     print(
         f"  practical production convergence: "
         f"{'PASS: practical production convergence accepted' if acceptance.get('practical_picard_acceptance_passed') else 'FAIL: practical production convergence not accepted'}"

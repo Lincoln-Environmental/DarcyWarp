@@ -31,6 +31,7 @@ import json
 import lzma
 import os
 import sys
+import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -55,6 +56,10 @@ from DARCY_WARP_PACKAGE.model_builder import (  # noqa: E402
     make_ugly_T_field,
 )
 from DARCY_WARP_PACKAGE.project_base import data_store, require_mf6  # noqa: E402
+from working_tests.transient_artifacts import (  # noqa: E402
+    ARTIFACT_SCHEMA_VERSION,
+    compute_transient_case_fingerprint,
+)
 
 
 # ---- defaults --------------------------------------------------------------
@@ -157,8 +162,15 @@ class TransientCase:
     steady_recharge_rate: float
     recharge_depths: np.ndarray   # (n_weeks,) m
     recharge_rates: np.ndarray    # (n_weeks,) m/day
+    initial_saturated_thickness: float = DEFAULT_INIT_SAT_THICKNESS
     t_field_kind: str = T_FIELD_HOMOGENEOUS
     t_field_seed: int = DEFAULT_T_FIELD_SEED
+    ghb_mask: np.ndarray | None = None
+    ghb_head: np.ndarray | None = None
+    ghb_width: np.ndarray | None = None
+    ghb_alpha: float = 1.0
+    ghb_aq_thickness: float | None = None
+    ghb_conductance_mode: str = "none"
 
 
 def build_transient_unconfined_case(
@@ -175,6 +187,10 @@ def build_transient_unconfined_case(
     dt_days: float = DT_DAYS,
     t_field_kind: str = DEFAULT_T_FIELD_KIND,
     t_field_seed: int = DEFAULT_T_FIELD_SEED,
+    ghb_conductance_mode: str = "none",
+    ghb_head_offset: float = 2.0,
+    ghb_width_value: float = 1.0,
+    ghb_alpha: float = 1.0,
     workspace: str | Path | None = None,
 ) -> TransientCase:
     """
@@ -187,6 +203,9 @@ def build_transient_unconfined_case(
     NumPy data so it can be used both by this MF6 generator and by future Warp
     replay/comparison code without importing Flopy.
     """
+    ghb_conductance_mode = str(ghb_conductance_mode).strip().lower()
+    if ghb_conductance_mode not in {"none", "warp_matched", "mf6_fixed_point"}:
+        raise ValueError("ghb_conductance_mode must be none, warp_matched, or mf6_fixed_point")
     if workspace is not None:
         Path(workspace).mkdir(parents=True, exist_ok=True)
 
@@ -219,6 +238,17 @@ def build_transient_unconfined_case(
     initial_head[bc_bool] = bc_values[bc_bool]
     initial_head[active == 0] = 0.0
 
+    ghb_mask = np.zeros_like(active, dtype=np.int32)
+    ghb_head = np.zeros_like(initial_head, dtype=np.float64)
+    ghb_width = np.zeros_like(initial_head, dtype=np.float64)
+    ghb_aq_thickness = float(np.nanmedian(np.maximum(top - bottom, 0.1)))
+    if ghb_conductance_mode != "none":
+        ghb_row = int(ny) // 2
+        ghb_mask[ghb_row, 1:max(int(nx) - 1, 1)] = 1
+        ghb_mask[(bc_mask != 0) | (active == 0)] = 0
+        ghb_head[ghb_mask != 0] = initial_head[ghb_mask != 0] - float(ghb_head_offset)
+        ghb_width[ghb_mask != 0] = float(ghb_width_value)
+
     depths, rates = build_seasonal_recharge(
         n_weeks=n_weeks,
         annual_depth_m=annual_recharge_m,
@@ -245,8 +275,15 @@ def build_transient_unconfined_case(
         steady_recharge_rate=float(steady_recharge_rate),
         recharge_depths=depths,
         recharge_rates=rates,
+        initial_saturated_thickness=float(initial_saturated_thickness),
         t_field_kind=t_field_kind,
         t_field_seed=int(t_field_seed),
+        ghb_mask=ghb_mask,
+        ghb_head=ghb_head,
+        ghb_width=ghb_width,
+        ghb_alpha=float(ghb_alpha),
+        ghb_aq_thickness=ghb_aq_thickness,
+        ghb_conductance_mode=ghb_conductance_mode,
     )
 
 
@@ -261,7 +298,69 @@ def _save_compressed_npz(out_path: Path, arrays: dict[str, np.ndarray], preset: 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     buf = io.BytesIO()
     np.savez(buf, **arrays)
-    out_path.write_bytes(lzma.compress(buf.getvalue(), preset=preset))
+    payload = lzma.compress(buf.getvalue(), preset=preset)
+    staging_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            prefix=f".{out_path.name}.staging-",
+            dir=out_path.parent,
+            delete=False,
+        ) as staging_file:
+            staging_path = Path(staging_file.name)
+            staging_file.write(payload)
+            staging_file.flush()
+            os.fsync(staging_file.fileno())
+        os.replace(staging_path, out_path)
+        staging_path = None
+    finally:
+        if staging_path is not None:
+            staging_path.unlink(missing_ok=True)
+
+
+def _mf6_normal_termination(mf6_workspace: Path) -> bool:
+    """Require explicit MF6 normal-termination text, not only ``ok=True``."""
+    for listing_path in (mf6_workspace / f"{MF6_MODEL_NAME}.lst", mf6_workspace / "mfsim.lst"):
+        if listing_path.exists() and "normal termination" in listing_path.read_text(errors="replace").lower():
+            return True
+    return False
+
+
+def _budget_gate_from_artifact(budget_path: Path) -> tuple[float, float]:
+    """Return max absolute parsed budget discrepancy and its row tolerance."""
+    with np.load(budget_path, allow_pickle=True) as budget:
+        if "mf6_mass_balance_json" not in budget.files:
+            raise RuntimeError(f"MF6 budget artifact {budget_path} has no parsed mass-balance rows.")
+        rows = json.loads(str(np.asarray(budget["mf6_mass_balance_json"]).reshape(())))
+    discrepancies = [abs(float(row["percent_discrepancy"])) for row in rows]
+    if not discrepancies:
+        raise RuntimeError(f"MF6 budget artifact {budget_path} has no period rows.")
+    return float(max(discrepancies)), 1.0
+
+
+def _validate_mf6_transient_outputs(
+    *,
+    mf6_workspace: Path,
+    heads_per_period: np.ndarray,
+    initial_head: np.ndarray,
+    active: np.ndarray,
+    budget_path: Path,
+) -> tuple[float, float]:
+    """Apply the transient truth gates before an artifact can be written."""
+    if not _mf6_normal_termination(mf6_workspace):
+        raise RuntimeError(f"MF6 workspace {mf6_workspace} lacks NORMAL TERMINATION.")
+    if heads_per_period.ndim != 3 or heads_per_period.shape[0] < 1:
+        raise RuntimeError("MF6 produced no complete saved transient periods.")
+    if not np.isfinite(heads_per_period[:, active]).all():
+        raise FloatingPointError("MF6 transient heads contain non-finite active-cell values.")
+    if not np.isfinite(initial_head[active]).all():
+        raise FloatingPointError("MF6 transient warm-start head contains non-finite active-cell values.")
+    if float(np.max(np.abs(heads_per_period[-1][active] - initial_head[active]))) <= 1.0e-12:
+        raise RuntimeError("MF6 transient response is indistinguishable from its initial condition.")
+    discrepancy, tolerance = _budget_gate_from_artifact(budget_path)
+    if discrepancy > tolerance:
+        raise RuntimeError(f"MF6 transient budget discrepancy {discrepancy:.6g}% exceeds {tolerance:.6g}%.")
+    return discrepancy, tolerance
 
 
 def _load_mf6_last_head(
@@ -937,6 +1036,28 @@ def run_mf6_transient(
     chd_spd = _create_chd_single_period(boundary_heads=fixed_head_cells, active=case.active)
     flopy.mf6.ModflowGwfchd(gwf, pname="chd", stress_period_data=chd_spd, save_flows=True)
 
+    ghb_package = None
+    ghb_mask = np.zeros((case.ny, case.nx), dtype=np.int32) if case.ghb_mask is None else np.asarray(case.ghb_mask, dtype=np.int32)
+    ghb_head = np.zeros((case.ny, case.nx), dtype=np.float64) if case.ghb_head is None else np.asarray(case.ghb_head, dtype=np.float64)
+    ghb_width = np.zeros((case.ny, case.nx), dtype=np.float64) if case.ghb_width is None else np.asarray(case.ghb_width, dtype=np.float64)
+    ghb_factor = np.zeros_like(ghb_width, dtype=np.float64)
+    ghb_factor[ghb_mask != 0] = (
+        float(case.ghb_alpha) * ghb_width[ghb_mask != 0] * float(case.dx)
+        / max(float(case.ghb_aq_thickness or np.nanmedian(np.maximum(case.top - case.bottom, 0.1))), 1.0e-12)
+    )
+    ghb_conductance = np.zeros((case.n_weeks, case.ny, case.nx), dtype=np.float64)
+    if np.any(ghb_mask != 0):
+        initial_sat = np.clip(transient_initial_head - case.bottom, 0.1, np.maximum(case.top - case.bottom, 0.1))
+        ghb_conductance[:] = case.hydraulic_conductivity[None, :, :] * initial_sat[None, :, :] * ghb_factor[None, :, :]
+        ghb_records = {
+            period: [((0, int(j), int(i)), float(ghb_head[j, i]), float(ghb_conductance[period, j, i]))
+                     for j, i in zip(*np.where(ghb_mask != 0))]
+            for period in range(case.n_weeks)
+        }
+        ghb_package = flopy.mf6.ModflowGwfghb(
+            gwf, pname="ghb", stress_period_data=ghb_records, save_flows=True
+        )
+
     # Per-period recharge: uniform-in-space, seasonal-in-time. MF6 reuses the
     # previous period's CHD; recharge is specified explicitly for every period.
     recharge_spd = {
@@ -966,6 +1087,41 @@ def run_mf6_transient(
     hds_path = mf6_ws.joinpath(f"{name}.hds")
     heads_all = flopy.utils.HeadFile(str(hds_path)).get_alldata()  # (ntimes, nlay, ny, nx)
     heads_per_period = np.asarray(heads_all[:, 0, :, :], dtype=np.float64)  # (n_weeks, ny, nx)
+    fixed_point_iterations = 1
+    fixed_point_head_change = 0.0
+    fixed_point_conductance_change = 0.0
+    fixed_point_converged = case.ghb_conductance_mode != "mf6_fixed_point"
+    if ghb_package is not None and case.ghb_conductance_mode == "mf6_fixed_point":
+        for iteration in range(1, 51):
+            sat_endpoint = np.clip(
+                heads_per_period - case.bottom[None, :, :],
+                0.1,
+                np.maximum(case.top - case.bottom, 0.1)[None, :, :],
+            )
+            updated_conductance = case.hydraulic_conductivity[None, :, :] * sat_endpoint * ghb_factor[None, :, :]
+            conductance_change = float(np.max(np.abs(updated_conductance - ghb_conductance)))
+            ghb_conductance = updated_conductance
+            ghb_records = {
+                period: [((0, int(j), int(i)), float(ghb_head[j, i]), float(ghb_conductance[period, j, i]))
+                         for j, i in zip(*np.where(ghb_mask != 0))]
+                for period in range(case.n_weeks)
+            }
+            ghb_package.stress_period_data.set_data(ghb_records)
+            sim.write_simulation(silent=True)
+            ok, _ = sim.run_simulation(silent=True, report=False)
+            if not ok:
+                raise RuntimeError("MF6 GHB fixed-point iteration failed")
+            updated_heads_all = flopy.utils.HeadFile(str(hds_path)).get_alldata()
+            updated_heads = np.asarray(updated_heads_all[:, 0, :, :], dtype=np.float64)
+            head_change = float(np.max(np.abs(updated_heads - heads_per_period)[:, ghb_mask != 0]))
+            heads_per_period = updated_heads
+            fixed_point_iterations = iteration + 1
+            fixed_point_head_change = head_change
+            fixed_point_conductance_change = conductance_change
+            conductance_scale = max(float(np.max(np.abs(ghb_conductance))), 1.0)
+            if head_change <= 1.0e-6 and conductance_change <= max(1.0e-6, 1.0e-6 * conductance_scale):
+                fixed_point_converged = True
+                break
     cbb_path = mf6_ws.joinpath(f"{name}.cbb")
     mf6_storage_budget_path = out_path.with_name("mf6_storage_budget_terms.npz")
     save_mf6_storage_budget_terms(
@@ -973,6 +1129,13 @@ def run_mf6_transient(
         out_path=mf6_storage_budget_path,
         case=case,
         formulation=formulation,
+    )
+    budget_discrepancy, budget_tolerance = _validate_mf6_transient_outputs(
+        mf6_workspace=mf6_ws,
+        heads_per_period=heads_per_period,
+        initial_head=transient_initial_head,
+        active=case.active,
+        budget_path=mf6_storage_budget_path,
     )
 
     annual_recharge_schedule_m = float(case.steady_recharge_rate) * float(case.recharge_schedule_weeks) * float(case.dt_days)
@@ -1000,7 +1163,31 @@ def run_mf6_transient(
         "ny": np.asarray(case.ny, dtype=np.int32),
         "dx": np.asarray(case.dx, dtype=np.float64),
         "n_weeks": np.asarray(case.n_weeks, dtype=np.int32),
+        "n_periods": np.asarray(case.n_weeks, dtype=np.int32),
         "dt_days": np.asarray(case.dt_days, dtype=np.float64),
+        "initial_saturated_thickness": np.asarray(case.initial_saturated_thickness, dtype=np.float64),
+        "t_field_kind": np.asarray(case.t_field_kind),
+        "t_field_seed": np.asarray(case.t_field_seed, dtype=np.int32),
+        "warm_start_mode": np.asarray(warm_start_mode),
+        "ghb_mask": np.asarray(ghb_mask, dtype=np.int32),
+        "ghb_head": np.asarray(ghb_head, dtype=np.float64),
+        "ghb_width": np.asarray(ghb_width, dtype=np.float64),
+        "ghb_alpha": np.asarray(case.ghb_alpha, dtype=np.float64),
+        "ghb_aq_thickness": np.asarray(case.ghb_aq_thickness or 0.0, dtype=np.float64),
+        "ghb_conductance": np.asarray(ghb_conductance, dtype=np.float64),
+        "ghb_conductance_mode": np.asarray(case.ghb_conductance_mode),
+        "ghb_conductance_settings": np.asarray(json.dumps({
+            "head_offset": 2.0,
+            "fixed_point_iterations": fixed_point_iterations,
+            "terminal_head_change": fixed_point_head_change,
+            "terminal_conductance_change": fixed_point_conductance_change,
+            "converged": fixed_point_converged,
+        }, sort_keys=True)),
+        "mf6_normal_termination": np.asarray(1, dtype=np.int8),
+        "mf6_budget_discrepancy_max": np.asarray(budget_discrepancy, dtype=np.float64),
+        "mf6_budget_discrepancy_tol": np.asarray(budget_tolerance, dtype=np.float64),
+        "ghb_fixed_point_converged": np.asarray(int(fixed_point_converged), dtype=np.int8),
+        "artifact_schema_version": np.asarray(ARTIFACT_SCHEMA_VERSION, dtype=np.int32),
         "engine_time": np.asarray(engine_time, dtype=np.float64),
         "confined_steady_engine_time": np.asarray(confined_steady_engine_time, dtype=np.float64),
         "unconfined_steady_engine_time": np.asarray(unconfined_steady_engine_time, dtype=np.float64),
@@ -1023,10 +1210,11 @@ def run_mf6_transient(
             "t_field_kind": case.t_field_kind,
             "t_field_seed": case.t_field_seed,
             "hydraulic_conductivity": case.hydraulic_conductivity.flat[0],
-            "initial_saturated_thickness": DEFAULT_INIT_SAT_THICKNESS,
+            "initial_saturated_thickness": case.initial_saturated_thickness,
             "generator": "working_tests/run_2d_transient_vs_mf6.py",
         }, default=str)),
     }
+    arrays["case_fingerprint"] = np.asarray(compute_transient_case_fingerprint(arrays))
     _save_compressed_npz(out_path, arrays)
 
     simulated_recharge = float(case.recharge_depths.sum())
@@ -1061,6 +1249,7 @@ def main(
     initial_saturated_thickness: float = DEFAULT_INIT_SAT_THICKNESS,
     t_field_kind: str = DEFAULT_T_FIELD_KIND,
     t_field_seed: int = DEFAULT_T_FIELD_SEED,
+    ghb_conductance_mode: str = "none",
     out_path: str | Path | None = None,
     mf6_workspace: str | Path | None = None,
     warm_start_workspace: str | Path | None = None,
@@ -1091,6 +1280,7 @@ def main(
         recharge_schedule_weeks=recharge_schedule_weeks,
         t_field_kind=t_field_kind,
         t_field_seed=t_field_seed,
+        ghb_conductance_mode=ghb_conductance_mode,
     )
     k_desc = (
         f"ugly_t(seed={t_field_seed}) K=T/{initial_saturated_thickness:g}"

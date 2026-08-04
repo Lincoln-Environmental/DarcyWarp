@@ -208,6 +208,12 @@ def run_warp_transient_replay(
     bottom = np.asarray(spatial["bottom"], dtype=np.float64)
     k = np.asarray(spatial["k"], dtype=np.float64)
     initial_head = np.asarray(spatial["initial_head"], dtype=np.float64)
+    ghb_mask = np.asarray(spatial.get("ghb_mask", np.zeros_like(active)), dtype=np.int32)
+    ghb_head = np.asarray(spatial.get("ghb_head", np.zeros_like(initial_head)), dtype=np.float64)
+    ghb_width = np.asarray(spatial.get("ghb_width", np.zeros_like(initial_head)), dtype=np.float64)
+    ghb_alpha = float(spatial.get("ghb_alpha", 1.0))
+    ghb_aq_thickness = float(spatial.get("ghb_aq_thickness", 0.0))
+    use_ghb = bool(np.any(ghb_mask != 0))
 
     rates = np.asarray(recharge_rates, dtype=np.float64).reshape(-1)
     n_periods = int(rates.shape[0]) if n_periods is None else int(n_periods)
@@ -256,6 +262,7 @@ def run_warp_transient_replay(
         dx=dx,
         device=device,
         solver_type="kcycle",
+        use_ghb=use_ghb,
         diag_preconditioner_backend=diag_preconditioner_backend,
     ) as solver:
         solver.build_from_fields(
@@ -264,6 +271,11 @@ def run_warp_transient_replay(
             active=active,
             bc_mask=bc_mask,
             bc_values=bc_values,
+            gh_mask=ghb_mask,
+            gh_head=ghb_head,
+            gh_width=ghb_width,
+            gh_alpha=ghb_alpha,
+            aq_thickness=ghb_aq_thickness if use_ghb else None,
         )
         heads_api, info_api = solver.solve_transient_2d_unconfined(
             solver=solver_backend,
@@ -278,6 +290,11 @@ def run_warp_transient_replay(
             active=active,
             bc_mask=bc_mask,
             bc_values=bc_values,
+            gh_mask=ghb_mask,
+            gh_head=ghb_head,
+            gh_width=ghb_width,
+            gh_alpha=ghb_alpha,
+            aq_thickness=ghb_aq_thickness if use_ghb else None,
             storage_mode=unconfined_storage_mode,
             storage_reference=storage_reference,
             solve_controls=controls,
@@ -478,7 +495,7 @@ def run_replay_from_artifact(
     comparison = compare_transient(
         warp_result,
         artifact_heads_per_period,
-        np.asarray(artifact["heads_final"], dtype=np.float64),
+        artifact_heads_per_period[n_periods - 1],
         spatial["active"],
     )
     mass_balance_runtime: float | None = None

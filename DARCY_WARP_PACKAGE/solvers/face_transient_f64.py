@@ -45,9 +45,10 @@ What this module provides:
   with the face dual residual, which matches the classic check formulas
   to round-off.
 
-GHB inputs are kept in the face build (Phase D will enable GHB on this
-path); the driver still raises ``NotImplementedError`` for GHB before
-reaching this module.
+GHB inputs are part of the face build: ``C_gh`` is included in the diagonal
+and the matching ``C_gh * gh_head`` term is included in the transient RHS.
+The classic transient device path remains the reference path and does not
+support GHB; production GHB runs therefore select the face operator.
 """
 
 from __future__ import annotations
@@ -530,7 +531,8 @@ def solve_kcycle_face_transient_device_buffers(
     bit-identical to N eager cycles (same kernels, same order, same
     reduction order).  Any capture failure is recorded in the cache
     (``False`` sentinel) and falls back to eager launches with identical
-    semantics.  Scalar-info mode is never captured (host readbacks).
+    semantics.  Scalar-info mode captures only the fixed K-cycle sequence;
+    convergence checks and all host readbacks remain outside the graph.
     """
     from DARCY_WARP_PACKAGE import warped_darcy as kernel_module
 
@@ -934,9 +936,61 @@ def solve_kcycle_face_transient_device_buffers(
             "implementation": "face_f64",
         }
 
+    # Scalar convergence decisions stay on the host, but the fixed K-cycle
+    # launch sequence can still be captured and replayed between decisions.
+    # The first replay is explicit after successful capture; a null capture is
+    # treated as one already-executed eager cycle.  This keeps exact-once
+    # behavior for capture, fallback, and graph replay.  Capture is deliberately
+    # deferred until after the initial convergence short-circuit above.
+    graph_entry = None
+    graph_null_executed = False
+    graph_key = None
+    if graph_cache is not None and str(device).startswith("cuda"):
+        graph_key = (
+            "face_transient_kcycle_scalar_v1",
+            id(lvl0.x_wp),
+            id(lvl0.b_wp),
+            id(lvl0.bc_values_wp),
+            id(levels),
+            int(len(levels)),
+            tuple((int(l.ny), int(l.nx)) for l in levels),
+            int(nu_pre),
+            int(nu_post),
+            int(nu_coarse),
+            str(smoother_mode),
+            tuple(float(v) for v in pre_omegas),
+            tuple(float(v) for v in post_omegas),
+        )
+        cached_graph = graph_cache.get(graph_key)
+        if cached_graph is not None and cached_graph is not False:
+            graph_entry = cached_graph
+        elif cached_graph is False:
+            graph_null_executed = False
+        else:
+            try:
+                with wp.ScopedCapture() as capture:
+                    kcycle(0)
+            except Exception:
+                graph_cache[graph_key] = False
+            else:
+                if capture.graph is None:
+                    graph_null_executed = True
+                    graph_cache[graph_key] = False
+                else:
+                    graph_entry = capture.graph
+                    graph_cache[graph_key] = graph_entry
+
+    def run_one_cycle(cycle_index: int) -> None:
+        if graph_entry is not None:
+            wp.capture_launch(graph_entry)
+        elif graph_null_executed and int(cycle_index) == 0:
+            return
+        else:
+            kcycle(0)
+
     for cyc in range(max_cycles_i):
         n_cycles_used = cyc + 1
-        kcycle(0)
+        run_one_cycle(cyc)
 
         if (cyc % check_every) != (check_every - 1):
             continue

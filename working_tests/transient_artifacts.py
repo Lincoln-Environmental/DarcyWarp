@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import hashlib
 import json
 import lzma
 from pathlib import Path
@@ -41,6 +42,20 @@ WARM_START_WARP_SOLVE_MODES = {
     WARM_START_UNCONFINED_STEADY_WARP,
 }
 
+# Bump whenever the serialized truth contract changes.  Old artifacts are
+# intentionally rejected instead of being silently compared as if they were
+# generated from the current equations.
+ARTIFACT_SCHEMA_VERSION = 2
+
+_FINGERPRINT_KEYS = (
+    "nx", "ny", "dx", "active", "bc_mask", "bc_values", "top", "bottom",
+    "k_field", "t_field_kind", "t_field_seed", "sy", "ss", "dt_days",
+    "recharge_rates", "n_periods", "n_weeks", "initial_head",
+    "initial_saturated_thickness",
+    "warm_start_mode", "formulation", "ghb_mask", "ghb_head",
+    "ghb_conductance", "ghb_conductance_mode", "ghb_conductance_settings",
+)
+
 
 def _load_compressed_npz(path: str | Path) -> dict:
     path = Path(path)
@@ -49,8 +64,104 @@ def _load_compressed_npz(path: str | Path) -> dict:
         return {key: data[key] for key in data.files}
 
 
+def _fingerprint_value(hasher: "hashlib._Hash", key: str, value: object) -> None:
+    """Add a typed, shape-aware value to a deterministic case hash."""
+    hasher.update(key.encode("utf-8"))
+    hasher.update(b"\0")
+    if value is None:
+        hasher.update(b"<missing>\0")
+        return
+    array = np.asarray(value)
+    hasher.update(str(array.dtype).encode("utf-8"))
+    hasher.update(b"\0")
+    hasher.update(repr(tuple(array.shape)).encode("ascii"))
+    hasher.update(b"\0")
+    if array.dtype.kind in {"U", "S", "O"}:
+        text = json.dumps(array.reshape(-1).tolist(), ensure_ascii=False, sort_keys=True, default=str)
+        hasher.update(text.encode("utf-8"))
+    else:
+        hasher.update(np.ascontiguousarray(array).tobytes(order="C"))
+    hasher.update(b"\0")
+
+
+def compute_transient_case_fingerprint(case_inputs: dict) -> str:
+    """Return the SHA-256 identity of all transient equation inputs.
+
+    Runtime settings, output heads, and timing values are deliberately absent.
+    Missing optional GHB fields are hashed as missing, so adding or changing a
+    GHB mode cannot reuse a no-GHB artifact.
+    """
+    hasher = hashlib.sha256()
+    hasher.update(f"artifact-schema={ARTIFACT_SCHEMA_VERSION}\0".encode("ascii"))
+    for key in _FINGERPRINT_KEYS:
+        _fingerprint_value(hasher, key, case_inputs.get(key))
+    return hasher.hexdigest()
+
+
+case_fingerprint = compute_transient_case_fingerprint
+
+
+def validate_transient_artifact(
+    path: str | Path,
+    *,
+    expected_fingerprint: str | None = None,
+    expected_periods: int | None = None,
+    require_mf6_gates: bool = True,
+) -> dict:
+    """Load and validate a current, internally consistent truth artifact."""
+    artifact_path = Path(path)
+    artifact = _load_compressed_npz(artifact_path)
+    stored_version = int(np.asarray(artifact.get("artifact_schema_version", -1)).reshape(()))
+    if stored_version != ARTIFACT_SCHEMA_VERSION:
+        raise ValueError(
+            f"stale transient artifact {artifact_path}: schema {stored_version}, "
+            f"expected {ARTIFACT_SCHEMA_VERSION}."
+        )
+    stored_fingerprint = _scalar_string(artifact.get("case_fingerprint", ""))
+    computed_fingerprint = compute_transient_case_fingerprint(artifact)
+    if stored_fingerprint != computed_fingerprint:
+        raise ValueError(f"corrupt or stale transient artifact {artifact_path}: fingerprint mismatch.")
+    if expected_fingerprint is not None and stored_fingerprint != str(expected_fingerprint):
+        raise ValueError(f"stale transient artifact {artifact_path}: requested case fingerprint differs.")
+    required = (
+        "heads_per_period", "heads_final", "initial_head", "active", "bc_mask",
+        "bc_values", "top", "bottom", "k_field", "recharge_rates", "sy", "ss",
+        "nx", "ny", "dx", "dt_days",
+    )
+    missing = [name for name in required if name not in artifact]
+    if missing:
+        raise ValueError(f"transient artifact {artifact_path} missing keys: {missing}")
+    n_periods = int(np.asarray(artifact["heads_per_period"]).shape[0])
+    expected = int(np.asarray(artifact.get("n_periods", artifact.get("n_weeks", n_periods))).reshape(()))
+    if n_periods != expected or (expected_periods is not None and n_periods != int(expected_periods)):
+        raise ValueError(f"transient artifact {artifact_path} has {n_periods} saved periods, expected {expected}.")
+    active = np.asarray(artifact["active"], dtype=np.int32) != 0
+    heads = np.asarray(artifact["heads_per_period"], dtype=np.float64)
+    shape = (int(np.asarray(artifact["ny"]).reshape(())), int(np.asarray(artifact["nx"]).reshape(())))
+    if heads.shape != (n_periods, *shape) or not np.isfinite(heads[:, active]).all():
+        raise ValueError(f"transient artifact {artifact_path} has invalid head shape or non-finite active heads.")
+    initial = np.asarray(artifact["initial_head"], dtype=np.float64)
+    if initial.shape != shape or not np.isfinite(initial[active]).all():
+        raise ValueError(f"transient artifact {artifact_path} has an invalid warm-start head.")
+    if np.max(np.abs(heads[-1][active] - initial[active])) <= 1.0e-12:
+        raise ValueError(f"transient artifact {artifact_path} has no nontrivial transient response.")
+    if require_mf6_gates:
+        if not bool(int(np.asarray(artifact.get("mf6_normal_termination", 0)).reshape(()))):
+            raise ValueError(f"transient artifact {artifact_path} lacks MF6 normal-termination proof.")
+        discrepancy = float(np.asarray(artifact.get("mf6_budget_discrepancy_max", np.nan)).reshape(()))
+        tolerance = float(np.asarray(artifact.get("mf6_budget_discrepancy_tol", np.nan)).reshape(()))
+        if not np.isfinite(discrepancy) or not np.isfinite(tolerance) or discrepancy > tolerance:
+            raise ValueError(f"transient artifact {artifact_path} fails the MF6 budget gate.")
+        ghb_mode = _scalar_string(artifact.get("ghb_conductance_mode", "none")).strip().lower()
+        if ghb_mode == "mf6_fixed_point" and not bool(
+            int(np.asarray(artifact.get("ghb_fixed_point_converged", 0)).reshape(()))
+        ):
+            raise ValueError(f"transient artifact {artifact_path} lacks a converged MF6 GHB fixed point.")
+    return artifact
+
+
 def load_transient_artifact(path: str | Path) -> dict:
-    arrays = _load_compressed_npz(path)
+    arrays = validate_transient_artifact(path)
     required = (
         "heads_per_period",
         "heads_final",
@@ -163,6 +274,7 @@ def build_synthetic_spatial_fields(
 
 
 def spatial_fields_from_artifact(artifact: dict) -> dict:
+    shape = (int(artifact["ny"]), int(artifact["nx"]))
     return {
         "nx": int(artifact["nx"]),
         "ny": int(artifact["ny"]),
@@ -174,6 +286,13 @@ def spatial_fields_from_artifact(artifact: dict) -> dict:
         "bottom": np.asarray(artifact["bottom"], dtype=np.float64),
         "k": np.asarray(artifact["k_field"], dtype=np.float64),
         "initial_head": np.asarray(artifact["initial_head"], dtype=np.float64),
+        "ghb_mask": np.asarray(artifact.get("ghb_mask", np.zeros(shape, dtype=np.int32)), dtype=np.int32),
+        "ghb_head": np.asarray(artifact.get("ghb_head", np.zeros(shape)), dtype=np.float64),
+        "ghb_width": np.asarray(artifact.get("ghb_width", np.zeros(shape)), dtype=np.float64),
+        "ghb_alpha": float(np.asarray(artifact.get("ghb_alpha", 1.0)).reshape(())),
+        "ghb_aq_thickness": float(np.asarray(artifact.get("ghb_aq_thickness", 0.0)).reshape(())),
+        "ghb_conductance_mode": str(np.asarray(artifact.get("ghb_conductance_mode", "none")).reshape(())),
+        "ghb_conductance": np.asarray(artifact.get("ghb_conductance", np.zeros((0, *shape))), dtype=np.float64),
         "workspace": None,
     }
 

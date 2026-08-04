@@ -717,6 +717,7 @@ def solve_multigrid_kcycle_backend(
         practical_dh_rms_tol: float = 3.0e-3,
         practical_storage_diag_change_rms_tol: float = 30.0,
         save_transient_diagnostics: bool = False,
+        transient_face_graphs_enabled: bool = True,
 ):
     from DARCY_WARP_PACKAGE import warped_darcy as kernel_module
     globals().update(kernel_module.__dict__)
@@ -806,16 +807,12 @@ def solve_multigrid_kcycle_backend(
         raise ValueError(
             f"implementation must be 'classic' or 'fast', got {implementation!r}."
         )
-    if implementation_mode == "fast":
+    fast_transient = implementation_mode == "fast" and bool(transient)
+    if implementation_mode == "fast" and not fast_transient:
         if bool(unconfined):
             raise ValueError(
                 "implementation='fast' is steady confined only; use the classic "
                 "implementation (or an unconfined backend) for unconfined solves."
-            )
-        if bool(transient):
-            raise ValueError(
-                "implementation='fast' is steady confined only; use the classic "
-                "implementation for transient solves."
             )
         from DARCY_WARP_PACKAGE.solvers.fast_confined_kcycle import (
             solve_confined_kcycle_fast_backend,
@@ -1079,6 +1076,73 @@ def solve_multigrid_kcycle_backend(
             levels[k].dh_max_buf.fill_(0.0)
         if getattr(levels[k], "x_prev_wp", None) is not None:
             levels[k].x_prev_wp.fill_(WP_FLOAT(0.0))
+
+    if fast_transient:
+        if WP_FLOAT is not wp.float64:
+            raise ValueError(
+                "implementation='fast' transient solves require the FP64 master model; "
+                "use implementation='classic' for FP32."
+            )
+        from DARCY_WARP_PACKAGE.solvers.face_transient_f64 import (
+            ensure_transient_face_levels,
+            refresh_transient_face_levels,
+            solve_kcycle_face_transient_device_buffers,
+        )
+
+        transient_face_levels = ensure_transient_face_levels(self, levels)
+        refresh_transient_face_levels(
+            self,
+            levels,
+            transient_face_levels,
+        )
+        solve_controls = {
+            "max_cycles": int(max_cycles),
+            "nu_pre": int(nu_pre),
+            "nu_post": int(nu_post),
+            "nu_coarse": int(nu_coarse),
+            "omega": float(omega),
+            "rel_tol": float(rel_tol),
+            "abs_tol_min": float(abs_tol_min),
+            "check_every_no": int(check_every_no),
+            "dh_rms_tol": dh_rms_tol,
+            "dh_max_tol": dh_max_tol,
+            "smoother": str(smoother),
+            "cheby_lambda_min": float(cheby_lambda_min),
+            "cheby_lambda_max": float(cheby_lambda_max),
+        }
+        transient_face_graph_cache = {} if bool(transient_face_graphs_enabled) else None
+        fast_info = solve_kcycle_face_transient_device_buffers(
+            model=self,
+            x_wp=lvl0.x_wp,
+            rhs_wp=lvl0.b_wp,
+            T_wp=lvl0.T_wp,
+            storage_diag_wp=lvl0.storage_diag_wp,
+            active_wp=lvl0.active_wp,
+            bc_mask_wp=lvl0.bc_mask_wp,
+            bc_values_wp=lvl0.bc_values_wp,
+            levels=levels,
+            face_levels=transient_face_levels,
+            solve_controls=solve_controls,
+            return_scalar_info=True,
+            graph_cache=transient_face_graph_cache,
+        )
+        graph_values = tuple((transient_face_graph_cache or {}).values())
+        fast_info.update(
+            {
+                "solver_type": "kcycle",
+                "implementation": "fast_transient_face_f64",
+                "transient": True,
+                "storage_active": True,
+                "fine_operator_residual_checked": True,
+                "cuda_graph_built_this_call": bool(graph_values and any(value is not False for value in graph_values)),
+                "cuda_graph_reused": False,
+                "cuda_graph_fallback": bool(graph_values and any(value is False for value in graph_values)),
+                "graph_count": int(sum(value is not False for value in graph_values)),
+                "graph_fallback_count": int(sum(value is False for value in graph_values)),
+            }
+        )
+        head_out = np.asarray(lvl0.x_wp.numpy(), dtype=NP_FLOAT).copy()
+        return (head_out, fast_info) if return_info else head_out
 
     active_host_i32 = np.asarray(self.active_host, dtype=np.int32)
     bc_host_i32 = np.asarray(self.bc_mask_host, dtype=np.int32)

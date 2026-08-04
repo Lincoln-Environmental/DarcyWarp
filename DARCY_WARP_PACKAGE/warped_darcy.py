@@ -3944,6 +3944,94 @@ def update_secant_sy_storage_kernel(
 
 
 @wp.kernel
+def update_secant_sy_storage_block_kernel(
+    head_ref: wp.array(dtype=WP_FLOAT, ndim=2),
+    head_prev: wp.array(dtype=WP_FLOAT, ndim=2),
+    bottom: wp.array(dtype=WP_FLOAT, ndim=2),
+    top: wp.array(dtype=WP_FLOAT, ndim=2),
+    active: wp.array(dtype=wp.int32, ndim=2),
+    bc_mask: wp.array(dtype=wp.int32, ndim=2),
+    sy: WP_FLOAT,
+    ss: WP_FLOAT,
+    dx: WP_FLOAT,
+    dt: WP_FLOAT,
+    min_sat: WP_FLOAT,
+    eps: WP_FLOAT,
+    nx: int,
+    ny: int,
+    block_span: int,
+    storage_coeff_out: wp.array(dtype=WP_FLOAT, ndim=2),
+    sy_coeff_out: wp.array(dtype=WP_FLOAT, ndim=2),
+    ss_coeff_out: wp.array(dtype=WP_FLOAT, ndim=2),
+    storage_diag_out: wp.array(dtype=WP_FLOAT, ndim=2),
+    storage_diag_prev: wp.array(dtype=WP_FLOAT, ndim=2),
+    storage_change_sum_sq_partials: wp.array(dtype=wp.float64, ndim=1),
+    storage_change_max_partials: wp.array(dtype=wp.float64, ndim=1),
+):
+    """Storage refresh with block-partial change statistics.
+
+    The storage coefficients intentionally share the authoritative secant-Sy
+    formula with ``update_secant_sy_storage_kernel``.  Only the reduction
+    destination changes: per-cell updates accumulate into one partial per
+    block, and the host-side driver combines those partials with the existing
+    two-stage FP64 reduction kernels.
+    """
+    j, i = wp.tid()
+    if j >= ny or i >= nx:
+        return
+    block = (j * nx + i) // block_span
+    if active[j, i] == 0 or bc_mask[j, i] != 0:
+        storage_coeff_out[j, i] = WP_FLOAT(0.0)
+        sy_coeff_out[j, i] = WP_FLOAT(0.0)
+        ss_coeff_out[j, i] = WP_FLOAT(0.0)
+        storage_diag_out[j, i] = WP_FLOAT(0.0)
+        return
+
+    full = wp.max(top[j, i] - bottom[j, i], WP_FLOAT(0.0))
+    sat_old = wp.min(wp.max(head_prev[j, i] - bottom[j, i], WP_FLOAT(0.0)), full)
+    sat_ref_zero = wp.min(wp.max(head_ref[j, i] - bottom[j, i], WP_FLOAT(0.0)), full)
+    dh = head_ref[j, i] - head_prev[j, i]
+
+    sy_coeff = WP_FLOAT(0.0)
+    if wp.abs(dh) > eps:
+        sy_coeff = sy * ((sat_ref_zero - sat_old) / dh)
+    elif head_ref[j, i] > bottom[j, i] and head_ref[j, i] < top[j, i]:
+        sy_coeff = sy
+    sy_coeff = wp.min(wp.max(sy_coeff, WP_FLOAT(0.0)), sy)
+
+    rel_old = head_prev[j, i] - bottom[j, i]
+    rel_ref = head_ref[j, i] - bottom[j, i]
+    phi_old = WP_FLOAT(0.0)
+    phi_ref = WP_FLOAT(0.0)
+    if rel_old > WP_FLOAT(0.0) and rel_old < full:
+        phi_old = WP_FLOAT(0.5) * ss * rel_old * rel_old
+    elif rel_old >= full:
+        phi_old = WP_FLOAT(0.5) * ss * full * full + ss * full * (rel_old - full)
+    if rel_ref > WP_FLOAT(0.0) and rel_ref < full:
+        phi_ref = WP_FLOAT(0.5) * ss * rel_ref * rel_ref
+    elif rel_ref >= full:
+        phi_ref = WP_FLOAT(0.5) * ss * full * full + ss * full * (rel_ref - full)
+
+    ss_coeff = WP_FLOAT(0.0)
+    if wp.abs(dh) > eps:
+        ss_coeff = (phi_ref - phi_old) / dh
+    else:
+        sat_ref_ss = wp.min(wp.max(rel_ref, WP_FLOAT(0.0)), full)
+        ss_coeff = ss * sat_ref_ss
+    ss_coeff = wp.max(ss_coeff, WP_FLOAT(0.0))
+    storage_coeff = sy_coeff + ss_coeff
+    storage_diag = storage_coeff * dx * dx / dt
+    delta = wp.float64(storage_diag - storage_diag_prev[j, i])
+
+    sy_coeff_out[j, i] = sy_coeff
+    ss_coeff_out[j, i] = ss_coeff
+    storage_coeff_out[j, i] = storage_coeff
+    storage_diag_out[j, i] = storage_diag
+    wp.atomic_add(storage_change_sum_sq_partials, block, delta * delta)
+    wp.atomic_max(storage_change_max_partials, block, wp.abs(delta))
+
+
+@wp.kernel
 def build_transient_rhs_from_storage_kernel(
     recharge_rate: wp.array(dtype=WP_FLOAT, ndim=2),
     storage_diag: wp.array(dtype=WP_FLOAT, ndim=2),
@@ -4324,6 +4412,9 @@ class WarpDarcySolver:
     def _invalidate_kcycle_graph(self) -> None:
         self._kcycle_graph = None
         self._kcycle_graph_shape = None
+        # Transient face levels retain hierarchy-owned arrays and must not
+        # survive a hierarchy rebuild with new level identities.
+        self._transient_face_cache = None
         # The fast confined K-cycle backend keeps its own captured graph keyed
         # on level shapes/omegas only; it must be dropped whenever the
         # hierarchy (buffer addresses) may change, or a later fast solve would
@@ -7415,6 +7506,7 @@ class WarpDarcySolver:
         # level-0 and per-level face arrays) before releasing the hierarchy.
         self._fast_face_cache = None
         self._fast_faces_stale = False
+        self._transient_face_cache = None
 
         # 2) Drop CPU staging buffers you created for kcycle (they are Warp arrays on CPU).
         if hasattr(self, "_kcycle_stage_b"):

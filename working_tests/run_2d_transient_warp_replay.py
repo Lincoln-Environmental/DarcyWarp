@@ -20,7 +20,10 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from DARCY_WARP_PACKAGE.project_base import data_store  # noqa: E402
-from working_tests.transient_artifacts import FORMULATION_UNCONFINED  # noqa: E402
+from working_tests.transient_artifacts import (  # noqa: E402
+    FORMULATION_UNCONFINED,
+    validate_transient_artifact,
+)
 from working_tests.transient_replay_settings import (  # noqa: E402
     default_run_config,
     production_secant_sy_settings,
@@ -36,6 +39,7 @@ def build_grid_artifact_path(
     n_weeks: int,
     t_field_kind: str,
     t_field_seed: int,
+    ghb_conductance_mode: str = "none",
 ) -> Path:
     """
     Build the grid-qualified MF6 truth artifact path used by the generator.
@@ -47,6 +51,9 @@ def build_grid_artifact_path(
         raise ValueError("n_weeks must be positive.")
     t_field_kind = str(t_field_kind).strip().lower()
     suffix = f"_ugly_t_s{int(t_field_seed)}" if t_field_kind == "ugly_t" else ""
+    ghb_mode = str(ghb_conductance_mode).strip().lower()
+    if ghb_mode != "none":
+        suffix += f"_ghb_{ghb_mode}"
     return data_store.joinpath(
         "working_tests",
         f"mf6_transient_2d_{formulation}_{int(nx)}x{int(ny)}_{int(n_weeks)}w{suffix}",
@@ -62,6 +69,7 @@ def build_case_setup(
     dx: float = 100.0,
     t_field_kind: str = "ugly_t",
     t_field_seed: int = 42,
+    ghb_conductance_mode: str = "none",
 ) -> dict:
     """
     Single source of truth for the transient replay case.
@@ -88,6 +96,7 @@ def build_case_setup(
         "t_field_kind": str(t_field_kind).strip().lower(),
         "t_field_seed": int(t_field_seed),
         "warm_start_mode": "unconfined_steady_mf6",
+        "ghb_conductance_mode": str(ghb_conductance_mode).strip().lower(),
     }
     setup["artifact_path"] = build_grid_artifact_path(
         formulation=formulation,
@@ -96,6 +105,7 @@ def build_case_setup(
         n_weeks=n_periods,
         t_field_kind=setup["t_field_kind"],
         t_field_seed=setup["t_field_seed"],
+        ghb_conductance_mode=setup["ghb_conductance_mode"],
     )
     return setup
 
@@ -109,7 +119,11 @@ def ensure_case_artifact(case_setup: dict) -> Path:
     """
     artifact_path = Path(case_setup["artifact_path"])
     if artifact_path.exists():
-        return artifact_path
+        try:
+            validate_transient_artifact(artifact_path)
+            return artifact_path
+        except (OSError, ValueError) as exc:
+            print(f"Existing MF6 artifact failed validation and will be regenerated: {exc}")
     from working_tests import run_2d_transient_vs_mf6 as truth_generator
 
     print(f"MF6 truth artifact missing; generating (this can take a while):")
@@ -126,6 +140,7 @@ def ensure_case_artifact(case_setup: dict) -> Path:
         initial_saturated_thickness=case_setup["initial_saturated_thickness"],
         t_field_kind=case_setup["t_field_kind"],
         t_field_seed=case_setup["t_field_seed"],
+        ghb_conductance_mode=case_setup["ghb_conductance_mode"],
         out_path=artifact_path,
         reuse_existing_warm_start=True,
         warm_start_mode=case_setup["warm_start_mode"],
@@ -133,6 +148,7 @@ def ensure_case_artifact(case_setup: dict) -> Path:
     )
     if not artifact_path.exists():
         raise RuntimeError(f"MF6 truth generation did not produce {artifact_path}")
+    validate_transient_artifact(artifact_path)
     return artifact_path
 
 

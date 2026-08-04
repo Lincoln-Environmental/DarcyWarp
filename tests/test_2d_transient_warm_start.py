@@ -1228,13 +1228,13 @@ def test_evaluate_method_settings_validated_vs_deviation():
     assert "storage_reference" in deviated["mismatches"]
 
 
-def test_production_acceptance_passes_with_strict_period1_warning():
+def test_production_acceptance_requires_strict_period1_convergence():
     replay = _load_replay_module()
     method = {"passed": True, "settings": {}, "mismatches": {}}
     head = {"passed": True}
     mb = _synth_mass_balance([0.10566] + [0.0001] * 9, cumulative_pct=0.0094)
     replay.annotate_mass_balance_classification(mb)
-    # strict fails in period 1, practical passes -> production still accepted.
+    # Practical acceptance is fallback diagnostics, not the production gate.
     acceptance = replay.build_production_acceptance(
         method_settings=method,
         head_accuracy=head,
@@ -1244,8 +1244,8 @@ def test_production_acceptance_passes_with_strict_period1_warning():
     assert acceptance["strict_picard_convergence_passed"] is False
     assert acceptance["practical_picard_acceptance_passed"] is True
     assert acceptance["mass_balance_passed"] is True
-    assert acceptance["production_acceptance_passed"] is True
-    assert any("strict Picard convergence failed" in w for w in acceptance["warnings"])
+    assert acceptance["production_acceptance_passed"] is False
+    assert any("strict Picard convergence failed" in failure for failure in acceptance["failures"])
 
 
 def test_production_acceptance_fails_when_mass_balance_fails():

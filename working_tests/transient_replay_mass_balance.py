@@ -52,6 +52,11 @@ def compute_boundary_flux_terms(
     bc_mask: np.ndarray,
     bc_values: np.ndarray,
     dx: float,
+    ghb_mask: np.ndarray | None = None,
+    ghb_head: np.ndarray | None = None,
+    ghb_width: np.ndarray | None = None,
+    ghb_alpha: float = 1.0,
+    ghb_aq_thickness: float | None = None,
 ) -> dict:
     T = np.asarray(T_field, dtype=np.float64)
     h = np.asarray(head, dtype=np.float64)
@@ -115,6 +120,17 @@ def compute_boundary_flux_terms(
 
     ghb_in = 0.0
     ghb_out = 0.0
+    if ghb_mask is not None and ghb_head is not None and ghb_width is not None:
+        gh_mask_i = (np.asarray(ghb_mask, dtype=np.int32) != 0) & free
+        gh_factor = np.zeros_like(T, dtype=np.float64)
+        thickness = max(float(ghb_aq_thickness or np.nanmedian(np.maximum(T, 1.0))), 1.0e-12)
+        gh_factor[gh_mask_i] = (
+            float(ghb_alpha) * np.asarray(ghb_width, dtype=np.float64)[gh_mask_i] * dx_f / thickness
+        )
+        gh_flux = T * gh_factor * (
+            np.asarray(ghb_head, dtype=np.float64) - h_use
+        )
+        ghb_in, ghb_out = _split_signed_flux(gh_flux[gh_mask_i])
     total_in = recharge_in + chd_in + ghb_in
     total_out = recharge_out + chd_out + ghb_out
     in_minus_out = total_in - total_out
@@ -355,6 +371,11 @@ def compute_replay_mass_balance(
             bc_mask=bc_mask,
             bc_values=bc_values,
             dx=dx,
+            ghb_mask=spatial.get("ghb_mask"),
+            ghb_head=spatial.get("ghb_head"),
+            ghb_width=spatial.get("ghb_width"),
+            ghb_alpha=float(spatial.get("ghb_alpha", 1.0)),
+            ghb_aq_thickness=spatial.get("ghb_aq_thickness"),
         )
         delta_head = head_new - head_old
         storage_release_linearized = -np.asarray(storage_coeffs[period_index], dtype=np.float64) * delta_head * area / float(dt)

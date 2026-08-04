@@ -164,20 +164,135 @@ def test_fast_face_cache_invalidated_by_transmissivity_update():
         fast_solver.close()
 
 
-def test_fast_rejects_transient_and_unconfined():
+def test_fast_accepts_confined_transient_and_rejects_unconfined():
     solver = _build_solver(device="cpu")
     try:
         head_prev = np.full((_NY, _NX), 10.0, dtype=np.float64)
-        with pytest.raises(ValueError, match="steady confined only"):
-            solver.solve_multigrid_kcycle(
-                implementation="fast", transient=True, storage_coeff=0.1, dt=1.0,
-                head_prev=head_prev, **_controls())
+        head, info = solver.solve_multigrid_kcycle(
+            implementation="fast", transient=True, storage_coeff=0.1, dt=1.0,
+            head_prev=head_prev, **_controls())
+        assert info["transient"] is True
+        assert info["implementation"] == "fast_transient_face_f64"
+        assert np.isfinite(head).all()
         with pytest.raises(ValueError, match="steady confined only"):
             solver.solve_multigrid_kcycle(
                 implementation="fast", unconfined=True, **_controls())
         with pytest.raises(ValueError, match="'classic' or 'fast'"):
             solver.solve_multigrid_kcycle(
                 implementation="ludicrous", **_controls())
+    finally:
+        solver.close()
+
+
+def test_transient_face_cache_releases_on_close_and_rebuild():
+    """Transient face levels are hierarchy-owned and never outlive it."""
+    solver = _build_solver(device="cpu")
+    try:
+        head_prev = np.full((_NY, _NX), 10.0, dtype=np.float64)
+        solver.solve_multigrid_kcycle(
+            implementation="fast", transient=True, storage_coeff=0.1, dt=1.0,
+            head_prev=head_prev, transient_face_graphs_enabled=False, **_controls())
+        assert solver._transient_face_cache is not None
+        solver.build_from_fields(**_case_fields())
+        solver.solve_multigrid_kcycle(**_controls())
+        assert solver._transient_face_cache is None
+    finally:
+        solver.close()
+    assert solver._transient_face_cache is None
+
+
+def test_confined_transient_fast_matches_classic_for_scalar_and_array_storage():
+    """The opt-in face path preserves transient heads as dt/storage change."""
+    classic_solver = _build_solver(device="cpu")
+    fast_solver = _build_solver(device="cpu")
+    try:
+        head_prev = np.full((_NY, _NX), 10.0, dtype=np.float64)
+        controls = _controls(max_cycles=80, nu_coarse=2)
+        head_classic, info_classic = classic_solver.solve_multigrid_kcycle(
+            transient=True, storage_coeff=0.1, dt=1.0, head_prev=head_prev, **controls)
+        head_fast, info_fast = fast_solver.solve_multigrid_kcycle(
+            implementation="fast", transient=True, storage_coeff=0.1, dt=1.0,
+            head_prev=head_prev, **controls)
+        assert info_classic["converged"] is True
+        assert info_fast["converged"] is True
+        np.testing.assert_allclose(head_fast, head_classic, rtol=0.0, atol=2.0e-5)
+
+        storage = np.full((_NY, _NX), 0.08, dtype=np.float64)
+        head_classic_2, info_classic_2 = classic_solver.solve_multigrid_kcycle(
+            transient=True, storage_coeff=storage, dt=2.0, head_prev=head_classic, **controls)
+        head_fast_2, info_fast_2 = fast_solver.solve_multigrid_kcycle(
+            implementation="fast", transient=True, storage_coeff=storage, dt=2.0,
+            head_prev=head_fast, **controls)
+        assert info_classic_2["converged"] is True
+        assert info_fast_2["converged"] is True
+        np.testing.assert_allclose(head_fast_2, head_classic_2, rtol=0.0, atol=2.0e-5)
+    finally:
+        classic_solver.close()
+        fast_solver.close()
+
+
+def test_confined_transient_fast_matches_classic_odd_grid_no_ghb():
+    """Odd, non-square, no-GHB confined transient: fast parity with classic."""
+    from DARCY_WARP_PACKAGE.warped_darcy import WarpDarcySolver
+
+    nx, ny = 45, 31
+    y, x = np.mgrid[:ny, :nx]
+    active = np.ones((ny, nx), dtype=np.int32)
+    bc_mask = np.zeros((ny, nx), dtype=np.int32)
+    bc_mask[:, 0] = 1
+    bc_mask[:, -1] = 1
+    bc_values = np.zeros((ny, nx), dtype=np.float64)
+    bc_values[:, 0] = 12.0
+    bc_values[:, -1] = 9.0
+    T = (60.0 + 1.0 * x + 2.0 * y).astype(np.float64)
+    R = np.full((ny, nx), 1.0e-4, dtype=np.float64)
+    fields = dict(T_field=T, R_field=R, active=active, bc_mask=bc_mask, bc_values=bc_values)
+    head_prev = np.full((ny, nx), 10.0, dtype=np.float64)
+    head_prev[:, 0] = 12.0
+    head_prev[:, -1] = 9.0
+
+    classic_solver = WarpDarcySolver(nx=nx, ny=ny, dx=100.0, device="cpu", use_ghb=False, solver_type="pcg")
+    fast_solver = WarpDarcySolver(nx=nx, ny=ny, dx=100.0, device="cpu", use_ghb=False, solver_type="pcg")
+    try:
+        classic_solver.build_from_fields(**fields)
+        fast_solver.build_from_fields(**fields)
+        controls = _controls(max_cycles=80, nu_coarse=2)
+        head_classic, info_classic = classic_solver.solve_multigrid_kcycle(
+            transient=True, storage_coeff=0.1, dt=1.0, head_prev=head_prev, **controls)
+        head_fast, info_fast = fast_solver.solve_multigrid_kcycle(
+            implementation="fast", transient=True, storage_coeff=0.1, dt=1.0,
+            head_prev=head_prev, **controls)
+        assert info_classic["converged"] is True
+        assert info_fast["converged"] is True
+        np.testing.assert_allclose(head_fast, head_classic, rtol=0.0, atol=2.0e-5)
+    finally:
+        classic_solver.close()
+        fast_solver.close()
+
+
+@requires_cuda
+def test_confined_transient_fast_graph_matches_eager():
+    """Captured scalar-info K-cycle replays are numerically identical to eager."""
+    solver = _build_solver(device="cuda:0")
+    try:
+        head_prev = np.full((_NY, _NX), 10.0, dtype=np.float64)
+        controls = _controls(max_cycles=80, nu_coarse=2)
+        head_eager, info_eager = solver.solve_multigrid_kcycle(
+            implementation="fast", transient=True, storage_coeff=0.1, dt=1.0,
+            head_prev=head_prev, transient_face_graphs_enabled=False, **controls)
+        head_graph, info_graph = solver.solve_multigrid_kcycle(
+            implementation="fast", transient=True, storage_coeff=0.1, dt=1.0,
+            head_prev=head_prev, transient_face_graphs_enabled=True, **controls)
+        assert info_eager["converged"] is True
+        assert info_graph["converged"] is True
+        assert int(info_eager["graph_count"]) == 0
+        assert int(info_graph["graph_count"]) >= 1
+        assert int(info_graph["graph_fallback_count"]) == 0
+        np.testing.assert_allclose(
+            np.asarray(head_graph, dtype=np.float64),
+            np.asarray(head_eager, dtype=np.float64),
+            rtol=0.0, atol=1.0e-9,
+        )
     finally:
         solver.close()
 

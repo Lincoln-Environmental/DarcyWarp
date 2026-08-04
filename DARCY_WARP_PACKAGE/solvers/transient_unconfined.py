@@ -331,6 +331,10 @@ def solve_transient_unconfined_backend(
 
         storage_change_sum_sq_buf = wp.zeros(1, dtype=wp.float64, device=device)
         storage_change_max_buf = wp.zeros(1, dtype=wp.float64, device=device)
+        storage_change_block_span = 256
+        storage_change_n_partials = (int(self.nx) * int(self.ny) + storage_change_block_span - 1) // storage_change_block_span
+        storage_change_sum_sq_partials = wp.zeros(storage_change_n_partials, dtype=wp.float64, device=device)
+        storage_change_max_partials = wp.zeros(storage_change_n_partials, dtype=wp.float64, device=device)
         dh_max_buf = wp.zeros(1, dtype=wp.float64, device=device)
         dh_rms_buf = wp.zeros(1, dtype=wp.float64, device=device)
         flow_rTr_buf = wp.zeros(1, dtype=wp.float64, device=device)
@@ -374,6 +378,52 @@ def solve_transient_unconfined_backend(
                 solve_kcycle_face_transient_device_buffers,
             )
             face_levels = ensure_transient_face_levels(self, self.mg_levels)
+
+        def _launch_storage_update(*, head_ref, head_previous, dt_value: float) -> None:
+            """Refresh storage and reduce change statistics without scalar atomics."""
+            if transient_face_operator_enabled_b:
+                wp.launch(
+                    kernel=update_secant_sy_storage_block_kernel,
+                    dim=dim2d,
+                    inputs=[
+                        head_ref, head_previous, bottom_wp, top_wp, self.active_wp, self.bc_mask_wp,
+                        sy_f, ss_f, dx_f, dt_value, min_sat_f, 1.0e-12, self.nx, self.ny,
+                        storage_change_block_span, storage_coeff_wp, sy_coeff_wp, ss_coeff_wp,
+                        storage_diag_wp, storage_diag_prev_wp, storage_change_sum_sq_partials,
+                        storage_change_max_partials,
+                    ],
+                    device=device,
+                )
+                wp.launch(
+                    kernel=combine_partials_kernel,
+                    dim=1,
+                    inputs=[storage_change_sum_sq_partials, storage_change_sum_sq_buf, storage_change_n_partials],
+                    device=device,
+                )
+                wp.launch(
+                    kernel=combine_partials_max_kernel,
+                    dim=1,
+                    inputs=[storage_change_max_partials, storage_change_max_buf, storage_change_n_partials],
+                    device=device,
+                )
+                return
+            # Classic path: the scalar statistics buffers accumulate via
+            # per-thread atomics and must be re-zeroed before every refresh
+            # (the face path self-cleans: the combine kernels overwrite the
+            # scalars and re-zero the partials).
+            wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[storage_change_sum_sq_buf], device=device)
+            wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[storage_change_max_buf], device=device)
+            wp.launch(
+                kernel=update_secant_sy_storage_kernel,
+                dim=dim2d,
+                inputs=[
+                    head_ref, head_previous, bottom_wp, top_wp, self.active_wp, self.bc_mask_wp,
+                    sy_f, ss_f, dx_f, dt_value, min_sat_f, 1.0e-12, self.nx, self.ny,
+                    storage_coeff_wp, sy_coeff_wp, ss_coeff_wp, storage_diag_wp, storage_diag_prev_wp,
+                    storage_change_sum_sq_buf, storage_change_max_buf,
+                ],
+                device=device,
+            )
 
         mixed_session = None
         if transient_mixed_precision_enabled_b:
@@ -587,18 +637,10 @@ def solve_transient_unconfined_backend(
                 inputs=[h_iter_wp, k_field_wp, bottom_wp, top_wp, self.active_wp, min_sat_f, self.nx, self.ny, self.T_wp],
                 device=device,
             )
-            wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[storage_change_sum_sq_buf], device=device)
-            wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[storage_change_max_buf], device=device)
-            wp.launch(
-                kernel=update_secant_sy_storage_kernel,
-                dim=dim2d,
-                inputs=[
-                    h_iter_wp, h_prev_wp, bottom_wp, top_wp, self.active_wp, self.bc_mask_wp,
-                    sy_f, ss_f, dx_f, dt_value, min_sat_f, 1.0e-12, self.nx, self.ny,
-                    storage_coeff_wp, sy_coeff_wp, ss_coeff_wp, storage_diag_wp, storage_diag_prev_wp,
-                    storage_change_sum_sq_buf, storage_change_max_buf,
-                ],
-                device=device,
+            _launch_storage_update(
+                head_ref=h_iter_wp,
+                head_previous=h_prev_wp,
+                dt_value=dt_value,
             )
             wp.launch(kernel=copy_field_kernel, dim=dim2d, inputs=[storage_diag_wp, storage_diag_prev_wp, self.nx, self.ny], device=device)
             refresh_transient_face_levels(self, self.mg_levels, face_levels)
@@ -801,18 +843,10 @@ def solve_transient_unconfined_backend(
                 inputs=[h_iter_wp, k_field_wp, bottom_wp, top_wp, self.active_wp, min_sat_f, self.nx, self.ny, self.T_wp],
                 device=device,
             )
-            wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[storage_change_sum_sq_buf], device=device)
-            wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[storage_change_max_buf], device=device)
-            wp.launch(
-                kernel=update_secant_sy_storage_kernel,
-                dim=dim2d,
-                inputs=[
-                    h_iter_wp, h_prev_wp, bottom_wp, top_wp, self.active_wp, self.bc_mask_wp,
-                    sy_f, ss_f, dx_f, substep_dt, min_sat_f, 1.0e-12, self.nx, self.ny,
-                    storage_coeff_wp, sy_coeff_wp, ss_coeff_wp, storage_diag_wp, storage_diag_prev_wp,
-                    storage_change_sum_sq_buf, storage_change_max_buf,
-                ],
-                device=device,
+            _launch_storage_update(
+                head_ref=h_iter_wp,
+                head_previous=h_prev_wp,
+                dt_value=substep_dt,
             )
             _launch_rhs_build_face()
             if transient_face_operator_enabled_b:
@@ -899,18 +933,10 @@ def solve_transient_unconfined_backend(
                 T_update_seconds += _fast_path_phase_elapsed(phase_t0)
                 counters["T_device_updates"] += 1
                 phase_t0 = _fast_path_phase_start()
-                wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[storage_change_sum_sq_buf], device=device)
-                wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[storage_change_max_buf], device=device)
-                wp.launch(
-                    kernel=update_secant_sy_storage_kernel,
-                    dim=dim2d,
-                    inputs=[
-                        h_iter_wp, h_prev_wp, bottom_wp, top_wp, self.active_wp, self.bc_mask_wp,
-                        sy_f, ss_f, dx_f, dt_f_val, min_sat_f, 1.0e-12, self.nx, self.ny,
-                        storage_coeff_wp, sy_coeff_wp, ss_coeff_wp, storage_diag_wp, storage_diag_prev_wp,
-                        storage_change_sum_sq_buf, storage_change_max_buf,
-                    ],
-                    device=device,
+                _launch_storage_update(
+                    head_ref=h_iter_wp,
+                    head_previous=h_prev_wp,
+                    dt_value=dt_f_val,
                 )
                 storage_kernel_seconds += _fast_path_phase_elapsed(phase_t0)
                 counters["storage_device_updates"] += 1
@@ -1050,19 +1076,10 @@ def solve_transient_unconfined_backend(
                     counters["T_device_updates"] += 1
 
                     phase_t0 = _fast_path_phase_start()
-                    wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[storage_change_sum_sq_buf], device=device)
-                    wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[storage_change_max_buf], device=device)
-
-                    wp.launch(
-                        kernel=update_secant_sy_storage_kernel,
-                        dim=dim2d,
-                        inputs=[
-                            h_iter_wp, h_prev_wp, bottom_wp, top_wp, self.active_wp, self.bc_mask_wp,
-                            sy_f, ss_f, dx_f, actual_dt_f, min_sat_f, 1.0e-12, self.nx, self.ny,
-                            storage_coeff_wp, sy_coeff_wp, ss_coeff_wp, storage_diag_wp, storage_diag_prev_wp,
-                            storage_change_sum_sq_buf, storage_change_max_buf
-                        ],
-                        device=device
+                    _launch_storage_update(
+                        head_ref=h_iter_wp,
+                        head_previous=h_prev_wp,
+                        dt_value=actual_dt_f,
                     )
                     wp.launch(kernel=copy_field_kernel, dim=dim2d, inputs=[storage_diag_wp, storage_diag_prev_wp, self.nx, self.ny], device=device)
                     storage_kernel_seconds += _fast_path_phase_elapsed(phase_t0)
@@ -1992,18 +2009,10 @@ def solve_transient_unconfined_backend(
             T_update_seconds += _fast_path_phase_elapsed(phase_t0)
             counters["T_device_updates"] += 1
             phase_t0 = _fast_path_phase_start()
-            wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[storage_change_sum_sq_buf], device=device)
-            wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[storage_change_max_buf], device=device)
-            wp.launch(
-                kernel=update_secant_sy_storage_kernel,
-                dim=dim2d,
-                inputs=[
-                    h_iter_wp, h_prev_wp, bottom_wp, top_wp, self.active_wp, self.bc_mask_wp,
-                    sy_f, ss_f, dx_f, actual_dt_f, min_sat_f, 1.0e-12, self.nx, self.ny,
-                    storage_coeff_wp, sy_coeff_wp, ss_coeff_wp, storage_diag_wp, storage_diag_prev_wp,
-                    storage_change_sum_sq_buf, storage_change_max_buf
-                ],
-                device=device
+            _launch_storage_update(
+                head_ref=h_iter_wp,
+                head_previous=h_prev_wp,
+                dt_value=actual_dt_f,
             )
             storage_kernel_seconds += _fast_path_phase_elapsed(phase_t0)
             counters["storage_device_updates"] += 1
@@ -2266,6 +2275,12 @@ def solve_transient_unconfined_backend(
                     ),
                     "transient_face_refresh_graph_count": int(
                         sum(1 for v in face_refresh_graphs.values() if v is not False)
+                    ),
+                    "transient_face_kcycle_graph_fallback_count": int(
+                        sum(1 for v in face_kcycle_graphs.values() if v is False)
+                    ),
+                    "transient_face_refresh_graph_fallback_count": int(
+                        sum(1 for v in face_refresh_graphs.values() if v is False)
                     ),
                     "unconfined_startup_mode": str(startup_mode),
                     "startup_inner_kcycles": int(startup_inner_cycles),

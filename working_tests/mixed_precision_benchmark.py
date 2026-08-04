@@ -69,6 +69,7 @@ from DARCY_WARP_PACKAGE.modflow_truth import make_mf_model  # noqa: E402
 from DARCY_WARP_PACKAGE.project_base import data_store  # noqa: E402
 from DARCY_WARP_PACKAGE.warped_darcy import WarpDarcySolver as wds  # noqa: E402
 from DARCY_WARP_PACKAGE.warped_darcy import compute_mass_balance_budget  # noqa: E402
+from DARCY_WARP_PACKAGE.sanity_case_config import SPATIAL_GRID_CASES  # noqa: E402
 import warp as wp  # noqa: E402
 
 wp.init()
@@ -80,13 +81,8 @@ if args.mode == "mixed":
 
 
 GRID_CASES = {
-    "100x100": {"nx": 100, "ny": 100},
-    "100x250": {"nx": 100, "ny": 250},
-    "400x400": {"nx": 400, "ny": 400},
-    "100x1000": {"nx": 100, "ny": 1000},
-    "250x1000": {"nx": 250, "ny": 1000},
-    "1000x1001": {"nx": 1000, "ny": 1001},
-    "2000x1000": {"nx": 2000, "ny": 1000},
+    label: {"nx": int(SPATIAL_GRID_CASES[label]["nx"]), "ny": int(SPATIAL_GRID_CASES[label]["ny"])}
+    for label in ("100x100", "100x250", "400x400", "100x1000", "250x1000", "1000x1001", "2000x1000")
 }
 
 DX = 100.0

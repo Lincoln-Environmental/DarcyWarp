@@ -70,14 +70,13 @@ import warp as wp  # noqa: E402
 
 from working_tests.launch_profiler import LaunchProfiler  # noqa: E402
 from working_tests.mf6_truth_cache import load_cached_mf6_truth  # noqa: E402
+from DARCY_WARP_PACKAGE.sanity_case_config import SPATIAL_GRID_CASES  # noqa: E402
 
 wp.init()
 
 GRID_CASES = {
-    "100x100": {"nx": 100, "ny": 100},
-    "400x400": {"nx": 400, "ny": 400},
-    "1000x1001": {"nx": 1000, "ny": 1001},
-    "2000x1000": {"nx": 2000, "ny": 1000},
+    label: {"nx": int(SPATIAL_GRID_CASES[label]["nx"]), "ny": int(SPATIAL_GRID_CASES[label]["ny"])}
+    for label in ("100x100", "400x400", "1000x1001", "2000x1000")
 }
 
 DX = 100.0
