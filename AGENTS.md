@@ -31,6 +31,9 @@ The code has two eras:
 ```text
 DARCY_WARP_PACKAGE/
   config.py              # DARCY_FLOAT -> WP_FLOAT/NP_FLOAT
+  sanity_case_config.py  # shared spatial catalog (SPATIAL_GRID_CASES + steady/
+                         # transient tier labels; GRID_CASES = back-compat steady view;
+                         # near-9M capacity grids are manual_only)
   project_base.py        # data_store path, MF6 binary discovery
   factory.py             # create_solver(dim=2|3, solver=...)
   model_builder.py       # synthetic domains, DEM, BC masks, T/R fields
@@ -133,6 +136,14 @@ DARCY_WARP_PACKAGE/
                            # for trajectory parity). Enabled by default via
                            # transient_face_operator_enabled=True (control or
                            # DARCY_TRANSIENT_FACE_OPERATOR env var; False -> classic).
+                           # Also serves the opt-in confined transient fast K-cycle
+                           # (2026-08-04): multigrid_kcycle implementation="fast" +
+                           # transient=True routes here (face diag = faces + C_gh +
+                           # storage_diag, classic RHS/storage prep reused, per-call
+                           # scalar-info K-cycle CUDA graph with exact-once
+                           # capture/null/fallback semantics). Classic stays the
+                           # confined transient default pending the >=1M-cell
+                           # promotion benchmark. See TRANSIENT_2D_EXECUTION_PATHS.md.
                            # Phase B (2026-07-30): CUDA-graph capture of one
                            # K-cycle (replayed per fixed-work block cycle, keyed
                            # on buffer-wiring identity + structure) and of the
@@ -195,6 +206,13 @@ working_tests/
                            # NOTE: hard-T MF6 truth needs COMPLEX/BICGSTAB IMS
                            # (~230 s at 500x500; uniform keeps MODERATE ~7 s)
   run_3d_warp_vs_mf6.py             # 3D validation runner
+  run_2d_transient_sanity_matrix.py # resumable transient perf/accuracy matrix
+                           # (2026-08-04): smoke/shape/production/scale/capacity tiers
+                           # from the shared catalog; variants classic_device_fp64 /
+                           # face_eager_fp64 / face_graph_fp64 / face_graph_mixed
+                           # (mixed opt-in via --include-mixed); atomic JSON rows keyed
+                           # on case+control fingerprints, commit, device, Warp version;
+                           # warmup + median of >=3 repeats; parity/gate evaluation.
 
 tests/
   test_2d_transient.py
@@ -396,7 +414,13 @@ control lists in the script). CLI switches: `--t-field-kind {ugly_t,homogeneous}
 `python working_tests/optimize_2d_transient_kcycle.py` (same case CLI, plus
 `--stop-after-first-accepted`).
 
-- Loads artifact via `transient_artifacts.py`.
+- Loads artifact via `transient_artifacts.py` (schema v2: ARTIFACT_SCHEMA_VERSION
+  + SHA-256 `case_fingerprint` over all equation inputs, atomic .npz.lzma writes,
+  MF6 trust gates — normal termination, saved-period count, finite heads, parsed
+  budget discrepancy, nontrivial response; stale/corrupt artifacts are refused,
+  regenerated only on the automatic path; truncated replays compare against
+  heads_per_period[N-1]). GHB truth uses ghb_conductance_mode="mf6_fixed_point"
+  (independent; "warp_matched" is refused as unimplemented).
 - Calls `run_replay_from_artifact()` in `transient_replay_support.py`.
 - Defaults to warm start from MF6 unconfined steady head.
 - Compares Warp heads to MF6 per-period and final.
@@ -444,6 +468,12 @@ Usually means `sat = h - bottom` (saturated thickness of the aquifer), not soil 
 
 ### 2D transient unconfined
 
+- 2026-08-04: secant-storage change statistics on the face path now use
+  block-partial two-stage reductions (`update_secant_sy_storage_block_kernel`
+  + existing combine kernels) instead of per-thread FP64 atomics; the classic
+  device path keeps the scalar-atomic kernel with per-refresh re-zeroing.
+  Production acceptance now requires strict Picard convergence in every period
+  (practical acceptance is diagnostic fallback only, not the production gate).
 - RESOLVED 2026-07-19: **strict Picard "failures" and the 1M-cell accuracy
   failure were premature practical acceptance**, not solver deficiencies (see
   §3 Convergence / acceptance). 1000x1000 30w: 30/30 strict, RMSE 5.5e-05,

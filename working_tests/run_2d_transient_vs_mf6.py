@@ -170,6 +170,7 @@ class TransientCase:
     ghb_width: np.ndarray | None = None
     ghb_alpha: float = 1.0
     ghb_aq_thickness: float | None = None
+    ghb_head_offset: float = 2.0
     ghb_conductance_mode: str = "none"
 
 
@@ -206,6 +207,15 @@ def build_transient_unconfined_case(
     ghb_conductance_mode = str(ghb_conductance_mode).strip().lower()
     if ghb_conductance_mode not in {"none", "warp_matched", "mf6_fixed_point"}:
         raise ValueError("ghb_conductance_mode must be none, warp_matched, or mf6_fixed_point")
+    if ghb_conductance_mode == "warp_matched":
+        # Warp-matched conductance (C_gh evaluated at Warp's converged heads)
+        # is not implemented for the transient generator.  Refuse the mode
+        # rather than silently writing an initial-head-conductance artifact
+        # under a misleading label; use mf6_fixed_point for independent truth.
+        raise NotImplementedError(
+            "ghb_conductance_mode='warp_matched' is not implemented for transient "
+            "truth generation; use 'mf6_fixed_point' (independent) or 'none'."
+        )
     if workspace is not None:
         Path(workspace).mkdir(parents=True, exist_ok=True)
 
@@ -283,6 +293,7 @@ def build_transient_unconfined_case(
         ghb_width=ghb_width,
         ghb_alpha=float(ghb_alpha),
         ghb_aq_thickness=ghb_aq_thickness,
+        ghb_head_offset=float(ghb_head_offset),
         ghb_conductance_mode=ghb_conductance_mode,
     )
 
@@ -1177,7 +1188,7 @@ def run_mf6_transient(
         "ghb_conductance": np.asarray(ghb_conductance, dtype=np.float64),
         "ghb_conductance_mode": np.asarray(case.ghb_conductance_mode),
         "ghb_conductance_settings": np.asarray(json.dumps({
-            "head_offset": 2.0,
+            "head_offset": float(case.ghb_head_offset),
             "fixed_point_iterations": fixed_point_iterations,
             "terminal_head_change": fixed_point_head_change,
             "terminal_conductance_change": fixed_point_conductance_change,

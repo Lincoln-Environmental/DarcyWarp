@@ -87,23 +87,33 @@ def log_pool(tag: str, device: str = "cuda:0") -> None:
 if __name__ == "__main__":
     ghb = True
     isotropic_T = False
-    # Grid cases to benchmark: label -> (nx, ny)
+    # Grid cases to benchmark: label -> (nx, ny), drawn from the shared
+    # spatial catalog.  The capacity cases are selected explicitly here
+    # (they are manual-only in the catalog and never auto-selected).
+    from DARCY_WARP_PACKAGE.sanity_case_config import SPATIAL_GRID_CASES
+
     grid_cases = {
-        "100x100": {"nx": 100, "ny": 100},
-        "100x250": {"nx": 100, "ny": 250},
-        "400x400": {"nx": 400, "ny": 400},
-        "100x1000": {"nx": 100, "ny": 1000},
-        "250x1000": {"nx": 250, "ny": 1000},
-        "1000x1001": {"nx": 1000, "ny": 1001},
-        "2000x1000": {"nx": 2000, "ny": 1000},
-        "3000x111": {"nx": 3000, "ny": 111},
-        "3000x223": {"nx": 3000, "ny": 223},
-        "3000x333": {"nx": 3000, "ny": 333},
-        "3000x999": {"nx": 3000, "ny": 999},
-        "3000x1999": {"nx": 3000, "ny": 1999},
-        "3000x2999": {"nx": 3000, "ny": 2999},
-        "3000x3000": {"nx": 3000, "ny": 3000},
-        # "2600x10000": {"nx": 2600, "ny": 10000}, # nz at 100m resolution
+        label: {
+            "nx": int(SPATIAL_GRID_CASES[label]["nx"]),
+            "ny": int(SPATIAL_GRID_CASES[label]["ny"]),
+        }
+        for label in (
+            "100x100",
+            "100x250",
+            "400x400",
+            "100x1000",
+            "250x1000",
+            "1000x1001",
+            "2000x1000",
+            "3000x111",
+            "3000x223",
+            "3000x333",
+            "3000x999",
+            "3000x1999",
+            "3000x2999",
+            "3000x3000",
+            # "2600x10000",  # nz at 100m resolution
+        )
     }
 
     dx_truth = 100
