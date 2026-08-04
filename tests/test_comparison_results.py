@@ -19,7 +19,7 @@ os.environ.setdefault("DARCY_FLOAT", os.environ.get("DARCY_FLOAT", "float64"))
 
 try:
     from DARCY_WARP_PACKAGE.model_builder import _build_domain, _build_dem, make_ugly_T_field
-    from DARCY_WARP_PACKAGE.sanity_case_config import GRID_CASES
+    from DARCY_WARP_PACKAGE.sanity_case_config import DEFAULT_GRID_LABELS, SPATIAL_GRID_CASES
 except ModuleNotFoundError:
     # When running the file directly from the tests/ directory the package
     # root may not be on sys.path. Insert the repo root (parent of tests) so
@@ -31,7 +31,7 @@ except ModuleNotFoundError:
         sys.path.insert(0, str(repo_root))
 
     from DARCY_WARP_PACKAGE.model_builder import _build_domain, _build_dem, make_ugly_T_field
-    from DARCY_WARP_PACKAGE.sanity_case_config import GRID_CASES
+    from DARCY_WARP_PACKAGE.sanity_case_config import DEFAULT_GRID_LABELS, SPATIAL_GRID_CASES
 
 DEFAULT_WARP_HEAD_TOL = 2.0e-4
 
@@ -103,7 +103,14 @@ class TestWarpVsMf6Truth(unittest.TestCase):
             if cases_env:
                 labels = [part.strip() for part in cases_env.split(",") if part.strip()]
             else:
-                labels = sorted(GRID_CASES.keys())
+                # Default: catalog grids that have a cached MF6 truth file
+                # (explicit WARP_TRUTH_CASES selections keep the hard
+                # missing-truth assertion below).
+                labels = [
+                    label
+                    for label in sorted(DEFAULT_GRID_LABELS)
+                    if list(truth_dir.glob(f"mf6_truth_{label}_ghb_*_t_isotropic_*.npz"))
+                ]
         if not labels:
             raise ValueError("No cases selected for truth comparison.")
 
@@ -146,7 +153,7 @@ class TestWarpVsMf6Truth(unittest.TestCase):
         for isotropic_flag, ghb_flag in variants:
             for label in labels:
                 case_desc = f"{case_prefix}{label} ghb={ghb_flag} isotropic={isotropic_flag}".strip()
-                cfg = GRID_CASES.get(label)
+                cfg = SPATIAL_GRID_CASES.get(label)
                 self.assertIsNotNone(cfg, f"Unknown case label: {case_desc}")
 
                 truth_path = truth_dir.joinpath(

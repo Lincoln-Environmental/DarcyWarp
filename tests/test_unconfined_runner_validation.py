@@ -242,12 +242,12 @@ def test_runner_default_is_equation_equivalence():
 
 
 def test_runner_uses_shared_sanity_grid_configuration():
-    """The default grid sequence comes only from sanity_case_config.GRID_CASES."""
-    from DARCY_WARP_PACKAGE.sanity_case_config import GRID_CASES
+    """The default grid sequence comes only from the shared spatial catalog."""
+    from DARCY_WARP_PACKAGE.sanity_case_config import DEFAULT_GRID_LABELS, SPATIAL_GRID_CASES
 
     expected = tuple(
-        (int(case["nx"]), int(case["ny"]))
-        for case in GRID_CASES.values()
+        (int(SPATIAL_GRID_CASES[label]["nx"]), int(SPATIAL_GRID_CASES[label]["ny"]))
+        for label in DEFAULT_GRID_LABELS
     )
     assert R.BENCHMARK_GRID_SIZES == expected
     assert (3000, 3000) not in R.BENCHMARK_GRID_SIZES

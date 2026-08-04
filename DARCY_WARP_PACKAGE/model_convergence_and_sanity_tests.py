@@ -27,7 +27,7 @@ from DARCY_WARP_PACKAGE.warped_darcy import WarpDarcySolver as wds
 from DARCY_WARP_PACKAGE.warped_darcy import compute_mass_balance_budget
 import warp as wp
 from DARCY_WARP_PACKAGE.sanity_case_config import (
-    GRID_CASES,
+    SPATIAL_GRID_CASES,
     DEFAULT_DX,
     DEFAULT_R_TRUTH,
     DEFAULT_THICKNESS,
@@ -352,13 +352,13 @@ if __name__ == "__main__":
     # --- solver implementation switches (production default: both False) ---
     # Fast FP64 K-cycle: face arrays + block-reduced reductions + graphed
     # cycles (implementation="fast").  See MIXED_PRECISION_CAMPAIGN.md.
-    use_fast_fp64 = False
+    use_fast_fp64 = True
     # Experimental mixed precision: FP64 master head + FP32 fast correction
     # (solvers/mixed_fast.py).  Overrides use_fast_fp64.  Needs a float32
     # model hierarchy, so this script relaunches itself once with
     # DARCY_FLOAT=float32 pinned.  EXPERIMENTAL and non-default: opt in by
     # flipping this switch locally.
-    use_mixed_precision_fp32 = False
+    use_mixed_precision_fp32 = True
     # Run the CPU FD (numpy) reference solve and its comparisons.  Disable
     # to skip the slow host solve on large grids.
     run_fd_reference = False
@@ -375,9 +375,9 @@ if __name__ == "__main__":
     elif use_fast_fp64:
         os.environ["DARCY_KCYCLE_IMPL"] = "fast"
 
-    # Grid cases to benchmark: label -> {"nx", "ny"}, from the shared
-    # catalog (STEADY_SANITY_LABELS view of SPATIAL_GRID_CASES).
-    grid_cases = GRID_CASES
+    # Grid cases to benchmark: the complete shared spatial registry, in
+    # catalog order (comment an entry out of SPATIAL_GRID_CASES to skip it).
+    grid_cases = SPATIAL_GRID_CASES
 
     dx_truth = float(DEFAULT_DX)
     R_truth = float(DEFAULT_R_TRUTH)

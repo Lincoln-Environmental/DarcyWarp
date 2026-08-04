@@ -31,14 +31,13 @@ The code has two eras:
 ```text
 DARCY_WARP_PACKAGE/
   config.py              # DARCY_FLOAT -> WP_FLOAT/NP_FLOAT
-  sanity_case_config.py  # shared spatial catalog (SPATIAL_GRID_CASES + steady/
-                         # transient tier labels + DEFAULT_* physics;
-                         # GRID_CASES = automatic steady view, manual_only grids
-                         # excluded; manual_only covers the near-9M capacity
-                         # grids AND the large legacy steady/shape/scale grids
-                         # 1000x1001, 2000x1000, 3000x111/223/333/999 — explicit
-                         # runs only; export_mf6/fd_truth_npz default to
-                         # GRID_CASES but accept any SPATIAL_GRID_CASES label)
+  sanity_case_config.py  # shared spatial catalog (SPATIAL_GRID_CASES = complete
+                         # registry + DEFAULT_GRID_LABELS = non-manual_only grids,
+                         # the default for unconfined/benchmark/export drivers +
+                         # transient tier labels + DEFAULT_* physics; manual_only
+                         # marks explicit-run-only grids.  The confined steady
+                         # convergence script drives the full registry; unconfined
+                         # drivers never default-select manual_only grids)
   project_base.py        # data_store path, MF6 binary discovery
   factory.py             # create_solver(dim=2|3, solver=...)
   model_builder.py       # synthetic domains, DEM, BC masks, T/R fields

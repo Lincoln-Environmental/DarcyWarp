@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 from DARCY_WARP_PACKAGE.sanity_case_config import (
-    GRID_CASES,
+    DEFAULT_GRID_LABELS,
     SPATIAL_GRID_CASES,
-    STEADY_SANITY_LABELS,
     TRANSIENT_CAPACITY_LABELS,
     TRANSIENT_PRODUCTION_LABELS,
     TRANSIENT_SCALE_LABELS,
@@ -16,7 +15,7 @@ from DARCY_WARP_PACKAGE.sanity_case_config import (
 
 def test_selected_labels_exist_in_spatial_catalog():
     labels = (
-        STEADY_SANITY_LABELS
+        DEFAULT_GRID_LABELS
         + TRANSIENT_SMOKE_LABELS
         + TRANSIENT_SHAPE_LABELS
         + TRANSIENT_PRODUCTION_LABELS
@@ -26,11 +25,12 @@ def test_selected_labels_exist_in_spatial_catalog():
     assert set(labels) <= set(SPATIAL_GRID_CASES)
 
 
-def test_grid_cases_is_steady_backward_compatible_view():
-    assert tuple(GRID_CASES) == STEADY_SANITY_LABELS
-    assert all(set(case) == {"nx", "ny"} for case in GRID_CASES.values())
-    assert "3000x1999" not in GRID_CASES
-    assert all(not SPATIAL_GRID_CASES[label]["manual_only"] for label in GRID_CASES)
+def test_default_grid_labels_exclude_manual_only_cases():
+    assert DEFAULT_GRID_LABELS == tuple(
+        label for label, case in SPATIAL_GRID_CASES.items() if not case["manual_only"]
+    )
+    assert not set(DEFAULT_GRID_LABELS) & set(TRANSIENT_CAPACITY_LABELS)
+    assert all(not SPATIAL_GRID_CASES[label]["manual_only"] for label in DEFAULT_GRID_LABELS)
 
 
 def test_rectangular_and_odd_geometry_is_exact():
