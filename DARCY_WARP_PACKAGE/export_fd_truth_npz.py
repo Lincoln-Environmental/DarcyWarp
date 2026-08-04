@@ -13,6 +13,7 @@ from DARCY_WARP_PACKAGE.model_builder import _build_domain, _build_dem, make_ugl
 from DARCY_WARP_PACKAGE.project_base import data_store
 from DARCY_WARP_PACKAGE.sanity_case_config import (
     GRID_CASES,
+    SPATIAL_GRID_CASES,
     DEFAULT_DX,
     DEFAULT_R_TRUTH,
     DEFAULT_THICKNESS,
@@ -151,9 +152,11 @@ def main(argv: list[str] | None = None) -> int:
     labels = _parse_cases(args.cases)
     jobs: list[tuple] = []
     for label in labels:
-        if label not in GRID_CASES:
+        # Defaults come from the automatic steady view (GRID_CASES); explicit
+        # labels may name any catalog grid, including manual_only ones.
+        if label not in SPATIAL_GRID_CASES:
             raise KeyError(f"Unknown case label: {label}")
-        cfg = GRID_CASES[label]
+        cfg = SPATIAL_GRID_CASES[label]
         nx = int(cfg["nx"])
         ny = int(cfg["ny"])
 

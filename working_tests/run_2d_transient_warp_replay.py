@@ -12,8 +12,11 @@ The K-cycle tuning sweep lives in ``working_tests/optimize_2d_transient_kcycle.p
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
+
+import numpy as np
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -110,9 +113,73 @@ def build_case_setup(
     return setup
 
 
+def _artifact_scalar(artifact: dict, name: str) -> object:
+    value = artifact.get(name)
+    if value is None:
+        return None
+    return np.asarray(value).reshape(())
+
+
+def case_setup_mismatches(artifact: dict, case_setup: dict) -> list[str]:
+    """Return the ways an artifact's recorded physics differ from the request.
+
+    The artifact path encodes only grid/periods/T-kind/seed/GHB mode, so the
+    remaining equation inputs (dx, storage, recharge, initial thickness, warm
+    start) must be compared against the artifact's own recorded metadata
+    before reuse.  An empty list means the artifact matches the requested case.
+    """
+    mismatches: list[str] = []
+
+    int_fields = ("nx", "ny", "n_periods", "t_field_seed", "recharge_schedule_weeks")
+    for name in int_fields:
+        if name not in case_setup:
+            continue
+        recorded = _artifact_scalar(artifact, name)
+        if recorded is None or int(recorded) != int(case_setup[name]):
+            mismatches.append(f"{name}: artifact={recorded} requested={case_setup[name]}")
+
+    float_fields = ("dx", "sy", "ss", "dt_days", "initial_saturated_thickness")
+    for name in float_fields:
+        if name not in case_setup:
+            continue
+        recorded = _artifact_scalar(artifact, name)
+        if recorded is None or float(recorded) != float(case_setup[name]):
+            mismatches.append(f"{name}: artifact={recorded} requested={case_setup[name]}")
+
+    str_fields = ("formulation", "t_field_kind", "warm_start_mode", "ghb_conductance_mode")
+    for name in str_fields:
+        if name not in case_setup:
+            continue
+        recorded = _artifact_scalar(artifact, name)
+        recorded_str = None if recorded is None else str(recorded).strip().lower()
+        requested_str = str(case_setup[name]).strip().lower()
+        if recorded_str != requested_str:
+            mismatches.append(f"{name}: artifact={recorded_str} requested={requested_str}")
+
+    # annual_recharge_m is only recorded in the provenance JSON block.
+    provenance = artifact.get("provenance")
+    if provenance is not None and "annual_recharge_m" in case_setup:
+        try:
+            provenance_data = json.loads(str(np.asarray(provenance).reshape(())))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            provenance_data = {}
+        recorded_recharge = provenance_data.get("annual_recharge_m")
+        if recorded_recharge is not None and float(recorded_recharge) != float(case_setup["annual_recharge_m"]):
+            mismatches.append(
+                f"annual_recharge_m: artifact={recorded_recharge} "
+                f"requested={case_setup['annual_recharge_m']}"
+            )
+    return mismatches
+
+
 def ensure_case_artifact(case_setup: dict) -> Path:
     """
     Return the case artifact path, generating the MF6 truth when missing.
+
+    An existing artifact is reused only when it is internally valid AND its
+    recorded physics match the requested setup (the path does not encode dx,
+    storage, recharge, or the initial saturated thickness); otherwise it is
+    regenerated on this automatic path.
 
     The generator is imported lazily so the replay stays Flopy-free until a
     truth artifact actually has to be built.
@@ -120,7 +187,13 @@ def ensure_case_artifact(case_setup: dict) -> Path:
     artifact_path = Path(case_setup["artifact_path"])
     if artifact_path.exists():
         try:
-            validate_transient_artifact(artifact_path)
+            artifact = validate_transient_artifact(artifact_path)
+            mismatches = case_setup_mismatches(artifact, case_setup)
+            if mismatches:
+                raise ValueError(
+                    "requested case differs from the artifact's recorded physics: "
+                    + "; ".join(mismatches)
+                )
             return artifact_path
         except (OSError, ValueError) as exc:
             print(f"Existing MF6 artifact failed validation and will be regenerated: {exc}")

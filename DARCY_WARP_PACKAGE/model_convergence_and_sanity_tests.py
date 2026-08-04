@@ -32,6 +32,7 @@ from DARCY_WARP_PACKAGE.sanity_case_config import (
     DEFAULT_R_TRUTH,
     DEFAULT_THICKNESS,
     DEFAULT_GHB,
+    DEFAULT_ISOTROPIC,
     DEFAULT_T_SEED,
     DEFAULT_ISOTROPIC_T,
 )
@@ -346,7 +347,7 @@ def load_or_run_mf6_truth(
 
 if __name__ == "__main__":
     ghb = bool(DEFAULT_GHB)
-    isotropic = False
+    isotropic = bool(DEFAULT_ISOTROPIC)
 
     # --- solver implementation switches (production default: both False) ---
     # Fast FP64 K-cycle: face arrays + block-reduced reductions + graphed
@@ -355,8 +356,9 @@ if __name__ == "__main__":
     # Experimental mixed precision: FP64 master head + FP32 fast correction
     # (solvers/mixed_fast.py).  Overrides use_fast_fp64.  Needs a float32
     # model hierarchy, so this script relaunches itself once with
-    # DARCY_FLOAT=float32 pinned.
-    use_mixed_precision_fp32 = True
+    # DARCY_FLOAT=float32 pinned.  EXPERIMENTAL and non-default: opt in by
+    # flipping this switch locally.
+    use_mixed_precision_fp32 = False
     # Run the CPU FD (numpy) reference solve and its comparisons.  Disable
     # to skip the slow host solve on large grids.
     run_fd_reference = False
@@ -373,7 +375,8 @@ if __name__ == "__main__":
     elif use_fast_fp64:
         os.environ["DARCY_KCYCLE_IMPL"] = "fast"
 
-    # Grid cases to benchmark: label -> (nx, ny)
+    # Grid cases to benchmark: label -> {"nx", "ny"}, from the shared
+    # catalog (STEADY_SANITY_LABELS view of SPATIAL_GRID_CASES).
     grid_cases = GRID_CASES
 
     dx_truth = float(DEFAULT_DX)
@@ -559,6 +562,23 @@ if __name__ == "__main__":
         n_active = int(np.count_nonzero(active_mask))
         n_total = int(nx_truth * ny_truth)
 
+        # Acceptance gates: a reported result must prove the K-cycle converged
+        # and agrees with MF6 and closes its mass balance.  Tolerances carry
+        # wide margin over the observed classic agreement (rmse <= ~4e-5 m,
+        # max_abs <= ~7e-5 m on the hard-T catalog) while still catching a
+        # stalled or non-conservative solve.
+        budget_percent_discrepancy = float(bud_k["percent_discrepancy"].iloc[0])
+        acceptance_gates = {
+            "kcycle_converged": bool(info_k.get("converged", False)),
+            "head_agreement_vs_mf6_rmse_le_1e-3": float(k_cycle_vs_mf["rmse"]) <= 1.0e-3,
+            "head_agreement_vs_mf6_max_abs_le_1e-2": float(k_cycle_vs_mf["max_abs_diff"]) <= 1.0e-2,
+            "mass_balance_percent_discrepancy_le_1pct": abs(budget_percent_discrepancy) <= 1.0,
+        }
+        sanity_passed = bool(all(acceptance_gates.values()))
+        print("Acceptance gates:")
+        for gate_name, gate_passed in acceptance_gates.items():
+            print(f"  {gate_name}: {'PASS' if gate_passed else 'FAIL'}")
+
         all_results[label] = {
             "nx": nx_truth,
             "ny": ny_truth,
@@ -569,6 +589,8 @@ if __name__ == "__main__":
             "mf_vs_fd": mf_vs_fd,
             "k_cycle_vs_mf": k_cycle_vs_mf,
             "fd_vs_k_cycle": FD_vs_warp_k_cycle,
+            "acceptance_gates": acceptance_gates,
+            "sanity_passed": sanity_passed,
             "timings": {
                 "fd_seconds": None if t_fd is None else float(t_fd),
                 "warp_seconds_cuda_cold_runtime": float(cold_runtime),
@@ -600,3 +622,9 @@ if __name__ == "__main__":
         json.dump(existing, f, indent=4)
 
     print(f"\nSaved comparison results to {results_path}")
+
+    failed_cases = [label for label, row in all_results.items() if not row.get("sanity_passed", False)]
+    if failed_cases:
+        print(f"\nSANITY GATES FAILED for cases: {failed_cases}")
+        raise SystemExit(1)
+    print("\nAll sanity gates passed.")

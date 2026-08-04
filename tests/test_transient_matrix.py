@@ -33,6 +33,7 @@ def test_matrix_resume_key_includes_execution_identity():
     base = _matrix_row_identity(
         label="100x100",
         variant="face_graph_fp64",
+        repeats=3,
         physical_fingerprint="physical-a",
         solver_control_fingerprint="controls-a",
         precision_mode="fp64",
@@ -42,9 +43,11 @@ def test_matrix_resume_key_includes_execution_identity():
     )
     changed_device = dict(base, device="cpu")
     changed_controls = dict(base, solver_control_fingerprint="controls-b")
+    changed_repeats = dict(base, repeats=5)
     assert base["schema_version"] == MATRIX_SCHEMA_VERSION
     assert _row_key(base) != _row_key(changed_device)
     assert _row_key(base) != _row_key(changed_controls)
+    assert _row_key(base) != _row_key(changed_repeats)
 
 
 def test_matrix_persists_parity_for_reference_and_graph_rows(tmp_path):

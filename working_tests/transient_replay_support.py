@@ -471,6 +471,7 @@ def run_replay_from_artifact(
     print(f"    storage_reference={storage_reference}")
     print(f"    unconfined_startup_mode={effective_startup_mode}")
     print(f"    warm_start={warm_start_used}")
+    print(f"    solver_backend={solver_backend}")
 
     warp_result = replay_runner(
         spatial=spatial,
@@ -487,6 +488,7 @@ def run_replay_from_artifact(
         formulation=formulation,
         unconfined_storage_mode=unconfined_storage_mode,
         storage_reference=storage_reference,
+        solver_backend=solver_backend,
     )
 
     artifact_heads_per_period = np.asarray(artifact["heads_per_period"], dtype=np.float64)

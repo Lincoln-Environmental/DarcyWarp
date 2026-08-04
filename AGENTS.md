@@ -32,8 +32,13 @@ The code has two eras:
 DARCY_WARP_PACKAGE/
   config.py              # DARCY_FLOAT -> WP_FLOAT/NP_FLOAT
   sanity_case_config.py  # shared spatial catalog (SPATIAL_GRID_CASES + steady/
-                         # transient tier labels; GRID_CASES = back-compat steady view;
-                         # near-9M capacity grids are manual_only)
+                         # transient tier labels + DEFAULT_* physics;
+                         # GRID_CASES = automatic steady view, manual_only grids
+                         # excluded; manual_only covers the near-9M capacity
+                         # grids AND the large legacy steady/shape/scale grids
+                         # 1000x1001, 2000x1000, 3000x111/223/333/999 — explicit
+                         # runs only; export_mf6/fd_truth_npz default to
+                         # GRID_CASES but accept any SPATIAL_GRID_CASES label)
   project_base.py        # data_store path, MF6 binary discovery
   factory.py             # create_solver(dim=2|3, solver=...)
   model_builder.py       # synthetic domains, DEM, BC masks, T/R fields
@@ -213,6 +218,32 @@ working_tests/
                            # (mixed opt-in via --include-mixed); atomic JSON rows keyed
                            # on case+control fingerprints, commit, device, Warp version;
                            # warmup + median of >=3 repeats; parity/gate evaluation.
+                           # 2026-08-05 hardening (MATRIX_SCHEMA_VERSION=3): repeats is
+                           # part of the row identity (no cross-repeat-count reuse);
+                           # scratch workspaces are keyed on the case-unique artifact
+                           # PARENT directory (the artifact filename is the same for
+                           # every case, so stem-keyed workspaces collided across
+                           # grids); correctness metrics are aggregated across ALL
+                           # repeats and parity checks every repeat's head artifact;
+                           # matrix gates now require the requested implementation to
+                           # have actually run (face operator active on every period
+                           # row, graph capture count > 0 with zero eager fallbacks for
+                           # graph variants, mixed correction active for the mixed
+                           # variant) — the underlying period-summary allowlist in
+                           # transient_replay_metrics.py was extended so these fields
+                           # reach the matrix at all; mempool rows carry a pre-variant
+                           # baseline + high-water delta (Warp's high-water mark is
+                           # process-cumulative and cannot be reset).  --tier all
+                           # excludes manual_only grids (previously accepted then
+                           # self-rejected); explicit shape/scale/capacity tiers or
+                           # --cases remain the way to run manual_only grids (the old
+                           # capacity-only guard was removed once it also blocked the
+                           # explicit shape/scale tiers). --ghb-mode offers only
+                           # none/mf6_fixed_point (warp_matched was offered but truth
+                           # generation always rejected it); GHB runs drop the
+                           # classic_device_fp64 default variant (the classic device
+                           # path raises for GHB) and reject an explicit classic
+                           # --variants request.
 
 tests/
   test_2d_transient.py
@@ -381,7 +412,13 @@ benchmarks (`model_builder.make_ugly_T_field`, K = T / 100 m per the
 
 - `ensure_case_artifact(setup)` returns the artifact path, generating the MF6
   truth via a lazy call to `run_2d_transient_vs_mf6.py::main(...)` when the
-  artifact is missing.
+  artifact is missing.  Reuse is gated (2026-08-05) on
+  `case_setup_mismatches()`: the artifact path encodes only grid/periods/
+  T-kind/seed/GHB mode, so an existing artifact's recorded physics (dx, sy,
+  ss, dt_days, initial_saturated_thickness, recharge schedule/annual target,
+  T-kind/seed, warm-start and GHB modes) must match the requested setup;
+  any mismatch regenerates on this automatic path (previously a dx change
+  silently reused truth generated for a different case).
 - `run_2d_transient_vs_mf6.py` run standalone pulls the same setup from the
   replay (`build_case_setup` + `ensure_case_artifact`), so both entry points
   always agree.
@@ -410,7 +447,9 @@ The replay is a thin harness: production solve controls come from
 `transient_replay_settings.py::default_solve_controls()` (no duplicated
 control lists in the script). CLI switches: `--t-field-kind {ugly_t,homogeneous}`,
 `--t-field-seed`, `--nx/--ny/--n-periods`, `--artifact`, `--workspace`,
-`--device`. The K-cycle tuning sweep is a separate experiment harness:
+`--device`, `--solver` (backend selection, e.g. unconfined_fas; forwarded end
+-to-end since 2026-08-05 — previously accepted but silently dropped inside
+`run_replay_from_artifact`, so every CLI run used the Picard default). The K-cycle tuning sweep is a separate experiment harness:
 `python working_tests/optimize_2d_transient_kcycle.py` (same case CLI, plus
 `--stop-after-first-accepted`).
 
