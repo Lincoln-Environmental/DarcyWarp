@@ -31,6 +31,7 @@ from DARCY_WARP_PACKAGE.model_builder import (  # noqa: E402
     make_ugly_T_field,
 )
 from DARCY_WARP_PACKAGE.project_base import data_store, require_mf6  # noqa: E402
+from DARCY_WARP_PACKAGE.sanity_case_config import GRID_CASES  # noqa: E402
 from DARCY_WARP_PACKAGE.warped_darcy import WarpDarcySolver  # noqa: E402
 
 
@@ -38,7 +39,13 @@ DEFAULT_DH_TOL = 1.0e-4
 DEFAULT_RESIDUAL_FLOOR_TOL = 1.0e-4
 DEFAULT_MF6_AGREEMENT_TOL = 5.0e-4
 DEFAULT_INNER_HEAD_RESIDUAL_TOL_MIN = 1.0e-4
-BENCHMARK_GRID_SIZES = [(250, 250), (500, 500), (1000, 1000), (2000, 2000), (3000, 3000)]
+# Single source of truth for benchmark grids. Preserve the insertion order in
+# sanity_case_config.py so commenting/uncommenting entries there directly
+# controls this runner, including rectangular cases.
+BENCHMARK_GRID_SIZES = tuple(
+    (int(case["nx"]), int(case["ny"]))
+    for case in GRID_CASES.values()
+)
 
 # Artifact schema version.  Bump whenever the set of fields written to the
 # MF6/Warp NPZ artifacts changes in a way that invalidates older caches.
