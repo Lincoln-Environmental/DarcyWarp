@@ -1,12 +1,11 @@
 #!/usr/bin/env python
 # SPDX-License-Identifier: AGPL-3.0-only
-"""Production 2D transient unconfined Warp-vs-MF6 replay support.
+"""Production 2D transient confined/unconfined Warp-vs-MF6 replay support.
 
 This module keeps working-test artifact loading, comparison, reporting, and
-mass-balance orchestration around the production secant-Sy solver API in
-``WarpDarcySolver.solve_transient_2d_unconfined``. Legacy replay experiments are
-kept out of this wrapper; lower-level storage helper formulas remain tested in
-their own working-test modules.
+mass-balance orchestration around the production 2D Warp solver APIs. The
+unconfined path uses the production secant-Sy transient driver; the confined
+path uses fixed-transmissivity backward-Euler K-cycle steps.
 """
 
 from __future__ import annotations
@@ -27,9 +26,11 @@ os.environ.setdefault("DARCY_FLOAT", "float64")
 
 from DARCY_WARP_PACKAGE.project_base import data_store  # noqa: E402
 from working_tests.transient_artifacts import (
+    FORMULATION_CONFINED,
     FORMULATION_UNCONFINED,
     UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
     WARM_START_ARTIFACT_INITIAL,
+    WARM_START_CONFINED_STEADY_MF6,
     WARM_START_UNCONFINED_STEADY_MF6,
     artifact_warm_start_provenance,
     default_artifact_path,
@@ -147,6 +148,197 @@ def _build_transient_fast_path_profile(
     }
 
 
+def _confined_solve_kwargs(solve_controls: dict) -> dict:
+    """Select the K-cycle controls used by one confined transient step."""
+    supported = (
+        "max_cycles",
+        "max_levels",
+        "min_coarse_cells",
+        "nu_pre",
+        "nu_post",
+        "nu_coarse",
+        "check_every_no",
+        "rel_tol",
+        "abs_tol_min",
+        "dh_rms_tol",
+        "smoother",
+        "omega",
+        "cheby_lambda_min",
+        "cheby_lambda_max",
+        "fallback_to_pcg",
+        "implementation",
+        "transient_face_graphs_enabled",
+    )
+    return {key: solve_controls[key] for key in supported if key in solve_controls}
+
+
+def _run_confined_transient_replay(
+    *,
+    spatial: dict,
+    recharge_rates: np.ndarray,
+    sy: float,
+    dt: float,
+    ss: float | None,
+    n_periods: int,
+    device: str,
+    diag_preconditioner_backend: str,
+    solve_controls: dict,
+    warm_start_mode: str,
+    warm_start_head: np.ndarray,
+    solver_backend: str,
+    implementation: str,
+    transient_face_graphs_enabled: bool,
+    min_sat: float,
+    _warp_solver_class_fn=None,
+    _warp_device_fn=None,
+) -> dict:
+    """Run fixed-transmissivity confined backward-Euler replay steps."""
+    del sy  # Confined storage uses specific storage times saturated thickness.
+    if solver_backend == "unconfined_picard_kcycle":
+        solver_backend = "confined_kcycle"
+    nx = int(spatial["nx"])
+    ny = int(spatial["ny"])
+    dx = float(spatial["dx"])
+    active = np.asarray(spatial["active"], dtype=np.int32)
+    bc_mask = np.asarray(spatial["bc_mask"], dtype=np.int32)
+    bc_values = np.asarray(spatial["bc_values"], dtype=np.float64)
+    top = np.asarray(spatial["top"], dtype=np.float64)
+    bottom = np.asarray(spatial["bottom"], dtype=np.float64)
+    k = np.asarray(spatial["k"], dtype=np.float64)
+    ghb_mask = np.asarray(spatial.get("ghb_mask", np.zeros_like(active)), dtype=np.int32)
+    ghb_head = np.asarray(spatial.get("ghb_head", np.zeros_like(warm_start_head)), dtype=np.float64)
+    ghb_width = np.asarray(spatial.get("ghb_width", np.zeros_like(warm_start_head)), dtype=np.float64)
+    ghb_alpha = float(spatial.get("ghb_alpha", 1.0))
+    ghb_aq_thickness = float(spatial.get("ghb_aq_thickness", 0.0))
+    use_ghb = bool(np.any(ghb_mask != 0))
+
+    rates = np.asarray(recharge_rates, dtype=np.float64).reshape(-1)
+    if n_periods < 1 or n_periods > rates.shape[0]:
+        raise ValueError(f"n_periods={n_periods} out of range [1, {rates.shape[0]}]")
+
+    head_previous = validate_warm_start_head(
+        head=np.asarray(warm_start_head, dtype=np.float64),
+        spatial=spatial,
+        label="confined warm_start_head",
+    )
+    thickness = np.maximum(top - bottom, float(min_sat))
+    transmissivity = k * thickness
+    transmissivity[active == 0] = 0.0
+    storage_coeff = np.asarray(ss if ss is not None else 0.0, dtype=np.float64) * thickness
+    storage_coeff[active == 0] = 0.0
+    recharge_field = np.zeros((ny, nx), dtype=np.float64)
+
+    warp_device_fn = _warp_device if _warp_device_fn is None else _warp_device_fn
+    resolved_device = warp_device_fn(device)
+    solver_class_factory = _warp_solver_class if _warp_solver_class_fn is None else _warp_solver_class_fn
+    WarpDarcySolver = solver_class_factory()
+    heads_per_period = np.zeros((n_periods, ny, nx), dtype=np.float64)
+    heads_old_per_period = np.zeros_like(heads_per_period)
+    storage_coeffs_per_period = np.repeat(storage_coeff[None, :, :], n_periods, axis=0)
+    storage_terms_per_period = np.zeros_like(heads_per_period)
+    period_times = np.zeros(n_periods, dtype=np.float64)
+    period_infos: list[dict] = []
+
+    solve_kwargs = _confined_solve_kwargs(solve_controls)
+    solve_kwargs["implementation"] = str(implementation).strip().lower()
+    solve_kwargs["transient_face_graphs_enabled"] = bool(transient_face_graphs_enabled)
+    with WarpDarcySolver(
+        nx=nx,
+        ny=ny,
+        dx=dx,
+        device=resolved_device,
+        solver_type="kcycle",
+        use_ghb=use_ghb,
+        diag_preconditioner_backend=diag_preconditioner_backend,
+    ) as solver:
+        solver.build_from_fields(
+            T_field=transmissivity,
+            R_field=recharge_field,
+            active=active,
+            bc_mask=bc_mask,
+            bc_values=bc_values,
+            gh_mask=ghb_mask,
+            gh_head=ghb_head,
+            gh_width=ghb_width,
+            gh_alpha=ghb_alpha,
+            aq_thickness=ghb_aq_thickness if use_ghb else None,
+        )
+        for period_index in range(n_periods):
+            period_start = time.perf_counter()
+            solver.update_R_in_place(float(rates[period_index]))
+            heads_old_per_period[period_index] = head_previous
+            head_current, info = solver.solve(
+                formulation=FORMULATION_CONFINED,
+                solver=solver_backend,
+                initial_head=head_previous,
+                transient=True,
+                storage_coeff=storage_coeff,
+                dt=float(dt),
+                head_prev=head_previous,
+                return_info=True,
+                **solve_kwargs,
+            )
+            head_current = np.asarray(head_current, dtype=np.float64)
+            heads_per_period[period_index] = head_current
+            storage_terms_per_period[period_index] = (
+                storage_coeff * (head_current - head_previous) / float(dt)
+            )
+            period_time = float(time.perf_counter() - period_start)
+            period_times[period_index] = period_time
+            period_info = dict(info or {})
+            period_info.update(
+                {
+                    "formulation": FORMULATION_CONFINED,
+                    "transient": True,
+                    "period_total_seconds": period_time,
+                    "outer_iterations": 1,
+                    "strict_picard_convergence_passed": bool(period_info.get("converged", False)),
+                    "practical_picard_acceptance_passed": bool(period_info.get("converged", False)),
+                    "production_acceptance_passed": bool(period_info.get("converged", False)),
+                }
+            )
+            period_infos.append(period_info)
+            head_previous = head_current
+
+    last_info = period_infos[-1]
+    return {
+        "heads_per_period": heads_per_period,
+        "heads_old_per_period": heads_old_per_period,
+        "heads_final": heads_per_period[-1],
+        "storage_reference_heads_per_period": heads_old_per_period.copy(),
+        "storage_coeffs_per_period": storage_coeffs_per_period,
+        "sy_storage_coeffs_per_period": np.zeros_like(storage_coeffs_per_period),
+        "ss_storage_coeffs_per_period": storage_coeffs_per_period.copy(),
+        "storage_terms_per_period": storage_terms_per_period,
+        "sy_storage_terms_per_period": np.zeros_like(storage_terms_per_period),
+        "ss_storage_terms_per_period": storage_terms_per_period.copy(),
+        "sy_crossing_volume_terms_per_period": np.zeros_like(storage_terms_per_period),
+        "period_infos": period_infos,
+        "last_info": last_info,
+        "period_times": period_times,
+        "total_time": float(np.sum(period_times)),
+        "n_periods": n_periods,
+        "device": resolved_device,
+        "storativity": storage_coeff,
+        "storativity_kind": "confined_specific_storage_times_thickness",
+        "include_specific_storage": True,
+        "unconfined_storage_mode": None,
+        "saturated_thickness_reference": None,
+        "saturated_thickness_reference_source": None,
+        "storage_reference": None,
+        "dt": float(dt),
+        "formulation": FORMULATION_CONFINED,
+        "solve_controls": dict(solve_controls),
+        "warm_start_mode": warm_start_mode,
+        "warm_start_used": warm_start_mode,
+        "warm_start_head": np.asarray(warm_start_head, dtype=np.float64).copy(),
+        "storage_coeff": storage_coeff,
+        "storage_coeff_kind": "confined_specific_storage_times_thickness",
+        "implementation": str(implementation).strip().lower(),
+        "transient_face_graphs_enabled": bool(transient_face_graphs_enabled),
+    }
+
+
 def run_warp_transient_replay(
     spatial: dict,
     recharge_rates: np.ndarray,
@@ -164,13 +356,37 @@ def run_warp_transient_replay(
     unconfined_storage_mode: str = UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY,
     storage_reference: str = STORAGE_REFERENCE_CURRENT_PICARD,
     solver_backend: str = "unconfined_picard_kcycle",
+    implementation: str = "classic",
+    transient_face_graphs_enabled: bool = True,
     _warp_solver_class_fn=None,
     _warp_device_fn=None,
 ) -> dict:
-    """Run the production 2D unconfined transient replay solver path."""
+    """Run one of the production 2D confined or unconfined replay paths."""
     formulation = str(formulation).strip().lower()
+    if formulation == FORMULATION_CONFINED:
+        if warm_start_head is None:
+            raise ValueError("confined transient replay requires a warm_start_head.")
+        return _run_confined_transient_replay(
+            spatial=spatial,
+            recharge_rates=recharge_rates,
+            sy=sy,
+            dt=dt,
+            ss=ss,
+            n_periods=int(np.asarray(recharge_rates).reshape(-1).shape[0] if n_periods is None else n_periods),
+            device=device,
+            diag_preconditioner_backend=diag_preconditioner_backend,
+            solve_controls=dict(solve_controls or default_solve_controls()),
+            warm_start_mode=warm_start_mode,
+            warm_start_head=warm_start_head,
+            solver_backend=solver_backend,
+            implementation=implementation,
+            transient_face_graphs_enabled=transient_face_graphs_enabled,
+            min_sat=min_sat,
+            _warp_solver_class_fn=_warp_solver_class_fn,
+            _warp_device_fn=_warp_device_fn,
+        )
     if formulation != FORMULATION_UNCONFINED:
-        raise ValueError("transient replay support now only carries the 2D unconfined path")
+        raise ValueError("formulation must be 'confined' or 'unconfined'.")
     storage_reference = str(storage_reference).strip().lower()
     if storage_reference != STORAGE_REFERENCE_CURRENT_PICARD:
         raise ValueError("transient replay support now requires storage_reference='current_picard'")
@@ -359,6 +575,7 @@ def run_replay_from_artifact(
     storage_reference: str = STORAGE_REFERENCE_CURRENT_PICARD,
     allow_warm_start_mismatch: bool = False,
     solver_backend: str = "unconfined_picard_kcycle",
+    implementation: str = "classic",
     run_config: dict | None = None,
     load_transient_artifact_fn=None,
     run_warp_transient_replay_fn=None,
@@ -390,28 +607,37 @@ def run_replay_from_artifact(
     spatial = spatial_fields_from_artifact(artifact)
     spatial["workspace"] = workspace
     formulation = str(formulation).strip().lower()
-    if formulation != FORMULATION_UNCONFINED:
-        raise ValueError("transient replay support now only carries formulation='unconfined'")
+    if formulation not in {FORMULATION_CONFINED, FORMULATION_UNCONFINED}:
+        raise ValueError("formulation must be 'confined' or 'unconfined'.")
+    if formulation == FORMULATION_CONFINED and solver_backend == "unconfined_picard_kcycle":
+        solver_backend = "confined_kcycle"
     artifact_mode = require_matching_artifact_formulation(
         artifact=artifact,
         requested_formulation=formulation,
         artifact_path=artifact_path,
     )
     warm_start_mode = str(warm_start_mode).strip().lower()
-    if warm_start_mode != WARM_START_UNCONFINED_STEADY_MF6:
-        raise ValueError(
-            "transient replay support now requires "
-            "warm_start_mode='unconfined_steady_mf6'"
-        )
-    unconfined_storage_mode = str(unconfined_storage_mode).strip().lower()
-    if unconfined_storage_mode != UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY:
-        raise ValueError(
-            "transient replay support now requires "
-            "unconfined_storage_mode='mf6_convertible_secant_sy'"
-        )
-    storage_reference = str(storage_reference).strip().lower()
-    if storage_reference != STORAGE_REFERENCE_CURRENT_PICARD:
-        raise ValueError("transient replay support now requires storage_reference='current_picard'")
+    if formulation == FORMULATION_UNCONFINED:
+        if warm_start_mode != WARM_START_UNCONFINED_STEADY_MF6:
+            raise ValueError(
+                "unconfined replay requires warm_start_mode='unconfined_steady_mf6'"
+            )
+        unconfined_storage_mode = str(unconfined_storage_mode).strip().lower()
+        if unconfined_storage_mode != UNCONFINED_STORAGE_MF6_CONVERTIBLE_SECANT_SY:
+            raise ValueError(
+                "unconfined replay requires "
+                "unconfined_storage_mode='mf6_convertible_secant_sy'"
+            )
+        storage_reference = str(storage_reference).strip().lower()
+        if storage_reference != STORAGE_REFERENCE_CURRENT_PICARD:
+            raise ValueError("unconfined replay requires storage_reference='current_picard'")
+    else:
+        if warm_start_mode != WARM_START_CONFINED_STEADY_MF6:
+            raise ValueError(
+                "confined replay requires warm_start_mode='confined_steady_mf6'"
+            )
+        unconfined_storage_mode = None
+        storage_reference = None
 
     artifact_warm_start = artifact_warm_start_provenance(artifact)
     validate_warm_start_comparability(
@@ -434,10 +660,13 @@ def run_replay_from_artifact(
         raise ValueError(f"n_periods={n_periods} out of range [1, {recharge_rates.shape[0]}]")
 
     print(f"Transient replay: {spatial['nx']}x{spatial['ny']}, {n_periods} periods, dt={dt}")
-    print(
-        f"  formulation: unconfined; storativity S = secant(Sy crossing) + Ss*saturated_thickness "
-        f"(Sy={sy}, Ss={ss}, reference={storage_reference})"
-    )
+    if formulation == FORMULATION_UNCONFINED:
+        print(
+            "  formulation: unconfined; storativity S = secant(Sy crossing) "
+            f"+ Ss*saturated_thickness (Sy={sy}, Ss={ss}, reference={storage_reference})"
+        )
+    else:
+        print(f"  formulation: confined; storativity uses Ss={ss} times full aquifer thickness")
     print(f"  warm start: {warm_start_used} (artifact provenance: {artifact_warm_start})")
     print(f"  artifact: {artifact_path}")
 
@@ -447,8 +676,10 @@ def run_replay_from_artifact(
     effective_controls = dict(default_solve_controls())
     if solve_controls:
         effective_controls.update(solve_controls)
-    effective_startup_mode = str(
-        effective_controls.get("unconfined_startup_mode", "confined_pre_solve")
+    effective_startup_mode = (
+        str(effective_controls.get("unconfined_startup_mode", "confined_pre_solve"))
+        if formulation == FORMULATION_UNCONFINED
+        else None
     )
     mass_balance_min_sat = float(effective_controls.get("min_saturated_thickness", DEFAULT_MIN_SAT))
     if run_config is None:
@@ -489,6 +720,7 @@ def run_replay_from_artifact(
         unconfined_storage_mode=unconfined_storage_mode,
         storage_reference=storage_reference,
         solver_backend=solver_backend,
+        implementation=implementation,
     )
 
     artifact_heads_per_period = np.asarray(artifact["heads_per_period"], dtype=np.float64)
@@ -622,6 +854,14 @@ def run_replay_from_artifact(
             "unconfined_storage_mode": warp_result["unconfined_storage_mode"],
             "storage_reference": warp_result.get("storage_reference", STORAGE_REFERENCE_CURRENT_PICARD),
             "warm_start": warp_result["warm_start_used"],
+            "implementation": warp_result.get("implementation"),
+            "transient_face_graphs_enabled": warp_result.get("transient_face_graphs_enabled"),
+            "transient_face_operator_enabled": warp_result.get("solve_controls", {}).get(
+                "transient_face_operator_enabled"
+            ),
+            "transient_mixed_precision_enabled": warp_result.get("solve_controls", {}).get(
+                "transient_mixed_precision_enabled"
+            ),
         }
     )
 
@@ -637,9 +877,7 @@ def run_replay_from_artifact(
         "mf6_replay_settings": {
             "unconfined_storage_mode": warp_result["unconfined_storage_mode"],
             "storage_reference": warp_result.get("storage_reference", STORAGE_REFERENCE_CURRENT_PICARD),
-            "unconfined_startup_mode": warp_result["solve_controls"].get(
-                "unconfined_startup_mode", "confined_pre_solve"
-            ),
+            "unconfined_startup_mode": effective_startup_mode,
             "warm_start": warp_result["warm_start_used"],
         },
         "storage": {
@@ -707,6 +945,7 @@ def run_replay_from_artifact(
     }
     # --- Production acceptance, performance summary, run configuration. ---
     method_settings = evaluate_method_settings(
+        formulation=formulation,
         unconfined_storage_mode=warp_result["unconfined_storage_mode"],
         storage_reference=storage_reference,
         unconfined_startup_mode=effective_startup_mode,
@@ -717,6 +956,7 @@ def run_replay_from_artifact(
     summary["head_accuracy"] = head_accuracy
     summary["method_settings"] = method_settings
     summary["production_acceptance"] = build_production_acceptance(
+        formulation=formulation,
         method_settings=method_settings,
         head_accuracy=head_accuracy,
         mass_balance=mass_balance,
@@ -779,6 +1019,7 @@ def main(
     storage_reference: str = STORAGE_REFERENCE_CURRENT_PICARD,
     allow_warm_start_mismatch: bool = False,
     solver_backend: str = "unconfined_picard_kcycle",
+    implementation: str = "classic",
     solve_controls: dict | None = None,
     run_config: dict | None = None,
 ) -> dict:
@@ -789,8 +1030,13 @@ def main(
     failing, so importing this module never requires MF6 to be installed.
     """
     formulation = str(formulation).strip().lower()
-    if formulation != FORMULATION_UNCONFINED:
-        raise ValueError("transient replay support now only carries formulation='unconfined'")
+    if formulation not in {FORMULATION_CONFINED, FORMULATION_UNCONFINED}:
+        raise ValueError("formulation must be 'confined' or 'unconfined'.")
+    if formulation == FORMULATION_CONFINED:
+        if warm_start_mode == WARM_START_UNCONFINED_STEADY_MF6:
+            warm_start_mode = WARM_START_CONFINED_STEADY_MF6
+        unconfined_storage_mode = None
+        storage_reference = None
     artifact_path = (
         Path(artifact_path)
         if artifact_path is not None
@@ -814,6 +1060,7 @@ def main(
         storage_reference=storage_reference,
         allow_warm_start_mismatch=allow_warm_start_mismatch,
         solver_backend=solver_backend,
+        implementation=implementation,
         solve_controls=solve_controls,
         run_config=run_config,
     )

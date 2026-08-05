@@ -381,7 +381,11 @@ def compute_replay_mass_balance(
         storage_release_linearized = -np.asarray(storage_coeffs[period_index], dtype=np.float64) * delta_head * area / float(dt)
         sat_old = np.clip(head_old - bottom, 0.0, full_thickness)
         sat_new = np.clip(head_new - bottom, 0.0, full_thickness)
-        sy_storage_release_volume = -float(sy) * (sat_new - sat_old) * area / float(dt)
+        sy_storage_release_volume = (
+            np.zeros_like(head_new)
+            if str(formulation).strip().lower() == "confined"
+            else -float(sy) * (sat_new - sat_old) * area / float(dt)
+        )
         phi_old = _specific_storage_potential(
             head=head_old,
             bottom=bottom,

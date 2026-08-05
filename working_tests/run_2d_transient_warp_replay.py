@@ -11,7 +11,6 @@ The K-cycle tuning sweep lives in ``working_tests/optimize_2d_transient_kcycle.p
 
 from __future__ import annotations
 
-import argparse
 import json
 import sys
 from pathlib import Path
@@ -24,10 +23,13 @@ if str(REPO_ROOT) not in sys.path:
 
 from DARCY_WARP_PACKAGE.project_base import data_store  # noqa: E402
 from working_tests.transient_artifacts import (  # noqa: E402
+    FORMULATION_CONFINED,
     FORMULATION_UNCONFINED,
+    WARM_START_CONFINED_STEADY_MF6,
     validate_transient_artifact,
 )
 from working_tests.transient_replay_settings import (  # noqa: E402
+    default_solve_controls,
     default_run_config,
     production_secant_sy_settings,
 )
@@ -66,6 +68,7 @@ def build_grid_artifact_path(
 
 def build_case_setup(
     *,
+    formulation: str = FORMULATION_UNCONFINED,
     nx: int = 1000,
     ny: int = 1000,
     n_periods: int = 30,
@@ -83,7 +86,14 @@ def build_case_setup(
     ``run_2d_transient_vs_mf6.py`` pulls this setup when run standalone, and
     ``ensure_case_artifact`` generates the MF6 artifact when it is missing.
     """
-    formulation = FORMULATION_UNCONFINED
+    formulation = str(formulation).strip().lower()
+    if formulation not in {FORMULATION_CONFINED, FORMULATION_UNCONFINED}:
+        raise ValueError("formulation must be 'confined' or 'unconfined'.")
+    warm_start_mode = (
+        WARM_START_CONFINED_STEADY_MF6
+        if formulation == FORMULATION_CONFINED
+        else "unconfined_steady_mf6"
+    )
     setup = {
         "formulation": formulation,
         "nx": int(nx),
@@ -98,7 +108,7 @@ def build_case_setup(
         "initial_saturated_thickness": 100.0,
         "t_field_kind": str(t_field_kind).strip().lower(),
         "t_field_seed": int(t_field_seed),
-        "warm_start_mode": "unconfined_steady_mf6",
+        "warm_start_mode": warm_start_mode,
         "ghb_conductance_mode": str(ghb_conductance_mode).strip().lower(),
     }
     setup["artifact_path"] = build_grid_artifact_path(
@@ -227,6 +237,7 @@ def ensure_case_artifact(case_setup: dict) -> Path:
 
 def run_production_replay(
     *,
+    formulation: str = FORMULATION_UNCONFINED,
     artifact_path: Path | None,
     workspace: Path | None,
     device: str,
@@ -234,6 +245,11 @@ def run_production_replay(
     diag_preconditioner_backend: str = "device",
     allow_warm_start_mismatch: bool = False,
     solver_backend: str = "unconfined_picard_kcycle",
+    implementation: str = "classic",
+    use_device_transient_fast_path: bool | None = None,
+    transient_face_operator_enabled: bool | None = None,
+    transient_face_graphs_enabled: bool | None = None,
+    transient_mixed_precision_enabled: bool | None = None,
 ) -> dict:
     """
     Run the production replay with the selected artifact.
@@ -242,9 +258,29 @@ def run_production_replay(
     ``production_secant_sy_settings()``; ``solve_control_overrides`` exists for
     genuine one-off experiments (e.g. the K-cycle tuning sweep) only.
     """
-    production_settings = production_secant_sy_settings()
+    formulation = str(formulation).strip().lower()
+    if formulation == FORMULATION_UNCONFINED:
+        production_settings = production_secant_sy_settings()
+    elif formulation == FORMULATION_CONFINED:
+        production_settings = {
+            "solve_controls": default_solve_controls(),
+            "unconfined_storage_mode": None,
+            "storage_reference": None,
+            "warm_start_mode": WARM_START_CONFINED_STEADY_MF6,
+        }
+    else:
+        raise ValueError("formulation must be 'confined' or 'unconfined'.")
+    if formulation == FORMULATION_CONFINED and solver_backend == "unconfined_picard_kcycle":
+        solver_backend = "confined_kcycle"
     solve_controls = dict(production_settings["solve_controls"])
     solve_controls.update(solve_control_overrides or {})
+    transient_switches = {
+        "use_device_transient_fast_path": use_device_transient_fast_path,
+        "transient_face_operator_enabled": transient_face_operator_enabled,
+        "transient_face_graphs_enabled": transient_face_graphs_enabled,
+        "transient_mixed_precision_enabled": transient_mixed_precision_enabled,
+    }
+    solve_controls.update({key: value for key, value in transient_switches.items() if value is not None})
     run_config = default_run_config(device=device)
     return run_transient_replay(
         artifact_path=artifact_path,
@@ -252,56 +288,119 @@ def run_production_replay(
         device=device,
         diag_preconditioner_backend=diag_preconditioner_backend,
         warm_start_mode=production_settings["warm_start_mode"],
-        formulation=FORMULATION_UNCONFINED,
+        formulation=formulation,
         solve_controls=solve_controls,
         unconfined_storage_mode=production_settings["unconfined_storage_mode"],
         storage_reference=production_settings["storage_reference"],
         allow_warm_start_mismatch=allow_warm_start_mismatch,
         solver_backend=solver_backend,
+        implementation=implementation,
         run_config=run_config,
     )
 
 
-def main() -> dict:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--t-field-kind",
-        choices=("ugly_t", "homogeneous"),
-        default="ugly_t",
-        help="transmissivity field: 'ugly_t' = hard heterogeneous benchmark field "
-             "(model_builder.make_ugly_T_field, K = T/100 m); "
-             "'homogeneous' = legacy uniform K=100 m/day",
-    )
-    parser.add_argument("--t-field-seed", type=int, default=42, help="ugly_t field random seed")
-    parser.add_argument("--nx", type=int, default=1000)
-    parser.add_argument("--ny", type=int, default=1000)
-    parser.add_argument("--n-periods", type=int, default=30)
-    parser.add_argument("--artifact", default=None, help="explicit artifact path (bypasses the case setup)")
-    parser.add_argument("--workspace", default=None)
-    parser.add_argument("--device", default="auto")
-    parser.add_argument(
-        "--solver",
-        default="unconfined_picard_kcycle",
-        help="solver backend (e.g. unconfined_picard_kcycle, unconfined_fas, unconfined_semismooth_newton_kcycle)"
-    )
-    args = parser.parse_args()
-
+def run_configured_replay(
+    *,
+    formulation: str,
+    nx: int,
+    ny: int,
+    n_periods: int,
+    t_field_kind: str,
+    t_field_seed: int,
+    artifact_path: Path | None,
+    workspace: Path | None,
+    device: str,
+    solver_backend: str,
+    implementation: str,
+    use_device_transient_fast_path: bool,
+    transient_face_operator_enabled: bool,
+    transient_face_graphs_enabled: bool,
+    transient_mixed_precision_enabled: bool,
+) -> dict:
+    """Build the requested case and run its production replay."""
     case_setup = build_case_setup(
-        nx=args.nx,
-        ny=args.ny,
-        n_periods=args.n_periods,
-        t_field_kind=args.t_field_kind,
-        t_field_seed=args.t_field_seed,
+        formulation=formulation,
+        nx=nx,
+        ny=ny,
+        n_periods=n_periods,
+        t_field_kind=t_field_kind,
+        t_field_seed=t_field_seed,
     )
-    artifact_path = Path(args.artifact) if args.artifact is not None else ensure_case_artifact(case_setup)
-    workspace = Path(args.workspace) if args.workspace else None
+    selected_artifact_path = artifact_path or ensure_case_artifact(case_setup)
     return run_production_replay(
-        artifact_path=artifact_path,
+        formulation=formulation,
+        artifact_path=selected_artifact_path,
         workspace=workspace,
-        device=args.device,
-        solver_backend=args.solver,
+        device=device,
+        solver_backend=solver_backend,
+        implementation=implementation,
+        use_device_transient_fast_path=use_device_transient_fast_path,
+        transient_face_operator_enabled=transient_face_operator_enabled,
+        transient_face_graphs_enabled=transient_face_graphs_enabled,
+        transient_mixed_precision_enabled=transient_mixed_precision_enabled,
     )
 
 
 if __name__ == "__main__":
-    main()
+    # Adjust run settings here instead of passing command-line arguments.
+    # Formulation options: "unconfined" or "confined".
+    formulation = FORMULATION_CONFINED
+    nx = 1000  # Number of grid cells in the x direction.
+    ny = 1000  # Number of grid cells in the y direction.
+    n_periods = 30  # Number of weekly transient periods to replay.
+
+    # Available T fields: "ugly_t" (hard heterogeneous benchmark) or
+    # "homogeneous" (legacy uniform K=100 m/day).
+    t_field_kind = "ugly_t"
+    t_field_seed = 42  # Random seed used by the "ugly_t" field.
+
+    # None automatically validates/reuses or generates the matching MF6
+    # artifact. Set an explicit Path to bypass automatic case-artifact lookup.
+    artifact_path = None
+    workspace = None  # None uses the replay's default workspace handling.
+
+    # Device options: "auto", "cuda:0" (or another CUDA device), or "cpu".
+    device = "auto"
+
+    # Canonical solver backends:
+    #   confined: "confined_kcycle" (transient-capable fixed-T solver)
+    #   "unconfined_picard_kcycle" (production default)
+    #   "unconfined_semismooth_newton_kcycle" (experimental)
+    #   "unconfined_fas" (experimental)
+    # Legacy aliases include "picard", "picard_kcycle", and "kcycle".
+    # Choose a backend compatible with the formulation above.
+    solver_backend = (
+        "confined_kcycle"
+        if formulation == FORMULATION_CONFINED
+        else "unconfined_picard_kcycle"
+    )
+
+    # Confined transient implementation: "classic" or "fast".
+    # "fast" uses the FP64 face-array transient K-cycle.
+    implementation = "fast"
+
+    # Unconfined transient implementation switches. The mixed path is
+    # experimental, requires DARCY_FLOAT=float64, the face operator, and the
+    # device fast path.
+    use_device_transient_fast_path = True
+    transient_face_operator_enabled = True
+    transient_face_graphs_enabled = True
+    transient_mixed_precision_enabled = True
+
+    run_configured_replay(
+        formulation=formulation,
+        nx=nx,
+        ny=ny,
+        n_periods=n_periods,
+        t_field_kind=t_field_kind,
+        t_field_seed=t_field_seed,
+        artifact_path=artifact_path,
+        workspace=workspace,
+        device=device,
+        solver_backend=solver_backend,
+        implementation=implementation,
+        use_device_transient_fast_path=use_device_transient_fast_path,
+        transient_face_operator_enabled=transient_face_operator_enabled,
+        transient_face_graphs_enabled=transient_face_graphs_enabled,
+        transient_mixed_precision_enabled=transient_mixed_precision_enabled,
+    )

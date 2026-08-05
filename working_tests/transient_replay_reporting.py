@@ -41,11 +41,22 @@ def evaluate_head_accuracy(comparison: dict) -> dict:
 
 def evaluate_method_settings(
     *,
-    unconfined_storage_mode: str,
-    storage_reference: str,
-    unconfined_startup_mode: str,
+    unconfined_storage_mode: str | None,
+    storage_reference: str | None,
+    unconfined_startup_mode: str | None,
     warm_start: str,
+    formulation: str = "unconfined",
 ) -> dict:
+    if str(formulation).strip().lower() == "confined":
+        return {
+            "passed": True,
+            "settings": {
+                "formulation": "confined",
+                "storage": "specific_storage_times_full_thickness",
+                "warm_start": str(warm_start),
+            },
+            "mismatches": {},
+        }
     actual = {
         "unconfined_storage_mode": str(unconfined_storage_mode),
         "storage_reference": str(storage_reference),
@@ -66,6 +77,7 @@ def build_production_acceptance(
     head_accuracy: dict,
     mass_balance: dict,
     period_convergence: dict,
+    formulation: str = "unconfined",
 ) -> dict:
     warnings: list[str] = []
     failures: list[str] = []
@@ -74,6 +86,19 @@ def build_production_acceptance(
     mass_passed = bool(mass_balance.get("mass_balance_passed", False))
     strict_passed = bool(period_convergence.get("strict_all_converged", False))
     practical_passed = bool(period_convergence.get("practical_all_accepted", False))
+    if str(formulation).strip().lower() == "confined":
+        converged = bool(period_convergence.get("all_converged", False))
+        production_passed = method_valid and head_passed and mass_passed and converged
+        return {
+            "method_settings_valid": method_valid,
+            "head_accuracy_passed": head_passed,
+            "mass_balance_passed": mass_passed,
+            "strict_picard_convergence_passed": converged,
+            "practical_picard_acceptance_passed": converged,
+            "production_acceptance_passed": production_passed,
+            "warnings": warnings,
+            "failures": ([] if production_passed else ["confined transient replay acceptance failed"]),
+        }
     if not method_valid:
         failures.append("method settings do not match the validated secant-Sy method")
     if not head_passed:

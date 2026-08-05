@@ -101,6 +101,19 @@ def compute_transient_case_fingerprint(case_inputs: dict) -> str:
 case_fingerprint = compute_transient_case_fingerprint
 
 
+def all_active_transient_heads_finite(
+    *,
+    heads_per_period: np.ndarray,
+    active: np.ndarray,
+) -> bool:
+    """Return whether all active cells are finite without a large broadcast."""
+    heads = np.asarray(heads_per_period)
+    active_mask = np.asarray(active, dtype=bool)
+    if heads.ndim != 3 or heads.shape[1:] != active_mask.shape:
+        return False
+    return all(np.isfinite(period[active_mask]).all() for period in heads)
+
+
 def validate_transient_artifact(
     path: str | Path,
     *,
@@ -138,7 +151,10 @@ def validate_transient_artifact(
     active = np.asarray(artifact["active"], dtype=np.int32) != 0
     heads = np.asarray(artifact["heads_per_period"], dtype=np.float64)
     shape = (int(np.asarray(artifact["ny"]).reshape(())), int(np.asarray(artifact["nx"]).reshape(())))
-    if heads.shape != (n_periods, *shape) or not np.isfinite(heads[:, active]).all():
+    if heads.shape != (n_periods, *shape) or not all_active_transient_heads_finite(
+        heads_per_period=heads,
+        active=active,
+    ):
         raise ValueError(f"transient artifact {artifact_path} has invalid head shape or non-finite active heads.")
     initial = np.asarray(artifact["initial_head"], dtype=np.float64)
     if initial.shape != shape or not np.isfinite(initial[active]).all():

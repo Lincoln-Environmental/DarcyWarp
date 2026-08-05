@@ -58,6 +58,7 @@ from DARCY_WARP_PACKAGE.model_builder import (  # noqa: E402
 from DARCY_WARP_PACKAGE.project_base import data_store, require_mf6  # noqa: E402
 from working_tests.transient_artifacts import (  # noqa: E402
     ARTIFACT_SCHEMA_VERSION,
+    all_active_transient_heads_finite,
     compute_transient_case_fingerprint,
 )
 
@@ -362,7 +363,10 @@ def _validate_mf6_transient_outputs(
         raise RuntimeError(f"MF6 workspace {mf6_workspace} lacks NORMAL TERMINATION.")
     if heads_per_period.ndim != 3 or heads_per_period.shape[0] < 1:
         raise RuntimeError("MF6 produced no complete saved transient periods.")
-    if not np.isfinite(heads_per_period[:, active]).all():
+    if not all_active_transient_heads_finite(
+        heads_per_period=heads_per_period,
+        active=active,
+    ):
         raise FloatingPointError("MF6 transient heads contain non-finite active-cell values.")
     if not np.isfinite(initial_head[active]).all():
         raise FloatingPointError("MF6 transient warm-start head contains non-finite active-cell values.")
@@ -384,6 +388,12 @@ def _load_mf6_last_head(
     Load a completed MF6 head file when it matches the requested case shape.
     """
     if not hds_path.exists():
+        return None
+    if not _mf6_normal_termination(hds_path.parent):
+        print(
+            f"Existing {label} warm-start workspace did not terminate normally; "
+            "recomputing warm start."
+        )
         return None
     heads = flopy.utils.HeadFile(str(hds_path)).get_alldata()
     if heads.size == 0:
@@ -669,11 +679,15 @@ def run_mf6_confined_steady_warm_start(
         print_option="SUMMARY",
         complexity="COMPLEX",
         linear_acceleration="BICGSTAB",
-        outer_maximum=100,
-        outer_dvclose=1.0e-7,
-        inner_maximum=300,
-        inner_dvclose=1.0e-9,
-        rcloserecord=[1.0e-7, "RELATIVE_RCLOSE"],
+        # The hard heterogeneous T field needs the same robust iteration
+        # budget as the production transient solve.  The older 100/300 caps
+        # caused this steady warm start to terminate after exhausting both
+        # iteration limits without converging.
+        outer_maximum=500,
+        outer_dvclose=1.0e-6,
+        inner_maximum=500,
+        inner_dvclose=1.0e-8,
+        rcloserecord=[1.0e-6, "RELATIVE_RCLOSE"],
         scaling_method="DIAGONAL",
     )
     sim.register_ims_package(ims, [gwf.name])
@@ -1096,8 +1110,10 @@ def run_mf6_transient(
         raise RuntimeError(_transient_failure_message(mf6_ws=mf6_ws, name=name))
 
     hds_path = mf6_ws.joinpath(f"{name}.hds")
-    heads_all = flopy.utils.HeadFile(str(hds_path)).get_alldata()  # (ntimes, nlay, ny, nx)
-    heads_per_period = np.asarray(heads_all[:, 0, :, :], dtype=np.float64)  # (n_weeks, ny, nx)
+    heads_per_period = np.asarray(
+        flopy.utils.HeadFile(str(hds_path)).get_alldata(mflay=0),
+        dtype=np.float64,
+    )  # (n_weeks, ny, nx)
     fixed_point_iterations = 1
     fixed_point_head_change = 0.0
     fixed_point_conductance_change = 0.0
@@ -1122,8 +1138,10 @@ def run_mf6_transient(
             ok, _ = sim.run_simulation(silent=True, report=False)
             if not ok:
                 raise RuntimeError("MF6 GHB fixed-point iteration failed")
-            updated_heads_all = flopy.utils.HeadFile(str(hds_path)).get_alldata()
-            updated_heads = np.asarray(updated_heads_all[:, 0, :, :], dtype=np.float64)
+            updated_heads = np.asarray(
+                flopy.utils.HeadFile(str(hds_path)).get_alldata(mflay=0),
+                dtype=np.float64,
+            )
             head_change = float(np.max(np.abs(updated_heads - heads_per_period)[:, ghb_mask != 0]))
             heads_per_period = updated_heads
             fixed_point_iterations = iteration + 1
