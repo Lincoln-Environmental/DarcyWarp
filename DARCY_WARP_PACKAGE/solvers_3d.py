@@ -18,7 +18,9 @@ from DARCY_WARP_PACKAGE.kernels_3d import (
     dh_change_reduce_3d_kernel,
     dot_active_3d_kernel,
     jacobi_applyA_fused_7point_kernel,
+    prolong_bilinear_axes_3d_kernel,
     prolong_bilinear_xy_3d_kernel,
+    restrict_blockavg_axes_3d_kernel,
     restrict_blockavg_xy_3d_kernel,
     zero_scalar_kernel,
 )
@@ -386,7 +388,7 @@ def _prepare_7point_transient_terms(
     return b, sdiag, h_prev, float(dt_f)
 
 
-def _coarsen_mean_edge_1x2x2(field_f: np.ndarray) -> np.ndarray:
+def _coarsen_mean_edge_axes(field_f: np.ndarray, *, coarsen_y: int, coarsen_x: int) -> np.ndarray:
     """
     Horizontally semi-coarsen a 3D field while preserving layer index.
 
@@ -397,38 +399,64 @@ def _coarsen_mean_edge_1x2x2(field_f: np.ndarray) -> np.ndarray:
     the coarse vertical coupling is the arithmetic mean of the fine vertical
     couplings in the horizontal block, rather than a hidden full 2x2x2 merge.
     """
+    if int(coarsen_y) not in {1, 2} or int(coarsen_x) not in {1, 2}:
+        raise ValueError("coarsen_y and coarsen_x must be 1 or 2.")
     arr_f = np.asarray(field_f, dtype=NP_FLOAT)
     nz_f, ny_f, nx_f = arr_f.shape
     nz_c = nz_f
-    ny_c = (ny_f + 1) // 2
-    nx_c = (nx_f + 1) // 2
+    fy = int(coarsen_y)
+    fx = int(coarsen_x)
+    ny_c = (ny_f + fy - 1) // fy
+    nx_c = (nx_f + fx - 1) // fx
 
     pad_z = 0
-    pad_y = int(2 * ny_c - ny_f)
-    pad_x = int(2 * nx_c - nx_f)
+    pad_y = int(fy * ny_c - ny_f)
+    pad_x = int(fx * nx_c - nx_f)
 
     arr_p = np.pad(arr_f, ((0, pad_z), (0, pad_y), (0, pad_x)), mode="edge")
-    arr_c = arr_p.reshape(nz_c, 1, ny_c, 2, nx_c, 2).mean(axis=(1, 3, 5), dtype=np.float64)
+    arr_c = arr_p.reshape(nz_c, ny_c, fy, nx_c, fx).mean(axis=(2, 4), dtype=np.float64)
     return arr_c.astype(NP_FLOAT, copy=False)
 
 
-def _coarsen_max_edge_1x2x2(mask_f: np.ndarray) -> np.ndarray:
+def _coarsen_max_edge_axes(mask_f: np.ndarray, *, coarsen_y: int, coarsen_x: int) -> np.ndarray:
     """
     Horizontally semi-coarsen a 3D mask while preserving layer index.
     """
+    if int(coarsen_y) not in {1, 2} or int(coarsen_x) not in {1, 2}:
+        raise ValueError("coarsen_y and coarsen_x must be 1 or 2.")
     arr_f = np.asarray(mask_f, dtype=np.int32)
     nz_f, ny_f, nx_f = arr_f.shape
     nz_c = nz_f
-    ny_c = (ny_f + 1) // 2
-    nx_c = (nx_f + 1) // 2
+    fy = int(coarsen_y)
+    fx = int(coarsen_x)
+    ny_c = (ny_f + fy - 1) // fy
+    nx_c = (nx_f + fx - 1) // fx
 
     pad_z = 0
-    pad_y = int(2 * ny_c - ny_f)
-    pad_x = int(2 * nx_c - nx_f)
+    pad_y = int(fy * ny_c - ny_f)
+    pad_x = int(fx * nx_c - nx_f)
 
     arr_p = np.pad(arr_f, ((0, pad_z), (0, pad_y), (0, pad_x)), mode="edge")
-    arr_c = arr_p.reshape(nz_c, 1, ny_c, 2, nx_c, 2).max(axis=(1, 3, 5))
+    arr_c = arr_p.reshape(nz_c, ny_c, fy, nx_c, fx).max(axis=(2, 4))
     return arr_c.astype(np.int32, copy=False)
+
+
+def _coarsen_mean_edge_1x2x2(field_f: np.ndarray) -> np.ndarray:
+    return _coarsen_mean_edge_axes(field_f, coarsen_y=2, coarsen_x=2)
+
+
+def _coarsen_max_edge_1x2x2(mask_f: np.ndarray) -> np.ndarray:
+    return _coarsen_max_edge_axes(mask_f, coarsen_y=2, coarsen_x=2)
+
+
+def _choose_horizontal_coarsening(ny: int, nx: int, min_coarse_n: int) -> tuple[int, int]:
+    """Choose independent y/x factors, preserving any dimension that cannot coarsen."""
+    minimum = int(min_coarse_n)
+    if minimum < 1:
+        raise ValueError("min_coarse_n must be >= 1.")
+    fy = 2 if ((int(ny) + 1) // 2) >= minimum and int(ny) > 1 else 1
+    fx = 2 if ((int(nx) + 1) // 2) >= minimum and int(nx) > 1 else 1
+    return fy, fx
 
 
 def _solve_chebyshev_7point_3d_linear(
@@ -2195,6 +2223,8 @@ def solve_multigrid_kcycle_7point_3d(
             "bc_values": bcv0,
             "storage_diag": sdiag0,
             "b0": b_eff0,
+            "coarsen_y": 1,
+            "coarsen_x": 1,
         }
     )
 
@@ -2202,37 +2232,50 @@ def solve_multigrid_kcycle_7point_3d(
         prev = levels_host[-1]
         nz_f, ny_f, nx_f = prev["active"].shape
 
+        coarsen_y, coarsen_x = _choose_horizontal_coarsening(
+            ny=int(ny_f),
+            nx=int(nx_f),
+            min_coarse_n=int(min_coarse_n),
+        )
+        if coarsen_y == 1 and coarsen_x == 1:
+            break
         nz_c = int(nz_f)
-        ny_c = (int(ny_f) + 1) // 2
-        nx_c = (int(nx_f) + 1) // 2
-        if (ny_c, nx_c) == (ny_f, nx_f):
-            break
-        if nx_c < int(min_coarse_n) or ny_c < int(min_coarse_n):
-            break
+        ny_c = (int(ny_f) + coarsen_y - 1) // coarsen_y
+        nx_c = (int(nx_f) + coarsen_x - 1) // coarsen_x
 
-        active_c = _coarsen_max_edge_1x2x2(prev["active"])
-        bc_mask_c = _coarsen_max_edge_1x2x2(prev["bc_mask"])
+        active_c = _coarsen_max_edge_axes(
+            prev["active"], coarsen_y=coarsen_y, coarsen_x=coarsen_x
+        )
+        bc_mask_c = _coarsen_max_edge_axes(
+            prev["bc_mask"], coarsen_y=coarsen_y, coarsen_x=coarsen_x
+        )
         bc_values_c = np.zeros((nz_c, ny_c, nx_c), dtype=NP_FLOAT)
 
-        storage_c = _coarsen_mean_edge_1x2x2(prev["storage_diag"])
+        storage_c = _coarsen_mean_edge_axes(
+            prev["storage_diag"], coarsen_y=coarsen_y, coarsen_x=coarsen_x
+        )
         free_c = (active_c != 0) & (bc_mask_c == 0)
         storage_c[~free_c] = NP_FLOAT(0.0)
 
         levels_host.append(
             {
-                "tx_p": _coarsen_mean_edge_1x2x2(prev["tx_p"]),
-                "tx_m": _coarsen_mean_edge_1x2x2(prev["tx_m"]),
-                "ty_p": _coarsen_mean_edge_1x2x2(prev["ty_p"]),
-                "ty_m": _coarsen_mean_edge_1x2x2(prev["ty_m"]),
-                "tz_p": _coarsen_mean_edge_1x2x2(prev["tz_p"]),
-                "tz_m": _coarsen_mean_edge_1x2x2(prev["tz_m"]),
+                "tx_p": _coarsen_mean_edge_axes(prev["tx_p"], coarsen_y=coarsen_y, coarsen_x=coarsen_x),
+                "tx_m": _coarsen_mean_edge_axes(prev["tx_m"], coarsen_y=coarsen_y, coarsen_x=coarsen_x),
+                "ty_p": _coarsen_mean_edge_axes(prev["ty_p"], coarsen_y=coarsen_y, coarsen_x=coarsen_x),
+                "ty_m": _coarsen_mean_edge_axes(prev["ty_m"], coarsen_y=coarsen_y, coarsen_x=coarsen_x),
+                "tz_p": _coarsen_mean_edge_axes(prev["tz_p"], coarsen_y=coarsen_y, coarsen_x=coarsen_x),
+                "tz_m": _coarsen_mean_edge_axes(prev["tz_m"], coarsen_y=coarsen_y, coarsen_x=coarsen_x),
                 "active": active_c,
                 "bc_mask": bc_mask_c,
                 "bc_values": bc_values_c,
                 "storage_diag": storage_c,
                 "b0": np.zeros((nz_c, ny_c, nx_c), dtype=NP_FLOAT),
+                "coarsen_y": 1,
+                "coarsen_x": 1,
             }
         )
+        prev["coarsen_y"] = int(coarsen_y)
+        prev["coarsen_x"] = int(coarsen_x)
 
     levels: list[dict] = []
     diag_mode = _resolve_diag_backend(diag_preconditioner_backend, device)
@@ -2248,6 +2291,8 @@ def solve_multigrid_kcycle_7point_3d(
             "nz": int(nz),
             "shape": shapeL,
             "dim": dimL,
+            "coarsen_y": int(lh.get("coarsen_y", 1)),
+            "coarsen_x": int(lh.get("coarsen_x", 1)),
             "tx_p_wp": wp.array(lh["tx_p"], dtype=WP_FLOAT, device=device),
             "tx_m_wp": wp.array(lh["tx_m"], dtype=WP_FLOAT, device=device),
             "ty_p_wp": wp.array(lh["ty_p"], dtype=WP_FLOAT, device=device),
@@ -2459,7 +2504,7 @@ def solve_multigrid_kcycle_7point_3d(
         coarse = levels[level_id + 1]
 
         wp.launch(
-            kernel=restrict_blockavg_xy_3d_kernel,
+            kernel=restrict_blockavg_axes_3d_kernel,
             dim=coarse["dim"],
             inputs=[
                 level["r_wp"],
@@ -2472,6 +2517,8 @@ def solve_multigrid_kcycle_7point_3d(
                 int(coarse["nx"]),
                 int(coarse["ny"]),
                 int(coarse["nz"]),
+                int(level.get("coarsen_y", 2)),
+                int(level.get("coarsen_x", 2)),
             ],
             device=device,
         )
@@ -2566,7 +2613,7 @@ def solve_multigrid_kcycle_7point_3d(
         )
 
         wp.launch(
-            kernel=prolong_bilinear_xy_3d_kernel,
+            kernel=prolong_bilinear_axes_3d_kernel,
             dim=level["dim"],
             inputs=[
                 coarse["z1_wp"],
@@ -2577,6 +2624,8 @@ def solve_multigrid_kcycle_7point_3d(
                 int(coarse["nx"]),
                 int(coarse["ny"]),
                 int(coarse["nz"]),
+                int(level.get("coarsen_y", 2)),
+                int(level.get("coarsen_x", 2)),
             ],
             device=device,
         )
@@ -2690,6 +2739,10 @@ def solve_multigrid_kcycle_7point_3d(
         "n_levels": int(len(levels)),
         "coarsening_mode": "horizontal",
         "level_shapes": [tuple(lh["active"].shape) for lh in levels_host],
+        "coarsening_factors": [
+            (int(lh.get("coarsen_y", 1)), int(lh.get("coarsen_x", 1)))
+            for lh in levels_host[:-1]
+        ],
         "max_cycles": int(max_cycles_i),
         "n_cycles_used": int(n_cycles_used),
         "nu_pre": int(nu_pre),

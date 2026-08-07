@@ -18,6 +18,7 @@ from DARCY_WARP_PACKAGE.solvers_3d import (
     solve_chebyshev_7point_3d,
     solve_multigrid_kcycle_7point_3d,
 )
+from DARCY_WARP_PACKAGE.solvers.session_3d import ThreeDOperatorSession
 from DARCY_WARP_PACKAGE.solvers_3d import build_7point_face_conductance_from_k
 
 
@@ -27,7 +28,9 @@ class WarpDarcySolver3D:
 
     The solver uses a cell-centered 7-point finite-volume stencil with
     harmonic-mean face conductances.  It is a thin wrapper around the
-    functions in :mod:`DARCY_WARP_PACKAGE.solvers_3d`.
+    functions in :mod:`DARCY_WARP_PACKAGE.solvers_3d`. ``implementation``
+    defaults to ``"classic"``; ``"fast"`` is an explicit FP64,
+    steady-confined face-array K-cycle.
     """
 
     def __init__(
@@ -41,6 +44,7 @@ class WarpDarcySolver3D:
         device: str = "cuda:0",
         solver: str = "kcycle",
         diag_preconditioner_backend: str = "auto",
+        implementation: str = "classic",
     ):
         if nx <= 0 or ny <= 0 or nz <= 0:
             raise ValueError("nx, ny, nz must be positive")
@@ -60,7 +64,10 @@ class WarpDarcySolver3D:
         if backend_mode not in {"auto", "host", "device"}:
             raise ValueError("diag_preconditioner_backend must be 'auto', 'host', or 'device'.")
         self.diag_preconditioner_backend = backend_mode
-
+        implementation_mode = str(implementation).strip().lower()
+        if implementation_mode not in {"classic", "fast"}:
+            raise ValueError("implementation must be 'classic' or 'fast'.")
+        self.implementation = implementation_mode
         self._tx_p: np.ndarray | None = None
         self._tx_m: np.ndarray | None = None
         self._ty_p: np.ndarray | None = None
@@ -75,6 +82,7 @@ class WarpDarcySolver3D:
         self._kx_field: np.ndarray | None = None
         self._ky_field: np.ndarray | None = None
         self._kz_field: np.ndarray | None = None
+        self._session: ThreeDOperatorSession | None = None
 
     @property
     def shape(self) -> tuple[int, int, int]:
@@ -189,6 +197,19 @@ class WarpDarcySolver3D:
         self._kx_field = None
         self._ky_field = None
         self._kz_field = None
+        if self._session is not None:
+            self._session.close()
+        self._session = ThreeDOperatorSession(
+            faces=(self._tx_p, self._tx_m, self._ty_p, self._ty_m, self._tz_p, self._tz_m),
+            active=self._active,
+            bc_mask=self._bc_mask,
+            bc_values=self._bc_values,
+            rhs=self._rhs,
+            initial_head=self._initial_head,
+            dx=self.dx,
+            dy=self.dy,
+            dz=self.dz,
+        )
         return self
 
     def solve(self, **kwargs: Any) -> tuple[np.ndarray, dict[str, Any]]:
@@ -201,6 +222,25 @@ class WarpDarcySolver3D:
         """
         if self._rhs is None:
             raise RuntimeError("Solver has not been built. Call build_from_K_fields or build_from_face_conductance first.")
+
+        if self._session is not None:
+            solve_kwargs = dict(kwargs)
+            if bool(solve_kwargs.get("unconfined", False)):
+                # The session currently owns the linear operator. Unconfined
+                # callers retain the existing standalone path until the 3D
+                # face-refresh backend is introduced.
+                if self.implementation == "fast":
+                    raise ValueError("implementation='fast' currently supports steady confined 3D solves only.")
+                pass
+            else:
+                solve_kwargs.setdefault("return_info", True)
+                return self._session.solve(
+                    solver=self.solver,
+                    device=self.device,
+                    implementation=self.implementation,
+                    diag_preconditioner_backend=self.diag_preconditioner_backend,
+                    **solve_kwargs,
+                )
 
         common = {
             "tx_p": self._tx_p,
@@ -235,8 +275,40 @@ class WarpDarcySolver3D:
             return solve_multigrid_kcycle_7point_3d(**common)
         return solve_chebyshev_7point_3d(**common)
 
+    def update_rhs(self, rhs: np.ndarray) -> None:
+        """Update the source field in the persistent 3D operator session."""
+        if self._session is None:
+            raise RuntimeError("Solver has not been built.")
+        self._session.update_rhs(rhs)
+        self._rhs = self._session.rhs
+
+    def update_initial_head(self, initial_head: np.ndarray | None) -> None:
+        """Update the persistent initial guess without rebuilding faces."""
+        if self._session is None:
+            raise RuntimeError("Solver has not been built.")
+        self._session.update_initial_head(initial_head)
+        self._initial_head = self._session.initial_head
+
+    def update_face_conductance(
+        self,
+        tx_p: np.ndarray,
+        tx_m: np.ndarray,
+        ty_p: np.ndarray,
+        ty_m: np.ndarray,
+        tz_p: np.ndarray,
+        tz_m: np.ndarray,
+    ) -> None:
+        """Refresh six face arrays in place and retain the session identity."""
+        if self._session is None:
+            raise RuntimeError("Solver has not been built.")
+        self._session.update_face_conductance((tx_p, tx_m, ty_p, ty_m, tz_p, tz_m))
+        self._tx_p, self._tx_m, self._ty_p, self._ty_m, self._tz_p, self._tz_m = self._session.faces
+
     def close(self) -> None:
         """Release stored host arrays."""
+        if self._session is not None:
+            self._session.close()
+            self._session = None
         self._tx_p = None
         self._tx_m = None
         self._ty_p = None

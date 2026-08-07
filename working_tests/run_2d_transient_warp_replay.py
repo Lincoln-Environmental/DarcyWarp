@@ -371,7 +371,7 @@ if __name__ == "__main__":
     # Choose a backend compatible with the formulation above.
     solver_backend = (
         "confined_kcycle"
-        if formulation == FORMULATION_CONFINED
+        if formulation == FORMULATION_UNCONFINED
         else "unconfined_picard_kcycle"
     )
 

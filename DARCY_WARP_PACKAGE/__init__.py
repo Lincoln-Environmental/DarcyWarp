@@ -10,6 +10,7 @@ from __future__ import annotations
 
 __all__ = [
     "create_solver",
+    "Model3DInputs",
     "WarpDarcySolver",
     "WarpDarcySolver3D",
 ]
@@ -24,6 +25,10 @@ def __getattr__(name: str):
         from DARCY_WARP_PACKAGE.model import WarpDarcySolver
 
         return WarpDarcySolver
+    if name == "Model3DInputs":
+        from DARCY_WARP_PACKAGE.model_3d_inputs import Model3DInputs
+
+        return Model3DInputs
     if name == "WarpDarcySolver3D":
         from DARCY_WARP_PACKAGE.warped_darcy_3d import WarpDarcySolver3D
 

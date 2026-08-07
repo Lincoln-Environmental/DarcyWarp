@@ -20,8 +20,10 @@ __all__ = [
     "jacobi_applyA_fused_7point_kernel",
     "prolong_trilinear_any_3d_kernel",
     "prolong_bilinear_xy_3d_kernel",
+    "prolong_bilinear_axes_3d_kernel",
     "restrict_blockavg_3d_kernel",
     "restrict_blockavg_xy_3d_kernel",
+    "restrict_blockavg_axes_3d_kernel",
     "vertical_line_relaxation_7point_kernel",
     "zero_scalar_kernel",
 ]
@@ -552,6 +554,96 @@ def add_correction_3d_kernel(
         x_f[k, j, i] = bc_values[k, j, i]
         return
     x_f[k, j, i] = x_f[k, j, i] + e_f[k, j, i]
+
+
+@wp.kernel
+def restrict_blockavg_axes_3d_kernel(
+    r_f: wp.array(dtype=WP_FLOAT, ndim=3),
+    active_f: wp.array(dtype=wp.int32, ndim=3),
+    bc_mask_f: wp.array(dtype=wp.int32, ndim=3),
+    b_c: wp.array(dtype=WP_FLOAT, ndim=3),
+    nx_f: int,
+    ny_f: int,
+    nz_f: int,
+    nx_c: int,
+    ny_c: int,
+    nz_c: int,
+    coarsen_y: int,
+    coarsen_x: int,
+):
+    """Residual restriction with independent horizontal coarsening factors."""
+    kc, jc, ic = wp.tid()
+    if kc >= nz_c or jc >= ny_c or ic >= nx_c:
+        return
+
+    j0 = coarsen_y * jc
+    i0 = coarsen_x * ic
+    s = WP_FLOAT(0.0)
+    n = WP_FLOAT(0.0)
+    for dj in range(2):
+        if coarsen_y == 1 and dj != 0:
+            continue
+        jf = j0 + dj
+        if jf >= ny_f:
+            continue
+        for di in range(2):
+            if coarsen_x == 1 and di != 0:
+                continue
+            i_f = i0 + di
+            if i_f >= nx_f:
+                continue
+            if active_f[kc, jf, i_f] != 0 and bc_mask_f[kc, jf, i_f] == 0:
+                s = s + r_f[kc, jf, i_f]
+                n = n + WP_FLOAT(1.0)
+    if n > WP_FLOAT(0.0):
+        b_c[kc, jc, ic] = s / n
+    else:
+        b_c[kc, jc, ic] = WP_FLOAT(0.0)
+
+
+@wp.kernel
+def prolong_bilinear_axes_3d_kernel(
+    x_c: wp.array(dtype=WP_FLOAT, ndim=3),
+    e_f: wp.array(dtype=WP_FLOAT, ndim=3),
+    nx_f: int,
+    ny_f: int,
+    nz_f: int,
+    nx_c: int,
+    ny_c: int,
+    nz_c: int,
+    coarsen_y: int,
+    coarsen_x: int,
+):
+    """Bilinear horizontal prolongation with independent axis factors."""
+    k, j, i = wp.tid()
+    if k >= nz_f or j >= ny_f or i >= nx_f:
+        return
+
+    jc = j // coarsen_y
+    ic = i // coarsen_x
+    fy = WP_FLOAT(0.0)
+    fx = WP_FLOAT(0.0)
+    if coarsen_y == 2 and (j & 1) == 1:
+        fy = WP_FLOAT(0.5)
+    if coarsen_x == 2 and (i & 1) == 1:
+        fx = WP_FLOAT(0.5)
+    jc1 = jc + 1
+    ic1 = ic + 1
+    if jc1 >= ny_c:
+        jc1 = ny_c - 1
+    if ic1 >= nx_c:
+        ic1 = nx_c - 1
+
+    c00 = x_c[k, jc, ic]
+    c01 = x_c[k, jc, ic1]
+    c10 = x_c[k, jc1, ic]
+    c11 = x_c[k, jc1, ic1]
+    e_f[k, j, i] = (
+        c00 * (WP_FLOAT(1.0) - fx) * (WP_FLOAT(1.0) - fy)
+        + c01 * fx * (WP_FLOAT(1.0) - fy)
+        + c10 * (WP_FLOAT(1.0) - fx) * fy
+        + c11 * fx * fy
+    )
 
 
 @wp.kernel
