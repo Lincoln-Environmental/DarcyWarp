@@ -46,12 +46,12 @@ def build_7point_face_conductance_from_k(
     Returns (tx_p, tx_m, ty_p, ty_m, tz_p, tz_m), each shape (nz, ny, nx),
     where e.g. tx_p[k,j,i] couples cell (k,j,i) to (k,j,i+1).
     """
-    if float(dx) <= 0.0:
-        raise ValueError("dx must be > 0.")
+    if not np.isfinite(float(dx)) or float(dx) <= 0.0:
+        raise ValueError("dx must be finite and > 0.")
     dy_f = float(dx) if dy is None else float(dy)
     dz_f = float(dz)
-    if dy_f <= 0.0 or dz_f <= 0.0:
-        raise ValueError("dy and dz must be > 0.")
+    if not np.isfinite(dy_f) or not np.isfinite(dz_f) or dy_f <= 0.0 or dz_f <= 0.0:
+        raise ValueError("dy and dz must be finite and > 0.")
 
     Kx = np.asarray(kx_field, dtype=np.float64)
     Ky = np.asarray(ky_field, dtype=np.float64)

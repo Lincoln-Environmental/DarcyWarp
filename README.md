@@ -40,6 +40,16 @@ bash scripts/generate_docs.sh
 
 Generated HTML docs are written to `build/html/index.html`.
 
+## 3D river-loss case study
+
+`DARCY_WARP_PACKAGE.case_studies.river_loss_cross_section` is an example
+builder for a saturated, steady x-z structural-sensitivity experiment.  It
+assembles reusable `Model3DInputs` with shape `(nz, 1, nx)` and solves through
+the generic seven-point 3D backend; river geometry and outlet policies remain
+local to the case study.  The compatibility runner is
+`working_tests/run_river_loss_cross_section.py` (or
+`python -m DARCY_WARP_PACKAGE.river_loss_cross_section`).
+
 What this does
 
 Generates a fixed set of n_cases synthetic recharge fields for a grid (nx, ny, dx)

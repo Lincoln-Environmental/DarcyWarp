@@ -48,14 +48,16 @@ class WarpDarcySolver3D:
     ):
         if nx <= 0 or ny <= 0 or nz <= 0:
             raise ValueError("nx, ny, nz must be positive")
-        if float(dx) <= 0.0:
-            raise ValueError("dx must be > 0")
+        if not np.isfinite(float(dx)) or float(dx) <= 0.0:
+            raise ValueError("dx must be finite and > 0")
         self.nx = int(nx)
         self.ny = int(ny)
         self.nz = int(nz)
         self.dx = float(dx)
         self.dy = float(dy) if dy is not None else self.dx
         self.dz = float(dz)
+        if not np.isfinite(self.dy) or self.dy <= 0.0 or not np.isfinite(self.dz) or self.dz <= 0.0:
+            raise ValueError("dy and dz must be finite and > 0")
         self.device = str(device)
         self.solver = str(solver).lower()
         if self.solver not in {"kcycle", "chebyshev"}:
@@ -179,37 +181,37 @@ class WarpDarcySolver3D:
             if a.shape != shape:
                 raise ValueError(f"{name} shape {a.shape} does not match {shape}")
 
-        self._tx_p = np.asarray(tx_p, dtype=NP_FLOAT)
-        self._tx_m = np.asarray(tx_m, dtype=NP_FLOAT)
-        self._ty_p = np.asarray(ty_p, dtype=NP_FLOAT)
-        self._ty_m = np.asarray(ty_m, dtype=NP_FLOAT)
-        self._tz_p = np.asarray(tz_p, dtype=NP_FLOAT)
-        self._tz_m = np.asarray(tz_m, dtype=NP_FLOAT)
-        self._active = np.asarray(active, dtype=np.int32)
-        self._bc_mask = np.asarray(bc_mask, dtype=np.int32)
-        self._bc_values = np.asarray(bc_values, dtype=NP_FLOAT)
-        self._rhs = np.asarray(rhs, dtype=NP_FLOAT)
-        self._initial_head = (
-            np.asarray(initial_head, dtype=NP_FLOAT)
-            if initial_head is not None
-            else None
-        )
+        input_faces = tuple(np.asarray(value, dtype=NP_FLOAT) for value in (tx_p, tx_m, ty_p, ty_m, tz_p, tz_m))
+        input_active = np.asarray(active, dtype=np.int32)
+        input_bc_mask = np.asarray(bc_mask, dtype=np.int32)
+        input_bc_values = np.asarray(bc_values, dtype=NP_FLOAT)
+        input_rhs = np.asarray(rhs, dtype=NP_FLOAT)
+        input_initial = None if initial_head is None else np.asarray(initial_head, dtype=NP_FLOAT)
         self._kx_field = None
         self._ky_field = None
         self._kz_field = None
         if self._session is not None:
             self._session.close()
         self._session = ThreeDOperatorSession(
-            faces=(self._tx_p, self._tx_m, self._ty_p, self._ty_m, self._tz_p, self._tz_m),
-            active=self._active,
-            bc_mask=self._bc_mask,
-            bc_values=self._bc_values,
-            rhs=self._rhs,
-            initial_head=self._initial_head,
+            faces=input_faces,
+            active=input_active,
+            bc_mask=input_bc_mask,
+            bc_values=input_bc_values,
+            rhs=input_rhs,
+            initial_head=input_initial,
             dx=self.dx,
             dy=self.dy,
             dz=self.dz,
         )
+        # The session is the single owner of operator state.  Keep the
+        # compatibility attributes as references, so classic, fast and the
+        # unconfined fallback cannot observe divergent host arrays.
+        self._tx_p, self._tx_m, self._ty_p, self._ty_m, self._tz_p, self._tz_m = self._session.faces
+        self._active = self._session.active
+        self._bc_mask = self._session.bc_mask
+        self._bc_values = self._session.bc_values
+        self._rhs = self._session.rhs
+        self._initial_head = self._session.initial_head
         return self
 
     def solve(self, **kwargs: Any) -> tuple[np.ndarray, dict[str, Any]]:

@@ -44,8 +44,20 @@ def boundary_interface_flux(
             raise ValueError(f"{name} shape {np.asarray(value).shape} does not match {shape}.")
 
     h = np.asarray(head, dtype=np.float64)
-    bnd = np.asarray(boundary_mask) != 0
-    act = np.asarray(active) != 0
+    active_raw = np.asarray(active)
+    boundary_raw = np.asarray(boundary_mask)
+    if not np.all(np.isfinite(active_raw)) or not np.all(np.isfinite(boundary_raw)):
+        raise ValueError("active and boundary_mask must contain finite values.")
+    act = active_raw != 0
+    bnd = (boundary_raw != 0) & act
+    if not np.all(np.isfinite(h)):
+        raise ValueError("head must contain finite values.")
+    conductances = tuple(np.asarray(arr, dtype=np.float64) for arr in (tx_p, tx_m, ty_p, ty_m, tz_p, tz_m))
+    if any(not np.all(np.isfinite(arr)) for arr in conductances):
+        raise ValueError("face conductances must contain finite values.")
+    if any(np.any(arr < 0.0) for arr in conductances):
+        raise ValueError("face conductances must be non-negative.")
+    tx_p, tx_m, ty_p, ty_m, tz_p, tz_m = conductances
     other = act & ~bnd
     total = 0.0
 
