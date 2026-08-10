@@ -29,8 +29,8 @@ class WarpDarcySolver3D:
     The solver uses a cell-centered 7-point finite-volume stencil with
     harmonic-mean face conductances.  It is a thin wrapper around the
     functions in :mod:`DARCY_WARP_PACKAGE.solvers_3d`. ``implementation``
-    defaults to ``"classic"``; ``"fast"`` is an explicit FP64,
-    steady-confined face-array K-cycle.
+    defaults to ``"classic"``; ``"fast"`` is an explicit FP64 face-array
+    K-cycle for steady and backward-Euler confined flow.
     """
 
     def __init__(
@@ -232,7 +232,10 @@ class WarpDarcySolver3D:
                 # callers retain the existing standalone path until the 3D
                 # face-refresh backend is introduced.
                 if self.implementation == "fast":
-                    raise ValueError("implementation='fast' currently supports steady confined 3D solves only.")
+                    raise ValueError(
+                        "implementation='fast' currently supports confined "
+                        "3D solves only."
+                    )
                 pass
             else:
                 solve_kwargs.setdefault("return_info", True)
@@ -290,6 +293,14 @@ class WarpDarcySolver3D:
             raise RuntimeError("Solver has not been built.")
         self._session.update_initial_head(initial_head)
         self._initial_head = self._session.initial_head
+
+    def update_boundary_values(self, bc_values: np.ndarray) -> None:
+        """Update prescribed heads while retaining faces and boundary masks."""
+
+        if self._session is None:
+            raise RuntimeError("Solver has not been built.")
+        self._session.update_boundary_values(bc_values)
+        self._bc_values = self._session.bc_values
 
     def update_face_conductance(
         self,
