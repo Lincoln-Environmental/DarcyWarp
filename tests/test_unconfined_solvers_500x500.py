@@ -5,9 +5,10 @@ against the MF6 truth artifact for every unconfined backend:
 
 * ``unconfined_picard_kcycle`` — production default, full replay harness
   (production acceptance, head accuracy, mass balance, runtime),
-* ``unconfined_semismooth_newton_kcycle`` — experimental, via the experimental
-  multi-period transient driver (head accuracy, budget closure, runtime),
-* ``unconfined_fas`` — experimental, same experimental driver path.
+* ``unconfined_semismooth_newton_kcycle`` — production alternative via the
+  alternate nonlinear multi-period driver (head accuracy, budget closure,
+  runtime),
+* ``unconfined_fas`` — experimental, through the same compatibility driver.
 
 The MF6 truth artifact is generated on first use by
 ``run_2d_transient_warp_replay.ensure_case_artifact`` and cached under
@@ -46,7 +47,7 @@ GRID_NY = 500
 N_PERIODS = 52
 T_FIELD_KIND = "homogeneous"
 
-EXPERIMENTAL_BACKENDS = (
+ALTERNATE_NONLINEAR_BACKENDS = (
     "unconfined_semismooth_newton_kcycle",
     "unconfined_fas",
 )
@@ -119,9 +120,9 @@ def test_picard_production_replay_500x500(case_artifact):
     assert np.isfinite(warp_total) and warp_total > 0.0
 
 
-@pytest.mark.parametrize("backend", EXPERIMENTAL_BACKENDS)
-def test_experimental_backend_500x500(loaded_case, backend):
-    """Experimental backends: multi-period transient via the experimental driver."""
+@pytest.mark.parametrize("backend", ALTERNATE_NONLINEAR_BACKENDS)
+def test_alternate_nonlinear_backend_500x500(loaded_case, backend):
+    """Alternate nonlinear backends run complete multi-period simulations."""
     from DARCY_WARP_PACKAGE.warped_darcy import WarpDarcySolver
 
     spatial = loaded_case["spatial"]

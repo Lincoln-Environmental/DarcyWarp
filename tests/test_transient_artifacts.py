@@ -15,6 +15,19 @@ from working_tests.transient_artifacts import (
     validate_transient_artifact,
 )
 from working_tests.transient_replay_metrics import compare_transient
+from working_tests.run_2d_transient_warp_replay import production_solver_backend
+from working_tests.transient_artifacts import FORMULATION_CONFINED, FORMULATION_UNCONFINED
+
+
+def test_production_solver_backend_matches_replay_formulation():
+    assert production_solver_backend(
+        formulation=FORMULATION_CONFINED,
+    ) == "confined_kcycle"
+    assert production_solver_backend(
+        formulation=FORMULATION_UNCONFINED,
+    ) == "unconfined_picard_kcycle"
+    with pytest.raises(ValueError, match="formulation"):
+        production_solver_backend(formulation="invalid")
 
 
 def _write_artifact(path: Path, *, sy: float = 0.1, ss: float = 1.0e-5, dt: float = 7.0,

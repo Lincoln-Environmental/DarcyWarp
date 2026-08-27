@@ -76,9 +76,9 @@ DARCY_WARP_PACKAGE/
                            # 8.8e-9 at hclose=1e-6).  Validation:
                            # `working_tests/validate_unconfined_ghb_hardt.py`.
     transient_unconfined.py # transient period driver incl. production device fast path
-    transient_experimental.py # experimental multi-period/timestep driver (FAS/Newton)
+    transient_experimental.py # compatibility-named alternate period driver (production Newton + experimental FAS)
     pcg.py               # confined PCG backend
-    semismooth_newton.py # experimental Newton backend (FGMRES + K-cycle preconditioner)
+    semismooth_newton.py # production Newton alternative (FGMRES + K-cycle preconditioner)
     fas.py               # experimental FAS V-cycle backend
     fas_hierarchy.py, fas_kernels.py, fas_state.py  # FAS rediscretized hierarchy/state/kernels
     fgmres.py, kcycle_preconditioner.py, newton_kernels.py  # Newton machinery
@@ -89,14 +89,15 @@ DARCY_WARP_PACKAGE/
     mixed_vcycle.py        # EXPERIMENTAL fixed V-cycle correction (REJECTED 2026-07-30:
                            # stalls on smooth defects — approximate coarse operators;
                            # retained to reproduce MIXED_PRECISION_CAMPAIGN.md §2)
-    mixed_fast_kernels.py  # EXPERIMENTAL face-array stencil kernels (explicit f32/f64
+    mixed_fast_kernels.py  # face-array stencil kernels used by production mixed precision (explicit f32/f64
                            # variants), two-stage block reductions, block-reduced FP64
                            # outer kernels
-    mixed_fast.py          # EXPERIMENTAL fast K-cycle session: face arrays + true-FP32
+    mixed_fast.py          # PRODUCTION mixed-precision fast K-cycle session: face arrays + true-FP32
                            # arithmetic + CUDA-graphed fixed correction block inside the
                            # FP64 outer loop.  3.0-4.4× faster than production FP64 with
-                           # all gates passing — adopt-experimentally verdict,
-                           # non-default (MIXED_PRECISION_CAMPAIGN.md).  Callable via
+                           # all gates passing. It remains an explicit precision
+                           # choice because the model starts under DARCY_FLOAT=float32.
+                           # Historical results: MIXED_PRECISION_CAMPAIGN.md. Callable via
                            # MixedFastConfig / get_mixed_fast_session / solve_mixed_fast
     face_kernels_f64.py    # PRODUCTION FP64 face-array kernels (harmonic face build,
                            # jacobi/residual, two-stage reductions, block-reduced check)
@@ -116,7 +117,7 @@ DARCY_WARP_PACKAGE/
                            # fast alike); GHB arrays are established before
                            # the face refresh and missing GHB arrays in a
                            # use_ghb hierarchy raise.
-    mixed_transient_f32.py # EXPERIMENTAL opt-in FP32 inner correction K-cycle
+    mixed_transient_f32.py # PRODUCTION FP32 inner correction K-cycle
                            # for the transient unconfined device fast path
                            # (UNCONFINED_FAST_PLAN.md Phase C, 2026-07-30):
                            # FP64 outer loop unchanged; per outer the FP64
@@ -125,9 +126,9 @@ DARCY_WARP_PACKAGE/
                            # per outer in the refresh graph; Jacobi-block
                            # coarsest; graph-captured/replayed like the FP64
                            # path), correction cast back to FP64.  Enable via
-                           # transient_mixed_precision_enabled /
-                           # DARCY_TRANSIENT_MIXED=1 (default OFF; requires the
-                           # face operator).  1000x1000 30w hard-T: 29.0 s vs
+                           # transient_mixed_precision_enabled (enabled by the
+                           # production replay) / DARCY_TRANSIENT_MIXED=1;
+                           # requires the face operator. 1000x1000 30w hard-T: 29.0 s vs
                            # 33.1 s FP64, strict 30/30, heads <=4.5e-5; 500x500
                            # 52w: 12.5 s vs 13.8 s; +11% mempool at 1M.
     face_transient_f64.py  # PRODUCTION face-array operator for the 2D transient
@@ -278,12 +279,11 @@ tests/
 Canonical backends live in `solvers/registry.py` + `solver_capabilities.py`:
 
 - Production: `confined_pcg` (steady only; `transient=True` raises
-  `NotImplementedError`), `confined_kcycle`, `unconfined_picard_kcycle`
-  (production default; the only backend allowed in the multi-period transient
-  driver — gated via `supports_production_period_driver`).
-- Experimental (`select_backend` emits a runtime warning):
-  `unconfined_semismooth_newton_kcycle`, `unconfined_fas`. Single solves cover
-  steady or one transient timestep; when explicitly selected they may also drive
+  `NotImplementedError`), `confined_kcycle` (confined default),
+  `unconfined_picard_kcycle` (unconfined default), and
+  `unconfined_semismooth_newton_kcycle` (production alternative).
+- Experimental (`select_backend` emits a runtime warning): `unconfined_fas`.
+  When explicitly selected, Newton and FAS may drive
   complete multi-timestep/multi-period transient simulations through
   `solvers/transient_experimental.py` (capability-gated via
   `supports_production_period_driver`; per-timestep state refresh, retry-first
@@ -554,7 +554,7 @@ Usually means `sat = h - bottom` (saturated thickness of the aquifer), not soil 
   the authoritative secant Ss potential — device-vs-host head differences
   of ~1e-5 m on draining cases come from that, not from the GHB port.
 
-### Experimental unconfined backends (500x500 52w homogeneous vs MF6, engine 162.0 s)
+### Alternate unconfined backends (500x500 52w homogeneous vs MF6, engine 162.0 s)
 
 | Backend | Time | Speedup vs MF6 | Final RMSE | Worst-period RMSE | Retries/fallbacks |
 |---|---|---|---|---|---|
@@ -568,9 +568,10 @@ Usually means `sat = h - bottom` (saturated thickness of the aquifer), not soil 
   host hierarchy build 1.35 s -> 0.03 s, defect/diagonal kernel fusion,
   CUDA-graph coarsest sweep block). Chebyshev smoothing of the nonlinear FAS
   defect was tried and abandoned (over-relaxes the nonlinear iterate).
-- The experimental backends run complete multi-timestep/multi-period
-  transient simulations through `solvers/transient_experimental.py`
-  (explicitly selected only; Picard remains the production default).
+- The alternate nonlinear backends run complete multi-timestep/multi-period
+  transient simulations through the compatibility-named
+  `solvers/transient_experimental.py` (explicitly selected only; Picard remains
+  the production default and only FAS remains experimental).
 - 1000x1000 hard-T (ugly_t) status (2026-07-20): the 1M host hierarchy build
   is 0.12 s after vectorization, but **FAS does not converge on the hard-T 1M
   case** (`fas_cycle_limit`, residual contraction ~0.85/cycle at every dt), and
@@ -596,8 +597,8 @@ Usually means `sat = h - bottom` (saturated thickness of the aquifer), not soil 
   implementation validated but not faster (`solvers/mixed_precision.py`,
   `MIXED_PRECISION_PLAN.md`).  The 2026-07-30 optimisation campaign
   (`MIXED_PRECISION_CAMPAIGN.md`) then delivered a 3.0-4.4× end-to-end win over
-  production FP64 (`solvers/mixed_fast.py` + `mixed_fast_kernels.py`, experimental,
-  opt-in, steady confined only): face-conductance precompute (removes per-call FP64
+  production FP64 (`solvers/mixed_fast.py` + `mixed_fast_kernels.py`, now the
+  production mixed-precision choice for steady confined solves): face-conductance precompute (removes per-call FP64
   divisions), true-FP32 stencil arithmetic, block-reduced reductions (production's
   per-thread FP64 atomics serialize — level-0 residual was 2.78 ms vs 0.47 ms
   smoother), Jacobi-block coarsest, and CUDA-graph capture of the fixed correction
@@ -627,7 +628,7 @@ Usually means `sat = h - bottom` (saturated thickness of the aquifer), not soil 
 | `test_adaptive_inner_controller.py` | — | pure-Python adaptive block controller |
 | `test_solver_registry_2d.py` | — | backend registry, aliases, capability flags |
 | `test_nonlinear_operator_2d.py` | warp | Stage-1 nonlinear operator vs host reference, Jv, exact storage |
-| `test_semismooth_newton_2d.py` | warp | experimental Newton backend (steady/transient/GHB/fallbacks) |
+| `test_semismooth_newton_2d.py` | warp | production Newton alternative (steady/transient/GHB/fallbacks) |
 | `test_fas_2d.py` | warp | experimental FAS backend (hierarchy, cycles, fallbacks, workspace reuse) |
 | `test_fas_transient_multistep.py` | warp | FAS multi-timestep/multi-period transient: retry, fallback, state reset, FAS vs Picard histories |
 | `test_unconfined_solvers_500x500.py` | warp + CUDA + MF6 artifact | all 3 unconfined backends on the 500x500 52w homogeneous case: runtime + MF6 head-accuracy validation |
@@ -681,9 +682,9 @@ python working_tests/run_2d_transient_warp_replay.py
 | Mass balance | `working_tests/transient_replay_mass_balance.py` | |
 | Acceptance reporting | `working_tests/transient_replay_reporting.py` | |
 | Diagnostics ladder | `working_tests/run_transient_unconfined_diagnostics.py` | read verdict logic ~l. 1332 |
-| Status docs | `TRANSIENT_STATUS.md`, `transient_progress.md`, `working_tests/darcywarp_transient_unconfined_changes.rst`, `UNCONFINED_FAST_PLAN.md` (port of fast-kernel learnings to the unconfined path; all phases landed — A/B/D production-default, C opt-in experimental) | |
+| Status docs | `TRANSIENT_STATUS.md`, `transient_progress.md`, `working_tests/darcywarp_transient_unconfined_changes.rst`, `UNCONFINED_FAST_PLAN.md` (port of fast-kernel learnings to the unconfined path; all phases landed and Phase C is selected by the production replay) | |
 | Benchmark entry | `bench_and_plot.py`, `model_benchmarking_recharge_change.py`, `model_benchmarking_T_change.py` | |
-| Steady confined convergence/sanity benchmark | `model_convergence_and_sanity_tests.py` (+ `sanity_case_config.py`) | MF6 heads cached per case in `DARCY_WARP_PACKAGE/data/mf6_truth_npz/` (metadata-validated, atomic write; MF6 runs only on cache miss). Solver switches in the `__main__` block: `use_fast_fp64` (implementation="fast", results JSON `..._fast.json`) and `use_mixed_precision_fp32` (experimental `mixed_fast`; relaunches the script once with `DARCY_FLOAT=float32` pinned, results JSON `..._mixed.json`). `DARCY_KCYCLE_IMPL` env var also honoured |
+| Steady confined convergence/sanity benchmark | `model_convergence_and_sanity_tests.py` (+ `sanity_case_config.py`) | MF6 heads cached per case in `DARCY_WARP_PACKAGE/data/mf6_truth_npz/` (metadata-validated, atomic write; MF6 runs only on cache miss). Solver switches in the `__main__` block: `use_fast_fp64` (implementation="fast", results JSON `..._fast.json`) and `use_mixed_precision_fp32` (production `mixed_fast`; relaunches the script once with `DARCY_FLOAT=float32` pinned, results JSON `..._mixed.json`). `DARCY_KCYCLE_IMPL` env var also honoured |
 
 ---
 

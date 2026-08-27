@@ -228,10 +228,11 @@ def test_solver_selection_validation_and_aliases():
     ) == "unconfined_semismooth_newton_kcycle"
     assert CAPABILITIES["unconfined_picard_kcycle"].production_default
     assert CAPABILITIES["unconfined_picard_kcycle"].supports_production_period_driver
-    assert CAPABILITIES["unconfined_semismooth_newton_kcycle"].experimental
+    assert CAPABILITIES["confined_kcycle"].production_default
+    assert not CAPABILITIES["unconfined_semismooth_newton_kcycle"].experimental
     assert not CAPABILITIES["unconfined_semismooth_newton_kcycle"].production_default
-    # Experimental backends may drive the multi-period transient dispatcher
-    # through the experimental driver branch (still not the production path).
+    # Non-default nonlinear backends may drive the multi-period dispatcher
+    # through the alternate driver branch. Only FAS remains experimental.
     assert CAPABILITIES["unconfined_semismooth_newton_kcycle"].supports_production_period_driver
     assert CAPABILITIES["unconfined_fas"].experimental
     assert not CAPABILITIES["unconfined_fas"].production_default
@@ -242,12 +243,13 @@ def test_solver_selection_validation_and_aliases():
         transient=True,
         default="unconfined_picard_kcycle",
     ).name == "unconfined_semismooth_newton_kcycle"
-    assert select_backend(
-        solver="unconfined_fas",
-        formulation="unconfined",
-        transient=True,
-        default="unconfined_picard_kcycle",
-    ).name == "unconfined_fas"
+    with pytest.warns(UserWarning, match="experimental"):
+        assert select_backend(
+            solver="unconfined_fas",
+            formulation="unconfined",
+            transient=True,
+            default="unconfined_picard_kcycle",
+        ).name == "unconfined_fas"
     with pytest.raises(ValueError, match="requires formulation='unconfined'"):
         canonical_solver_name("unconfined_picard_kcycle", formulation="confined", default="pcg")
     with pytest.raises(ValueError, match="requires formulation='unconfined'"):

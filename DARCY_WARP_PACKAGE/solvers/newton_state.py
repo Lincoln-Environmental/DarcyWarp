@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-"""Cached fine-grid operator state for the experimental semismooth-Newton backend.
+"""Cached fine-grid operator state for the production semismooth-Newton backend.
 
 ``NewtonOperatorWorkspace2D`` is the Newton analogue of the FAS
 :class:`FASWorkspace` reuse/refresh split.  It owns a single persistent

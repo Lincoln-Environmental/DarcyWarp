@@ -48,10 +48,12 @@
 > regressions: pytest 18/18, 100x100 3w and 500x500 10w replays
 > unchanged (identical RMSE, runtime ballpark).
 >
-> Status (2026-07-30, later still): **Phase C LANDED as opt-in
-> EXPERIMENTAL** (`transient_mixed_precision_enabled` control /
-> `DARCY_TRANSIENT_MIXED=1` env, default OFF, requires the face operator;
-> `solvers/mixed_transient_f32.py`).  Design: Option 1 implemented in
+> Status (updated 2026-08-28): **Phase C is the production mixed-precision
+> path** selected by `run_2d_transient_warp_replay.py`
+> (`transient_mixed_precision_enabled=True`). It requires the face operator;
+> `DARCY_TRANSIENT_MIXED=1` remains an environment-level selector for
+> lower-level calls. The implementation is in
+> `solvers/mixed_transient_f32.py`. Design: Option 1 implemented in
 > correction form — per Picard outer the FP64 nonlinear residual
 > `r = b - A*h^k` is cast to FP32 and fixed-work FP32 K-cycles solve
 > `A32*delta32 = r32` (FP32 faces rebuilt every outer inside the captured

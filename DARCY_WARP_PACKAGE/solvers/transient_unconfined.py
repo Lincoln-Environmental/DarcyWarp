@@ -2480,9 +2480,10 @@ def solve_transient_unconfined(
         # Production default: the Picard period driver, byte-for-byte unchanged.
         result = solve_transient_unconfined_backend(model=context.model, **kwargs)
     else:
-        # Explicitly selected experimental nonlinear backends run through the
-        # capability-gated experimental driver (per-timestep solves, retry,
-        # fallback, budgets, full histories).
+        # Explicitly selected nonlinear backends run through the alternate
+        # capability-gated driver (per-timestep solves, retry, fallback,
+        # budgets, full histories). FAS remains experimental; Newton is a
+        # production alternative.
         result = solve_transient_unconfined_experimental(
             model=context.model,
             backend_name=backend.name,

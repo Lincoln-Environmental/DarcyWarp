@@ -17,7 +17,11 @@ class SolverCapabilities:
 
 CAPABILITIES: dict[str, SolverCapabilities] = {
     "confined_pcg": SolverCapabilities(frozenset({"confined"}), False),
-    "confined_kcycle": SolverCapabilities(frozenset({"confined"}), True),
+    "confined_kcycle": SolverCapabilities(
+        frozenset({"confined"}),
+        True,
+        production_default=True,
+    ),
     "unconfined_picard_kcycle": SolverCapabilities(
         frozenset({"unconfined"}),
         True,
@@ -27,7 +31,6 @@ CAPABILITIES: dict[str, SolverCapabilities] = {
     "unconfined_semismooth_newton_kcycle": SolverCapabilities(
         frozenset({"unconfined"}),
         True,
-        experimental=True,
         supports_production_period_driver=True,
     ),
     "unconfined_fas": SolverCapabilities(

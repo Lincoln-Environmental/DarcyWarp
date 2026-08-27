@@ -18,7 +18,7 @@ from DARCY_WARP_PACKAGE.CPU_FD import run_fd_truth_forward
 from DARCY_WARP_PACKAGE.project_base import data_store
 
 # DARCY_FLOAT must be pinned before warped_darcy/config are imported.  The
-# experimental mixed-precision path needs a float32-built hierarchy, so the
+# production mixed-precision path needs a float32-built hierarchy, so the
 # __main__ switch below relaunches this script once with DARCY_MIXED_FP32=1.
 os.environ["DARCY_FLOAT"] = (
     "float32" if os.environ.get("DARCY_MIXED_FP32") == "1" else "float64"
@@ -86,7 +86,7 @@ def run_solve(solver, check_every_no: int = 5):
 
 
 def run_solve_mixed(solver):
-    """Experimental mixed-precision solve (FP64 master + FP32 fast correction).
+    """Production mixed-precision solve (FP64 master + FP32 fast correction).
 
     Requires the model to have been built under DARCY_FLOAT=float32 (the
     __main__ switch handles the relaunch).  Uses the validated
@@ -349,15 +349,14 @@ if __name__ == "__main__":
     ghb = bool(DEFAULT_GHB)
     isotropic = bool(DEFAULT_ISOTROPIC)
 
-    # --- solver implementation switches (production default: both False) ---
+    # --- production solver implementation switches ---
     # Fast FP64 K-cycle: face arrays + block-reduced reductions + graphed
     # cycles (implementation="fast").  See MIXED_PRECISION_CAMPAIGN.md.
     use_fast_fp64 = True
-    # Experimental mixed precision: FP64 master head + FP32 fast correction
+    # Production mixed precision: FP64 master head + FP32 fast correction
     # (solvers/mixed_fast.py).  Overrides use_fast_fp64.  Needs a float32
     # model hierarchy, so this script relaunches itself once with
-    # DARCY_FLOAT=float32 pinned.  EXPERIMENTAL and non-default: opt in by
-    # flipping this switch locally.
+    # DARCY_FLOAT=float32 pinned. Select it by flipping this switch locally.
     use_mixed_precision_fp32 = True
     # Run the CPU FD (numpy) reference solve and its comparisons.  Disable
     # to skip the slow host solve on large grids.

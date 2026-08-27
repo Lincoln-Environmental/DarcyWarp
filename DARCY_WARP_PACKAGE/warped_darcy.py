@@ -7402,9 +7402,9 @@ class WarpDarcySolver:
         solver:
             Optional backend selector. ``"confined_pcg"``,
             ``"confined_kcycle"``, ``"unconfined_picard_kcycle"``, and the
-            experimental ``"unconfined_semismooth_newton_kcycle"`` and
-            ``"unconfined_fas"`` are
-            explicit names. Legacy ``"pcg"``, ``"kcycle"``, ``"multigrid"``,
+            production alternative ``"unconfined_semismooth_newton_kcycle"``
+            and experimental ``"unconfined_fas"`` are explicit names. Legacy
+            ``"pcg"``, ``"kcycle"``, ``"multigrid"``,
             and ``"mg"`` remain supported. PCG is confined steady-state only;
             transient PCG calls raise ``NotImplementedError`` so storage terms
             cannot be silently ignored.

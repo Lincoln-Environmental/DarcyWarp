@@ -1,9 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-"""EXPERIMENTAL fast K-cycle correction driver (campaign Phase 3).
+"""Production mixed-precision fast K-cycle correction driver.
 
-Status: **experimental, opt-in, non-production** (see
-``MIXED_PRECISION_CAMPAIGN.md``).  Not part of the solver registry; reachable
-by no alias.  Production kernels/paths are untouched.
+This is the production mixed-precision path used by the confined steady
+benchmark runner. It remains an explicit precision choice because the model
+must be created under ``DARCY_FLOAT=float32``; it is therefore not represented
+as a separate numerical backend in the solver registry.
 
 Structure is deliberately identical to the production fixed-work K-cycle
 (two descents + per-level 2-term Krylov; Phase 2 showed that structure is
@@ -29,15 +30,16 @@ from typing import Any
 import numpy as np
 import warp as wp
 
-from .mixed_precision import EXPERIMENTAL, MixedPrecisionDefectCorrectionSession
+from .mixed_precision import MixedPrecisionDefectCorrectionSession
 from . import mixed_fast_kernels as mf3
 
 _BLOCK = 256
+EXPERIMENTAL = False
 
 
 @dataclass(frozen=True)
 class MixedFastConfig:
-    """Validated experimental settings for the fast mixed-precision solver.
+    """Validated production settings for the fast mixed-precision solver.
 
     Defaults are the campaign-validated configuration
     (``MIXED_PRECISION_CAMPAIGN.md``): 5 fast K-cycles per outer refinement,
@@ -107,7 +109,7 @@ def solve_mixed_fast(
     R_f64: np.ndarray,
     config: MixedFastConfig = MixedFastConfig(),
 ):
-    """One complete experimental mixed-precision solve from ``initial_head_f64``.
+    """Run one production mixed-precision solve from ``initial_head_f64``.
 
     Every timed invocation starts from the caller-supplied head (benchmarks:
     the original DEM); all defect-correction iterations and K-cycles are
@@ -380,11 +382,11 @@ def solve_kcycle_fast_device_buffers(
 
 
 class MixedPrecisionFastSession(MixedPrecisionDefectCorrectionSession):
-    """EXPERIMENTAL mixed-precision session with fast FP32 K-cycle correction
+    """Production mixed-precision session with fast FP32 K-cycle correction
     and block-reduced FP64 outer kernels."""
 
     def __init__(self, model: Any, **kwargs: Any):
-        super().__init__(model, **kwargs)
+        super().__init__(model, emit_experimental_warning=False, **kwargs)
         device = self.device
 
         # FP32 face arrays for every hierarchy level (correction operator)
@@ -409,6 +411,14 @@ class MixedPrecisionFastSession(MixedPrecisionDefectCorrectionSession):
         # by the solve-control values that affect the launch sequence.
         self._correction_graph = None
         self._correction_graph_key = None
+
+    def solve(self, initial_head_f64: np.ndarray, **controls: Any):
+        """Solve with production mixed precision and label the result accordingly."""
+        head, info = super().solve(initial_head_f64, **controls)
+        production_info = dict(info)
+        production_info["experimental"] = False
+        production_info["production_precision_path"] = True
+        return head, production_info
 
     # -- graph-captured correction block (Phase 4) -----------------------------
 

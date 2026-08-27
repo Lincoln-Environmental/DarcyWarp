@@ -1,4 +1,4 @@
-"""Regression coverage for the EXPERIMENTAL fast mixed-precision campaign code.
+"""Regression coverage for production fast mixed precision and campaign references.
 
 Covers ``DARCY_WARP_PACKAGE.solvers.mixed_fast_kernels`` (Phase 3 kernels),
 ``DARCY_WARP_PACKAGE.solvers.mixed_fast`` (fast K-cycle session), and
@@ -316,7 +316,7 @@ def test_fast_session_matches_fp64_backend(fast_child_results):
         solver.close()
 
 
-def test_fast_and_vcycle_paths_remain_experimental_and_unregistered():
+def test_fast_path_is_production_and_rejected_vcycle_remains_experimental():
     from DARCY_WARP_PACKAGE.solver_capabilities import ALIASES, CAPABILITIES
 
     assert not any("mixed" in name for name in CAPABILITIES)
@@ -325,7 +325,7 @@ def test_fast_and_vcycle_paths_remain_experimental_and_unregistered():
 
     from DARCY_WARP_PACKAGE.solvers import mixed_fast, mixed_vcycle
 
-    assert mixed_fast.EXPERIMENTAL is True
+    assert mixed_fast.EXPERIMENTAL is False
     assert mixed_vcycle.EXPERIMENTAL is True
 
 

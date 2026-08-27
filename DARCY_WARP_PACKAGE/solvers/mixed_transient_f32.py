@@ -1,10 +1,11 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-"""EXPERIMENTAL FP32 inner correction K-cycle for the 2D transient
-unconfined device fast path (Phase C of ``UNCONFINED_FAST_PLAN.md``,
+"""Production FP32 inner correction K-cycle for the 2D transient unconfined
+device fast path (originating in Phase C of ``UNCONFINED_FAST_PLAN.md``,
 Option 1: FP32 inner linear solve per Picard outer iteration).
 
-Opt-in only (``transient_mixed_precision_enabled`` control /
-``DARCY_TRANSIENT_MIXED=1`` env; default OFF; requires the face operator).
+Selected by the production replay through the
+``transient_mixed_precision_enabled`` control. It requires the face operator
+and may also be selected with ``DARCY_TRANSIENT_MIXED=1``.
 
 Structure: the strict Picard gate already evaluates the TRUE FP64 dual
 residual every outer iteration, so the inner linear solve may be

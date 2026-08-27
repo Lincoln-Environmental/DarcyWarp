@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-"""Experimental multi-period transient driver for nonlinear backends.
+"""Alternate multi-period transient driver for nonlinear backends.
 
 Drives backends that expose the single-timestep transient contract
 (``unconfined_fas`` and ``unconfined_semismooth_newton_kcycle``) through
@@ -15,9 +15,11 @@ complete transient simulations:
 * complete per-timestep histories, budgets, and replay-compatible
   period-granularity diagnostics.
 
-The production Picard driver (``transient_unconfined.py``) is untouched and
-remains the default; this driver runs only when an experimental backend is
-explicitly selected through ``solve_transient_unconfined``.
+The production Picard driver (``transient_unconfined.py``) remains the default.
+This compatibility-named module drives the production semismooth-Newton
+alternative and the experimental FAS backend when either is explicitly
+selected through ``solve_transient_unconfined``. Existing ``experimental_*``
+control and diagnostic names are retained for artifact compatibility.
 """
 
 from __future__ import annotations
@@ -33,6 +35,7 @@ from DARCY_WARP_PACKAGE.physics.budgets_2d import (
     compute_mass_balance_budget,
 )
 from DARCY_WARP_PACKAGE.physics.storage_2d import exact_unconfined_storage_terms
+from DARCY_WARP_PACKAGE.solver_capabilities import CAPABILITIES
 
 # Match the solver stack's float default (warped_darcy.py and
 # nonlinear/kernels.py both default DARCY_FLOAT to float64); importing
@@ -40,7 +43,7 @@ from DARCY_WARP_PACKAGE.physics.storage_2d import exact_unconfined_storage_terms
 # and break other modules' kernel/array dtype agreement.
 NP_FLOAT = np.float64
 
-EXPERIMENTAL_TRANSIENT_BACKENDS = (
+NONLINEAR_TRANSIENT_BACKENDS = (
     "unconfined_fas",
     "unconfined_semismooth_newton_kcycle",
 )
@@ -192,18 +195,19 @@ def solve_transient_unconfined_experimental(
     bc_values_per_period: np.ndarray | None = None,
     save_transient_diagnostics: bool = True,
 ):
-    """Run a complete transient simulation with an experimental backend.
+    """Run a complete transient simulation with an alternate nonlinear backend.
 
     Every timestep solves the authoritative nonlinear equation for
     ``head_new`` given the previous accepted head, the current dt, the current
     stress-period source and boundary data, and the current Sy/Ss.  The
     previous-head state advances only on accepted timesteps.
     """
-    if backend_name not in EXPERIMENTAL_TRANSIENT_BACKENDS:
+    if backend_name not in NONLINEAR_TRANSIENT_BACKENDS:
         raise ValueError(
-            f"backend {backend_name!r} is not supported by the experimental "
-            f"transient driver; choose one of: {', '.join(EXPERIMENTAL_TRANSIENT_BACKENDS)}."
+            f"backend {backend_name!r} is not supported by the alternate "
+            f"nonlinear transient driver; choose one of: {', '.join(NONLINEAR_TRANSIENT_BACKENDS)}."
         )
+    is_experimental_backend = bool(CAPABILITIES[backend_name].experimental)
 
     controls = dict(solve_controls or {})
     save_diagnostics_b = bool(controls.pop("save_transient_diagnostics", save_transient_diagnostics))
@@ -556,9 +560,13 @@ def solve_transient_unconfined_experimental(
         )
         period_info = {
             "period": int(period_index + 1),
-            "solver_type": f"experimental_{backend_name}_transient",
+            "solver_type": (
+                f"experimental_{backend_name}_transient"
+                if is_experimental_backend
+                else f"{backend_name}_transient"
+            ),
             "solver_backend": str(backend_name),
-            "experimental_backend": True,
+            "experimental_backend": is_experimental_backend,
             "converged": bool(period_converged),
             "experimental_acceptance_passed": bool(period_converged),
             "production_acceptance_passed": bool(period_converged),
@@ -622,7 +630,10 @@ def solve_transient_unconfined_experimental(
         "solve_controls": controls,
         "save_diagnostics": bool(save_diagnostics_b),
         "transient_replay_counters": counters,
-        "experimental_backend": str(backend_name),
+        "experimental_backend": (
+            str(backend_name) if is_experimental_backend else False
+        ),
+        "nonlinear_period_driver_backend": str(backend_name),
         "experimental_timestep_records": timestep_records,
         "experimental_period_budgets": period_budgets,
         "simulation_time": float(simulation_time),

@@ -1,4 +1,4 @@
-"""Stage-2 regression tests for experimental semismooth Newton--K-cycle."""
+"""Regression tests for the production semismooth Newton--K-cycle alternative."""
 
 from __future__ import annotations
 
@@ -211,6 +211,7 @@ def test_newton_solves_steady_heterogeneous_sloping_masked_problem(use_ghb):
             **_newton_controls(),
         )
         assert info["converged"], info
+        assert info["experimental_backend"] is False
         assert info["newton_fallback_used"] is False
         assert info["true_nonlinear_residual_rms"] <= 1.0e-6
         assert np.all(np.isfinite(head))

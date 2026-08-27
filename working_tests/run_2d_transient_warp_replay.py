@@ -123,6 +123,16 @@ def build_case_setup(
     return setup
 
 
+def production_solver_backend(*, formulation: str) -> str:
+    """Return the production backend paired with a replay formulation."""
+    formulation = str(formulation).strip().lower()
+    if formulation == FORMULATION_CONFINED:
+        return "confined_kcycle"
+    if formulation == FORMULATION_UNCONFINED:
+        return "unconfined_picard_kcycle"
+    raise ValueError("formulation must be 'confined' or 'unconfined'.")
+
+
 def _artifact_scalar(artifact: dict, name: str) -> object:
     value = artifact.get(name)
     if value is None:
@@ -344,7 +354,7 @@ def run_configured_replay(
 if __name__ == "__main__":
     # Adjust run settings here instead of passing command-line arguments.
     # Formulation options: "unconfined" or "confined".
-    formulation = FORMULATION_CONFINED
+    formulation = FORMULATION_UNCONFINED
     nx = 1000  # Number of grid cells in the x direction.
     ny = 1000  # Number of grid cells in the y direction.
     n_periods = 30  # Number of weekly transient periods to replay.
@@ -365,23 +375,18 @@ if __name__ == "__main__":
     # Canonical solver backends:
     #   confined: "confined_kcycle" (transient-capable fixed-T solver)
     #   "unconfined_picard_kcycle" (production default)
-    #   "unconfined_semismooth_newton_kcycle" (experimental)
+    #   "unconfined_semismooth_newton_kcycle" (production alternative)
     #   "unconfined_fas" (experimental)
     # Legacy aliases include "picard", "picard_kcycle", and "kcycle".
     # Choose a backend compatible with the formulation above.
-    solver_backend = (
-        "confined_kcycle"
-        if formulation == FORMULATION_UNCONFINED
-        else "unconfined_picard_kcycle"
-    )
+    solver_backend = production_solver_backend(formulation=formulation)
 
     # Confined transient implementation: "classic" or "fast".
     # "fast" uses the FP64 face-array transient K-cycle.
     implementation = "fast"
 
-    # Unconfined transient implementation switches. The mixed path is
-    # experimental, requires DARCY_FLOAT=float64, the face operator, and the
-    # device fast path.
+    # Unconfined transient production switches. The mixed path requires
+    # DARCY_FLOAT=float64, the face operator, and the device fast path.
     use_device_transient_fast_path = True
     transient_face_operator_enabled = True
     transient_face_graphs_enabled = True

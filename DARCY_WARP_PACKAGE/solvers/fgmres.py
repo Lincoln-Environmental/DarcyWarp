@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-"""Restarted matrix-free GPU FGMRES for the experimental Newton backend."""
+"""Restarted matrix-free GPU FGMRES for the production Newton backend."""
 
 from __future__ import annotations
 

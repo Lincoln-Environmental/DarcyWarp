@@ -286,6 +286,7 @@ class MixedPrecisionDefectCorrectionSession:
         R_f64: np.ndarray,
         max_levels: int = 6,
         min_coarse_cells: int = 500,
+        emit_experimental_warning: bool = True,
     ):
         from DARCY_WARP_PACKAGE import warped_darcy as kernel_module
 
@@ -297,7 +298,8 @@ class MixedPrecisionDefectCorrectionSession:
                 + str(kernel_module.WP_FLOAT)
             )
 
-        warnings.warn(_EXPERIMENTAL_WARNING, stacklevel=2)
+        if emit_experimental_warning:
+            warnings.warn(_EXPERIMENTAL_WARNING, stacklevel=2)
 
         self.model = model
         self.device = str(model.device_str)

@@ -1,5 +1,11 @@
 # Mixed-Precision Multigrid Optimisation Campaign — Experimental Report
 
+> Current status (2026-08-28): the campaign itself is a historical
+> experimental report. Its validated `solvers/mixed_fast.py` implementation is
+> now the production mixed-precision choice used by the confined steady runner.
+> The rejected `mixed_vcycle.py` path and the original slower
+> `mixed_precision.py` reference remain non-production.
+
 > Companion to `MIXED_PRECISION_PLAN.md` (which covers the initial audit, the
 > validated-but-not-faster defect-correction solver, and the bounded negative
 > recommendation).  This document tracks the staged optimisation campaign:
@@ -406,5 +412,6 @@ advantage (fast FP32 correction vs fast FP64 correction, both graphed) is:
 | 2000x1000 | 0.322 s | 0.227 s | 1.42× |
 
 Consistent with the ~35 % cycle-level precision effect measured in Phase 4.
-Mixed precision remains experimental; the FP64 fast implementation is the
-recommended production candidate pending broader validation.
+This was the campaign verdict on 2026-07-30. It was superseded on 2026-08-28:
+`mixed_fast` is now the production mixed-precision choice; the original
+defect-correction reference and rejected V-cycle remain non-production.

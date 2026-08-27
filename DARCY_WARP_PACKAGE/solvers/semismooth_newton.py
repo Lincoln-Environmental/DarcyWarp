@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-"""Experimental globalized semismooth Newton--FGMRES--K-cycle backend."""
+"""Globalized semismooth Newton--FGMRES--K-cycle production backend."""
 
 from __future__ import annotations
 
@@ -127,7 +127,7 @@ def _fallback_to_picard(
             "newton_diagnostics_before_fallback": newton_info,
             "fallback_backend": "unconfined_picard_kcycle",
             "fallback_state": "picard_completed",
-            "experimental_backend": True,
+            "experimental_backend": False,
         }
     )
     return (head, merged) if return_info else head
@@ -532,7 +532,7 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
             "converged": bool(converged),
             "solver_type": "unconfined_semismooth_newton_kcycle",
             "solver_backend": "unconfined_semismooth_newton_kcycle",
-            "experimental_backend": True,
+            "experimental_backend": False,
             "newton_iterations": int(accepted_updates),
             "outer_picard_iterations": 0,
             "inexact_forcing_enabled": bool(forcing_enabled),
@@ -600,7 +600,7 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
 
 
 class UnconfinedSemismoothNewtonKCycleBackend:
-    """Explicit experimental 2D nonlinear backend."""
+    """Explicit production 2D nonlinear backend."""
 
     name = "unconfined_semismooth_newton_kcycle"
 

@@ -1,5 +1,11 @@
 # Mixed-Precision Defect-Correction Solver — Audit, Plan, and Results
 
+> Current status (2026-08-28): this document describes the original slower
+> defect-correction reference, which remains non-production. The later
+> `solvers/mixed_fast.py` implementation is now the production
+> mixed-precision choice for the confined steady runner; see
+> `MIXED_PRECISION_CAMPAIGN.md`.
+
 > Experimental investigation, 2026-07-29/30. Target: FP32 speed/memory with FP64-grade
 > absolute-head accuracy for the **steady confined** 2D K-cycle solver.
 > Status: COMPLETE — benchmarked; recommendation in §4 (**numerically validated on the

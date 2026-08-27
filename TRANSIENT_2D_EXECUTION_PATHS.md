@@ -13,9 +13,9 @@
 | 4 | Classic device transient operator (`transient_face_operator_enabled=False`) | same driver | stencil, per-outer M_inv rebuild | yes | yes | yes | yes | no | no | no (per-thread atomics; scalar stats re-zeroed per refresh) | per-outer scalar readbacks | kept as parity/reference path; not eligible for promotion |
 | 5 | CPU/host Picard fallback | same driver (host path) | host stencil | yes | yes | yes | yes | n/a | n/a | n/a | entire solve on host | not eligible (correctness fallback only) |
 | 6 | Experimental transient FAS | `solvers/transient_experimental.py` | rediscretized nonlinear FAS hierarchy | yes | yes | yes | yes | no | coarsest sweep block only | partial | per-cycle host checks | **not touched** — fails on hard-T 1M; no promotion |
-| 7 | Experimental transient semismooth Newton | `solvers/transient_experimental.py` | FGMRES + K-cycle preconditioner (cached workspace) | yes | yes | yes | yes | no | no | partial | FGMRES host syncs | **not touched** — needs retries on hard-T; no promotion |
+| 7 | Production transient semismooth Newton alternative | `solvers/transient_experimental.py` | FGMRES + K-cycle preconditioner (cached workspace) | yes | yes | yes | yes | no | no | partial | FGMRES host syncs | production alternative; compatibility driver name retained |
 | 8 | GHB variants | paths 2/3 only | C_gh in face diag, `C_gh·gh_head` in RHS | — | — | — | — | yes (required) | yes | yes | — | production on face path; classic device path raises for GHB |
-| 9 | Precision variants | paths 2/3 | FP64 master everywhere; optional FP32 correction (`mixed_transient_f32`, face path only) | — | — | — | — | — | — | — | — | FP64 default; mixed remains experimental opt-in |
+| 9 | Precision variants | paths 2/3 | FP64 master everywhere; FP32 correction (`mixed_transient_f32`, face path only) | — | — | — | — | — | — | — | — | mixed correction is enabled by the production unconfined replay |
 
 ## Notes
 

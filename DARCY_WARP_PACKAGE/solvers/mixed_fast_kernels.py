@@ -1,9 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-"""EXPERIMENTAL fast correction kernels for the mixed-precision campaign (Phase 3).
+"""Production fast correction kernels for the mixed-precision solver.
 
-Status: **experimental, opt-in, non-production** (see
-``MIXED_PRECISION_CAMPAIGN.md``).  Not part of the solver registry; reachable
-by no alias.  Production kernels in ``warped_darcy.py`` are untouched.
+Originated in Phase 3 of ``MIXED_PRECISION_CAMPAIGN.md`` and now support the
+production confined ``mixed_fast`` path and transient FP32 corrections.
 
 Why these kernels exist (Phase 1 profile evidence, 2000x1000):
 
@@ -40,7 +39,7 @@ from typing import Any
 import numpy as np
 import warp as wp
 
-from .mixed_precision import EXPERIMENTAL
+EXPERIMENTAL = False
 
 from .face_kernels_f64 import (  # noqa: F401  (single source of truth, re-exported)
     applyA_dot_partials_f64_kernel as _mf3_applyA_dot_partials_f64,
