@@ -1,6 +1,7 @@
 # DarcyWarp Benchmarks
 
 **Version 0.2** — now includes unconfined aquifer and transient (time-dependent) simulation options.
+  — also includes functioning float 32 mixed precision and major performance improvement s through kernel fusion.
 
 This repo contains scripts to run ensemble benchmarks (Warp solver, MODFLOW 6, optional CPU finite difference) and to generate standard summary plots from the benchmark outputs.
 
