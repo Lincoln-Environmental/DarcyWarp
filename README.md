@@ -1,5 +1,7 @@
 # DarcyWarp Benchmarks
 
+**Version 0.2** — now includes unconfined aquifer and transient (time-dependent) simulation options.
+
 This repo contains scripts to run ensemble benchmarks (Warp solver, MODFLOW 6, optional CPU finite difference) and to generate standard summary plots from the benchmark outputs.
 
 ## Environment setup
@@ -203,6 +205,8 @@ Benchmark flags
 --device: Warp device string (example cuda:0)
 
 --ghb: enable GHB boundaries
+
+--warp_impl: Warp solve implementation: `mixed` (default; production mixed precision, FP64 master head + FP32 fast correction), `fast` (FP64 fast K-cycle), or `classic` (FP64 K-cycle). The mixed path builds the model under `DARCY_FLOAT=float32`, so do not combine `--warp_impl mixed` with other Warp implementations in the same process. For the T-change benchmark, `mixed` requires `--warp_update_mode full`.
 
 --run_warp: run Warp solver benchmark
 

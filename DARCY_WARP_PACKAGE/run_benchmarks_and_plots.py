@@ -6,5 +6,5 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    argv = ['--run_mf', '--run_warp']
+    argv = ['--run_mf6', '--run_warp']
     raise SystemExit(main(argv))

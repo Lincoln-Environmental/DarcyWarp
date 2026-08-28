@@ -824,9 +824,10 @@ def _benchmark_warp_multigrid_class_solvers_T_core(
         verify_t_upload: bool = True,
         allow_experimental_update_modes: bool = False,
         solver_module: str = "DARCY_WARP_PACKAGE.warped_darcy",
-        solver_variant: str = "warp_kcycle_default",
+        solver_variant: str | None = None,
         solve_kwargs: dict | None = None,
         mg_min_coarse_cells: int | None = 500,
+        warp_impl: str = "classic",
 ) -> dict:
     """
     Benchmark WarpDarcySolver by reusing one solver instance and updating the transmissivity
@@ -844,9 +845,37 @@ def _benchmark_warp_multigrid_class_solvers_T_core(
         If True, update fine-level diagonal preconditioner during fast/ultrafast updates.
     warmup:
         Number of warmup iterations (not timed) to trigger kernel compilation + caching.
+    warp_impl:
+        Solve implementation: "classic" (FP64 K-cycle), "fast" (FP64 fast
+        K-cycle), or "mixed" (production mixed precision: FP64 master head +
+        FP32 fast correction, solvers/mixed_fast.py).  "mixed" requires the
+        model hierarchy under DARCY_FLOAT=float32 (handled automatically in a
+        fresh process) and update_mode="full".
     """
-    os.environ["DARCY_FLOAT"] = "float64"
-    WarpDarcySolver = import_module(str(solver_module)).WarpDarcySolver
+    warp_impl = str(warp_impl).strip().lower()
+    if warp_impl not in {"classic", "fast", "mixed"}:
+        raise ValueError(f"warp_impl must be one of {{'classic','fast','mixed'}}, got {warp_impl!r}")
+    if solver_variant is None:
+        solver_variant = {
+            "classic": "warp_kcycle_default",
+            "fast": "warp_kcycle_fast_fp64",
+            "mixed": "warp_kcycle_mixed_fp32",
+        }[warp_impl]
+
+    # WP_FLOAT is pinned at import time; this only takes effect if
+    # warped_darcy has not been imported yet (validated below).
+    required_float = "float32" if warp_impl == "mixed" else "float64"
+    os.environ["DARCY_FLOAT"] = required_float
+    wd_module = import_module(str(solver_module))
+    WarpDarcySolver = wd_module.WarpDarcySolver
+    import warp as wp
+    expected_wp_float = wp.float32 if warp_impl == "mixed" else wp.float64
+    if getattr(wd_module, "WP_FLOAT", expected_wp_float) is not expected_wp_float:
+        raise RuntimeError(
+            f"warp_impl={warp_impl!r} requires DARCY_FLOAT={required_float}, but "
+            f"{solver_module} was already imported with WP_FLOAT={getattr(wd_module, 'WP_FLOAT', None)}. "
+            "Run this benchmark in a fresh process."
+        )
 
     base_workspace = Path(base_workspace)
     base_workspace.mkdir(parents=True, exist_ok=True)
@@ -862,6 +891,11 @@ def _benchmark_warp_multigrid_class_solvers_T_core(
     update_mode = str(update_mode).lower().strip()
     if update_mode not in {"full", "fast", "ultrafast"}:
         raise ValueError("update_mode must be one of {'full','fast','ultrafast'}")
+    if warp_impl == "mixed" and update_mode != "full":
+        raise ValueError(
+            "warp_impl='mixed' requires update_mode='full': the mixed-precision "
+            "correction runs on every MG level, so coarse levels must stay consistent."
+        )
     if update_mode in {"fast", "ultrafast"} and (not allow_experimental_update_modes):
         raise ValueError(
             "update_mode=fast/ultrafast is experimental. "
@@ -908,6 +942,51 @@ def _benchmark_warp_multigrid_class_solvers_T_core(
     if single_solver.T_field_host is None:
         raise RuntimeError("Expected single_solver.T_field_host to be initialized after build_from_truth_inputs().")
 
+    # Mixed-precision path: one reusable session (FP64 master + FP32 fast
+    # correction) with the campaign-validated configuration.  Per case the
+    # operator faces and the FP64 RHS are refreshed in place after the T
+    # update, so the captured correction graph stays valid.
+    mixed_session = None
+    mixed_controls: dict | None = None
+    dem_f64 = np.asarray(dem, dtype=np.float64)
+    if warp_impl == "mixed":
+        from DARCY_WARP_PACKAGE.solvers.mixed_fast import (
+            MixedFastConfig,
+            MixedPrecisionFastSession,
+        )
+        mixed_cfg = MixedFastConfig()
+        bc_values64 = np.asarray(single_solver.bc_values_host, dtype=np.float64)
+        gh_head64 = (
+            np.asarray(single_solver.gh_head_host, dtype=np.float64)
+            if bool(use_ghb)
+            else None
+        )
+        mixed_session = MixedPrecisionFastSession(
+            single_solver,
+            bc_values_f64=bc_values64,
+            gh_head_f64=gh_head64,
+            R_f64=np.asarray(R_field_ugly, dtype=np.float64),
+            max_levels=6,
+            min_coarse_cells=(
+                500 if mg_min_coarse_cells_norm is None else int(mg_min_coarse_cells_norm)
+            ),
+        )
+        mixed_controls = dict(
+            inner_kcycles=mixed_cfg.inner_kcycles,
+            max_outer=mixed_cfg.max_outer,
+            nu_pre=mixed_cfg.nu_pre,
+            nu_post=mixed_cfg.nu_post,
+            nu_coarse=mixed_cfg.nu_coarse,
+            omega=mixed_cfg.omega,
+            smoother=mixed_cfg.smoother,
+            cheby_lambda_min=mixed_cfg.cheby_lambda_min,
+            cheby_lambda_max=mixed_cfg.cheby_lambda_max,
+            rel_tol=mixed_cfg.rel_tol,
+            abs_tol_min=mixed_cfg.abs_tol_min,
+            dh_rms_tol=mixed_cfg.dh_rms_tol,
+            dh_max_tol=mixed_cfg.dh_max_tol,
+        )
+
     target_dtype = single_solver.T_field_host.dtype
     env_verify = str(os.environ.get("DARCY_VERIFY_T_UPLOAD", "")).strip().lower()
     if env_verify in {"0", "false", "no", "n"}:
@@ -946,6 +1025,8 @@ def _benchmark_warp_multigrid_class_solvers_T_core(
     }
     if mg_min_coarse_cells_norm is not None:
         solve_call_kwargs["min_coarse_cells"] = int(mg_min_coarse_cells_norm)
+    if warp_impl == "fast":
+        solve_call_kwargs["implementation"] = "fast"
     if solve_kwargs:
         solve_call_kwargs.update(dict(solve_kwargs))
 
@@ -976,9 +1057,14 @@ def _benchmark_warp_multigrid_class_solvers_T_core(
         else:
             single_solver.update_T_in_place_ultrafast(T_arr, update_diag_preconditioner=bool(update_diag_preconditioner))
 
-        if verify_upload and not verified_once:
-            _verify_t_upload(T_arr)
-        _ = single_solver.solve_multigrid_kcycle(**warmup_kwargs)
+        if warp_impl == "mixed":
+            mixed_session.refresh_operator_faces()
+            mixed_session.update_rhs_f64()
+            _ = mixed_session.solve(dem_f64, **mixed_controls)
+        else:
+            if verify_upload and not verified_once:
+                _verify_t_upload(T_arr)
+            _ = single_solver.solve_multigrid_kcycle(**warmup_kwargs)
 
     per_case_times_single: list[float] = []
     per_case_update_times: list[float] = []
@@ -1010,9 +1096,15 @@ def _benchmark_warp_multigrid_class_solvers_T_core(
             single_solver.update_T_in_place_fast(T_arr, update_diag_preconditioner=bool(update_diag_preconditioner))
         else:
             single_solver.update_T_in_place_ultrafast(T_arr, update_diag_preconditioner=bool(update_diag_preconditioner))
+        if warp_impl == "mixed":
+            mixed_session.refresh_operator_faces()
+            mixed_session.update_rhs_f64()
         t_up1 = time.perf_counter()
 
-        _head = single_solver.solve_multigrid_kcycle(**solve_call_kwargs)
+        if warp_impl == "mixed":
+            _head, _info = mixed_session.solve(dem_f64, **mixed_controls)
+        else:
+            _head = single_solver.solve_multigrid_kcycle(**solve_call_kwargs)
         t_sol1 = time.perf_counter()
 
         per_case_update_times.append(float(t_up1 - t_up0))
@@ -1031,6 +1123,7 @@ def _benchmark_warp_multigrid_class_solvers_T_core(
         "n_cases": int(n_cases),
         "device": str(warp_device),
         "update_mode": str(update_mode),
+        "warp_impl": str(warp_impl),
         "solver_module": str(solver_module),
         "solver_variant": str(solver_variant),
         "update_diag_preconditioner": bool(update_diag_preconditioner),
@@ -1075,9 +1168,14 @@ def benchmark_warp_multigrid_class_solvers_T(
         verify_t_upload: bool = True,
         allow_experimental_update_modes: bool = False,
         mg_min_coarse_cells: int | None = 500,
+        warp_impl: str = "classic",
 ) -> dict:
     """
-    Benchmark the existing Warp K-cycle path (`warped_darcy`) for T-change ensembles.
+    Benchmark the Warp K-cycle path (`warped_darcy`) for T-change ensembles.
+
+    :param warp_impl: "classic" (FP64), "fast" (FP64 fast K-cycle), or "mixed"
+        (FP64 master + FP32 fast correction, requires a fresh process so the
+        model builds under DARCY_FLOAT=float32; update_mode must be "full").
     """
     return _benchmark_warp_multigrid_class_solvers_T_core(
         nx=nx,
@@ -1101,9 +1199,10 @@ def benchmark_warp_multigrid_class_solvers_T(
         verify_t_upload=verify_t_upload,
         allow_experimental_update_modes=allow_experimental_update_modes,
         solver_module="DARCY_WARP_PACKAGE.warped_darcy",
-        solver_variant="warp_kcycle_default",
+        solver_variant=None,
         solve_kwargs=None,
         mg_min_coarse_cells=mg_min_coarse_cells,
+        warp_impl=warp_impl,
     )
 
 
@@ -1124,6 +1223,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--ghb", action="store_true")
     parser.add_argument("--device", type=str, default="cuda:0")
     parser.add_argument("--warp_update_mode", type=str, default="full", choices=["full", "fast", "ultrafast"])
+    parser.add_argument(
+        "--warp_impl",
+        type=str,
+        default="mixed",
+        choices=["classic", "fast", "mixed"],
+        help=(
+            "Warp solve implementation: classic (FP64 K-cycle), fast (FP64 fast "
+            "K-cycle), or mixed (FP64 master + FP32 fast correction; default; "
+            "requires --warp_update_mode=full)."
+        ),
+    )
     parser.add_argument(
         "--warp_allow_experimental_update_modes",
         action="store_true",
@@ -1232,6 +1342,7 @@ def main(argv: list[str] | None = None) -> int:
             verify_t_upload=not bool(args.warp_no_verify_t_upload),
             allow_experimental_update_modes=bool(args.warp_allow_experimental_update_modes),
             mg_min_coarse_cells=mg_min_coarse_cells,
+            warp_impl=str(args.warp_impl),
         )
 
         warp_class_results_path = data_store.joinpath(f"warp_class_T_ensemble_benchmark_results_{cells}.json")
@@ -1308,6 +1419,7 @@ def main(argv: list[str] | None = None) -> int:
         "solver_parameters": {
             "warp": {
                 "device": str(args.device),
+                "warp_impl": str(args.warp_impl),
                 "max_cycles": 200,
                 "nu_pre": 2,
                 "nu_post": 2,

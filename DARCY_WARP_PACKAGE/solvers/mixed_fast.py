@@ -157,16 +157,13 @@ class FastLevel:
     level: Any  # underlying production hierarchy level (buffers/masks)
 
 
-def build_face_level(model: Any, level: Any, wp_dtype, device: str) -> FastLevel:
-    """Allocate and fill face-conductance arrays for one hierarchy level."""
+def _fill_face_level(faces: dict, level: Any, wp_dtype, device: str) -> None:
+    """(Re)fill face-conductance arrays from a hierarchy level's current state."""
     nxL, nyL = int(level.nx), int(level.ny)
-    shape = (nyL, nxL)
-    faces = {k: wp.zeros(shape, dtype=wp_dtype, device=device)
-             for k in ("Te", "Tw", "Tn", "Ts", "diag")}
     build_kernel = mf3._mf3_build_faces_f32 if wp_dtype is wp.float32 else mf3._mf3_build_faces_f64
     wp.launch(
         kernel=build_kernel,
-        dim=shape,
+        dim=(nyL, nxL),
         inputs=[
             level.T_wp, level.active_wp, level.gh_mask_wp, level.ghb_factor_wp,
             faces["Te"], faces["Tw"], faces["Tn"], faces["Ts"], faces["diag"],
@@ -174,6 +171,15 @@ def build_face_level(model: Any, level: Any, wp_dtype, device: str) -> FastLevel
         ],
         device=device,
     )
+
+
+def build_face_level(model: Any, level: Any, wp_dtype, device: str) -> FastLevel:
+    """Allocate and fill face-conductance arrays for one hierarchy level."""
+    nxL, nyL = int(level.nx), int(level.ny)
+    shape = (nyL, nxL)
+    faces = {k: wp.zeros(shape, dtype=wp_dtype, device=device)
+             for k in ("Te", "Tw", "Tn", "Ts", "diag")}
+    _fill_face_level(faces, level, wp_dtype, device)
     n_cells = nxL * nyL
     n_partials = (n_cells + _BLOCK - 1) // _BLOCK
     return FastLevel(
@@ -419,6 +425,31 @@ class MixedPrecisionFastSession(MixedPrecisionDefectCorrectionSession):
         production_info["experimental"] = False
         production_info["production_precision_path"] = True
         return head, production_info
+
+    def refresh_operator_faces(self) -> None:
+        """Refill face-conductance arrays from the model's current hierarchy.
+
+        Call after an in-place transmissivity update
+        (``model.update_T_in_place``) and before the next :meth:`solve`.
+        Arrays are refilled in place — pointers are unchanged, so the
+        captured correction graph remains valid and replays against the new
+        operator.  Pair with :meth:`update_rhs_f64` (the FP64 RHS carries a
+        T-dependent GHB term).
+        """
+        for fl in self.fast_levels:
+            _fill_face_level(
+                {"Te": fl.Te, "Tw": fl.Tw, "Tn": fl.Tn, "Ts": fl.Ts, "diag": fl.diag},
+                fl.level,
+                wp.float32,
+                self.device,
+            )
+        f0 = self.face0_f64
+        _fill_face_level(
+            {"Te": f0.Te, "Tw": f0.Tw, "Tn": f0.Tn, "Ts": f0.Ts, "diag": f0.diag},
+            f0.level,
+            wp.float64,
+            self.device,
+        )
 
     # -- graph-captured correction block (Phase 4) -----------------------------
 

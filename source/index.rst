@@ -8,6 +8,11 @@ solver) across repeated ensemble runs.
 This documentation covers the current benchmark workflow, output files, and the
 Sphinx documentation build process used in this repository.
 
+.. note::
+
+   This is version 0.2 of DarcyWarp, which adds support for **unconfined**
+   aquifer conditions and **transient** (time-dependent) simulations.
+
 .. toctree::
    :maxdepth: 2
    :caption: Contents

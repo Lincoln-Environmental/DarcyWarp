@@ -12,18 +12,10 @@ from DARCY_WARP_PACKAGE.model_benchmarking_T_change import main as bench_t_main
 from DARCY_WARP_PACKAGE.benchmark_plots import main as plots_main
 
 p = Path(__file__).resolve()
-repo_root = None
-
-for parent in p.parents:
-    if parent.joinpath("paper").is_dir():
-        repo_root = parent
-        break
-
-if repo_root is None:
-    raise RuntimeError(f"Could not find repo root containing 'paper' starting from {p}")
+repo_root = p.parents[1]  # DarcyWarp project root (parent of DARCY_WARP_PACKAGE)
 
 outdir = repo_root.joinpath("paper", "tables_figures")
-outdir.mkdir(exist_ok=True)
+outdir.mkdir(parents=True, exist_ok=True)
 
 
 print(str(outdir))
@@ -61,6 +53,11 @@ def main(argv: list[str] | None = None) -> int:
         "--plots_only",
         action="store_true",
         help="Skip running benchmarks and only generate plots from existing summaries.",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Re-run benchmarks even if their summary JSON files already exist.",
     )
 
     parser.add_argument("--out_dir", type=str, default=str(outdir))
@@ -105,17 +102,68 @@ def main(argv: list[str] | None = None) -> int:
     if args.write_metadata:
         bench_argv_base.append("--write_metadata")
 
-    suite_bench_argv = list(bench_argv_base)
-    suite_bench_argv.extend(["--mg_min_coarse_cells", str(args.mg_min_coarse_cells)])
-    suite_bench_argv.extend(run_flags_common)
+    suite_bench_argv_base = list(bench_argv_base)
+    suite_bench_argv_base.extend(["--mg_min_coarse_cells", str(args.mg_min_coarse_cells)])
 
-    def _pick_existing(label: str, candidates: list[Path]) -> Path | None:
+    def _first_existing(candidates: list[Path]) -> Path | None:
         for path in candidates:
             if path.exists():
                 return path
+        return None
+
+    def _pick_existing(label: str, candidates: list[Path]) -> Path | None:
+        existing = _first_existing(candidates)
+        if existing is not None:
+            return existing
         if candidates:
             print(f"{label} summary JSON not found. Tried: {[str(p) for p in candidates]}")
         return None
+
+    def _recharge_summary_candidates() -> dict[str, list[Path]]:
+        return {
+            "--run_mf6": [
+                Path(data_store).joinpath(f"mf6_ensemble_benchmark_results_recharge{cells}.json"),
+                Path(data_store).joinpath(f"mf6_ensemble_benchmark_results_{cells}.json"),
+            ],
+            "--run_warp": [
+                Path(data_store).joinpath(f"warp_class_ensemble_benchmark_results_recharge_{cells}.json"),
+                Path(data_store).joinpath(f"warp_class_ensemble_benchmark_results_{cells}.json"),
+            ],
+            "--run_fd": [
+                Path(data_store).joinpath(f"fd_ensemble_benchmark_results_recharge{cells}.json"),
+            ],
+        }
+
+    def _t_summary_candidates() -> dict[str, list[Path]]:
+        return {
+            "--run_mf6": [
+                Path(data_store).joinpath(f"mf6_T_ensemble_benchmark_results_{cells}.json"),
+            ],
+            "--run_warp": [
+                Path(data_store).joinpath(f"warp_class_T_ensemble_benchmark_results_{cells}.json"),
+            ],
+            "--run_fd": [
+                Path(data_store).joinpath(f"fd_T_ensemble_benchmark_results_{cells}.json"),
+            ],
+        }
+
+    def _suite_run_flags(summary_candidates: dict[str, list[Path]]) -> list[str]:
+        """Return run flags for components whose summary JSON does not yet exist.
+
+        DarcyWarp (--run_warp) always re-runs; only MF6/FD results are reused.
+        """
+        flags: list[str] = []
+        for flag in run_flags_common:
+            if flag == "--run_warp":
+                flags.append(flag)
+                continue
+            candidates = summary_candidates.get(flag, [])
+            existing = _first_existing(candidates)
+            if existing is not None and not args.force:
+                print(f"Skipping {flag}: summary already exists: {existing} (use --force to re-run).")
+                continue
+            flags.append(flag)
+        return flags
 
     def _plot_from_summaries(mf6_summary: Path | None, warp_summary: Path | None, plot_out_dir: Path, title_prefix: str) -> int:
         if mf6_summary is None:
@@ -136,25 +184,18 @@ def main(argv: list[str] | None = None) -> int:
         return int(plots_main(plot_argv))
 
     if run_recharge:
+        summary_candidates = _recharge_summary_candidates()
         if not args.plots_only:
-            rc = int(bench_recharge_main(suite_bench_argv))
-            if rc != 0:
-                return rc
+            suite_flags = _suite_run_flags(summary_candidates)
+            if suite_flags:
+                rc = int(bench_recharge_main(suite_bench_argv_base + suite_flags))
+                if rc != 0:
+                    return rc
+            else:
+                print("All requested recharge benchmark summaries already exist; skipping benchmark run.")
 
-        mf6_summary = _pick_existing(
-            "MF6 recharge",
-            [
-                Path(data_store).joinpath(f"mf6_ensemble_benchmark_results_recharge{cells}.json"),
-                Path(data_store).joinpath(f"mf6_ensemble_benchmark_results_{cells}.json"),
-            ],
-        )
-        warp_summary = _pick_existing(
-            "Warp recharge",
-            [
-                Path(data_store).joinpath(f"warp_class_ensemble_benchmark_results_recharge_{cells}.json"),
-                Path(data_store).joinpath(f"warp_class_ensemble_benchmark_results_{cells}.json"),
-            ],
-        )
+        mf6_summary = _pick_existing("MF6 recharge", summary_candidates["--run_mf6"])
+        warp_summary = _pick_existing("Warp recharge", summary_candidates["--run_warp"])
         plot_out_dir = out_dir.joinpath("recharge_change")
         plot_out_dir.mkdir(exist_ok=True)
         rc = _plot_from_summaries(
@@ -167,21 +208,18 @@ def main(argv: list[str] | None = None) -> int:
             return rc
 
     if run_t:
+        summary_candidates = _t_summary_candidates()
         if not args.plots_only:
-            rc = int(bench_t_main(suite_bench_argv))
-            if rc != 0:
-                return rc
+            suite_flags = _suite_run_flags(summary_candidates)
+            if suite_flags:
+                rc = int(bench_t_main(suite_bench_argv_base + suite_flags))
+                if rc != 0:
+                    return rc
+            else:
+                print("All requested T benchmark summaries already exist; skipping benchmark run.")
 
-        mf6_summary = _pick_existing(
-            "MF6 T",
-            [Path(data_store).joinpath(f"mf6_T_ensemble_benchmark_results_{cells}.json")],
-        )
-        warp_summary = _pick_existing(
-            "Warp T",
-            [
-                Path(data_store).joinpath(f"warp_class_T_ensemble_benchmark_results_{cells}.json"),
-            ],
-        )
+        mf6_summary = _pick_existing("MF6 T", summary_candidates["--run_mf6"])
+        warp_summary = _pick_existing("Warp T", summary_candidates["--run_warp"])
         plot_out_dir = out_dir.joinpath("t_change")
         plot_out_dir.mkdir(exist_ok=True)
         rc = _plot_from_summaries(

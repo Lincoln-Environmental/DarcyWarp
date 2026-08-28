@@ -337,6 +337,14 @@ class MixedPrecisionDefectCorrectionSession:
         )
         self.b64 = wp.array(b64_host, dtype=wp.float64, device=self.device)
 
+        # Host-side FP64 state needed to rebuild the RHS for ensemble
+        # parameter updates (see update_rhs_f64).
+        self._R_f64_host = np.asarray(R_f64, dtype=np.float64)
+        self._bc_values_f64_host = np.asarray(bc_values_f64, dtype=np.float64)
+        self._gh_head_f64_host = (
+            None if gh_head_f64 is None else np.asarray(gh_head_f64, dtype=np.float64)
+        )
+
         # Coefficient arrays used by the FP64 residual kernel (model storage)
         self.T_coeff_wp = model.T_wp
         self.ghb_coeff_wp = model.ghb_factor_wp
@@ -356,6 +364,34 @@ class MixedPrecisionDefectCorrectionSession:
         )
         if self.n_free <= 0:
             raise RuntimeError("No free (active, non-Dirichlet) cells.")
+
+    # -- ensemble parameter updates -------------------------------------------
+
+    def update_rhs_f64(self, R_f64: np.ndarray | None = None) -> None:
+        """Refresh the FP64 fine RHS in place for ensemble parameter updates.
+
+        Rebuilds ``b64`` from the model's *current* host coefficient state
+        (transmissivity and GHB conductance factor) and the boundary heads
+        captured at session construction.  Pass ``R_f64`` to also swap the
+        recharge field; omit it to keep the current recharge (e.g. after an
+        in-place T update).  The device array is updated in place, so eager
+        kernels pick up the new values on the next :meth:`solve`.
+        """
+        if R_f64 is not None:
+            self._R_f64_host = np.asarray(R_f64, dtype=np.float64)
+        model = self.model
+        b64_host = _build_rhs_f64_host(
+            R_f64=self._R_f64_host,
+            active=model.active_host,
+            bc_mask=model.bc_mask_host,
+            bc_values_f64=self._bc_values_f64_host,
+            dx=float(model.dx),
+            gh_mask=model.gh_mask_host if model.use_ghb else None,
+            gh_head_f64=self._gh_head_f64_host if model.use_ghb else None,
+            T_coeff_host=np.asarray(model.T_field_host, dtype=np.float64),
+            ghb_factor_host=model.ghb_factor_host,
+        )
+        wp.copy(self.b64, wp.array(b64_host, dtype=wp.float64, device=self.device))
 
     # -- internal steps ------------------------------------------------------
 

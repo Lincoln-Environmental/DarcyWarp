@@ -6,16 +6,17 @@
         "n_cases": 48,
         "device": "cuda:0",
         "update_mode": "full",
+        "warp_impl": "mixed",
         "solver_module": "DARCY_WARP_PACKAGE.warped_darcy",
-        "solver_variant": "warp_kcycle_default",
+        "solver_variant": "warp_kcycle_mixed_fp32",
         "update_diag_preconditioner": false,
         "warmup": 1,
-        "total_wall_seconds": 36.236092273000395,
-        "mean_case_seconds": 0.7549142373130356,
-        "mean_update_seconds": 0.13689983270766484,
-        "mean_solve_seconds": 0.6180143599576695,
-        "min_case_seconds": 0.7485741580021568,
-        "max_case_seconds": 0.7676693329995032,
-        "throughput_cases_per_second": 1.324646146675284
+        "total_wall_seconds": 11.212169805992744,
+        "mean_case_seconds": 0.23313226777069454,
+        "mean_update_seconds": 0.10895377520895029,
+        "mean_solve_seconds": 0.1241783217919874,
+        "min_case_seconds": 0.22875965900311712,
+        "max_case_seconds": 0.26975337900512386,
+        "throughput_cases_per_second": 4.281062526750593
     }
 }
