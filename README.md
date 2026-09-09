@@ -7,12 +7,25 @@ This repo contains scripts to run ensemble benchmarks (Warp solver, MODFLOW 6, o
 
 ## Environment setup
 
-Create the conda environment from `environment.yml`:
+Create the conda environment from `environment.yml`. The environment also
+installs the pip-only dependencies (Warp, flopy, nvtx, pytest) from
+`requirements-pip.txt`:
 
 ```bash
 conda env create -f environment.yml
 conda activate darcywarp
 ```
+
+If you already have the conda environment, install or refresh the pip-only
+dependencies with:
+
+```bash
+conda activate darcywarp
+pip install -r requirements-pip.txt
+```
+
+Note that NVIDIA Warp is distributed on PyPI as `warp-lang` (imported in
+Python as `warp`); `requirements-pip.txt` pins `warp-lang` directly.
 
 ## Documentation (Sphinx)
 
@@ -24,10 +37,10 @@ Build docs with `make`:
 make docs
 ```
 
-Or use the Linux helper script (cleans first, then builds HTML docs):
+To clean first and then rebuild the HTML docs:
 
 ```bash
-bash scripts/generate_docs.sh
+make docs-clean docs
 ```
 
 Generated HTML docs are written to `build/html/index.html`.

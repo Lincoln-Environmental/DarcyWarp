@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 """
 DarcyWarp — GPU-accelerated Darcy flow solvers and benchmarks.
+
+This branch is 2D-only; the experimental 3D solver lives on ``dev``.
 """
 
 from __future__ import annotations
@@ -10,9 +12,7 @@ from __future__ import annotations
 
 __all__ = [
     "create_solver",
-    "Model3DInputs",
     "WarpDarcySolver",
-    "WarpDarcySolver3D",
 ]
 
 
@@ -25,12 +25,4 @@ def __getattr__(name: str):
         from DARCY_WARP_PACKAGE.model import WarpDarcySolver
 
         return WarpDarcySolver
-    if name == "Model3DInputs":
-        from DARCY_WARP_PACKAGE.model_3d_inputs import Model3DInputs
-
-        return Model3DInputs
-    if name == "WarpDarcySolver3D":
-        from DARCY_WARP_PACKAGE.warped_darcy_3d import WarpDarcySolver3D
-
-        return WarpDarcySolver3D
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

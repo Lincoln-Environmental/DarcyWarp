@@ -6374,6 +6374,7 @@ class WarpDarcySolver:
         t_phase = time.perf_counter() if profile_enabled else None
         self._update_fine_T_and_upload(T_truth)
         self._fast_faces_stale = True  # invalidate derived face-conductance arrays
+        self._operator_generation = getattr(self, "_operator_generation", 0) + 1
         if profile_enabled:
             _profile_sync()
             fine_t_upload_s = time.perf_counter() - t_phase
@@ -7032,6 +7033,7 @@ class WarpDarcySolver:
                     self._stage_M_levels[lid].numpy()[:, :] = Mc
                     wp.copy(coarse.M_inv_wp, self._stage_M_levels[lid])
         self._fast_faces_stale = True  # ghb_factor feeds face conductances
+        self._operator_generation = getattr(self, "_operator_generation", 0) + 1
 
     def update_R_in_place(self, R_truth) -> None:
         """
@@ -7122,6 +7124,7 @@ class WarpDarcySolver:
 
         self._update_fine_T_and_upload(T_truth)
         self._fast_faces_stale = True  # invalidate derived face-conductance arrays
+        self._operator_generation = getattr(self, "_operator_generation", 0) + 1
 
         if update_diag_preconditioner:
             self._update_fine_diag_preconditioner()
@@ -7136,6 +7139,7 @@ class WarpDarcySolver:
         Falls back to fast host staging otherwise. Coarse levels are not rebuilt.
         """
         self._fast_faces_stale = True  # invalidate derived face-conductance arrays
+        self._operator_generation = getattr(self, "_operator_generation", 0) + 1
         if self.T_field_host is None or self.T_wp is None:
             raise RuntimeError("Call build_from_truth_inputs() once before update_T_in_place_ultrafast().")
 

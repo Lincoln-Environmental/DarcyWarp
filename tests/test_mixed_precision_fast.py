@@ -340,3 +340,115 @@ def test_mixed_fast_config_defaults_are_the_validated_settings():
     assert cfg.smoother == "chebyshev"
     assert cfg.rel_tol == 5.0e-7 and cfg.abs_tol_min == 5.0e-7
     assert cfg.max_outer >= 40
+
+
+_AUTO_REFRESH_CHILD_PROGRAM = r"""
+import json
+import sys
+
+import numpy as np
+
+from DARCY_WARP_PACKAGE.model_builder import (
+    _build_dem,
+    _build_domain,
+    build_truth_inputs,
+    make_ugly_T_field,
+)
+from DARCY_WARP_PACKAGE.warped_darcy import WarpDarcySolver
+from DARCY_WARP_PACKAGE.solvers.mixed_fast import MixedPrecisionFastSession
+
+NX, NY = 48, 40
+DX, THICKNESS = 100.0, 300.0
+
+domain = _build_domain(nx=NX, ny=NY)
+dem = _build_dem(domain)
+T0 = make_ugly_T_field(nx=NX, ny=NY, domain=domain, seed=123)
+T1 = 0.1 * T0  # materially different operator
+R_field = np.full_like(domain, 1.0e-4, dtype=np.float64)
+(_, _, _, _, bc_values64, _, gh_head64, _) = build_truth_inputs(
+    nx=NX, ny=NY, dx=DX, T_truth=T0, R_truth=R_field, use_ghb=True, width=DX,
+)
+
+controls = dict(inner_kcycles=5, max_outer=40, nu_pre=2, nu_post=2,
+                nu_coarse=10, omega=0.7, rel_tol=5.0e-7, abs_tol_min=5.0e-7)
+
+with WarpDarcySolver(nx=NX, ny=NY, dx=DX, device="cuda:0", use_ghb=True,
+                     solver_type="pcg", aq_thickness=THICKNESS) as solver:
+    solver.build_from_truth_inputs(T_truth=T0, R_truth=R_field, width=DX)
+    solver.build_hierarchy(max_levels=6, min_coarse_n=4, min_coarse_cells=100)
+
+    session = MixedPrecisionFastSession(
+        solver, bc_values_f64=bc_values64, gh_head_f64=gh_head64,
+        R_f64=R_field, max_levels=6, min_coarse_cells=100,
+    )
+    head_t0, info_t0 = session.solve(dem, **controls)
+
+    # In-place operator change WITHOUT a manual refresh: the next solve()
+    # must detect the stale faces/RHS itself and re-sync.
+    solver.update_T_in_place(T1)
+    head_auto, info_auto = session.solve(dem, **controls)
+
+    # Authoritative: a fresh session built against the updated operator.
+    session_fresh = MixedPrecisionFastSession(
+        solver, bc_values_f64=bc_values64, gh_head_f64=gh_head64,
+        R_f64=R_field, max_levels=6, min_coarse_cells=100,
+    )
+    head_fresh, info_fresh = session_fresh.solve(dem, **controls)
+
+print("RESULT_JSON:" + json.dumps({
+    "converged_t0": bool(info_t0["converged"]),
+    "converged_auto": bool(info_auto["converged"]),
+    "converged_fresh": bool(info_fresh["converged"]),
+    "max_auto_vs_fresh": float(np.max(np.abs(np.asarray(head_auto) - np.asarray(head_fresh)))),
+    "max_before_vs_after": float(np.max(np.abs(np.asarray(head_t0) - np.asarray(head_fresh)))),
+}))
+"""
+
+
+def _run_auto_refresh_child(*, update_call: str) -> dict:
+    env = dict(os.environ)
+    env["DARCY_FLOAT"] = "float32"
+    env["PYTHONPATH"] = str(REPO_ROOT) + os.pathsep + env.get("PYTHONPATH", "")
+    child_program = _AUTO_REFRESH_CHILD_PROGRAM.replace(
+        "solver.update_T_in_place(T1)",
+        update_call,
+    )
+    proc = subprocess.run(
+        [sys.executable, "-c", child_program],
+        capture_output=True, text=True, env=env, timeout=900,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(f"auto-refresh child failed:\n{proc.stderr[-3000:]}")
+    for line in proc.stdout.splitlines():
+        if line.startswith("RESULT_JSON:"):
+            return json.loads(line[len("RESULT_JSON:"):])
+    raise RuntimeError("auto-refresh child emitted no result")
+
+
+@requires_cuda
+@pytest.mark.parametrize(
+    "update_call",
+    (
+        "solver.update_T_in_place(T1)",
+        "solver.update_T_in_place_fast(T1)",
+        "solver.update_T_in_place_ultrafast(T1)",
+        "solver.update_ghb_factor_in_place(aq_thickness=30.0)",
+    ),
+    ids=("full-T", "fast-T", "ultrafast-T", "ghb"),
+)
+def test_fast_session_auto_refreshes_after_in_place_operator_update(update_call: str):
+    """The next solve must use an in-place operator update with no manual
+    refresh_operator_faces()/update_rhs_f64() pair.
+
+    Every supported transmissivity and GHB update path must agree with a
+    freshly built session and must differ materially from the original
+    solution, so the check cannot pass vacuously.
+    """
+    if not _cuda_available():
+        pytest.skip("CUDA is not available")
+    info = _run_auto_refresh_child(update_call=update_call)
+    assert info["converged_t0"] is True
+    assert info["converged_auto"] is True
+    assert info["converged_fresh"] is True
+    assert info["max_before_vs_after"] > 1.0e-3
+    assert info["max_auto_vs_fresh"] < 1.0e-6

@@ -72,7 +72,8 @@ def get_mixed_fast_session(
     R_f64: np.ndarray,
     config: MixedFastConfig = MixedFastConfig(),
 ) -> "MixedPrecisionFastSession":
-    """Explicit opt-in session factory (cached on the model per config).
+    """Explicit opt-in session factory (cached on the model per array
+    identity and hierarchy config).
 
     The model must be built under ``DARCY_FLOAT=float32``.  Reusing the
     session keeps FP64 master buffers, face arrays, and the captured
@@ -82,7 +83,15 @@ def get_mixed_fast_session(
     if cache is None:
         cache = {}
         model._mixed_fast_sessions = cache
-    key = (id(bc_values_f64), id(gh_head_f64), id(R_f64))
+    # Hierarchy-affecting config is part of the key: identical arrays with a
+    # different max_levels/min_coarse_cells must not return the old session.
+    key = (
+        id(bc_values_f64),
+        id(gh_head_f64),
+        id(R_f64),
+        int(config.max_levels),
+        int(config.min_coarse_cells),
+    )
     entry = cache.get(key)
     if entry is None:
         session = MixedPrecisionFastSession(
@@ -113,7 +122,9 @@ def solve_mixed_fast(
 
     Every timed invocation starts from the caller-supplied head (benchmarks:
     the original DEM); all defect-correction iterations and K-cycles are
-    inside this single call.
+    inside this single call.  Stale operator state (after
+    ``model.update_T_in_place`` etc.) is refreshed automatically before
+    solving.
     """
     session = get_mixed_fast_session(
         model,
@@ -394,6 +405,8 @@ class MixedPrecisionFastSession(MixedPrecisionDefectCorrectionSession):
     def __init__(self, model: Any, **kwargs: Any):
         super().__init__(model, emit_experimental_warning=False, **kwargs)
         device = self.device
+        self._max_levels = int(kwargs.get("max_levels", 6))
+        self._min_coarse_cells = int(kwargs.get("min_coarse_cells", 500))
 
         # FP32 face arrays for every hierarchy level (correction operator)
         self.fast_levels = [
@@ -417,9 +430,71 @@ class MixedPrecisionFastSession(MixedPrecisionDefectCorrectionSession):
         # by the solve-control values that affect the launch sequence.
         self._correction_graph = None
         self._correction_graph_key = None
+        # Hierarchy identity + operator generation at construction time; a
+        # rebuilt hierarchy (different level objects) or an in-place
+        # T/GHB update invalidates the cached face arrays.
+        self._mg_levels_ref = model.mg_levels
+        self._operator_generation_seen = getattr(model, "_operator_generation", 0)
+
+    def _ensure_operator_current(self) -> None:
+        """Sync cached face arrays and the FP64 RHS with the model operator.
+
+        In-place T/GHB updates (``model.update_T_in_place`` and friends)
+        bump ``model._operator_generation`` while keeping the level objects
+        alive; this refreshes the face-conductance arrays in place (captured
+        graphs stay valid) and rebuilds the T-dependent FP64 RHS, so callers
+        no longer have to pair every update with
+        :meth:`refresh_operator_faces` + ``update_rhs_f64`` themselves.
+        The model's ``_fast_faces_stale`` flag is left untouched for the
+        confined fast backend, which owns a separate face cache.
+        """
+        model = self.model
+        if self.nx != int(model.nx) or self.ny != int(model.ny):
+            raise RuntimeError(
+                "Model geometry changed since this MixedPrecisionFastSession "
+                "was created; create a new session via "
+                "get_mixed_fast_session()."
+            )
+        if model._operator_dirty:
+            # The fast and ultrafast transmissivity updates intentionally
+            # upload only the fine level and mark the hierarchy dirty. A
+            # mixed session must rebuild that hierarchy before refilling its
+            # face arrays, otherwise its coarse correction levels still use
+            # the previous transmissivity field.
+            model.build_hierarchy(
+                max_levels=self._max_levels,
+                min_coarse_n=4,
+                min_coarse_cells=self._min_coarse_cells,
+            )
+        generation = getattr(model, "_operator_generation", 0)
+        if model.mg_levels is not self._mg_levels_ref:
+            # Hierarchy rebuilt (new level objects): rebind the face arrays
+            # to it. Array pointers change, so captured graphs are invalid.
+            self.fast_levels = [
+                build_face_level(model, level, wp.float32, self.device)
+                for level in model.mg_levels
+            ]
+            self.face0_f64 = build_face_level(
+                model, model.mg_levels[0], wp.float64, self.device
+            )
+            self._mg_levels_ref = model.mg_levels
+            self._correction_graph = None
+            self._correction_graph_key = None
+            self.update_rhs_f64()
+        elif generation != self._operator_generation_seen:
+            # In-place T/GHB update since the last solve: refill faces in
+            # place (captured graphs stay valid) and rebuild the RHS.
+            self.refresh_operator_faces()
+            self.update_rhs_f64()
+        self._operator_generation_seen = generation
 
     def solve(self, initial_head_f64: np.ndarray, **controls: Any):
-        """Solve with production mixed precision and label the result accordingly."""
+        """Solve with production mixed precision and label the result accordingly.
+
+        Stale operator state (after ``model.update_T_in_place`` etc.) is
+        detected and refreshed automatically before solving.
+        """
+        self._ensure_operator_current()
         head, info = super().solve(initial_head_f64, **controls)
         production_info = dict(info)
         production_info["experimental"] = False
@@ -429,12 +504,14 @@ class MixedPrecisionFastSession(MixedPrecisionDefectCorrectionSession):
     def refresh_operator_faces(self) -> None:
         """Refill face-conductance arrays from the model's current hierarchy.
 
-        Call after an in-place transmissivity update
-        (``model.update_T_in_place``) and before the next :meth:`solve`.
+        Called automatically by :meth:`solve` whenever the model operator
+        changed since the last solve (``model._operator_generation`` is
+        bumped by in-place transmissivity/GHB updates); manual calls remain
+        supported.
         Arrays are refilled in place — pointers are unchanged, so the
         captured correction graph remains valid and replays against the new
         operator.  Pair with :meth:`update_rhs_f64` (the FP64 RHS carries a
-        T-dependent GHB term).
+        T-dependent GHB term); :meth:`_ensure_operator_current` does both.
         """
         for fl in self.fast_levels:
             _fill_face_level(

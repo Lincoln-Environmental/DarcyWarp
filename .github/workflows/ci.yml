@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Public API is importable without Warp
+        run: |
+          python -c "import sys; sys.modules['warp'] = None; import DARCY_WARP_PACKAGE; import DARCY_WARP_PACKAGE.factory; assert callable(DARCY_WARP_PACKAGE.create_solver)"
+
+      - name: Install dependencies
+        run: python -m pip install numpy scipy pytest warp-lang==1.10.0
+
+      - name: Byte-compile package (syntax check)
+        run: python -m compileall -q DARCY_WARP_PACKAGE tests working_tests
+
+      - name: Public API imports cleanly with Warp installed
+        run: |
+          python -c "import DARCY_WARP_PACKAGE; assert callable(DARCY_WARP_PACKAGE.create_solver)"
+          python -c "import DARCY_WARP_PACKAGE.factory, DARCY_WARP_PACKAGE.solver_capabilities"
+
+      - name: Unit tests (CPU; GPU-dependent tests self-skip)
+        # `python -m pytest` (not bare pytest) so the repo root is importable.
+        run: python -m pytest tests/test_sparse_system_consistency.py tests/test_solver_registry_2d.py -v
