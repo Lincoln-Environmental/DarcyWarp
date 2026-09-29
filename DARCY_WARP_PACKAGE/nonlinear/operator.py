@@ -130,6 +130,13 @@ class NonlinearOperator2D:
         self._gh_mask_wp = _i32_field("ghb_mask", bnd.ghb_mask)
         self._gh_head_wp = _f64_field("ghb_external_head", bnd.ghb_external_head)
         self._ghb_factor_wp = _f64_field("ghb_factor", bnd.ghb_factor)
+        self._drn_mask_wp = _i32_field("drn_mask", bnd.drn_mask)
+        self._drn_elev_wp = _f64_field("drn_elev", bnd.drn_elev)
+        self._drn_cond_wp = _f64_field("drn_cond", bnd.drn_cond)
+        self._riv_mask_wp = _i32_field("riv_mask", bnd.riv_mask)
+        self._riv_stage_wp = _f64_field("riv_stage", bnd.riv_stage)
+        self._riv_rbot_wp = _f64_field("riv_rbot", bnd.riv_rbot)
+        self._riv_cond_wp = _f64_field("riv_cond", bnd.riv_cond)
         self._R_field_wp = _f64_field("R_field", context.sources.R_field)
 
         if sto.transient:
@@ -257,7 +264,10 @@ class NonlinearOperator2D:
                 head, self._K_wp, self._zbot_wp, self._has_ztop, self._ztop_wp,
                 float(self._min_sat),
                 self._active_wp, self._dirichlet_mask_wp, self._gh_mask_wp,
-                self._gh_head_wp, self._ghb_factor_wp, self._R_field_wp, self._head_prev_wp,
+                self._gh_head_wp, self._ghb_factor_wp,
+                self._drn_mask_wp, self._drn_elev_wp, self._drn_cond_wp,
+                self._riv_mask_wp, self._riv_stage_wp, self._riv_rbot_wp, self._riv_cond_wp,
+                self._R_field_wp, self._head_prev_wp,
                 float(self._sy), float(self._ss), float(self._area), float(self._inv_dt),
                 self._has_storage,
                 F_wp, self._rTr_buf, self._Fmax_buf,
@@ -288,6 +298,8 @@ class NonlinearOperator2D:
                 head, vector, self._K_wp, self._zbot_wp, self._has_ztop, self._ztop_wp,
                 float(self._min_sat), self._active_wp, self._dirichlet_mask_wp,
                 self._gh_mask_wp, self._gh_head_wp, self._ghb_factor_wp,
+                self._drn_mask_wp, self._drn_elev_wp, self._drn_cond_wp,
+                self._riv_mask_wp, self._riv_stage_wp, self._riv_rbot_wp, self._riv_cond_wp,
                 float(self._sy), float(self._ss), float(self._area), float(self._inv_dt),
                 self._has_storage, Jv_wp, self._nx, self._ny,
             ],
@@ -539,6 +551,8 @@ class NonlinearOperator2D:
             "_K_wp", "_zbot_wp", "_ztop_wp", "_active_wp", "_dirichlet_mask_wp",
             "_dirichlet_values_wp",
             "_gh_mask_wp", "_gh_head_wp", "_ghb_factor_wp", "_R_field_wp",
+            "_drn_mask_wp", "_drn_elev_wp", "_drn_cond_wp",
+            "_riv_mask_wp", "_riv_stage_wp", "_riv_rbot_wp", "_riv_cond_wp",
             "_head_prev_wp", "_free_mask_wp", "_head_wp", "_F_wp", "_sat_flow_wp",
             "_T_wp", "_store_total_wp", "_store_sy_wp", "_store_ss_wp", "_sat_phys_wp",
             "_pic_T_wp", "_pic_sy_wp", "_pic_ss_wp", "_pic_diag_wp", "_rTr_buf",

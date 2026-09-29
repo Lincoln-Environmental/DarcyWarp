@@ -4192,6 +4192,8 @@ class WarpDarcySolver:
         dx: float,
         device: str = "cuda:0",
         use_ghb: bool = False,
+        use_drn: bool = False,
+        use_riv: bool = False,
         solver_type: str = "pcg",
         head_scale: float = 1.0,
         aq_thickness: float | np.ndarray = 1.0,
@@ -4204,6 +4206,11 @@ class WarpDarcySolver:
         :param dx: cell size
         :param device: Warp device string, for example "cuda:0"
         :param use_ghb: if True, include GHB terms in operator and RHS assembly
+        :param use_drn: if True, enable MODFLOW-style fixed-conductance drain
+            (DRN) boundaries; requires the ``unconfined_semismooth_newton_kcycle``
+            backend at solve time
+        :param use_riv: if True, enable MODFLOW-style fixed-conductance river
+            (RIV) boundaries; same backend restriction as ``use_drn``
         :param solver_type: "pcg" or "jacobi" (future)
         :param head_scale: characteristic head scale, h_scaled = h / head_scale
         :param aq_thickness: aquifer thickness (scalar or grid) used in GHB conductance scaling
@@ -4217,6 +4224,8 @@ class WarpDarcySolver:
         # cache. Backends only receive borrowed references through SolverContext.
         self._resource_owner = SolverResourceOwner(device=self.device_str)
         self.use_ghb = bool(use_ghb)
+        self.use_drn = bool(use_drn)
+        self.use_riv = bool(use_riv)
         self.solver_type = str(solver_type)
         self.trust_ghb_params_for_graph = bool(trust_ghb_params_for_graph)
         backend_mode = str(diag_preconditioner_backend).strip().lower()
@@ -4247,6 +4256,15 @@ class WarpDarcySolver:
         self.gh_alpha = 1.0
         self.gh_alpha_host = None
         self.ghb_factor_host = None
+        # MODFLOW-style gated boundaries (fixed conductance; nonlinear operator
+        # only — consumed by the semismooth Newton backend).
+        self.drn_mask_host = None
+        self.drn_elev_host = None
+        self.drn_cond_host = None
+        self.riv_mask_host = None
+        self.riv_stage_host = None
+        self.riv_rbot_host = None
+        self.riv_cond_host = None
         self.storage_diag_host = None
 
         # Device side Warp arrays (set in build_from_truth_inputs)
@@ -5108,6 +5126,90 @@ class WarpDarcySolver:
                 gh_head[bad_h] = np.float32(0.0)
             self.gh_head_host = gh_head
 
+    def _require_drn_riv_supported(self, backend_name: str) -> None:
+        """DRN/RIV gated boundaries are assembled only by the semismooth Newton backend."""
+        if not (self.use_drn or self.use_riv):
+            return
+        if str(backend_name) != "unconfined_semismooth_newton_kcycle":
+            raise NotImplementedError(
+                "DRN/RIV boundaries require solver='unconfined_semismooth_newton_kcycle' "
+                f"(got {backend_name!r}); the confined, Picard and FAS backends do not "
+                "assemble gated boundary terms."
+            )
+
+    def _sanitize_drn_riv_host_fields(self) -> None:
+        """
+        Make DRN/RIV inputs numerically safe (MODFLOW fixed-conductance gated
+        boundaries, nonlinear semismooth-Newton path only):
+          - masks are zeroed on inactive and Dirichlet cells
+          - elevations / stage / rbot must be finite where the mask is set
+          - conductance must be finite and strictly positive where the mask
+            is set; masked-off cells carry zero conductance
+        """
+        shape = (int(self.ny), int(self.nx))
+
+        def _sanitize(mask_host, fields, *, label):
+            if mask_host is None:
+                return None, {}
+            mask = np.asarray(mask_host, dtype=np.int32)
+            if mask.shape != shape:
+                raise ValueError(f"{label}_mask must have shape {shape}, got {mask.shape}.")
+            mask = mask.copy()
+            if self.active_host is not None:
+                mask[np.asarray(self.active_host, dtype=np.int32) == 0] = 0
+            if self.bc_mask_host is not None:
+                mask[np.asarray(self.bc_mask_host, dtype=np.int32) != 0] = 0
+            on = mask != 0
+            out = {}
+            for name, values in fields.items():
+                if values is None:
+                    if np.any(on):
+                        raise ValueError(f"{label}_{name} is required on masked cells (got None).")
+                    out[name] = np.zeros(shape, dtype=NP_FLOAT)
+                    continue
+                arr = np.asarray(values, dtype=NP_FLOAT)
+                if arr.shape != shape:
+                    raise ValueError(f"{label}_{name} must have shape {shape}, got {arr.shape}.")
+                arr = arr.copy()
+                if np.any(~np.isfinite(arr[on])):
+                    raise ValueError(f"{label}_{name} must be finite on masked cells.")
+                arr[~on] = NP_FLOAT(0.0)
+                out[name] = arr
+            if np.any(on):
+                cond = out.get("cond")
+                if cond is None or np.any(cond[on] <= 0.0):
+                    raise ValueError(f"{label}_cond must be positive on masked cells.")
+            return mask, out
+
+        if self.use_drn:
+            if self.drn_mask_host is None:
+                self.drn_mask_host = np.zeros(shape, dtype=np.int32)
+            mask, fields = _sanitize(
+                self.drn_mask_host,
+                {"elev": self.drn_elev_host, "cond": self.drn_cond_host},
+                label="drn",
+            )
+            self.drn_mask_host = mask
+            self.drn_elev_host = fields["elev"]
+            self.drn_cond_host = fields["cond"]
+
+        if self.use_riv:
+            if self.riv_mask_host is None:
+                self.riv_mask_host = np.zeros(shape, dtype=np.int32)
+            mask, fields = _sanitize(
+                self.riv_mask_host,
+                {
+                    "stage": self.riv_stage_host,
+                    "rbot": self.riv_rbot_host,
+                    "cond": self.riv_cond_host,
+                },
+                label="riv",
+            )
+            self.riv_mask_host = mask
+            self.riv_stage_host = fields["stage"]
+            self.riv_rbot_host = fields["rbot"]
+            self.riv_cond_host = fields["cond"]
+
     def _summarize_grid_to_scalar_for_reporting(self, grid: np.ndarray, mask: np.ndarray) -> float:
         vals = np.asarray(grid, dtype=np.float64)[np.asarray(mask, dtype=bool)]
         if vals.size == 0:
@@ -5363,6 +5465,7 @@ class WarpDarcySolver:
         self._recompute_ghb_factor_host(gh_alpha=self._gh_alpha_input, aq_thickness=aq_thickness)
         self._prune_isolated_active_host_cells()
         self._recompute_ghb_factor_host()
+        self._sanitize_drn_riv_host_fields()
         self.n_active = int(np.count_nonzero(self.active_host))
 
         device = self.device_str
@@ -5486,9 +5589,21 @@ class WarpDarcySolver:
         gh_width: np.ndarray | None = None,
         gh_alpha: float | np.ndarray = 1.0,
         aq_thickness: float | np.ndarray | None = None,
+        drn_mask: np.ndarray | None = None,
+        drn_elev: np.ndarray | None = None,
+        drn_cond: np.ndarray | None = None,
+        riv_mask: np.ndarray | None = None,
+        riv_stage: np.ndarray | None = None,
+        riv_rbot: np.ndarray | None = None,
+        riv_cond: np.ndarray | None = None,
     ) -> None:
         """
         Build solver state from explicitly provided fields (no synthetic builder).
+
+        ``drn_*`` / ``riv_*`` are MODFLOW-style gated head-dependent boundaries
+        (fixed per-cell conductance [L^2/T]); they are only assembled by the
+        ``unconfined_semismooth_newton_kcycle`` backend and require
+        ``use_drn=True`` / ``use_riv=True`` at construction.
         """
         self._gh_alpha_input = gh_alpha
         if aq_thickness is not None:
@@ -5528,6 +5643,36 @@ class WarpDarcySolver:
             gh_head = np.zeros((self.ny, self.nx), dtype=NP_FLOAT)
             gh_width = np.zeros((self.ny, self.nx), dtype=NP_FLOAT)
 
+        shape = (self.ny, self.nx)
+        if self.use_drn:
+            if drn_mask is None:
+                raise ValueError("drn_mask is required when use_drn=True.")
+            if np.any(np.asarray(drn_mask, dtype=np.int32) != 0) and (drn_elev is None or drn_cond is None):
+                raise ValueError("drn_elev and drn_cond are required where drn_mask != 0.")
+        else:
+            if drn_mask is not None and np.any(np.asarray(drn_mask, dtype=np.int32) != 0):
+                raise ValueError("drn_mask was provided but the solver was built with use_drn=False.")
+            drn_mask = None
+        if self.use_riv:
+            if riv_mask is None:
+                raise ValueError("riv_mask is required when use_riv=True.")
+            if np.any(np.asarray(riv_mask, dtype=np.int32) != 0) and (
+                riv_stage is None or riv_rbot is None or riv_cond is None
+            ):
+                raise ValueError("riv_stage, riv_rbot and riv_cond are required where riv_mask != 0.")
+        else:
+            if riv_mask is not None and np.any(np.asarray(riv_mask, dtype=np.int32) != 0):
+                raise ValueError("riv_mask was provided but the solver was built with use_riv=False.")
+            riv_mask = None
+
+        self.drn_mask_host = None if drn_mask is None else np.asarray(drn_mask, dtype=np.int32)
+        self.drn_elev_host = None if drn_mask is None else drn_elev
+        self.drn_cond_host = None if drn_mask is None else drn_cond
+        self.riv_mask_host = None if riv_mask is None else np.asarray(riv_mask, dtype=np.int32)
+        self.riv_stage_host = None if riv_mask is None else riv_stage
+        self.riv_rbot_host = None if riv_mask is None else riv_rbot
+        self.riv_cond_host = None if riv_mask is None else riv_cond
+
         self.T_field_host = T_field
         self.R_field_host = R_field
         self.active_host = active
@@ -5545,6 +5690,7 @@ class WarpDarcySolver:
         self._recompute_ghb_factor_host(gh_alpha=self._gh_alpha_input, aq_thickness=aq_thickness)
         self._prune_isolated_active_host_cells()
         self._recompute_ghb_factor_host()
+        self._sanitize_drn_riv_host_fields()
         self.n_active = int(np.count_nonzero(self.active_host))
 
         device = self.device_str
@@ -7351,6 +7497,7 @@ class WarpDarcySolver:
         backend_name = (
             "unconfined_picard_kcycle" if unconfined else "confined_kcycle"
         )
+        self._require_drn_riv_supported(backend_name)
         return solve_selected(
             context,
             solver=backend_name,
@@ -7372,6 +7519,7 @@ class WarpDarcySolver:
         """
         if args:
             raise TypeError("solve_transient_2d_unconfined accepts keyword arguments only.")
+        self._require_drn_riv_supported(str(solver) if solver is not None else "unconfined_picard_kcycle")
         context = self._make_solver_context(formulation="unconfined", transient=True)
         return solve_transient_unconfined(context, solver=solver, **kwargs)
 
@@ -7444,6 +7592,7 @@ class WarpDarcySolver:
             formulation=form_mode,
             default=str(self.solver_type),
         )
+        self._require_drn_riv_supported(backend_name)
         context = self._make_solver_context(
             formulation=form_mode,
             transient=bool(transient),

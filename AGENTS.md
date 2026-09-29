@@ -183,7 +183,13 @@ working_tests/
                            # use_ghb (center-row GHB), t_field_kind="ugly_t"
                            # hard-T (make_ugly_T_field/100),
                            # inner_implementation="fast",
-                           # ghb_head_elevation (draining cases).
+                           # ghb_head_elevation (draining cases), and
+                           # boundary_kind="drn"/"riv" (MODFLOW gated
+                           # boundaries on the same centre-row geometry,
+                           # fixed conductance, no fixed point; Warp side
+                           # solved by unconfined_semismooth_newton_kcycle
+                           # warm-started from a plain Picard pre-solve;
+                           # ARTIFACT_SCHEMA_VERSION=4).
                            # 2026-08-03 hardening: every MF6 run is gated on
                            # normal termination + finite heads + parsed
                            # PERCENT BUDGET DISCREPANCY <=
@@ -303,6 +309,7 @@ Canonical backends live in `solvers/registry.py` + `solver_capabilities.py`:
 - `min_sat` (default 0.1 m) is a numerical floor. Cells are **never deactivated** — this is not a full drying/rewetting package.
 - Picard outer loop updates T each iteration, then solves the linearised problem.
 - Optional: Chebyshev acceleration, adaptive omega, update clipping, transmissivity relaxation.
+- **DRN/RIV gated boundaries** (MODFLOW semantics, fixed per-cell conductance): DRN gives `C*max(h-elev,0)` outflow; RIV gives `C*(h-stage)` for `h>rbot` and the constant `C*(rbot-stage)` otherwise. Implemented only in the nonlinear operator (`nonlinear/kernels.py` residual + semismooth Jacobian) and assembled solely by `unconfined_semismooth_newton_kcycle`; `solve()` raises `NotImplementedError` for other backends when `use_drn`/`use_riv`, and the Newton→Picard fallback is disabled when gated cells exist. Fields enter via `WarpDarcySolver(use_drn=/use_riv=)` + `build_from_fields(drn_mask/drn_elev/drn_cond, riv_mask/riv_stage/riv_rbot/riv_cond)`.
 
 ### Transient physics
 
@@ -637,6 +644,8 @@ Usually means `sat = h - bottom` (saturated thickness of the aquifer), not soil 
 | `test_fast_confined_kcycle.py` | warp + CUDA | production `implementation="fast"`: fast-vs-classic equivalence, graph reuse, face-cache invalidation on T update, fast-graph invalidation on classic hierarchy rebuild, close() release, per-call GHB parameter overrides, transient/unconfined guards, classic-stays-default |
 | `test_model_convergence_mf6_cache.py` | — | MF6 truth-artifact cache (hit/miss/populate) used by the convergence benchmark |
 | `test_comparison_results.py` | warp + fixtures | end-to-end Warp vs MF6 truth |
+| `test_drn_riv_operator_2d.py` | warp | gated DRN/RIV terms: gating regimes, host/device residual, Jv vs FD, sanitisation/guards, Newton vs scipy fixed point |
+| `test_drn_riv_parity_2d.py` | warp + flopy + MF6 | live MF6 parity for centre-row DRN/RIV (active/gated-off, coupled/decoupled), 5e-4 m gate |
 
 ### Important caveats
 

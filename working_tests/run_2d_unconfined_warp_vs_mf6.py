@@ -53,7 +53,9 @@ BENCHMARK_GRID_SIZES = tuple(
 
 # Artifact schema version.  Bump whenever the set of fields written to the
 # MF6/Warp NPZ artifacts changes in a way that invalidates older caches.
-ARTIFACT_SCHEMA_VERSION = 3
+# 4: boundary_kind + DRN/RIV gated boundary fields added to the case
+# definition and fingerprint.
+ARTIFACT_SCHEMA_VERSION = 4
 
 # MF6 trust gates (Task: "trustworthy MF6").  MF6 can return ok=True with a
 # ~200 % budget discrepancy and mostly-initial-condition heads on hard-T
@@ -99,6 +101,24 @@ class Unconfined2DCase:
     # "warp_matched" (C_gh evaluated at Warp's converged head; a deliberate
     # cross-solver equation-equivalence test, not an independent truth).
     ghb_conductance_mode: str = "warp_matched"
+    # Gated boundary package on the centre-row mask geometry: "ghb" (the
+    # historical head-dependent GHB), "drn" (MODFLOW DRN, fixed conductance,
+    # outflow-only) or "riv" (MODFLOW RIV, fixed conductance, decouples at
+    # rbot).  DRN/RIV force use_ghb=False and use identical fixed
+    # conductances on the MF6 and Warp sides (no fixed point needed).
+    boundary_kind: str = "ghb"
+    drn_elevation: float = 20.0      # drain elevation, m above the cell bottom
+    drn_conductance: float = 200.0   # fixed per-cell drain conductance [L^2/T]
+    riv_stage_elevation: float = 100.0  # river stage, m above the cell bottom
+    riv_rbot_elevation: float = 10.0    # riverbed bottom, m above the cell bottom
+    riv_conductance: float = 200.0   # fixed per-cell riverbed conductance [L^2/T]
+    drn_mask: np.ndarray | None = None
+    drn_elev: np.ndarray | None = None
+    drn_cond: np.ndarray | None = None
+    riv_mask: np.ndarray | None = None
+    riv_stage: np.ndarray | None = None
+    riv_rbot: np.ndarray | None = None
+    riv_cond: np.ndarray | None = None
 
 
 def _warp_device(preferred: str = "cuda:0") -> str:
@@ -183,6 +203,12 @@ def case_fingerprint(case: Unconfined2DCase) -> str:
         "use_ghb": bool(case.use_ghb),
         "ghb_width": float(case.ghb_width),
         "ghb_conductance_mode": str(getattr(case, "ghb_conductance_mode", "fixed_point")),
+        "boundary_kind": str(getattr(case, "boundary_kind", "ghb")),
+        "drn_elevation": float(getattr(case, "drn_elevation", 0.0)),
+        "drn_conductance": float(getattr(case, "drn_conductance", 0.0)),
+        "riv_stage_elevation": float(getattr(case, "riv_stage_elevation", 0.0)),
+        "riv_rbot_elevation": float(getattr(case, "riv_rbot_elevation", 0.0)),
+        "riv_conductance": float(getattr(case, "riv_conductance", 0.0)),
     }
     h.update(json.dumps(scalars, sort_keys=True).encode())
     for name in (
@@ -197,8 +223,18 @@ def case_fingerprint(case: Unconfined2DCase) -> str:
         "gh_mask",
         "gh_head",
         "gh_width",
+        "drn_mask",
+        "drn_elev",
+        "drn_cond",
+        "riv_mask",
+        "riv_stage",
+        "riv_rbot",
+        "riv_cond",
     ):
-        arr = np.ascontiguousarray(np.asarray(getattr(case, name)))
+        raw = getattr(case, name, None)
+        if raw is None:
+            raw = np.zeros((int(case.ny), int(case.nx)), dtype=np.float64)
+        arr = np.ascontiguousarray(np.asarray(raw))
         h.update(name.encode())
         h.update(str(arr.shape).encode())
         h.update(str(arr.dtype).encode())
@@ -374,6 +410,12 @@ def build_simple_unconfined_case(
     ghb_width: float = 100.0,
     ghb_head_elevation: float | None = None,
     ghb_conductance_mode: str = "warp_matched",
+    boundary_kind: str = "ghb",
+    drn_elevation: float = 20.0,
+    drn_conductance: float = 200.0,
+    riv_stage_elevation: float = 100.0,
+    riv_rbot_elevation: float = 10.0,
+    riv_conductance: float = 200.0,
 ) -> Unconfined2DCase:
     """
     Build a shared 2D unconfined benchmark case for MF6 and Warp.
@@ -396,11 +438,37 @@ def build_simple_unconfined_case(
         Small values (e.g. 0.3 m) design DRAINING cases whose heads approach
         ``bottom + min_sat`` near the GHB row when combined with low K, low
         recharge and a small ``ghb_width`` (so the GHB row is not clamped).
+    :param boundary_kind: ``"ghb"`` (centre-row GHB per ``use_ghb``),
+        ``"drn"`` (centre-row MODFLOW DRN cells with fixed conductance) or
+        ``"riv"`` (centre-row MODFLOW RIV cells with fixed conductance).
+        DRN/RIV force ``use_ghb=False`` and place gated boundary cells on the
+        same mask geometry as the GHB.
+    :param drn_elevation: drain elevation [m above the cell bottom];
+        ``drn_elev = bottom + drn_elevation`` on masked cells.
+    :param drn_conductance: fixed per-cell drain conductance [L^2/T].
+    :param riv_stage_elevation: river stage [m above the cell bottom].
+    :param riv_rbot_elevation: riverbed bottom elevation [m above the cell
+        bottom]; must stay below the stage.
+    :param riv_conductance: fixed per-cell riverbed conductance [L^2/T].
     """
     if workspace is None:
         workspace = data_store.joinpath("working_tests", "mf6_vs_warp_2d_unconfined")
     workspace = Path(workspace)
     workspace.mkdir(parents=True, exist_ok=True)
+
+    boundary_kind = str(boundary_kind).strip().lower()
+    if boundary_kind not in {"ghb", "drn", "riv"}:
+        raise ValueError(
+            f"boundary_kind must be 'ghb', 'drn' or 'riv', got {boundary_kind!r}."
+        )
+    if boundary_kind != "ghb":
+        if use_ghb:
+            raise ValueError(
+                f"boundary_kind={boundary_kind!r} replaces the centre-row GHB; "
+                "combine it with use_ghb=False."
+            )
+        if boundary_kind == "riv" and not float(riv_stage_elevation) > float(riv_rbot_elevation):
+            raise ValueError("riv_stage_elevation must exceed riv_rbot_elevation.")
 
     active = _build_domain(nx=int(nx), ny=int(ny)).astype(np.int32)
     top = np.asarray(_build_dem(active), dtype=np.float64)
@@ -431,7 +499,7 @@ def build_simple_unconfined_case(
     gh_mask = np.zeros((int(ny), int(nx)), dtype=np.int32)
     gh_head = np.zeros((int(ny), int(nx)), dtype=np.float64)
     gh_width_field = np.zeros((int(ny), int(nx)), dtype=np.float64)
-    if use_ghb:
+    if use_ghb and boundary_kind == "ghb":
         if _build_ghb_boundary_masks is None:
             raise RuntimeError("GHB boundary mask builder unavailable (legacy_code import failed).")
         gh_mask_bool = np.asarray(_build_ghb_boundary_masks(active), dtype=bool) & (active != 0)
@@ -441,6 +509,27 @@ def build_simple_unconfined_case(
         else:
             gh_head[gh_mask_bool] = bottom[gh_mask_bool] + float(ghb_head_elevation)
         gh_width_field[gh_mask_bool] = float(ghb_width)
+
+    drn_mask = np.zeros((int(ny), int(nx)), dtype=np.int32)
+    drn_elev = np.zeros((int(ny), int(nx)), dtype=np.float64)
+    drn_cond = np.zeros((int(ny), int(nx)), dtype=np.float64)
+    riv_mask = np.zeros((int(ny), int(nx)), dtype=np.int32)
+    riv_stage = np.zeros((int(ny), int(nx)), dtype=np.float64)
+    riv_rbot = np.zeros((int(ny), int(nx)), dtype=np.float64)
+    riv_cond = np.zeros((int(ny), int(nx)), dtype=np.float64)
+    if boundary_kind in {"drn", "riv"}:
+        if _build_ghb_boundary_masks is None:
+            raise RuntimeError("Boundary mask builder unavailable (legacy_code import failed).")
+        gated_mask_bool = np.asarray(_build_ghb_boundary_masks(active), dtype=bool) & (active != 0)
+        if boundary_kind == "drn":
+            drn_mask[gated_mask_bool] = 1
+            drn_elev[gated_mask_bool] = bottom[gated_mask_bool] + float(drn_elevation)
+            drn_cond[gated_mask_bool] = float(drn_conductance)
+        else:
+            riv_mask[gated_mask_bool] = 1
+            riv_stage[gated_mask_bool] = bottom[gated_mask_bool] + float(riv_stage_elevation)
+            riv_rbot[gated_mask_bool] = bottom[gated_mask_bool] + float(riv_rbot_elevation)
+            riv_cond[gated_mask_bool] = float(riv_conductance)
 
     initial_head = bottom + max(float(initial_saturated_thickness), 0.1)
     initial_head = np.minimum(initial_head, top)
@@ -465,9 +554,22 @@ def build_simple_unconfined_case(
         gh_width=gh_width_field,
         t_field_kind=str(t_field_kind),
         t_field_seed=int(t_field_seed),
-        use_ghb=bool(use_ghb),
+        use_ghb=bool(use_ghb) and boundary_kind == "ghb",
         ghb_width=float(ghb_width),
         ghb_conductance_mode=str(ghb_conductance_mode),
+        boundary_kind=str(boundary_kind),
+        drn_elevation=float(drn_elevation),
+        drn_conductance=float(drn_conductance),
+        riv_stage_elevation=float(riv_stage_elevation),
+        riv_rbot_elevation=float(riv_rbot_elevation),
+        riv_conductance=float(riv_conductance),
+        drn_mask=drn_mask,
+        drn_elev=drn_elev,
+        drn_cond=drn_cond,
+        riv_mask=riv_mask,
+        riv_stage=riv_stage,
+        riv_rbot=riv_rbot,
+        riv_cond=riv_cond,
     )
 
 
@@ -619,6 +721,41 @@ def _build_and_run_mf6(
                 gwf,
                 pname="ghb",
                 stress_period_data={0: ghb_spd},
+                save_flows=True,
+            )
+    drn_mask = getattr(case, "drn_mask", None)
+    if drn_mask is not None:
+        drn_cells = (np.asarray(drn_mask) != 0) & (case.active != 0) & (case.bc_mask == 0)
+        drn_spd = [
+            ((0, int(j), int(i)), float(case.drn_elev[j, i]), float(case.drn_cond[j, i]))
+            for j, i in zip(*np.where(drn_cells))
+            if case.drn_cond[j, i] > 0.0
+        ]
+        if drn_spd:
+            flopy.mf6.ModflowGwfdrn(
+                gwf,
+                pname="drn",
+                stress_period_data={0: drn_spd},
+                save_flows=True,
+            )
+    riv_mask = getattr(case, "riv_mask", None)
+    if riv_mask is not None:
+        riv_cells = (np.asarray(riv_mask) != 0) & (case.active != 0) & (case.bc_mask == 0)
+        riv_spd = [
+            (
+                (0, int(j), int(i)),
+                float(case.riv_stage[j, i]),
+                float(case.riv_cond[j, i]),
+                float(case.riv_rbot[j, i]),
+            )
+            for j, i in zip(*np.where(riv_cells))
+            if case.riv_cond[j, i] > 0.0
+        ]
+        if riv_spd:
+            flopy.mf6.ModflowGwfriv(
+                gwf,
+                pname="riv",
+                stress_period_data={0: riv_spd},
                 save_flows=True,
             )
     flopy.mf6.ModflowGwfrcha(
@@ -1042,9 +1179,62 @@ def run_warp_unconfined(
     out_path = Path(out_path) if out_path is not None else case.workspace.joinpath("warp_heads.npz")
     device = _warp_device(device)
 
+    boundary_kind = str(getattr(case, "boundary_kind", "ghb"))
+    use_drn = boundary_kind == "drn"
+    use_riv = boundary_kind == "riv"
+    if (use_drn or use_riv) and solver_backend is None:
+        # The gated DRN/RIV terms are assembled only by the semismooth Newton backend.
+        solver_backend = "unconfined_semismooth_newton_kcycle"
+
     initial_transmissivity = case.hydraulic_conductivity * np.maximum(case.initial_head - case.bottom, 0.1)
     initial_transmissivity[case.active == 0] = 0.0
     rhs_recharge = np.asarray(case.recharge, dtype=np.float64)
+
+    initial_head = case.initial_head.copy()
+    if (use_drn or use_riv) and str(solver_backend) == "unconfined_semismooth_newton_kcycle":
+        # Cold-start Newton on a gated-boundary case takes an enormous first
+        # step that the Armijo line search crushes (contraction ~1%/iteration).
+        # Warm-start from an unconfined Picard pre-solve WITHOUT the gated
+        # boundary (a separate plain model — the gated terms only exist on the
+        # Newton model, so this only affects the starting iterate).
+        with WarpDarcySolver(
+            nx=case.nx,
+            ny=case.ny,
+            dx=case.dx,
+            device=device,
+            solver_type="kcycle",
+            diag_preconditioner_backend=diag_preconditioner_backend,
+            aq_thickness=(case.top - case.bottom),
+        ) as pre_solver:
+            pre_solver.build_from_fields(
+                T_field=initial_transmissivity,
+                R_field=rhs_recharge,
+                active=case.active,
+                bc_mask=case.bc_mask,
+                bc_values=case.bc_values,
+            )
+            warm_head, warm_info = pre_solver.solve(
+                formulation="unconfined",
+                solver="unconfined_picard_kcycle",
+                K_field=case.hydraulic_conductivity,
+                zbot_field=case.bottom,
+                ztop_field=case.top,
+                initial_head=case.initial_head.copy(),
+                max_cycles=80,
+                max_levels=5,
+                min_coarse_cells=500,
+                rel_tol=5.0e-7,
+                abs_tol_min=5.0e-7,
+                hclose=DEFAULT_DH_TOL,
+                max_outer_iterations=60,
+                unconfined_startup_mode=str(unconfined_startup_mode),
+                return_info=True,
+            )
+        if warm_info.get("converged", False):
+            initial_head = np.asarray(warm_head, dtype=np.float64)
+        else:
+            print("WARNING: gated-boundary warm-start pre-solve did not converge; "
+                  "Newton starts from the case initial head.")
 
     t0 = time.perf_counter()
     with WarpDarcySolver(
@@ -1053,6 +1243,8 @@ def run_warp_unconfined(
         dx=case.dx,
         device=device,
         use_ghb=bool(case.use_ghb),
+        use_drn=use_drn,
+        use_riv=use_riv,
         solver_type="kcycle",
         diag_preconditioner_backend=diag_preconditioner_backend,
         aq_thickness=(case.top - case.bottom),
@@ -1068,6 +1260,13 @@ def run_warp_unconfined(
             gh_width=case.gh_width,
             gh_alpha=1.0,
             aq_thickness=(case.top - case.bottom),
+            drn_mask=case.drn_mask if use_drn else None,
+            drn_elev=case.drn_elev if use_drn else None,
+            drn_cond=case.drn_cond if use_drn else None,
+            riv_mask=case.riv_mask if use_riv else None,
+            riv_stage=case.riv_stage if use_riv else None,
+            riv_rbot=case.riv_rbot if use_riv else None,
+            riv_cond=case.riv_cond if use_riv else None,
         )
         solve1_kwargs = {
             "formulation": "unconfined",
@@ -1075,7 +1274,7 @@ def run_warp_unconfined(
             "K_field": case.hydraulic_conductivity,
             "zbot_field": case.bottom,
             "ztop_field": case.top,
-            "initial_head": case.initial_head.copy(),
+            "initial_head": initial_head.copy(),
             "max_cycles": 80,
             "max_levels": 5,
             "min_coarse_cells": 500,
@@ -1105,6 +1304,11 @@ def run_warp_unconfined(
             "chebyshev_rejection_factor": 1.2,
             "inner_implementation": str(inner_implementation),
         }
+        if str(solver_backend) == "unconfined_semismooth_newton_kcycle":
+            # Gated-boundary Newton needs a larger outer budget than the
+            # default 20 (the warm-started contraction is linear for the first
+            # ~25 iterations before the quadratic regime).
+            solve1_kwargs["newton_max_iterations"] = 100
         if check_every_no is not None:
             solve1_kwargs["check_every_no"] = int(check_every_no)
         solve2_kwargs = dict(solve1_kwargs)
@@ -1290,6 +1494,10 @@ def _require_warp_converged(info: dict, context: str = "Warp solve") -> dict:
     strict_flag = info.get("strict_picard_convergence_passed")
     if strict_flag is not None:
         strict_ok = bool(strict_flag)
+    elif info.get("solver_backend") == "unconfined_semismooth_newton_kcycle":
+        # The Newton backend has no Picard strict flag; its converged flag is
+        # the gate (the gated-terms Picard fallback is disabled there).
+        strict_ok = bool(info.get("converged", False))
     else:
         strict_ok = status == "Nonlinear head-change and inner residual tolerances met."
     if not (bool(info.get("converged", False)) and strict_ok):
@@ -1374,6 +1582,97 @@ def _ghb_coupling_ratio(
     return out
 
 
+def _gated_boundary_flux_from_heads(case: Unconfined2DCase, heads: np.ndarray) -> np.ndarray:
+    """Per-cell DRN/RIV flux from converged heads, MF6 CBC sign convention.
+
+    Positive means flow INTO the aquifer (the MF6 cell-budget convention):
+    DRN cells carry ``-C*max(h - elev, 0)`` (drains only remove water) and RIV
+    cells carry ``C*(stage - max(h, rbot))`` (coupled branch ``C*(stage - h)``,
+    decoupled branch the constant ``C*(stage - rbot)``).
+    """
+    h = np.asarray(heads, dtype=np.float64)
+    q = np.zeros((case.ny, case.nx), dtype=np.float64)
+    kind = str(case.boundary_kind)
+    if kind == "drn":
+        mask = (np.asarray(case.drn_mask) != 0) & (case.active != 0) & (case.bc_mask == 0)
+        cond = np.asarray(case.drn_cond, dtype=np.float64)
+        q[mask] = -cond[mask] * np.maximum(h[mask] - np.asarray(case.drn_elev, dtype=np.float64)[mask], 0.0)
+    elif kind == "riv":
+        mask = (np.asarray(case.riv_mask) != 0) & (case.active != 0) & (case.bc_mask == 0)
+        cond = np.asarray(case.riv_cond, dtype=np.float64)
+        rbot = np.asarray(case.riv_rbot, dtype=np.float64)
+        q[mask] = cond[mask] * (
+            np.asarray(case.riv_stage, dtype=np.float64)[mask] - np.maximum(h[mask], rbot[mask])
+        )
+    return q
+
+
+def _boundary_flux_comparison(
+    case: Unconfined2DCase,
+    warp_heads: np.ndarray,
+) -> dict:
+    """Compare Warp DRN/RIV per-cell fluxes against the MF6 CBC budget.
+
+    The Warp fluxes are evaluated host-side from the converged Warp heads with
+    the gated MODFLOW formulas (see ``_gated_boundary_flux_from_heads``); the
+    MF6 fluxes come from the ``drn``/``riv`` records of the cell-by-cell budget
+    file, which use the MF6 sign convention (positive = flow into the model
+    cell).  A gated-off DRN cell records zero MF6 flow; a decoupled RIV cell
+    records the constant ``C*(stage - rbot)``.
+    """
+    kind = str(case.boundary_kind)
+    if kind not in {"drn", "riv"}:
+        return {}
+    mask_name = "drn_mask" if kind == "drn" else "riv_mask"
+    cells = (np.asarray(getattr(case, mask_name)) != 0) & (case.active != 0) & (case.bc_mask == 0)
+    if not np.any(cells):
+        return {}
+    cbb_path = case.workspace.joinpath("mf6", "unconf2d_truth.cbb")
+    if not cbb_path.exists():
+        raise RuntimeError(f"MF6 budget file {cbb_path} missing; cannot compare {kind} fluxes.")
+    cbb = flopy.utils.CellBudgetFile(str(cbb_path), precision="double")
+    records = cbb.get_data(text=kind, full3D=True)
+    if not records:
+        raise RuntimeError(f"MF6 budget file {cbb_path} has no {kind!r} record.")
+    q_mf6 = np.asarray(records[-1], dtype=np.float64)[0]
+
+    q_warp = _gated_boundary_flux_from_heads(case, warp_heads)
+    diff = q_warp[cells] - q_mf6[cells]
+    q_scale = max(1.0e-30, float(np.max(np.abs(q_mf6[cells]))))
+    q_total_scale = max(1.0e-30, float(abs(np.sum(q_mf6[cells]))))
+    tol = 1.0e-6 * q_scale
+
+    h = np.asarray(warp_heads, dtype=np.float64)
+    if kind == "drn":
+        warp_off = h[cells] <= np.asarray(case.drn_elev, dtype=np.float64)[cells]
+        mf6_off = np.abs(q_mf6[cells]) <= tol
+    else:
+        warp_off = h[cells] <= np.asarray(case.riv_rbot, dtype=np.float64)[cells]
+        decoupled_q = (
+            np.asarray(case.riv_cond, dtype=np.float64)
+            * (np.asarray(case.riv_stage, dtype=np.float64) - np.asarray(case.riv_rbot, dtype=np.float64))
+        )[cells]
+        mf6_off = np.abs(q_mf6[cells] - decoupled_q) <= tol
+
+    out = {
+        "boundary_kind": kind,
+        "n_boundary_cells": int(np.count_nonzero(cells)),
+        "sign_convention": "positive = flow into the aquifer (MF6 CBC convention)",
+        "max_abs_diff": float(np.max(np.abs(diff))),
+        "rms_diff": float(np.sqrt(np.mean(diff * diff))),
+        "total_warp_flux": float(np.sum(q_warp[cells])),
+        "total_mf6_flux": float(np.sum(q_mf6[cells])),
+        "relative_total_diff": float(abs(np.sum(q_warp[cells]) - np.sum(q_mf6[cells])) / q_total_scale),
+        "n_gated_off_warp": int(np.count_nonzero(warp_off)),
+        "n_gated_off_mf6": int(np.count_nonzero(mf6_off)),
+        "gate_pattern_matches_mf6": bool(np.array_equal(warp_off, mf6_off)),
+    }
+    print(f"\nWarp vs MF6 {kind.upper()} boundary-flux comparison (positive = into aquifer)")
+    for key, value in out.items():
+        print(f"  {key}: {value}")
+    return out
+
+
 def run_case(
     nx: int = 250,
     ny: int = 250,
@@ -1406,6 +1705,12 @@ def run_case(
     ghb_width: float = 100.0,
     ghb_head_elevation: float | None = None,
     ghb_conductance_mode: str = "warp_matched",
+    boundary_kind: str = "ghb",
+    drn_elevation: float = 20.0,
+    drn_conductance: float = 200.0,
+    riv_stage_elevation: float = 100.0,
+    riv_rbot_elevation: float = 10.0,
+    riv_conductance: float = 200.0,
     mf6_budget_discrepancy_tol: float | None = DEFAULT_MF6_BUDGET_DISCREPANCY_TOL,
     mf6_head_change_min: float | None = DEFAULT_MF6_HEAD_CHANGE_MIN,
     ghb_cond_rtol: float = DEFAULT_GHB_COND_RTOL,
@@ -1426,14 +1731,26 @@ def run_case(
         ghb_width=ghb_width,
         ghb_head_elevation=ghb_head_elevation,
         ghb_conductance_mode=ghb_conductance_mode,
+        boundary_kind=boundary_kind,
+        drn_elevation=drn_elevation,
+        drn_conductance=drn_conductance,
+        riv_stage_elevation=riv_stage_elevation,
+        riv_rbot_elevation=riv_rbot_elevation,
+        riv_conductance=riv_conductance,
     )
+
+    # Drain/river-dominated cases can legitimately sit near the initial
+    # condition; the anti-stall head-change gate would be a false positive.
+    if case.boundary_kind != "ghb" and mf6_head_change_min == DEFAULT_MF6_HEAD_CHANGE_MIN:
+        mf6_head_change_min = 0.0
 
     print(f"Running 2D unconfined case: nx={case.nx}, ny={case.ny}, dx={case.dx}")
     print(f"Workspace: {case.workspace}")
     print(
         f"Options: t_field_kind={case.t_field_kind} (seed={case.t_field_seed}), "
         f"use_ghb={case.use_ghb} (width={case.ghb_width}), "
-        f"ghb_conductance_mode={case.ghb_conductance_mode}\n"
+        f"ghb_conductance_mode={case.ghb_conductance_mode}, "
+        f"boundary_kind={case.boundary_kind}\n"
     )
 
     mf6_path = case.workspace.joinpath("mf6_heads.npz")
@@ -1590,6 +1907,9 @@ def run_case(
             ghb_cell_metrics = _ghb_cell_comparison(case, mf6_heads, warp_heads)
             if ghb_conductance is not None:
                 ghb_coupling_ratio = _ghb_coupling_ratio(case, mf6_heads, ghb_conductance)
+        if case.boundary_kind in ("drn", "riv"):
+            _, warp_heads = load_results(mf6_path, warp_path)
+            metrics["boundary_flux_comparison"] = _boundary_flux_comparison(case, warp_heads)
     else:
         print("Skipping comparison because both MF6 and Warp heads were not generated or found.")
 
@@ -1639,6 +1959,9 @@ def run_case(
         "use_ghb": bool(case.use_ghb),
         "ghb_width": float(case.ghb_width),
         "ghb_cell_count": int(np.count_nonzero(case.gh_mask)) if case.use_ghb else 0,
+        "boundary_kind": str(case.boundary_kind),
+        "drn_cell_count": int(np.count_nonzero(case.drn_mask)) if case.drn_mask is not None else 0,
+        "riv_cell_count": int(np.count_nonzero(case.riv_mask)) if case.riv_mask is not None else 0,
         "ghb_conductance_mode": conductance_mode if case.use_ghb else None,
         "ghb_conductance_note": ghb_conductance_note,
         "ghb_fixed_point": ghb_fixed_point_info,
@@ -1728,6 +2051,12 @@ def run_grid_benchmark(
     ghb_width: float = 100.0,
     ghb_head_elevation: float | None = None,
     ghb_conductance_mode: str = "warp_matched",
+    boundary_kind: str = "ghb",
+    drn_elevation: float = 20.0,
+    drn_conductance: float = 200.0,
+    riv_stage_elevation: float = 100.0,
+    riv_rbot_elevation: float = 10.0,
+    riv_conductance: float = 200.0,
     mf6_budget_discrepancy_tol: float | None = DEFAULT_MF6_BUDGET_DISCREPANCY_TOL,
     mf6_head_change_min: float | None = DEFAULT_MF6_HEAD_CHANGE_MIN,
     ghb_cond_rtol: float = DEFAULT_GHB_COND_RTOL,
@@ -1810,6 +2139,12 @@ def run_grid_benchmark(
             ghb_width=ghb_width,
             ghb_head_elevation=ghb_head_elevation,
             ghb_conductance_mode=ghb_conductance_mode,
+            boundary_kind=boundary_kind,
+            drn_elevation=drn_elevation,
+            drn_conductance=drn_conductance,
+            riv_stage_elevation=riv_stage_elevation,
+            riv_rbot_elevation=riv_rbot_elevation,
+            riv_conductance=riv_conductance,
             mf6_budget_discrepancy_tol=mf6_budget_discrepancy_tol,
             mf6_head_change_min=mf6_head_change_min,
             ghb_cond_rtol=ghb_cond_rtol,
@@ -2155,6 +2490,12 @@ def main(
     ghb_width=100.0,
     ghb_head_elevation=None,
     ghb_conductance_mode="warp_matched",
+    boundary_kind="ghb",
+    drn_elevation=20.0,
+    drn_conductance=200.0,
+    riv_stage_elevation=100.0,
+    riv_rbot_elevation=10.0,
+    riv_conductance=200.0,
     mf6_budget_discrepancy_tol=DEFAULT_MF6_BUDGET_DISCREPANCY_TOL,
     mf6_head_change_min=DEFAULT_MF6_HEAD_CHANGE_MIN,
     ghb_cond_rtol=DEFAULT_GHB_COND_RTOL,
@@ -2239,6 +2580,12 @@ def main(
             ghb_width=ghb_width,
             ghb_head_elevation=ghb_head_elevation,
             ghb_conductance_mode=ghb_conductance_mode,
+            boundary_kind=boundary_kind,
+            drn_elevation=drn_elevation,
+            drn_conductance=drn_conductance,
+            riv_stage_elevation=riv_stage_elevation,
+            riv_rbot_elevation=riv_rbot_elevation,
+            riv_conductance=riv_conductance,
             mf6_budget_discrepancy_tol=mf6_budget_discrepancy_tol,
             mf6_head_change_min=mf6_head_change_min,
             ghb_cond_rtol=ghb_cond_rtol,
@@ -2282,6 +2629,14 @@ if __name__ == "__main__":
     # Warp's converged head and compare the same discrete operator. Select
     # "fixed_point" explicitly for the slower independent conductance-law test.
     ghb_conductance_mode = "warp_matched"
+    # Centre-row gated boundary package: "ghb" (historical), "drn" or "riv".
+    # DRN/RIV force use_ghb off and use the semismooth Newton backend by default.
+    boundary_kind = "ghb"
+    drn_elevation = 20.0       # drain elevation, m above the cell bottom
+    drn_conductance = 200.0    # fixed per-cell drain conductance [L^2/T]
+    riv_stage_elevation = 100.0  # river stage, m above the cell bottom
+    riv_rbot_elevation = 10.0    # riverbed bottom, m above the cell bottom
+    riv_conductance = 200.0    # fixed per-cell riverbed conductance [L^2/T]
     t_field_kind = "ugly_t"  # "uniform" or "ugly_t" (hard heterogeneous K ~ 4-535 m/day)
     t_field_seed = 42
     mf6_budget_discrepancy_tol = DEFAULT_MF6_BUDGET_DISCREPANCY_TOL
@@ -2323,6 +2678,12 @@ if __name__ == "__main__":
         ghb_width=ghb_width,
         ghb_head_elevation=ghb_head_elevation,
         ghb_conductance_mode=ghb_conductance_mode,
+        boundary_kind=boundary_kind,
+        drn_elevation=drn_elevation,
+        drn_conductance=drn_conductance,
+        riv_stage_elevation=riv_stage_elevation,
+        riv_rbot_elevation=riv_rbot_elevation,
+        riv_conductance=riv_conductance,
         mf6_budget_discrepancy_tol=mf6_budget_discrepancy_tol,
         mf6_head_change_min=mf6_head_change_min,
         ghb_cond_rtol=ghb_cond_rtol,

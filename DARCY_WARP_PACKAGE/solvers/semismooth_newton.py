@@ -199,6 +199,15 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
     armijo = float(kwargs.pop("newton_armijo_coefficient", 1.0e-4))
     max_head_change = float(kwargs.pop("newton_max_head_change", kwargs.get("max_head_change_per_outer_iteration", 5.0)))
     fallback_enabled = bool(kwargs.pop("newton_fallback_to_picard", True))
+    # The Picard fallback cannot honour gated DRN/RIV boundaries (it would
+    # silently drop the terms), so refuse it when such cells are present.
+    _drn_mask = getattr(model, "drn_mask_host", None)
+    _riv_mask = getattr(model, "riv_mask_host", None)
+    if fallback_enabled and (
+        (_drn_mask is not None and bool(np.any(np.asarray(_drn_mask) != 0)))
+        or (_riv_mask is not None and bool(np.any(np.asarray(_riv_mask) != 0)))
+    ):
+        fallback_enabled = False
     preconditioner_cycles = int(kwargs.pop("newton_preconditioner_kcycles", 2))
     max_levels = int(kwargs.get("max_levels", 5))
     min_coarse_cells = kwargs.get("min_coarse_cells", 500)

@@ -65,8 +65,65 @@ def _face_conductance_north_south(T: np.ndarray, active: np.ndarray) -> np.ndarr
     return C
 
 
+def _gated_boundary_diagonal(head: np.ndarray, ctx: Any) -> np.ndarray:
+    """Diagonal conductance of the gated DRN/RIV boundary terms at ``head``.
+
+    MODFLOW semantics with fixed conductance: a DRN cell contributes ``C`` while
+    ``h > elev``; a RIV cell contributes ``C`` while ``h > rbot``.  Inactive
+    drains and decoupled river cells contribute zero diagonal (the decoupled RIV
+    branch is a constant source handled on the residual side).
+    """
+    h = np.asarray(head, dtype=np.float64)
+    bnd = ctx.boundaries
+    diag = np.zeros_like(h, dtype=np.float64)
+
+    drn_mask = np.asarray(bnd.drn_mask, dtype=np.int32) != 0
+    drn_cond = np.asarray(bnd.drn_cond, dtype=np.float64)
+    drn_elev = np.asarray(bnd.drn_elev, dtype=np.float64)
+    ok = drn_mask & np.isfinite(drn_cond) & (drn_cond > 0.0) & (h > drn_elev)
+    diag[ok] += drn_cond[ok]
+
+    riv_mask = np.asarray(bnd.riv_mask, dtype=np.int32) != 0
+    riv_cond = np.asarray(bnd.riv_cond, dtype=np.float64)
+    riv_rbot = np.asarray(bnd.riv_rbot, dtype=np.float64)
+    ok = riv_mask & np.isfinite(riv_cond) & (riv_cond > 0.0) & (h > riv_rbot)
+    diag[ok] += riv_cond[ok]
+
+    return diag
+
+
+def _gated_boundary_source(head: np.ndarray, ctx: Any) -> np.ndarray:
+    """Source-side contribution of the gated DRN/RIV boundary terms at ``head``.
+
+    Active DRN: ``C*elev``.  Coupled RIV: ``C*stage``.  Decoupled RIV:
+    the constant ``C*(stage - rbot)``.  These enter the residual as
+    ``F = flow_A + storage - sources`` exactly like the GHB source.
+    """
+    h = np.asarray(head, dtype=np.float64)
+    bnd = ctx.boundaries
+    source = np.zeros_like(h, dtype=np.float64)
+
+    drn_mask = np.asarray(bnd.drn_mask, dtype=np.int32) != 0
+    drn_cond = np.asarray(bnd.drn_cond, dtype=np.float64)
+    drn_elev = np.asarray(bnd.drn_elev, dtype=np.float64)
+    ok = drn_mask & np.isfinite(drn_cond) & (drn_cond > 0.0) & (h > drn_elev)
+    source[ok] += drn_cond[ok] * drn_elev[ok]
+
+    riv_mask = np.asarray(bnd.riv_mask, dtype=np.int32) != 0
+    riv_cond = np.asarray(bnd.riv_cond, dtype=np.float64)
+    riv_stage = np.asarray(bnd.riv_stage, dtype=np.float64)
+    riv_rbot = np.asarray(bnd.riv_rbot, dtype=np.float64)
+    riv_ok = riv_mask & np.isfinite(riv_cond) & (riv_cond > 0.0)
+    coupled = riv_ok & (h > riv_rbot)
+    source[coupled] += riv_cond[coupled] * riv_stage[coupled]
+    decoupled = riv_ok & ~coupled
+    source[decoupled] += riv_cond[decoupled] * (riv_stage[decoupled] - riv_rbot[decoupled])
+
+    return source
+
+
 def flow_operator_applied(head: np.ndarray, ctx: Any) -> np.ndarray:
-    """Host ``flow_A(h) h`` (5-point + GHB diagonal, NO storage, NO sources)."""
+    """Host ``flow_A(h) h`` (5-point + GHB + gated DRN/RIV diagonals; NO storage, NO sources)."""
     h = np.asarray(head, dtype=np.float64)
     T = _flow_transmissivity(h, ctx)
     active = np.asarray(ctx.boundaries.active, dtype=np.int32)
@@ -84,7 +141,8 @@ def flow_operator_applied(head: np.ndarray, ctx: Any) -> np.ndarray:
     C_gh = np.zeros_like(h, dtype=np.float64)
     ok = gh_mask & np.isfinite(ghb_factor) & (ghb_factor > 0.0)
     C_gh[ok] = T[ok] * ghb_factor[ok]
-    Ah += C_gh * h
+    C_gated = _gated_boundary_diagonal(h, ctx)
+    Ah += (C_gh + C_gated) * h
 
     # Mirror the device isolated-cell branch: if a free cell has no conductance
     # it degenerates to an identity row.
@@ -94,6 +152,7 @@ def flow_operator_applied(head: np.ndarray, ctx: Any) -> np.ndarray:
         + np.pad(C_ns, ((0, 1), (0, 0)), constant_values=0.0)
         + np.pad(C_ns, ((1, 0), (0, 0)), constant_values=0.0)
         + C_gh
+        + C_gated
     )
     isolated = (sum_T < _TINY) & (active != 0)
     Ah[isolated] = h[isolated]
@@ -164,8 +223,9 @@ def nonlinear_residual_host(head: np.ndarray, ctx: Any) -> np.ndarray:
     ok = gh_mask & np.isfinite(ghb_factor) & (ghb_factor > 0.0)
     C_gh[ok] = T[ok] * ghb_factor[ok]
     ghb_source = C_gh * gh_head
+    gated_source = _gated_boundary_source(h, ctx)
 
-    F = flow_Ah + total_store - recharge - ghb_source
+    F = flow_Ah + total_store - recharge - ghb_source - gated_source
     out = np.zeros_like(h, dtype=np.float64)
     out[free] = F[free]
     return out
@@ -232,7 +292,8 @@ def frozen_picard_operator_host(head: np.ndarray, ctx: Any) -> dict[str, np.ndar
 def assemble_flow_operator_sparse(head: np.ndarray, ctx: Any) -> sp.csr_matrix:
     """Independent scipy CSR assembly of the head-dependent flow operator A(h).
 
-    Built directly from the 5-point harmonic stencil with GHB diagonal; identity
+    Built directly from the 5-point harmonic stencil with the GHB diagonal plus
+    the gated DRN/RIV diagonals at ``head``; identity
     rows on inactive / Dirichlet cells.  Independent of both the device kernel
     and :func:`flow_operator_applied` (uses a different code path) so it is a
     genuine cross-check for confined linear consistency.
@@ -245,6 +306,7 @@ def assemble_flow_operator_sparse(head: np.ndarray, ctx: Any) -> sp.csr_matrix:
     dirichlet = np.asarray(ctx.boundaries.dirichlet_mask, dtype=np.int32) != 0
     gh_mask = np.asarray(ctx.boundaries.ghb_mask, dtype=np.int32) != 0
     ghb_factor = np.asarray(ctx.boundaries.ghb_factor, dtype=np.float64)
+    C_gated = _gated_boundary_diagonal(h, ctx)
 
     def idx(j: int, i: int) -> int:
         return j * nx + i
@@ -277,6 +339,7 @@ def assemble_flow_operator_sparse(head: np.ndarray, ctx: Any) -> sp.csr_matrix:
                             rows.append(k); cols.append(idx(nj, ni)); vals.append(-C)
             if gh_mask[j, i] and np.isfinite(ghb_factor[j, i]) and ghb_factor[j, i] > 0.0:
                 diag += T[j, i] * ghb_factor[j, i]
+            diag += C_gated[j, i]
             if diag < _TINY:
                 rows.append(k); cols.append(k); vals.append(1.0)
             else:

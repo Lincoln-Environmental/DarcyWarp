@@ -47,6 +47,13 @@ def _capture_static(context: Any) -> dict[str, Any]:
         "ghb_mask": np.array(bnd.ghb_mask, dtype=np.int32, copy=True),
         "ghb_factor": np.array(bnd.ghb_factor, dtype=np.float64, copy=True),
         "ghb_external_head": np.array(bnd.ghb_external_head, dtype=np.float64, copy=True),
+        "drn_mask": np.array(bnd.drn_mask, dtype=np.int32, copy=True),
+        "drn_elev": np.array(bnd.drn_elev, dtype=np.float64, copy=True),
+        "drn_cond": np.array(bnd.drn_cond, dtype=np.float64, copy=True),
+        "riv_mask": np.array(bnd.riv_mask, dtype=np.int32, copy=True),
+        "riv_stage": np.array(bnd.riv_stage, dtype=np.float64, copy=True),
+        "riv_rbot": np.array(bnd.riv_rbot, dtype=np.float64, copy=True),
+        "riv_cond": np.array(bnd.riv_cond, dtype=np.float64, copy=True),
     }
 
 
@@ -58,6 +65,8 @@ def _static_equal(a: dict[str, Any], b: dict[str, Any]) -> bool:
     names = (
         "K", "zbot", "active", "dirichlet_mask", "dirichlet_values",
         "ghb_mask", "ghb_factor", "ghb_external_head",
+        "drn_mask", "drn_elev", "drn_cond",
+        "riv_mask", "riv_stage", "riv_rbot", "riv_cond",
     )
     for name in names:
         if not np.array_equal(a[name], b[name]):
