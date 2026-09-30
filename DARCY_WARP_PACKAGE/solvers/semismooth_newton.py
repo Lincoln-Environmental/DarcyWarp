@@ -534,6 +534,10 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
             gh_head=np.asarray(model.gh_head_host, dtype=np.float64) if model.use_ghb else None,
             gh_width=np.asarray(model.gh_width_host, dtype=np.float64) if model.use_ghb else None,
             ghb_factor=np.asarray(model.ghb_factor_host, dtype=np.float64) if model.use_ghb else None,
+            riv_mask=np.asarray(model.riv_mask_host, dtype=np.int32) if model.use_riv else None,
+            riv_stage=np.asarray(model.riv_stage_host, dtype=np.float64) if model.use_riv else None,
+            riv_rbot=np.asarray(model.riv_rbot_host, dtype=np.float64) if model.use_riv else None,
+            riv_cond=np.asarray(model.riv_cond_host, dtype=np.float64) if model.use_riv else None,
             case="unconfined_semismooth_newton_kcycle",
         )
         accepted_drn_flux = np.zeros((ny, nx), dtype=np.float64)

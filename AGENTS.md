@@ -1,6 +1,10 @@
 kimi --model kimi-code/k3
 # DarcyWarp — Agent System Memory
 
+## Scientific audit repairs — 2026-10-01
+
+The accepted 2D semismooth-Newton transient budget now receives active RIV fields, so RIV inflow/outflow is included without changing the authoritative DRN/RIV relations. Transient nonlinear residual/Jv paths no longer add the steady identity pin when conductance is zero; exact physical storage remains. **Build-time isolated-cell removal is unchanged**, as requested: pruned cells contribute neither recharge nor storage. Regression coverage includes CPU/CUDA residual parity, datum translation, active/disconnected RIV budgets and pruning. The affected suite passed **70 tests**, including existing MF6 DRN/RIV parity and accepted-state tests. Use `MPLBACKEND=Agg` for headless pytest collection; interactive Matplotlib probing through FloPy can stall in this environment. A broader local suite still has seven failures and three errors, reproduced on unchanged tracked revision `a749e74` with the same untracked research modules (precision/3D river cases and missing mixed-session update API). They are not waived scientific acceptance criteria. Details and before/after evidence live in sibling SHANZ `docs/audits/2026-10-01/fixes/`.
+
 > Last updated: 2026-07-18 by ingest of the full repo.
 > Purpose: prevent re-ingesting the project from scratch. Read this first, then grep/read the specific files listed below.
 

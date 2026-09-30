@@ -364,9 +364,10 @@ def nl_residual_kernel(
 
     sum_T = T_e + T_w + T_n + T_s + C_gh + C_drn + C_riv
 
-    # flow_A(h) (mirrors apply_A_kernel; isolated cell -> identity-like).
+    # Retain the legacy steady pin only without transient storage. An
+    # isolated transient cell has zero physical flow, not a head-dependent sink.
     flow_Ah = wp.float64(0.0)
-    if sum_T < _NL_TINY:
+    if sum_T < _NL_TINY and has_storage == 0:
         flow_Ah = hC
     else:
         flow_Ah = sum_T * hC
@@ -753,7 +754,7 @@ def nl_jacobian_vector_kernel(
                 flow_sum = flow_sum + cr
                 result = result + cr * v_c
 
-    if flow_sum < _NL_TINY:
+    if flow_sum < _NL_TINY and has_storage == 0:
         result = v_c
 
     # Exact convertible storage derivative.  Sy follows clipped physical
