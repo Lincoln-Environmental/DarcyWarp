@@ -521,6 +521,7 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
             add_exact_storage_to_budget,
             compute_mass_balance_budget,
         )
+        from DARCY_WARP_PACKAGE.physics.drn_2d import add_drn_to_budget, drn_discharge_2d
         budget = compute_mass_balance_budget(
             T_field=transmissivity,
             R_field=np.asarray(model.R_field_host, dtype=np.float64),
@@ -535,6 +536,15 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
             ghb_factor=np.asarray(model.ghb_factor_host, dtype=np.float64) if model.use_ghb else None,
             case="unconfined_semismooth_newton_kcycle",
         )
+        accepted_drn_flux = np.zeros((ny, nx), dtype=np.float64)
+        if model.use_drn:
+            accepted_drn_flux = drn_discharge_2d(
+                head=head,
+                elevation=np.asarray(model.drn_elev_host, dtype=np.float64),
+                conductance=np.asarray(model.drn_cond_host, dtype=np.float64),
+                mask=np.asarray(model.drn_mask_host, dtype=np.int32),
+            )
+            budget = add_drn_to_budget(budget, accepted_drn_flux)
         if storage_terms is not None:
             budget = add_exact_storage_to_budget(budget, storage_terms.total)
         info = {
@@ -577,6 +587,9 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
             "transmissivity_array": transmissivity,
             "budget": budget,
             "budget_summary": dict(budget.iloc[0]),
+            "drn_discharge_rate_array": accepted_drn_flux,
+            "drn_out_rate": float(accepted_drn_flux.sum()),
+            "drn_volume": float(accepted_drn_flux.sum() * float(dt)) if transient else 0.0,
             "dry_mask": np.asarray(head <= (zbot + min_sat), dtype=bool),
             "active_mask": active.copy(),
         }
