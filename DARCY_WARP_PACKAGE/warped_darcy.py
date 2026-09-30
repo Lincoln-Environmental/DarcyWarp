@@ -27,6 +27,7 @@ from DARCY_WARP_PACKAGE.physics.operator_data import (
 from DARCY_WARP_PACKAGE.physics.budgets_2d import (
     compute_mass_balance_budget as _physics_compute_mass_balance_budget,
 )
+from DARCY_WARP_PACKAGE.physics.drn_2d import drn_discharge_2d
 from DARCY_WARP_PACKAGE.physics.storage_2d import (
     exact_unconfined_storage_terms as _physics_exact_unconfined_storage_terms,
     secant_specific_storage_coeff as _physics_secant_specific_storage_coeff,
@@ -6494,6 +6495,45 @@ class WarpDarcySolver:
 
         if self._fine_level is not None:
             self._fine_level.M_inv_wp = self.M_inv_wp
+
+    def accepted_drn_discharge_2d(self, *, head, info) -> np.ndarray:
+        """Return non-negative DRN outflow from the accepted Newton solution.
+
+        ``head`` and ``info`` must be returned by the same converged
+        semismooth-Newton solve. Stored model head and transmissivity fields
+        are deliberately not read here because they may be stale.
+        """
+        if not self.use_drn or self.drn_mask_host is None:
+            raise RuntimeError("DRN fields have not been built")
+        if not isinstance(info, dict) or not info.get("converged", False):
+            raise RuntimeError("accepted DRN discharge requires a converged nonlinear solve")
+        if info.get("solver_backend", info.get("solver_type")) != "unconfined_semismooth_newton_kcycle":
+            raise RuntimeError("accepted DRN discharge requires the semismooth-Newton backend")
+        expected = (self.ny, self.nx)
+        accepted_head = np.asarray(head, dtype=np.float64)
+        for name, value in (("head", accepted_head),
+                            ("transmissivity_array", info.get("transmissivity_array")),
+                            ("saturated_thickness_array", info.get("saturated_thickness_array"))):
+            if value is None:
+                raise RuntimeError(f"accepted nonlinear state lacks {name}")
+            field = np.asarray(value, dtype=np.float64)
+            if field.shape != expected or not np.all(np.isfinite(field)):
+                raise ValueError(f"accepted {name} must be a finite field of shape {expected}")
+        accepted_flux = info.get("drn_discharge_rate_array")
+        if accepted_flux is None:
+            raise RuntimeError("accepted nonlinear state lacks drn_discharge_rate_array")
+        accepted_flux = np.asarray(accepted_flux, dtype=np.float64)
+        if accepted_flux.shape != expected or not np.all(np.isfinite(accepted_flux)):
+            raise ValueError(f"accepted drn_discharge_rate_array must be a finite field of shape {expected}")
+        derived_flux = drn_discharge_2d(
+            head=accepted_head,
+            elevation=self.drn_elev_host,
+            conductance=self.drn_cond_host,
+            mask=self.drn_mask_host,
+        )
+        if not np.allclose(accepted_flux, derived_flux, rtol=1.0e-12, atol=1.0e-12):
+            raise RuntimeError("accepted DRN flux does not match the supplied nonlinear head")
+        return accepted_flux.copy()
 
     def update_T_in_place(self, T_truth) -> None:
         """
