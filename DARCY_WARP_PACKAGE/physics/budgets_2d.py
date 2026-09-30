@@ -22,11 +22,24 @@ def compute_mass_balance_budget(
     gh_alpha: float = 1.0,
     aq_thickness: float = 1.0,
     case: str | None = None,
+    drn_mask: np.ndarray | None = None,
+    drn_elev: np.ndarray | None = None,
+    drn_cond: np.ndarray | None = None,
+    riv_mask: np.ndarray | None = None,
+    riv_stage: np.ndarray | None = None,
+    riv_rbot: np.ndarray | None = None,
+    riv_cond: np.ndarray | None = None,
 ) -> pd.DataFrame:
-    """Compute the MF6-like discrete recharge, CHD, and GHB budget.
+    """Compute the MF6-like discrete recharge, CHD, GHB, and gated DRN/RIV budget.
 
     This is the original vectorised formulation, retained verbatim in sign and
     interface ordering while moving it out of the model implementation.
+
+    DRN/RIV follow the MODFLOW fixed-conductance gated semantics of the
+    nonlinear operator, with the GHB sign convention (positive = flow out of
+    the aquifer): DRN contributes ``C*max(h - elev, 0)``; RIV contributes
+    ``C*(max(h, rbot) - stage)`` (coupled branch ``C*(h - stage)``, decoupled
+    branch the constant ``C*(rbot - stage)``).
     """
     T = np.asarray(T_field, dtype=np.float64)
     R = np.asarray(R_field, dtype=np.float64)
@@ -116,8 +129,46 @@ def compute_mass_balance_budget(
         ghb_in = float(np.sum(np.maximum(-q_gh, 0.0)))
         ghb_net_out_positive = ghb_out - ghb_in
 
-    total_in = rcha_in + chd_in + ghb_in
-    total_out = rcha_out + chd_out + ghb_out
+    drn_in = 0.0
+    drn_out = 0.0
+    drn_net_out_positive = 0.0
+    if (drn_mask is not None) and (drn_elev is not None) and (drn_cond is not None):
+        dm = np.asarray(drn_mask, dtype=np.int32) != 0
+        de = np.asarray(drn_elev, dtype=np.float64)
+        dc = np.asarray(drn_cond, dtype=np.float64)
+        for name, arr in (("drn_elev", de), ("drn_cond", dc)):
+            if arr.shape != (ny, nx):
+                raise ValueError(f"{name} shape mismatch")
+        mask_drn = dm & cell_is_interior & np.isfinite(dc) & (dc > 0.0) & np.isfinite(de)
+        q_drn = np.zeros((ny, nx), dtype=np.float64)
+        q_drn[mask_drn] = dc[mask_drn] * np.maximum(h_use[mask_drn] - de[mask_drn], 0.0)
+        # DRN is outflow-only by construction.
+        drn_out = float(np.sum(q_drn))
+        drn_net_out_positive = drn_out
+
+    riv_in = 0.0
+    riv_out = 0.0
+    riv_net_out_positive = 0.0
+    if (
+        (riv_mask is not None) and (riv_stage is not None)
+        and (riv_rbot is not None) and (riv_cond is not None)
+    ):
+        rm = np.asarray(riv_mask, dtype=np.int32) != 0
+        rs = np.asarray(riv_stage, dtype=np.float64)
+        rb = np.asarray(riv_rbot, dtype=np.float64)
+        rc = np.asarray(riv_cond, dtype=np.float64)
+        for name, arr in (("riv_stage", rs), ("riv_rbot", rb), ("riv_cond", rc)):
+            if arr.shape != (ny, nx):
+                raise ValueError(f"{name} shape mismatch")
+        mask_riv = rm & cell_is_interior & np.isfinite(rc) & (rc > 0.0) & np.isfinite(rs) & np.isfinite(rb)
+        q_riv = np.zeros((ny, nx), dtype=np.float64)
+        q_riv[mask_riv] = rc[mask_riv] * (np.maximum(h_use[mask_riv], rb[mask_riv]) - rs[mask_riv])
+        riv_out = float(np.sum(np.maximum(q_riv, 0.0)))
+        riv_in = float(np.sum(np.maximum(-q_riv, 0.0)))
+        riv_net_out_positive = riv_out - riv_in
+
+    total_in = rcha_in + chd_in + ghb_in + drn_in + riv_in
+    total_out = rcha_out + chd_out + ghb_out + drn_out + riv_out
     in_minus_out = total_in - total_out
     denom = abs(total_in) + abs(total_out)
     percent_discrepancy = 0.0 if denom == 0.0 else 100.0 * in_minus_out / denom
@@ -128,11 +179,15 @@ def compute_mass_balance_budget(
         "rcha_in": rcha_in, "rcha_out": rcha_out,
         "chd_in": chd_in, "chd_out": chd_out,
         "ghb_in": ghb_in, "ghb_out": ghb_out,
+        "drn_in": drn_in, "drn_out": drn_out,
+        "riv_in": riv_in, "riv_out": riv_out,
         "total_in": total_in, "total_out": total_out,
         "in_minus_out": in_minus_out, "percent_discrepancy": percent_discrepancy,
         "throughflow": throughflow, "imbalance_fraction": imbalance_fraction,
         "chd_net_out_positive": chd_net_out_positive,
         "ghb_net_out_positive": ghb_net_out_positive,
+        "drn_net_out_positive": drn_net_out_positive,
+        "riv_net_out_positive": riv_net_out_positive,
     }])
 
 

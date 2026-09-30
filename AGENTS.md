@@ -694,6 +694,7 @@ python working_tests/run_2d_transient_warp_replay.py
 | Status docs | `TRANSIENT_STATUS.md`, `transient_progress.md`, `working_tests/darcywarp_transient_unconfined_changes.rst`, `UNCONFINED_FAST_PLAN.md` (port of fast-kernel learnings to the unconfined path; all phases landed and Phase C is selected by the production replay) | |
 | Benchmark entry | `bench_and_plot.py`, `model_benchmarking_recharge_change.py`, `model_benchmarking_T_change.py` | |
 | Steady confined convergence/sanity benchmark | `model_convergence_and_sanity_tests.py` (+ `sanity_case_config.py`) | MF6 heads cached per case in `DARCY_WARP_PACKAGE/data/mf6_truth_npz/` (metadata-validated, atomic write; MF6 runs only on cache miss). Solver switches in the `__main__` block: `use_fast_fp64` (implementation="fast", results JSON `..._fast.json`) and `use_mixed_precision_fp32` (production `mixed_fast`; relaunches the script once with `DARCY_FLOAT=float32` pinned, results JSON `..._mixed.json`). `DARCY_KCYCLE_IMPL` env var also honoured |
+| Steady DRN/RIV convergence/sanity sweep | `model_convergence_and_sanity_tests_drn_riv.py` | Centre-row DRN/RIV variant of the GHB harness; drives `run_case(boundary_kind=...)` (unconfined semismooth Newton only — confined/Picard paths refuse gated boundaries), per-package JSON logs `comparison_results_{drn,riv}_{t_field_kind}.json`, per-case try/except so one failed case doesn't abort the sweep |
 
 ---
 
