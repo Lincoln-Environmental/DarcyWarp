@@ -549,6 +549,13 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
                 mask=np.asarray(model.drn_mask_host, dtype=np.int32),
             )
             budget = add_drn_to_budget(budget, accepted_drn_flux)
+        from DARCY_WARP_PACKAGE.physics.riv_2d import riv_discharge_2d
+        accepted_riv_flux = np.zeros((ny, nx), dtype=np.float64)
+        if model.use_riv:
+            accepted_riv_flux = riv_discharge_2d(
+                head=head, stage=model.riv_stage_host, bottom=model.riv_rbot_host,
+                conductance=model.riv_cond_host, mask=model.riv_mask_host,
+                device=model.device_str)
         if storage_terms is not None:
             budget = add_exact_storage_to_budget(budget, storage_terms.total)
         info = {
@@ -592,6 +599,7 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
             "budget": budget,
             "budget_summary": dict(budget.iloc[0]),
             "drn_discharge_rate_array": accepted_drn_flux,
+            "riv_discharge_rate_array": accepted_riv_flux,
             "drn_out_rate": float(accepted_drn_flux.sum()),
             "drn_volume": float(accepted_drn_flux.sum() * float(dt)) if transient else 0.0,
             "dry_mask": np.asarray(head <= (zbot + min_sat), dtype=bool),

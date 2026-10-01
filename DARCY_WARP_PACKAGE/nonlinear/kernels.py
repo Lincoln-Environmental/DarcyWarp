@@ -29,8 +29,8 @@ The floating-point dtype is resolved from the same ``DARCY_FLOAT`` environment
 variable as ``warped_darcy`` so device and host stay consistent.  All residual
 arithmetic is carried out in ``wp.float64`` (matching the production residual
 kernels) and only the stored field is cast to ``WP_FLOAT``.  Following the
-repository convention there are no ``@wp.func`` helpers; storage/face maths are
-inlined per kernel and validated against the host reference for consistency.
+RIV residual and accepted-flux extraction share one ``@wp.func`` relation;
+other storage/face maths are validated against the host reference.
 """
 
 from __future__ import annotations
@@ -54,6 +54,30 @@ else:
 
 # Small regularization mirroring the production harmonic-mean denominator.
 _NL_TINY = wp.float64(1.0e-12)
+
+
+@wp.func
+def riv_outflow(head: wp.float64, stage: wp.float64, bottom: wp.float64,
+                conductance: wp.float64) -> wp.float64:
+    """Authoritative MODFLOW RIV relation: positive aquifer outflow."""
+    return conductance * (wp.max(head, bottom) - stage)
+
+
+@wp.kernel
+def accepted_riv_flux_kernel(
+    head: wp.array(dtype=WP_FLOAT, ndim=2),
+    stage: wp.array(dtype=WP_FLOAT, ndim=2),
+    bottom: wp.array(dtype=WP_FLOAT, ndim=2),
+    conductance: wp.array(dtype=WP_FLOAT, ndim=2),
+    mask: wp.array(dtype=wp.int32, ndim=2),
+    output: wp.array(dtype=WP_FLOAT, ndim=2),
+):
+    j, i = wp.tid()
+    q = wp.float64(0.0)
+    if mask[j, i] != 0:
+        q = riv_outflow(wp.float64(head[j, i]), wp.float64(stage[j, i]),
+                        wp.float64(bottom[j, i]), wp.float64(conductance[j, i]))
+    output[j, i] = WP_FLOAT(q)
 
 
 @wp.kernel
@@ -346,28 +370,23 @@ def nl_residual_kernel(
                 C_drn = cd
                 drn_source = cd * z_d
 
-    # RIV (MODFLOW fixed-conductance river; gated on the riverbed bottom).
-    # Coupled (h > rbot): diagonal C with source C*stage.  Decoupled
-    # (h <= rbot): constant source C*(stage - rbot), no diagonal.
+    # The exact same relation is used for accepted RIV flux extraction.
+    q_riv = wp.float64(0.0)
     C_riv = wp.float64(0.0)
-    riv_source = wp.float64(0.0)
     if riv_mask[j, i] != 0:
         cr = wp.float64(riv_cond[j, i])
         if cr > wp.float64(0.0) and not wp.isnan(cr):
-            h_r = wp.float64(riv_stage[j, i])
-            rbot = wp.float64(riv_rbot[j, i])
-            if hC > rbot:
+            if hC > wp.float64(riv_rbot[j, i]):
                 C_riv = cr
-                riv_source = cr * h_r
-            else:
-                riv_source = cr * (h_r - rbot)
+            q_riv = riv_outflow(hC, wp.float64(riv_stage[j, i]),
+                                wp.float64(riv_rbot[j, i]), cr)
 
-    sum_T = T_e + T_w + T_n + T_s + C_gh + C_drn + C_riv
+    sum_T = T_e + T_w + T_n + T_s + C_gh + C_drn
 
     # Retain the legacy steady pin only without transient storage. An
     # isolated transient cell has zero physical flow, not a head-dependent sink.
     flow_Ah = wp.float64(0.0)
-    if sum_T < _NL_TINY and has_storage == 0:
+    if sum_T + C_riv < _NL_TINY and has_storage == 0:
         flow_Ah = hC
     else:
         flow_Ah = sum_T * hC
@@ -422,7 +441,7 @@ def nl_residual_kernel(
     recharge = wp.float64(R_field[j, i]) * wp.float64(area)
     ghb_source = C_gh * wp.float64(gh_head[j, i])
 
-    F = flow_Ah + storage_flux - recharge - ghb_source - drn_source - riv_source
+    F = flow_Ah + storage_flux - recharge - ghb_source - drn_source + q_riv
     F_out[j, i] = WP_FLOAT(F)
     wp.atomic_add(rTr_buf, 0, F * F)
     wp.atomic_max(Fmax_buf, 0, wp.abs(F))
