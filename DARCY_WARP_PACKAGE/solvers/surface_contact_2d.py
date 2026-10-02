@@ -21,6 +21,8 @@ def solve_surface_contact_2d(*, model, contact_mask, surface_head,
     """
     if solve_arguments.get("solver") != "unconfined_semismooth_newton_kcycle":
         raise ValueError("head contact requires the semismooth-Newton backend")
+    if solve_arguments.get("transient", False) and solve_arguments.get("head_prev") is None:
+        raise ValueError("transient contact requires an explicit accepted previous head")
     if maximum_iterations < 1:
         raise ValueError("maximum_iterations must be positive")
     mask = np.asarray(contact_mask, dtype=bool)

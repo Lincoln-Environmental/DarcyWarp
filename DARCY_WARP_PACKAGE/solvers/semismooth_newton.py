@@ -238,6 +238,8 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
         raise ValueError("contact flux must be finite and zero on CHD/inactive cells")
     if contact_mask.shape != shape or contact_head.shape != shape or not np.all(np.isfinite(contact_head)):
         raise ValueError("contact mask/head must be finite matching grids")
+    if transient and np.any(contact_mask) and head_prev is None:
+        raise ValueError("transient contact requires an explicit accepted previous head")
     if np.any(contact_mask & (~active | prescribed)):
         raise ValueError("contact cannot overlap inactive or prescribed-head cells")
     prescribed = prescribed | contact_mask

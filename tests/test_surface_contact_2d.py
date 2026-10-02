@@ -76,3 +76,15 @@ def test_supply_limited_contact_reaction_is_real_fv_flux(device):
         assert info['budget_summary']['rcha_out']==pytest.approx(.4)
         assert info['budget_summary']['contact_in']==pytest.approx(.2,abs=1e-7)
         assert abs(info['budget_summary']['in_minus_out'])<1e-7
+
+
+@pytest.mark.parametrize('previous', [None, 'missing'])
+def test_transient_contact_refuses_unproven_previous_state(previous):
+    from types import SimpleNamespace
+    model=SimpleNamespace(ny=2,nx=2)
+    arguments=dict(solver='unconfined_semismooth_newton_kcycle',transient=True)
+    if previous is None:
+        arguments['head_prev']=None
+    with pytest.raises(ValueError,match='explicit accepted previous head'):
+        solve_surface_contact_2d(model=model,contact_mask=np.ones((2,2),bool),
+            surface_head=np.zeros((2,2)),ponded_mask=np.zeros((2,2),bool),solve_arguments=arguments)
