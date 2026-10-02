@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import time
 from typing import Any
 
@@ -231,6 +231,17 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
     active = np.asarray(model.active_host, dtype=np.int32) != 0
     prescribed = np.asarray(model.bc_mask_host, dtype=np.int32) != 0
     prescribed_values = np.asarray(model.bc_values_host, dtype=np.float64)
+    contact_mask = np.asarray(kwargs.pop("fixed_contact_mask", np.zeros(shape)), dtype=bool)
+    contact_head = np.asarray(kwargs.pop("fixed_contact_head", np.zeros(shape)), dtype=np.float64)
+    contact_flux = np.asarray(kwargs.pop("fixed_contact_flux", np.zeros(shape)), dtype=np.float64)
+    if contact_flux.shape != shape or not np.all(np.isfinite(contact_flux)) or np.any(contact_flux[prescribed | ~active] != 0):
+        raise ValueError("contact flux must be finite and zero on CHD/inactive cells")
+    if contact_mask.shape != shape or contact_head.shape != shape or not np.all(np.isfinite(contact_head)):
+        raise ValueError("contact mask/head must be finite matching grids")
+    if np.any(contact_mask & (~active | prescribed)):
+        raise ValueError("contact cannot overlap inactive or prescribed-head cells")
+    prescribed = prescribed | contact_mask
+    prescribed_values = np.where(contact_mask, contact_head, prescribed_values)
     if initial_head is None:
         initial_sat = float(kwargs.get("initial_saturated_thickness", 10.0))
         initial = zbot + max(initial_sat, min_sat)
@@ -255,6 +266,15 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
         min_sat=min_sat,
         transient=transient,
     )
+
+    physical_context = nonlinear_context
+    if np.any(contact_flux):
+        nonlinear_context = replace(nonlinear_context, sources=replace(
+            nonlinear_context.sources, R_field=np.asarray(model.R_field_host)-contact_flux/(float(model.dx)**2)))
+    if np.any(contact_mask):
+        nonlinear_context = replace(nonlinear_context, boundaries=replace(
+            nonlinear_context.boundaries, dirichlet_mask=prescribed.astype(np.int32),
+            dirichlet_values=prescribed_values))
 
     # Hierarchy topology and its work buffers are model-owned and built at most
     # once here.  Frozen coefficients remain in a separate experimental cache.
@@ -326,7 +346,7 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
     operator_workspace.refresh(
         head_prev=head_prev if transient else None,
         dt=dt if transient else None,
-        source_rate=np.asarray(model.R_field_host, dtype=np.float64),
+        source_rate=np.asarray(nonlinear_context.sources.R_field, dtype=np.float64),
         sy=sy,
         ss=ss,
     )
@@ -513,7 +533,22 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
             end_memory = int(wp.get_mempool_used_mem_current(model.device_str))
         runtime = float(time.perf_counter() - start_time)
         head = np.asarray(operator.head_device.numpy(), dtype=np.float64).copy()
-        storage_terms = operator.exact_storage_terms(head) if transient else None
+        # Evaluate reaction using the SAME FV residual, with contact rows
+        # unconstrained. These cells retain physical storage, unlike CHD.
+        imposed_contact = contact_flux.copy()
+        reaction_mask = contact_mask | (imposed_contact != 0)
+        contact_flux = np.zeros(shape, dtype=np.float64)
+        physical_operator = operator
+        if np.any(reaction_mask):
+            physical_operator = NonlinearOperator2D(physical_context)
+            try:
+                physical_residual = physical_operator.residual(head).numpy()
+                contact_flux[reaction_mask] = -physical_residual[reaction_mask]
+                storage_terms = physical_operator.exact_storage_terms(head) if transient else None
+            finally:
+                physical_operator.close()
+        else:
+            storage_terms = operator.exact_storage_terms(head) if transient else None
         saturation = np.asarray(operator.saturated_thickness(head).numpy(), dtype=np.float64).copy()
         transmissivity = np.asarray(K_field, dtype=np.float64) * saturation
         transmissivity[~active] = 0.0
@@ -558,7 +593,24 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
                 device=model.device_str)
         if storage_terms is not None:
             budget = add_exact_storage_to_budget(budget, storage_terms.total)
+        if np.any(reaction_mask):
+            contact_in = float(np.maximum(-contact_flux, 0).sum())
+            contact_out = float(np.maximum(contact_flux, 0).sum())
+            budget["contact_in"] = contact_in
+            budget["contact_out"] = contact_out
+            # Keep native aggregate budget consistent with the new boundary.
+            budget["total_in"] += contact_in
+            budget["total_out"] += contact_out
+            total_in = float(budget.iloc[0]["total_in"])
+            total_out = float(budget.iloc[0]["total_out"])
+            imbalance = total_in - total_out
+            budget["in_minus_out"] = imbalance
+            budget["percent_discrepancy"] = 100*imbalance/(total_in+total_out) if total_in+total_out else 0.
+            budget["throughflow"] = .5*(total_in+total_out)
+            budget["imbalance_fraction"] = imbalance/(.5*(total_in+total_out)) if total_in+total_out else 0.
         info = {
+            "contact_discharge_rate_array": contact_flux,
+            "contact_mask_array": contact_mask.copy(),
             "converged": bool(converged),
             "solver_type": "unconfined_semismooth_newton_kcycle",
             "solver_backend": "unconfined_semismooth_newton_kcycle",
