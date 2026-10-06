@@ -7745,6 +7745,11 @@ class WarpDarcySolver:
         reuse the memory for later allocations. Warp distinguishes pool "used" memory from
         "reserved" memory. :contentReference[oaicite:2]{index=2}
         """
+        session = getattr(self, "_production_transient_session", None)
+        if session is not None:
+            session.invalidate()
+            self._production_transient_session = None
+
         # 1) Break graph references first, because graphs can keep arrays alive.
         self._invalidate_kcycle_graph()
         # Drop the fast backend's face-conductance cache (holds strong refs to
