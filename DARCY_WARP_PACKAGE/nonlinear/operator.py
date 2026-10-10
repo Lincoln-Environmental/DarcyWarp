@@ -137,6 +137,7 @@ class NonlinearOperator2D:
         self._riv_stage_wp = _f64_field("riv_stage", bnd.riv_stage)
         self._riv_rbot_wp = _f64_field("riv_rbot", bnd.riv_rbot)
         self._riv_cond_wp = _f64_field("riv_cond", bnd.riv_cond)
+        self._has_gated = bool(np.any(bnd.drn_mask) or np.any(bnd.riv_mask))
         self._R_field_wp = _f64_field("R_field", context.sources.R_field)
 
         if sto.transient:
@@ -170,6 +171,9 @@ class NonlinearOperator2D:
         self._head_stage = wp.zeros(shape, dtype=WP, device="cpu")
         self._vector_stage = wp.zeros(shape, dtype=WP, device="cpu")
 
+        from .coastal import CoastalDeviceTerms
+        self._coast = None if bnd.coastal_boundary is None else CoastalDeviceTerms(
+            boundary=bnd.coastal_boundary, device=device)
         self._closed = False
 
     # ------------------------------------------------------------------ utils
@@ -275,6 +279,12 @@ class NonlinearOperator2D:
             ],
             device=self._device,
         )
+        if self._coast is not None:
+            from .coastal import coastal_norm_kernel
+            self._coast.add(head=head, vector=head, output=F_wp, mode=0)
+            self._zero_reduction_bufs()
+            wp.launch(kernel=coastal_norm_kernel, dim=self._dim,
+                inputs=[F_wp, self._free_mask_wp, self._rTr_buf, self._Fmax_buf], device=self._device)
         return F_wp
 
     def jacobian_vector(self, head: Any, vector: Any, out: Any | None = None) -> Any:
@@ -305,7 +315,24 @@ class NonlinearOperator2D:
             ],
             device=self._device,
         )
+        if self._coast is not None:
+            self._coast.add(head=head, vector=vector, output=Jv_wp, mode=1)
         return Jv_wp
+
+    def frozen_picard_vector_device(self, vector: Any, out: Any) -> Any:
+        """Trusted frozen harmonic operator with all gated boundary diagonals.
+
+        Used only for explicitly requested steady warm-start iterations. The
+        nonlinear residual remains authoritative for accepting each update.
+        Call freeze_picard_device before this action.
+        """
+        from DARCY_WARP_PACKAGE.warped_darcy import apply_A_kernel
+        wp.launch(kernel=apply_A_kernel, dim=self._dim,
+            inputs=[self._pic_T_wp, self._active_wp, self._dirichlet_mask_wp,
+                self._gh_mask_wp, self._ghb_factor_wp, self._pic_diag_wp,
+                vector, out, self._nx, self._ny],
+            device=self._device)
+        return out
 
     def freeze_picard_device(self, head: Any) -> tuple[Any, Any]:
         """Refresh and return device ``(T, storage_diag)`` Picard coefficients."""
@@ -322,6 +349,14 @@ class NonlinearOperator2D:
             ],
             device=self._device,
         )
+        if self._has_gated:
+            from .coastal import gated_diagonal_kernel
+            wp.launch(kernel=gated_diagonal_kernel, dim=self._dim,
+                inputs=[head, self._free_mask_wp, self._drn_mask_wp, self._drn_elev_wp,
+                    self._drn_cond_wp, self._riv_mask_wp, self._riv_rbot_wp,
+                    self._riv_cond_wp, self._pic_diag_wp], device=self._device)
+        if self._coast is not None:
+            self._coast.add(head=head, vector=head, output=self._pic_diag_wp, mode=2)
         return self._pic_T_wp, self._pic_diag_wp
 
     def set_head_device(self, head: Any) -> None:
@@ -559,6 +594,7 @@ class NonlinearOperator2D:
             "_Fmax_buf", "_head_stage", "_vector_wp", "_Jv_wp", "_vector_stage",
         ):
             setattr(self, name, None)
+        self._coast = None
         self._closed = True
 
     def __enter__(self):

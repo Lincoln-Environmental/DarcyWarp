@@ -191,7 +191,11 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
     # of the outer tolerance, solve the inner system to the eta floor so the
     # accepted result keeps full final accuracy.
     forcing_final_tighten_ratio = float(kwargs.pop("newton_forcing_final_tighten_ratio", 100.0))
+    log_progress = bool(kwargs.pop("newton_log_progress", False))
     max_newton = int(kwargs.pop("newton_max_iterations", 20))
+    picard_warm_steps = int(kwargs.pop("newton_picard_warm_start_iterations", 0))
+    if picard_warm_steps < 0 or (transient and picard_warm_steps):
+        raise ValueError('Picard warm start is optional steady preparation only')
     residual_tol = float(kwargs.pop("newton_residual_rms_tolerance", 1.0e-6))
     head_residual_tol = float(kwargs.pop("newton_head_equivalent_rms_tolerance", kwargs.get("hclose", 1.0e-4) or 1.0e-4))
     max_backtracks = int(kwargs.pop("newton_max_backtracks", 10))
@@ -203,11 +207,21 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
     # silently drop the terms), so refuse it when such cells are present.
     _drn_mask = getattr(model, "drn_mask_host", None)
     _riv_mask = getattr(model, "riv_mask_host", None)
+    if getattr(model, "coastal_boundary", None) is not None:
+        fallback_enabled = False
     if fallback_enabled and (
         (_drn_mask is not None and bool(np.any(np.asarray(_drn_mask) != 0)))
         or (_riv_mask is not None and bool(np.any(np.asarray(_riv_mask) != 0)))
     ):
         fallback_enabled = False
+    coarse_restriction = str(kwargs.pop("newton_coarse_residual_restriction", "average"))
+    if coarse_restriction not in ("average", "conservative_sum"):
+        raise ValueError("Newton coarse restriction must be average or conservative_sum")
+    preconditioner_kind = str(kwargs.pop("newton_preconditioner", "kcycle"))
+    if preconditioner_kind not in ("kcycle", "steady_cpu_amg", "steady_cpu_jacobian_amg", "steady_cpu_ilu", "steady_cpu_sparse_lu"):
+        raise ValueError("unknown Newton preconditioner")
+    if transient and preconditioner_kind != "kcycle":
+        raise ValueError("Sparse CPU preconditioning is a steady-preparation backend, not a transient solver")
     preconditioner_cycles = int(kwargs.pop("newton_preconditioner_kcycles", 2))
     max_levels = int(kwargs.get("max_levels", 5))
     min_coarse_cells = kwargs.get("min_coarse_cells", 500)
@@ -299,6 +313,7 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
         omega=float(kwargs.get("omega", 0.8)),
         cheby_lambda_min=float(kwargs.get("cheby_lambda_min", 0.05)),
         cheby_lambda_max=float(kwargs.get("cheby_lambda_max", 1.95)),
+        coarse_residual_restriction=coarse_restriction,
     )
 
     # The authoritative operator is cached on the resource owner and reused
@@ -331,7 +346,16 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
         ss=ss,
     )
     operator = operator_workspace.operator
+    if preconditioner_kind in ("steady_cpu_amg", "steady_cpu_jacobian_amg"):
+        from .steady_amg_preconditioner import SteadyAMGPreconditioner2D
+        preconditioner = SteadyAMGPreconditioner2D(operator=operator, model=model,
+            exact_jacobian=preconditioner_kind == 'steady_cpu_jacobian_amg')
+    elif preconditioner_kind in ("steady_cpu_ilu", "steady_cpu_sparse_lu"):
+        from .steady_sparse_preconditioner import SteadySparsePreconditioner2D
+        preconditioner = SteadySparsePreconditioner2D(operator=operator, model=model,
+            exact=preconditioner_kind == "steady_cpu_sparse_lu")
     history: list[dict[str, Any]] = []
+    linear_history = []
     failure_reason: str | None = None
     converged = False
     total_fgmres_iterations = 0
@@ -367,6 +391,7 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
             converged = True
 
         previous_backtracks = 0
+        warm_start_active = picard_warm_steps > 0
         for newton_iteration in range(max_newton):
             if converged:
                 break
@@ -404,10 +429,20 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
                 ny=ny,
                 device=model.device_str,
             )
+            direction_kind = 'frozen_picard' if warm_start_active and newton_iteration < picard_warm_steps else 'analytical_newton'
+
+            def apply_direction(vector, out):
+                if direction_kind == 'frozen_picard':
+                    return operator.frozen_picard_vector_device(vector=vector, out=out)
+                return operator.jacobian_vector_device(head=operator.head_device, vector=vector, out=out)
+
+            def apply_preconditioning(rhs, out):
+                return preconditioner.apply(rhs=rhs, out=out)
+
             result = krylov.solve(
                 rhs=fgmres_workspace.rhs,
-                apply_jacobian=lambda vector, out: operator.jacobian_vector_device(operator.head_device, vector, out=out),
-                apply_preconditioner=lambda rhs, out: preconditioner.apply(rhs, out),
+                apply_jacobian=apply_direction,
+                apply_preconditioner=apply_preconditioning,
                 relative_tolerance=iteration_rtol,
                 absolute_tolerance=krylov_atol,
                 max_iterations=max_krylov,
@@ -415,6 +450,19 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
             total_fgmres_iterations += result.iterations
             total_fgmres_restarts += result.restarts
             total_reductions += result.reduction_count
+            linear_history.append(dict(newton_iteration=newton_iteration+1,
+                linear_operator=direction_kind,
+                converged=bool(result.converged), iterations=int(result.iterations),
+                initial_true_residual=float(result.residual_history[0]),
+                final_true_residual=float(result.final_residual),
+                requested_relative_tolerance=float(iteration_rtol),
+                requested_absolute_tolerance=float(krylov_atol),
+                breakdown_reason=result.breakdown_reason, krylov_residual_history=result.residual_history))
+            if log_progress:
+                print(f"Darcy Newton {newton_iteration+1}: nonlinear RMS={norms.rms:.6g}; "
+                    f"FGMRES {result.iterations}, true relative residual="
+                    f"{result.final_residual/max(result.residual_history[0], np.finfo(float).tiny):.6g}; "
+                    f"linear accepted={result.converged}", flush=True)
             if not result.converged:
                 failure_reason = result.breakdown_reason or "fgmres_nonconvergence"
                 break
@@ -466,6 +514,7 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
             history.append(
                 {
                     "newton_iteration": int(newton_iteration + 1),
+                    "direction_kind": direction_kind,
                     "residual_rms_before": float(norms.rms),
                     "residual_rms_after": None if candidate_norms is None else float(candidate_norms.rms),
                     "accepted_step_length": float(alpha) if accepted else 0.0,
@@ -480,7 +529,17 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
                     "fgmres_breakdown_reason": result.breakdown_reason,
                 }
             )
+            if log_progress:
+                print(f"Darcy Newton candidate: accepted={accepted}, scale={alpha:.6g}, "
+                    f"backtracks={backtracks}; RMS={None if candidate_norms is None else candidate_norms.rms}", flush=True)
             if not accepted or candidate_norms is None:
+                if direction_kind == 'frozen_picard':
+                    # A Picard direction need not be a descent direction for
+                    # the nonlinear norm. End preparation without committing
+                    # its failed candidate, then try analytical Newton from
+                    # the last accepted preparation iterate.
+                    warm_start_active = False
+                    continue
                 failure_reason = "line_search_failed"
                 break
 
@@ -533,6 +592,10 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
             gh_head=np.asarray(model.gh_head_host, dtype=np.float64) if model.use_ghb else None,
             gh_width=np.asarray(model.gh_width_host, dtype=np.float64) if model.use_ghb else None,
             ghb_factor=np.asarray(model.ghb_factor_host, dtype=np.float64) if model.use_ghb else None,
+            drn_mask=model.drn_mask_host, drn_elev=model.drn_elev_host, drn_cond=model.drn_cond_host,
+            riv_mask=model.riv_mask_host, riv_stage=model.riv_stage_host,
+            riv_rbot=model.riv_rbot_host, riv_cond=model.riv_cond_host,
+            coastal_boundary=getattr(model, "coastal_boundary", None),
             case="unconfined_semismooth_newton_kcycle",
         )
         if storage_terms is not None:
@@ -541,11 +604,14 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
             "converged": bool(converged),
             "solver_type": "unconfined_semismooth_newton_kcycle",
             "solver_backend": "unconfined_semismooth_newton_kcycle",
+            "multigrid_level_shapes": [(int(level.ny), int(level.nx)) for level in levels],
             "experimental_backend": False,
             "newton_iterations": int(accepted_updates),
+            "picard_warm_start_updates": sum(item['direction_kind'] == 'frozen_picard' and item['accepted_step_length'] > 0 for item in history),
             "outer_picard_iterations": 0,
             "inexact_forcing_enabled": bool(forcing_enabled),
             "outer_history": history,
+            "linear_history": linear_history,
             "nonlinear_residual_history": [float(initial_residual)] + [
                 float(item["residual_rms_after"]) for item in history if item["residual_rms_after"] is not None
             ],
@@ -555,9 +621,15 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
             "fgmres_iterations": int(total_fgmres_iterations),
             "fgmres_restarts": int(total_fgmres_restarts),
             "fgmres_restart_size": int(restart),
+            "coarse_residual_restriction": coarse_restriction,
+            "preconditioner_kind": preconditioner_kind,
+            "preconditioner_setup_wall_s": getattr(preconditioner, "setup_wall_s", None),
+            "preconditioner_apply_wall_s": getattr(preconditioner, "apply_wall_s", None),
+            "preconditioner_full_vector_transfer_bytes": getattr(preconditioner, "full_vector_transfer_bytes", 0),
             "fgmres_reduction_count": int(total_reductions),
-            "kcycle_preconditioner_applications": int(preconditioner.applications),
-            "kcycle_preconditioner_cycles": int(preconditioner.cycles),
+            "preconditioner_applications": int(preconditioner.applications),
+            "kcycle_preconditioner_applications": int(preconditioner.applications) if preconditioner_kind == "kcycle" else 0,
+            "kcycle_preconditioner_cycles": int(preconditioner.cycles) if preconditioner_kind == "kcycle" else 0,
             "backtrack_count": int(total_backtracks),
             "breakdown_state": failure_reason if failure_reason and "breakdown" in failure_reason else None,
             "newton_failure_reason": failure_reason,

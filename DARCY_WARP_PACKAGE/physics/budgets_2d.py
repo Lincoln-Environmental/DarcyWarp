@@ -29,6 +29,7 @@ def compute_mass_balance_budget(
     riv_stage: np.ndarray | None = None,
     riv_rbot: np.ndarray | None = None,
     riv_cond: np.ndarray | None = None,
+    coastal_boundary=None,
 ) -> pd.DataFrame:
     """Compute the MF6-like discrete recharge, CHD, GHB, and gated DRN/RIV budget.
 
@@ -167,8 +168,11 @@ def compute_mass_balance_budget(
         riv_in = float(np.sum(np.maximum(-q_riv, 0.0)))
         riv_net_out_positive = riv_out - riv_in
 
-    total_in = rcha_in + chd_in + ghb_in + drn_in + riv_in
-    total_out = rcha_out + chd_out + ghb_out + drn_out + riv_out
+    coastal_flux = np.zeros(0) if coastal_boundary is None else coastal_boundary.fluxes(head=h_use)
+    coastal_in = float(np.maximum(-coastal_flux, 0.).sum())
+    coastal_out = float(np.maximum(coastal_flux, 0.).sum())
+    total_in = rcha_in + chd_in + ghb_in + drn_in + riv_in + coastal_in
+    total_out = rcha_out + chd_out + ghb_out + drn_out + riv_out + coastal_out
     in_minus_out = total_in - total_out
     denom = abs(total_in) + abs(total_out)
     percent_discrepancy = 0.0 if denom == 0.0 else 100.0 * in_minus_out / denom
@@ -181,6 +185,7 @@ def compute_mass_balance_budget(
         "ghb_in": ghb_in, "ghb_out": ghb_out,
         "drn_in": drn_in, "drn_out": drn_out,
         "riv_in": riv_in, "riv_out": riv_out,
+        "coastal_in": coastal_in, "coastal_out": coastal_out,
         "total_in": total_in, "total_out": total_out,
         "in_minus_out": in_minus_out, "percent_discrepancy": percent_discrepancy,
         "throughflow": throughflow, "imbalance_fraction": imbalance_fraction,

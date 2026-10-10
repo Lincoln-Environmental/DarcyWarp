@@ -74,12 +74,14 @@ class FixedWorkKCyclePreconditioner2D:
         omega: float,
         cheby_lambda_min: float,
         cheby_lambda_max: float,
+        coarse_residual_restriction: str = "average",
     ):
         self.model = model
         self.levels = levels
         self.workspace = workspace
         self.n_cycles = max(1, int(n_cycles))
         self.controls = {
+            "coarse_residual_restriction": coarse_residual_restriction,
             "max_cycles": self.n_cycles,
             "nu_pre": int(nu_pre),
             "nu_post": int(nu_post),
