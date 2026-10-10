@@ -428,6 +428,46 @@ def nl_residual_kernel(
 
 
 @wp.kernel
+def nl_confined_sources_kernel(
+    head: wp.array(dtype=WP_FLOAT, ndim=2),
+    transmissivity: wp.array(dtype=WP_FLOAT, ndim=2),
+    active: wp.array(dtype=wp.int32, ndim=2),
+    prescribed: wp.array(dtype=wp.int32, ndim=2),
+    gh_mask: wp.array(dtype=wp.int32, ndim=2),
+    gh_head: wp.array(dtype=WP_FLOAT, ndim=2),
+    gh_factor: wp.array(dtype=WP_FLOAT, ndim=2),
+    drn_mask: wp.array(dtype=wp.int32, ndim=2),
+    drn_elev: wp.array(dtype=WP_FLOAT, ndim=2),
+    drn_cond: wp.array(dtype=WP_FLOAT, ndim=2),
+    riv_mask: wp.array(dtype=wp.int32, ndim=2),
+    riv_stage: wp.array(dtype=WP_FLOAT, ndim=2),
+    riv_bottom: wp.array(dtype=WP_FLOAT, ndim=2),
+    riv_cond: wp.array(dtype=WP_FLOAT, ndim=2),
+    recharge: wp.array(dtype=WP_FLOAT, ndim=2),
+    area: wp.float64,
+    drain_equality_active: int,
+    residual: wp.array(dtype=WP_FLOAT, ndim=2),
+):
+    """Complete a frozen-T matrix action with its actual gated source terms."""
+    j, i = wp.tid()
+    if active[j, i] == 0 or prescribed[j, i] != 0:
+        residual[j, i] = WP_FLOAT(0.)
+        return
+    source = wp.float64(recharge[j, i]) * area
+    if gh_mask[j, i] != 0:
+        source += wp.float64(transmissivity[j, i]) * wp.float64(gh_factor[j, i]) * wp.float64(gh_head[j, i])
+    if drn_mask[j, i] != 0 and (head[j, i] > drn_elev[j, i]
+            or (drain_equality_active != 0 and head[j, i] == drn_elev[j, i])):
+        source += wp.float64(drn_cond[j, i]) * wp.float64(drn_elev[j, i])
+    if riv_mask[j, i] != 0:
+        if head[j, i] > riv_bottom[j, i]:
+            source += wp.float64(riv_cond[j, i]) * wp.float64(riv_stage[j, i])
+        else:
+            source += wp.float64(riv_cond[j, i]) * (wp.float64(riv_stage[j, i]) - wp.float64(riv_bottom[j, i]))
+    residual[j, i] = WP_FLOAT(wp.float64(residual[j, i]) - source)
+
+
+@wp.kernel
 def nl_picard_freeze_kernel(
     head: wp.array(dtype=WP_FLOAT, ndim=2),
     head_prev: wp.array(dtype=WP_FLOAT, ndim=2),

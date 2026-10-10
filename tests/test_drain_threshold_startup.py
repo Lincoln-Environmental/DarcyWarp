@@ -70,3 +70,38 @@ def test_drain_threshold_jacobian_matches_active_one_sided_derivative(device):
         inactive_jacobian = operator.jacobian_vector(
             head=elevation-epsilon*vector, vector=vector).numpy().copy()
         np.testing.assert_allclose(inactive_jacobian, 0.0, atol=1e-9)
+
+
+@pytest.mark.parametrize("device", ["cpu", "cuda:0"])
+@pytest.mark.parametrize("drain_equality_active", [False, True])
+def test_fixed_t_preparation_preserves_native_gated_sources(device, drain_equality_active):
+    """Confined R/GHB/DRN/RIV/coast rows agree with the capped native operator."""
+    import warp as wp
+    from DARCY_WARP_PACKAGE.nonlinear import from_arrays, NonlinearOperator2D
+    from DARCY_WARP_PACKAGE.nonlinear.coastal import CoastalSubfaces2D
+    from DARCY_WARP_PACKAGE.nonlinear.kernels import WP_FLOAT
+
+    shape = (3, 4)
+    head = np.broadcast_to(np.array([-2.0, 0.0, 2.0, 4.0]), shape).copy()
+    mask = np.ones(shape, dtype=int)
+    zero = np.zeros(shape)
+    coast = CoastalSubfaces2D(rows=np.array([0, 0, 1]), columns=np.array([0, 1, 0]),
+        head_m=np.array([0.0, 1.0, 0.0]), conductance_m2_per_time=np.array([100.0, 10.0, 10.0]),
+        submerged=np.array([1, 0, 0]))
+    context = from_arrays(nx=shape[1], ny=shape[0], dx=5.0,
+        K=np.full(shape, 1.25), zbot=np.full(shape, -50.0), ztop=np.full(shape, -10.0),
+        active=mask, dirichlet_mask=np.zeros(shape, dtype=int), dirichlet_values=zero,
+        R_field=np.full(shape, 0.001), ghb_mask=mask, ghb_external_head=np.full(shape, 2.0),
+        ghb_factor=np.full(shape, 0.03), drn_mask=mask, drn_elev=zero,
+        drn_cond=np.full(shape, 250.0), riv_mask=mask, riv_stage=np.full(shape, 3.0),
+        riv_rbot=np.full(shape, -1.0), riv_cond=np.full(shape, 10.0),
+        coastal_boundary=coast, device=device)
+    with NonlinearOperator2D(context) as operator:
+        native = operator.residual(head=head).numpy().copy()
+        fixed_t = wp.array(np.full(shape, 50.0), dtype=WP_FLOAT, device=device)
+        operator.freeze_confined_device(transmissivity=fixed_t, head=operator.head_device,
+            drain_equality_active=drain_equality_active)
+        result = operator.confined_residual_device(head=operator.head_device,
+            out=operator.residual_device_array, drain_equality_active=drain_equality_active)
+        np.testing.assert_allclose(result.numpy(), native, rtol=1e-12, atol=1e-10)
+        assert operator.current_reduced_norms().l2 == pytest.approx(np.linalg.norm(native))

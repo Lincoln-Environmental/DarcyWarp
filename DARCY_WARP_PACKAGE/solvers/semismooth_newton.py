@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import time
 from typing import Any
 
@@ -97,18 +97,31 @@ def _head_equivalent_rms(
 
 
 def _confined_startup(*, operator, preconditioner, vectors, workspace,
-                      relative_tolerance, absolute_tolerance, max_iterations):
-    """Honor the existing fixed-T startup without dropping physical outlets.
+                      relative_tolerance, absolute_tolerance, max_iterations,
+                      max_outer_iterations, residual_tolerance):
+    """Solve the fixed-T gated problem before handing off to unconfined Newton.
 
-    This is preparation, not nonlinear convergence. A full linear candidate
-    replaces the initial iterate only if its actual nonlinear residual falls.
-    No clipping, new step limits, or permanent boundary changes are applied.
+    DRNs/RIVs remain native, outflow-gated terms, not fixed heads. A single
+    frozen-active-set solve is insufficient: it can activate many previously
+    inactive drains. Preparation uses the configured outer work limit and
+    exact linear controls; only a converged fixed-T state whose actual
+    unconfined residual decreases can replace the initial iterate.
     """
     shape = operator.ctx.shape
     nx, ny = operator.ctx.nx, operator.ctx.ny
-    wp.launch(kernel=_k.masked_copy_kernel, dim=shape,
-        inputs=[operator.residual_device_array, operator.active_device,
-            operator.dirichlet_mask_device, workspace.rhs, -1., nx, ny], device=operator.device)
+    before = operator.current_reduced_norms().rms
+    fixed_t = wp.clone(operator._pic_T_wp)
+    trial = wp.clone(operator.head_device)
+    boundaries = operator.ctx.boundaries
+    other_anchor = bool(np.any(boundaries.dirichlet_mask) or np.any(boundaries.ghb_factor))
+    if boundaries.coastal_boundary is not None:
+        other_anchor |= bool(np.any(boundaries.coastal_boundary.submerged))
+    # With a genuine sea/GHB/fixed-head anchor, the initial drain-inactive
+    # selection avoids artificially anchoring every H=DEM cell during this
+    # confined preparation. A closed drain-only domain needs the active-side
+    # selection at equality to admit recharged startup instead of a singular
+    # pure-Neumann linear system. Both are valid generalized derivatives.
+    drain_equality_active = not other_anchor
     krylov = RestartedFGMRES2D(workspace=workspace, active=operator.active_device,
         prescribed=operator.dirichlet_mask_device, nx=nx, ny=ny, device=operator.device)
 
@@ -118,40 +131,92 @@ def _confined_startup(*, operator, preconditioner, vectors, workspace,
     def apply_preconditioner(rhs, out):
         return preconditioner.apply(rhs=rhs, out=out)
 
-    before = operator.current_reduced_norms().rms
-    result = krylov.solve(rhs=workspace.rhs, apply_jacobian=apply_frozen,
-        apply_preconditioner=apply_preconditioner, relative_tolerance=relative_tolerance,
-        absolute_tolerance=absolute_tolerance, max_iterations=max_iterations)
-    diagnostic = dict(status='linear_nonconvergence', accepted=False,
-        nonlinear_residual_before=before, nonlinear_residual_after=None,
-        linear_converged=bool(result.converged), linear_iterations=int(result.iterations),
-        linear_initial_true_residual=float(result.residual_history[0]),
-        linear_final_true_residual=float(result.final_residual),
-        requested_relative_tolerance=relative_tolerance, requested_absolute_tolerance=absolute_tolerance,
-        boundaries='native coastal, DRN/RIV and other physical terms retained')
-    if result.converged:
+    totals = dict(iterations=0, restarts=0, reduction_count=0)
+    history = []
+    result = None
+    fixed_converged = False
+    status = 'confined_active_set_iteration_limit'
+    for iteration in range(max_outer_iterations):
+        t, diagonal = operator.freeze_confined_device(transmissivity=fixed_t, head=trial,
+            drain_equality_active=drain_equality_active)
+        preconditioner.freeze(transmissivity=t, storage_diagonal=diagonal)
+        operator.confined_residual_device(head=trial, out=vectors.candidate_residual,
+            drain_equality_active=drain_equality_active)
+        fixed_before = operator.current_reduced_norms().rms
+        if fixed_before <= residual_tolerance:
+            fixed_converged = True
+            break
+        wp.launch(kernel=_k.masked_copy_kernel, dim=shape,
+            inputs=[vectors.candidate_residual, operator.active_device,
+                operator.dirichlet_mask_device, workspace.rhs, -1., nx, ny], device=operator.device)
+        result = krylov.solve(rhs=workspace.rhs, apply_jacobian=apply_frozen,
+            apply_preconditioner=apply_preconditioner, relative_tolerance=relative_tolerance,
+            absolute_tolerance=absolute_tolerance, max_iterations=max_iterations)
+        for name in totals:
+            totals[name] += getattr(result, name)
+        record = dict(iteration=iteration+1, residual_rms_before=fixed_before,
+            linear_converged=bool(result.converged), linear_iterations=int(result.iterations),
+            linear_initial_true_residual=float(result.residual_history[0]),
+            linear_final_true_residual=float(result.final_residual),
+            requested_relative_tolerance=relative_tolerance,
+            requested_absolute_tolerance=absolute_tolerance)
+        history.append(record)
+        if not result.converged:
+            status = 'linear_nonconvergence'
+            break
         vectors.change_sq.fill_(wp.float64(0.))
         vectors.change_max.fill_(wp.float64(0.))
         vectors.finite_flag.fill_(wp.int32(0))
         wp.launch(kernel=_k.masked_candidate_kernel, dim=shape,
-            inputs=[operator.head_device, workspace.solution, operator.active_device,
+            inputs=[trial, workspace.solution, operator.active_device,
                 operator.dirichlet_mask_device, operator.dirichlet_values_device, 1.,
                 vectors.candidate, vectors.change_sq, vectors.change_max, vectors.finite_flag,
                 nx, ny], device=operator.device)
-        diagnostic['head_change_max_m'] = float(vectors.change_max.numpy()[0])
-        diagnostic['status'] = 'nonfinite_candidate'
-        if int(vectors.finite_flag.numpy()[0]) == 0:
-            operator.residual_device(vectors.candidate, out=vectors.candidate_residual, reduce=True)
-            after = operator.current_reduced_norms().rms
-            diagnostic.update(status='non_descent_candidate', nonlinear_residual_after=after)
-            if np.isfinite(after) and after < before:
-                operator.set_head_device(vectors.candidate)
-                wp.copy(operator.residual_device_array, vectors.candidate_residual)
-                diagnostic.update(status='accepted_initial_iterate', accepted=True)
+        record['head_change_max_m'] = float(vectors.change_max.numpy()[0])
+        if int(vectors.finite_flag.numpy()[0]) != 0:
+            status = 'nonfinite_candidate'
+            break
+        wp.copy(trial, vectors.candidate)
+        operator.freeze_confined_device(transmissivity=fixed_t, head=trial,
+            drain_equality_active=drain_equality_active)
+        operator.confined_residual_device(head=trial, out=vectors.candidate_residual,
+            drain_equality_active=drain_equality_active)
+        record['residual_rms_after'] = operator.current_reduced_norms().rms
+        if record['residual_rms_after'] <= residual_tolerance:
+            fixed_converged = True
+            break
+
+    diagnostic = dict(status=status, accepted=False,
+        nonlinear_residual_before=before, nonlinear_residual_after=None,
+        linear_converged=bool(all(item['linear_converged'] for item in history)),
+        linear_iterations=totals['iterations'], confined_active_set_iterations=len(history),
+        confined_converged=fixed_converged, confined_history=history,
+        confined_residual_tolerance=residual_tolerance,
+        confined_max_outer_iterations=max_outer_iterations,
+        drain_equality_active=drain_equality_active,
+        linear_initial_true_residual=None if result is None else float(result.residual_history[0]),
+        linear_final_true_residual=None if result is None else float(result.final_residual),
+        requested_relative_tolerance=relative_tolerance, requested_absolute_tolerance=absolute_tolerance,
+        boundaries='native coastal, DRN/RIV and other physical terms retained')
+    if fixed_converged:
+        operator.residual_device(trial, out=vectors.candidate_residual, reduce=True)
+        after = operator.current_reduced_norms().rms
+        diagnostic.update(status='non_descent_candidate', nonlinear_residual_after=after)
+        if np.isfinite(after) and after < before:
+            operator.set_head_device(trial)
+            wp.copy(operator.residual_device_array, vectors.candidate_residual)
+            diagnostic.update(status='accepted_initial_iterate', accepted=True)
     # Refresh residual reductions for the retained state even when a candidate
     # was rejected; trial evaluation never changes the accepted initial head.
     operator.residual_device(operator.head_device, reduce=True)
-    return diagnostic, result
+    # Only counts are consumed by the caller. Keep the final linear solve's
+    # convergence record distinct from total preparation work.
+    if result is None:
+        from .fgmres import FGMRESResult
+        result = FGMRESResult(converged=True, iterations=0, restarts=0,
+            final_residual=0., breakdown=False, breakdown_reason=None,
+            residual_history=[0.], reduction_count=0)
+    return diagnostic, replace(result, **totals)
 
 
 def conductivity_from_reference_transmissivity(*, transmissivity, bottom, top, active):
@@ -477,7 +542,9 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
                 preconditioner=preconditioner, vectors=vector_workspace, workspace=fgmres_workspace,
                 relative_tolerance=float(kwargs.get('rel_tol', krylov_rtol)),
                 absolute_tolerance=float(kwargs.get('abs_tol_min', krylov_atol)),
-                max_iterations=max_krylov)
+                max_iterations=max_krylov,
+                max_outer_iterations=int(kwargs.get('max_outer_iterations', max_newton)),
+                residual_tolerance=residual_tol)
             total_fgmres_iterations += startup_linear.iterations
             total_fgmres_restarts += startup_linear.restarts
             total_reductions += startup_linear.reduction_count

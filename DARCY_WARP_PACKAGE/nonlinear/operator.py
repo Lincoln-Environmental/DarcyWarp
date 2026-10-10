@@ -354,10 +354,50 @@ class NonlinearOperator2D:
             wp.launch(kernel=gated_diagonal_kernel, dim=self._dim,
                 inputs=[head, self._free_mask_wp, self._drn_mask_wp, self._drn_elev_wp,
                     self._drn_cond_wp, self._riv_mask_wp, self._riv_rbot_wp,
-                    self._riv_cond_wp, self._pic_diag_wp], device=self._device)
+                    self._riv_cond_wp, 1, self._pic_diag_wp], device=self._device)
         if self._coast is not None:
             self._coast.add(head=head, vector=head, output=self._pic_diag_wp, mode=2)
         return self._pic_T_wp, self._pic_diag_wp
+
+    def freeze_confined_device(self, *, transmissivity: Any, head: Any,
+                              drain_equality_active: bool) -> tuple[Any, Any]:
+        """Freeze a steady fixed-T row, retaining all gated physical outlets.
+
+        This is used only for confined startup. Its active set can change;
+        the supplied transmissivity remains fixed until preparation ends.
+        """
+        if self._has_storage:
+            raise ValueError('confined preparation is steady-only')
+        wp.copy(self._pic_T_wp, transmissivity)
+        self._pic_diag_wp.zero_()
+        if self._has_gated:
+            from .coastal import gated_diagonal_kernel
+            wp.launch(kernel=gated_diagonal_kernel, dim=self._dim,
+                inputs=[head, self._free_mask_wp, self._drn_mask_wp, self._drn_elev_wp,
+                    self._drn_cond_wp, self._riv_mask_wp, self._riv_rbot_wp,
+                    self._riv_cond_wp, int(drain_equality_active), self._pic_diag_wp], device=self._device)
+        if self._coast is not None:
+            self._coast.add(head=head, vector=head, output=self._pic_diag_wp, mode=2)
+        return self._pic_T_wp, self._pic_diag_wp
+
+    def confined_residual_device(self, *, head: Any, out: Any,
+                                 drain_equality_active: bool) -> Any:
+        """Actual fixed-T gated residual, for the currently frozen active set."""
+        self.frozen_picard_vector_device(vector=head, out=out)
+        wp.launch(kernel=_k.nl_confined_sources_kernel, dim=self._dim,
+            inputs=[head, self._pic_T_wp, self._active_wp, self._dirichlet_mask_wp,
+                self._gh_mask_wp, self._gh_head_wp, self._ghb_factor_wp,
+                self._drn_mask_wp, self._drn_elev_wp, self._drn_cond_wp,
+                self._riv_mask_wp, self._riv_stage_wp, self._riv_rbot_wp, self._riv_cond_wp,
+                self._R_field_wp, float(self._area), int(drain_equality_active), out],
+            device=self._device)
+        if self._coast is not None:
+            self._coast.add(head=head, vector=head, output=out, mode=3)
+        from .coastal import coastal_norm_kernel
+        self._zero_reduction_bufs()
+        wp.launch(kernel=coastal_norm_kernel, dim=self._dim,
+            inputs=[out, self._free_mask_wp, self._rTr_buf, self._Fmax_buf], device=self._device)
+        return out
 
     def set_head_device(self, head: Any) -> None:
         """Copy a device head into the operator-owned accepted-head buffer."""

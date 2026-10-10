@@ -66,6 +66,10 @@ def coastal_add_kernel(head: wp.array(dtype=WP_FLOAT, ndim=2),
             term = cond[n] * vector[j, i]
         elif mode == 2:
             term = cond[n]
+        elif mode == 3:
+            # Source side of a frozen-T affine boundary row. The diagonal
+            # C*H is already present in the frozen matrix action.
+            term = -cond[n] * levels[n]
         wp.atomic_add(output, j, i, term)
 
 
@@ -103,12 +107,14 @@ def gated_diagonal_kernel(head: wp.array(dtype=WP_FLOAT, ndim=2),
                           riv_mask: wp.array(dtype=wp.int32, ndim=2),
                           riv_bottom: wp.array(dtype=WP_FLOAT, ndim=2),
                           riv_cond: wp.array(dtype=WP_FLOAT, ndim=2),
+                          drain_equality_active: int,
                           diagonal: wp.array(dtype=WP_FLOAT, ndim=2)):
     j, i = wp.tid()
     if free[j, i] != 0:
         # Match the analytical Jacobian's active-side selection at equality;
         # this is a linearisation, not a nonzero physical drain discharge.
-        if drn_mask[j, i] != 0 and head[j, i] >= drn_elev[j, i]:
+        if drn_mask[j, i] != 0 and (head[j, i] > drn_elev[j, i]
+                or (drain_equality_active != 0 and head[j, i] == drn_elev[j, i])):
             diagonal[j, i] += drn_cond[j, i]
         if riv_mask[j, i] != 0 and head[j, i] > riv_bottom[j, i]:
             diagonal[j, i] += riv_cond[j, i]
