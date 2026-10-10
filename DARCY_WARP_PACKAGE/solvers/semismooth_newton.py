@@ -740,6 +740,7 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
             "newton_fallback_used": False,
             "fallback_state": "not_used",
             "generalized_derivative_convention": "one_strictly_inside_zero_outside_and_at_clip_thresholds",
+            "drain_generalized_derivative_convention": "active_side_at_equality; zero_strictly_below_elevation",
             "runtime_seconds": runtime,
             "gpu_scalar_synchronization_count": int(total_reductions + 3 * (accepted_updates + total_backtracks + 1)),
             "persistent_memory_before_bytes": start_memory,

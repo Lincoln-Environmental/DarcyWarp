@@ -106,7 +106,9 @@ def gated_diagonal_kernel(head: wp.array(dtype=WP_FLOAT, ndim=2),
                           diagonal: wp.array(dtype=WP_FLOAT, ndim=2)):
     j, i = wp.tid()
     if free[j, i] != 0:
-        if drn_mask[j, i] != 0 and head[j, i] > drn_elev[j, i]:
+        # Match the analytical Jacobian's active-side selection at equality;
+        # this is a linearisation, not a nonzero physical drain discharge.
+        if drn_mask[j, i] != 0 and head[j, i] >= drn_elev[j, i]:
             diagonal[j, i] += drn_cond[j, i]
         if riv_mask[j, i] != 0 and head[j, i] > riv_bottom[j, i]:
             diagonal[j, i] += riv_cond[j, i]

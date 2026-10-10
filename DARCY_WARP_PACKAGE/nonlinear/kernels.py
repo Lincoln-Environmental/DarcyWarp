@@ -735,12 +735,14 @@ def nl_jacobian_vector_kernel(
             result = result + C * v_c + dC * (h_c - wp.float64(gh_head[j, i]))
 
     # DRN: semismooth derivative of the outflow-only term C*max(h - elev, 0).
-    # Derivative is C strictly above the elevation and 0 at/below it (matching
-    # the clipping-derivative convention used for the saturation thresholds).
+    # Select the active-side generalized derivative C at exact equality.
+    # Zero is also a valid Clarke selection there, but makes an initially
+    # recharged domain with H=drain elevation lose every drain anchor at once.
+    # The residual remains C*max(H-elevation, 0), including zero at equality.
     if drn_mask[j, i] != 0:
         cd = wp.float64(drn_cond[j, i])
         if cd > wp.float64(0.0) and not wp.isnan(cd):
-            if h_c > wp.float64(drn_elev[j, i]):
+            if h_c >= wp.float64(drn_elev[j, i]):
                 flow_sum = flow_sum + cd
                 result = result + cd * v_c
 
