@@ -96,6 +96,81 @@ def _head_equivalent_rms(
     return float(np.sqrt(max(total, 0.0) / float(operator.n_free))) if operator.n_free else 0.0
 
 
+def _confined_startup(*, operator, preconditioner, vectors, workspace,
+                      relative_tolerance, absolute_tolerance, max_iterations):
+    """Honor the existing fixed-T startup without dropping physical outlets.
+
+    This is preparation, not nonlinear convergence. A full linear candidate
+    replaces the initial iterate only if its actual nonlinear residual falls.
+    No clipping, new step limits, or permanent boundary changes are applied.
+    """
+    shape = operator.ctx.shape
+    nx, ny = operator.ctx.nx, operator.ctx.ny
+    wp.launch(kernel=_k.masked_copy_kernel, dim=shape,
+        inputs=[operator.residual_device_array, operator.active_device,
+            operator.dirichlet_mask_device, workspace.rhs, -1., nx, ny], device=operator.device)
+    krylov = RestartedFGMRES2D(workspace=workspace, active=operator.active_device,
+        prescribed=operator.dirichlet_mask_device, nx=nx, ny=ny, device=operator.device)
+
+    def apply_frozen(vector, out):
+        return operator.frozen_picard_vector_device(vector=vector, out=out)
+
+    def apply_preconditioner(rhs, out):
+        return preconditioner.apply(rhs=rhs, out=out)
+
+    before = operator.current_reduced_norms().rms
+    result = krylov.solve(rhs=workspace.rhs, apply_jacobian=apply_frozen,
+        apply_preconditioner=apply_preconditioner, relative_tolerance=relative_tolerance,
+        absolute_tolerance=absolute_tolerance, max_iterations=max_iterations)
+    diagnostic = dict(status='linear_nonconvergence', accepted=False,
+        nonlinear_residual_before=before, nonlinear_residual_after=None,
+        linear_converged=bool(result.converged), linear_iterations=int(result.iterations),
+        linear_initial_true_residual=float(result.residual_history[0]),
+        linear_final_true_residual=float(result.final_residual),
+        requested_relative_tolerance=relative_tolerance, requested_absolute_tolerance=absolute_tolerance,
+        boundaries='native coastal, DRN/RIV and other physical terms retained')
+    if result.converged:
+        vectors.change_sq.fill_(wp.float64(0.))
+        vectors.change_max.fill_(wp.float64(0.))
+        vectors.finite_flag.fill_(wp.int32(0))
+        wp.launch(kernel=_k.masked_candidate_kernel, dim=shape,
+            inputs=[operator.head_device, workspace.solution, operator.active_device,
+                operator.dirichlet_mask_device, operator.dirichlet_values_device, 1.,
+                vectors.candidate, vectors.change_sq, vectors.change_max, vectors.finite_flag,
+                nx, ny], device=operator.device)
+        diagnostic['head_change_max_m'] = float(vectors.change_max.numpy()[0])
+        diagnostic['status'] = 'nonfinite_candidate'
+        if int(vectors.finite_flag.numpy()[0]) == 0:
+            operator.residual_device(vectors.candidate, out=vectors.candidate_residual, reduce=True)
+            after = operator.current_reduced_norms().rms
+            diagnostic.update(status='non_descent_candidate', nonlinear_residual_after=after)
+            if np.isfinite(after) and after < before:
+                operator.set_head_device(vectors.candidate)
+                wp.copy(operator.residual_device_array, vectors.candidate_residual)
+                diagnostic.update(status='accepted_initial_iterate', accepted=True)
+    # Refresh residual reductions for the retained state even when a candidate
+    # was rejected; trial evaluation never changes the accepted initial head.
+    operator.residual_device(operator.head_device, reduce=True)
+    return diagnostic, result
+
+
+def conductivity_from_reference_transmissivity(*, transmissivity, bottom, top, active):
+    """Convert explicit full-column reference T to the native unconfined law.
+
+    T(h) = T_reference * flow_sat(h) / (top-bottom). This conversion is
+    internal API plumbing, not an assumption of K=10 across a deep domain.
+    """
+    reference = np.asarray(transmissivity, dtype=np.float64)
+    base, surface = np.asarray(bottom, dtype=np.float64), np.asarray(top, dtype=np.float64)
+    mask = np.asarray(active, dtype=bool)
+    if (reference.shape != mask.shape or base.shape != mask.shape or surface.shape != mask.shape
+            or not np.all(np.isfinite(reference)) or not np.all(np.isfinite(base))
+            or not np.all(np.isfinite(surface)) or np.any(reference[mask] <= 0.)
+            or np.any(surface[mask] <= base[mask])):
+        raise ValueError('reference T requires finite compatible fields, positive active T and positive column height')
+    return np.divide(reference, surface-base, out=np.zeros_like(reference), where=mask)
+
+
 def _fallback_to_picard(
     *,
     context: SolverContext,
@@ -142,6 +217,12 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
     K_field = kwargs.get("K_field")
     zbot_field = kwargs.get("zbot_field")
     ztop_field = kwargs.get("ztop_field")
+    reference_transmissivity = kwargs.get('reference_transmissivity_field')
+    if reference_transmissivity is not None:
+        if K_field is not None or zbot_field is None or ztop_field is None:
+            raise ValueError('reference T input requires top and bottom and must not also supply K_field')
+        K_field = conductivity_from_reference_transmissivity(transmissivity=reference_transmissivity,
+            bottom=zbot_field, top=ztop_field, active=model.active_host)
     transient = bool(kwargs.get("transient", False))
     dt = kwargs.get("dt")
     head_prev = kwargs.get("head_prev")
@@ -167,6 +248,9 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
     if min_sat is None:
         min_sat = 0.1
     min_sat = float(min_sat)
+    startup_mode = str(kwargs.get('unconfined_startup_mode', 'initial_head')).strip().lower()
+    if startup_mode not in ('initial_head', 'confined_pre_solve'):
+        raise ValueError('semismooth Newton supports initial_head or confined_pre_solve startup')
 
     restart = int(kwargs.pop("newton_fgmres_restart", 20))
     max_krylov = int(kwargs.pop("newton_fgmres_max_iterations", max(40, 3 * restart)))
@@ -363,6 +447,7 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
     total_reductions = 0
     total_backtracks = 0
     accepted_updates = 0
+    startup_diagnostics = dict(status='not_requested', accepted=False)
     start_memory = None
     end_memory = None
     start_time = time.perf_counter()
@@ -386,6 +471,21 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
             vectors=vector_workspace,
         )
         initial_residual = norms.rms
+
+        if not transient and startup_mode == 'confined_pre_solve' and norms.rms > residual_tol:
+            startup_diagnostics, startup_linear = _confined_startup(operator=operator,
+                preconditioner=preconditioner, vectors=vector_workspace, workspace=fgmres_workspace,
+                relative_tolerance=float(kwargs.get('rel_tol', krylov_rtol)),
+                absolute_tolerance=float(kwargs.get('abs_tol_min', krylov_atol)),
+                max_iterations=max_krylov)
+            total_fgmres_iterations += startup_linear.iterations
+            total_fgmres_restarts += startup_linear.restarts
+            total_reductions += startup_linear.reduction_count
+            norms = operator.current_reduced_norms()
+            T_frozen, S_frozen = operator.freeze_picard_device(operator.head_device)
+            preconditioner.freeze(transmissivity=T_frozen, storage_diagonal=S_frozen)
+            head_equivalent = _head_equivalent_rms(residual=operator.residual_device_array,
+                diagonal_inverse=preconditioner.fine_diagonal_inverse, operator=operator, vectors=vector_workspace)
 
         if norms.rms <= residual_tol and head_equivalent <= head_residual_tol:
             converged = True
@@ -606,7 +706,11 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
             "solver_backend": "unconfined_semismooth_newton_kcycle",
             "multigrid_level_shapes": [(int(level.ny), int(level.nx)) for level in levels],
             "experimental_backend": False,
+            "flow_coefficient_input": 'full_column_reference_transmissivity' if reference_transmissivity is not None else 'hydraulic_conductivity',
+            "reference_transmissivity_field": reference_transmissivity,
             "newton_iterations": int(accepted_updates),
+            "unconfined_startup_mode": startup_mode,
+            "confined_startup": startup_diagnostics,
             "picard_warm_start_updates": sum(item['direction_kind'] == 'frozen_picard' and item['accepted_step_length'] > 0 for item in history),
             "outer_picard_iterations": 0,
             "inexact_forcing_enabled": bool(forcing_enabled),
