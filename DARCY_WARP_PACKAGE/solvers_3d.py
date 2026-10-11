@@ -123,8 +123,174 @@ def build_7point_face_conductance_from_k(
     )
 
 
-def build_diag_preconditioner_7point(
-    tx_p: np.ndarray,
+def build_7point_face_conductance_unconfined_from_sat(
+    kx_field: np.ndarray,
+    ky_field: np.ndarray,
+    kz_field: np.ndarray,
+    sat: np.ndarray,
+    active: np.ndarray,
+    dx: float,
+    dy: float | None = None,
+    dz: float = 1.0,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Build 3D 7-point face conductances for unconfined (water-table) flow.
+
+    This is the quasi-3D saturated-flow formulation (MODFLOW 6 NPF convertible
+    cell behaviour), distinct from a 2D transmissivity model:
+
+    - Horizontal faces carry ``C_x = T_face * dy / dx`` (and ``C_y = T_face *
+      dx / dy``) where ``T = K_h * sat`` is the cell transmissivity
+      (m^2/day) built from hydraulic conductivity ``K_h`` (m/day) and the
+      cell's saturated thickness ``sat`` (m), and ``T_face`` is the harmonic
+      mean of the two cell transmissivities.  The saturated thickness enters
+      exactly once, through the face's saturated cross-section ``dy * sat``;
+      the full cell height ``dz`` must NOT be multiplied in (that was the
+      double-counting defect of passing ``K * sat`` into the confined
+      builder, which already multiplies by ``dy * dz``).
+    - Vertical faces carry the full-thickness harmonic resistance
+      ``C_z = dx*dy / (0.5*dz/Kz_k + 0.5*dz/Kz_{k+1})`` (MODFLOW-NWT-style):
+      vertical conductance does not scale with saturated thickness.  Drying
+      cells lose their *horizontal* transmission through ``sat``; vertical
+      drainage through partially saturated columns is preserved so cells can
+      drain and rewet smoothly.
+
+    ``sat`` is the caller-computed saturated thickness per cell (already
+    clipped to the numerical floor and the cell thickness).  Returns
+    (tx_p, tx_m, ty_p, ty_m, tz_p, tz_m) with the same layout and units
+    (m^2/day) as ``build_7point_face_conductance_from_k``.
+    """
+    if not np.isfinite(float(dx)) or float(dx) <= 0.0:
+        raise ValueError("dx must be finite and > 0.")
+    dy_f = float(dx) if dy is None else float(dy)
+    dz_f = float(dz)
+    if not np.isfinite(dy_f) or not np.isfinite(dz_f) or dy_f <= 0.0 or dz_f <= 0.0:
+        raise ValueError("dy and dz must be finite and > 0.")
+
+    Kx = np.asarray(kx_field, dtype=np.float64)
+    Ky = np.asarray(ky_field, dtype=np.float64)
+    Kz = np.asarray(kz_field, dtype=np.float64)
+    b = np.asarray(sat, dtype=np.float64)
+    act = np.asarray(active, dtype=np.int32) != 0
+
+    if Kx.ndim != 3 or Ky.shape != Kx.shape or Kz.shape != Kx.shape or b.shape != Kx.shape:
+        raise ValueError("kx_field, ky_field, kz_field, sat must be matching 3D arrays (nz, ny, nx).")
+    if act.shape != Kx.shape:
+        raise ValueError(f"active shape {act.shape} must match K shape {Kx.shape}.")
+    for name, arr in (("kx_field", Kx), ("ky_field", Ky), ("kz_field", Kz), ("sat", b)):
+        if not np.all(np.isfinite(arr)):
+            raise ValueError(f"{name} must be finite.")
+    if np.any(Kx < 0.0) or np.any(Ky < 0.0) or np.any(Kz < 0.0):
+        raise ValueError("K fields must be >= 0.")
+    if np.any(b < 0.0):
+        raise ValueError("sat must be >= 0.")
+
+    nz, ny, nx = Kx.shape
+    tiny = 1.0e-12
+
+    Tx = Kx * b
+    Ty = Ky * b
+
+    tx_p = np.zeros((nz, ny, nx), dtype=np.float64)
+    tx_m = np.zeros((nz, ny, nx), dtype=np.float64)
+    ty_p = np.zeros((nz, ny, nx), dtype=np.float64)
+    ty_m = np.zeros((nz, ny, nx), dtype=np.float64)
+    tz_p = np.zeros((nz, ny, nx), dtype=np.float64)
+    tz_m = np.zeros((nz, ny, nx), dtype=np.float64)
+
+    if nx > 1:
+        TL = Tx[:, :, :-1]
+        TR = Tx[:, :, 1:]
+        denom = TL + TR
+        conn = act[:, :, :-1] & act[:, :, 1:] & (TL > 0.0) & (TR > 0.0) & (denom > tiny)
+        cond = np.zeros_like(denom, dtype=np.float64)
+        cond[conn] = 2.0 * TL[conn] * TR[conn] / denom[conn] * (dy_f / float(dx))
+        tx_p[:, :, :-1] = cond
+        tx_m[:, :, 1:] = cond
+
+    if ny > 1:
+        TT = Ty[:, :-1, :]
+        TB = Ty[:, 1:, :]
+        denom = TT + TB
+        conn = act[:, :-1, :] & act[:, 1:, :] & (TT > 0.0) & (TB > 0.0) & (denom > tiny)
+        cond = np.zeros_like(denom, dtype=np.float64)
+        cond[conn] = 2.0 * TT[conn] * TB[conn] / denom[conn] * (float(dx) / dy_f)
+        ty_p[:, :-1, :] = cond
+        ty_m[:, 1:, :] = cond
+
+    if nz > 1:
+        # Full-thickness vertical harmonic resistance (saturation-independent).
+        KU = Kz[:-1, :, :]
+        KD = Kz[1:, :, :]
+        denom = KU + KD
+        conn = act[:-1, :, :] & act[1:, :, :] & (KU > 0.0) & (KD > 0.0) & (denom > tiny)
+        cond = np.zeros_like(denom, dtype=np.float64)
+        cond[conn] = 2.0 * KU[conn] * KD[conn] / denom[conn] * (float(dx) * dy_f / dz_f)
+        tz_p[:-1, :, :] = cond
+        tz_m[1:, :, :] = cond
+
+    return (
+        tx_p.astype(NP_FLOAT, copy=False),
+        tx_m.astype(NP_FLOAT, copy=False),
+        ty_p.astype(NP_FLOAT, copy=False),
+        ty_m.astype(NP_FLOAT, copy=False),
+        tz_p.astype(NP_FLOAT, copy=False),
+        tz_m.astype(NP_FLOAT, copy=False),
+    )
+
+
+def _validate_flat_layer_geometry(
+    zbot: np.ndarray,
+    ztop: np.ndarray | None,
+    dz: float,
+    shape: tuple[int, int, int],
+) -> np.ndarray:
+    """Validate the layered geometry the 7-point operator can represent.
+
+    The operator carries a single scalar ``dz`` and cell-centred face areas,
+    which is exact only for flat layers of uniform thickness that are
+    vertically aligned (full face overlap).  Returns the effective ``ztop``
+    (``zbot + dz`` when not supplied).  Raises ``ValueError`` for dipping,
+    vertically offset, or non-uniform-thickness layers instead of silently
+    applying Cartesian face geometry.
+    """
+    zb = np.asarray(zbot, dtype=np.float64)
+    if zb.shape != shape:
+        raise ValueError(f"zbot_field shape {zb.shape} expected {shape}")
+    dz_f = float(dz)
+    atol = 1.0e-9 * max(1.0, float(np.max(np.abs(zb))) if zb.size else 1.0, abs(dz_f))
+    layer_bot = zb[:, 0:1, 0:1]
+    if not np.all(np.abs(zb - layer_bot) <= atol):
+        raise ValueError(
+            "The 3D 7-point operator supports flat layers only: zbot_field "
+            "varies within a layer (dipping or offset geometry). Use a "
+            "vertically aligned, uniform-thickness layer stack."
+        )
+    if ztop is None:
+        return (zb + dz_f)
+    zt = np.asarray(ztop, dtype=np.float64)
+    if zt.shape != shape:
+        raise ValueError(f"ztop_field shape {zt.shape} expected {shape}")
+    layer_top = zt[:, 0:1, 0:1]
+    if not np.all(np.abs(zt - layer_top) <= atol):
+        raise ValueError(
+            "The 3D 7-point operator supports flat layers only: ztop_field "
+            "varies within a layer (dipping or offset geometry)."
+        )
+    if not np.all(np.abs((zt - zb) - dz_f) <= atol):
+        raise ValueError(
+            "The 3D 7-point operator requires uniform layer thickness equal "
+            f"to dz={dz_f}; ztop - zbot varies or differs from dz."
+        )
+    if shape[0] > 1 and not np.all(np.abs(zt[1:] - zb[:-1]) <= atol):
+        raise ValueError(
+            "The 3D 7-point operator requires vertically contiguous layers "
+            "(ztop of the layer below equals zbot of the layer above)."
+        )
+    return zt
+
+
+def build_diag_preconditioner_7point(    tx_p: np.ndarray,
     tx_m: np.ndarray,
     ty_p: np.ndarray,
     ty_m: np.ndarray,
@@ -1195,7 +1361,10 @@ def _picard_unconfined_7point_3d(
     ky64 = np.asarray(ky, dtype=np.float64)
     kz64 = np.asarray(kz, dtype=np.float64)
     zbot64 = np.asarray(zbot, dtype=np.float64)
-    ztop64 = None if ztop is None else np.asarray(ztop, dtype=np.float64)
+    # Fail clearly for geometries the 7-point operator cannot represent
+    # (dipping/offset layers, non-uniform thickness) instead of silently
+    # applying uniform Cartesian face geometry.
+    ztop64 = _validate_flat_layer_geometry(zbot64, ztop, float(dz), tuple(int(v) for v in shape))
 
     hclose_f = float(pic_tol)
     if hclose_f < 0.0 or not np.isfinite(hclose_f):
@@ -1346,11 +1515,18 @@ def _picard_unconfined_7point_3d(
     h_iter[~active_mask] = NP_FLOAT(0.0)
 
     def _conductances_from_sat(sat_arr):
-        ks = sat_arr.astype(np.float64, copy=False)
-        return build_7point_face_conductance_from_k(
-            kx_field=(kx64 * ks).astype(NP_FLOAT, copy=False),
-            ky_field=(ky64 * ks).astype(NP_FLOAT, copy=False),
-            kz_field=(kz64 * ks).astype(NP_FLOAT, copy=False),
+        # Unconfined quasi-3D conductance: horizontal faces use the harmonic
+        # mean of cell transmissivities T = K * sat times dy/dx (saturated
+        # thickness enters ONCE through the saturated face area); vertical
+        # faces use the full-thickness harmonic resistance.  K stays in
+        # m/day; the previous implementation multiplied K by sat and then
+        # passed it to the confined builder, which multiplies by the full
+        # face area dy*dz/dx, double-counting the thickness.
+        return build_7point_face_conductance_unconfined_from_sat(
+            kx_field=kx64,
+            ky_field=ky64,
+            kz_field=kz64,
+            sat=sat_arr.astype(np.float64, copy=False),
             active=act,
             dx=float(dx),
             dy=float(dx) if dy is None else float(dy),
