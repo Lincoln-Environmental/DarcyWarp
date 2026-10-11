@@ -692,6 +692,7 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
     accepted_updates = 0
     gated_active_set_work = 0
     startup_diagnostics = dict(status='not_requested', accepted=False)
+    startup_wall_s = 0.0
     start_memory = None
     end_memory = None
     start_time = time.perf_counter()
@@ -717,6 +718,7 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
         initial_residual = norms.rms
 
         if not transient and startup_mode == 'confined_pre_solve' and norms.rms > residual_tol:
+            startup_started = time.perf_counter()
             startup_diagnostics, startup_linear, _ = _confined_startup(operator=operator,
                 preconditioner=preconditioner, vectors=vector_workspace, workspace=fgmres_workspace,
                 relative_tolerance=float(kwargs.get('rel_tol', krylov_rtol)),
@@ -724,6 +726,7 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
                 max_iterations=max_krylov,
                 max_outer_iterations=int(kwargs.get('max_outer_iterations', max_newton)),
                 residual_tolerance=residual_tol)
+            startup_wall_s = time.perf_counter() - startup_started
             total_fgmres_iterations += startup_linear.iterations
             total_fgmres_restarts += startup_linear.restarts
             total_reductions += startup_linear.reduction_count
@@ -1034,7 +1037,45 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
             budget["percent_discrepancy"] = 100*imbalance/(total_in+total_out) if total_in+total_out else 0.
             budget["throughflow"] = .5*(total_in+total_out)
             budget["imbalance_fraction"] = imbalance/(.5*(total_in+total_out)) if total_in+total_out else 0.
+        from .steady_config import steady_source_identity
+        effective = dict(
+            transient=transient, precision=WP_FLOAT.__name__, mixed_precision=False,
+            device=str(model.device_str), device_name=wp.get_device(model.device_str).name,
+            newton_max_iterations=max_newton, shared_newton_gated_work_budget=True,
+            nonlinear_residual_rms_tolerance=residual_tol,
+            head_equivalent_rms_tolerance=head_residual_tol,
+            fgmres_restart=restart, fgmres_max_iterations=max_krylov,
+            fgmres_fixed_relative_tolerance=None if forcing_enabled else krylov_rtol,
+            fgmres_absolute_tolerance=krylov_atol,
+            forcing=dict(enabled=forcing_enabled, eta_initial=forcing_eta_initial,
+                eta_min=forcing_eta_min, eta_max=forcing_eta_max, power=forcing_eta_power,
+                safeguard_backtracks=forcing_safeguard_backtracks,
+                final_tighten_ratio=forcing_final_tighten_ratio),
+            preconditioner_kind=preconditioner_kind,
+            preconditioner_implementation=getattr(preconditioner, "implementation", preconditioner_kind),
+            preconditioner_controls=dict(getattr(preconditioner, "controls", {})),
+            requested_max_levels=max_levels, min_coarse_cells=min_coarse_cells,
+            actual_level_shapes=[(int(level.ny), int(level.nx)) for level in levels],
+            startup=dict(mode=startup_mode, max_active_set_iterations=int(kwargs.get("max_outer_iterations", max_newton)),
+                relative_tolerance=float(kwargs.get("rel_tol", krylov_rtol)),
+                absolute_tolerance=float(kwargs.get("abs_tol_min", krylov_atol)),
+                accepted=bool(startup_diagnostics.get("accepted", False))),
+            gated_model_enabled=gated_model_enabled, gated_model_work=int(gated_active_set_work),
+            line_search=dict(max_backtracks=max_backtracks, min_step_length=min_step,
+                armijo_coefficient=armijo, max_head_change=max_head_change),
+            min_flow_saturated_thickness=min_sat, picard_fallback_enabled=fallback_enabled,
+            ignored_supplied_controls=sorted(key for key in original_kwargs if key in {
+                "max_cycles", "dh_rms_tol", "residual_floor_tol", "inner_forcing_eta",
+                "inner_head_residual_tol_min", "inner_head_residual_tol_max",
+                "chebyshev_reset_factor", "transmissivity_relaxation_enabled", "omega_min",
+                "omega_max", "chebyshev_enabled", "chebyshev_order", "chebyshev_rejection_factor",
+                "check_every_no", "adaptive_dt_enabled", "transient_mixed_precision_enabled"}),
+            stopping_rule="true residual RMS AND diagonal-scaled head-equivalent RMS; each FGMRES solve checks true residual")
         info = {
+            "effective_configuration": effective,
+            "source_identity": steady_source_identity(model_file=__import__(
+                "DARCY_WARP_PACKAGE.warped_darcy", fromlist=["__file__"]).__file__, solver_file=__file__),
+            "kcycle_graph_execution": dict(getattr(preconditioner, "execution_stats", {})),
             "contact_discharge_rate_array": contact_flux,
             "contact_mask_array": contact_mask.copy(),
             "converged": bool(converged),
@@ -1050,6 +1091,7 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
             "gated_newton_model_enabled": gated_model_enabled,
             "unconfined_startup_mode": startup_mode,
             "confined_startup": startup_diagnostics,
+            "confined_startup_wall_s": startup_wall_s,
             "picard_warm_start_updates": sum(item['direction_kind'] == 'frozen_picard' and item['accepted_step_length'] > 0 for item in history),
             "outer_picard_iterations": 0,
             "inexact_forcing_enabled": bool(forcing_enabled),

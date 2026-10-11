@@ -504,6 +504,7 @@ def solve_kcycle_face_transient_device_buffers(
     solve_controls: dict,
     return_scalar_info: bool = False,
     graph_cache: dict | None = None,
+    execution_stats: dict | None = None,
 ) -> dict:
     """K-cycle on the face operator, device-buffer variant for the transient
     unconfined driver.
@@ -834,6 +835,8 @@ def solve_kcycle_face_transient_device_buffers(
         if graph_cache is None or not str(device).startswith("cuda"):
             for _ in range(max_cycles_i):
                 kcycle(0)
+                if execution_stats is not None:
+                    execution_stats["eager_cycles"] += 1
         else:
             graph_key = (
                 "face_transient_kcycle_v1",
@@ -870,20 +873,30 @@ def solve_kcycle_face_transient_device_buffers(
                     executed_eagerly = graph is None
                 if graph is not None:
                     graph_cache[graph_key] = graph
+                    if execution_stats is not None:
+                        execution_stats["graph_captures"] += 1
                     for _ in range(max_cycles_i):
                         wp.capture_launch(graph)
+                        if execution_stats is not None:
+                            execution_stats["graph_launches"] += 1
                 else:
                     graph_cache[graph_key] = False
+                    if execution_stats is not None:
+                        execution_stats["eager_cycles"] += max_cycles_i
                     remaining = max_cycles_i - (1 if executed_eagerly else 0)
                     for _ in range(max(int(remaining), 0)):
                         kcycle(0)
             elif entry is False:
+                if execution_stats is not None:
+                    execution_stats["eager_cycles"] += max_cycles_i
                 # Capture previously failed for this key: eager fallback.
                 for _ in range(max_cycles_i):
                     kcycle(0)
             else:
                 for _ in range(max_cycles_i):
                     wp.capture_launch(entry)
+                    if execution_stats is not None:
+                        execution_stats["graph_launches"] += 1
         return {
             "converged": False,
             "n_cycles_used": int(max_cycles_i),

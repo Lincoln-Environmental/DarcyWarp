@@ -92,6 +92,7 @@ class FixedWorkKCyclePreconditioner2D:
             raise ValueError('fast face preconditioner supports average residual restriction only')
         self.face_levels = None
         self.graph_cache = workspace.graph_cache
+        self.execution_stats = {"graph_captures": 0, "graph_launches": 0, "eager_cycles": 0}
         self.controls = {
             "coarse_residual_restriction": coarse_residual_restriction,
             "max_cycles": self.n_cycles,
@@ -236,7 +237,7 @@ class FixedWorkKCyclePreconditioner2D:
                     active_wp=level0.active_wp, bc_mask_wp=level0.bc_mask_wp,
                     bc_values_wp=self.workspace.zero_boundary_values, levels=self.levels,
                     face_levels=self.face_levels, solve_controls=self.controls,
-                    return_scalar_info=False, graph_cache=self.graph_cache)
+                    return_scalar_info=False, graph_cache=self.graph_cache, execution_stats=self.execution_stats)
             else:
                 solve_kcycle_device_buffers(
                 model=self.model,

@@ -2,6 +2,13 @@
 
 This repo contains scripts to run ensemble benchmarks (Warp solver, MODFLOW 6, optional CPU finite difference) and to generate standard summary plots from the benchmark outputs.
 
+## Fast steady unconfined groundwater initialisation
+
+The opt-in [steady production profile](docs/UNCONFINED_STEADY_PRODUCTION_PROFILE.md)
+documents effective Newton/FGMRES/fast GPU K-cycle controls, the executable
+DRN/coastal example, measured Purau performance and physical acceptance limits.
+Use it for steady preprocessing; transient Picard settings remain separate.
+
 ## Environment setup
 
 The project uses a dedicated conda environment named **`darcywarp`**, defined in
