@@ -1066,6 +1066,8 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
             "fgmres_restart_size": int(restart),
             "coarse_residual_restriction": coarse_restriction,
             "preconditioner_kind": preconditioner_kind,
+            "kcycle_graph_cache_entries": len(getattr(preconditioner, "graph_cache", {})),
+            "kcycle_graph_capture_fallback_entries": sum(value is False for value in getattr(preconditioner, "graph_cache", {}).values()),
             "preconditioner_implementation": getattr(preconditioner, 'implementation', preconditioner_kind),
             "preconditioner_setup_wall_s": getattr(preconditioner, "setup_wall_s", None),
             "preconditioner_apply_wall_s": getattr(preconditioner, "apply_wall_s", None),

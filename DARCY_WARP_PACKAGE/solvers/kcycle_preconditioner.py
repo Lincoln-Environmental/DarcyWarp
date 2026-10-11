@@ -37,6 +37,7 @@ class KCyclePreconditionerWorkspace2D:
                 )
             )
         ny0, nx0 = self.signature[0]
+        self.graph_cache = {}
         self.zero_boundary_values = wp.zeros((ny0, nx0), dtype=WP_FLOAT, device=device)
         self.closed = False
 
@@ -47,6 +48,7 @@ class KCyclePreconditionerWorkspace2D:
     def close(self) -> None:
         if self.closed:
             return
+        self.graph_cache.clear()
         self.coefficients = []
         self.zero_boundary_values = None
         self.closed = True
@@ -89,7 +91,7 @@ class FixedWorkKCyclePreconditioner2D:
         if self.implementation == 'fast' and coarse_residual_restriction != 'average':
             raise ValueError('fast face preconditioner supports average residual restriction only')
         self.face_levels = None
-        self.graph_cache = {}
+        self.graph_cache = workspace.graph_cache
         self.controls = {
             "coarse_residual_restriction": coarse_residual_restriction,
             "max_cycles": self.n_cycles,

@@ -45,6 +45,28 @@ def test_recharged_all_drain_domain_starts_at_exact_drain_elevation(device):
         assert independent_outflow == pytest.approx(recharge*25.0*elevation.size, abs=1e-7)
         assert info["budget_summary"]["drn_out"] == pytest.approx(independent_outflow)
         assert not info["newton_fallback_used"]
+        workspace = model._resource_owner.get_experimental_workspace("semismooth_newton_kcycle")
+        cached_graphs = workspace.graph_cache
+        graph_count = len(cached_graphs)
+        model.update_uniform_recharge_in_place(recharge_rate=2.0*recharge)
+        repeated, repeated_info = model.solve(formulation="unconfined",
+            solver="unconfined_semismooth_newton_kcycle", initial_head=head,
+            reference_transmissivity_field=np.full(shape, 50.0),
+            zbot_field=np.full(shape, -50.0), ztop_field=elevation,
+            unconfined_startup_mode="initial_head", max_levels=7,
+            newton_residual_rms_tolerance=1.0e-10,
+            newton_fallback_to_picard=False, inner_implementation="fast",
+            newton_profile_timing=True)
+        assert repeated_info["converged"]
+        assert repeated_info["newton_workspace_reused"]
+        assert workspace.graph_cache is cached_graphs
+        np.testing.assert_allclose(repeated, elevation+2.0*recharge*25.0/conductance,
+            rtol=0.0, atol=1e-8)
+        assert repeated_info["budget_summary"]["drn_out"] == pytest.approx(
+            2.0*recharge*25.0*elevation.size, abs=1e-7)
+        if device.startswith("cuda"):
+            assert graph_count > 0
+            assert repeated_info["kcycle_graph_capture_fallback_entries"] == 0
     finally:
         model.close()
 
