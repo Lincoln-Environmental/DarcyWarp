@@ -40,6 +40,125 @@ class BoundaryInterfaceFluxPlan:
         )
 
 
+def compute_3d_flow_budget(
+    *,
+    head: np.ndarray,
+    source: np.ndarray,
+    faces: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray],
+    active: np.ndarray,
+    bc_mask: np.ndarray,
+    storage_diag: np.ndarray | None = None,
+    head_prev: np.ndarray | None = None,
+    return_field: bool = False,
+) -> dict[str, float]:
+    """Cellwise and domain water budget for the discrete 7-point system.
+
+    Sign conventions (consistent with the solver kernels):
+    positive ``source`` is injection/recharge [m^3/day]; the intercell flux
+    across a face is ``C * (h_here - h_neighbour)`` (flow from higher head to
+    lower head); the transient storage term is ``storage_diag * (h - h_prev)``
+    (positive = uptake into storage).  All fluxes are volumetric [m^3/day].
+
+    Returns aggregate statistics:
+      - ``cell_residual_max`` / ``cell_residual_rms``: imbalance of the
+        discrete balance equation per free cell [m^3/day],
+      - ``source_total``: sum of sources over free cells,
+      - ``boundary_inflow`` / ``boundary_outflow``: exchange with Dirichlet
+        cells (positive = into the model),
+      - ``storage_uptake``: rate of change of stored water (0 when steady),
+      - ``domain_imbalance``: source + boundary net - storage uptake; equals
+        the sum of cell residuals (exact telescoping of internal faces),
+      - ``relative_imbalance``: normalised by the total throughput.
+    """
+    h = np.asarray(head, dtype=np.float64)
+    src = np.asarray(source, dtype=np.float64)
+    act = np.asarray(active, dtype=np.int32) != 0
+    bcm = np.asarray(bc_mask, dtype=np.int32) != 0
+    shape = h.shape
+    if src.shape != shape or act.shape != shape or bcm.shape != shape:
+        raise ValueError("head, source, active, bc_mask shapes must match.")
+    tx_p, tx_m, ty_p, ty_m, tz_p, tz_m = (
+        np.maximum(np.asarray(value, dtype=np.float64), 0.0) for value in faces
+    )
+    if any(value.shape != shape for value in (tx_p, tx_m, ty_p, ty_m, tz_p, tz_m)):
+        raise ValueError("face shapes must match head.")
+    free = act & ~bcm
+    n_free = int(np.count_nonzero(free))
+
+    s = (
+        np.zeros(shape, dtype=np.float64)
+        if storage_diag is None
+        else np.maximum(np.asarray(storage_diag, dtype=np.float64), 0.0)
+    )
+    if s.shape != shape:
+        raise ValueError("storage_diag shape must match head.")
+    if head_prev is None:
+        hp = np.zeros(shape, dtype=np.float64)
+    else:
+        hp = np.asarray(head_prev, dtype=np.float64)
+        if hp.shape != shape:
+            raise ValueError("head_prev shape must match head.")
+
+    # Net outflow divergence per cell: sum c*(h_self - h_nb) + storage*h.
+    # (The Dirichlet exchange below reports the free<->bc face part of it.)
+    div = s * h
+    bc_exchange = np.zeros(shape, dtype=np.float64)  # c * (h_bc - h_free), inflow +
+    diag_c = np.zeros(shape, dtype=np.float64)
+    for face, sl_self, sl_nb in (
+        (tx_p, (slice(None), slice(None), slice(None, -1)), (slice(None), slice(None), slice(1, None))),
+        (tx_m, (slice(None), slice(None), slice(1, None)), (slice(None), slice(None), slice(None, -1))),
+        (ty_p, (slice(None), slice(None, -1), slice(None)), (slice(None), slice(1, None), slice(None))),
+        (ty_m, (slice(None), slice(1, None), slice(None)), (slice(None), slice(None, -1), slice(None))),
+        (tz_p, (slice(None, -1), slice(None), slice(None)), (slice(1, None), slice(None), slice(None))),
+        (tz_m, (slice(1, None), slice(None), slice(None)), (slice(None, -1), slice(None), slice(None))),
+    ):
+        c = face[sl_self]
+        both_act = act[sl_self] & act[sl_nb]
+        c = np.where(both_act, c, 0.0)
+        diag_c[sl_self] += c
+        div[sl_self] -= c * h[sl_nb]
+        is_bc_nb = bcm[sl_nb] & act[sl_nb]
+        bc_exchange[sl_self] += np.where(is_bc_nb, c * (h[sl_nb] - h[sl_self]), 0.0)
+    div += diag_c * h  # completes sum c*(h_self - h_nb) + storage uptake
+
+    # Cellwise balance residual: source + storage release - net outflow = 0.
+    residual = src + s * hp - div
+    residual = np.where(free, residual, 0.0)
+
+    source_total = float(np.sum(src[free]))
+    storage_uptake = float(np.sum((s * (h - hp))[free]))
+    bc_net = float(np.sum(bc_exchange[free]))
+    bc_in = float(np.sum(bc_exchange[free & (bc_exchange > 0.0)]))
+    bc_out = float(np.sum(bc_exchange[free & (bc_exchange < 0.0)]))
+    domain_imbalance = float(np.sum(residual[free]))
+    throughput = max(
+        abs(source_total) + abs(bc_in) + abs(bc_out) + abs(storage_uptake),
+        1.0e-30,
+    )
+    if n_free > 0:
+        cell_residual_max = float(np.max(np.abs(residual[free])))
+        cell_residual_rms = float(np.sqrt(np.mean(residual[free] ** 2)))
+    else:
+        cell_residual_max = 0.0
+        cell_residual_rms = 0.0
+    result = {
+        "cell_residual_max": cell_residual_max,
+        "cell_residual_rms": cell_residual_rms,
+        "source_total": source_total,
+        "boundary_inflow": bc_in,
+        "boundary_outflow": bc_out,
+        "boundary_net": bc_net,
+        "storage_uptake": storage_uptake,
+        "domain_imbalance": domain_imbalance,
+        "relative_imbalance": abs(domain_imbalance) / throughput,
+        "n_free_cells": float(n_free),
+    }
+    if return_field:
+        result["cell_residual_field"] = residual
+        result["operator_diagonal"] = diag_c + s
+    return result
+
+
 def prepare_boundary_interface_flux(
     *,
     boundary_mask: np.ndarray,

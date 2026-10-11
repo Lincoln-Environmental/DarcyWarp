@@ -14,7 +14,11 @@ from .storage_2d import (
     secant_specific_yield_coeff,
     specific_storage_potential,
 )
-from .budget_3d import boundary_interface_flux, named_boundary_interface_fluxes
+from .budget_3d import (
+    boundary_interface_flux,
+    compute_3d_flow_budget,
+    named_boundary_interface_fluxes,
+)
 
 __all__ = [
     "BoundaryFields",
@@ -27,5 +31,6 @@ __all__ = [
     "secant_specific_yield_coeff",
     "specific_storage_potential",
     "boundary_interface_flux",
+    "compute_3d_flow_budget",
     "named_boundary_interface_fluxes",
 ]

@@ -511,7 +511,7 @@ def solve_fast_confined_kcycle_3d(
         raise ValueError("bc_mask must be a finite binary mask.")
     if np.any((np.asarray(bc_mask) != 0) & (np.asarray(active) == 0)):
         raise ValueError("bc_mask may only select active cells.")
-    rhs_effective, storage, _, dt_used = _prepare_7point_transient_terms(
+    rhs_effective, storage, h_prev_used, dt_used = _prepare_7point_transient_terms(
         rhs=np.asarray(rhs, dtype=np.float64),
         storage_diag=storage_diag,
         active=np.asarray(active, dtype=np.int32),
@@ -633,6 +633,18 @@ def solve_fast_confined_kcycle_3d(
         n_isolated=n_isolated,
         return_info=True,
     )
+    # Physical water budget of the solved discrete system (host, one pass).
+    from DARCY_WARP_PACKAGE.physics.budget_3d import compute_3d_flow_budget
+
+    info["budget"] = compute_3d_flow_budget(
+        head=head,
+        source=np.asarray(rhs, dtype=np.float64),
+        faces=(tx_p, tx_m, ty_p, ty_m, tz_p, tz_m),
+        active=active_work,
+        bc_mask=bc_f,
+        storage_diag=storage if bool(transient) else None,
+        head_prev=h_prev_used if bool(transient) else None,
+    )
     return (head, info) if return_info else head
 
 
@@ -706,6 +718,7 @@ def solve_fast_unconfined_kcycle_3d(
     unconfined_inner_middle_dh: float = 1.0,
     max_head_change_per_outer_iteration: float = 10.0,
     dry_cell_flag_threshold: float = 0.1,
+    final_head_residual_tol: float | None = None,
     device: str = "cuda:0",
     return_info: bool = True,
     **unsupported: Any,
@@ -920,6 +933,8 @@ def solve_fast_unconfined_kcycle_3d(
         head_prev=head_prev,
         unconfined_storage_mode=unconfined_storage_mode,
         dry_cell_flag_threshold=dry_cell_flag_threshold,
+        final_head_residual_tol=final_head_residual_tol,
+        legacy_storage_coeff=storage_coeff,
         return_info=return_info,
     )
 

@@ -1237,6 +1237,19 @@ def _solve_chebyshev_7point_3d_linear(
     hrTr_end = float(rTr_buf.numpy()[0])
     h_rms_end = float(np.sqrt(max(hrTr_end, 0.0) / float(n_free)))
 
+    # Physical water budget of the solved discrete system (host, one pass).
+    from DARCY_WARP_PACKAGE.physics.budget_3d import compute_3d_flow_budget
+
+    budget_lin = compute_3d_flow_budget(
+        head=head_out,
+        source=np.asarray(b, dtype=np.float64),
+        faces=(txp, txm, typ, tym, tzp, tzm),
+        active=act,
+        bc_mask=bcm,
+        storage_diag=sdiag if bool(transient) else None,
+        head_prev=h_prev_used if bool(transient) else None,
+    )
+
     info = {
         "solver_type": "chebyshev_7point_3d",
         "n_iter_used": int(n_iter_used),
@@ -1260,6 +1273,7 @@ def _solve_chebyshev_7point_3d_linear(
         "converged": bool(converged),
         "diag_preconditioner_backend": diag_mode,
         "n_isolated_cells_excluded": n_isolated,
+        "budget": budget_lin,
     }
 
     return (head_out, info) if return_info else head_out
@@ -1326,6 +1340,8 @@ def _picard_unconfined_7point_3d(
     linear_solver_type_label="kcycle_7point_3d",
     solver_type_label="kcycle_7point_3d_unconfined_picard",
     dry_cell_flag_threshold=0.1,
+    final_head_residual_tol=None,
+    legacy_storage_coeff=None,
     return_info=True,
 ):
     """
@@ -1560,6 +1576,64 @@ def _picard_unconfined_7point_3d(
     if secant_active:
         pot_old = _storage_potential(h_prev_storage)
 
+    def _current_storage_terms(h_ref: np.ndarray):
+        """Storage diagonal + backward-Euler RHS for the iterate ``h_ref``.
+
+        The previous-timestep state (``h_prev_storage`` / ``pot_old``) is
+        fixed for the whole nonlinear loop; only the current state moves.
+        """
+        if secant_active:
+            # Volume-conservative secant linearisation of the storage
+            # potential: the diagonal carries the secant slope between the
+            # FIXED previous-timestep head and ``h_ref``, so the converged
+            # inner solution satisfies exactly
+            #   storage = area * (S(h_new) - S(h_old)) / dt.
+            pot_new = _storage_potential(h_ref)
+            dh = np.asarray(h_ref, dtype=np.float64) - h_prev_storage.astype(np.float64, copy=False)
+            moving = np.abs(dh) > 1.0e-12
+            s_sec = _storage_tangent(h_ref)
+            s_sec = np.where(
+                moving,
+                (pot_new - pot_old) / np.where(moving, dh, 1.0),
+                s_sec,
+            )
+            s_sec = np.maximum(s_sec, 0.0)
+            storage_diag_iter = (s_sec * (area_f / float(dt))).astype(NP_FLOAT, copy=False)
+        else:
+            # Legacy phreatic_sy mode: Sy*area/dt on the per-column
+            # water-table cell plus Ss*sat*area/dt on saturated cells.
+            phys_sat = np.maximum(np.asarray(h_ref, dtype=np.float64) - zbot64, 0.0)
+            phys_sat = np.minimum(phys_sat, np.maximum(ztop64 - zbot64, 0.0))
+            saturated = active_mask & (phys_sat > 0.0)
+            # Water-table cell per (j,i) column: the topmost (smallest layer
+            # index) active cell with positive saturation. Layers are ordered
+            # top->bottom, so this is the cell containing the phreatic surface.
+            has_sat_col = saturated.any(axis=0)
+            wt_layer = saturated.argmax(axis=0)
+            lay_idx = np.arange(shape[0])[:, None, None]
+            is_wt = has_sat_col[None, :, :] & (lay_idx == wt_layer[None, :, :])
+
+            dt_f = float(dt)
+            ss_term = (
+                ss_field * phys_sat * area_f / dt_f
+                if ss_field is not None
+                else np.zeros(shape, dtype=np.float64)
+            )
+            sy_term = np.where(
+                is_wt,
+                sy_field * area_f / dt_f,
+                0.0,
+            )
+            storage_diag_iter = (ss_term + sy_term).astype(NP_FLOAT, copy=False)
+        storage_diag_iter[~free_mask] = NP_FLOAT(0.0)
+        # Backward-Euler RHS contribution from the previous time step.
+        rhs_eff_iter = (
+            b.astype(np.float64, copy=False)
+            + storage_diag_iter.astype(np.float64, copy=False) * h_prev_storage
+        ).astype(NP_FLOAT, copy=False)
+        return storage_diag_iter, rhs_eff_iter
+
+
     if initial_head is None:
         h_iter = (zbot64 + float(min_sat)).astype(NP_FLOAT, copy=False)
     else:
@@ -1676,68 +1750,8 @@ def _picard_unconfined_7point_3d(
         txp_i, txm_i, typ_i, tym_i, tzp_i, tzm_i = _conductances_from_sat(sat_use)
 
         iter_storage_kwargs: dict = {}
-        if secant_active:
-            # Volume-conservative secant linearisation of the storage
-            # potential: the diagonal carries the secant slope between the
-            # FIXED previous-timestep head and the current Picard iterate, so
-            # the converged inner solution satisfies exactly
-            #   storage = area * (S(h_new) - S(h_old)) / dt.
-            pot_new = _storage_potential(h_iter)
-            dh = h_iter.astype(np.float64, copy=False) - h_prev_storage.astype(np.float64, copy=False)
-            moving = np.abs(dh) > 1.0e-12
-            s_sec = _storage_tangent(h_iter)
-            s_sec = np.where(
-                moving,
-                (pot_new - pot_old) / np.where(moving, dh, 1.0),
-                s_sec,
-            )
-            s_sec = np.maximum(s_sec, 0.0)
-            storage_diag_iter = (s_sec * (area_f / float(dt))).astype(NP_FLOAT, copy=False)
-            storage_diag_iter[~free_mask] = NP_FLOAT(0.0)
-            # Backward-Euler RHS contribution from the previous time step.
-            rhs_eff_iter = (
-                b.astype(np.float64, copy=False)
-                + storage_diag_iter.astype(np.float64, copy=False) * h_prev_storage
-            ).astype(NP_FLOAT, copy=False)
-            iter_storage_kwargs = {
-                "storage_diag_iter": storage_diag_iter,
-                "rhs_eff_iter": rhs_eff_iter,
-            }
-        elif phreatic_active:
-            # Physical saturated thickness from the current iterate (0 if dry,
-            # capped at the cell thickness). This couples the storage capacity
-            # to the Picard saturated-thickness update.
-            phys_sat = np.maximum(h_iter.astype(np.float64, copy=False) - zbot64, 0.0)
-            if ztop64 is not None:
-                phys_sat = np.minimum(phys_sat, np.maximum(ztop64 - zbot64, 0.0))
-            saturated = active_mask & (phys_sat > 0.0)
-            # Water-table cell per (j,i) column: the topmost (smallest layer
-            # index) active cell with positive saturation. Layers are ordered
-            # top->bottom, so this is the cell containing the phreatic surface.
-            has_sat_col = saturated.any(axis=0)
-            wt_layer = saturated.argmax(axis=0)
-            lay_idx = np.arange(shape[0])[:, None, None]
-            is_wt = has_sat_col[None, :, :] & (lay_idx == wt_layer[None, :, :])
-
-            area_f = float(dx) * (float(dx) if dy is None else float(dy))
-            dt_f = float(dt)
-            ss_term = (
-                ss_field * phys_sat * area_f / dt_f
-                if ss_field is not None
-                else np.zeros(shape, dtype=np.float64)
-            )
-            sy_term = np.where(
-                is_wt,
-                sy_field * area_f / dt_f,
-                0.0,
-            )
-            storage_diag_iter = (ss_term + sy_term).astype(NP_FLOAT, copy=False)
-            storage_diag_iter[~free_mask] = NP_FLOAT(0.0)
-            # Backward-Euler RHS contribution from the previous time step.
-            rhs_eff_iter = (
-                b.astype(np.float64, copy=False)
-                + storage_diag_iter.astype(np.float64, copy=False) * h_prev_storage
-            ).astype(NP_FLOAT, copy=False)
+        if secant_active or phreatic_active:
+            storage_diag_iter, rhs_eff_iter = _current_storage_terms(h_iter)
             iter_storage_kwargs = {
                 "storage_diag_iter": storage_diag_iter,
                 "rhs_eff_iter": rhs_eff_iter,
@@ -1970,6 +1984,66 @@ def _picard_unconfined_7point_3d(
             converged_nonlinear = True
             break
 
+    # --- Final physical acceptance ----------------------------------------
+    # Recompute the actual physical operator from the FINAL accepted head
+    # state and evaluate the true discrete balance residual and water budget.
+    # Convergence is never declared from small head updates alone: the
+    # head-equivalent residual of the final operator must also meet the gate.
+    from DARCY_WARP_PACKAGE.physics.budget_3d import compute_3d_flow_budget
+
+    sat_final = h_iter.astype(np.float64, copy=False) - zbot64
+    sat_final = np.maximum(sat_final, float(min_sat))
+    sat_final = np.minimum(sat_final, np.maximum(ztop64 - zbot64, float(min_sat)))
+    faces_final = _conductances_from_sat(sat_final)
+    if secant_active or phreatic_active:
+        s_final, _rhs_final = _current_storage_terms(h_iter)
+        hp_final = h_prev_storage
+    elif bool(transient) and legacy_storage_coeff is not None:
+        # Legacy confined-volume mode: constant storativity over full cells.
+        sc = np.asarray(legacy_storage_coeff, dtype=np.float64)
+        if sc.shape == ():
+            sc = np.full(shape, float(sc.reshape(()).item()), dtype=np.float64)
+        s_final = np.zeros(shape, dtype=np.float64)
+        s_final[free_mask] = (
+            sc[free_mask] * (area_f * dz_f) / float(dt)
+        )
+        hp_final = np.asarray(head_prev, dtype=np.float64)
+    else:
+        s_final = None
+        hp_final = None
+    budget = compute_3d_flow_budget(
+        head=h_iter,
+        source=b,
+        faces=faces_final,
+        active=act,
+        bc_mask=bcm,
+        storage_diag=s_final,
+        head_prev=hp_final,
+        return_field=True,
+    )
+    diag_final = np.asarray(budget.pop("operator_diagonal"), dtype=np.float64)
+    residual_field = np.asarray(budget.pop("cell_residual_field"), dtype=np.float64)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        head_residual_field = np.where(
+            diag_final > 1.0e-30,
+            residual_field / np.where(diag_final > 1.0e-30, diag_final, 1.0),
+            np.where(np.abs(residual_field) < 1.0e-12, 0.0, np.inf),
+        )
+    if n_free > 0:
+        final_head_residual_rms = float(
+            np.sqrt(np.mean(head_residual_field[free_mask] ** 2))
+        )
+    else:
+        final_head_residual_rms = 0.0
+    final_res_tol_f = (
+        float(hclose_f)
+        if final_head_residual_tol is None
+        else float(final_head_residual_tol)
+    )
+    final_physical_acceptance = bool(final_head_residual_rms <= final_res_tol_f)
+    if converged_nonlinear and not final_physical_acceptance:
+        converged_nonlinear = False
+
     effectively_dry = active_mask & (
         h_iter.astype(np.float64, copy=False) <= zbot64 + float(dry_cell_flag_threshold)
     )
@@ -2025,7 +2099,13 @@ def _picard_unconfined_7point_3d(
             "inner_forcing_eta": float(inner_forcing_eta_f),
             "inner_head_residual_tol_min": float(inner_head_residual_tol_min_f),
             "inner_head_residual_tol_max": float(inner_head_residual_tol_max_f),
-            "nonlinear_convergence_basis": "head_change_and_inner_usable_for_picard",
+            "nonlinear_convergence_basis": "head_change_and_inner_usable_and_final_residual",
+            "final_physical_acceptance": final_physical_acceptance,
+            "final_head_residual_rms": final_head_residual_rms,
+            "final_head_residual_tol": final_res_tol_f,
+            "final_physical_residual_rms": float(budget["cell_residual_rms"]),
+            "final_physical_residual_max": float(budget["cell_residual_max"]),
+            "budget": budget,
             "residual_floor_tol": None if residual_floor_tol_f is None else float(residual_floor_tol_f),
             "inner_residual_converged": bool(inner_residual_converged),
             "inner_head_change_converged": bool(inner_head_change_converged),
@@ -2119,6 +2199,7 @@ def solve_chebyshev_7point_3d(
     unconfined_startup_mode: str = "initial_head",
     max_head_change_per_outer_iteration: float = 10.0,
     dry_cell_flag_threshold: float = 0.1,
+    final_head_residual_tol: float | None = None,
     diag_preconditioner_backend: str = "auto",
     device: str = "cuda:0",
     return_info: bool = True,
@@ -2349,6 +2430,8 @@ def solve_chebyshev_7point_3d(
             head_prev=head_prev,
             unconfined_storage_mode=unconfined_storage_mode,
             dry_cell_flag_threshold=dry_cell_flag_threshold,
+            final_head_residual_tol=final_head_residual_tol,
+            legacy_storage_coeff=storage_coeff,
             return_info=return_info,
         )
 
@@ -2466,6 +2549,7 @@ def solve_multigrid_kcycle_7point_3d(
     unconfined_startup_mode: str = "initial_head",
     max_head_change_per_outer_iteration: float = 10.0,
     dry_cell_flag_threshold: float = 0.1,
+    final_head_residual_tol: float | None = None,
     diag_preconditioner_backend: str = "auto",
     device: str = "cuda:0",
     return_info: bool = True,
@@ -2705,6 +2789,8 @@ def solve_multigrid_kcycle_7point_3d(
             head_prev=head_prev,
             unconfined_storage_mode=unconfined_storage_mode,
             dry_cell_flag_threshold=dry_cell_flag_threshold,
+            final_head_residual_tol=final_head_residual_tol,
+            legacy_storage_coeff=storage_coeff,
             return_info=return_info,
         )
 
@@ -3413,6 +3499,19 @@ def solve_multigrid_kcycle_7point_3d(
     hrTr_end = float(lvl0["rTr_buf"].numpy()[0])
     h_rms_end = float(np.sqrt(max(hrTr_end, 0.0) / float(n_free0)))
 
+    # Physical water budget of the solved discrete system (host, one pass).
+    from DARCY_WARP_PACKAGE.physics.budget_3d import compute_3d_flow_budget
+
+    budget0 = compute_3d_flow_budget(
+        head=head_out,
+        source=np.asarray(b0, dtype=np.float64),
+        faces=(txp0, txm0, typ0, tym0, tzp0, tzm0),
+        active=act0,
+        bc_mask=bcm0,
+        storage_diag=sdiag0 if bool(transient) else None,
+        head_prev=h_prev_used if bool(transient) else None,
+    )
+
     info = {
         "solver_type": "kcycle_7point_3d",
         "n_levels": int(len(levels)),
@@ -3459,6 +3558,7 @@ def solve_multigrid_kcycle_7point_3d(
         "vertical_line_max_nz": int(vertical_line_max_nz),
         "diag_preconditioner_backend": diag_mode,
         "n_isolated_cells_excluded": n_isolated0,
+        "budget": budget0,
     }
 
     # Release the multigrid device arrays so the unconfined Picard loop (which
