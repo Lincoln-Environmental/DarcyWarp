@@ -378,29 +378,63 @@ Canonical backends live in `solvers/registry.py` + `solver_capabilities.py`:
 
 ---
 
-## 4. The 3D solver (`solvers_3d.py` + `kernels_3d.py`)
+## 4. The 3D solver (`solvers_3d.py` + `kernels_3d.py` + `solvers/fast_3d.py`)
 
 ### Entry points
 
-- `WarpDarcySolver3D` in `warped_darcy_3d.py` (~l. 24)
-- `solve_multigrid_kcycle_7point_3d` (~l. 1763)
-- `solve_chebyshev_7point_3d` (~l. 1444)
-- `_picard_unconfined_7point_3d` (~l. 752) — shared Picard driver
+- `WarpDarcySolver3D` in `warped_darcy_3d.py` (~l. 24) — owns a persistent
+  `solvers/session_3d.py::ThreeDOperatorSession` (single owner of operator
+  state, in-place updates, fast-workspace holder).
+- `solvers/fast_3d.py::solve_fast_confined_kcycle_3d` — fast confined backend
+  (`implementation="fast"`): FP64 face arrays, block-partial reductions,
+  CUDA-graph-captured K-cycle, session-cached workspace.
+- `solvers/fast_3d.py::solve_fast_unconfined_kcycle_3d` — fast unconfined
+  backend (2026-10-12): shared Picard driver with inner solves on the
+  persistent workspace refreshed in place per outer iteration (graphs stay
+  valid).
+- `solve_multigrid_kcycle_7point_3d` / `solve_chebyshev_7point_3d` — classic
+  backends; `_picard_unconfined_7point_3d` — shared Picard driver.
+
+### Physics (corrected 2026-10-12, see docs/3D_PHYSICS_CORRECTION_2026-10-12.md)
+
+- Confined faces: harmonic-mean K × face area / distance (m²/day); rhs is
+  volumetric per cell [m³/day].
+- Unconfined faces: `build_7point_face_conductance_unconfined_from_sat` —
+  horizontal `C = harmonic(K*sat) * dy/dx` (saturation enters once), vertical
+  full-thickness harmonic resistance (saturation-independent, NWT-style).
+- Transient unconfined storage: default `unconfined_storage_mode="secant_sy"`
+  — volume-conservative per-cell potential `W(h) = Sy*b_sat + Ss*(b_sat²/2 +
+  dz*excess)`, secant slope vs the fixed previous-timestep head; legacy
+  `phreatic_sy` / `confined_volume` kept as explicit options.  Transient
+  calls without valid storage inputs raise.
+- Coarse operators: `_coarsen_faces_consistent_axes` — reciprocal by
+  construction, Galerkin-scaled (block-sum/(fy*fx)) to the block-average
+  restriction, Dirichlet couplings as diagonal springs, free cells never
+  coarsen into fixed cells; storage coarsens with the same scaling.
+- Singular cells: `_resolve_isolated_free_cells` — source into a
+  disconnected cell raises; source-free singular cells are excluded and
+  reported (`n_isolated_cells_excluded`), never identity-pinned.
+- Every solve reports `info["budget"]` (cellwise + domain water balance via
+  `physics/budget_3d.compute_3d_flow_budget`); unconfined convergence
+  additionally requires the final head-equivalent residual at the rebuilt
+  final operator (`final_head_residual_tol`, default hclose).
+- Geometry: flat contiguous uniform-thickness layers only
+  (`_validate_flat_layer_geometry`); dipping/offset geometry raises.
 
 ### Key differences from 2D
 
 - 7-point stencil from six face-conductance arrays.
 - Horizontal-only semi-coarsening (`1×2×2`) to preserve layers.
-- Vertical-line relaxation: Thomas tridiagonal solve per column (launch `dim=(ny*nx,)`); `nz <= 64` default.
+- Vertical-line relaxation: Thomas tridiagonal solve per column (launch `dim=(ny*nx,)`); `nz <= 64` default (classic backend only; fast rejects line controls).
 - `WarpDarcySolver3D` is intentionally thin; algorithms are in standalone functions.
 
 ### Transient 3D
 
 - Confined: volume storage `storage_coeff * dx*dy*dz / dt`.
-- Unconfined: two modes
-  - `phreatic_sy`: physical — `Sy*dx*dy/dt` on water-table cell only + `Ss*sat*dx*dy/dt` on saturated cells.
-  - `confined_volume`: legacy fallback.
-- Status: scaffolding exists; full benchmark grids **not run** per `TRANSIENT_STATUS.md`.
+- Unconfined: `secant_sy` (production default, volume-conservative),
+  `phreatic_sy` and `confined_volume` (legacy).
+- Validation: `tests/test_3d_physics_validation.py` — analytical, structural,
+  and MODFLOW 6 (NPF/STO) comparisons on both backends.
 
 ---
 
@@ -594,9 +628,13 @@ Usually means `sat = h - bottom` (saturated thickness of the aquifer), not soil 
 
 ### 3D transient unconfined
 
-- Phreatic-Sy path exists but full validation/benchmarks not run.
-- Storage rebuild happens on host per Picard iteration (no device fast path).
-- Wetting/drying limited to `min_sat` floor.
+- Secant-Sy volume-conservative storage is the production default (both
+  backends); legacy modes remain for comparison.  On stiff heterogeneous
+  cases the legacy outer Chebyshev acceleration can oscillate in the
+  convergence tail — reported honestly as `converged=False`; consider
+  `chebyshev_enabled=False` and fixed moderate relaxation there.
+- Drying uses the `min_sat` conductance floor (no full deactivation);
+  over-abstraction beyond stored water is reported via the budget, not masked.
 
 ### General
 
@@ -632,6 +670,7 @@ Usually means `sat = h - bottom` (saturated thickness of the aquifer), not soil 
 | `test_2d_transient_warm_start.py` | flopy | replay defaults, production acceptance, mass-balance classes |
 | `test_2d_unconfined.py` | warp | host/device parity, dry cells, MF6 truth fixtures |
 | `test_3d_solver.py` | warp | 3D transient unconfined smoke, vertical-line reference, scipy reference |
+| `test_3d_physics_validation.py` | warp + flopy/MF6 | independent 3D physics validation: analytical flow/storage/sign cases, isolated cells, coarse-operator structure, MF6 NPF/STO comparisons on classic AND fast backends |
 | `test_adaptive_inner_controller.py` | — | pure-Python adaptive block controller |
 | `test_solver_registry_2d.py` | — | backend registry, aliases, capability flags |
 | `test_nonlinear_operator_2d.py` | warp | Stage-1 nonlinear operator vs host reference, Jv, exact storage |
