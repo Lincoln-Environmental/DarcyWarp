@@ -495,88 +495,78 @@ its comparison with the channel-only numerical benchmark above.
 
 ## Grid resolution, conservative input aggregation, groundwater parameter upscaling and head-field transfer to finer models
 
-**Status (11 October 2026):** validated on the Purau steady channel-only case
-at 20 m, 25 m and 50 m against the 5 m reference. All coarsening lives in
-SHANZ scripts (`scripts/coarsen_purau_groundwater.py`,
+**Status (11 October 2026, corrected after the physics audit):** validated on
+the ACCEPTED Purau soil-profile-seepage steady model (channel-bed conductance
+x1, soil-profile seepage DRNs on all non-channel cells, coastal subfaces) at
+10 m, 20 m and 25 m against the verified 5 m reference. All coarsening lives
+in SHANZ scripts (`scripts/coarsen_purau_groundwater.py`,
 `scripts/benchmark_coarse_darcy_steady.py`,
 `scripts/map_coarse_head_to_richards_ic.py`); no solver code changes — the
-solver only requires square cells and aligned `(ny, nx)` fields, so a
-coarsened field archive with a coarser `dx` is a valid model.
+solver only requires square cells and aligned `(ny, nx)` fields.
 
 ### Upscaling rules (never plain averaging of everything)
 
-- **Active mask:** any-coverage — a coarse cell is active iff it contains at
-  least one fine active cell (preserves extent; active-area inflation at
-  fringes is recorded: 1.0%/1.4%/3.2% at 20/25/50 m, and recharge is
+- **Active mask:** any-coverage (fringe area inflation recorded; recharge is
   volume-corrected below).
-- **DEM:** active-weighted mean per block (preserves mean terrain, not
-  extrema).
-- **Reference transmissivity:** active-weighted arithmetic mean per block —
-  the correct rule for horizontal flow through parallel fine columns (exact
-  for the spatially uniform Purau reference T).
-- **Regional bottom:** active-weighted mean (uniform −50 m); validated below
-  every coarse DEM cell.
-- **Recharge:** per-block volume-preserving rate,
-  `R_c = R_fine · n_fine · A_fine / A_coarse`, so every block's integrated
-  recharge volume is exactly the fine volume (recharge is a per-area rate;
-  a uniform rate over an any-coverage mask would inflate volume by the
-  fringe area ratio).
-- **DRN:** any-coverage drain mask; conductance is the **sum** of the fine
-  per-cell conductances in the block (parallel bed conductances add),
-  preserving total drain conductance exactly and total channel length to
-  block-path accuracy; drain elevation is the conductance-weighted mean bed.
-- **Coastal boundary:** the fine `CoastalSubfaces2D` records are aggregated
-  by coarse owner cell (`owner//f`): submerged conductance is summed
-  exactly; exposed conductance is summed exactly and re-banded over the
-  coarse owner's exposed height with the same band rule. A face-mask
-  reduction cannot represent a coastline shorter than a coarse fringe row
-  (the 445 m Purau coast loses all but 7 of 89 faces at 20 m that way);
-  owner remapping preserves the total conductance exactly at every
-  resolution.
+- **DEM:** active-weighted mean per block (mean terrain, not extrema).
+- **Reference transmissivity:** active-weighted arithmetic mean per block
+  (parallel horizontal flow; exact for the uniform Purau reference T).
+- **Regional bottom:** active-weighted mean; validated below every coarse
+  DEM cell.
+- **Recharge:** per-block volume-preserving rate
+  `R_c = R_fine * n_fine * A_fine / A_coarse` (integrated block volume exact).
+- **Multi-threshold DRN:** every fine drain cell contributes an exposed
+  subface record (owner remapped, verbatim elevation, verbatim conductance),
+  so `Q_J(H) = sum_i C_i * max(H - z_i, 0)` exactly, with the native
+  semismooth derivative evaluated in-kernel by the existing exposed-subface
+  machinery — no host active-set, no solver changes, fast K-cycle retained.
+  Channel-bed and soil-seepage contacts are preserved as separate physical
+  categories. A single (elevation, summed conductance) drain per coarse cell
+  is NOT equivalent (`(sum C_i) max(H - z_mean, 0) != Q_J(H)`) and is kept
+  only as a documented fallback.
+- **Coastal:** fine `CoastalSubfaces2D` records preserved verbatim with
+  owner remapping (head, conductance, submerged/exposed class): the
+  head-dependent total flux `Q_J(H) = sum_k Q_k(H)` is exact. No re-banding,
+  no threshold shift, no classification change.
 
-### Measured accuracy and performance (Purau, recharge 300 mm/yr, connected-channel DRN, conductance ×100, confined pre-solve startup, fast K-cycle, FP64)
+### Measured accuracy and performance (accepted reference, recharge 300 mm/yr, fast K-cycle, FP64, RTX 4070 Ti SUPER)
 
-| Resolution | Cells | Cold solve | Warm (head restart) | Newton | Head vs 5 m (bias, p50, p99, max) | DRN block rel-L2 | DRN:coastal partition |
+| Resolution | Cells | Cold solve | Newton | Head vs 5 m (bias, p50, p99, max) | DRN block rel-L2 | Outlet categories (m3/day) | Verified |
 |---|---|---|---|---|---|---|---|
-| 5 m (reference, re-solved) | 660,178 | 80.2 s | 0.32 s | 19/0 | 0 | 0 | 0.912 |
-| 20 m | 41,661 | 6.4 s (12.5×) | 0.05 s | 19/0 | −0.005, 0.089, 0.34, 1.13 m | 0.050 | 0.908 |
-| 25 m | 26,781 | 5.9 s (13.7×) | 0.05 s | 19/0 | −0.087, 0.148, 0.53, 2.03 m | 0.059 | 0.906 |
-| 50 m | 6,810 | 2.7 s (30×) | 0.04 s | 26/0 | −0.305, 0.300, 1.20, 2.41 m | 0.083 | 0.905 |
+| 5 m reference | 660,178 | 99.8 s | 16 | 0 | 0 | channel 8145 / seepage 4530 / coastal 881 | yes |
+| 10 m | 165,576 | 15.9 s (6.3x) | 15 | -0.051, 0.039, 0.162, 0.707 m | 0.0009 | 8139 / 4523 / 894 | yes |
+| 20 m | 41,661 | 5.2 s (19x) | 14 | -0.148, 0.118, 0.453, 1.282 m | 0.0041 | 8089 / 4564 / 903 | yes |
+| 25 m | 26,781 | 4.9 s (20x) | 15 | -0.258, 0.242, 0.688, 1.960 m | 0.0061 | 8061 / 4574 / 921 | yes |
 
-All resolutions: converged, no Picard fallback, executed fast K-cycle,
-independent budget residual ≤ 3e-8 m³/day against a 1e-6 allowance, and the
-same documented physical-gate caveat as the 5 m reference (non-drain heads
-above DEM; the count falls with coarsening as extrema average out). A warm
-head restart converges in zero Newton iterations at every resolution. The
-head-mapping and checkpoint-write costs are ≤ 0.1 s and ≤ 0.5 s
-respectively, i.e. negligible against solve time.
+All resolutions: semismooth-Newton converged, no Picard fallback, executed
+fast K-cycle, independent budget residual <= 1.5e-6 m3/day against the 1e-6
+allowance + relative gate, zero non-drain heads above DEM and zero
+below-basement heads (the accepted physical gates), warm head restart
+converging in zero Newton iterations. Relative L2 uses the conventional
+denominator `||Q_c - Q_f|| / ||Q_f||` on block-aggregated fine discharge;
+per-category contact counts and outflows are reported in the benchmark
+report, not concealed by aggregate closure.
 
 ### Head-field transfer to finer models
 
-`scripts/map_coarse_head_to_richards_ic.py`: inactive coarse cells are
-nearest-active filled (any-coverage guarantees every fine active cell lies
-in an active coarse cell), the coarse head is bilinearly sampled at fine
-cell centres, and the mapped head is independently gated on the fine grid
-(non-drain heads above DEM counted exactly as for the fine reference, none
-below the regional bottom, Richards-domain water-table fraction reported)
-before building the Richards initial pressure with the production soil
-profile. The constitutive storage inventory is computed independently and
-reported against the fine-reference inventory; the difference is physical
-state, never a mass correction. At 20 m the mapped Richards IC differs from
-the fine-reference IC by a −4.8 mm bias and 0.34 m p99 on head.
+`scripts/map_coarse_head_to_richards_ic.py`: nearest-active fill + bilinear
+sampling at fine cell centres, independent fine-grid physical gates, then the
+production soil-profile pressure initialisation with an independently
+computed constitutive inventory. Storage differences are physical state,
+never mass corrections.
 
 ### Guidance and limits
 
-- Use 20 m for steady initial-condition generation when ≤0.35 m p99 head
-  error and ~5% DRN partition error are acceptable; treat 50 m as a
-  screening option (bias −0.30 m).
-- Keep the same `max_levels` cap across resolutions; inspect
-  `effective_configuration.actual_level_shapes` — coarse grids bottom out
-  earlier by `min_coarse_cells`, which is intended.
-- Multigrid/CUDA-graph caches are model-instance local: cross-resolution
-  reuse is impossible; only head warm starts transfer (and they are
-  essentially free convergence, see the warm column).
-- Do not compare coarse-run wall time against the 5 m reference as an
-  equivalent-physics speedup: the coarse model solves an upscaled
-  equation set. The accuracy rows above are the equivalence statement;
-  budget closure alone is not.
+- Use 10-20 m for steady initial-condition generation when <=0.5 m p99 head
+  error and <=0.5% DRN partition error are acceptable; 25 m remains a
+  screening option (bias -0.26 m).
+- Keep the same `max_levels` cap; inspect `actual_level_shapes` (coarse grids
+  bottom out earlier by `min_coarse_cells`, intended).
+- Multigrid/CUDA-graph caches are model-instance local; only head warm
+  starts transfer across resolutions.
+- Coarse-run wall time is not an equivalent-physics speedup claim: the
+  accuracy rows above are the equivalence statement; budget closure alone
+  is not.
+- Earlier numbers in this document's history used the older channel-only
+  conductance-x100 configuration; they are a different physical model and
+  are not comparable row-for-row.
