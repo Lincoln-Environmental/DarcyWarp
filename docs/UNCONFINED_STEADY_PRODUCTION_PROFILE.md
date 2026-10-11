@@ -492,3 +492,91 @@ Outputs and exact reproduction are preserved in sibling SHANZ
 `results/darcy_hot_start/soil_profile_seepage_300_20261011/recharge_300_conductance_1`.
 This changes outlet physics; do not claim an equivalent-physics speedup from
 its comparison with the channel-only numerical benchmark above.
+
+## Grid resolution, conservative input aggregation, groundwater parameter upscaling and head-field transfer to finer models
+
+**Status (11 October 2026):** validated on the Purau steady channel-only case
+at 20 m, 25 m and 50 m against the 5 m reference. All coarsening lives in
+SHANZ scripts (`scripts/coarsen_purau_groundwater.py`,
+`scripts/benchmark_coarse_darcy_steady.py`,
+`scripts/map_coarse_head_to_richards_ic.py`); no solver code changes — the
+solver only requires square cells and aligned `(ny, nx)` fields, so a
+coarsened field archive with a coarser `dx` is a valid model.
+
+### Upscaling rules (never plain averaging of everything)
+
+- **Active mask:** any-coverage — a coarse cell is active iff it contains at
+  least one fine active cell (preserves extent; active-area inflation at
+  fringes is recorded: 1.0%/1.4%/3.2% at 20/25/50 m, and recharge is
+  volume-corrected below).
+- **DEM:** active-weighted mean per block (preserves mean terrain, not
+  extrema).
+- **Reference transmissivity:** active-weighted arithmetic mean per block —
+  the correct rule for horizontal flow through parallel fine columns (exact
+  for the spatially uniform Purau reference T).
+- **Regional bottom:** active-weighted mean (uniform −50 m); validated below
+  every coarse DEM cell.
+- **Recharge:** per-block volume-preserving rate,
+  `R_c = R_fine · n_fine · A_fine / A_coarse`, so every block's integrated
+  recharge volume is exactly the fine volume (recharge is a per-area rate;
+  a uniform rate over an any-coverage mask would inflate volume by the
+  fringe area ratio).
+- **DRN:** any-coverage drain mask; conductance is the **sum** of the fine
+  per-cell conductances in the block (parallel bed conductances add),
+  preserving total drain conductance exactly and total channel length to
+  block-path accuracy; drain elevation is the conductance-weighted mean bed.
+- **Coastal boundary:** the fine `CoastalSubfaces2D` records are aggregated
+  by coarse owner cell (`owner//f`): submerged conductance is summed
+  exactly; exposed conductance is summed exactly and re-banded over the
+  coarse owner's exposed height with the same band rule. A face-mask
+  reduction cannot represent a coastline shorter than a coarse fringe row
+  (the 445 m Purau coast loses all but 7 of 89 faces at 20 m that way);
+  owner remapping preserves the total conductance exactly at every
+  resolution.
+
+### Measured accuracy and performance (Purau, recharge 300 mm/yr, connected-channel DRN, conductance ×100, confined pre-solve startup, fast K-cycle, FP64)
+
+| Resolution | Cells | Cold solve | Warm (head restart) | Newton | Head vs 5 m (bias, p50, p99, max) | DRN block rel-L2 | DRN:coastal partition |
+|---|---|---|---|---|---|---|---|
+| 5 m (reference, re-solved) | 660,178 | 80.2 s | 0.32 s | 19/0 | 0 | 0 | 0.912 |
+| 20 m | 41,661 | 6.4 s (12.5×) | 0.05 s | 19/0 | −0.005, 0.089, 0.34, 1.13 m | 0.050 | 0.908 |
+| 25 m | 26,781 | 5.9 s (13.7×) | 0.05 s | 19/0 | −0.087, 0.148, 0.53, 2.03 m | 0.059 | 0.906 |
+| 50 m | 6,810 | 2.7 s (30×) | 0.04 s | 26/0 | −0.305, 0.300, 1.20, 2.41 m | 0.083 | 0.905 |
+
+All resolutions: converged, no Picard fallback, executed fast K-cycle,
+independent budget residual ≤ 3e-8 m³/day against a 1e-6 allowance, and the
+same documented physical-gate caveat as the 5 m reference (non-drain heads
+above DEM; the count falls with coarsening as extrema average out). A warm
+head restart converges in zero Newton iterations at every resolution. The
+head-mapping and checkpoint-write costs are ≤ 0.1 s and ≤ 0.5 s
+respectively, i.e. negligible against solve time.
+
+### Head-field transfer to finer models
+
+`scripts/map_coarse_head_to_richards_ic.py`: inactive coarse cells are
+nearest-active filled (any-coverage guarantees every fine active cell lies
+in an active coarse cell), the coarse head is bilinearly sampled at fine
+cell centres, and the mapped head is independently gated on the fine grid
+(non-drain heads above DEM counted exactly as for the fine reference, none
+below the regional bottom, Richards-domain water-table fraction reported)
+before building the Richards initial pressure with the production soil
+profile. The constitutive storage inventory is computed independently and
+reported against the fine-reference inventory; the difference is physical
+state, never a mass correction. At 20 m the mapped Richards IC differs from
+the fine-reference IC by a −4.8 mm bias and 0.34 m p99 on head.
+
+### Guidance and limits
+
+- Use 20 m for steady initial-condition generation when ≤0.35 m p99 head
+  error and ~5% DRN partition error are acceptable; treat 50 m as a
+  screening option (bias −0.30 m).
+- Keep the same `max_levels` cap across resolutions; inspect
+  `effective_configuration.actual_level_shapes` — coarse grids bottom out
+  earlier by `min_coarse_cells`, which is intended.
+- Multigrid/CUDA-graph caches are model-instance local: cross-resolution
+  reuse is impossible; only head warm starts transfer (and they are
+  essentially free convergence, see the warm column).
+- Do not compare coarse-run wall time against the 5 m reference as an
+  equivalent-physics speedup: the coarse model solves an upscaled
+  equation set. The accuracy rows above are the equivalence statement;
+  budget closure alone is not.
