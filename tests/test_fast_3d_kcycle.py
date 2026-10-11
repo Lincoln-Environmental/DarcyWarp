@@ -167,7 +167,8 @@ def test_fast_3d_session_reuses_workspace_and_invalidates_faces():
         _, after_face_update = solver.solve(**controls)
     assert not first["workspace_reused"]
     assert second["workspace_reused"]
-    assert not after_face_update["workspace_reused"]
+    assert after_face_update["workspace_reused"]
+    assert not after_face_update["operator_refreshed_in_place"]
 
 
 def test_fast_hierarchy_depth_does_not_change_converged_solution():

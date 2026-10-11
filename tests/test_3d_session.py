@@ -7,10 +7,12 @@ from DARCY_WARP_PACKAGE.warped_darcy_3d import WarpDarcySolver3D
 def _session() -> ThreeDOperatorSession:
     shape = (2, 3, 4)
     faces = tuple(np.ones(shape, dtype=np.float64) for _ in range(6))
+    bc_mask = np.zeros(shape, dtype=np.int32)
+    bc_mask[:, :, 0] = 1
     return ThreeDOperatorSession(
         faces=faces,
         active=np.ones(shape, dtype=np.int32),
-        bc_mask=np.zeros(shape, dtype=np.int32),
+        bc_mask=bc_mask,
         bc_values=np.zeros(shape, dtype=np.float64),
         rhs=np.zeros(shape, dtype=np.float64),
         initial_head=np.zeros(shape, dtype=np.float64),
@@ -39,7 +41,9 @@ def test_session_updates_are_in_place_and_versioned():
     assert session.revision == 3
     assert id(session.bc_values) == original_identity
     assert np.all(session.bc_values == 4.0)
-    assert not session._fast_workspace_holder
+    assert "sentinel" in session._fast_workspace_holder
+    assert session.operator_revision == 2
+    assert session.topology_revision == 0
 
 
 def test_session_rejects_inconsistent_updates_and_closes():

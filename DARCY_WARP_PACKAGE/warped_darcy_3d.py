@@ -30,7 +30,9 @@ class WarpDarcySolver3D:
     harmonic-mean face conductances.  It is a thin wrapper around the
     functions in :mod:`DARCY_WARP_PACKAGE.solvers_3d`. ``implementation``
     defaults to ``"classic"``; ``"fast"`` is an explicit FP64 face-array
-    K-cycle for steady and backward-Euler confined flow.
+    K-cycle for steady and backward-Euler confined or quasi-3D unconfined flow.
+    Layer geometry is flat, contiguous and uniformly dz thick. This API does
+    not represent terrain-following or unsaturated-flow geometry/physics.
     """
 
     def __init__(
@@ -162,7 +164,13 @@ class WarpDarcySolver3D:
         initial_head: np.ndarray | None = None,
     ) -> "WarpDarcySolver3D":
         """
-        Build solver from pre-computed 7-point face conductances.
+        Build from reciprocal, nonnegative finite internal conductances.
+
+        Each internal face must agree in its two directional representations
+        within 32 input-dtype epsilons relative tolerance (no absolute floor).
+        Connections touching inactive cells must be zero. Exterior slots are
+        unused. Only flat, contiguous layers of scalar thickness dz are
+        supported; unconfined solves validate supplied or inferred elevations.
         """
         shape = self.shape
         for name, arr in (
@@ -181,7 +189,10 @@ class WarpDarcySolver3D:
             if a.shape != shape:
                 raise ValueError(f"{name} shape {a.shape} does not match {shape}")
 
-        input_faces = tuple(np.asarray(value, dtype=NP_FLOAT) for value in (tx_p, tx_m, ty_p, ty_m, tz_p, tz_m))
+        from DARCY_WARP_PACKAGE.physics.faces_3d import validate_reciprocal_faces
+        validated_faces = validate_reciprocal_faces(
+            faces=(tx_p, tx_m, ty_p, ty_m, tz_p, tz_m), active=active, canonicalize=True)
+        input_faces = tuple(np.asarray(value, dtype=NP_FLOAT) for value in validated_faces)
         input_active = np.asarray(active, dtype=np.int32)
         input_bc_mask = np.asarray(bc_mask, dtype=np.int32)
         input_bc_values = np.asarray(bc_values, dtype=NP_FLOAT)

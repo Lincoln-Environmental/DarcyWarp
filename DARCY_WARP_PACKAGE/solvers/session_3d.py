@@ -2,9 +2,8 @@
 """Reusable operator/session state for structured 3D solves.
 
 The session owns validated host-side operator data and stable update/version
-semantics.  The classic solver remains the numerical backend; this seam lets
-the fast backend reuse the same case/session contract without changing the
-public ``WarpDarcySolver3D`` API.
+semantics. Both backends share this case/session contract; the fast backend
+keeps GPU buffer and graph identities across operator-value changes.
 """
 
 from __future__ import annotations
@@ -12,6 +11,8 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
+
+from DARCY_WARP_PACKAGE.physics.faces_3d import validate_reciprocal_faces
 
 
 class ThreeDOperatorSession:
@@ -32,6 +33,8 @@ class ThreeDOperatorSession:
     ) -> None:
         self._closed = False
         self.revision = 0
+        self.operator_revision = 0
+        self.topology_revision = 0
         self.dx = float(dx)
         self.dy = float(dy)
         self.dz = float(dz)
@@ -46,6 +49,7 @@ class ThreeDOperatorSession:
         self.initial_head = None if initial_head is None else np.asarray(initial_head).copy()
         self._fast_workspace_holder: dict[str, Any] = {}
         self._validate()
+        self.faces = validate_reciprocal_faces(faces=self.faces, active=self.active, canonicalize=True)
 
     @property
     def shape(self) -> tuple[int, int, int]:
@@ -116,9 +120,7 @@ class ThreeDOperatorSession:
         if not np.all(np.isfinite(value)):
             raise ValueError("bc_values must contain finite values.")
         self.bc_values[...] = value
-        # The fast hierarchy owns a device copy of the boundary values, so a
-        # boundary-value change must rebuild that workspace before reuse.
-        self._fast_workspace_holder.clear()
+        self.operator_revision += 1
         self.revision += 1
 
     def update_face_conductance(
@@ -133,9 +135,15 @@ class ThreeDOperatorSession:
             raise ValueError("faces must contain finite values.")
         if any(np.any(value < 0.0) for value in values):
             raise ValueError("face conductances must be non-negative.")
+        values = validate_reciprocal_faces(faces=values, active=self.active, canonicalize=True)
+        topology_changed = any(not np.array_equal(old > 0.0, value > 0.0)
+                               for old, value in zip(self.faces, values))
         for old, value in zip(self.faces, values):
             old[...] = value
-        self._fast_workspace_holder.clear()
+        self.operator_revision += 1
+        self.topology_revision += int(topology_changed)
+        if topology_changed:
+            self._fast_workspace_holder.clear()
         self.revision += 1
 
     def solve(self, *, solver: str, device: str, implementation: str = "classic", **kwargs: Any):
@@ -187,6 +195,8 @@ class ThreeDOperatorSession:
                 )
             if isinstance(result, tuple) and len(result) == 2 and isinstance(result[1], dict):
                 result[1].setdefault("session_revision", int(self.revision))
+                result[1].setdefault("operator_revision", int(self.operator_revision))
+                result[1].setdefault("topology_revision", int(self.topology_revision))
                 result[1].setdefault("session_backend", "fast_3d")
             return result
         result = backend(

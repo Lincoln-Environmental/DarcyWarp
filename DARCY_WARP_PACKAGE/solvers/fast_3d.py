@@ -45,6 +45,7 @@ from DARCY_WARP_PACKAGE.solvers.face_kernels_3d_f64 import (
     dot_partials_3d_f64_kernel,
     face_jacobi_3d_f64_kernel,
     head_residual_partials_3d_f64_kernel,
+    mask_correction_3d_kernel,
     residual_partials_3d_f64_kernel,
 )
 from DARCY_WARP_PACKAGE.solvers_3d import (
@@ -68,7 +69,12 @@ def _sanitise_faces_and_diagonal(
     storage: np.ndarray,
 ) -> tuple[tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray], np.ndarray]:
     """Apply the classic active-neighbour contract and form the FP64 diagonal."""
-    tx_p, tx_m, ty_p, ty_m, tz_p, tz_m = (np.maximum(np.asarray(value, dtype=np.float64), 0.0).copy() for value in faces)
+    from DARCY_WARP_PACKAGE.physics.faces_3d import validate_reciprocal_faces
+    validate_reciprocal_faces(faces=faces, active=active)
+    tx_p, tx_m, ty_p, ty_m, tz_p, tz_m = (np.asarray(value, dtype=np.float64).copy() for value in faces)
+    tx_m[:, :, 1:] = tx_p[:, :, :-1]
+    ty_m[:, 1:, :] = ty_p[:, :-1, :]
+    tz_m[1:, :, :] = tz_p[:-1, :, :]
     active_b = np.asarray(active, dtype=np.int32) != 0
     tx_p[:, :, -1] = 0.0
     tx_m[:, :, 0] = 0.0
@@ -88,7 +94,6 @@ def _sanitise_faces_and_diagonal(
     cleaned = (tx_p, tx_m, ty_p, ty_m, tz_p, tz_m)
     diagonal = np.maximum(np.asarray(storage, dtype=np.float64), 0.0)
     diagonal = diagonal + sum(cleaned)
-    diagonal[(active_b) & (diagonal < 1.0e-12)] = 1.0
     diagonal[~active_b] = 1.0
     return cleaned, diagonal
 
@@ -131,7 +136,7 @@ def _build_levels(
             previous["faces"], previous["active"], previous["bc_mask"],
             coarsen_y=coarsen_y, coarsen_x=coarsen_x,
         )
-        # Galerkin Dirichlet springs ride on the coarse storage diagonal slot
+        # Aggregated Dirichlet springs ride on the coarse storage diagonal slot
         # (diagonal-only, non-negative); see solvers_3d._coarsen_faces_consistent_axes.
         storage_c = _masked_block_sum_axes(
             previous["storage"], free_f.astype(np.float64), coarsen_y=coarsen_y, coarsen_x=coarsen_x
@@ -175,6 +180,7 @@ def _upload_levels(
             "bc_mask": wp.array(host["bc_mask"], dtype=wp.int32, device=device),
             "bc_values": wp.array(host["bc_values"], dtype=wp.float64, device=device),
             "rhs": wp.array(host["rhs"], dtype=wp.float64, device=device),
+            "project_correction": bool(np.any(host_levels[0]["active"] == 0)),
             "x": wp.zeros((nz, ny, nx), dtype=wp.float64, device=device), "work": wp.zeros((nz, ny, nx), dtype=wp.float64, device=device),
             "residual": wp.zeros((nz, ny, nx), dtype=wp.float64, device=device), "correction": wp.zeros((nz, ny, nx), dtype=wp.float64, device=device),
             "z1": wp.zeros((nz, ny, nx), dtype=wp.float64, device=device), "partials_a": wp.zeros(n_partials, dtype=wp.float64, device=device),
@@ -197,6 +203,7 @@ def _refresh_levels_in_place(
     storage_diag: np.ndarray,
     max_levels: int,
     min_coarse_n: int,
+    refresh_boundary_values: bool = True,
 ) -> None:
     """Refresh operator data in existing device buffers (no reallocation).
 
@@ -225,6 +232,31 @@ def _refresh_levels_in_place(
         level["diag"].assign(diagonal)
         level["rhs"].assign(host["rhs"])
         level["active"].assign(host["active"])
+        if refresh_boundary_values:
+            level["bc_values"].assign(host["bc_values"])
+
+
+def _same_topology(*, record, active, bc_mask, faces):
+    """Cheap host comparisons guard arbitrary mutable public input arrays."""
+    topology = record.get("topology_snapshot")
+    if topology is not None:
+        return (np.array_equal(topology[0], active) and np.array_equal(topology[1], bc_mask)
+                and all(np.array_equal(old, np.asarray(faces[index]) > 0.0)
+                        for old, index in zip(topology[2:], (0, 2, 4))))
+    previous = record.get("operator_snapshot")
+    return (previous is not None and np.array_equal(previous[0], active)
+            and np.array_equal(previous[1], bc_mask)
+            and all(np.array_equal(old > 0.0, new > 0.0)
+                    for old, new in zip(previous[4:], faces)))
+
+
+def _snapshot_operator(*, active, bc_mask, bc_values, storage, faces):
+    return tuple(np.asarray(value).copy() for value in (active, bc_mask, bc_values, storage, *faces))
+
+
+def _snapshot_topology(*, active, bc_mask, faces):
+    return (np.asarray(active).copy(), np.asarray(bc_mask).copy(),
+            *(np.asarray(faces[index]) > 0.0 for index in (0, 2, 4)))
 
 
 def _run_kcycles(
@@ -278,6 +310,16 @@ def _run_kcycles(
         residual_into(level, x, out)
         return float(level["num"].numpy()[0])
 
+    def head_residual_norm() -> float:
+        fine["partials_a"].fill_(0.0)
+        wp.launch(head_residual_partials_3d_f64_kernel, dim=fine["n_cells"],
+                  inputs=[fine["residual"], fine["diag"], fine["active"], fine["bc_mask"],
+                          fine["partials_a"], fine["nx"], fine["ny"], fine["nz"], BLOCK_SIZE_3D],
+                  device=device)
+        wp.launch(combine_partials_3d_f64_kernel, dim=1,
+                  inputs=[fine["partials_a"], fine["num"], fine["n_partials"]], device=device)
+        return float(np.sqrt(max(float(fine["num"].numpy()[0]), 0.0) / n_free))
+
     def smooth(level: dict[str, Any], omegas: tuple[float, ...]) -> None:
         x_in, x_out = level["x"], level["work"]
         for step in omegas:
@@ -323,8 +365,32 @@ def _run_kcycles(
         wp.launch(prolong_bilinear_axes_3d_kernel, dim=level["dim"],
                   inputs=[coarse["z1"], level["correction"], level["nx"], level["ny"], level["nz"], coarse["nx"], coarse["ny"], coarse["nz"],
                           level["coarsen_y"], level["coarsen_x"]], device=device)
-        wp.launch(add_correction_3d_kernel, dim=level["dim"],
-                  inputs=[level["x"], level["correction"], level["active"], level["bc_mask"], level["bc_values"], level["nx"], level["ny"], level["nz"]], device=device)
+        if level["project_correction"]:
+            # Irregular free-cell restriction is not adjoint to bilinear
+            # prolongation. A full coarse correction can increase fine energy.
+            # Minimise that energy along the correction using device scalars;
+            # this segment is captured in the existing K-cycle CUDA graph.
+            wp.launch(mask_correction_3d_kernel, dim=level["dim"],
+                      inputs=[level["correction"], level["active"], level["bc_mask"]], device=device)
+            level["partials_a"].fill_(0.0)
+            wp.launch(dot_partials_3d_f64_kernel, dim=level["n_cells"],
+                      inputs=[level["residual"], level["correction"], level["active"], level["bc_mask"],
+                              level["partials_a"], level["nx"], level["ny"], level["nz"], BLOCK_SIZE_3D], device=device)
+            wp.launch(combine_partials_3d_f64_kernel, dim=1,
+                      inputs=[level["partials_a"], level["num"], level["n_partials"]], device=device)
+            level["partials_b"].fill_(0.0)
+            wp.launch(apply_a_dot_partials_3d_f64_kernel, dim=level["n_cells"],
+                      inputs=[level["correction"], *level["faces"], level["diag"], level["active"], level["bc_mask"],
+                              level["partials_b"], level["nx"], level["ny"], level["nz"], BLOCK_SIZE_3D], device=device)
+            wp.launch(combine_partials_3d_f64_kernel, dim=1,
+                      inputs=[level["partials_b"], level["den"], level["n_partials"]], device=device)
+            wp.launch(compute_safe_alpha_3d_kernel, dim=1, inputs=[level["num"], level["den"], level["alpha"]], device=device)
+            wp.launch(axpy_active_device_scalar_3d_kernel, dim=level["dim"],
+                      inputs=[level["x"], level["correction"], level["active"], level["bc_mask"], level["alpha"],
+                              level["nx"], level["ny"], level["nz"]], device=device)
+        else:
+            wp.launch(add_correction_3d_kernel, dim=level["dim"],
+                      inputs=[level["x"], level["correction"], level["active"], level["bc_mask"], level["bc_values"], level["nx"], level["ny"], level["nz"]], device=device)
         smooth(level, post_omegas)
 
     if n_free == 0:
@@ -354,7 +420,10 @@ def _run_kcycles(
     graph_built = False
     graph_failed = False
     cycles = 0
-    converged = rms0 <= tolerance
+    # A small volumetric residual can simply mean very small K. Require a
+    # head-equivalent residual as well, including at the initial iterate.
+    head_tolerance = float(dh_rms_tol) if dh_rms_tol is not None else max(float(rel_tol), np.finfo(np.float64).eps)
+    converged = rms0 <= tolerance and head_residual_norm() <= head_tolerance
     dh_rms = float("nan")
     dh_max = float("nan")
     for cycle in range(int(max_cycles)):
@@ -397,7 +466,7 @@ def _run_kcycles(
         wp.launch(copy_field_3d_kernel, dim=fine["dim"],
                   inputs=[fine["x"], fine["x_prev"], fine["nx"], fine["ny"], fine["nz"]], device=device)
         dh_ok = (dh_rms_tol is None or dh_rms <= float(dh_rms_tol)) and (dh_max_tol is None or dh_max <= float(dh_max_tol))
-        if rms <= tolerance and dh_ok:
+        if rms <= tolerance and dh_ok and head_residual_norm() <= head_tolerance:
             converged = True
             break
     rtr_end = residual_norm(fine, fine["x"], fine["residual"])
@@ -418,6 +487,7 @@ def _run_kcycles(
         "n_cycles_used": cycles, "max_cycles": int(max_cycles), "converged": bool(converged),
         "r_rms0": rms0, "r_rms_end": float(np.sqrt(max(rtr_end, 0.0) / n_free)), "tol_abs": tolerance,
         "h_rms_end": h_rms_end,
+        "head_residual_tolerance": head_tolerance,
         "dh_rms_lastcheck": dh_rms, "dh_max_lastcheck": dh_max, "smoother": str(smoother),
         "workspace_reused": bool(workspace_record.get("reused", False)),
         "cuda_graph_built_this_call": bool(graph_built), "cuda_graph_capture_failed": bool(graph_failed),
@@ -429,6 +499,7 @@ def _run_kcycles(
         "transient_formulation": "confined" if bool(transient) else "steady",
         "dt": float(dt_used) if bool(transient) else float("nan"),
         "n_isolated_cells_excluded": n_isolated,
+        "irregular_correction_energy_projection": bool(fine["project_correction"]),
     }
     head = np.asarray(fine["x"].numpy(), dtype=NP_FLOAT)
     if n_isolated and isolated is not None:
@@ -543,6 +614,7 @@ def solve_fast_confined_kcycle_3d(
         bc_mask=np.asarray(bc_mask, dtype=np.int32),
         rhs_eff=rhs_effective,
         storage_diag=storage,
+        topology_cache=workspace_holder,
     )
     n_isolated = int(np.count_nonzero(isolated))
     if n_isolated:
@@ -562,33 +634,29 @@ def solve_fast_confined_kcycle_3d(
         if mode == "chebyshev" else tuple(float(omega) for _ in range(int(nu_post)))
     )
     coarse_omegas = tuple(float(omega) for _ in range(max(1, int(nu_coarse))))
-    storage_coeff_key = (
-        None
-        if storage_coeff is None
-        else (
-            ("scalar", float(np.asarray(storage_coeff).reshape(())))
-            if np.asarray(storage_coeff).shape == ()
-            else ("array", id(storage_coeff), np.asarray(storage_coeff).shape)
-        )
-    )
-    storage_diag_key = (
-        None
-        if storage_diag is None
-        else ("array", id(storage_diag), np.asarray(storage_diag).shape)
-    )
+    # Buffer structure determines graph wiring; operator values are compared
+    # with owned snapshots, never with identities of caller-owned arrays.
     cache_key = (
         shape, int(max_levels), int(min_coarse_n), str(device),
-        id(tx_p), id(tx_m), id(ty_p), id(ty_m), id(tz_p), id(tz_m),
-        id(active_work), id(bc_mask), id(bc_values), bool(transient),
-        float(dt_used) if bool(transient) else None,
-        float(dx), None if dy is None else float(dy), float(dz),
-        storage_coeff_key, storage_diag_key,
         mode, tuple(pre_omegas), tuple(post_omegas), tuple(coarse_omegas),
     )
+    faces = (tx_p, tx_m, ty_p, ty_m, tz_p, tz_m)
+    values = (active_work, bc_mask, bc_values, storage, *faces)
     cached = None if workspace_holder is None else workspace_holder.get("workspace")
-    if cached is not None and cached["key"] == cache_key:
+    if (cached is not None and cached["key"] == cache_key
+            and _same_topology(record=cached, active=active_work, bc_mask=bc_mask, faces=faces)):
         levels = cached["levels"]
-        levels[0]["rhs"].assign(np.asarray(rhs_effective, dtype=np.float64))
+        operator_refreshed = not all(np.array_equal(old, new)
+                                     for old, new in zip(cached["operator_snapshot"], values))
+        if operator_refreshed:
+            _refresh_levels_in_place(levels=levels, faces=faces, active=active_work,
+                                     bc_mask=bc_mask, bc_values=bc_values,
+                                     rhs=rhs_effective, storage_diag=storage,
+                                     max_levels=max_levels, min_coarse_n=min_coarse_n)
+            cached["operator_snapshot"] = _snapshot_operator(
+                active=active_work, bc_mask=bc_mask, bc_values=bc_values, storage=storage, faces=faces)
+        else:
+            levels[0]["rhs"].assign(np.asarray(rhs_effective, dtype=np.float64))
         workspace_reused = True
         workspace_record = cached
     else:
@@ -600,9 +668,12 @@ def solve_fast_confined_kcycle_3d(
         )
         levels = _upload_levels(host_levels, device)
         workspace_reused = False
+        operator_refreshed = False
         workspace_record = {
             "key": cache_key,
             "levels": levels,
+            "operator_snapshot": _snapshot_operator(active=active_work, bc_mask=bc_mask,
+                                                     bc_values=bc_values, storage=storage, faces=faces),
             "cycle_graph": None,
         }
         if workspace_holder is not None:
@@ -644,15 +715,30 @@ def solve_fast_confined_kcycle_3d(
     )
     from DARCY_WARP_PACKAGE.physics.budget_3d import compute_3d_flow_budget
 
+    info["operator_refreshed_in_place"] = bool(operator_refreshed)
+    if workspace_holder is not None:
+        info.update(workspace_holder.get("component_diagnostics", {}))
     info["budget"] = compute_3d_flow_budget(
         head=head,
-        source=np.asarray(rhs, dtype=np.float64),
+        source=rhs_effective if h_prev_used is None else rhs_effective - storage * h_prev_used,
         faces=(tx_p, tx_m, ty_p, ty_m, tz_p, tz_m),
         active=active_work,
         bc_mask=bc_f,
-        storage_diag=storage if bool(transient) else None,
-        head_prev=h_prev_used if bool(transient) else None,
+        storage_diag=storage,
+        head_prev=h_prev_used,
+        return_field=True,
     )
+    physical = info["budget"].pop("cell_residual_field")
+    diagonal = info["budget"].pop("operator_diagonal")
+    free = (active_work != 0) & (bc_f == 0)
+    head_residual = np.zeros_like(physical)
+    np.divide(physical, diagonal, out=head_residual, where=diagonal > 0.0)
+    head_residual[(diagonal == 0.0) & (physical != 0.0)] = np.inf
+    info["final_physical_head_residual_rms"] = float(np.sqrt(np.mean(head_residual[free] ** 2))) if np.any(free) else 0.0
+    info["final_physical_acceptance"] = bool(
+        np.all(np.isfinite(head[active_work != 0]))
+        and info["final_physical_head_residual_rms"] <= info.get("head_residual_tolerance", np.inf))
+    info["converged"] = bool(info["converged"] and info["final_physical_acceptance"])
     return (head, info) if return_info else head
 
 
@@ -825,7 +911,7 @@ def solve_fast_unconfined_kcycle_3d(
         # Singular-row detection on this iteration's operator.
         isolated = _resolve_isolated_free_cells(
             faces=faces_i, active=act0, bc_mask=bcm0,
-            rhs_eff=rhs_i, storage_diag=storage_i,
+            rhs_eff=rhs_i, storage_diag=storage_i, topology_cache=state,
         )
         n_isolated = int(np.count_nonzero(isolated))
         if n_isolated:
@@ -834,7 +920,8 @@ def solve_fast_unconfined_kcycle_3d(
         else:
             active_i = act0
         rec = state["record"]
-        if state["levels"] is None:
+        if (state["levels"] is None or not _same_topology(
+                record=rec, active=active_i, bc_mask=bcm0, faces=faces_i)):
             host_levels = _build_levels(
                 faces=faces_i, active=active_i, bc_mask=bcm0, bc_values=bcv0,
                 rhs=rhs_i, storage_diag=storage_i,
@@ -844,6 +931,8 @@ def solve_fast_unconfined_kcycle_3d(
             rec = {
                 "key": cache_key,
                 "levels": state["levels"],
+                "topology_snapshot": _snapshot_topology(active=active_i, bc_mask=bcm0, faces=faces_i),
+                "boundary_snapshot": bcv0.copy(),
                 "cycle_graph": None,
                 "reused": False,
             }
@@ -856,7 +945,10 @@ def solve_fast_unconfined_kcycle_3d(
                 faces=faces_i, active=active_i, bc_mask=bcm0, bc_values=bcv0,
                 rhs=rhs_i, storage_diag=storage_i,
                 max_levels=max_levels, min_coarse_n=min_coarse_n,
+                refresh_boundary_values=not np.array_equal(rec["boundary_snapshot"], bcv0),
             )
+            if not np.array_equal(rec["boundary_snapshot"], bcv0):
+                rec["boundary_snapshot"] = bcv0.copy()
             rec["reused"] = True
         levels = state["levels"]
         n_free_i = int(np.count_nonzero((active_i != 0) & (bcm0 == 0)))
@@ -864,7 +956,7 @@ def solve_fast_unconfined_kcycle_3d(
         x0 = np.asarray(h0, dtype=np.float64).copy()
         x0[active_i == 0] = 0.0
         x0[bcm0 != 0] = bcv0[bcm0 != 0]
-        return _run_kcycles(
+        result = _run_kcycles(
             levels=levels,
             workspace_record=rec,
             x0=x0,
@@ -887,6 +979,8 @@ def solve_fast_unconfined_kcycle_3d(
             restore_values=restore0,
             return_info=True,
         )
+        result[1].update(state.get("component_diagnostics", {}))
+        return result
 
     return _picard_unconfined_7point_3d(
         _inner_solve_fast,
