@@ -109,3 +109,29 @@ def head_equivalent_norm_kernel(
         value = wp.float64(residual[j, i]) * wp.float64(diagonal_inverse[j, i])
         wp.atomic_add(out, 0, value * value)
 
+
+
+@wp.kernel
+def restrict_integrated_flux_kernel(
+    fine: wp.array(dtype=WP_FLOAT, ndim=2),
+    active: wp.array(dtype=wp.int32, ndim=2),
+    prescribed: wp.array(dtype=wp.int32, ndim=2),
+    coarse: wp.array(dtype=WP_FLOAT, ndim=2),
+    nx_f: int, ny_f: int, nx_c: int, ny_c: int,
+):
+    """Conservative block sum for residuals measured in volume/time.
+
+    Matches summed reaction/boundary diagonals in the frozen Newton hierarchy.
+    This only changes an explicitly selected preconditioner, never the fine
+    equation or its true-residual acceptance.
+    """
+    j, i = wp.tid()
+    total = wp.float64(0.)
+    for dj in range(2):
+        y = 2*j+dj
+        for di in range(2):
+            x = 2*i+di
+            if y < ny_f and x < nx_f:
+                if active[y, x] != 0 and prescribed[y, x] == 0:
+                    total += wp.float64(fine[y, x])
+    coarse[j, i] = WP_FLOAT(total)

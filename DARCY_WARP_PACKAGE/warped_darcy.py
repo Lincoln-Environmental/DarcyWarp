@@ -5129,7 +5129,7 @@ class WarpDarcySolver:
 
     def _require_drn_riv_supported(self, backend_name: str) -> None:
         """DRN/RIV gated boundaries are assembled only by the semismooth Newton backend."""
-        if not (self.use_drn or self.use_riv):
+        if not (self.use_drn or self.use_riv or getattr(self, "coastal_boundary", None) is not None):
             return
         if str(backend_name) != "unconfined_semismooth_newton_kcycle":
             raise NotImplementedError(
@@ -5597,6 +5597,7 @@ class WarpDarcySolver:
         riv_stage: np.ndarray | None = None,
         riv_rbot: np.ndarray | None = None,
         riv_cond: np.ndarray | None = None,
+        coastal_boundary: Any | None = None,
     ) -> None:
         """
         Build solver state from explicitly provided fields (no synthetic builder).
@@ -5666,6 +5667,9 @@ class WarpDarcySolver:
                 raise ValueError("riv_mask was provided but the solver was built with use_riv=False.")
             riv_mask = None
 
+        self.coastal_boundary = coastal_boundary
+        if coastal_boundary is not None:
+            coastal_boundary.validate(active=np.asarray(active, bool), prescribed=np.asarray(bc_mask, bool))
         self.drn_mask_host = None if drn_mask is None else np.asarray(drn_mask, dtype=np.int32)
         self.drn_elev_host = None if drn_mask is None else drn_elev
         self.drn_cond_host = None if drn_mask is None else drn_cond

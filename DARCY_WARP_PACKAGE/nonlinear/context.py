@@ -92,6 +92,7 @@ class NonlinearBoundaryFields:
     riv_stage: Any             # (ny, nx) river stage [L]
     riv_rbot: Any              # (ny, nx) riverbed bottom elevation [L]
     riv_cond: Any              # (ny, nx) fixed riverbed conductance [L^2/T]
+    coastal_boundary: Any | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -204,6 +205,7 @@ def from_arrays(
     riv_stage: Any | None = None,
     riv_rbot: Any | None = None,
     riv_cond: Any | None = None,
+    coastal_boundary: Any | None = None,
     sy: float = 0.0,
     ss: float = 0.0,
     head_prev: Any | None = None,
@@ -264,6 +266,9 @@ def from_arrays(
     riv_rbot_arr = _as2d(riv_rbot if riv_rbot is not None else zeros, name="riv_rbot", shape=shape)
     riv_cond_arr = _as2d(riv_cond if riv_cond is not None else zeros, name="riv_cond", shape=shape)
 
+    if coastal_boundary is not None:
+        coastal_boundary.validate(active=active_arr != 0, prescribed=dirichlet_mask_arr != 0)
+
     sy_f = float(sy)
     ss_f = float(ss)
     if sy_f < 0.0 or not np.isfinite(sy_f):
@@ -306,6 +311,7 @@ def from_arrays(
             riv_stage=riv_stage_arr,
             riv_rbot=riv_rbot_arr,
             riv_cond=riv_cond_arr,
+            coastal_boundary=coastal_boundary,
         ),
         sources=NonlinearSourceField(R_field=R_arr),
         storage=NonlinearStorageFields(
@@ -395,6 +401,7 @@ def from_unconfined_solve_inputs(
         riv_stage=riv_stage,
         riv_rbot=riv_rbot,
         riv_cond=riv_cond,
+        coastal_boundary=getattr(model, "coastal_boundary", None),
         sy=sy_eff,
         ss=ss_eff,
         head_prev=head_prev,

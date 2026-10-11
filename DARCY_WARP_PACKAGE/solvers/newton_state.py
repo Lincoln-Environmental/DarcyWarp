@@ -35,6 +35,7 @@ def _capture_static(context: Any) -> dict[str, Any]:
     bnd = context.boundaries
     grid = context.grid
     return {
+        "coast": None if bnd.coastal_boundary is None else bnd.coastal_boundary.fingerprint(),
         "shape": (int(grid.ny), int(grid.nx)),
         "dx": float(grid.dx),
         "has_top": flow.ztop is not None,
@@ -58,6 +59,8 @@ def _capture_static(context: Any) -> dict[str, Any]:
 
 
 def _static_equal(a: dict[str, Any], b: dict[str, Any]) -> bool:
+    if a["coast"] != b["coast"]:
+        return False
     if a["shape"] != b["shape"] or a["has_top"] != b["has_top"]:
         return False
     if float(a["dx"]) != float(b["dx"]):

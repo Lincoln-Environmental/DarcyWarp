@@ -96,6 +96,146 @@ def _head_equivalent_rms(
     return float(np.sqrt(max(total, 0.0) / float(operator.n_free))) if operator.n_free else 0.0
 
 
+def _confined_startup(*, operator, preconditioner, vectors, workspace,
+                      relative_tolerance, absolute_tolerance, max_iterations,
+                      max_outer_iterations, residual_tolerance):
+    """Solve the fixed-T gated problem before handing off to unconfined Newton.
+
+    DRNs/RIVs remain native, outflow-gated terms, not fixed heads. A single
+    frozen-active-set solve is insufficient: it can activate many previously
+    inactive drains. Preparation uses the configured outer work limit and
+    exact linear controls; only a converged fixed-T state whose actual
+    unconfined residual decreases can replace the initial iterate.
+    """
+    shape = operator.ctx.shape
+    nx, ny = operator.ctx.nx, operator.ctx.ny
+    before = operator.current_reduced_norms().rms
+    fixed_t = wp.clone(operator._pic_T_wp)
+    trial = wp.clone(operator.head_device)
+    boundaries = operator.ctx.boundaries
+    other_anchor = bool(np.any(boundaries.dirichlet_mask) or np.any(boundaries.ghb_factor))
+    if boundaries.coastal_boundary is not None:
+        other_anchor |= bool(np.any(boundaries.coastal_boundary.submerged))
+    # With a genuine sea/GHB/fixed-head anchor, the initial drain-inactive
+    # selection avoids artificially anchoring every H=DEM cell during this
+    # confined preparation. A closed drain-only domain needs the active-side
+    # selection at equality to admit recharged startup instead of a singular
+    # pure-Neumann linear system. Both are valid generalized derivatives.
+    drain_equality_active = not other_anchor
+    krylov = RestartedFGMRES2D(workspace=workspace, active=operator.active_device,
+        prescribed=operator.dirichlet_mask_device, nx=nx, ny=ny, device=operator.device)
+
+    def apply_frozen(vector, out):
+        return operator.frozen_picard_vector_device(vector=vector, out=out)
+
+    def apply_preconditioner(rhs, out):
+        return preconditioner.apply(rhs=rhs, out=out)
+
+    totals = dict(iterations=0, restarts=0, reduction_count=0)
+    history = []
+    result = None
+    fixed_converged = False
+    status = 'confined_active_set_iteration_limit'
+    for iteration in range(max_outer_iterations):
+        t, diagonal = operator.freeze_confined_device(transmissivity=fixed_t, head=trial,
+            drain_equality_active=drain_equality_active)
+        preconditioner.freeze(transmissivity=t, storage_diagonal=diagonal)
+        operator.confined_residual_device(head=trial, out=vectors.candidate_residual,
+            drain_equality_active=drain_equality_active)
+        fixed_before = operator.current_reduced_norms().rms
+        if fixed_before <= residual_tolerance:
+            fixed_converged = True
+            break
+        wp.launch(kernel=_k.masked_copy_kernel, dim=shape,
+            inputs=[vectors.candidate_residual, operator.active_device,
+                operator.dirichlet_mask_device, workspace.rhs, -1., nx, ny], device=operator.device)
+        result = krylov.solve(rhs=workspace.rhs, apply_jacobian=apply_frozen,
+            apply_preconditioner=apply_preconditioner, relative_tolerance=relative_tolerance,
+            absolute_tolerance=absolute_tolerance, max_iterations=max_iterations)
+        for name in totals:
+            totals[name] += getattr(result, name)
+        record = dict(iteration=iteration+1, residual_rms_before=fixed_before,
+            linear_converged=bool(result.converged), linear_iterations=int(result.iterations),
+            linear_initial_true_residual=float(result.residual_history[0]),
+            linear_final_true_residual=float(result.final_residual),
+            requested_relative_tolerance=relative_tolerance,
+            requested_absolute_tolerance=absolute_tolerance)
+        history.append(record)
+        if not result.converged:
+            status = 'linear_nonconvergence'
+            break
+        vectors.change_sq.fill_(wp.float64(0.))
+        vectors.change_max.fill_(wp.float64(0.))
+        vectors.finite_flag.fill_(wp.int32(0))
+        wp.launch(kernel=_k.masked_candidate_kernel, dim=shape,
+            inputs=[trial, workspace.solution, operator.active_device,
+                operator.dirichlet_mask_device, operator.dirichlet_values_device, 1.,
+                vectors.candidate, vectors.change_sq, vectors.change_max, vectors.finite_flag,
+                nx, ny], device=operator.device)
+        record['head_change_max_m'] = float(vectors.change_max.numpy()[0])
+        if int(vectors.finite_flag.numpy()[0]) != 0:
+            status = 'nonfinite_candidate'
+            break
+        wp.copy(trial, vectors.candidate)
+        operator.freeze_confined_device(transmissivity=fixed_t, head=trial,
+            drain_equality_active=drain_equality_active)
+        operator.confined_residual_device(head=trial, out=vectors.candidate_residual,
+            drain_equality_active=drain_equality_active)
+        record['residual_rms_after'] = operator.current_reduced_norms().rms
+        if record['residual_rms_after'] <= residual_tolerance:
+            fixed_converged = True
+            break
+
+    diagnostic = dict(status=status, accepted=False,
+        nonlinear_residual_before=before, nonlinear_residual_after=None,
+        linear_converged=bool(all(item['linear_converged'] for item in history)),
+        linear_iterations=totals['iterations'], confined_active_set_iterations=len(history),
+        confined_converged=fixed_converged, confined_history=history,
+        confined_residual_tolerance=residual_tolerance,
+        confined_max_outer_iterations=max_outer_iterations,
+        drain_equality_active=drain_equality_active,
+        linear_initial_true_residual=None if result is None else float(result.residual_history[0]),
+        linear_final_true_residual=None if result is None else float(result.final_residual),
+        requested_relative_tolerance=relative_tolerance, requested_absolute_tolerance=absolute_tolerance,
+        boundaries='native coastal, DRN/RIV and other physical terms retained')
+    if fixed_converged:
+        operator.residual_device(trial, out=vectors.candidate_residual, reduce=True)
+        after = operator.current_reduced_norms().rms
+        diagnostic.update(status='non_descent_candidate', nonlinear_residual_after=after)
+        if np.isfinite(after) and after < before:
+            operator.set_head_device(trial)
+            wp.copy(operator.residual_device_array, vectors.candidate_residual)
+            diagnostic.update(status='accepted_initial_iterate', accepted=True)
+    # Refresh residual reductions for the retained state even when a candidate
+    # was rejected; trial evaluation never changes the accepted initial head.
+    operator.residual_device(operator.head_device, reduce=True)
+    # Only counts are consumed by the caller. Keep the final linear solve's
+    # convergence record distinct from total preparation work.
+    if result is None:
+        from .fgmres import FGMRESResult
+        result = FGMRESResult(converged=True, iterations=0, restarts=0,
+            final_residual=0., breakdown=False, breakdown_reason=None,
+            residual_history=[0.], reduction_count=0)
+    return diagnostic, replace(result, **totals)
+
+
+def conductivity_from_reference_transmissivity(*, transmissivity, bottom, top, active):
+    """Convert explicit full-column reference T to the native unconfined law.
+
+    T(h) = T_reference * flow_sat(h) / (top-bottom). This conversion is
+    internal API plumbing, not an assumption of K=10 across a deep domain.
+    """
+    reference = np.asarray(transmissivity, dtype=np.float64)
+    base, surface = np.asarray(bottom, dtype=np.float64), np.asarray(top, dtype=np.float64)
+    mask = np.asarray(active, dtype=bool)
+    if (reference.shape != mask.shape or base.shape != mask.shape or surface.shape != mask.shape
+            or not np.all(np.isfinite(reference)) or not np.all(np.isfinite(base))
+            or not np.all(np.isfinite(surface)) or np.any(reference[mask] <= 0.)
+            or np.any(surface[mask] <= base[mask])):
+        raise ValueError('reference T requires finite compatible fields, positive active T and positive column height')
+    return np.divide(reference, surface-base, out=np.zeros_like(reference), where=mask)
+
+
 def _fallback_to_picard(
     *,
     context: SolverContext,
@@ -142,6 +282,12 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
     K_field = kwargs.get("K_field")
     zbot_field = kwargs.get("zbot_field")
     ztop_field = kwargs.get("ztop_field")
+    reference_transmissivity = kwargs.get('reference_transmissivity_field')
+    if reference_transmissivity is not None:
+        if K_field is not None or zbot_field is None or ztop_field is None:
+            raise ValueError('reference T input requires top and bottom and must not also supply K_field')
+        K_field = conductivity_from_reference_transmissivity(transmissivity=reference_transmissivity,
+            bottom=zbot_field, top=ztop_field, active=model.active_host)
     transient = bool(kwargs.get("transient", False))
     dt = kwargs.get("dt")
     head_prev = kwargs.get("head_prev")
@@ -167,6 +313,9 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
     if min_sat is None:
         min_sat = 0.1
     min_sat = float(min_sat)
+    startup_mode = str(kwargs.get('unconfined_startup_mode', 'initial_head')).strip().lower()
+    if startup_mode not in ('initial_head', 'confined_pre_solve'):
+        raise ValueError('semismooth Newton supports initial_head or confined_pre_solve startup')
 
     restart = int(kwargs.pop("newton_fgmres_restart", 20))
     max_krylov = int(kwargs.pop("newton_fgmres_max_iterations", max(40, 3 * restart)))
@@ -191,7 +340,11 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
     # of the outer tolerance, solve the inner system to the eta floor so the
     # accepted result keeps full final accuracy.
     forcing_final_tighten_ratio = float(kwargs.pop("newton_forcing_final_tighten_ratio", 100.0))
+    log_progress = bool(kwargs.pop("newton_log_progress", False))
     max_newton = int(kwargs.pop("newton_max_iterations", 20))
+    picard_warm_steps = int(kwargs.pop("newton_picard_warm_start_iterations", 0))
+    if picard_warm_steps < 0 or (transient and picard_warm_steps):
+        raise ValueError('Picard warm start is optional steady preparation only')
     residual_tol = float(kwargs.pop("newton_residual_rms_tolerance", 1.0e-6))
     head_residual_tol = float(kwargs.pop("newton_head_equivalent_rms_tolerance", kwargs.get("hclose", 1.0e-4) or 1.0e-4))
     max_backtracks = int(kwargs.pop("newton_max_backtracks", 10))
@@ -203,11 +356,21 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
     # silently drop the terms), so refuse it when such cells are present.
     _drn_mask = getattr(model, "drn_mask_host", None)
     _riv_mask = getattr(model, "riv_mask_host", None)
+    if getattr(model, "coastal_boundary", None) is not None:
+        fallback_enabled = False
     if fallback_enabled and (
         (_drn_mask is not None and bool(np.any(np.asarray(_drn_mask) != 0)))
         or (_riv_mask is not None and bool(np.any(np.asarray(_riv_mask) != 0)))
     ):
         fallback_enabled = False
+    coarse_restriction = str(kwargs.pop("newton_coarse_residual_restriction", "average"))
+    if coarse_restriction not in ("average", "conservative_sum"):
+        raise ValueError("Newton coarse restriction must be average or conservative_sum")
+    preconditioner_kind = str(kwargs.pop("newton_preconditioner", "kcycle"))
+    if preconditioner_kind not in ("kcycle", "steady_cpu_amg", "steady_cpu_jacobian_amg", "steady_cpu_ilu", "steady_cpu_sparse_lu"):
+        raise ValueError("unknown Newton preconditioner")
+    if transient and preconditioner_kind != "kcycle":
+        raise ValueError("Sparse CPU preconditioning is a steady-preparation backend, not a transient solver")
     preconditioner_cycles = int(kwargs.pop("newton_preconditioner_kcycles", 2))
     max_levels = int(kwargs.get("max_levels", 5))
     min_coarse_cells = kwargs.get("min_coarse_cells", 500)
@@ -321,6 +484,7 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
         omega=float(kwargs.get("omega", 0.8)),
         cheby_lambda_min=float(kwargs.get("cheby_lambda_min", 0.05)),
         cheby_lambda_max=float(kwargs.get("cheby_lambda_max", 1.95)),
+        coarse_residual_restriction=coarse_restriction,
     )
 
     # The authoritative operator is cached on the resource owner and reused
@@ -353,7 +517,16 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
         ss=ss,
     )
     operator = operator_workspace.operator
+    if preconditioner_kind in ("steady_cpu_amg", "steady_cpu_jacobian_amg"):
+        from .steady_amg_preconditioner import SteadyAMGPreconditioner2D
+        preconditioner = SteadyAMGPreconditioner2D(operator=operator, model=model,
+            exact_jacobian=preconditioner_kind == 'steady_cpu_jacobian_amg')
+    elif preconditioner_kind in ("steady_cpu_ilu", "steady_cpu_sparse_lu"):
+        from .steady_sparse_preconditioner import SteadySparsePreconditioner2D
+        preconditioner = SteadySparsePreconditioner2D(operator=operator, model=model,
+            exact=preconditioner_kind == "steady_cpu_sparse_lu")
     history: list[dict[str, Any]] = []
+    linear_history = []
     failure_reason: str | None = None
     converged = False
     total_fgmres_iterations = 0
@@ -361,6 +534,7 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
     total_reductions = 0
     total_backtracks = 0
     accepted_updates = 0
+    startup_diagnostics = dict(status='not_requested', accepted=False)
     start_memory = None
     end_memory = None
     start_time = time.perf_counter()
@@ -385,10 +559,28 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
         )
         initial_residual = norms.rms
 
+        if not transient and startup_mode == 'confined_pre_solve' and norms.rms > residual_tol:
+            startup_diagnostics, startup_linear = _confined_startup(operator=operator,
+                preconditioner=preconditioner, vectors=vector_workspace, workspace=fgmres_workspace,
+                relative_tolerance=float(kwargs.get('rel_tol', krylov_rtol)),
+                absolute_tolerance=float(kwargs.get('abs_tol_min', krylov_atol)),
+                max_iterations=max_krylov,
+                max_outer_iterations=int(kwargs.get('max_outer_iterations', max_newton)),
+                residual_tolerance=residual_tol)
+            total_fgmres_iterations += startup_linear.iterations
+            total_fgmres_restarts += startup_linear.restarts
+            total_reductions += startup_linear.reduction_count
+            norms = operator.current_reduced_norms()
+            T_frozen, S_frozen = operator.freeze_picard_device(operator.head_device)
+            preconditioner.freeze(transmissivity=T_frozen, storage_diagonal=S_frozen)
+            head_equivalent = _head_equivalent_rms(residual=operator.residual_device_array,
+                diagonal_inverse=preconditioner.fine_diagonal_inverse, operator=operator, vectors=vector_workspace)
+
         if norms.rms <= residual_tol and head_equivalent <= head_residual_tol:
             converged = True
 
         previous_backtracks = 0
+        warm_start_active = picard_warm_steps > 0
         for newton_iteration in range(max_newton):
             if converged:
                 break
@@ -426,10 +618,20 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
                 ny=ny,
                 device=model.device_str,
             )
+            direction_kind = 'frozen_picard' if warm_start_active and newton_iteration < picard_warm_steps else 'analytical_newton'
+
+            def apply_direction(vector, out):
+                if direction_kind == 'frozen_picard':
+                    return operator.frozen_picard_vector_device(vector=vector, out=out)
+                return operator.jacobian_vector_device(head=operator.head_device, vector=vector, out=out)
+
+            def apply_preconditioning(rhs, out):
+                return preconditioner.apply(rhs=rhs, out=out)
+
             result = krylov.solve(
                 rhs=fgmres_workspace.rhs,
-                apply_jacobian=lambda vector, out: operator.jacobian_vector_device(operator.head_device, vector, out=out),
-                apply_preconditioner=lambda rhs, out: preconditioner.apply(rhs, out),
+                apply_jacobian=apply_direction,
+                apply_preconditioner=apply_preconditioning,
                 relative_tolerance=iteration_rtol,
                 absolute_tolerance=krylov_atol,
                 max_iterations=max_krylov,
@@ -437,6 +639,19 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
             total_fgmres_iterations += result.iterations
             total_fgmres_restarts += result.restarts
             total_reductions += result.reduction_count
+            linear_history.append(dict(newton_iteration=newton_iteration+1,
+                linear_operator=direction_kind,
+                converged=bool(result.converged), iterations=int(result.iterations),
+                initial_true_residual=float(result.residual_history[0]),
+                final_true_residual=float(result.final_residual),
+                requested_relative_tolerance=float(iteration_rtol),
+                requested_absolute_tolerance=float(krylov_atol),
+                breakdown_reason=result.breakdown_reason, krylov_residual_history=result.residual_history))
+            if log_progress:
+                print(f"Darcy Newton {newton_iteration+1}: nonlinear RMS={norms.rms:.6g}; "
+                    f"FGMRES {result.iterations}, true relative residual="
+                    f"{result.final_residual/max(result.residual_history[0], np.finfo(float).tiny):.6g}; "
+                    f"linear accepted={result.converged}", flush=True)
             if not result.converged:
                 failure_reason = result.breakdown_reason or "fgmres_nonconvergence"
                 break
@@ -488,6 +703,7 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
             history.append(
                 {
                     "newton_iteration": int(newton_iteration + 1),
+                    "direction_kind": direction_kind,
                     "residual_rms_before": float(norms.rms),
                     "residual_rms_after": None if candidate_norms is None else float(candidate_norms.rms),
                     "accepted_step_length": float(alpha) if accepted else 0.0,
@@ -502,7 +718,17 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
                     "fgmres_breakdown_reason": result.breakdown_reason,
                 }
             )
+            if log_progress:
+                print(f"Darcy Newton candidate: accepted={accepted}, scale={alpha:.6g}, "
+                    f"backtracks={backtracks}; RMS={None if candidate_norms is None else candidate_norms.rms}", flush=True)
             if not accepted or candidate_norms is None:
+                if direction_kind == 'frozen_picard':
+                    # A Picard direction need not be a descent direction for
+                    # the nonlinear norm. End preparation without committing
+                    # its failed candidate, then try analytical Newton from
+                    # the last accepted preparation iterate.
+                    warm_start_active = False
+                    continue
                 failure_reason = "line_search_failed"
                 break
 
@@ -571,10 +797,14 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
             gh_head=np.asarray(model.gh_head_host, dtype=np.float64) if model.use_ghb else None,
             gh_width=np.asarray(model.gh_width_host, dtype=np.float64) if model.use_ghb else None,
             ghb_factor=np.asarray(model.ghb_factor_host, dtype=np.float64) if model.use_ghb else None,
+            drn_mask=np.asarray(model.drn_mask_host, dtype=np.int32) if model.use_drn else None,
+            drn_elev=np.asarray(model.drn_elev_host, dtype=np.float64) if model.use_drn else None,
+            drn_cond=np.asarray(model.drn_cond_host, dtype=np.float64) if model.use_drn else None,
             riv_mask=np.asarray(model.riv_mask_host, dtype=np.int32) if model.use_riv else None,
             riv_stage=np.asarray(model.riv_stage_host, dtype=np.float64) if model.use_riv else None,
             riv_rbot=np.asarray(model.riv_rbot_host, dtype=np.float64) if model.use_riv else None,
             riv_cond=np.asarray(model.riv_cond_host, dtype=np.float64) if model.use_riv else None,
+            coastal_boundary=getattr(model, "coastal_boundary", None),
             case="unconfined_semismooth_newton_kcycle",
         )
         accepted_drn_flux = np.zeros((ny, nx), dtype=np.float64)
@@ -616,11 +846,18 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
             "converged": bool(converged),
             "solver_type": "unconfined_semismooth_newton_kcycle",
             "solver_backend": "unconfined_semismooth_newton_kcycle",
+            "multigrid_level_shapes": [(int(level.ny), int(level.nx)) for level in levels],
             "experimental_backend": False,
+            "flow_coefficient_input": 'full_column_reference_transmissivity' if reference_transmissivity is not None else 'hydraulic_conductivity',
+            "reference_transmissivity_field": reference_transmissivity,
             "newton_iterations": int(accepted_updates),
+            "unconfined_startup_mode": startup_mode,
+            "confined_startup": startup_diagnostics,
+            "picard_warm_start_updates": sum(item['direction_kind'] == 'frozen_picard' and item['accepted_step_length'] > 0 for item in history),
             "outer_picard_iterations": 0,
             "inexact_forcing_enabled": bool(forcing_enabled),
             "outer_history": history,
+            "linear_history": linear_history,
             "nonlinear_residual_history": [float(initial_residual)] + [
                 float(item["residual_rms_after"]) for item in history if item["residual_rms_after"] is not None
             ],
@@ -630,15 +867,22 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
             "fgmres_iterations": int(total_fgmres_iterations),
             "fgmres_restarts": int(total_fgmres_restarts),
             "fgmres_restart_size": int(restart),
+            "coarse_residual_restriction": coarse_restriction,
+            "preconditioner_kind": preconditioner_kind,
+            "preconditioner_setup_wall_s": getattr(preconditioner, "setup_wall_s", None),
+            "preconditioner_apply_wall_s": getattr(preconditioner, "apply_wall_s", None),
+            "preconditioner_full_vector_transfer_bytes": getattr(preconditioner, "full_vector_transfer_bytes", 0),
             "fgmres_reduction_count": int(total_reductions),
-            "kcycle_preconditioner_applications": int(preconditioner.applications),
-            "kcycle_preconditioner_cycles": int(preconditioner.cycles),
+            "preconditioner_applications": int(preconditioner.applications),
+            "kcycle_preconditioner_applications": int(preconditioner.applications) if preconditioner_kind == "kcycle" else 0,
+            "kcycle_preconditioner_cycles": int(preconditioner.cycles) if preconditioner_kind == "kcycle" else 0,
             "backtrack_count": int(total_backtracks),
             "breakdown_state": failure_reason if failure_reason and "breakdown" in failure_reason else None,
             "newton_failure_reason": failure_reason,
             "newton_fallback_used": False,
             "fallback_state": "not_used",
             "generalized_derivative_convention": "one_strictly_inside_zero_outside_and_at_clip_thresholds",
+            "drain_generalized_derivative_convention": "active_side_at_equality; zero_strictly_below_elevation",
             "runtime_seconds": runtime,
             "gpu_scalar_synchronization_count": int(total_reductions + 3 * (accepted_updates + total_backtracks + 1)),
             "persistent_memory_before_bytes": start_memory,

@@ -80,6 +80,9 @@ def solve_kcycle_device_buffers(
     update_p_kernel = kernel_module.update_p_kernel
     update_x_r_z_rho_rTr_kernel = kernel_module.update_x_r_z_rho_rTr_kernel
     zero_scalar_kernel = kernel_module.zero_scalar_kernel
+    if solve_controls.get("coarse_residual_restriction", "average") == "conservative_sum":
+        from DARCY_WARP_PACKAGE.solvers.newton_kernels import restrict_integrated_flux_kernel
+        restrict_blockavg_kernel = restrict_integrated_flux_kernel
     device = self.device_str
 
     max_cycles_i = int(solve_controls.get("max_cycles", 20))
