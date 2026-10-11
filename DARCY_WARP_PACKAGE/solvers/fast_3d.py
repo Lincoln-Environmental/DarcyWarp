@@ -37,8 +37,10 @@ from DARCY_WARP_PACKAGE.solvers.face_kernels_3d_f64 import (
 )
 from DARCY_WARP_PACKAGE.solvers_3d import (
     _choose_horizontal_coarsening,
+    _coarsen_bc_mask_axes,
+    _coarsen_faces_consistent_axes,
     _coarsen_max_edge_axes,
-    _coarsen_mean_edge_axes,
+    _masked_block_sum_axes,
     _prepare_7point_transient_terms,
 )
 from DARCY_WARP_PACKAGE.warped_darcy import _chebyshev_relaxation_sequence
@@ -106,13 +108,20 @@ def _build_levels(
         if coarsen_y == 1 and coarsen_x == 1:
             break
         active_c = _coarsen_max_edge_axes(previous["active"], coarsen_y=coarsen_y, coarsen_x=coarsen_x)
-        bc_mask_c = _coarsen_max_edge_axes(previous["bc_mask"], coarsen_y=coarsen_y, coarsen_x=coarsen_x)
-        storage_c = _coarsen_mean_edge_axes(previous["storage"], coarsen_y=coarsen_y, coarsen_x=coarsen_x)
-        storage_c[(active_c == 0) | (bc_mask_c != 0)] = 0.0
-        face_c = tuple(
-            _coarsen_mean_edge_axes(value, coarsen_y=coarsen_y, coarsen_x=coarsen_x)
-            for value in previous["faces"]
+        bc_mask_c = _coarsen_bc_mask_axes(
+            previous["bc_mask"], previous["active"], coarsen_y=coarsen_y, coarsen_x=coarsen_x
         )
+        free_f = (previous["active"] != 0) & (previous["bc_mask"] == 0)
+        face_c, springs_c = _coarsen_faces_consistent_axes(
+            previous["faces"], previous["active"], previous["bc_mask"],
+            coarsen_y=coarsen_y, coarsen_x=coarsen_x,
+        )
+        # Galerkin Dirichlet springs ride on the coarse storage diagonal slot
+        # (diagonal-only, non-negative); see solvers_3d._coarsen_faces_consistent_axes.
+        storage_c = _masked_block_sum_axes(
+            previous["storage"], free_f.astype(np.float64), coarsen_y=coarsen_y, coarsen_x=coarsen_x
+        ) / float(coarsen_y * coarsen_x) + springs_c
+        storage_c[(active_c == 0) | (bc_mask_c != 0)] = 0.0
         levels.append({
             "faces": face_c,
             "active": active_c,

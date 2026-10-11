@@ -418,6 +418,233 @@ def _coarsen_mean_edge_axes(field_f: np.ndarray, *, coarsen_y: int, coarsen_x: i
     return arr_c.astype(NP_FLOAT, copy=False)
 
 
+def _masked_block_mean_axes(
+    field_f: np.ndarray,
+    weight_f: np.ndarray,
+    *,
+    coarsen_y: int,
+    coarsen_x: int,
+) -> np.ndarray:
+    """Horizontally semi-coarsen ``field_f`` as a masked block mean.
+
+    ``weight_f`` selects the fine cells that participate (1 = include,
+    0 = exclude).  A coarse cell with no participating fine cell receives 0.
+    Layers are preserved (no vertical coarsening).
+    """
+    fy = int(coarsen_y)
+    fx = int(coarsen_x)
+    if fy not in {1, 2} or fx not in {1, 2}:
+        raise ValueError("coarsen_y and coarsen_x must be 1 or 2.")
+    arr = np.asarray(field_f, dtype=np.float64)
+    wgt = np.asarray(weight_f, dtype=np.float64)
+    if arr.shape != wgt.shape or arr.ndim != 3:
+        raise ValueError("field_f and weight_f must be matching 3D arrays.")
+    nz_f, ny_f, nx_f = arr.shape
+    ny_c = (ny_f + fy - 1) // fy
+    nx_c = (nx_f + fx - 1) // fx
+    pad_y = fy * ny_c - ny_f
+    pad_x = fx * nx_c - nx_f
+    # Zero padding never participates: pad the weights with 0 so padded slots
+    # do not distort the masked mean (the old np.pad "edge" replication did).
+    arr_p = np.pad(arr, ((0, 0), (0, pad_y), (0, pad_x)), mode="constant")
+    wgt_p = np.pad(wgt, ((0, 0), (0, pad_y), (0, pad_x)), mode="constant")
+    num = (arr_p * wgt_p).reshape(nz_f, ny_c, fy, nx_c, fx).sum(axis=(2, 4))
+    den = wgt_p.reshape(nz_f, ny_c, fy, nx_c, fx).sum(axis=(2, 4))
+    out = np.zeros((nz_f, ny_c, nx_c), dtype=np.float64)
+    np.divide(num, den, out=out, where=den > 0.0)
+    return out.astype(NP_FLOAT, copy=False)
+
+
+def _coarsen_bc_mask_axes(
+    bc_mask_f: np.ndarray,
+    active_f: np.ndarray,
+    *,
+    coarsen_y: int,
+    coarsen_x: int,
+) -> np.ndarray:
+    """Semi-coarsen a Dirichlet mask without turning free cells into fixed ones.
+
+    A coarse cell is Dirichlet only when it contains at least one active fine
+    cell and *every* active fine cell in its block is Dirichlet.  A coarse cell
+    holding any free fine cell stays free so its correction equation survives.
+    """
+    fy = int(coarsen_y)
+    fx = int(coarsen_x)
+    if fy not in {1, 2} or fx not in {1, 2}:
+        raise ValueError("coarsen_y and coarsen_x must be 1 or 2.")
+    bcm = np.asarray(bc_mask_f, dtype=np.int32)
+    act = np.asarray(active_f, dtype=np.int32)
+    if bcm.shape != act.shape or bcm.ndim != 3:
+        raise ValueError("bc_mask_f and active_f must be matching 3D arrays.")
+    nz_f, ny_f, nx_f = bcm.shape
+    ny_c = (ny_f + fy - 1) // fy
+    nx_c = (nx_f + fx - 1) // fx
+    pad_y = fy * ny_c - ny_f
+    pad_x = fx * nx_c - nx_f
+    act_p = np.pad(act, ((0, 0), (0, pad_y), (0, pad_x)), mode="constant")
+    bcm_p = np.pad(bcm, ((0, 0), (0, pad_y), (0, pad_x)), mode="constant")
+    act_b = (act_p != 0).reshape(nz_f, ny_c, fy, nx_c, fx)
+    bcm_b = (bcm_p != 0).reshape(nz_f, ny_c, fy, nx_c, fx)
+    n_act = act_b.sum(axis=(2, 4))
+    n_bc = (act_b & bcm_b).sum(axis=(2, 4))
+    out = ((n_act > 0) & (n_bc == n_act)).astype(np.int32)
+    return out
+
+
+def _masked_block_sum_axes(
+    field_f: np.ndarray,
+    weight_f: np.ndarray,
+    *,
+    coarsen_y: int,
+    coarsen_x: int,
+) -> np.ndarray:
+    """Masked horizontal block sum (layers preserved); padding contributes 0."""
+    fy = int(coarsen_y)
+    fx = int(coarsen_x)
+    if fy not in {1, 2} or fx not in {1, 2}:
+        raise ValueError("coarsen_y and coarsen_x must be 1 or 2.")
+    arr = np.asarray(field_f, dtype=np.float64)
+    wgt = np.asarray(weight_f, dtype=np.float64)
+    if arr.shape != wgt.shape or arr.ndim != 3:
+        raise ValueError("field_f and weight_f must be matching 3D arrays.")
+    nz_f, ny_f, nx_f = arr.shape
+    ny_c = (ny_f + fy - 1) // fy
+    nx_c = (nx_f + fx - 1) // fx
+    pad_y = fy * ny_c - ny_f
+    pad_x = fx * nx_c - nx_f
+    arr_p = np.pad(arr * wgt, ((0, 0), (0, pad_y), (0, pad_x)), mode="constant")
+    return arr_p.reshape(nz_f, ny_c, fy, nx_c, fx).sum(axis=(2, 4))
+
+
+def _coarsen_faces_consistent_axes(
+    faces_f: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray],
+    active_f: np.ndarray,
+    bc_mask_f: np.ndarray | None = None,
+    *,
+    coarsen_y: int,
+    coarsen_x: int,
+) -> tuple[
+    tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray],
+    np.ndarray,
+]:
+    """Aggregate fine 7-point face conductances onto the semi-coarsened grid.
+
+    Returns ``(coarse_faces, coarse_bc_springs)``.  Unlike the previous
+    independent per-array block mean, the coarse operator approximates the
+    Galerkin product for piecewise-constant coarse corrections with the
+    block-average (free-cell) residual restriction the K-cycle actually uses:
+
+    - Coarse faces come only from the fine faces lying *on* the coarse-cell
+      boundary where both fine cells are free, summed and scaled by the
+      inverse block area: ``C_c = (sum of crossing fine faces) / (fy*fx)``.
+      ``tx_p`` of a coarse cell and ``tx_m`` of its neighbour are the same
+      value by construction (reciprocity), the scaling is exact for full
+      blocks, and faces interior to a coarse cell no longer inflate the
+      coarse diagonal.
+    - ``coarse_bc_springs`` collects, per coarse cell, the coupling of its
+      free fine cells to Dirichlet fine cells, with the same ``1/(fy*fx)``
+      scaling.  Those faces act as springs to ground on the coarse diagonal
+      (a Dirichlet fine cell carries zero correction), keeping mixed
+      Dirichlet/free coarse blocks non-singular without freezing them.
+
+    The result is a conservative, reciprocal finite-volume operator on the
+    coarse grid plus a non-negative diagonal spring term.
+    """
+    fy = int(coarsen_y)
+    fx = int(coarsen_x)
+    if fy not in {1, 2} or fx not in {1, 2}:
+        raise ValueError("coarsen_y and coarsen_x must be 1 or 2.")
+    tx_p, tx_m, ty_p, ty_m, tz_p, tz_m = (
+        np.asarray(value, dtype=np.float64) for value in faces_f
+    )
+    act = np.asarray(active_f, dtype=np.int32) != 0
+    if tx_p.shape != act.shape or tx_p.ndim != 3:
+        raise ValueError("faces_f and active_f must be matching 3D arrays.")
+    if bc_mask_f is None:
+        free = act
+    else:
+        free = act & (np.asarray(bc_mask_f, dtype=np.int32) == 0)
+    nz_f, ny_f, nx_f = act.shape
+    ny_c = (ny_f + fy - 1) // fy
+    nx_c = (nx_f + fx - 1) // fx
+    inv_block = 1.0 / float(fy * fx)
+
+    def _plane_sum_x(face: np.ndarray) -> np.ndarray:
+        # Face plane between coarse column ic and ic+1 sits at fine column
+        # i_b = (ic+1)*fx - 1 for ic in [0, nx_c-1).
+        out = np.zeros((nz_f, ny_c, nx_c), dtype=np.float64)
+        i_b = (np.arange(nx_c - 1) + 1) * fx - 1
+        valid_cols = i_b[i_b + 1 < nx_f]
+        if valid_cols.size == 0:
+            return out
+        left = face[:, :, valid_cols]
+        both_free = free[:, :, valid_cols] & free[:, :, valid_cols + 1]
+        sums = _masked_block_sum_axes(
+            left, both_free.astype(np.float64), coarsen_y=fy, coarsen_x=1
+        )
+        out[:, :, : valid_cols.size] = sums * inv_block
+        return out
+
+    def _plane_sum_y(face: np.ndarray) -> np.ndarray:
+        out = np.zeros((nz_f, ny_c, nx_c), dtype=np.float64)
+        j_b = (np.arange(ny_c - 1) + 1) * fy - 1
+        valid_rows = j_b[j_b + 1 < ny_f]
+        if valid_rows.size == 0:
+            return out
+        top = face[:, valid_rows, :]
+        both_free = free[:, valid_rows, :] & free[:, valid_rows + 1, :]
+        sums = _masked_block_sum_axes(
+            top, both_free.astype(np.float64), coarsen_y=1, coarsen_x=fx
+        )
+        out[:, : valid_rows.size, :] = sums * inv_block
+        return out
+
+    tx_p_c = _plane_sum_x(tx_p)
+    tx_m_c = np.zeros_like(tx_p_c)
+    tx_m_c[:, :, 1:] = tx_p_c[:, :, :-1]
+    ty_p_c = _plane_sum_y(ty_p)
+    ty_m_c = np.zeros_like(ty_p_c)
+    ty_m_c[:, 1:, :] = ty_p_c[:, :-1, :]
+
+    if nz_f > 1:
+        both_free_z = free[:-1] & free[1:]
+        tz_p_inner = (
+            _masked_block_sum_axes(
+                tz_p[:-1], both_free_z.astype(np.float64), coarsen_y=fy, coarsen_x=fx
+            )
+            * inv_block
+        )
+    else:
+        tz_p_inner = np.zeros((0, ny_c, nx_c), dtype=np.float64)
+    tz_p_c = np.zeros((nz_f, ny_c, nx_c), dtype=np.float64)
+    tz_p_c[:-1] = tz_p_inner
+    tz_m_c = np.zeros_like(tz_p_c)
+    tz_m_c[1:] = tz_p_c[:-1]
+
+    # Springs: free fine cell -> Dirichlet fine neighbour conductances, summed
+    # per fine cell, then block-summed with the same 1/(fy*fx) scaling.
+    spring_f = np.zeros((nz_f, ny_f, nx_f), dtype=np.float64)
+    bc = act & ~free
+    spring_f[:, :, :-1] += np.where(free[:, :, :-1] & bc[:, :, 1:], tx_p[:, :, :-1], 0.0)
+    spring_f[:, :, 1:] += np.where(free[:, :, 1:] & bc[:, :, :-1], tx_m[:, :, 1:], 0.0)
+    spring_f[:, :-1, :] += np.where(free[:, :-1, :] & bc[:, 1:, :], ty_p[:, :-1, :], 0.0)
+    spring_f[:, 1:, :] += np.where(free[:, 1:, :] & bc[:, :-1, :], ty_m[:, 1:, :], 0.0)
+    spring_f[:-1] += np.where(free[:-1] & bc[1:], tz_p[:-1], 0.0)
+    spring_f[1:] += np.where(free[1:] & bc[:-1], tz_m[1:], 0.0)
+    spring_c = (
+        _masked_block_sum_axes(
+            spring_f, free.astype(np.float64), coarsen_y=fy, coarsen_x=fx
+        )
+        * inv_block
+    )
+
+    faces_c = tuple(
+        value.astype(NP_FLOAT, copy=False)
+        for value in (tx_p_c, tx_m_c, ty_p_c, ty_m_c, tz_p_c, tz_m_c)
+    )
+    return faces_c, spring_c.astype(NP_FLOAT, copy=False)
+
+
 def _coarsen_max_edge_axes(mask_f: np.ndarray, *, coarsen_y: int, coarsen_x: int) -> np.ndarray:
     """
     Horizontally semi-coarsen a 3D mask while preserving layer index.
@@ -2246,25 +2473,43 @@ def solve_multigrid_kcycle_7point_3d(
         active_c = _coarsen_max_edge_axes(
             prev["active"], coarsen_y=coarsen_y, coarsen_x=coarsen_x
         )
-        bc_mask_c = _coarsen_max_edge_axes(
-            prev["bc_mask"], coarsen_y=coarsen_y, coarsen_x=coarsen_x
+        bc_mask_c = _coarsen_bc_mask_axes(
+            prev["bc_mask"], prev["active"], coarsen_y=coarsen_y, coarsen_x=coarsen_x
         )
         bc_values_c = np.zeros((nz_c, ny_c, nx_c), dtype=NP_FLOAT)
 
-        storage_c = _coarsen_mean_edge_axes(
-            prev["storage_diag"], coarsen_y=coarsen_y, coarsen_x=coarsen_x
+        free_f = (prev["active"] != 0) & (prev["bc_mask"] == 0)
+        face_c, springs_c = _coarsen_faces_consistent_axes(
+            (prev["tx_p"], prev["tx_m"], prev["ty_p"], prev["ty_m"], prev["tz_p"], prev["tz_m"]),
+            prev["active"],
+            prev["bc_mask"],
+            coarsen_y=coarsen_y,
+            coarsen_x=coarsen_x,
         )
+        # The coarse diagonal carries the Galerkin Dirichlet springs (coupling
+        # of free fine cells to fixed-head fine cells) through the storage
+        # slot; both are non-negative diagonal-only contributions and the
+        # kernels simply add storage to the diagonal.
+        storage_c = (
+            _masked_block_sum_axes(
+                prev["storage_diag"],
+                free_f.astype(np.float64),
+                coarsen_y=coarsen_y,
+                coarsen_x=coarsen_x,
+            )
+            / float(coarsen_y * coarsen_x)
+        ) + springs_c
         free_c = (active_c != 0) & (bc_mask_c == 0)
         storage_c[~free_c] = NP_FLOAT(0.0)
 
         levels_host.append(
             {
-                "tx_p": _coarsen_mean_edge_axes(prev["tx_p"], coarsen_y=coarsen_y, coarsen_x=coarsen_x),
-                "tx_m": _coarsen_mean_edge_axes(prev["tx_m"], coarsen_y=coarsen_y, coarsen_x=coarsen_x),
-                "ty_p": _coarsen_mean_edge_axes(prev["ty_p"], coarsen_y=coarsen_y, coarsen_x=coarsen_x),
-                "ty_m": _coarsen_mean_edge_axes(prev["ty_m"], coarsen_y=coarsen_y, coarsen_x=coarsen_x),
-                "tz_p": _coarsen_mean_edge_axes(prev["tz_p"], coarsen_y=coarsen_y, coarsen_x=coarsen_x),
-                "tz_m": _coarsen_mean_edge_axes(prev["tz_m"], coarsen_y=coarsen_y, coarsen_x=coarsen_x),
+                "tx_p": face_c[0],
+                "tx_m": face_c[1],
+                "ty_p": face_c[2],
+                "ty_m": face_c[3],
+                "tz_p": face_c[4],
+                "tz_m": face_c[5],
                 "active": active_c,
                 "bc_mask": bc_mask_c,
                 "bc_values": bc_values_c,
