@@ -248,9 +248,16 @@ def _run_kcycles(
     dt_used: float,
     isolated: np.ndarray | None = None,
     n_isolated: int = 0,
+    restore_values: np.ndarray | None = None,
     return_info: bool = True,
 ):
-    """Run the K-cycle iteration on device levels; capture/replay CUDA graph."""
+    """Run the K-cycle iteration on device levels; capture/replay CUDA graph.
+
+    ``restore_values`` supplies the heads reported for excluded singular
+    cells (typically the pre-masking initial head); defaults to ``x0``.
+    """
+    if restore_values is None:
+        restore_values = x0
     shape = x0.shape
     fine = levels[0]
     fine["x"].assign(x0)
@@ -323,7 +330,7 @@ def _run_kcycles(
     if n_free == 0:
         head = fine["x"].numpy()
         if n_isolated and isolated is not None:
-            head[isolated] = x0[isolated]
+            head[isolated] = restore_values[isolated]
         info = {
             "solver_type": "kcycle_7point_3d",
             "implementation": "fast",
@@ -428,7 +435,7 @@ def _run_kcycles(
         # Excluded singular cells carry no flux and no residual; report their
         # initial head rather than the zero the working mask leaves behind.
         head = head.copy()
-        head[isolated] = x0[isolated]
+        head[isolated] = restore_values[isolated]
     return (head, info) if return_info else head
 
 
@@ -608,6 +615,7 @@ def solve_fast_confined_kcycle_3d(
         raise ValueError("initial_head shape must match the face arrays.")
     if not np.all(np.isfinite(x0)):
         raise ValueError("initial_head must contain finite values.")
+    restore0 = x0.copy()
     x0[active_work == 0] = 0.0
     x0[bc_f != 0] = np.asarray(bc_values, dtype=np.float64)[bc_f != 0]
 
@@ -631,9 +639,9 @@ def solve_fast_confined_kcycle_3d(
         dt_used=dt_used,
         isolated=isolated,
         n_isolated=n_isolated,
+        restore_values=restore0,
         return_info=True,
     )
-    # Physical water budget of the solved discrete system (host, one pass).
     from DARCY_WARP_PACKAGE.physics.budget_3d import compute_3d_flow_budget
 
     info["budget"] = compute_3d_flow_budget(
@@ -852,6 +860,7 @@ def solve_fast_unconfined_kcycle_3d(
             rec["reused"] = True
         levels = state["levels"]
         n_free_i = int(np.count_nonzero((active_i != 0) & (bcm0 == 0)))
+        restore0 = np.asarray(h0, dtype=np.float64).copy()
         x0 = np.asarray(h0, dtype=np.float64).copy()
         x0[active_i == 0] = 0.0
         x0[bcm0 != 0] = bcv0[bcm0 != 0]
@@ -875,6 +884,7 @@ def solve_fast_unconfined_kcycle_3d(
             dt_used=dt_i,
             isolated=isolated,
             n_isolated=n_isolated,
+            restore_values=restore0,
             return_info=True,
         )
 
