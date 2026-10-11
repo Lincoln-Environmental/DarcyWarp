@@ -293,7 +293,8 @@ class NonlinearOperator2D:
         self._stage_vector(vector)
         return self.jacobian_vector_device(self._head_wp, self._vector_wp, out=out)
 
-    def jacobian_vector_device(self, head: Any, vector: Any, out: Any | None = None) -> Any:
+    def jacobian_vector_device(self, head: Any, vector: Any, out: Any | None = None,
+                              *, boundary_head: Any | None = None) -> Any:
         """Allocation-free device action ``out = J(head) @ vector``.
 
         Warp automatic differentiation is intentionally not used.  The kernel
@@ -301,11 +302,12 @@ class NonlinearOperator2D:
         of the authoritative Stage-1 residual.
         """
         Jv_wp = self._Jv_wp if out is None else out
+        branch_head = head if boundary_head is None else boundary_head
         wp.launch(
             kernel=_k.nl_jacobian_vector_kernel,
             dim=self._dim,
             inputs=[
-                head, vector, self._K_wp, self._zbot_wp, self._has_ztop, self._ztop_wp,
+                head, branch_head, vector, self._K_wp, self._zbot_wp, self._has_ztop, self._ztop_wp,
                 float(self._min_sat), self._active_wp, self._dirichlet_mask_wp,
                 self._gh_mask_wp, self._gh_head_wp, self._ghb_factor_wp,
                 self._drn_mask_wp, self._drn_elev_wp, self._drn_cond_wp,
@@ -316,7 +318,7 @@ class NonlinearOperator2D:
             device=self._device,
         )
         if self._coast is not None:
-            self._coast.add(head=head, vector=vector, output=Jv_wp, mode=1)
+            self._coast.add(head=branch_head, vector=vector, output=Jv_wp, mode=1)
         return Jv_wp
 
     def frozen_picard_vector_device(self, vector: Any, out: Any) -> Any:
@@ -334,7 +336,7 @@ class NonlinearOperator2D:
             device=self._device)
         return out
 
-    def freeze_picard_device(self, head: Any) -> tuple[Any, Any]:
+    def freeze_picard_device(self, head: Any, *, boundary_head: Any | None = None) -> tuple[Any, Any]:
         """Refresh and return device ``(T, storage_diag)`` Picard coefficients."""
         wp.launch(
             kernel=_k.nl_picard_freeze_kernel,
@@ -349,15 +351,38 @@ class NonlinearOperator2D:
             ],
             device=self._device,
         )
+        branch_head = head if boundary_head is None else boundary_head
         if self._has_gated:
             from .coastal import gated_diagonal_kernel
             wp.launch(kernel=gated_diagonal_kernel, dim=self._dim,
-                inputs=[head, self._free_mask_wp, self._drn_mask_wp, self._drn_elev_wp,
+                inputs=[branch_head, self._free_mask_wp, self._drn_mask_wp, self._drn_elev_wp,
                     self._drn_cond_wp, self._riv_mask_wp, self._riv_rbot_wp,
                     self._riv_cond_wp, 1, self._pic_diag_wp], device=self._device)
         if self._coast is not None:
-            self._coast.add(head=head, vector=head, output=self._pic_diag_wp, mode=2)
+            self._coast.add(head=branch_head, vector=head, output=self._pic_diag_wp, mode=2)
         return self._pic_T_wp, self._pic_diag_wp
+
+    def gated_model_rhs_device(self, *, head: Any, branch_head: Any, out: Any) -> None:
+        """Add exact boundary affine offsets to an already scaled -F RHS.
+
+        Interior derivatives remain evaluated at head; only gated boundary
+        branches are selected at the proposed head. No physical state changes.
+        """
+        wp.launch(kernel=_k.nl_gated_model_rhs_kernel, dim=self._dim,
+            inputs=[head, branch_head, self._free_mask_wp, self._drn_mask_wp,
+                self._drn_elev_wp, self._drn_cond_wp, self._riv_mask_wp,
+                self._riv_stage_wp, self._riv_rbot_wp, self._riv_cond_wp, out], device=self._device)
+        if self._coast is not None:
+            self._coast.model_rhs(head=head, branch_head=branch_head, out=out)
+
+    def gated_branch_changes_device(self, *, first: Any, second: Any, count: Any) -> int:
+        count.fill_(wp.int32(0))
+        wp.launch(kernel=_k.nl_gated_branch_changes_kernel, dim=self._dim,
+            inputs=[first, second, self._free_mask_wp, self._drn_mask_wp, self._drn_elev_wp,
+                self._riv_mask_wp, self._riv_rbot_wp, count], device=self._device)
+        if self._coast is not None:
+            self._coast.branch_changes(first=first, second=second, count=count)
+        return int(count.numpy()[0])
 
     def freeze_confined_device(self, *, transmissivity: Any, head: Any,
                               drain_equality_active: bool) -> tuple[Any, Any]:

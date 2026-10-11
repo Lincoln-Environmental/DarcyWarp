@@ -105,3 +105,78 @@ def test_fixed_t_preparation_preserves_native_gated_sources(device, drain_equali
             out=operator.residual_device_array, drain_equality_active=drain_equality_active)
         np.testing.assert_allclose(result.numpy(), native, rtol=1e-12, atol=1e-10)
         assert operator.current_reduced_norms().l2 == pytest.approx(np.linalg.norm(native))
+
+
+@pytest.mark.parametrize("device", ["cpu", "cuda:0"])
+def test_newly_activated_drain_stalls_smooth_newton_but_exact_gated_model_converges(device):
+    """A nearly contacted drain activates under a nonlocal groundwater rise."""
+    from DARCY_WARP_PACKAGE.warped_darcy import WarpDarcySolver
+    from DARCY_WARP_PACKAGE.nonlinear.coastal import CoastalSubfaces2D
+    shape = (1, 6)
+    initial = np.zeros(shape)
+    initial[0, 1] = .0008
+    mask = np.zeros(shape, int)
+    mask[0, 1] = 1
+    elevations = np.full(shape, .0008+1e-9)
+    recharge = .3/365.25
+    coast = CoastalSubfaces2D(rows=np.array([0]), columns=np.array([0]), head_m=np.zeros(1),
+        conductance_m2_per_time=np.ones(1), submerged=np.ones(1, int))
+    outcomes = {}
+    for enabled in (False, True):
+        model = WarpDarcySolver(nx=shape[1], ny=shape[0], dx=5., device=device,
+            use_drn=True, diag_preconditioner_backend='device')
+        try:
+            model.build_from_fields(T_field=np.full(shape, 50.), R_field=np.full(shape, recharge),
+                active=np.ones(shape, int), bc_mask=np.zeros(shape, int), bc_values=np.zeros(shape),
+                drn_mask=mask, drn_elev=elevations, drn_cond=np.full(shape, 250.), coastal_boundary=coast)
+            head, info = model.solve(formulation='unconfined', solver='unconfined_semismooth_newton_kcycle',
+                initial_head=initial.copy(), reference_transmissivity_field=np.full(shape, 50.),
+                zbot_field=np.full(shape, -50.), ztop_field=np.full(shape, .1),
+                newton_max_iterations=10, newton_fgmres_relative_tolerance=1e-9,
+                newton_gated_model_enabled=enabled, newton_fallback_to_picard=False)
+            outcomes[enabled] = (head, info)
+        finally:
+            model.close()
+    failed_head, failed = outcomes[False]
+    assert not failed['converged'] and failed['newton_failure_reason'] == 'line_search_failed'
+    np.testing.assert_array_equal(failed_head, initial)
+    head, repaired = outcomes[True]
+    assert repaired['converged'], repaired['newton_failure_reason']
+    assert repaired['gated_corrective_active_set_iterations'] > 0
+    assert repaired['true_nonlinear_residual_rms'] <= 1e-6
+    assert head[0, 1] > elevations[0, 1]
+    outflow = head[0, 0]+250.*(head[0, 1]-elevations[0, 1])
+    assert outflow == pytest.approx(recharge*25.*initial.size, abs=1e-7)
+    assert repaired['budget_summary']['drn_out'] > 0.
+    assert not repaired['newton_fallback_used']
+
+
+@pytest.mark.parametrize("device", ["cpu", "cuda:0"])
+def test_exact_gated_newton_model_keeps_constant_t_interior_and_native_fluxes(device):
+    import warp as wp
+    from DARCY_WARP_PACKAGE.nonlinear import from_arrays, NonlinearOperator2D
+    from DARCY_WARP_PACKAGE.nonlinear.coastal import CoastalSubfaces2D
+    from DARCY_WARP_PACKAGE.nonlinear.kernels import WP_FLOAT
+    shape = (3, 4)
+    head = np.broadcast_to(np.array([-2., 0., 2., 4.]), shape).copy()
+    change = np.broadcast_to(np.array([3., -1., -5., 2.]), shape).copy()
+    mask, zero = np.ones(shape, int), np.zeros(shape)
+    coast = CoastalSubfaces2D(rows=np.array([0, 0, 1]), columns=np.array([0, 1, 0]),
+        head_m=np.array([0., 1., 0.]), conductance_m2_per_time=np.array([100., 10., 10.]), submerged=np.array([1, 0, 0]))
+    context = from_arrays(nx=4, ny=3, dx=5., K=np.full(shape, 1.25), zbot=np.full(shape, -50.),
+        ztop=np.full(shape, -10.), active=mask, dirichlet_mask=np.zeros(shape, int), dirichlet_values=zero,
+        R_field=np.full(shape, .001), drn_mask=mask, drn_elev=zero, drn_cond=np.full(shape, 250.),
+        riv_mask=mask, riv_stage=np.full(shape, 3.), riv_rbot=np.full(shape, -1.), riv_cond=np.full(shape, 10.),
+        coastal_boundary=coast, device=device)
+    with NonlinearOperator2D(context) as operator:
+        original = operator.residual(head=head).numpy().copy()
+        proposed = operator.residual(head=head+change).numpy().copy()
+        current = wp.array(head, dtype=WP_FLOAT, device=device)
+        branch = wp.array(head+change, dtype=WP_FLOAT, device=device)
+        vector = wp.array(change, dtype=WP_FLOAT, device=device)
+        action = operator.jacobian_vector_device(head=current, vector=vector, boundary_head=branch).numpy().copy()
+        offset = wp.zeros(shape, dtype=WP_FLOAT, device=device)
+        operator.gated_model_rhs_device(head=current, branch_head=branch, out=offset)
+        np.testing.assert_allclose(action-offset.numpy(), proposed-original, rtol=1e-12, atol=1e-9)
+        count = wp.zeros(1, dtype=wp.int32, device=device)
+        assert operator.gated_branch_changes_device(first=current, second=branch, count=count) == 10

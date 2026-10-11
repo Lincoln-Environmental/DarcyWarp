@@ -96,9 +96,155 @@ def _head_equivalent_rms(
     return float(np.sqrt(max(total, 0.0) / float(operator.n_free))) if operator.n_free else 0.0
 
 
+def _backtrack_newton_direction(*, operator, vectors, correction, residual_rms,
+                                max_backtracks, min_step, max_head_change, armijo):
+    """Evaluate candidates without committing, using the native acceptance rule."""
+    alpha, backtracks = 1.0, 0
+    candidate_norms = None
+    dh_rms, dh_max = float('nan'), float('nan')
+    accepted = False
+    while backtracks <= max_backtracks and alpha >= min_step:
+        vectors.change_sq.fill_(wp.float64(0.))
+        vectors.change_max.fill_(wp.float64(0.))
+        vectors.finite_flag.fill_(wp.int32(0))
+        wp.launch(kernel=_k.masked_candidate_kernel, dim=operator.ctx.shape,
+            inputs=[operator.head_device, correction, operator.active_device,
+                operator.dirichlet_mask_device, operator.dirichlet_values_device, alpha,
+                vectors.candidate, vectors.change_sq, vectors.change_max, vectors.finite_flag,
+                operator.ctx.nx, operator.ctx.ny], device=operator.device)
+        dh_max = float(vectors.change_max.numpy()[0])
+        dh_sq = float(vectors.change_sq.numpy()[0])
+        dh_rms = float(np.sqrt(max(dh_sq, 0.)/operator.n_free)) if operator.n_free else 0.
+        if int(vectors.finite_flag.numpy()[0]) == 0 and dh_max <= max_head_change:
+            operator.residual_device(vectors.candidate, out=vectors.candidate_residual, reduce=True)
+            candidate_norms = operator.current_reduced_norms()
+            if np.isfinite(candidate_norms.rms) and candidate_norms.rms <= max(
+                    0., (1.-armijo*alpha)*residual_rms):
+                accepted = True
+                break
+        alpha *= .5
+        backtracks += 1
+    return accepted, alpha, backtracks, candidate_norms, dh_rms, dh_max
+
+
+def _gated_newton_model_step(*, operator, preconditioner, vectors, workspace,
+                             residual_norms, relative_tolerance, absolute_tolerance,
+                             max_iterations, max_model_work, max_backtracks, min_step,
+                             max_head_change, armijo):
+    """Backtrack the Newton model with gated fluxes solved on each branch.
+
+    F_flux(H)+J_flux(H)*dH+Q_gate(H+dH) = (1-alpha)*F(H).
+    Interior derivatives are unchanged. Only the piecewise affine boundary
+    terms are exact in this model; candidate acceptance uses the real residual.
+    """
+    shape, nx, ny = operator.ctx.shape, operator.ctx.nx, operator.ctx.ny
+    seed = wp.clone(workspace.solution)
+    branch = wp.clone(operator.head_device)
+    krylov = RestartedFGMRES2D(workspace=workspace, active=operator.active_device,
+        prescribed=operator.dirichlet_mask_device, nx=nx, ny=ny, device=operator.device)
+
+    def apply_model(vector, out):
+        return operator.jacobian_vector_device(head=operator.head_device, vector=vector,
+            out=out, boundary_head=branch)
+
+    def apply_preconditioner(rhs, out):
+        return preconditioner.apply(rhs=rhs, out=out)
+
+    vectors.change_sq.fill_(wp.float64(0.))
+    vectors.change_max.fill_(wp.float64(0.))
+    vectors.finite_flag.fill_(wp.int32(0))
+    wp.launch(kernel=_k.masked_candidate_kernel, dim=shape,
+        inputs=[operator.head_device, seed, operator.active_device, operator.dirichlet_mask_device,
+            operator.dirichlet_values_device, 1., branch, vectors.change_sq, vectors.change_max,
+            vectors.finite_flag, nx, ny], device=operator.device)
+    seed_max = float(vectors.change_max.numpy()[0])
+    alpha, backtracks = 1., 0
+    while alpha*seed_max > max_head_change and backtracks <= max_backtracks:
+        alpha *= .5
+        backtracks += 1
+    history = []
+    totals = dict(iterations=0, restarts=0, reduction_count=0)
+    result = None
+    accepted = False
+    candidate_norms = None
+    dh_rms, dh_max = float('nan'), float('nan')
+    while backtracks <= max_backtracks and alpha >= min_step and len(history) < max_model_work:
+        vectors.change_sq.fill_(wp.float64(0.))
+        vectors.change_max.fill_(wp.float64(0.))
+        vectors.finite_flag.fill_(wp.int32(0))
+        wp.launch(kernel=_k.masked_candidate_kernel, dim=shape,
+            inputs=[operator.head_device, seed, operator.active_device, operator.dirichlet_mask_device,
+                operator.dirichlet_values_device, alpha, branch, vectors.change_sq, vectors.change_max,
+                vectors.finite_flag, nx, ny], device=operator.device)
+        settled = False
+        for _ in range(max_backtracks+1):
+            if len(history) >= max_model_work:
+                break
+            t, diagonal = operator.freeze_picard_device(head=operator.head_device, boundary_head=branch)
+            preconditioner.freeze(transmissivity=t, storage_diagonal=diagonal)
+            wp.launch(kernel=_k.masked_copy_kernel, dim=shape,
+                inputs=[operator.residual_device_array, operator.active_device,
+                    operator.dirichlet_mask_device, workspace.rhs, -alpha, nx, ny], device=operator.device)
+            operator.gated_model_rhs_device(head=operator.head_device, branch_head=branch, out=workspace.rhs)
+            rhs_norm = krylov._norm(workspace.rhs)
+            # Affine gate offsets can enlarge the RHS. Keep the requested
+            # true residual at least as strict as against alpha*original F.
+            rtol = relative_tolerance*min(1., alpha*residual_norms.l2/max(rhs_norm, np.finfo(float).tiny))
+            result = krylov.solve(rhs=workspace.rhs, apply_jacobian=apply_model,
+                apply_preconditioner=apply_preconditioner, relative_tolerance=rtol,
+                absolute_tolerance=absolute_tolerance, max_iterations=max_iterations)
+            for name in totals:
+                totals[name] += getattr(result, name)
+            totals['reduction_count'] += 1
+            record = dict(alpha=alpha, linear_converged=bool(result.converged),
+                linear_iterations=int(result.iterations), linear_initial_true_residual=float(result.residual_history[0]),
+                linear_final_true_residual=float(result.final_residual), requested_relative_tolerance=rtol,
+                requested_absolute_tolerance=absolute_tolerance)
+            history.append(record)
+            if not result.converged:
+                break
+            vectors.change_sq.fill_(wp.float64(0.))
+            vectors.change_max.fill_(wp.float64(0.))
+            vectors.finite_flag.fill_(wp.int32(0))
+            wp.launch(kernel=_k.masked_candidate_kernel, dim=shape,
+                inputs=[operator.head_device, workspace.solution, operator.active_device,
+                    operator.dirichlet_mask_device, operator.dirichlet_values_device, 1., vectors.candidate,
+                    vectors.change_sq, vectors.change_max, vectors.finite_flag, nx, ny], device=operator.device)
+            if int(vectors.finite_flag.numpy()[0]) != 0:
+                record['nonfinite_candidate'] = True
+                break
+            record['branch_changes'] = operator.gated_branch_changes_device(first=branch,
+                second=vectors.candidate, count=vectors.finite_flag)
+            if record['branch_changes'] == 0:
+                settled = True
+                break
+            wp.copy(branch, vectors.candidate)
+        if settled:
+            dh_max = float(vectors.change_max.numpy()[0])
+            dh_sq = float(vectors.change_sq.numpy()[0])
+            dh_rms = float(np.sqrt(max(dh_sq, 0.)/operator.n_free)) if operator.n_free else 0.
+            if np.isfinite(dh_max) and dh_max <= max_head_change:
+                operator.residual_device(vectors.candidate, out=vectors.candidate_residual, reduce=True)
+                candidate_norms = operator.current_reduced_norms()
+                if np.isfinite(candidate_norms.rms) and candidate_norms.rms <= max(
+                        0., (1.-armijo*alpha)*residual_norms.rms):
+                    accepted = True
+                    break
+        alpha *= .5
+        backtracks += 1
+    diagnostic = dict(accepted=accepted, model_history=history, model_work=len(history),
+        accepted_step_length=alpha if accepted else 0.,
+        residual_rms_after=None if candidate_norms is None else candidate_norms.rms)
+    if result is None:
+        from .fgmres import FGMRESResult
+        result = FGMRESResult(converged=False, iterations=0, restarts=0, final_residual=float('inf'),
+            breakdown=False, breakdown_reason='no_model_work', residual_history=[], reduction_count=0)
+    return diagnostic, replace(result, **totals), (accepted, alpha, backtracks, candidate_norms, dh_rms, dh_max)
+
+
 def _confined_startup(*, operator, preconditioner, vectors, workspace,
                       relative_tolerance, absolute_tolerance, max_iterations,
-                      max_outer_iterations, residual_tolerance):
+                      max_outer_iterations, residual_tolerance, commit=True):
     """Solve the fixed-T gated problem before handing off to unconfined Newton.
 
     DRNs/RIVs remain native, outflow-gated terms, not fixed heads. A single
@@ -202,7 +348,9 @@ def _confined_startup(*, operator, preconditioner, vectors, workspace,
         operator.residual_device(trial, out=vectors.candidate_residual, reduce=True)
         after = operator.current_reduced_norms().rms
         diagnostic.update(status='non_descent_candidate', nonlinear_residual_after=after)
-        if np.isfinite(after) and after < before:
+        if not commit:
+            diagnostic.update(status='gated_picard_candidate', accepted=False)
+        elif np.isfinite(after) and after < before:
             operator.set_head_device(trial)
             wp.copy(operator.residual_device_array, vectors.candidate_residual)
             diagnostic.update(status='accepted_initial_iterate', accepted=True)
@@ -216,7 +364,7 @@ def _confined_startup(*, operator, preconditioner, vectors, workspace,
         result = FGMRESResult(converged=True, iterations=0, restarts=0,
             final_residual=0., breakdown=False, breakdown_reason=None,
             residual_history=[0.], reduction_count=0)
-    return diagnostic, replace(result, **totals)
+    return diagnostic, replace(result, **totals), trial
 
 
 def conductivity_from_reference_transmissivity(*, transmissivity, bottom, top, active):
@@ -341,6 +489,10 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
     # accepted result keeps full final accuracy.
     forcing_final_tighten_ratio = float(kwargs.pop("newton_forcing_final_tighten_ratio", 100.0))
     log_progress = bool(kwargs.pop("newton_log_progress", False))
+    debug_observer = kwargs.pop('newton_debug_observer', None)
+    gated_model_enabled = bool(kwargs.pop('newton_gated_model_enabled', True))
+    if debug_observer is not None and not callable(debug_observer):
+        raise ValueError('Newton debug observer must be callable')
     max_newton = int(kwargs.pop("newton_max_iterations", 20))
     picard_warm_steps = int(kwargs.pop("newton_picard_warm_start_iterations", 0))
     if picard_warm_steps < 0 or (transient and picard_warm_steps):
@@ -485,6 +637,7 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
         cheby_lambda_min=float(kwargs.get("cheby_lambda_min", 0.05)),
         cheby_lambda_max=float(kwargs.get("cheby_lambda_max", 1.95)),
         coarse_residual_restriction=coarse_restriction,
+        implementation=str(kwargs.get('inner_implementation', 'classic')),
     )
 
     # The authoritative operator is cached on the resource owner and reused
@@ -534,6 +687,7 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
     total_reductions = 0
     total_backtracks = 0
     accepted_updates = 0
+    gated_active_set_work = 0
     startup_diagnostics = dict(status='not_requested', accepted=False)
     start_memory = None
     end_memory = None
@@ -560,7 +714,7 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
         initial_residual = norms.rms
 
         if not transient and startup_mode == 'confined_pre_solve' and norms.rms > residual_tol:
-            startup_diagnostics, startup_linear = _confined_startup(operator=operator,
+            startup_diagnostics, startup_linear, _ = _confined_startup(operator=operator,
                 preconditioner=preconditioner, vectors=vector_workspace, workspace=fgmres_workspace,
                 relative_tolerance=float(kwargs.get('rel_tol', krylov_rtol)),
                 absolute_tolerance=float(kwargs.get('abs_tol_min', krylov_atol)),
@@ -583,6 +737,9 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
         warm_start_active = picard_warm_steps > 0
         for newton_iteration in range(max_newton):
             if converged:
+                break
+            if newton_iteration + gated_active_set_work >= max_newton:
+                failure_reason = 'newton_iteration_limit'
                 break
             if forcing_enabled:
                 ratio = norms.rms / max(float(initial_residual), 1.0e-300)
@@ -656,48 +813,68 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
                 failure_reason = result.breakdown_reason or "fgmres_nonconvergence"
                 break
 
-            alpha = 1.0
-            accepted = False
-            backtracks = 0
-            candidate_norms = None
-            dh_rms = float("nan")
-            dh_max = float("nan")
-            while backtracks <= max_backtracks and alpha >= min_step:
-                vector_workspace.change_sq.fill_(wp.float64(0.0))
-                vector_workspace.change_max.fill_(wp.float64(0.0))
-                vector_workspace.finite_flag.fill_(wp.int32(0))
-                wp.launch(
-                    kernel=_k.masked_candidate_kernel,
-                    dim=shape,
-                    inputs=[
-                        operator.head_device,
-                        fgmres_workspace.solution,
-                        operator.active_device,
-                        operator.dirichlet_mask_device,
-                        operator.dirichlet_values_device,
-                        alpha,
-                        vector_workspace.candidate,
-                        vector_workspace.change_sq,
-                        vector_workspace.change_max,
-                        vector_workspace.finite_flag,
-                        nx,
-                        ny,
-                    ],
-                    device=model.device_str,
-                )
-                nonfinite = int(vector_workspace.finite_flag.numpy()[0]) != 0
-                dh_max = float(vector_workspace.change_max.numpy()[0])
-                dh_sq = float(vector_workspace.change_sq.numpy()[0])
-                dh_rms = float(np.sqrt(max(dh_sq, 0.0) / float(operator.n_free))) if operator.n_free else 0.0
-                if not nonfinite and dh_max <= max_head_change:
-                    operator.residual_device(vector_workspace.candidate, out=vector_workspace.candidate_residual, reduce=True)
-                    candidate_norms = operator.current_reduced_norms()
-                    target = max(0.0, (1.0 - armijo * alpha) * norms.rms)
-                    if np.isfinite(candidate_norms.rms) and candidate_norms.rms <= target:
-                        accepted = True
-                        break
-                alpha *= 0.5
-                backtracks += 1
+            if debug_observer is not None:
+                # Explicit diagnostics only. Read-only copies ensure a callback
+                # cannot alter solver-owned iterates or Krylov workspaces.
+                observed = dict(head=operator.head_device.numpy().copy(),
+                    correction=fgmres_workspace.solution.numpy().copy(),
+                    residual=operator.residual_device_array.numpy().copy())
+                for array in observed.values():
+                    array.setflags(write=False)
+                debug_observer(newton_iteration=newton_iteration+1, **observed)
+
+            accepted, alpha, backtracks, candidate_norms, dh_rms, dh_max = _backtrack_newton_direction(
+                operator=operator, vectors=vector_workspace, correction=fgmres_workspace.solution,
+                residual_rms=norms.rms, max_backtracks=max_backtracks, min_step=min_step,
+                max_head_change=max_head_change, armijo=armijo)
+            gated_proposal = None
+            iteration_linear_work = result.iterations
+            slow_switching_step = False
+            if accepted and backtracks > forcing_safeguard_backtracks and candidate_norms is not None:
+                expected = (1.-alpha+iteration_rtol*alpha)*norms.rms
+                if candidate_norms.rms > expected:
+                    slow_switching_step = operator.gated_branch_changes_device(first=operator.head_device,
+                        second=vector_workspace.candidate, count=vector_workspace.finite_flag) > 0
+            if (gated_model_enabled and (not accepted or slow_switching_step)
+                    and direction_kind == 'analytical_newton' and not transient
+                    and preconditioner_kind == 'kcycle' and (operator._has_gated or operator._coast is not None)
+                    and newton_iteration + gated_active_set_work + 1 < max_newton):
+                # Retain an already acceptable trial if the exact-gate Newton
+                # model cannot improve it. Only device copies are needed.
+                previous_trial = (accepted, alpha, backtracks, candidate_norms, dh_rms, dh_max)
+                previous_candidate = wp.clone(vector_workspace.candidate) if accepted else None
+                previous_residual = wp.clone(vector_workspace.candidate_residual) if accepted else None
+                operator.residual_device(operator.head_device, reduce=True)
+                gated_proposal, proposal_linear, model_trial = _gated_newton_model_step(
+                    operator=operator, preconditioner=preconditioner, vectors=vector_workspace,
+                    workspace=fgmres_workspace, residual_norms=norms, relative_tolerance=iteration_rtol,
+                    absolute_tolerance=krylov_atol, max_iterations=max_krylov,
+                    max_model_work=max_newton-newton_iteration-gated_active_set_work-1,
+                    max_backtracks=max_backtracks, min_step=min_step,
+                    max_head_change=max_head_change, armijo=armijo)
+                gated_active_set_work += gated_proposal['model_work']
+                total_fgmres_iterations += proposal_linear.iterations
+                total_fgmres_restarts += proposal_linear.restarts
+                total_reductions += proposal_linear.reduction_count
+                iteration_linear_work += proposal_linear.iterations
+                for linear in gated_proposal['model_history']:
+                    linear_history.append(dict(newton_iteration=newton_iteration+1,
+                        linear_operator='gated_newton_model', converged=linear['linear_converged'],
+                        iterations=linear['linear_iterations'], initial_true_residual=linear['linear_initial_true_residual'],
+                        final_true_residual=linear['linear_final_true_residual'],
+                        requested_relative_tolerance=linear['requested_relative_tolerance'],
+                        requested_absolute_tolerance=linear['requested_absolute_tolerance'], breakdown_reason=None))
+                if model_trial[0] and (not accepted or model_trial[3].rms < candidate_norms.rms):
+                    accepted, alpha, backtracks, candidate_norms, dh_rms, dh_max = model_trial
+                    backtracks += previous_trial[2]
+                    direction_kind = 'gated_newton_model'
+                    result = proposal_linear
+                else:
+                    accepted, alpha, backtracks, candidate_norms, dh_rms, dh_max = previous_trial
+                    backtracks += model_trial[2]
+                    if accepted:
+                        wp.copy(vector_workspace.candidate, previous_candidate)
+                        wp.copy(vector_workspace.candidate_residual, previous_residual)
 
             total_backtracks += backtracks
             history.append(
@@ -710,12 +887,13 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
                     "backtrack_count": int(backtracks),
                     "head_change_rms": float(dh_rms),
                     "head_change_max": float(dh_max),
-                    "fgmres_iterations": int(result.iterations),
+                    "fgmres_iterations": int(iteration_linear_work),
                     "fgmres_restarts": int(result.restarts),
                     "fgmres_final_residual": float(result.final_residual),
                     "fgmres_relative_tolerance": float(iteration_rtol),
                     "fgmres_breakdown": bool(result.breakdown),
                     "fgmres_breakdown_reason": result.breakdown_reason,
+                    "gated_proposal": gated_proposal,
                 }
             )
             if log_progress:
@@ -851,6 +1029,9 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
             "flow_coefficient_input": 'full_column_reference_transmissivity' if reference_transmissivity is not None else 'hydraulic_conductivity',
             "reference_transmissivity_field": reference_transmissivity,
             "newton_iterations": int(accepted_updates),
+            "gated_corrective_active_set_iterations": int(gated_active_set_work),
+            "debug_observer_enabled": debug_observer is not None,
+            "gated_newton_model_enabled": gated_model_enabled,
             "unconfined_startup_mode": startup_mode,
             "confined_startup": startup_diagnostics,
             "picard_warm_start_updates": sum(item['direction_kind'] == 'frozen_picard' and item['accepted_step_length'] > 0 for item in history),
@@ -869,6 +1050,7 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
             "fgmres_restart_size": int(restart),
             "coarse_residual_restriction": coarse_restriction,
             "preconditioner_kind": preconditioner_kind,
+            "preconditioner_implementation": getattr(preconditioner, 'implementation', preconditioner_kind),
             "preconditioner_setup_wall_s": getattr(preconditioner, "setup_wall_s", None),
             "preconditioner_apply_wall_s": getattr(preconditioner, "apply_wall_s", None),
             "preconditioner_full_vector_transfer_bytes": getattr(preconditioner, "full_vector_transfer_bytes", 0),

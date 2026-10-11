@@ -488,6 +488,50 @@ def nl_confined_sources_kernel(
 
 
 @wp.kernel
+def nl_gated_model_rhs_kernel(
+    head: wp.array(dtype=WP_FLOAT, ndim=2), branch: wp.array(dtype=WP_FLOAT, ndim=2),
+    free: wp.array(dtype=wp.int32, ndim=2),
+    drn_mask: wp.array(dtype=wp.int32, ndim=2), drn_elev: wp.array(dtype=WP_FLOAT, ndim=2),
+    drn_cond: wp.array(dtype=WP_FLOAT, ndim=2), riv_mask: wp.array(dtype=wp.int32, ndim=2),
+    riv_stage: wp.array(dtype=WP_FLOAT, ndim=2), riv_bottom: wp.array(dtype=WP_FLOAT, ndim=2),
+    riv_cond: wp.array(dtype=WP_FLOAT, ndim=2), rhs: wp.array(dtype=WP_FLOAT, ndim=2),
+):
+    j, i = wp.tid()
+    if free[j, i] == 0:
+        return
+    offset = wp.float64(0.)
+    if drn_mask[j, i] != 0:
+        gap = wp.float64(head[j, i])-wp.float64(drn_elev[j, i])
+        current = wp.max(gap, wp.float64(0.))
+        affine = wp.float64(0.)
+        if branch[j, i] >= drn_elev[j, i]:
+            affine = gap
+        offset += wp.float64(drn_cond[j, i])*(current-affine)
+    if riv_mask[j, i] != 0:
+        current = wp.max(wp.float64(head[j, i]), wp.float64(riv_bottom[j, i]))-wp.float64(riv_stage[j, i])
+        affine = wp.float64(riv_bottom[j, i])-wp.float64(riv_stage[j, i])
+        if branch[j, i] > riv_bottom[j, i]:
+            affine = wp.float64(head[j, i])-wp.float64(riv_stage[j, i])
+        offset += wp.float64(riv_cond[j, i])*(current-affine)
+    rhs[j, i] = WP_FLOAT(wp.float64(rhs[j, i])+offset)
+
+
+@wp.kernel
+def nl_gated_branch_changes_kernel(
+    first: wp.array(dtype=WP_FLOAT, ndim=2), second: wp.array(dtype=WP_FLOAT, ndim=2),
+    free: wp.array(dtype=wp.int32, ndim=2), drn_mask: wp.array(dtype=wp.int32, ndim=2),
+    drn_elev: wp.array(dtype=WP_FLOAT, ndim=2), riv_mask: wp.array(dtype=wp.int32, ndim=2),
+    riv_bottom: wp.array(dtype=WP_FLOAT, ndim=2), count: wp.array(dtype=wp.int32),
+):
+    j, i = wp.tid()
+    if free[j, i] != 0:
+        changed = drn_mask[j, i] != 0 and ((first[j, i] >= drn_elev[j, i]) != (second[j, i] >= drn_elev[j, i]))
+        changed_riv = riv_mask[j, i] != 0 and ((first[j, i] > riv_bottom[j, i]) != (second[j, i] > riv_bottom[j, i]))
+        if changed or changed_riv:
+            wp.atomic_add(count, 0, 1)
+
+
+@wp.kernel
 def nl_picard_freeze_kernel(
     head: wp.array(dtype=WP_FLOAT, ndim=2),
     head_prev: wp.array(dtype=WP_FLOAT, ndim=2),
@@ -610,6 +654,7 @@ def nl_picard_freeze_kernel(
 @wp.kernel
 def nl_jacobian_vector_kernel(
     head: wp.array(dtype=WP_FLOAT, ndim=2),
+    boundary_head: wp.array(dtype=WP_FLOAT, ndim=2),
     vector: wp.array(dtype=WP_FLOAT, ndim=2),
     K: wp.array(dtype=WP_FLOAT, ndim=2),
     zbot: wp.array(dtype=WP_FLOAT, ndim=2),
@@ -802,7 +847,7 @@ def nl_jacobian_vector_kernel(
     if drn_mask[j, i] != 0:
         cd = wp.float64(drn_cond[j, i])
         if cd > wp.float64(0.0) and not wp.isnan(cd):
-            if h_c >= wp.float64(drn_elev[j, i]):
+            if wp.float64(boundary_head[j, i]) >= wp.float64(drn_elev[j, i]):
                 flow_sum = flow_sum + cd
                 result = result + cd * v_c
 
@@ -811,7 +856,7 @@ def nl_jacobian_vector_kernel(
     if riv_mask[j, i] != 0:
         cr = wp.float64(riv_cond[j, i])
         if cr > wp.float64(0.0) and not wp.isnan(cr):
-            if h_c > wp.float64(riv_rbot[j, i]):
+            if wp.float64(boundary_head[j, i]) > wp.float64(riv_rbot[j, i]):
                 flow_sum = flow_sum + cr
                 result = result + cr * v_c
 

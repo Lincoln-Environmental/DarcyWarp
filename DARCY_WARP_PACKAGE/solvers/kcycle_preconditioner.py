@@ -75,11 +75,19 @@ class FixedWorkKCyclePreconditioner2D:
         cheby_lambda_min: float,
         cheby_lambda_max: float,
         coarse_residual_restriction: str = "average",
+        implementation: str = "classic",
     ):
         self.model = model
         self.levels = levels
         self.workspace = workspace
         self.n_cycles = max(1, int(n_cycles))
+        self.implementation = str(implementation).strip().lower()
+        if self.implementation not in ('classic', 'fast'):
+            raise ValueError('K-cycle preconditioner implementation must be classic or fast')
+        if self.implementation == 'fast' and coarse_residual_restriction != 'average':
+            raise ValueError('fast face preconditioner supports average residual restriction only')
+        self.face_levels = None
+        self.graph_cache = {}
         self.controls = {
             "coarse_residual_restriction": coarse_residual_restriction,
             "max_cycles": self.n_cycles,
@@ -143,6 +151,20 @@ class FixedWorkKCyclePreconditioner2D:
                 storage_diag_wp=coeff.storage_diagonal,
             )
 
+        if self.implementation == 'fast':
+            from .face_transient_f64 import ensure_transient_face_levels, refresh_transient_face_levels
+            snapshots = [(level.T_wp, level.storage_diag_wp, level.M_inv_wp) for level in self.levels]
+            try:
+                for level, coeff in zip(self.levels, self.workspace.coefficients):
+                    level.T_wp = coeff.transmissivity
+                    level.storage_diag_wp = coeff.storage_diagonal
+                    level.M_inv_wp = coeff.diagonal_inverse
+                self.face_levels = ensure_transient_face_levels(model=self.model, levels=self.levels)
+                refresh_transient_face_levels(model=self.model, levels=self.levels, face_levels=self.face_levels)
+            finally:
+                for level, snapshot in zip(self.levels, snapshots):
+                    level.T_wp, level.storage_diag_wp, level.M_inv_wp = snapshot
+
     def apply(self, rhs: Any, out: Any) -> None:
         """Apply fixed K-cycle work without allocations, checks, or host reads."""
         out.fill_(WP_FLOAT(0.0))
@@ -162,7 +184,17 @@ class FixedWorkKCyclePreconditioner2D:
             level.storage_diag_wp = coeff.storage_diagonal
             level.M_inv_wp = coeff.diagonal_inverse
         try:
-            solve_kcycle_device_buffers(
+            if self.implementation == 'fast':
+                from .face_transient_f64 import solve_kcycle_face_transient_device_buffers
+                solve_kcycle_face_transient_device_buffers(model=self.model, x_wp=out, rhs_wp=rhs,
+                    T_wp=self.workspace.coefficients[0].transmissivity,
+                    storage_diag_wp=self.workspace.coefficients[0].storage_diagonal,
+                    active_wp=level0.active_wp, bc_mask_wp=level0.bc_mask_wp,
+                    bc_values_wp=self.workspace.zero_boundary_values, levels=self.levels,
+                    face_levels=self.face_levels, solve_controls=self.controls,
+                    return_scalar_info=False, graph_cache=self.graph_cache)
+            else:
+                solve_kcycle_device_buffers(
                 model=self.model,
                 x_wp=out,
                 rhs_wp=rhs,
@@ -175,7 +207,7 @@ class FixedWorkKCyclePreconditioner2D:
                 solve_controls=self.controls,
                 return_scalar_info=False,
                 fixed_work_no_scalar_reads=True,
-            )
+                )
         finally:
             for level, snapshot in zip(self.levels, snapshots):
                 level.T_wp, level.storage_diag_wp, level.M_inv_wp = snapshot

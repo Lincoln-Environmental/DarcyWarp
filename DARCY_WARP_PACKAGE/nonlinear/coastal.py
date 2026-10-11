@@ -97,6 +97,46 @@ class CoastalDeviceTerms:
             wp.launch(kernel=coastal_add_kernel, dim=self.fields[0].size,
                 inputs=[head, vector, *self.fields, mode, output], device=self.device)
 
+    def model_rhs(self, *, head, branch_head, out):
+        if self.fields[0].size:
+            wp.launch(kernel=coastal_model_rhs_kernel, dim=self.fields[0].size,
+                inputs=[head, branch_head, *self.fields, out], device=self.device)
+
+    def branch_changes(self, *, first, second, count):
+        if self.fields[0].size:
+            wp.launch(kernel=coastal_branch_changes_kernel, dim=self.fields[0].size,
+                inputs=[first, second, *self.fields, count], device=self.device)
+
+
+@wp.kernel
+def coastal_model_rhs_kernel(
+    head: wp.array(dtype=WP_FLOAT, ndim=2), branch: wp.array(dtype=WP_FLOAT, ndim=2),
+    rows: wp.array(dtype=wp.int32), cols: wp.array(dtype=wp.int32),
+    levels: wp.array(dtype=WP_FLOAT), cond: wp.array(dtype=WP_FLOAT),
+    submerged: wp.array(dtype=wp.int32), output: wp.array(dtype=WP_FLOAT, ndim=2),
+):
+    n = wp.tid()
+    if submerged[n] == 0:
+        j, i = rows[n], cols[n]
+        gap = head[j, i]-levels[n]
+        affine = WP_FLOAT(0.)
+        if branch[j, i] > levels[n]:
+            affine = gap
+        wp.atomic_add(output, j, i, cond[n]*(wp.max(gap, WP_FLOAT(0.))-affine))
+
+
+@wp.kernel
+def coastal_branch_changes_kernel(
+    first: wp.array(dtype=WP_FLOAT, ndim=2), second: wp.array(dtype=WP_FLOAT, ndim=2),
+    rows: wp.array(dtype=wp.int32), cols: wp.array(dtype=wp.int32),
+    levels: wp.array(dtype=WP_FLOAT), cond: wp.array(dtype=WP_FLOAT),
+    submerged: wp.array(dtype=wp.int32), count: wp.array(dtype=wp.int32),
+):
+    n = wp.tid()
+    j, i = rows[n], cols[n]
+    if submerged[n] == 0 and ((first[j, i] > levels[n]) != (second[j, i] > levels[n])):
+        wp.atomic_add(count, 0, 1)
+
 
 @wp.kernel
 def gated_diagonal_kernel(head: wp.array(dtype=WP_FLOAT, ndim=2),
