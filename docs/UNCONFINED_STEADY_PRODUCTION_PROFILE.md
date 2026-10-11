@@ -8,12 +8,16 @@ DRN/RIV/coastal boundaries. It names the existing accelerated numerical method;
 it does not replace public defaults or change the governing equation.
 
 **Validation status (11 October 2026):** CPU/CUDA gated-flow components pass;
-the complete connected-channel Purau problem converges numerically and closes
-its independent budget. It does **not** pass the physical hot-start gate:
-some non-drain heads exceed terrain. Thus the profile is a tested numerical
-configuration, not a certificate that the present Purau boundary assumptions
-produce an acceptable RichardsWarp initial state. No accepted hot checkpoint
-or Richards storm is produced from those diagnostic heads.
+full Purau steady solves converge and close independent groundwater budgets.
+The original channel-only solution leaves upward hydraulic potential outside
+its outlets; this is not intrinsically invalid groundwater pressure or proof
+of ponding. Adding finite Richards-profile soil seepage DRNs produces a
+budget-accepted full-catchment solution and an independently inventoried
+storm-zero pressure/retention checkpoint. See the
+[soil-profile outlet extension](#soil-profile-seepage-extension-interpretation-correction).
+The controlled channel-only benchmarks below retain their historical workflow
+labels. A Richards transient or routed storm has not yet been validated from
+the new state, and the regional model is not an exact 3D Richards equilibrium.
 
 A steady solve has no storage term, timestep controller or secant-Sy update.
 The regional Dupuit groundwater problem is an approximation used to prepare
@@ -148,7 +152,7 @@ DRN/RIV/coast arrays before solving.
 
 This **complete executable example** constructs the real Purau model from a
 prepared steady-array archive, checks execution, independently sums recharge,
-DRN and coast, rejects unphysical heads/floor dependence, and exports only an
+DRN and coast, requires represented surface outlets and rejects unreviewed flow-floor dependence, and exports only an
 accepted head. The called implementation is committed at
 `working_tests/run_steady_production_profile.py` (not pseudocode). Run from the
 DarcyWarp repository:
@@ -179,7 +183,7 @@ if __name__ == "__main__":
 
 Use `DARCY_FLOAT=float64` before importing the model. On the current channel-only
 Purau inputs, this example deliberately **raises at the physical gate** rather
-than exporting a misleading accepted head. The array archive supplies geometry
+than exporting a head without its intended soil-surface discharge mechanism. The array archive supplies geometry
 and physical terms, not a trusted restart head. For other models including
 CHD/GHB/RIV, extend the independent external budget accordingly; the example
 is specifically the Purau DRN/coastal case.
@@ -309,8 +313,9 @@ areas and outflow gates, without invented correction water.
 
 The five-level solution has R13556.0164271, DRN12050.2371774, coastalout1505.77924975,
 coastalin0 m³/day. It has18241 non-drain heads above DEM, maximum9.504745 m;
-these indicate land-surface discharge not represented by the selected
-channel-only outlet assumptions. They must not be clipped into an accepted
+these indicate upward gradients whose soil-surface discharge is not represented by the
+selected channel-only outlet assumptions. Positive head above DEM is not an
+intrinsically invalid unconfined/artesian state and is not surface-water depth. They must not be clipped into an accepted
 hot start or silently replaced by all-cell drains. Boundary/geometry assumptions
 require explicit physical review separately from numerical-profile validation.
 
@@ -439,3 +444,51 @@ to this DarcyWarp checkout, not the older isolated worktree. Tested working
 source fingerprints are saved even when Git HEAD predates the profile commit;
 the final implementation/tests/documentation commit is recoverable with
 `git log --all -- docs/UNCONFINED_STEADY_PRODUCTION_PROFILE.md`.
+
+## Soil-profile seepage extension (interpretation correction)
+
+The channel-only numerical solution above is a valid converged solution of its
+stated groundwater equations. The earlier workflow's "physical failure" label
+was too categorical: H>DEM represents an upward hydraulic potential. To model
+the equivalent Richards soil discharge, SHANZ now offers
+`--surface-seepage soil_profile --numerical-profile production`.
+
+`shanz/initialization/darcy_seepage.py` adds potential non-channel surface DRNs
+using full cell area and the actual Richards vertical saturated resistance:
+
+`C = A / (0.2/Kv_FSL + 0.8/0.1 + 4.0/10)` in m²/day for the5 m profile.
+
+The implementation obtains horizon depths/Kv from the saved Richards
+configuration, not from an unrelated drain tuning parameter. Existing selected
+channel-bed conductances and coastal subfaces remain distinct and unchanged.
+Native DRN gating activates surface discharge only where H>DEM; below DEM
+there is no withdrawal or atmospheric inflow. Potential contacts at every
+non-channel cell avoid a second host-side activation solver and allow newly
+emerging discharge within the existing native semismooth active set.
+
+These are finite-conductance outlets, not fixed heads or inferred standing
+surface water. Regional head is interpreted as the hydraulic potential at
+the base of the shallow Richards-equivalent vertical resistance. This remains
+a reduced-order approximation, not an exact terrain-metric Richards steady
+solution. Channel and soil surface discharge are separately budgeted; no
+antecedent discharge is added again as storm forcing. The resulting saturated
+positive-pressure initial columns must retain valid constitutive inventories.
+
+SHANZ distinguishes valid upward pressure from **unrepresented surface
+seepage contacts** in its diagnostics. Its hot-start export still requires
+native convergence, an independent external budget, supported geometry and
+explicit discharge ownership. Historical evidence files preserve the old
+label verbatim; this section corrects its scientific interpretation.
+
+The soil-profile extension subsequently converged on full Purau in39.719 s,
+with16 Newton,1161 FGMRES and2322 executed fast K-cycles. Independent groundwater
+budget residual is6.04e-9 m³/day; channel DRNs8144.97168, soil seepage4529.94141,
+coastout881.10334 m³/day sum to recharge13556.01643.5606 soil contacts discharge;
+zero regional flow-floor columns. A storm-zero Richards pressure/retention
+checkpoint was generated and independently inventoried, with no Richards
+advance. Sources: SHANZ7d90f2e, DarcyWarpd7ee792 (native code unchanged).
+Outputs and exact reproduction are preserved in sibling SHANZ
+`docs/DARCY_SOIL_SEEPAGE_2026-10-11.md` and
+`results/darcy_hot_start/soil_profile_seepage_300_20261011/recharge_300_conductance_1`.
+This changes outlet physics; do not claim an equivalent-physics speedup from
+its comparison with the channel-only numerical benchmark above.

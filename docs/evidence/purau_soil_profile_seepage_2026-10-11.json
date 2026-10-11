@@ -1,0 +1,321 @@
+{
+  "configuration": {
+    "recharge_mm_year": 300.0,
+    "days_per_year": 365.25,
+    "thickness_m": 5.0,
+    "bottom_elevation_m": -50.0,
+    "coastal_exposed_band_height_m": 0.25,
+    "aquifer_k_m_day": 10.0,
+    "reference_transmissivity_m2_day": 50.0,
+    "sea_head_m": 0.0,
+    "channel_bed_k_m_day": 0.1,
+    "channel_width_m": 1.0,
+    "bed_resistance_thickness_m": 0.2,
+    "conductance_multiplier": 1.0,
+    "minimum_flow_thickness_m": 0.1,
+    "nearly_dry_thickness_m": 0.05,
+    "budget_relative_tolerance": 1e-06,
+    "budget_absolute_m3_day": 1e-06,
+    "head_validity_tolerance_m": 1e-06
+  },
+  "wall_s": 39.71882714598905,
+  "outputs": "/home/patrickdurney/PycharmProjects/SHANZ/results/darcy_hot_start/soil_profile_seepage_300_20261011/recharge_300_conductance_1",
+  "status": "verified_steady",
+  "source_provenance": {
+    "python": "/home/patrickdurney/miniconda3/envs/shanz/bin/python",
+    "solvers": {
+      "DarcyWarp": {
+        "path": "/home/patrickdurney/PycharmProjects/DarcyWarp/DARCY_WARP_PACKAGE/__init__.py",
+        "repository": {
+          "root": "/home/patrickdurney/PycharmProjects/DarcyWarp",
+          "sha": "d7ee792f352bdcddffc593ba990bf3a1fc3b7f8f",
+          "branch": "feature/shanz-surface-coupling",
+          "dirty": true,
+          "status": "?? DARCY_WARP_PACKAGE/canterbury_case_study/results/forward_base_summary.json\n?? DARCY_WARP_PACKAGE/canterbury_case_study/run_forward_case_study.py\n?? DARCY_WARP_PACKAGE/case_studies/\n?? DARCY_WARP_PACKAGE/data/Paper_mf6_truth_1000x1000_ghb_True_t_isotropic_False/\n?? DARCY_WARP_PACKAGE/data/Paper_mf6_truth_1000x1001/\n?? DARCY_WARP_PACKAGE/data/Paper_mf6_truth_100x100/\n?? DARCY_WARP_PACKAGE/data/Paper_mf6_truth_100x1000/\n?? DARCY_WARP_PACKAGE/data/Paper_mf6_truth_100x250/\n?? DARCY_WARP_PACKAGE/data/Paper_mf6_truth_2000x1000/\n?? DARCY_WARP_PACKAGE/data/Paper_mf6_truth_250x1000/\n?? DARCY_WARP_PACKAGE/data/Paper_mf6_truth_3000x111/\n?? DARCY_WARP_PACKAGE/data/Paper_mf6_truth_3000x1999/\n?? DARCY_WARP_PACKAGE/data/Paper_mf6_truth_3000x223/\n?? DARCY_WARP_PACKAGE/data/Paper_mf6_truth_3000x333/\n?? DARCY_WARP_PACKAGE/data/Paper_mf6_truth_3000x999/\n?? DARCY_WARP_PACKAGE/data/Paper_mf6_truth_400x400/\n?? DARCY_WARP_PACKAGE/data/Paper_mf6_truth_500x500_ghb_True_t_isotropic_False/\n?? DARCY_WARP_PACKAGE/data/comparison_results_ghb_Truehard_vat_t.json\n?? DARCY_WARP_PACKAGE/data/comparison_results_ghb_Truehard_vat_t_fast.json\n?? DARCY_WARP_PACKAGE/data/comparison_results_ghb_Truehard_vat_t_mixed.json\n?? DARCY_WARP_PACKAGE/data/mf6_T_ensemble_benchmark/\n?? DARCY_WARP_PACKAGE/data/mf6_ensemble_benchmark/\n?? DARCY_WARP_PACKAGE/data/mf6_truth_npz/mf6_truth_1000x1000_ghb_True_t_isotropic_False.npz\n?? DARCY_WARP_PACKAGE/data/mf6_truth_npz/mf6_truth_500x500_ghb_True_t_isotropic_False.npz\n?? DARCY_WARP_PACKAGE/data/warp_class_T_ensemble_benchmark_10000/\n?? DARCY_WARP_PACKAGE/data/warp_class_T_ensemble_benchmark_1000000/\n?? DARCY_WARP_PACKAGE/data/warp_class_T_ensemble_benchmark_results_10000.json\n?? DARCY_WARP_PACKAGE/data/warp_class_ensemble_benchmark_10000/\n?? DARCY_WARP_PACKAGE/data/warp_class_ensemble_benchmark_1000000/\n?? DARCY_WARP_PACKAGE/data/warp_class_ensemble_benchmark_results_recharge_10000.json\n?? DARCY_WARP_PACKAGE/data/working_tests/\n?? DARCY_WARP_PACKAGE/solvers/face_kernels_3d_f64.py\n?? DARCY_WARP_PACKAGE/solvers/fast_3d.py\n?? DARCY_WARP_PACKAGE/solvers/session_3d.py\n?? cross_section_results/\n?? paper/\n?? patch_transient.py\n?? patch_vs_mf6.py\n?? test_fas_ss.py\n?? tests/test_3d_face_kernels.py\n?? tests/test_3d_hierarchy_axes.py\n?? tests/test_3d_operator_analytical.py\n?? tests/test_3d_session.py\n?? tests/test_fast_3d_kcycle.py\n?? working_tests/benchmark_out.txt\n?? working_tests/cross_section_results/\n?? working_tests/mixed_precision_profile_fp32.json\n?? working_tests/mixed_precision_profile_fp64.json\n?? working_tests/mixed_precision_profile_mixed.json\n?? working_tests/mixed_precision_ref/\n?? working_tests/mixed_precision_results_fp32_ghb_False_t_isotropic_True.json\n?? working_tests/mixed_precision_results_fp32_ghb_True_t_isotropic_False.json\n?? working_tests/mixed_precision_results_fp64_ghb_False_t_isotropic_True.json\n?? working_tests/mixed_precision_results_fp64_ghb_True_t_isotropic_False.json\n?? working_tests/mixed_precision_results_mixed_ghb_False_t_isotropic_True.json\n?? working_tests/mixed_precision_results_mixed_ghb_True_t_isotropic_False.json\n?? working_tests/mixed_vcycle_results_mixed-fast-k2-nuc30.json\n?? working_tests/mixed_vcycle_results_mixed-fast-k5-nuc10.json\n?? working_tests/mixed_vcycle_results_mixed-fast-k5-nuc10_ghb_False_iso_True.json\n?? working_tests/mixed_vcycle_results_mixed-fast-k5-nuc30.json\n?? working_tests/mixed_vcycle_results_mixed-kcycle-k1.json\n?? working_tests/mixed_vcycle_results_mixed-kcycle-k2.json\n?? working_tests/mixed_vcycle_results_mixed-kcycle-k5.json\n?? working_tests/mixed_vcycle_results_mixed-vcycle-v1-nu22.json\n?? working_tests/mixed_vcycle_results_mixed-vcycle-v2-nu22.json\n?? working_tests/mixed_vcycle_results_vcost-float32.json"
+        },
+        "source_sha256": "3d3f397c48d3b1d9600e78bb898e371fea4827454262e486a461c6baef97f89e",
+        "imported_modules": {
+          "DARCY_WARP_PACKAGE": "/home/patrickdurney/PycharmProjects/DarcyWarp/DARCY_WARP_PACKAGE/__init__.py",
+          "DARCY_WARP_PACKAGE.physics.operator_data": "/home/patrickdurney/PycharmProjects/DarcyWarp/DARCY_WARP_PACKAGE/physics/operator_data.py",
+          "DARCY_WARP_PACKAGE.physics.storage_2d": "/home/patrickdurney/PycharmProjects/DarcyWarp/DARCY_WARP_PACKAGE/physics/storage_2d.py",
+          "DARCY_WARP_PACKAGE.physics.budget_3d": "/home/patrickdurney/PycharmProjects/DarcyWarp/DARCY_WARP_PACKAGE/physics/budget_3d.py",
+          "DARCY_WARP_PACKAGE.physics": "/home/patrickdurney/PycharmProjects/DarcyWarp/DARCY_WARP_PACKAGE/physics/__init__.py",
+          "DARCY_WARP_PACKAGE.solvers.context": "/home/patrickdurney/PycharmProjects/DarcyWarp/DARCY_WARP_PACKAGE/solvers/context.py",
+          "DARCY_WARP_PACKAGE.solvers.resources": "/home/patrickdurney/PycharmProjects/DarcyWarp/DARCY_WARP_PACKAGE/solvers/resources.py",
+          "DARCY_WARP_PACKAGE.solver_capabilities": "/home/patrickdurney/PycharmProjects/DarcyWarp/DARCY_WARP_PACKAGE/solver_capabilities.py",
+          "DARCY_WARP_PACKAGE.solvers.capabilities": "/home/patrickdurney/PycharmProjects/DarcyWarp/DARCY_WARP_PACKAGE/solvers/capabilities.py",
+          "DARCY_WARP_PACKAGE.solvers.regression": "/home/patrickdurney/PycharmProjects/DarcyWarp/DARCY_WARP_PACKAGE/solvers/regression.py",
+          "DARCY_WARP_PACKAGE.solvers.base": "/home/patrickdurney/PycharmProjects/DarcyWarp/DARCY_WARP_PACKAGE/solvers/base.py",
+          "DARCY_WARP_PACKAGE.solvers.multigrid_kcycle": "/home/patrickdurney/PycharmProjects/DarcyWarp/DARCY_WARP_PACKAGE/solvers/multigrid_kcycle.py",
+          "DARCY_WARP_PACKAGE.solvers.pcg": "/home/patrickdurney/PycharmProjects/DarcyWarp/DARCY_WARP_PACKAGE/solvers/pcg.py",
+          "DARCY_WARP_PACKAGE.solvers.picard_unconfined": "/home/patrickdurney/PycharmProjects/DarcyWarp/DARCY_WARP_PACKAGE/solvers/picard_unconfined.py",
+          "DARCY_WARP_PACKAGE.nonlinear.kernels": "/home/patrickdurney/PycharmProjects/DarcyWarp/DARCY_WARP_PACKAGE/nonlinear/kernels.py",
+          "DARCY_WARP_PACKAGE.nonlinear.context": "/home/patrickdurney/PycharmProjects/DarcyWarp/DARCY_WARP_PACKAGE/nonlinear/context.py",
+          "DARCY_WARP_PACKAGE.nonlinear.operator": "/home/patrickdurney/PycharmProjects/DarcyWarp/DARCY_WARP_PACKAGE/nonlinear/operator.py",
+          "DARCY_WARP_PACKAGE.nonlinear": "/home/patrickdurney/PycharmProjects/DarcyWarp/DARCY_WARP_PACKAGE/nonlinear/__init__.py",
+          "DARCY_WARP_PACKAGE.solvers.newton_kernels": "/home/patrickdurney/PycharmProjects/DarcyWarp/DARCY_WARP_PACKAGE/solvers/newton_kernels.py",
+          "DARCY_WARP_PACKAGE.solvers.fgmres": "/home/patrickdurney/PycharmProjects/DarcyWarp/DARCY_WARP_PACKAGE/solvers/fgmres.py",
+          "DARCY_WARP_PACKAGE.solvers.kcycle_preconditioner": "/home/patrickdurney/PycharmProjects/DarcyWarp/DARCY_WARP_PACKAGE/solvers/kcycle_preconditioner.py",
+          "DARCY_WARP_PACKAGE.solvers.newton_state": "/home/patrickdurney/PycharmProjects/DarcyWarp/DARCY_WARP_PACKAGE/solvers/newton_state.py",
+          "DARCY_WARP_PACKAGE.solvers.semismooth_newton": "/home/patrickdurney/PycharmProjects/DarcyWarp/DARCY_WARP_PACKAGE/solvers/semismooth_newton.py",
+          "DARCY_WARP_PACKAGE.solvers.fas_hierarchy": "/home/patrickdurney/PycharmProjects/DarcyWarp/DARCY_WARP_PACKAGE/solvers/fas_hierarchy.py",
+          "DARCY_WARP_PACKAGE.solvers.fas_kernels": "/home/patrickdurney/PycharmProjects/DarcyWarp/DARCY_WARP_PACKAGE/solvers/fas_kernels.py",
+          "DARCY_WARP_PACKAGE.solvers.fas_state": "/home/patrickdurney/PycharmProjects/DarcyWarp/DARCY_WARP_PACKAGE/solvers/fas_state.py",
+          "DARCY_WARP_PACKAGE.solvers.fas": "/home/patrickdurney/PycharmProjects/DarcyWarp/DARCY_WARP_PACKAGE/solvers/fas.py",
+          "DARCY_WARP_PACKAGE.solvers.registry": "/home/patrickdurney/PycharmProjects/DarcyWarp/DARCY_WARP_PACKAGE/solvers/registry.py",
+          "DARCY_WARP_PACKAGE.solvers": "/home/patrickdurney/PycharmProjects/DarcyWarp/DARCY_WARP_PACKAGE/solvers/__init__.py",
+          "DARCY_WARP_PACKAGE.solvers.steady_config": "/home/patrickdurney/PycharmProjects/DarcyWarp/DARCY_WARP_PACKAGE/solvers/steady_config.py"
+        }
+      },
+      "RichardsWarp": {
+        "path": "/tmp/richards-hot-start/richardswarp/__init__.py",
+        "repository": {
+          "root": "/tmp/richards-hot-start",
+          "sha": "3e7f685bce60291f59c994aeb4e86fc502fd57c7",
+          "branch": "",
+          "dirty": false,
+          "status": ""
+        },
+        "source_sha256": "c826fdb307652607337efaf115f6bba3e5322a4e7145999efc2fcd95729ab6d0",
+        "imported_modules": {
+          "richardswarp": "/tmp/richards-hot-start/richardswarp/__init__.py"
+        }
+      },
+      "Overlander": {
+        "path": "/home/patrickdurney/PycharmProjects/Overlander/overland_flow/__init__.py",
+        "repository": {
+          "root": "/home/patrickdurney/PycharmProjects/Overlander",
+          "sha": "156e03fe5d03bfe327f2e11f8f52ec79c2b56e1e",
+          "branch": "feature/shanz-external-coupling",
+          "dirty": true,
+          "status": "?? np\n?? rasterio"
+        },
+        "source_sha256": "2973ff6fa125e34990c6f244c69c1485275fa0ca143277ab96bd567e1e4627fc",
+        "imported_modules": {
+          "overland_flow": "/home/patrickdurney/PycharmProjects/Overlander/overland_flow/__init__.py"
+        }
+      }
+    },
+    "environment": {
+      "DARCY_FLOAT": "float64",
+      "SHANZ_SOLVER_ROOT": "/tmp/hot-start-solvers",
+      "PYTHONPATH": null
+    },
+    "SHANZ": {
+      "repository": {
+        "root": "/home/patrickdurney/PycharmProjects/SHANZ",
+        "sha": "7d90f2e507ade5639139fedf7fad4b3f170d8267",
+        "branch": "feature/surface-groundwater-coupling",
+        "dirty": true,
+        "status": "?? docs/handoffs/evidence/fv3d-2026-10-08/dry_150s.npz\n?? docs/handoffs/evidence/fv3d-2026-10-08/dry_300s.npz\n?? docs/handoffs/evidence/fv3d-2026-10-08/dry_30s.npz\n?? docs/handoffs/evidence/fv3d-2026-10-08/dry_60s.npz\n?? docs/handoffs/evidence/fv3d-2026-10-08/emergence_150s.npz\n?? docs/handoffs/evidence/fv3d-2026-10-08/emergence_300s.npz\n?? docs/handoffs/evidence/fv3d-2026-10-08/emergence_30s.npz\n?? docs/handoffs/evidence/fv3d-2026-10-08/emergence_60s.npz\n?? docs/handoffs/evidence/fv3d-2026-10-08/excess_rain_150s.npz\n?? docs/handoffs/evidence/fv3d-2026-10-08/excess_rain_300s.npz\n?? docs/handoffs/evidence/fv3d-2026-10-08/excess_rain_30s.npz\n?? docs/handoffs/evidence/fv3d-2026-10-08/excess_rain_60s.npz\n?? docs/handoffs/evidence/fv3d-2026-10-08/flow_through_150s.npz\n?? docs/handoffs/evidence/fv3d-2026-10-08/flow_through_300s.npz\n?? docs/handoffs/evidence/fv3d-2026-10-08/flow_through_30s.npz\n?? docs/handoffs/evidence/fv3d-2026-10-08/flow_through_60s.npz\n?? docs/handoffs/evidence/fv3d-2026-10-08/isolated_emergence_150s.npz\n?? docs/handoffs/evidence/fv3d-2026-10-08/isolated_emergence_300s.npz\n?? docs/handoffs/evidence/fv3d-2026-10-08/isolated_emergence_30s.npz\n?? docs/handoffs/evidence/fv3d-2026-10-08/isolated_emergence_60s.npz\n?? docs/handoffs/evidence/fv3d-2026-10-08/ponded_routing_150s.npz\n?? docs/handoffs/evidence/fv3d-2026-10-08/ponded_routing_300s.npz\n?? docs/handoffs/evidence/fv3d-2026-10-08/ponded_routing_30s.npz\n?? docs/handoffs/evidence/fv3d-2026-10-08/ponded_routing_60s.npz\n?? docs/handoffs/evidence/fv3d-2026-10-08/routed_exfiltration_150s.npz\n?? docs/handoffs/evidence/fv3d-2026-10-08/routed_exfiltration_300s.npz\n?? docs/handoffs/evidence/fv3d-2026-10-08/routed_exfiltration_30s.npz\n?? docs/handoffs/evidence/fv3d-2026-10-08/routed_exfiltration_60s.npz\n?? docs/handoffs/evidence/fv3d-2026-10-08/wet_dry_cycles_150s.npz\n?? docs/handoffs/evidence/fv3d-2026-10-08/wet_dry_cycles_300s.npz\n?? docs/handoffs/evidence/fv3d-2026-10-08/wet_dry_cycles_30s.npz\n?? docs/handoffs/evidence/fv3d-2026-10-08/wet_dry_cycles_60s.npz\n?? shanz.egg-info/PKG-INFO\n?? solver_experiments/"
+      },
+      "source_sha256": "9cf606533139d90ca07cba078543f71cfbf608379efb6305fa162d983e557801"
+    }
+  },
+  "soil_connection": {
+    "method": "outflow-only soil-profile DRN; active only when regional H exceeds DEM",
+    "conductance_equation": "dx*dy / (D_topsoil/Kv_topsoil + D_subsoil/Kv_subsoil + D_aquifer/Kv_aquifer)",
+    "reference_head": "regional Dupuit H interpreted at shallow Richards column bottom",
+    "connection_depth_m": 5.0,
+    "topsoil_depth_m": 0.2,
+    "subsoil_depth_m": 0.8,
+    "subsoil_kv_m_day": 0.1,
+    "aquifer_k_m_day": 10.0,
+    "potential_surface_outlets": 657612,
+    "retained_channel_cells": 2566,
+    "conductance_percentiles_m2_day": [
+      1.4940239108498854,
+      2.3847376829747535,
+      2.3847376829747535
+    ],
+    "assumption": "saturated vertical column resistance, full non-channel cell area, zero external surface stage; no prescribed ponding"
+  },
+  "budget": {
+    "recharge_m3_day": 13556.016427104722,
+    "recharge_m3_s": 0.15689833827667501,
+    "drain_outflow_m3_day": 12674.913087442894,
+    "coastal_inflow_m3_day": 0.0,
+    "coastal_outflow_m3_day": 881.1033396557884,
+    "residual_m3_day": 6.039272193447687e-09,
+    "relative_error": 4.4550493324664314e-13,
+    "allowance_m3_day": 0.01355601642710472,
+    "budget_passed": true,
+    "non_drain_heads_above_dem": 0,
+    "unrepresented_surface_seepage_cells": 0,
+    "surface_discharge_complete": true,
+    "heads_below_basement": 0,
+    "heads_below_richards_bottom": 634860,
+    "richards_below_water_table_fraction": 0.038350263110857985,
+    "flow_floor_columns": 0,
+    "head_min_m": 0.030018380313264023,
+    "head_max_m": 289.64622959694026,
+    "dry_columns": 0,
+    "nearly_dry_columns": 0,
+    "nearly_dry_definition_m": 0.05,
+    "saturated_thickness_percentiles_m": [
+      50.030018380313265,
+      55.70785744477309,
+      74.34096127537622,
+      195.07198969177955,
+      330.2955288796936,
+      337.5368884843993,
+      339.64622959694026
+    ],
+    "dry_state_policy": "thin saturated columns permitted; flow carried by the artificial transmissivity floor requires separate validation",
+    "max_non_drain_head_above_dem_m": 0.0,
+    "maximum_head_below_basement_m": 0.0,
+    "physically_valid": true,
+    "channel_drain_outflow_m3_day": 8144.971675662064,
+    "soil_surface_outflow_m3_day": 4529.941411780829,
+    "active_soil_seepage_cells": 5606,
+    "above_dem_interpretation": "positive upward hydraulic potential; not inferred surface ponding or a native convergence failure",
+    "package_budget_agreement_m3_day": 0.0,
+    "verified": true
+  },
+  "native": {
+    "solver_backend": "unconfined_semismooth_newton_kcycle",
+    "preconditioner_implementation": "fast",
+    "effective_configuration": {
+      "transient": false,
+      "precision": "float64",
+      "mixed_precision": false,
+      "device": "cuda:0",
+      "device_name": "NVIDIA GeForce RTX 4070 Ti SUPER",
+      "newton_max_iterations": 100,
+      "shared_newton_gated_work_budget": true,
+      "nonlinear_residual_rms_tolerance": 1e-06,
+      "head_equivalent_rms_tolerance": 0.0001,
+      "fgmres_restart": 20,
+      "fgmres_max_iterations": 60,
+      "fgmres_fixed_relative_tolerance": null,
+      "fgmres_absolute_tolerance": 1e-10,
+      "forcing": {
+        "enabled": true,
+        "eta_initial": 0.1,
+        "eta_min": 1e-07,
+        "eta_max": 0.5,
+        "power": 1.0,
+        "safeguard_backtracks": 3,
+        "final_tighten_ratio": 100.0
+      },
+      "preconditioner_kind": "kcycle",
+      "preconditioner_implementation": "fast",
+      "preconditioner_controls": {
+        "coarse_residual_restriction": "average",
+        "max_cycles": 2,
+        "nu_pre": 2,
+        "nu_post": 2,
+        "nu_coarse": 30,
+        "smoother": "chebyshev",
+        "omega": 0.7,
+        "cheby_lambda_min": 0.1,
+        "cheby_lambda_max": 2.0
+      },
+      "requested_max_levels": 5,
+      "min_coarse_cells": 500,
+      "actual_level_shapes": [
+        [
+          1310,
+          766
+        ],
+        [
+          655,
+          383
+        ],
+        [
+          328,
+          192
+        ],
+        [
+          164,
+          96
+        ],
+        [
+          82,
+          48
+        ]
+      ],
+      "startup": {
+        "mode": "confined_pre_solve",
+        "max_active_set_iterations": 60,
+        "relative_tolerance": 5e-07,
+        "absolute_tolerance": 5e-07,
+        "accepted": true
+      },
+      "gated_model_enabled": true,
+      "gated_model_work": 6,
+      "line_search": {
+        "max_backtracks": 10,
+        "min_step_length": 0.0009765625,
+        "armijo_coefficient": 0.0001,
+        "max_head_change": 10.0
+      },
+      "min_flow_saturated_thickness": 0.1,
+      "picard_fallback_enabled": false,
+      "ignored_supplied_controls": [],
+      "stopping_rule": "true residual RMS AND diagonal-scaled head-equivalent RMS; each FGMRES solve checks true residual"
+    },
+    "source_identity": {
+      "repository": "/home/patrickdurney/PycharmProjects/DarcyWarp",
+      "sha": "d7ee792f352bdcddffc593ba990bf3a1fc3b7f8f",
+      "branch": "feature/shanz-surface-coupling",
+      "tracked_dirty": true,
+      "file_sha256": {
+        "/home/patrickdurney/PycharmProjects/DarcyWarp/DARCY_WARP_PACKAGE/warped_darcy.py": "771a5d66d28782579faa7bd2b7f33c78cd393aae660ef55d24c847f6e94977a0",
+        "/home/patrickdurney/PycharmProjects/DarcyWarp/DARCY_WARP_PACKAGE/solvers/semismooth_newton.py": "efad6155a746ba00077314bf594e63fe7126ede99b30e3d10aa9782e1162e49b",
+        "/home/patrickdurney/PycharmProjects/DarcyWarp/DARCY_WARP_PACKAGE/solvers/steady_config.py": "a159cb7973fad6f6a50b5e7c3dac9ab8520fca9df30162df0bd726f633be00b5",
+        "/home/patrickdurney/PycharmProjects/DarcyWarp/DARCY_WARP_PACKAGE/solvers/kcycle_preconditioner.py": "1ee246eea939fd845528ce7a6f484b8414829058aec4f9ddd1ceb70b272398aa",
+        "/home/patrickdurney/PycharmProjects/DarcyWarp/DARCY_WARP_PACKAGE/solvers/face_transient_f64.py": "55e6ded7f03d7e00e6d7a68fba7034a8e43bf89485110c0e89e7a46155a09d87",
+        "/home/patrickdurney/PycharmProjects/DarcyWarp/DARCY_WARP_PACKAGE/solvers/fgmres.py": "c068363c06bc5619efbe5d4753b32543f081babd0a039962af4f9191d74ced31"
+      },
+      "model_file": "/home/patrickdurney/PycharmProjects/DarcyWarp/DARCY_WARP_PACKAGE/warped_darcy.py",
+      "solver_file": "/home/patrickdurney/PycharmProjects/DarcyWarp/DARCY_WARP_PACKAGE/solvers/semismooth_newton.py"
+    },
+    "newton_iterations": 16,
+    "fgmres_iterations": 1161,
+    "kcycle_preconditioner_cycles": 2322,
+    "gated_corrective_active_set_iterations": 6,
+    "backtrack_count": 45,
+    "true_nonlinear_residual_rms": 1.6179894941126495e-10,
+    "head_equivalent_residual_rms": 8.131904738140896e-13,
+    "kcycle_graph_execution": {
+      "graph_captures": 20,
+      "graph_launches": 2322,
+      "eager_cycles": 0
+    },
+    "confined_startup_wall_s": 18.733209494967014
+  },
+  "independent_audit": {
+    "hot_start_checksum_and_source_check": "passed",
+    "geometry_fingerprint": "passed",
+    "saved_material_configuration": "passed",
+    "pressure_mapping": "H-z on actual horizon coordinates",
+    "storage_m3": {
+      "topsoil": 157149.13815395403,
+      "subsoil": 645382.5778673751,
+      "aquifer": 4003022.1301874346
+    },
+    "total_initial_subsurface_storage_m3": 4805553.846208763,
+    "storage_difference_from_runner_m3": {
+      "topsoil": 0.0,
+      "subsoil": -1.1641532182693481e-10,
+      "aquifer": 0.0
+    },
+    "independent_groundwater_budget": {
+      "recharge_m3_day": 13556.016427104723,
+      "channel_drn_out_m3_day": 8144.971675662064,
+      "soil_surface_out_m3_day": 4529.941411780829,
+      "coastal_in_m3_day": 0.0,
+      "coastal_out_m3_day": 881.1033396557884,
+      "residual_m3_day": 6.041091182851233e-09,
+      "allowance_m3_day": 0.013556016427104722
+    },
+    "rejected_linear_results": 0,
+    "native_backend": "unconfined_semismooth_newton_kcycle",
+    "confined_startup": "accepted_initial_iterate",
+    "confined_accepted": true,
+    "richards_scope": "constitutive inventory only; no Richards advance or coupled simulation",
+    "verified": true
+  },
+  "validation_scope": "steady Darcy and mapped constitutive state; Richards advance and routed storm not tested"
+}
