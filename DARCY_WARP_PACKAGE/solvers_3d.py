@@ -31,6 +31,19 @@ from DARCY_WARP_PACKAGE.warped_darcy import (
 )
 
 
+def _stable_harmonic_mean(left: np.ndarray, right: np.ndarray) -> np.ndarray:
+    """Harmonic mean without products or sums of extreme conductivities.
+
+    A connection exists for every pair of strictly positive values, regardless
+    of units or absolute magnitude. Zero conductivity is impermeable.
+    """
+    small = np.minimum(left, right)
+    large = np.maximum(left, right)
+    ratio = np.zeros_like(small, dtype=np.float64)
+    np.divide(small, large, out=ratio, where=large > 0.0)
+    return small * (2.0 / (1.0 + ratio))
+
+
 def build_7point_face_conductance_from_k(
     kx_field: np.ndarray,
     ky_field: np.ndarray,
@@ -70,7 +83,6 @@ def build_7point_face_conductance_from_k(
         raise ValueError("K fields must be >= 0.")
 
     nz, ny, nx = Kx.shape
-    tiny = 1.0e-12
 
     tx_p = np.zeros((nz, ny, nx), dtype=np.float64)
     tx_m = np.zeros((nz, ny, nx), dtype=np.float64)
@@ -86,30 +98,27 @@ def build_7point_face_conductance_from_k(
     if nx > 1:
         KL = Kx[:, :, :-1]
         KR = Kx[:, :, 1:]
-        denom = KL + KR
-        conn = act[:, :, :-1] & act[:, :, 1:] & (KL > 0.0) & (KR > 0.0) & (denom > tiny)
-        cond = np.zeros_like(denom, dtype=np.float64)
-        cond[conn] = 2.0 * KL[conn] * KR[conn] / denom[conn] * fac_x
+        conn = act[:, :, :-1] & act[:, :, 1:] & (KL > 0.0) & (KR > 0.0)
+        cond = np.zeros_like(KL, dtype=np.float64)
+        cond[conn] = _stable_harmonic_mean(left=KL[conn], right=KR[conn]) * fac_x
         tx_p[:, :, :-1] = cond
         tx_m[:, :, 1:] = cond
 
     if ny > 1:
         KT = Ky[:, :-1, :]
         KB = Ky[:, 1:, :]
-        denom = KT + KB
-        conn = act[:, :-1, :] & act[:, 1:, :] & (KT > 0.0) & (KB > 0.0) & (denom > tiny)
-        cond = np.zeros_like(denom, dtype=np.float64)
-        cond[conn] = 2.0 * KT[conn] * KB[conn] / denom[conn] * fac_y
+        conn = act[:, :-1, :] & act[:, 1:, :] & (KT > 0.0) & (KB > 0.0)
+        cond = np.zeros_like(KT, dtype=np.float64)
+        cond[conn] = _stable_harmonic_mean(left=KT[conn], right=KB[conn]) * fac_y
         ty_p[:, :-1, :] = cond
         ty_m[:, 1:, :] = cond
 
     if nz > 1:
         KU = Kz[:-1, :, :]
         KD = Kz[1:, :, :]
-        denom = KU + KD
-        conn = act[:-1, :, :] & act[1:, :, :] & (KU > 0.0) & (KD > 0.0) & (denom > tiny)
-        cond = np.zeros_like(denom, dtype=np.float64)
-        cond[conn] = 2.0 * KU[conn] * KD[conn] / denom[conn] * fac_z
+        conn = act[:-1, :, :] & act[1:, :, :] & (KU > 0.0) & (KD > 0.0)
+        cond = np.zeros_like(KU, dtype=np.float64)
+        cond[conn] = _stable_harmonic_mean(left=KU[conn], right=KD[conn]) * fac_z
         tz_p[:-1, :, :] = cond
         tz_m[1:, :, :] = cond
 
@@ -186,7 +195,6 @@ def build_7point_face_conductance_unconfined_from_sat(
         raise ValueError("sat must be >= 0.")
 
     nz, ny, nx = Kx.shape
-    tiny = 1.0e-12
 
     Tx = Kx * b
     Ty = Ky * b
@@ -201,20 +209,18 @@ def build_7point_face_conductance_unconfined_from_sat(
     if nx > 1:
         TL = Tx[:, :, :-1]
         TR = Tx[:, :, 1:]
-        denom = TL + TR
-        conn = act[:, :, :-1] & act[:, :, 1:] & (TL > 0.0) & (TR > 0.0) & (denom > tiny)
-        cond = np.zeros_like(denom, dtype=np.float64)
-        cond[conn] = 2.0 * TL[conn] * TR[conn] / denom[conn] * (dy_f / float(dx))
+        conn = act[:, :, :-1] & act[:, :, 1:] & (TL > 0.0) & (TR > 0.0)
+        cond = np.zeros_like(TL, dtype=np.float64)
+        cond[conn] = _stable_harmonic_mean(left=TL[conn], right=TR[conn]) * (dy_f / float(dx))
         tx_p[:, :, :-1] = cond
         tx_m[:, :, 1:] = cond
 
     if ny > 1:
         TT = Ty[:, :-1, :]
         TB = Ty[:, 1:, :]
-        denom = TT + TB
-        conn = act[:, :-1, :] & act[:, 1:, :] & (TT > 0.0) & (TB > 0.0) & (denom > tiny)
-        cond = np.zeros_like(denom, dtype=np.float64)
-        cond[conn] = 2.0 * TT[conn] * TB[conn] / denom[conn] * (float(dx) / dy_f)
+        conn = act[:, :-1, :] & act[:, 1:, :] & (TT > 0.0) & (TB > 0.0)
+        cond = np.zeros_like(TT, dtype=np.float64)
+        cond[conn] = _stable_harmonic_mean(left=TT[conn], right=TB[conn]) * (float(dx) / dy_f)
         ty_p[:, :-1, :] = cond
         ty_m[:, 1:, :] = cond
 
@@ -222,10 +228,9 @@ def build_7point_face_conductance_unconfined_from_sat(
         # Full-thickness vertical harmonic resistance (saturation-independent).
         KU = Kz[:-1, :, :]
         KD = Kz[1:, :, :]
-        denom = KU + KD
-        conn = act[:-1, :, :] & act[1:, :, :] & (KU > 0.0) & (KD > 0.0) & (denom > tiny)
-        cond = np.zeros_like(denom, dtype=np.float64)
-        cond[conn] = 2.0 * KU[conn] * KD[conn] / denom[conn] * (float(dx) * dy_f / dz_f)
+        conn = act[:-1, :, :] & act[1:, :, :] & (KU > 0.0) & (KD > 0.0)
+        cond = np.zeros_like(KU, dtype=np.float64)
+        cond[conn] = _stable_harmonic_mean(left=KU[conn], right=KD[conn]) * (float(dx) * dy_f / dz_f)
         tz_p[:-1, :, :] = cond
         tz_m[1:, :, :] = cond
 
@@ -266,9 +271,11 @@ def _validate_flat_layer_geometry(
             "varies within a layer (dipping or offset geometry). Use a "
             "vertically aligned, uniform-thickness layer stack."
         )
-    if ztop is None:
-        return (zb + dz_f)
-    zt = np.asarray(ztop, dtype=np.float64)
+    if not np.isfinite(dz_f) or dz_f <= 0.0 or not np.all(np.isfinite(zb)):
+        raise ValueError("Layer elevations must be finite and dz must be positive finite.")
+    zt = zb + dz_f if ztop is None else np.asarray(ztop, dtype=np.float64)
+    if not np.all(np.isfinite(zt)):
+        raise ValueError("ztop_field must contain finite elevations.")
     if zt.shape != shape:
         raise ValueError(f"ztop_field shape {zt.shape} expected {shape}")
     layer_top = zt[:, 0:1, 0:1]
@@ -356,9 +363,9 @@ def build_diag_preconditioner_7point(    tx_p: np.ndarray,
             raise ValueError("storage_diag must be >= 0")
         diag[free] += sdiag[free]
 
-    tiny = 1.0e-12
     M_inv = np.ones(shape, dtype=np.float64)
-    valid = free & np.isfinite(diag) & (diag > tiny)
+    valid = free & np.isfinite(diag) & (diag > 0.0)
+    M_inv[free & (diag == 0.0)] = 0.0
     M_inv[valid] = 1.0 / diag[valid]
     M_inv[~free] = 1.0
     return M_inv.astype(NP_FLOAT, copy=False)
@@ -555,48 +562,73 @@ def _prepare_7point_transient_terms(
 
 
 def _resolve_isolated_free_cells(
-    *,
-    faces: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray],
-    active: np.ndarray,
-    bc_mask: np.ndarray,
-    rhs_eff: np.ndarray,
-    storage_diag: np.ndarray,
+    *, faces, active, bc_mask, rhs_eff, storage_diag, topology_cache=None,
 ) -> np.ndarray:
-    """Detect active free cells whose discrete equation is singular.
+    """Analyse the hydraulic graph before solving any singular equations.
 
-    A free cell with zero total face conductance *and* zero storage diagonal
-    has the equation ``0 * h = rhs``: with a nonzero source it is incompatible
-    (mass has nowhere to go) and with a zero source its head is physically
-    undetermined (no flux depends on it).  Historically such rows were silently
-    replaced by identity equations (``diag = 1``), which manufactures an
-    artificial solution ``h = rhs``.  Instead:
-
-    - a nonzero source into a disconnected cell raises ``ValueError``;
-    - otherwise the cell is excluded from the solve working set (returned
-      mask), keeps its initial head, and carries zero flux and zero residual.
-
-    Returns a boolean mask of excluded cells (shape matching ``active``).
+    Cached labels depend only on positive connections and the active mask.
+    Constraints and source compatibility are checked on every call, since
+    storage and forcing may change without changing the hydraulic topology.
+    Balanced multi-cell Neumann components are refused with an explicit
+    undetermined-datum diagnostic; no artificial boundary is manufactured.
+    Source-free singleton null rows retain their initial heads and are excluded.
     """
-    act = np.asarray(active, dtype=np.int32) != 0
-    bcm = np.asarray(bc_mask, dtype=np.int32) != 0
-    free = act & ~bcm
-    diag = np.zeros(act.shape, dtype=np.float64)
-    for face in faces:
-        diag += np.maximum(np.asarray(face, dtype=np.float64), 0.0)
-    diag += np.maximum(np.asarray(storage_diag, dtype=np.float64), 0.0)
-    isolated = free & (diag <= 0.0)
-    if not np.any(isolated):
-        return np.zeros(act.shape, dtype=bool)
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+
+    act = np.asarray(active) != 0
+    bcm = np.asarray(bc_mask) != 0
+    positive = tuple(np.asarray(faces[index]) > 0.0 for index in (0, 2, 4))
+    cached = None if topology_cache is None else topology_cache.get("components")
+    reused = (cached is not None and np.array_equal(cached["active"], act)
+              and all(np.array_equal(old, new) for old, new in zip(cached["positive"], positive)))
+    if reused:
+        labels, count = cached["labels"], cached["count"]
+    else:
+        indices = np.arange(act.size).reshape(act.shape)
+        rows, cols = [], []
+        for axis, edges in zip((2, 1, 0), positive):
+            here, there = [slice(None)] * 3, [slice(None)] * 3
+            here[axis], there[axis] = slice(None, -1), slice(1, None)
+            here, there = tuple(here), tuple(there)
+            connected = edges[here] & act[here] & act[there]
+            rows.append(indices[here][connected])
+            cols.append(indices[there][connected])
+        row, col = np.concatenate(rows), np.concatenate(cols)
+        graph = coo_matrix((np.ones(row.size), (row, col)), shape=(act.size, act.size)).tocsr()
+        count, labels = connected_components(csgraph=graph, directed=False)
+        labels = labels.reshape(act.shape)
+        if topology_cache is not None:
+            topology_cache["components"] = dict(active=act.copy(), positive=positive,
+                                                 labels=labels, count=count)
+    sizes = np.bincount(labels[act], minlength=count)
+    fixed = np.bincount(labels[act & bcm], minlength=count)
+    stored = np.bincount(labels[act & (np.asarray(storage_diag) > 0.0)], minlength=count)
+    unconstrained = (sizes > 0) & (fixed == 0) & (stored == 0)
     rhs = np.asarray(rhs_eff, dtype=np.float64)
-    n_source = int(np.count_nonzero(rhs[isolated] != 0.0))
-    if n_source:
-        raise ValueError(
-            f"{n_source} isolated active cell(s) (zero conductance and zero "
-            "storage) carry a nonzero source term; the steady-state equation "
-            "0 * h = rhs is incompatible. Remove the source, connect the "
-            "cells, or mark them inactive."
-        )
-    return isolated
+    net = np.bincount(labels[act], weights=rhs[act], minlength=count)
+    throughput = np.bincount(labels[act], weights=np.abs(rhs[act]), minlength=count)
+    incompatible = unconstrained & (np.abs(net) > 64.0 * np.finfo(np.float64).eps * throughput)
+    if np.any(incompatible):
+        component = int(np.flatnonzero(incompatible)[0])
+        location = tuple(np.argwhere(act & (labels == component))[0])
+        raise ValueError(f"Disconnected singular component (possibly isolated) at {location}: "
+                         f"{sizes[component]} cells, net source={net[component]:.17g} m^3/day; "
+                         "no fixed head or positive storage. No valid steady solution exists.")
+    undetermined = unconstrained & (sizes > 1)
+    if np.any(undetermined):
+        component = int(np.flatnonzero(undetermined)[0])
+        location = tuple(np.argwhere(act & (labels == component))[0])
+        raise ValueError(f"Source-balanced disconnected component at {location} "
+                         f"({sizes[component]} cells) has an undetermined head datum. "
+                         "Supply an explicit fixed-head datum; no artificial boundary was added.")
+    if topology_cache is not None:
+        topology_cache["component_diagnostics"] = dict(
+            n_hydraulic_components=int(np.count_nonzero(sizes)),
+            n_fixed_head_components=int(np.count_nonzero((sizes > 0) & (fixed > 0))),
+            n_storage_constrained_components=int(np.count_nonzero((sizes > 0) & (stored > 0))),
+            component_topology_reused=bool(reused))
+    return act & unconstrained[labels] & (sizes[labels] == 1)
 
 
 def _masked_block_mean_axes(
@@ -712,8 +744,10 @@ def _coarsen_faces_consistent_axes(
 
     Returns ``(coarse_faces, coarse_bc_springs)``.  Unlike the previous
     independent per-array block mean, the coarse operator approximates the
-    Galerkin product for piecewise-constant coarse corrections with the
-    block-average (free-cell) residual restriction the K-cycle actually uses:
+    block-aggregate product for hypothetical piecewise-constant coarse
+    corrections. The implemented prolongation is bilinear, so this is NOT an
+    exact Galerkin R A P hierarchy. Restriction also renormalizes partial free
+    blocks, whereas this symmetric coarse operator uses a uniform block scale:
 
     - Coarse faces come only from the fine faces lying *on* the coarse-cell
       boundary where both fine cells are free, summed and scaled by the
@@ -1347,6 +1381,11 @@ def _picard_unconfined_7point_3d(
     # (dipping/offset layers, non-uniform thickness) instead of silently
     # applying uniform Cartesian face geometry.
     ztop64 = _validate_flat_layer_geometry(zbot64, ztop, float(dz), tuple(int(v) for v in shape))
+    min_sat_requested = float(min_sat)
+    if not np.isfinite(min_sat_requested) or min_sat_requested < 0.0:
+        raise ValueError("unconfined_min_sat must be nonnegative finite.")
+    # A numerical floor cannot create transmissive thickness beyond a cell.
+    min_sat = min(min_sat_requested, float(dz))
 
     hclose_f = float(pic_tol)
     if hclose_f < 0.0 or not np.isfinite(hclose_f):
@@ -1987,13 +2026,21 @@ def _picard_unconfined_7point_3d(
         head_prev=hp_final,
         return_field=True,
     )
+    from DARCY_WARP_PACKAGE.physics.dry_cell_3d import quantify_dry_cell_transmission
+
+    true_sat_final = np.clip(h_iter.astype(np.float64) - zbot64, 0.0, ztop64 - zbot64)
+    unfloored_faces = faces_final if np.array_equal(true_sat_final, sat_final) else _conductances_from_sat(true_sat_final)
+    dry_diagnostics = quantify_dry_cell_transmission(
+        head=h_iter, bottoms=zbot64, tops=ztop64, actual_faces=faces_final,
+        unfloored_faces=unfloored_faces, active=act,
+        bc_mask=bcm, source=b, budget=budget)
     diag_final = np.asarray(budget.pop("operator_diagonal"), dtype=np.float64)
     residual_field = np.asarray(budget.pop("cell_residual_field"), dtype=np.float64)
     with np.errstate(divide="ignore", invalid="ignore"):
         head_residual_field = np.where(
-            diag_final > 1.0e-30,
-            residual_field / np.where(diag_final > 1.0e-30, diag_final, 1.0),
-            np.where(np.abs(residual_field) < 1.0e-12, 0.0, np.inf),
+            diag_final > 0.0,
+            residual_field / np.where(diag_final > 0.0, diag_final, 1.0),
+            np.where(residual_field == 0.0, 0.0, np.inf),
         )
     if n_free > 0:
         final_head_residual_rms = float(
@@ -2050,6 +2097,7 @@ def _picard_unconfined_7point_3d(
             "chebyshev_resets": int(chebyshev_resets),
             "omega_final": float(omega_current),
             "min_saturated_thickness": float(min_sat),
+            "requested_min_saturated_thickness": min_sat_requested,
             "max_head_change_per_outer_iteration": float(max_update_f),
             "final_max_abs_head_change": float(final_max_abs_head_change),
             "final_residual": None if final_residual is None else float(final_residual),
@@ -2072,6 +2120,7 @@ def _picard_unconfined_7point_3d(
             "final_physical_residual_rms": float(budget["cell_residual_rms"]),
             "final_physical_residual_max": float(budget["cell_residual_max"]),
             "budget": budget,
+            "dry_cell_approximation": dry_diagnostics,
             "residual_floor_tol": None if residual_floor_tol_f is None else float(residual_floor_tol_f),
             "inner_residual_converged": bool(inner_residual_converged),
             "inner_head_change_converged": bool(inner_head_change_converged),
@@ -2527,7 +2576,7 @@ def solve_multigrid_kcycle_7point_3d(
       - Coarse operators are built by conservative horizontal semi-coarsening
         of the face conductances (``_coarsen_faces_consistent_axes``): coarse
         faces aggregate only the fine faces crossing each coarse interface
-        (reciprocal by construction, Galerkin-scaled to the block-average
+        (reciprocal by construction, block-scaled relative to the block-average
         restriction), Dirichlet couplings become diagonal springs, and layers
         are preserved (no vertical coarsening).
       - Correction scheme uses homogeneous coarse Dirichlet values (bc_values=0 on coarse).
@@ -2973,7 +3022,7 @@ def solve_multigrid_kcycle_7point_3d(
             coarsen_y=coarsen_y,
             coarsen_x=coarsen_x,
         )
-        # The coarse diagonal carries the Galerkin Dirichlet springs (coupling
+        # The coarse diagonal carries the aggregated Dirichlet springs (coupling
         # of free fine cells to fixed-head fine cells) through the storage
         # slot; both are non-negative diagonal-only contributions and the
         # kernels simply add storage to the diagonal.
@@ -3325,7 +3374,7 @@ def solve_multigrid_kcycle_7point_3d(
         )
         den = float(coarse["pAp_buf"].numpy()[0])
         alpha = 0.0
-        if np.isfinite(num) and np.isfinite(den) and abs(den) > 1.0e-30:
+        if np.isfinite(num) and np.isfinite(den) and abs(den) > 0.0:
             alpha = num / den
 
         wp.launch(

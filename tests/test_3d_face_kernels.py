@@ -128,4 +128,5 @@ def test_face_operator_ignores_conductance_to_inactive_cell():
         ],
         device="cpu",
     )
-    np.testing.assert_allclose(out.numpy(), [[[2.0, 0.0]]])
+    # A genuinely null free equation evaluates to zero, never to head.
+    np.testing.assert_allclose(out.numpy(), [[[0.0, 0.0]]])

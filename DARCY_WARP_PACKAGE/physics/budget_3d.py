@@ -7,6 +7,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from DARCY_WARP_PACKAGE.physics.faces_3d import validate_reciprocal_faces
+
 
 @dataclass(frozen=True)
 class BoundaryInterfaceFluxPlan:
@@ -77,9 +79,8 @@ def compute_3d_flow_budget(
     shape = h.shape
     if src.shape != shape or act.shape != shape or bcm.shape != shape:
         raise ValueError("head, source, active, bc_mask shapes must match.")
-    tx_p, tx_m, ty_p, ty_m, tz_p, tz_m = (
-        np.maximum(np.asarray(value, dtype=np.float64), 0.0) for value in faces
-    )
+    tx_p, tx_m, ty_p, ty_m, tz_p, tz_m = validate_reciprocal_faces(
+        faces=faces, active=active, canonicalize=True)
     if any(value.shape != shape for value in (tx_p, tx_m, ty_p, ty_m, tz_p, tz_m)):
         raise ValueError("face shapes must match head.")
     free = act & ~bcm
@@ -101,8 +102,10 @@ def compute_3d_flow_budget(
 
     # Net outflow divergence per cell: sum c*(h_self - h_nb) + storage*h.
     # (The Dirichlet exchange below reports the free<->bc face part of it.)
-    div = s * h
+    div = s * (h - hp)
     bc_exchange = np.zeros(shape, dtype=np.float64)  # c * (h_bc - h_free), inflow +
+    bc_inflow = np.zeros(shape, dtype=np.float64)
+    bc_outflow = np.zeros(shape, dtype=np.float64)
     diag_c = np.zeros(shape, dtype=np.float64)
     for face, sl_self, sl_nb in (
         (tx_p, (slice(None), slice(None), slice(None, -1)), (slice(None), slice(None), slice(1, None))),
@@ -116,24 +119,29 @@ def compute_3d_flow_budget(
         both_act = act[sl_self] & act[sl_nb]
         c = np.where(both_act, c, 0.0)
         diag_c[sl_self] += c
-        div[sl_self] -= c * h[sl_nb]
+        div[sl_self] += c * (h[sl_self] - h[sl_nb])
         is_bc_nb = bcm[sl_nb] & act[sl_nb]
-        bc_exchange[sl_self] += np.where(is_bc_nb, c * (h[sl_nb] - h[sl_self]), 0.0)
-    div += diag_c * h  # completes sum c*(h_self - h_nb) + storage uptake
+        exchange = np.where(is_bc_nb, c * (h[sl_nb] - h[sl_self]), 0.0)
+        bc_exchange[sl_self] += exchange
+        # Count gross face exchanges before opposing boundaries cancel at
+        # one free cell. The net exchange alone understates throughput.
+        bc_inflow[sl_self] += np.maximum(exchange, 0.0)
+        bc_outflow[sl_self] += np.minimum(exchange, 0.0)
 
     # Cellwise balance residual: source + storage release - net outflow = 0.
-    residual = src + s * hp - div
+    residual = src - div
     residual = np.where(free, residual, 0.0)
 
     source_total = float(np.sum(src[free]))
     storage_uptake = float(np.sum((s * (h - hp))[free]))
     bc_net = float(np.sum(bc_exchange[free]))
-    bc_in = float(np.sum(bc_exchange[free & (bc_exchange > 0.0)]))
-    bc_out = float(np.sum(bc_exchange[free & (bc_exchange < 0.0)]))
+    bc_in = float(np.sum(bc_inflow[free]))
+    bc_out = float(np.sum(bc_outflow[free]))
     domain_imbalance = float(np.sum(residual[free]))
     throughput = max(
-        abs(source_total) + abs(bc_in) + abs(bc_out) + abs(storage_uptake),
-        1.0e-30,
+        float(np.sum(np.abs(src[free]))) + abs(bc_in) + abs(bc_out)
+        + float(np.sum(np.abs((s * (h - hp))[free]))),
+        np.finfo(np.float64).tiny,
     )
     if n_free > 0:
         cell_residual_max = float(np.max(np.abs(residual[free])))
@@ -151,6 +159,7 @@ def compute_3d_flow_budget(
         "storage_uptake": storage_uptake,
         "domain_imbalance": domain_imbalance,
         "relative_imbalance": abs(domain_imbalance) / throughput,
+        "throughput": throughput,
         "n_free_cells": float(n_free),
     }
     if return_field:
@@ -183,10 +192,8 @@ def prepare_boundary_interface_flux(
         )
     if not np.all(np.isfinite(active_raw)) or not np.all(np.isfinite(boundary_raw)):
         raise ValueError("active and boundary_mask must contain finite values.")
-    conductances = tuple(
-        np.asarray(value, dtype=np.float64)
-        for value in (tx_p, tx_m, ty_p, ty_m, tz_p, tz_m)
-    )
+    conductances = validate_reciprocal_faces(
+        faces=(tx_p, tx_m, ty_p, ty_m, tz_p, tz_m), active=active_raw, canonicalize=True)
     if any(value.shape != shape for value in conductances):
         raise ValueError("All face-conductance shapes must match active.")
     if any(not np.all(np.isfinite(value)) for value in conductances):
@@ -302,7 +309,8 @@ def boundary_interface_flux(
     bnd = (boundary_raw != 0) & act
     if not np.all(np.isfinite(h)):
         raise ValueError("head must contain finite values.")
-    conductances = tuple(np.asarray(arr, dtype=np.float64) for arr in (tx_p, tx_m, ty_p, ty_m, tz_p, tz_m))
+    conductances = validate_reciprocal_faces(
+        faces=(tx_p, tx_m, ty_p, ty_m, tz_p, tz_m), active=active_raw, canonicalize=True)
     if any(not np.all(np.isfinite(arr)) for arr in conductances):
         raise ValueError("face conductances must contain finite values.")
     if any(np.any(arr < 0.0) for arr in conductances):

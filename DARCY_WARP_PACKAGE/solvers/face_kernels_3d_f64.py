@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-"""Small FP64 face-array kernels for a future 3D execution path.
+"""Production FP64 face-array kernels for the fast 3D execution path.
 
 These kernels keep the six directional conductance arrays explicit and use
 per-block partial reductions. They are intentionally independent of the
-classic solver kernels and are not selected by the public 3D solver yet.
+classic solver kernels and are selected by implementation="fast".
 """
 
 from __future__ import annotations
@@ -12,6 +12,17 @@ import warp as wp
 
 
 BLOCK_SIZE_3D = 256
+
+
+@wp.kernel
+def mask_correction_3d_kernel(
+    correction: wp.array(dtype=wp.float64, ndim=3),
+    active: wp.array(dtype=wp.int32, ndim=3),
+    bc_mask: wp.array(dtype=wp.int32, ndim=3),
+):
+    k, j, i = wp.tid()
+    if active[k, j, i] == 0 or bc_mask[k, j, i] != 0:
+        correction[k, j, i] = wp.float64(0.0)
 
 
 @wp.kernel
@@ -66,22 +77,22 @@ def apply_A_faces_3d_f64_kernel(
     if sdiag < wp.float64(0.0):
         sdiag = wp.float64(0.0)
     diag = cxp + cxm + cyp + cym + czp + czm + sdiag
-    if diag < wp.float64(1.0e-12):
-        out[k, j, i] = x[k, j, i]
+    if diag == wp.float64(0.0):
+        out[k, j, i] = wp.float64(0.0)
         return
-    value = diag * x[k, j, i]
+    value = sdiag * x[k, j, i]
     if cxp > wp.float64(0.0):
-        value = value - cxp * x[k, j, i + 1]
+        value = value + cxp * (x[k, j, i] - x[k, j, i + 1])
     if cxm > wp.float64(0.0):
-        value = value - cxm * x[k, j, i - 1]
+        value = value + cxm * (x[k, j, i] - x[k, j, i - 1])
     if cyp > wp.float64(0.0):
-        value = value - cyp * x[k, j + 1, i]
+        value = value + cyp * (x[k, j, i] - x[k, j + 1, i])
     if cym > wp.float64(0.0):
-        value = value - cym * x[k, j - 1, i]
+        value = value + cym * (x[k, j, i] - x[k, j - 1, i])
     if czp > wp.float64(0.0):
-        value = value - czp * x[k + 1, j, i]
+        value = value + czp * (x[k, j, i] - x[k + 1, j, i])
     if czm > wp.float64(0.0):
-        value = value - czm * x[k - 1, j, i]
+        value = value + czm * (x[k, j, i] - x[k - 1, j, i])
     out[k, j, i] = value
 
 
@@ -138,21 +149,21 @@ def residual_partials_3d_f64_kernel(
     if sdiag < wp.float64(0.0):
         sdiag = wp.float64(0.0)
     diag = cxp + cxm + cyp + cym + czp + czm + sdiag
-    value = x[k, j, i]
-    if diag >= wp.float64(1.0e-12):
-        value = diag * x[k, j, i]
+    value = wp.float64(0.0)
+    if diag > wp.float64(0.0):
+        value = sdiag * x[k, j, i]
         if cxp > wp.float64(0.0):
-            value = value - cxp * x[k, j, i + 1]
+            value = value + cxp * (x[k, j, i] - x[k, j, i + 1])
         if cxm > wp.float64(0.0):
-            value = value - cxm * x[k, j, i - 1]
+            value = value + cxm * (x[k, j, i] - x[k, j, i - 1])
         if cyp > wp.float64(0.0):
-            value = value - cyp * x[k, j + 1, i]
+            value = value + cyp * (x[k, j, i] - x[k, j + 1, i])
         if cym > wp.float64(0.0):
-            value = value - cym * x[k, j - 1, i]
+            value = value + cym * (x[k, j, i] - x[k, j - 1, i])
         if czp > wp.float64(0.0):
-            value = value - czp * x[k + 1, j, i]
+            value = value + czp * (x[k, j, i] - x[k + 1, j, i])
         if czm > wp.float64(0.0):
-            value = value - czm * x[k - 1, j, i]
+            value = value + czm * (x[k, j, i] - x[k - 1, j, i])
     res = rhs[k, j, i] - value
     residual[k, j, i] = res
     wp.atomic_add(partials, block, res * res)
@@ -199,6 +210,9 @@ def face_jacobi_3d_f64_kernel(
         return
     if bc_mask[k, j, i] != 0:
         x_out[k, j, i] = bc_values[k, j, i]
+        return
+    if diag[k, j, i] == wp.float64(0.0):
+        x_out[k, j, i] = x_in[k, j, i]
         return
     value = diag[k, j, i] * x_in[k, j, i]
     if tx_p[k, j, i] > wp.float64(0.0):
@@ -305,7 +319,7 @@ def head_residual_partials_3d_f64_kernel(
     if active[k, j, i] == 0 or bc_mask[k, j, i] != 0:
         return
     d = diag[k, j, i]
-    if d < wp.float64(1.0e-30):
+    if d <= wp.float64(0.0):
         return
     rh = residual[k, j, i] / d
     wp.atomic_add(partials, t // block_span, rh * rh)
@@ -319,7 +333,7 @@ def compute_safe_alpha_3d_kernel(
 ):
     if wp.tid() == 0:
         value = wp.float64(0.0)
-        if wp.abs(denominator[0]) > wp.float64(1.0e-30):
+        if wp.abs(denominator[0]) > wp.float64(0.0):
             value = numerator[0] / denominator[0]
         alpha[0] = value
 

@@ -67,7 +67,6 @@ def apply_A_7point_kernel(
         Ah[k, j, i] = h[k, j, i]
         return
 
-    tiny = wp.float64(1.0e-12)
     hC = wp.float64(h[k, j, i])
 
     cxp = wp.float64(tx_p[k, j, i])
@@ -108,23 +107,23 @@ def apply_A_7point_kernel(
         czm = wp.float64(0.0)
 
     diag = cxp + cxm + cyp + cym + czp + czm + sdiag
-    if diag < tiny:
-        Ah[k, j, i] = WP_FLOAT(hC)
+    if diag == wp.float64(0.0):
+        Ah[k, j, i] = WP_FLOAT(0.0)
         return
 
-    val = diag * hC
+    val = sdiag * hC
     if cxp > wp.float64(0.0):
-        val = val - cxp * wp.float64(h[k, j, i + 1])
+        val = val + cxp * (hC - wp.float64(h[k, j, i + 1]))
     if cxm > wp.float64(0.0):
-        val = val - cxm * wp.float64(h[k, j, i - 1])
+        val = val + cxm * (hC - wp.float64(h[k, j, i - 1]))
     if cyp > wp.float64(0.0):
-        val = val - cyp * wp.float64(h[k, j + 1, i])
+        val = val + cyp * (hC - wp.float64(h[k, j + 1, i]))
     if cym > wp.float64(0.0):
-        val = val - cym * wp.float64(h[k, j - 1, i])
+        val = val + cym * (hC - wp.float64(h[k, j - 1, i]))
     if czp > wp.float64(0.0):
-        val = val - czp * wp.float64(h[k + 1, j, i])
+        val = val + czp * (hC - wp.float64(h[k + 1, j, i]))
     if czm > wp.float64(0.0):
-        val = val - czm * wp.float64(h[k - 1, j, i])
+        val = val + czm * (hC - wp.float64(h[k - 1, j, i]))
 
     Ah[k, j, i] = WP_FLOAT(val)
 
@@ -247,9 +246,10 @@ def vertical_line_relaxation_7point_kernel(
                 else:
                     c_k = -czp
 
-            if diag < wp.float64(1.0e-12):
+            if diag == wp.float64(0.0):
+                # Null equation: preserve the iterate in this smoother only.
                 b_k = wp.float64(1.0)
-                d_k = v
+                d_k = wp.float64(x_old[k, j, i])
             else:
                 b_k = diag
                 d_k = v
@@ -272,7 +272,7 @@ def vertical_line_relaxation_7point_kernel(
             c_prev = wp.float64(c_prime[k - 1, j, i])
             d_prev = wp.float64(d_prime[k - 1, j, i])
             denom = b_k - a_k * c_prev
-            if wp.abs(denom) > wp.float64(1e-30):
+            if wp.abs(denom) > wp.float64(0.0):
                 c_prime[k, j, i] = WP_FLOAT(c_k / denom)
                 d_prime[k, j, i] = WP_FLOAT((d_k - a_k * d_prev) / denom)
             else:
@@ -337,7 +337,6 @@ def jacobi_applyA_fused_7point_kernel(
         x_out[k, j, i] = bc_values[k, j, i]
         return
 
-    tiny = wp.float64(1.0e-12)
     hC = wp.float64(x_in[k, j, i])
 
     cxp = wp.float64(tx_p[k, j, i])
@@ -379,22 +378,22 @@ def jacobi_applyA_fused_7point_kernel(
     diag = cxp + cxm + cyp + cym + czp + czm + sdiag
 
     Ah = wp.float64(0.0)
-    if diag < tiny:
-        Ah = hC
+    if diag == wp.float64(0.0):
+        Ah = wp.float64(0.0)
     else:
-        Ah = diag * hC
+        Ah = sdiag * hC
         if cxp > wp.float64(0.0):
-            Ah = Ah - cxp * wp.float64(x_in[k, j, i + 1])
+            Ah = Ah + cxp * (hC - wp.float64(x_in[k, j, i + 1]))
         if cxm > wp.float64(0.0):
-            Ah = Ah - cxm * wp.float64(x_in[k, j, i - 1])
+            Ah = Ah + cxm * (hC - wp.float64(x_in[k, j, i - 1]))
         if cyp > wp.float64(0.0):
-            Ah = Ah - cyp * wp.float64(x_in[k, j + 1, i])
+            Ah = Ah + cyp * (hC - wp.float64(x_in[k, j + 1, i]))
         if cym > wp.float64(0.0):
-            Ah = Ah - cym * wp.float64(x_in[k, j - 1, i])
+            Ah = Ah + cym * (hC - wp.float64(x_in[k, j - 1, i]))
         if czp > wp.float64(0.0):
-            Ah = Ah - czp * wp.float64(x_in[k + 1, j, i])
+            Ah = Ah + czp * (hC - wp.float64(x_in[k + 1, j, i]))
         if czm > wp.float64(0.0):
-            Ah = Ah - czm * wp.float64(x_in[k - 1, j, i])
+            Ah = Ah + czm * (hC - wp.float64(x_in[k - 1, j, i]))
 
     r_ijk = wp.float64(b[k, j, i]) - Ah
     x_out[k, j, i] = WP_FLOAT(hC + wp.float64(omega) * wp.float64(M_inv[k, j, i]) * r_ijk)
@@ -427,7 +426,6 @@ def compute_residual_7point_kernel(
         r[k, j, i] = WP_FLOAT(0.0)
         return
 
-    tiny = wp.float64(1.0e-12)
     hC = wp.float64(x[k, j, i])
 
     cxp = wp.float64(tx_p[k, j, i])
@@ -468,22 +466,22 @@ def compute_residual_7point_kernel(
 
     diag = cxp + cxm + cyp + cym + czp + czm + sdiag
     Ax = wp.float64(0.0)
-    if diag < tiny:
-        Ax = hC
+    if diag == wp.float64(0.0):
+        Ax = wp.float64(0.0)
     else:
-        Ax = diag * hC
+        Ax = sdiag * hC
         if cxp > wp.float64(0.0):
-            Ax = Ax - cxp * wp.float64(x[k, j, i + 1])
+            Ax = Ax + cxp * (hC - wp.float64(x[k, j, i + 1]))
         if cxm > wp.float64(0.0):
-            Ax = Ax - cxm * wp.float64(x[k, j, i - 1])
+            Ax = Ax + cxm * (hC - wp.float64(x[k, j, i - 1]))
         if cyp > wp.float64(0.0):
-            Ax = Ax - cyp * wp.float64(x[k, j + 1, i])
+            Ax = Ax + cyp * (hC - wp.float64(x[k, j + 1, i]))
         if cym > wp.float64(0.0):
-            Ax = Ax - cym * wp.float64(x[k, j - 1, i])
+            Ax = Ax + cym * (hC - wp.float64(x[k, j - 1, i]))
         if czp > wp.float64(0.0):
-            Ax = Ax - czp * wp.float64(x[k + 1, j, i])
+            Ax = Ax + czp * (hC - wp.float64(x[k + 1, j, i]))
         if czm > wp.float64(0.0):
-            Ax = Ax - czm * wp.float64(x[k - 1, j, i])
+            Ax = Ax + czm * (hC - wp.float64(x[k - 1, j, i]))
 
     rf64 = wp.float64(b[k, j, i]) - Ax
     r[k, j, i] = WP_FLOAT(rf64)
@@ -918,7 +916,6 @@ def apply_A_and_pAp_7point_kernel(
         Ap[k, j, i] = p[k, j, i]
         return
 
-    tiny = wp.float64(1.0e-12)
     pC = wp.float64(p[k, j, i])
 
     cxp = wp.float64(tx_p[k, j, i])
@@ -959,22 +956,22 @@ def apply_A_and_pAp_7point_kernel(
 
     diag = cxp + cxm + cyp + cym + czp + czm + sdiag
     val64 = wp.float64(0.0)
-    if diag < tiny:
-        val64 = pC
+    if diag == wp.float64(0.0):
+        val64 = wp.float64(0.0)
     else:
-        val64 = diag * pC
+        val64 = sdiag * pC
         if cxp > wp.float64(0.0):
-            val64 = val64 - cxp * wp.float64(p[k, j, i + 1])
+            val64 = val64 + cxp * (pC - wp.float64(p[k, j, i + 1]))
         if cxm > wp.float64(0.0):
-            val64 = val64 - cxm * wp.float64(p[k, j, i - 1])
+            val64 = val64 + cxm * (pC - wp.float64(p[k, j, i - 1]))
         if cyp > wp.float64(0.0):
-            val64 = val64 - cyp * wp.float64(p[k, j + 1, i])
+            val64 = val64 + cyp * (pC - wp.float64(p[k, j + 1, i]))
         if cym > wp.float64(0.0):
-            val64 = val64 - cym * wp.float64(p[k, j - 1, i])
+            val64 = val64 + cym * (pC - wp.float64(p[k, j - 1, i]))
         if czp > wp.float64(0.0):
-            val64 = val64 - czp * wp.float64(p[k + 1, j, i])
+            val64 = val64 + czp * (pC - wp.float64(p[k + 1, j, i]))
         if czm > wp.float64(0.0):
-            val64 = val64 - czm * wp.float64(p[k - 1, j, i])
+            val64 = val64 + czm * (pC - wp.float64(p[k - 1, j, i]))
 
     Ap[k, j, i] = WP_FLOAT(val64)
     wp.atomic_add(pAp_buf, 0, pC * val64)
@@ -1002,7 +999,7 @@ def build_diag_preconditioner_7point_kernel(
     Mirrors the host ``build_diag_preconditioner_7point`` so the host/device
     backends produce an identical ``M_inv``: ``M_inv = 1 / (sum of face
     conductances + storage)`` on free active cells where the diagonal exceeds
-    ``tiny`` (else 1.0), and 1.0 on inactive / Dirichlet cells.
+    zero (else 0.0), and 1.0 on inactive / Dirichlet cells.
     """
     k, j, i = wp.tid()
     if k >= nz or j >= ny or i >= nx:
@@ -1012,7 +1009,6 @@ def build_diag_preconditioner_7point_kernel(
         M_inv_out[k, j, i] = WP_FLOAT(1.0)
         return
 
-    tiny = wp.float64(1.0e-12)
     cxp = wp.float64(tx_p[k, j, i])
     cxm = wp.float64(tx_m[k, j, i])
     cyp = wp.float64(ty_p[k, j, i])
@@ -1023,11 +1019,23 @@ def build_diag_preconditioner_7point_kernel(
     if sdiag < wp.float64(0.0):
         sdiag = wp.float64(0.0)
 
+    if i + 1 >= nx or active[k, j, i + 1] == 0:
+        cxp = wp.float64(0.0)
+    if i == 0 or active[k, j, i - 1] == 0:
+        cxm = wp.float64(0.0)
+    if j + 1 >= ny or active[k, j + 1, i] == 0:
+        cyp = wp.float64(0.0)
+    if j == 0 or active[k, j - 1, i] == 0:
+        cym = wp.float64(0.0)
+    if k + 1 >= nz or active[k + 1, j, i] == 0:
+        czp = wp.float64(0.0)
+    if k == 0 or active[k - 1, j, i] == 0:
+        czm = wp.float64(0.0)
     diag = cxp + cxm + cyp + cym + czp + czm + sdiag
-    if diag > tiny:
+    if diag > wp.float64(0.0):
         M_inv_out[k, j, i] = WP_FLOAT(wp.float64(1.0) / diag)
     else:
-        M_inv_out[k, j, i] = WP_FLOAT(1.0)
+        M_inv_out[k, j, i] = WP_FLOAT(0.0)
 
 
 @wp.kernel
@@ -1066,7 +1074,6 @@ def compute_head_residual_7point_kernel(
         r[k, j, i] = WP_FLOAT(0.0)
         return
 
-    tiny = wp.float64(1.0e-12)
     hC = wp.float64(x[k, j, i])
 
     cxp = wp.float64(tx_p[k, j, i])
@@ -1107,22 +1114,22 @@ def compute_head_residual_7point_kernel(
 
     diag = cxp + cxm + cyp + cym + czp + czm + sdiag
     Ax = wp.float64(0.0)
-    if diag < tiny:
-        Ax = hC
+    if diag == wp.float64(0.0):
+        Ax = wp.float64(0.0)
     else:
-        Ax = diag * hC
+        Ax = sdiag * hC
         if cxp > wp.float64(0.0):
-            Ax = Ax - cxp * wp.float64(x[k, j, i + 1])
+            Ax = Ax + cxp * (hC - wp.float64(x[k, j, i + 1]))
         if cxm > wp.float64(0.0):
-            Ax = Ax - cxm * wp.float64(x[k, j, i - 1])
+            Ax = Ax + cxm * (hC - wp.float64(x[k, j, i - 1]))
         if cyp > wp.float64(0.0):
-            Ax = Ax - cyp * wp.float64(x[k, j + 1, i])
+            Ax = Ax + cyp * (hC - wp.float64(x[k, j + 1, i]))
         if cym > wp.float64(0.0):
-            Ax = Ax - cym * wp.float64(x[k, j - 1, i])
+            Ax = Ax + cym * (hC - wp.float64(x[k, j - 1, i]))
         if czp > wp.float64(0.0):
-            Ax = Ax - czp * wp.float64(x[k + 1, j, i])
+            Ax = Ax + czp * (hC - wp.float64(x[k + 1, j, i]))
         if czm > wp.float64(0.0):
-            Ax = Ax - czm * wp.float64(x[k - 1, j, i])
+            Ax = Ax + czm * (hC - wp.float64(x[k - 1, j, i]))
 
     rf64 = wp.float64(b[k, j, i]) - Ax
     rh = rf64 * wp.float64(M_inv[k, j, i])
