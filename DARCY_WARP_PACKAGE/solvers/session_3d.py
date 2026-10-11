@@ -163,16 +163,28 @@ class ThreeDOperatorSession:
         if implementation_mode == "fast":
             if solver_name != "kcycle":
                 raise ValueError("implementation='fast' currently supports solver='kcycle' only.")
-            from DARCY_WARP_PACKAGE.solvers.fast_3d import solve_fast_confined_kcycle_3d
+            if bool(solve_kwargs.pop("unconfined", False)):
+                from DARCY_WARP_PACKAGE.solvers.fast_3d import solve_fast_unconfined_kcycle_3d
 
-            result = solve_fast_confined_kcycle_3d(
-                tx_p=self.faces[0], tx_m=self.faces[1], ty_p=self.faces[2], ty_m=self.faces[3],
-                tz_p=self.faces[4], tz_m=self.faces[5], rhs=self.rhs, active=self.active,
-                bc_mask=self.bc_mask, bc_values=self.bc_values, initial_head=initial_head,
-                dx=self.dx, dy=self.dy, dz=self.dz, return_info=return_info, device=device,
-                _workspace_holder=self._fast_workspace_holder,
-                **solve_kwargs,
-            )
+                result = solve_fast_unconfined_kcycle_3d(
+                    tx_p=self.faces[0], tx_m=self.faces[1], ty_p=self.faces[2], ty_m=self.faces[3],
+                    tz_p=self.faces[4], tz_m=self.faces[5], rhs=self.rhs, active=self.active,
+                    bc_mask=self.bc_mask, bc_values=self.bc_values, initial_head=initial_head,
+                    dx=self.dx, dy=self.dy, dz=self.dz, return_info=return_info, device=device,
+                    _workspace_holder=self._fast_workspace_holder,
+                    **solve_kwargs,
+                )
+            else:
+                from DARCY_WARP_PACKAGE.solvers.fast_3d import solve_fast_confined_kcycle_3d
+
+                result = solve_fast_confined_kcycle_3d(
+                    tx_p=self.faces[0], tx_m=self.faces[1], ty_p=self.faces[2], ty_m=self.faces[3],
+                    tz_p=self.faces[4], tz_m=self.faces[5], rhs=self.rhs, active=self.active,
+                    bc_mask=self.bc_mask, bc_values=self.bc_values, initial_head=initial_head,
+                    dx=self.dx, dy=self.dy, dz=self.dz, return_info=return_info, device=device,
+                    _workspace_holder=self._fast_workspace_holder,
+                    **solve_kwargs,
+                )
             if isinstance(result, tuple) and len(result) == 2 and isinstance(result[1], dict):
                 result[1].setdefault("session_revision", int(self.revision))
                 result[1].setdefault("session_backend", "fast_3d")

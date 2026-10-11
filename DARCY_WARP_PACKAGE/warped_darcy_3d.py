@@ -228,24 +228,23 @@ class WarpDarcySolver3D:
         if self._session is not None:
             solve_kwargs = dict(kwargs)
             if bool(solve_kwargs.get("unconfined", False)):
-                # The session currently owns the linear operator. Unconfined
-                # callers retain the existing standalone path until the 3D
-                # face-refresh backend is introduced.
-                if self.implementation == "fast":
-                    raise ValueError(
-                        "implementation='fast' currently supports confined "
-                        "3D solves only."
-                    )
-                pass
-            else:
-                solve_kwargs.setdefault("return_info", True)
-                return self._session.solve(
-                    solver=self.solver,
-                    device=self.device,
-                    implementation=self.implementation,
-                    diag_preconditioner_backend=self.diag_preconditioner_backend,
-                    **solve_kwargs,
-                )
+                # Unconfined solves rebuild the operator from the stored K
+                # fields each Picard iteration; supply them by default.
+                for name, field in (
+                    ("kx_field", self._kx_field),
+                    ("ky_field", self._ky_field),
+                    ("kz_field", self._kz_field),
+                ):
+                    if name not in solve_kwargs and field is not None:
+                        solve_kwargs[name] = field
+            solve_kwargs.setdefault("return_info", True)
+            return self._session.solve(
+                solver=self.solver,
+                device=self.device,
+                implementation=self.implementation,
+                diag_preconditioner_backend=self.diag_preconditioner_backend,
+                **solve_kwargs,
+            )
 
         common = {
             "tx_p": self._tx_p,

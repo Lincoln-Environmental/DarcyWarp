@@ -283,6 +283,35 @@ def apply_a_dot_partials_3d_f64_kernel(
 
 
 @wp.kernel
+def head_residual_partials_3d_f64_kernel(
+    residual: wp.array(dtype=wp.float64, ndim=3),
+    diag: wp.array(dtype=wp.float64, ndim=3),
+    active: wp.array(dtype=wp.int32, ndim=3),
+    bc_mask: wp.array(dtype=wp.int32, ndim=3),
+    partials: wp.array(dtype=wp.float64, ndim=1),
+    nx: int,
+    ny: int,
+    nz: int,
+    block_span: int,
+):
+    """Sum (r/diag)^2 over free cells: head-equivalent residual norm [m]."""
+    t = wp.tid()
+    n = nx * ny * nz
+    if t >= n:
+        return
+    i = t % nx
+    j = (t // nx) % ny
+    k = t // (nx * ny)
+    if active[k, j, i] == 0 or bc_mask[k, j, i] != 0:
+        return
+    d = diag[k, j, i]
+    if d < wp.float64(1.0e-30):
+        return
+    rh = residual[k, j, i] / d
+    wp.atomic_add(partials, t // block_span, rh * rh)
+
+
+@wp.kernel
 def compute_safe_alpha_3d_kernel(
     numerator: wp.array(dtype=wp.float64, ndim=1),
     denominator: wp.array(dtype=wp.float64, ndim=1),
@@ -315,6 +344,7 @@ __all__ = [
     "BLOCK_SIZE_3D",
     "apply_A_faces_3d_f64_kernel",
     "residual_partials_3d_f64_kernel",
+    "head_residual_partials_3d_f64_kernel",
     "combine_partials_3d_f64_kernel",
     "face_jacobi_3d_f64_kernel",
     "dot_partials_3d_f64_kernel",
