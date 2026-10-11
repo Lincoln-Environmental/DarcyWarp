@@ -883,3 +883,30 @@ def nl_jacobian_vector_kernel(
         result = result + (wp.float64(sy) * ds_phys + dphi) * wp.float64(area) * wp.float64(inv_dt) * v_c
 
     Jv_out[j, i] = WP_FLOAT(result)
+
+
+@wp.kernel
+def nl_gated_activation_diagnostics_kernel(
+    first: wp.array(dtype=WP_FLOAT, ndim=2), second: wp.array(dtype=WP_FLOAT, ndim=2),
+    free: wp.array(dtype=wp.int32, ndim=2), drn_mask: wp.array(dtype=wp.int32, ndim=2),
+    drn_elev: wp.array(dtype=WP_FLOAT, ndim=2), riv_mask: wp.array(dtype=wp.int32, ndim=2),
+    riv_bottom: wp.array(dtype=WP_FLOAT, ndim=2), counts: wp.array(dtype=wp.int32),
+):
+    j, i = wp.tid()
+    if free[j, i] != 0:
+        if drn_mask[j, i] != 0:
+            old = first[j, i] > drn_elev[j, i]
+            new = second[j, i] > drn_elev[j, i]
+            if old != new:
+                index = 1
+                if new:
+                    index = 0
+                wp.atomic_add(counts, index, 1)
+        if riv_mask[j, i] != 0:
+            old = first[j, i] > riv_bottom[j, i]
+            new = second[j, i] > riv_bottom[j, i]
+            if old != new:
+                index = 3
+                if new:
+                    index = 2
+                wp.atomic_add(counts, index, 1)

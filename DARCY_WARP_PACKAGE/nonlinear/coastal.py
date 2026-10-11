@@ -102,6 +102,11 @@ class CoastalDeviceTerms:
             wp.launch(kernel=coastal_model_rhs_kernel, dim=self.fields[0].size,
                 inputs=[head, branch_head, *self.fields, out], device=self.device)
 
+    def activation_diagnostics(self, *, first, second, counts):
+        if self.fields[0].size:
+            wp.launch(kernel=coastal_activation_diagnostics_kernel, dim=self.fields[0].size,
+                inputs=[first, second, *self.fields, counts], device=self.device)
+
     def branch_changes(self, *, first, second, count):
         if self.fields[0].size:
             wp.launch(kernel=coastal_branch_changes_kernel, dim=self.fields[0].size,
@@ -158,3 +163,22 @@ def gated_diagonal_kernel(head: wp.array(dtype=WP_FLOAT, ndim=2),
             diagonal[j, i] += drn_cond[j, i]
         if riv_mask[j, i] != 0 and head[j, i] > riv_bottom[j, i]:
             diagonal[j, i] += riv_cond[j, i]
+
+
+@wp.kernel
+def coastal_activation_diagnostics_kernel(
+    first: wp.array(dtype=WP_FLOAT, ndim=2), second: wp.array(dtype=WP_FLOAT, ndim=2),
+    rows: wp.array(dtype=wp.int32), cols: wp.array(dtype=wp.int32),
+    levels: wp.array(dtype=WP_FLOAT), cond: wp.array(dtype=WP_FLOAT),
+    submerged: wp.array(dtype=wp.int32), counts: wp.array(dtype=wp.int32),
+):
+    n = wp.tid()
+    j, i = rows[n], cols[n]
+    if submerged[n] == 0:
+        old = first[j, i] > levels[n]
+        new = second[j, i] > levels[n]
+        if old != new:
+            index = 5
+            if new:
+                index = 4
+            wp.atomic_add(counts, index, 1)

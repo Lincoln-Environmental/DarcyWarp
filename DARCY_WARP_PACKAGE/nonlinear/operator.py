@@ -375,6 +375,17 @@ class NonlinearOperator2D:
         if self._coast is not None:
             self._coast.model_rhs(head=head, branch_head=branch_head, out=out)
 
+    def gated_activation_diagnostics_device(self, *, first, second, counts):
+        counts.zero_()
+        wp.launch(kernel=_k.nl_gated_activation_diagnostics_kernel, dim=self._dim,
+            inputs=[first, second, self._free_mask_wp, self._drn_mask_wp, self._drn_elev_wp,
+                self._riv_mask_wp, self._riv_rbot_wp, counts], device=self._device)
+        if self._coast is not None:
+            self._coast.activation_diagnostics(first=first, second=second, counts=counts)
+        names = ('drn_activated', 'drn_deactivated', 'riv_activated', 'riv_deactivated',
+                 'coastal_subfaces_activated', 'coastal_subfaces_deactivated')
+        return dict(zip(names, map(int, counts.numpy())))
+
     def gated_branch_changes_device(self, *, first: Any, second: Any, count: Any) -> int:
         count.fill_(wp.int32(0))
         wp.launch(kernel=_k.nl_gated_branch_changes_kernel, dim=self._dim,

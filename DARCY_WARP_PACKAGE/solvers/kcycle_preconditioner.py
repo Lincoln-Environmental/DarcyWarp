@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
+from time import perf_counter
 
 import warp as wp
 
@@ -76,6 +77,7 @@ class FixedWorkKCyclePreconditioner2D:
         cheby_lambda_max: float,
         coarse_residual_restriction: str = "average",
         implementation: str = "classic",
+        profile_timing: bool = False,
     ):
         self.model = model
         self.levels = levels
@@ -99,8 +101,44 @@ class FixedWorkKCyclePreconditioner2D:
             "cheby_lambda_min": float(cheby_lambda_min),
             "cheby_lambda_max": float(cheby_lambda_max),
         }
+        self.profile_timing = bool(profile_timing)
+        self.timing_events = {'setup': [], 'apply': []}
+        self.submission_wall_s = {'setup': 0.0, 'apply': 0.0}
+        self.timing_device = wp.get_device(model.device_str)
         self.applications = 0
         self.cycles = 0
+
+    def _start_timing(self, *, kind):
+        if not self.profile_timing:
+            return None
+        start = end = None
+        if self.timing_device.is_cuda:
+            start = wp.Event(device=self.timing_device, enable_timing=True)
+            end = wp.Event(device=self.timing_device, enable_timing=True)
+            wp.record_event(start)
+        return kind, perf_counter(), start, end
+
+    def _end_timing(self, *, token):
+        if token is None:
+            return
+        kind, started, start, end = token
+        if end is not None:
+            wp.record_event(end)
+            self.timing_events[kind].append((start, end))
+        self.submission_wall_s[kind] += perf_counter() - started
+
+    def timing_report(self):
+        if not self.profile_timing:
+            return {}
+        # Resolve events once after the solve; no per-application host barrier.
+        gpu = {kind: sum(wp.get_event_elapsed_time(start, end) / 1000.0
+                        for start, end in events)
+               for kind, events in self.timing_events.items()}
+        return {'preconditioner_setup_wall_s': self.submission_wall_s['setup'],
+                'preconditioner_apply_wall_s': self.submission_wall_s['apply'],
+                'preconditioner_setup_gpu_s': gpu['setup'] if self.timing_device.is_cuda else None,
+                'preconditioner_apply_gpu_s': gpu['apply'] if self.timing_device.is_cuda else None,
+                'preconditioner_timing_method': 'deferred CUDA events and CPU submission time'}
 
     @property
     def fine_diagonal_inverse(self) -> Any:
@@ -108,6 +146,7 @@ class FixedWorkKCyclePreconditioner2D:
 
     def freeze(self, *, transmissivity: Any, storage_diagonal: Any) -> None:
         """Refresh all frozen Picard coefficients in-place on the device."""
+        timing = self._start_timing(kind='setup')
         wp.copy(self.workspace.coefficients[0].transmissivity, transmissivity)
         wp.copy(self.workspace.coefficients[0].storage_diagonal, storage_diagonal)
         kernel_module = __import__("DARCY_WARP_PACKAGE.warped_darcy", fromlist=["coarsen_transient_operator_level_kernel"])
@@ -165,8 +204,11 @@ class FixedWorkKCyclePreconditioner2D:
                 for level, snapshot in zip(self.levels, snapshots):
                     level.T_wp, level.storage_diag_wp, level.M_inv_wp = snapshot
 
+        self._end_timing(token=timing)
+
     def apply(self, rhs: Any, out: Any) -> None:
         """Apply fixed K-cycle work without allocations, checks, or host reads."""
+        timing = self._start_timing(kind='apply')
         out.fill_(WP_FLOAT(0.0))
         snapshots = []
         level0 = self.levels[0]
@@ -219,6 +261,7 @@ class FixedWorkKCyclePreconditioner2D:
                 level0.M_inv_wp,
                 level0.bc_values_wp,
             ) = level0_front
+        self._end_timing(token=timing)
         self.applications += 1
         self.cycles += self.n_cycles
 

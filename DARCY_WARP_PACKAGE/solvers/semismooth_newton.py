@@ -491,6 +491,7 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
     log_progress = bool(kwargs.pop("newton_log_progress", False))
     debug_observer = kwargs.pop('newton_debug_observer', None)
     gated_model_enabled = bool(kwargs.pop('newton_gated_model_enabled', True))
+    profile_timing = bool(kwargs.pop('newton_profile_timing', False))
     if debug_observer is not None and not callable(debug_observer):
         raise ValueError('Newton debug observer must be callable')
     max_newton = int(kwargs.pop("newton_max_iterations", 20))
@@ -601,6 +602,7 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
             min_coarse_n=4,
             min_coarse_cells=min_coarse_cells,
         )
+    gate_counts = wp.zeros(6, dtype=wp.int32, device=model.device_str) if profile_timing else None
     levels = model.mg_levels
     owner = model._resource_owner
     owner.refresh(hierarchy=levels, work=model._mg_work, cuda_graph=model._kcycle_graph)
@@ -638,6 +640,7 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
         cheby_lambda_max=float(kwargs.get("cheby_lambda_max", 1.95)),
         coarse_residual_restriction=coarse_restriction,
         implementation=str(kwargs.get('inner_implementation', 'classic')),
+        profile_timing=profile_timing,
     )
 
     # The authoritative operator is cached on the resource owner and reused
@@ -741,6 +744,9 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
             if newton_iteration + gated_active_set_work >= max_newton:
                 failure_reason = 'newton_iteration_limit'
                 break
+            iteration_started = time.perf_counter()
+            applications_before = preconditioner.applications
+            cycles_before = preconditioner.cycles
             if forcing_enabled:
                 ratio = norms.rms / max(float(initial_residual), 1.0e-300)
                 iteration_rtol = min(
@@ -876,6 +882,11 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
                         wp.copy(vector_workspace.candidate, previous_candidate)
                         wp.copy(vector_workspace.candidate_residual, previous_residual)
 
+            gate_diagnostics = {}
+            if profile_timing and candidate_norms is not None:
+                gate_diagnostics = operator.gated_activation_diagnostics_device(
+                    first=operator.head_device, second=vector_workspace.candidate, counts=gate_counts)
+                gate_diagnostics['candidate_accepted'] = bool(accepted)
             total_backtracks += backtracks
             history.append(
                 {
@@ -894,6 +905,10 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
                     "fgmres_breakdown": bool(result.breakdown),
                     "fgmres_breakdown_reason": result.breakdown_reason,
                     "gated_proposal": gated_proposal,
+                    "gate_diagnostics": gate_diagnostics,
+                    "kcycle_applications": int(preconditioner.applications - applications_before),
+                    "kcycles": int(preconditioner.cycles - cycles_before),
+                    "iteration_wall_s": time.perf_counter() - iteration_started,
                 }
             )
             if log_progress:
@@ -924,6 +939,7 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
                 vectors=vector_workspace,
             )
             history[-1]["head_equivalent_residual_rms"] = float(head_equivalent)
+            history[-1]["iteration_wall_s"] = time.perf_counter() - iteration_started
             if norms.rms <= residual_tol and head_equivalent <= head_residual_tol:
                 converged = True
                 break
@@ -1086,6 +1102,8 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
             "active_mask": active.copy(),
         }
 
+        if hasattr(preconditioner, 'timing_report'):
+            info.update(preconditioner.timing_report())
         if not converged and fallback_enabled:
             fallback_kwargs = dict(original_kwargs)
             for key in tuple(fallback_kwargs):

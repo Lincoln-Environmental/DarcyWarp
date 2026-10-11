@@ -8,7 +8,7 @@ def test_recharged_all_drain_domain_starts_at_exact_drain_elevation(device):
     """Flat closed domain: H=DEM initially, H=DEM+R*A/C at steady state."""
     from DARCY_WARP_PACKAGE.warped_darcy import WarpDarcySolver
 
-    shape = (12, 16)
+    shape = (40, 60)
     elevation = np.full(shape, 4.0)
     recharge = 0.3 / 365.25
     conductance = 250.0
@@ -26,8 +26,18 @@ def test_recharged_all_drain_domain_starts_at_exact_drain_elevation(device):
             reference_transmissivity_field=np.full(shape, 50.0),
             zbot_field=np.full(shape, -50.0), ztop_field=elevation,
             unconfined_startup_mode="confined_pre_solve", max_levels=7,
-            newton_fallback_to_picard=False)
+            newton_fallback_to_picard=False, inner_implementation="fast",
+            newton_profile_timing=True)
         assert info["converged"], info["newton_failure_reason"]
+        assert info["preconditioner_implementation"] == "fast"
+        assert len(info["multigrid_level_shapes"]) > 1
+        assert info["preconditioner_setup_wall_s"] > 0.0
+        assert info["preconditioner_apply_wall_s"] > 0.0
+        if device.startswith("cuda"):
+            assert info["preconditioner_setup_gpu_s"] > 0.0
+            assert info["preconditioner_apply_gpu_s"] > 0.0
+        else:
+            assert info["preconditioner_apply_gpu_s"] is None
         np.testing.assert_allclose(head, elevation + recharge*25.0/conductance,
             rtol=0.0, atol=1e-8)
         np.testing.assert_array_equal(initial, elevation)
