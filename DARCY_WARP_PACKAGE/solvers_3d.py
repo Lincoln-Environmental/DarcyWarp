@@ -599,36 +599,6 @@ def _resolve_isolated_free_cells(
     return isolated
 
 
-def _coarsen_mean_edge_axes(field_f: np.ndarray, *, coarsen_y: int, coarsen_x: int) -> np.ndarray:
-    """
-    Horizontally semi-coarsen a 3D field while preserving layer index.
-
-    This is used for layered groundwater multigrid levels where the vertical
-    axis represents model layers, not a smooth geometric continuum.  Values are
-    averaged over 2x2 horizontal blocks independently within each layer.  For
-    vertical face conductances this is a transparent first-order aggregation:
-    the coarse vertical coupling is the arithmetic mean of the fine vertical
-    couplings in the horizontal block, rather than a hidden full 2x2x2 merge.
-    """
-    if int(coarsen_y) not in {1, 2} or int(coarsen_x) not in {1, 2}:
-        raise ValueError("coarsen_y and coarsen_x must be 1 or 2.")
-    arr_f = np.asarray(field_f, dtype=NP_FLOAT)
-    nz_f, ny_f, nx_f = arr_f.shape
-    nz_c = nz_f
-    fy = int(coarsen_y)
-    fx = int(coarsen_x)
-    ny_c = (ny_f + fy - 1) // fy
-    nx_c = (nx_f + fx - 1) // fx
-
-    pad_z = 0
-    pad_y = int(fy * ny_c - ny_f)
-    pad_x = int(fx * nx_c - nx_f)
-
-    arr_p = np.pad(arr_f, ((0, pad_z), (0, pad_y), (0, pad_x)), mode="edge")
-    arr_c = arr_p.reshape(nz_c, ny_c, fy, nx_c, fx).mean(axis=(2, 4), dtype=np.float64)
-    return arr_c.astype(NP_FLOAT, copy=False)
-
-
 def _masked_block_mean_axes(
     field_f: np.ndarray,
     weight_f: np.ndarray,
@@ -877,10 +847,6 @@ def _coarsen_max_edge_axes(mask_f: np.ndarray, *, coarsen_y: int, coarsen_x: int
     arr_p = np.pad(arr_f, ((0, pad_z), (0, pad_y), (0, pad_x)), mode="edge")
     arr_c = arr_p.reshape(nz_c, ny_c, fy, nx_c, fx).max(axis=(2, 4))
     return arr_c.astype(np.int32, copy=False)
-
-
-def _coarsen_mean_edge_1x2x2(field_f: np.ndarray) -> np.ndarray:
-    return _coarsen_mean_edge_axes(field_f, coarsen_y=2, coarsen_x=2)
 
 
 def _coarsen_max_edge_1x2x2(mask_f: np.ndarray) -> np.ndarray:
@@ -2558,13 +2524,21 @@ def solve_multigrid_kcycle_7point_3d(
     3D multilevel K-cycle prototype for a fixed 7-point operator.
 
     Notes:
-      - Coarse operators are built by 1x2x2 horizontal semi-coarsening of face
-        conductances: layers are preserved and only horizontal dimensions are
-        coarsened.  Vertical face conductances use the same horizontal block
-        mean as the other operator arrays as a transparent first implementation.
+      - Coarse operators are built by conservative horizontal semi-coarsening
+        of the face conductances (``_coarsen_faces_consistent_axes``): coarse
+        faces aggregate only the fine faces crossing each coarse interface
+        (reciprocal by construction, Galerkin-scaled to the block-average
+        restriction), Dirichlet couplings become diagonal springs, and layers
+        are preserved (no vertical coarsening).
       - Correction scheme uses homogeneous coarse Dirichlet values (bc_values=0 on coarse).
       - Optional confined transient stream adds storage diagonal and RHS term.
-      - Optional unconfined stream uses Picard outer iterations with K*sat updates.
+      - Optional unconfined stream uses Picard outer iterations with the
+        corrected unconfined conductance
+        (``build_7point_face_conductance_unconfined_from_sat``: horizontal
+        faces carry harmonic-mean transmissivity T = K*sat times dy/dx;
+        vertical faces carry full-thickness harmonic resistance) and the
+        volume-conservative secant-Sy/Ss storage (default
+        ``unconfined_storage_mode="secant_sy"``).
     """
     txp0 = np.asarray(tx_p, dtype=NP_FLOAT)
     txm0 = np.asarray(tx_m, dtype=NP_FLOAT)
