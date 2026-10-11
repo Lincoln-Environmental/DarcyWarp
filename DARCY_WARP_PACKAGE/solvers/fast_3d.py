@@ -42,6 +42,7 @@ from DARCY_WARP_PACKAGE.solvers_3d import (
     _coarsen_max_edge_axes,
     _masked_block_sum_axes,
     _prepare_7point_transient_terms,
+    _resolve_isolated_free_cells,
 )
 from DARCY_WARP_PACKAGE.warped_darcy import _chebyshev_relaxation_sequence
 
@@ -230,6 +231,23 @@ def solve_fast_confined_kcycle_3d(
         dy=dy,
         dz=float(dz),
     )
+    # Detect physically singular rows (zero conductance AND zero storage)
+    # before any smoothing: a nonzero source there is incompatible (raise);
+    # otherwise the cell is excluded from the working set instead of being
+    # silently pinned by an identity equation.
+    isolated = _resolve_isolated_free_cells(
+        faces=(tx_p, tx_m, ty_p, ty_m, tz_p, tz_m),
+        active=np.asarray(active, dtype=np.int32),
+        bc_mask=np.asarray(bc_mask, dtype=np.int32),
+        rhs_eff=rhs_effective,
+        storage_diag=storage,
+    )
+    n_isolated = int(np.count_nonzero(isolated))
+    if n_isolated:
+        active_work = np.asarray(active, dtype=np.int32).copy()
+        active_work[isolated] = 0
+    else:
+        active_work = np.asarray(active, dtype=np.int32)
     mode = str(smoother).strip().lower()
     if mode not in {"jacobi", "chebyshev"}:
         raise ValueError("Fast 3D smoother must be 'jacobi' or 'chebyshev'.")
@@ -259,7 +277,7 @@ def solve_fast_confined_kcycle_3d(
     cache_key = (
         shape, int(max_levels), int(min_coarse_n), str(device),
         id(tx_p), id(tx_m), id(ty_p), id(ty_m), id(tz_p), id(tz_m),
-        id(active), id(bc_mask), id(bc_values), bool(transient),
+        id(active_work), id(bc_mask), id(bc_values), bool(transient),
         float(dt_used) if bool(transient) else None,
         float(dx), None if dy is None else float(dy), float(dz),
         storage_coeff_key, storage_diag_key,
@@ -273,7 +291,7 @@ def solve_fast_confined_kcycle_3d(
         workspace_record = cached
     else:
         host_levels = _build_levels(
-            faces=(tx_p, tx_m, ty_p, ty_m, tz_p, tz_m), active=active,
+            faces=(tx_p, tx_m, ty_p, ty_m, tz_p, tz_m), active=active_work,
             bc_mask=bc_mask, bc_values=bc_values, rhs=rhs_effective,
             storage_diag=storage,
             max_levels=max_levels, min_coarse_n=min_coarse_n,
@@ -313,7 +331,7 @@ def solve_fast_confined_kcycle_3d(
         if workspace_holder is not None:
             workspace_holder["workspace"] = workspace_record
     fine = levels[0]
-    active_f = np.asarray(active, dtype=np.int32)
+    active_f = active_work
     bc_f = np.asarray(bc_mask, dtype=np.int32)
     n_free = int(np.count_nonzero((active_f != 0) & (bc_f == 0)))
     x0 = np.zeros(shape, dtype=np.float64) if initial_head is None else np.asarray(initial_head, dtype=np.float64).copy()
@@ -392,11 +410,14 @@ def solve_fast_confined_kcycle_3d(
 
     if n_free == 0:
         head = fine["x"].numpy()
+        if n_isolated:
+            head[isolated] = x0[isolated]
         info = {
             "solver_type": "kcycle_7point_3d",
             "implementation": "fast",
             "converged": True,
             "n_cycles_used": 0,
+            "n_isolated_cells_excluded": n_isolated,
             "transient": bool(transient),
             "transient_formulation": "confined" if bool(transient) else "steady",
             "dt": float(dt_used) if bool(transient) else float("nan"),
@@ -478,6 +499,12 @@ def solve_fast_confined_kcycle_3d(
         "dt": float(dt_used) if bool(transient) else float("nan"),
     }
     head = np.asarray(fine["x"].numpy(), dtype=NP_FLOAT)
+    if n_isolated:
+        # Excluded singular cells carry no flux and no residual; report their
+        # initial head rather than the zero the working mask leaves behind.
+        head = head.copy()
+        head[isolated] = x0[isolated]
+    info["n_isolated_cells_excluded"] = n_isolated
     return (head, info) if return_info else head
 
 

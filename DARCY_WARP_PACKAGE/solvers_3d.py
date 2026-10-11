@@ -388,6 +388,51 @@ def _prepare_7point_transient_terms(
     return b, sdiag, h_prev, float(dt_f)
 
 
+def _resolve_isolated_free_cells(
+    *,
+    faces: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray],
+    active: np.ndarray,
+    bc_mask: np.ndarray,
+    rhs_eff: np.ndarray,
+    storage_diag: np.ndarray,
+) -> np.ndarray:
+    """Detect active free cells whose discrete equation is singular.
+
+    A free cell with zero total face conductance *and* zero storage diagonal
+    has the equation ``0 * h = rhs``: with a nonzero source it is incompatible
+    (mass has nowhere to go) and with a zero source its head is physically
+    undetermined (no flux depends on it).  Historically such rows were silently
+    replaced by identity equations (``diag = 1``), which manufactures an
+    artificial solution ``h = rhs``.  Instead:
+
+    - a nonzero source into a disconnected cell raises ``ValueError``;
+    - otherwise the cell is excluded from the solve working set (returned
+      mask), keeps its initial head, and carries zero flux and zero residual.
+
+    Returns a boolean mask of excluded cells (shape matching ``active``).
+    """
+    act = np.asarray(active, dtype=np.int32) != 0
+    bcm = np.asarray(bc_mask, dtype=np.int32) != 0
+    free = act & ~bcm
+    diag = np.zeros(act.shape, dtype=np.float64)
+    for face in faces:
+        diag += np.maximum(np.asarray(face, dtype=np.float64), 0.0)
+    diag += np.maximum(np.asarray(storage_diag, dtype=np.float64), 0.0)
+    isolated = free & (diag <= 0.0)
+    if not np.any(isolated):
+        return np.zeros(act.shape, dtype=bool)
+    rhs = np.asarray(rhs_eff, dtype=np.float64)
+    n_source = int(np.count_nonzero(rhs[isolated] != 0.0))
+    if n_source:
+        raise ValueError(
+            f"{n_source} isolated active cell(s) (zero conductance and zero "
+            "storage) carry a nonzero source term; the steady-state equation "
+            "0 * h = rhs is incompatible. Remove the source, connect the "
+            "cells, or mark them inactive."
+        )
+    return isolated
+
+
 def _coarsen_mean_edge_axes(field_f: np.ndarray, *, coarsen_y: int, coarsen_x: int) -> np.ndarray:
     """
     Horizontally semi-coarsen a 3D field while preserving layer index.
@@ -786,6 +831,48 @@ def _solve_chebyshev_7point_3d_linear(
         dz=float(dz),
     )
 
+    # Exclude physically singular free rows (zero conductance AND zero
+    # storage) instead of silently pinning them with identity equations.
+    isolated = _resolve_isolated_free_cells(
+        faces=(txp, txm, typ, tym, tzp, tzm),
+        active=act,
+        bc_mask=bcm,
+        rhs_eff=b_eff,
+        storage_diag=sdiag,
+    )
+    n_isolated = int(np.count_nonzero(isolated))
+    if n_isolated:
+        act = act.copy()
+        act[isolated] = 0
+        free = (act != 0) & (bcm == 0)
+        n_free = int(np.count_nonzero(free))
+        if n_free <= 0:
+            if initial_head is None:
+                h0 = np.zeros(shape, dtype=NP_FLOAT)
+            else:
+                h0 = np.asarray(initial_head, dtype=NP_FLOAT).copy()
+            h0[bcm != 0] = bcv[bcm != 0]
+            h0[act == 0] = NP_FLOAT(0.0)
+            h0[isolated] = (
+                np.asarray(initial_head, dtype=NP_FLOAT)[isolated]
+                if initial_head is not None
+                else 0.0
+            )
+            info0 = {
+                "solver_type": "chebyshev_7point_3d",
+                "n_iter_used": 0,
+                "converged": True,
+                "r_rms0": 0.0,
+                "r_rms_end": 0.0,
+                "tol_abs": float(abs_tol_min),
+                "n_isolated_cells_excluded": n_isolated,
+                "transient": bool(transient),
+                "transient_formulation": "confined" if bool(transient) else "steady",
+                "dt": float(dt) if bool(transient) and dt is not None else float("nan"),
+                "unconfined": False,
+            }
+            return (h0, info0) if return_info else h0
+
     if initial_head is None:
         if bool(transient) and h_prev_used is not None:
             x0 = np.asarray(h_prev_used, dtype=NP_FLOAT).copy()
@@ -947,6 +1034,13 @@ def _solve_chebyshev_7point_3d_linear(
             break
 
     head_out = np.asarray(x_wp.numpy(), dtype=NP_FLOAT)
+    if n_isolated:
+        head_out = head_out.copy()
+        head_out[isolated] = (
+            np.asarray(initial_head, dtype=NP_FLOAT)[isolated]
+            if initial_head is not None
+            else 0.0
+        )
 
     # Head-equivalent (Jacobi-preconditioned) residual RMS for reporting / inner-usable checks.
     wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[rTr_buf], device=device)
@@ -999,6 +1093,7 @@ def _solve_chebyshev_7point_3d_linear(
         "unconfined": False,
         "converged": bool(converged),
         "diag_preconditioner_backend": diag_mode,
+        "n_isolated_cells_excluded": n_isolated,
     }
 
     return (head_out, info) if return_info else head_out
@@ -2364,6 +2459,50 @@ def solve_multigrid_kcycle_7point_3d(
         dz=float(dz),
     )
 
+    # Exclude physically singular free rows (zero conductance AND zero
+    # storage) instead of letting the kernels pin them with identity
+    # equations.  A nonzero source into such a cell is incompatible and
+    # raises in the helper.
+    isolated0 = _resolve_isolated_free_cells(
+        faces=(txp0, txm0, typ0, tym0, tzp0, tzm0),
+        active=act0,
+        bc_mask=bcm0,
+        rhs_eff=b_eff0,
+        storage_diag=sdiag0,
+    )
+    n_isolated0 = int(np.count_nonzero(isolated0))
+    if n_isolated0:
+        act0 = act0.copy()
+        act0[isolated0] = 0
+        free0 = (act0 != 0) & (bcm0 == 0)
+        n_free0 = int(np.count_nonzero(free0))
+        if n_free0 <= 0:
+            if initial_head is None:
+                h0 = np.zeros(shape0, dtype=NP_FLOAT)
+            else:
+                h0 = np.asarray(initial_head, dtype=NP_FLOAT).copy()
+            h0[bcm0 != 0] = bcv0[bcm0 != 0]
+            h0[act0 == 0] = NP_FLOAT(0.0)
+            h0[isolated0] = (
+                np.asarray(initial_head, dtype=NP_FLOAT)[isolated0]
+                if initial_head is not None
+                else 0.0
+            )
+            info0 = {
+                "solver_type": "kcycle_7point_3d",
+                "n_cycles_used": 0,
+                "converged": True,
+                "r_rms0": 0.0,
+                "r_rms_end": 0.0,
+                "tol_abs": float(abs_tol_min),
+                "n_isolated_cells_excluded": n_isolated0,
+                "transient": bool(transient),
+                "transient_formulation": "confined" if bool(transient) else "steady",
+                "dt": float(dt) if bool(transient) and dt is not None else float("nan"),
+                "unconfined": False,
+            }
+            return (h0, info0) if return_info else h0
+
     if initial_head is None:
         if bool(transient) and h_prev_used is not None:
             x0 = np.asarray(h_prev_used, dtype=NP_FLOAT).copy()
@@ -2947,6 +3086,13 @@ def solve_multigrid_kcycle_7point_3d(
             break
 
     head_out = np.asarray(lvl0["x_wp"].numpy(), dtype=NP_FLOAT)
+    if n_isolated0:
+        head_out = head_out.copy()
+        head_out[isolated0] = (
+            np.asarray(initial_head, dtype=NP_FLOAT)[isolated0]
+            if initial_head is not None
+            else 0.0
+        )
     rTr_end = compute_residual_norm(lvl0, lvl0["x_wp"], lvl0["r_wp"], lvl0["rTr_buf"])
     r_rms_end = float(np.sqrt(max(rTr_end, 0.0) / float(n_free0)))
 
@@ -3024,6 +3170,7 @@ def solve_multigrid_kcycle_7point_3d(
         "check_every_no": int(check_every),
         "vertical_line_max_nz": int(vertical_line_max_nz),
         "diag_preconditioner_backend": diag_mode,
+        "n_isolated_cells_excluded": n_isolated0,
     }
 
     # Release the multigrid device arrays so the unconfined Picard loop (which
