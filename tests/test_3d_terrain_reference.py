@@ -43,6 +43,9 @@ def test_independent_sparse_matches_face_divergence(irregular):
     operator = TerrainReferenceOperator3D(metrics=metrics,kx=k,ky=2*k,kz=0.001*k)
     head = rng.normal(size=grid.shape)
     matrix,offset = operator.sparse_matrix()
+    row,col = matrix.nonzero()
+    allowed = {0,1,-1,5,-5,20,-20,19,-19,21,-21,15,-15,25,-25}
+    assert set((col-row).tolist()).issubset(allowed)
     np.testing.assert_allclose((matrix @ head.ravel()).reshape(grid.shape)+offset,
         operator.divergence(fluxes=operator.fluxes(head=head)),rtol=1e-13,atol=1e-13)
     np.testing.assert_allclose(matrix @ np.ones(head.size),0,atol=1e-13)
@@ -92,3 +95,80 @@ def test_storage_uses_actual_nonuniform_layers_and_no_floor():
     wet = storage_potential_3d(head=grid.tops+.5,bottoms=grid.bottoms,thickness=grid.thickness,sy=sy,ss=1e-4)
     expected = sy*grid.thickness+1e-4*(.5*grid.thickness**2+.5*grid.thickness)
     np.testing.assert_array_equal(wet,expected)
+
+
+@pytest.mark.parametrize("direction", ["west","east","south","north","top","bottom"])
+def test_analytic_exterior_total_head_and_transformed_flux_sign(direction):
+    surface = 20+.4*np.arange(3)[None,:]+.6*np.arange(3)[:,None]
+    grid = TerrainGrid3D(surface_elevation=surface,zeta_faces=np.array([0,1,2]),dx=2,dy=3)
+    metrics = TerrainMetrics3D(grid=grid)
+    sides = {"west": ((0,1,0),2,-1),"east": ((0,1,2),2,1),
+        "south": ((0,0,1),1,-1),"north": ((0,2,1),1,1),
+        "top": ((0,1,1),0,-1),"bottom": ((1,1,1),0,1)}
+    cell,axis,sign = sides[direction]
+    a,b,c = .3,-.2,.7
+    y,x = np.mgrid[:3,:3]
+    h = 9+a*x[None]*2+b*y[None]*3+c*grid.elevations
+    sx,sy = metrics.sx[cell[1:]],metrics.sy[cell[1:]]
+    distance = (2 if axis == 2 else 3 if axis == 1 else 1)/2
+    area = 3 if axis == 2 else 2 if axis == 1 else 6
+    derivative = a+c*sx if axis == 2 else b+c*sy if axis == 1 else -c
+    boundary_head = h[cell]+sign*distance*derivative
+    elevation = grid.elevations[cell]+sign*distance*(sx if axis == 2 else sy if axis == 1 else -1)
+    physical_area = area*np.sqrt(1+sx**2+sy**2) if axis == 0 else area
+    contact = TerrainContact3D(cell=cell,direction=direction,area=physical_area,distance=distance,
+                              elevation=elevation,head=boundary_head)
+    operator = TerrainReferenceOperator3D(metrics=metrics,kx=3,ky=5,kz=.02,contacts=(contact,))
+    flux = operator.fluxes(head=h)[3][0]
+    physical = -3*a if axis == 2 else -5*b if axis == 1 else (-3*a*sx-5*b*sy+.02*c)
+    assert flux == pytest.approx(sign*physical*area,abs=2e-12)
+
+
+def test_flat_operator_exact_cartesian_reduction():
+    from DARCY_WARP_PACKAGE.solvers_3d import build_7point_face_conductance_from_k,build_7point_face_conductance_unconfined_from_sat
+    grid = TerrainGrid3D(surface_elevation=np.full((3,5),20.),zeta_faces=np.arange(4)*2.,dx=3,dy=4)
+    metrics = TerrainMetrics3D(grid=grid)
+    rng = np.random.default_rng(18)
+    k = np.exp(rng.normal(size=grid.shape))
+    for head in (None,grid.bottoms+rng.uniform(-1,3,grid.shape)):
+        terrain = TerrainReferenceOperator3D(metrics=metrics,kx=k,ky=2*k,kz=.1*k,head=head)
+        if head is None:
+            faces = build_7point_face_conductance_from_k(kx_field=k,ky_field=2*k,kz_field=.1*k,
+                active=grid.active,dx=grid.dx,dy=grid.dy,dz=2.)
+        else:
+            faces = build_7point_face_conductance_unconfined_from_sat(kx_field=k,ky_field=2*k,kz_field=.1*k,
+                sat=np.clip(head-grid.bottoms,.01,2),active=grid.active,dx=grid.dx,dy=grid.dy,dz=2.)
+        for expected,actual in zip(faces,terrain.principal_faces()):
+            np.testing.assert_allclose(actual,expected,rtol=5e-16,atol=0)
+
+
+def test_continuous_manufactured_source_converges_under_refinement():
+    """Independent calculus reference, rather than source=discrete A*h."""
+    errors = []
+    for nx in (16,32,64):
+        spacing = 1/nx
+        x = (np.arange(nx)+.5)*spacing
+        surface = 900*np.sin(x)[None,:]
+        grid = TerrainGrid3D(surface_elevation=surface,zeta_faces=np.array([0,.4,1,2]),dx=spacing,dy=1)
+        operator = TerrainReferenceOperator3D(metrics=TerrainMetrics3D(grid=grid),kx=3,ky=2,kz=.01)
+        h = np.broadcast_to(np.sin(2*x)[None,None,:],grid.shape).copy()
+        discrete = operator.divergence(fluxes=operator.fluxes(head=h))
+        # Integral -Kx*h_xx over each physical cell: the unit Jacobian
+        # removes terrain relief from the volume measure exactly.
+        exact = -3*(2*np.cos(2*(x+spacing/2))-2*np.cos(2*(x-spacing/2)))*grid.thickness
+        errors.append(float(np.max(np.abs(discrete[1,:,1:-1]-exact[1,:,1:-1]))/np.max(np.abs(exact[1,:,1:-1]))))
+    assert errors[0] < .002
+    assert errors[1] < .3*errors[0]
+    assert errors[2] < .3*errors[1]
+
+
+def test_tiny_confined_elastic_increment_is_not_lost_in_yield_potential():
+    from DARCY_WARP_PACKAGE.physics.storage_3d import storage_increment_3d
+    old = np.array([10.])
+    new = np.nextafter(old,np.inf)
+    increment = storage_increment_3d(head=new,previous=old,bottoms=0.,thickness=10.,sy=.2,ss=1e-4)
+    expected = 1e-4*10*(new-old)
+    np.testing.assert_array_equal(increment,expected)
+    # Subtracting the two full stored-water potentials would lose this change.
+    assert (storage_potential_3d(head=new,bottoms=0,thickness=10,sy=.2,ss=1e-4)-
+            storage_potential_3d(head=old,bottoms=0,thickness=10,sy=.2,ss=1e-4)).item() == 0

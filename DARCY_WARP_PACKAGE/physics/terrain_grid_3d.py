@@ -56,7 +56,7 @@ class TerrainGrid3D:
         if active.shape != surface.shape or not np.all((active == 0) | (active == 1)):
             raise ValueError("active_columns must be a binary DEM-shaped mask")
         active = active.astype(bool)
-        if faces.size == 2 and np.any(surface[active] != surface[active][0]) if np.any(active) else False:
+        if faces.size == 2 and np.any(active) and np.any(surface[active] != surface[active][0]):
             raise ValueError("sloping terrain requires at least two layers to reconstruct depth gradients")
         for name, value in (("surface_elevation", surface), ("zeta_faces", faces), ("active_columns", active)):
             value.setflags(write=False)

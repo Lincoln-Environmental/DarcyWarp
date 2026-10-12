@@ -742,7 +742,7 @@ def _water_table(head, bottoms):
 
 
 @pytest.mark.skipif(not MF6_AVAILABLE, reason="LIVE MF6 comparisons SKIPPED: flopy/MF6 unavailable")
-@pytest.mark.parametrize("implementation", IMPLEMENTATIONS)
+@pytest.mark.parametrize("implementation", ["classic", "fast", "terrain"])
 @pytest.mark.parametrize("case", ["confined", "drain_recharge", "layered_basement"])
 def test_identical_transient_histories_vs_mf6(tmp_path, implementation, case):
     """Matching start, forcing and times; no warmup/offset comparison.
@@ -785,9 +785,14 @@ def test_identical_transient_histories_vs_mf6(tmp_path, implementation, case):
     from test_3d_scientific_audit import independent_system
     worst_head, worst_flux, worst_cell, worst_storage = 0.0, 0.0, 0.0, 0.0
     with WarpDarcySolver3D(nx=nx, ny=ny, nz=nlay, dx=dx, dy=dx, dz=dz,
-                          device=_device(), implementation=implementation) as solver:
-        solver.build_from_K_fields(kx_field=k, ky_field=k, kz_field=kz, active=active,
-                                   bc_mask=bc, bc_values=values, rhs=np.zeros(shape), initial_head=start)
+                          device=_device(), implementation="fast" if implementation == "terrain" else implementation) as solver:
+        if implementation == "terrain":
+            solver.build_from_terrain(surface_elevation=np.full((ny,nx),top),
+                zeta_faces=np.arange(nlay+1)*dz,kx_field=k,ky_field=k,kz_field=kz,
+                bc_mask=bc,bc_values=values,rhs=np.zeros(shape),initial_head=start)
+        else:
+            solver.build_from_K_fields(kx_field=k, ky_field=k, kz_field=kz, active=active,
+                bc_mask=bc, bc_values=values, rhs=np.zeros(shape), initial_head=start)
         previous = start
         for period, (dt, rate, pump) in enumerate(zip(durations, recharge, abstraction)):
             source = np.zeros(shape)
@@ -807,6 +812,9 @@ def test_identical_transient_histories_vs_mf6(tmp_path, implementation, case):
                 controls.update(unconfined=True, zbot_field=zbot, sy=sy, ss=ss,
                                 unconfined_max_picard_iter=300, unconfined_head_tol=1e-10,
                                 final_head_residual_tol=1e-10, chebyshev_enabled=False)
+            if implementation == "terrain":
+                for name in ("check_every_no", "zbot_field", "chebyshev_enabled"):
+                    controls.pop(name,None)
             head, info = solver.solve(**controls)
             if not info["converged"]:
                 print("CONVERGENCE_DIAGNOSTIC", info, flush=True)
@@ -820,7 +828,7 @@ def test_identical_transient_histories_vs_mf6(tmp_path, implementation, case):
                                                             active=active, dx=dx, dy=dx, dz=dz)
                 uptake = ss * dx * dx * dz * (head - previous) / dt
             else:
-                sat = np.clip(head - zbot, 0.1, dz)
+                sat = np.clip(head - zbot, 0.01, dz)
                 faces = build_7point_face_conductance_unconfined_from_sat(kx_field=k, ky_field=k,
                     kz_field=kz, sat=sat, active=active, dx=dx, dy=dx, dz=dz)
                 uptake = sy * dx * dx * (np.clip(head - zbot, 0, dz) - np.clip(previous - zbot, 0, dz)) / dt
@@ -918,7 +926,7 @@ def test_convertible_elastic_storage_analytical_and_mf6(tmp_path, implementation
 
 
 @pytest.mark.skipif(not MF6_AVAILABLE, reason="LIVE MF6 layer-transition comparison SKIPPED: unavailable")
-@pytest.mark.parametrize("implementation", IMPLEMENTATIONS)
+@pytest.mark.parametrize("implementation", ["classic", "fast", "terrain"])
 def test_mf6_layer_interface_different_sy_and_rewetting(tmp_path, implementation):
     """Closed column crosses the interface in both directions, Sy=.2/.35.
 
@@ -941,19 +949,27 @@ def test_mf6_layer_interface_different_sy_and_rewetting(tmp_path, implementation
         abstraction_cell=(1, 0, 0), newton=True, return_details=True)
     np.testing.assert_array_equal(ref["times"], [1.0, 2.0])
     with WarpDarcySolver3D(nx=1, ny=1, nz=2, dx=10.0, dz=10.0,
-                          device=_device(), implementation=implementation) as s:
-        s.build_from_K_fields(kx_field=k, ky_field=k, kz_field=k,
-                              active=np.ones(shape, dtype=np.int32), bc_mask=np.zeros(shape, dtype=np.int32),
-                              bc_values=np.zeros(shape), rhs=np.zeros(shape), initial_head=previous)
+                          device=_device(), implementation="fast" if implementation == "terrain" else implementation) as s:
+        if implementation == "terrain":
+            s.build_from_terrain(surface_elevation=np.array([[20.]]),zeta_faces=np.array([0.,10.,20.]),
+                kx_field=k,ky_field=k,kz_field=k,bc_mask=np.zeros(shape,dtype=np.int32),
+                bc_values=np.zeros(shape),rhs=np.zeros(shape),initial_head=previous)
+        else:
+            s.build_from_K_fields(kx_field=k, ky_field=k, kz_field=k,
+                active=np.ones(shape,dtype=np.int32),bc_mask=np.zeros(shape,dtype=np.int32),
+                bc_values=np.zeros(shape),rhs=np.zeros(shape),initial_head=previous)
         for period, rate in enumerate(rates):
             source = np.array([0.0, rate]).reshape(shape)
             s.update_rhs(rhs=source)
             s.update_initial_head(initial_head=previous)
-            head, info = s.solve(unconfined=True, transient=True, zbot_field=bottoms, sy=sy, ss=0.0,
-                                 dt=1.0, head_prev=previous, max_cycles=500, check_every_no=1,
-                                 rel_tol=1e-11, abs_tol_min=1e-12, dh_rms_tol=1e-10,
-                                 unconfined_max_picard_iter=500, unconfined_head_tol=1e-9,
-                                 final_head_residual_tol=1e-9, chebyshev_enabled=False)
+            controls = dict(unconfined=True,transient=True,zbot_field=bottoms,sy=sy,ss=0.0,
+                dt=1.0,head_prev=previous,max_cycles=500,check_every_no=1,rel_tol=1e-11,
+                abs_tol_min=1e-12,dh_rms_tol=1e-10,unconfined_max_picard_iter=500,
+                unconfined_head_tol=1e-9,final_head_residual_tol=1e-9,chebyshev_enabled=False)
+            if implementation == "terrain":
+                for name in ("zbot_field","check_every_no","chebyshev_enabled"):
+                    controls.pop(name)
+            head, info = s.solve(**controls)
             print("LAYER_TRANSITION", implementation, period, head.ravel(), ref["heads"][period].ravel(), info["budget"], flush=True)
             assert info["converged"] and info["final_physical_acceptance"]
             np.testing.assert_allclose(head.ravel(), [9.0, 5.0] if period == 0 else [13.0, 19.0], atol=1e-7, rtol=0.0)

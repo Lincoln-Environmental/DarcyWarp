@@ -31,8 +31,10 @@ class WarpDarcySolver3D:
     functions in :mod:`DARCY_WARP_PACKAGE.solvers_3d`. ``implementation``
     defaults to ``"classic"``; ``"fast"`` is an explicit FP64 face-array
     K-cycle for steady and backward-Euler confined or quasi-3D unconfined flow.
-    Layer geometry is flat, contiguous and uniformly dz thick. This API does
-    not represent terrain-following or unsaturated-flow geometry/physics.
+    Cartesian layers are flat, contiguous and uniformly dz thick.
+    ``build_from_terrain`` selects the separate conservative transformed
+    operator with common depth interfaces following a DEM (fast only).
+    Neither geometry mode implements unsaturated-flow physics.
     """
 
     def __init__(
@@ -87,6 +89,7 @@ class WarpDarcySolver3D:
         self._ky_field: np.ndarray | None = None
         self._kz_field: np.ndarray | None = None
         self._session: ThreeDOperatorSession | None = None
+        self.geometry = "cartesian"
 
     @property
     def shape(self) -> tuple[int, int, int]:
@@ -173,6 +176,7 @@ class WarpDarcySolver3D:
         supported; unconfined solves validate supplied or inferred elevations.
         """
         shape = self.shape
+        self.geometry = "cartesian"
         for name, arr in (
             ("tx_p", tx_p),
             ("tx_m", tx_m),
@@ -225,6 +229,61 @@ class WarpDarcySolver3D:
         self._initial_head = self._session.initial_head
         return self
 
+    def build_from_terrain(self, *, surface_elevation, zeta_faces, kx_field,
+                           ky_field, kz_field, bc_mask, bc_values, rhs,
+                           active_columns=None, initial_head=None, contacts=()):
+        """Build a fixed-depth terrain grid, with optional exterior subfaces.
+
+        Head and boundary head are TOTAL hydraulic head [m]. rhs is volumetric
+        injection [m³/day]; recharge rate [m/day] must be multiplied by dx*dy.
+        zeta_faces is a common increasing (nz+1,) depth vector from zero;
+        dz is unused in terrain mode. Layer thickness can vary with depth.
+        All active columns contain the complete stack. Variable local depth,
+        pinches, internal holes and nonparallel contacts are unsupported.
+        Contacts are TerrainContact3D records, preserving each physical
+        subface; fixed cells must not also own exchange contacts.
+        """
+        if self.implementation != "fast" or self.solver != "kcycle":
+            raise ValueError("terrain requires implementation='fast' and solver='kcycle' (principal-part multigrid GMRES)")
+        from DARCY_WARP_PACKAGE.physics.terrain_grid_3d import TerrainGrid3D
+        from DARCY_WARP_PACKAGE.solvers.terrain_fast_3d import TerrainOperatorSession3D
+        grid = TerrainGrid3D(surface_elevation=surface_elevation,zeta_faces=zeta_faces,
+                             dx=self.dx,dy=self.dy,active_columns=active_columns)
+        if grid.shape != self.shape:
+            raise ValueError(f"terrain grid shape {grid.shape} expected {self.shape}")
+        if self._session is not None:
+            self._session.close()
+        self._session = TerrainOperatorSession3D(grid=grid,kx=kx_field,ky=ky_field,kz=kz_field,
+            bc_mask=bc_mask,bc_values=bc_values,rhs=rhs,initial_head=initial_head,contacts=contacts)
+        self.geometry = "terrain"
+        self._rhs = self._session.rhs
+        self._active = grid.active
+        self._bc_mask = self._session.bc_mask
+        self._bc_values = self._session.bc_values
+        self._initial_head = self._session.initial_head
+        self._tx_p = self._tx_m = self._ty_p = self._ty_m = self._tz_p = self._tz_m = None
+        self._kx_field = self._ky_field = self._kz_field = None
+        return self
+
+    def update_terrain_K_fields(self, *, kx_field, ky_field, kz_field):
+        """Refresh owned physical K fields; the next solve refreshes buffers."""
+        if self.geometry != "terrain" or self._session is None:
+            raise RuntimeError("build_from_terrain is required first")
+        from DARCY_WARP_PACKAGE.physics.terrain_reference_3d import field_3d
+        fields = tuple(field_3d(value=value,shape=self.shape,name=name,nonnegative=True)
+            for name,value in (("kx",kx_field),("ky",ky_field),("kz",kz_field)))
+        self._session.kx[:],self._session.ky[:],self._session.kz[:] = fields
+
+    def update_terrain_geometry(self, *, surface_elevation, zeta_faces, active_columns=None):
+        """Explicit metric refresh; stable GPU buffers survive value changes."""
+        if self.geometry != "terrain" or self._session is None:
+            raise RuntimeError("build_from_terrain is required first")
+        from DARCY_WARP_PACKAGE.physics.terrain_grid_3d import TerrainGrid3D
+        grid = TerrainGrid3D(surface_elevation=surface_elevation,zeta_faces=zeta_faces,
+            dx=self.dx,dy=self.dy,active_columns=self._session.grid.active_columns if active_columns is None else active_columns)
+        self._session.update_geometry(grid=grid)
+        self._active = grid.active
+
     def solve(self, **kwargs: Any) -> tuple[np.ndarray, dict[str, Any]]:
         """
         Solve the assembled 3D system.
@@ -235,6 +294,9 @@ class WarpDarcySolver3D:
         """
         if self._rhs is None:
             raise RuntimeError("Solver has not been built. Call build_from_K_fields or build_from_face_conductance first.")
+
+        if self.geometry == "terrain":
+            return self._session.solve(device=self.device,**kwargs)
 
         if self._session is not None:
             solve_kwargs = dict(kwargs)
@@ -324,6 +386,8 @@ class WarpDarcySolver3D:
         """Refresh six face arrays in place and retain the session identity."""
         if self._session is None:
             raise RuntimeError("Solver has not been built.")
+        if self.geometry == "terrain":
+            raise ValueError("terrain face conductances include metric cross terms; rebuild physical K fields instead")
         self._session.update_face_conductance((tx_p, tx_m, ty_p, ty_m, tz_p, tz_m))
         self._tx_p, self._tx_m, self._ty_p, self._ty_m, self._tz_p, self._tz_m = self._session.faces
 

@@ -12,7 +12,8 @@ from test_3d_scientific_audit import device
 @pytest.mark.parametrize("thickness", [10.0, 0.05])
 @pytest.mark.parametrize("contrast", [1.0, 1e-14])
 @pytest.mark.parametrize("saturation", [1.0, 0.05, 0.0])
-def test_floor_and_dry_vertical_transmission_against_face_resistances(thickness, contrast, saturation):
+@pytest.mark.parametrize("floor", [0.1, 0.01, 0.001])
+def test_floor_and_dry_vertical_transmission_against_face_resistances(thickness, contrast, saturation, floor):
     shape = (2, 1, 2)
     bottom = np.broadcast_to(np.array([thickness, 0.0])[:, None, None], shape).copy()
     # Unequal heads probe flow without claiming they solve a zero-source problem.
@@ -24,7 +25,7 @@ def test_floor_and_dry_vertical_transmission_against_face_resistances(thickness,
     bc = np.zeros(shape, dtype=np.int32)
     source = np.array([0.01, -0.02, 0.0, 0.0]).reshape(shape)
     true_sat = np.clip(head - bottom, 0.0, thickness)
-    actual_sat = np.clip(head - bottom, min(0.1, thickness), thickness)
+    actual_sat = np.clip(head - bottom, min(floor, thickness), thickness)
     faces = build_7point_face_conductance_unconfined_from_sat(kx_field=k, ky_field=k, kz_field=k,
         sat=actual_sat, active=active, dx=1.0, dz=thickness)
     reference = build_7point_face_conductance_unconfined_from_sat(kx_field=k, ky_field=k, kz_field=k,

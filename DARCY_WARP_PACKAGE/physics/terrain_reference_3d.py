@@ -37,8 +37,9 @@ def field_3d(*, value, shape, name, nonnegative=False):
 class TerrainContact3D:
     """One exterior subface: total prescribed head or discharge-only head.
 
-    area is the computational face area (map area for top/bottom), distance
-    the positive logical centre-to-interface distance. elevation is the
+    area is the physical subface area; top/bottom areas are projected onto
+    the map plane internally. distance is the positive logical
+    centre-to-interface distance. elevation is the
     physical contact elevation, preserved for coastal/surface diagnostics.
     conductance overrides normal K*area/distance, retaining metric correction.
     """
@@ -122,14 +123,16 @@ class TerrainReferenceOperator3D:
             neighbor[axis] += sign
             if 0 <= neighbor[axis] < self.shape[axis] and self.active[tuple(neighbor)]:
                 raise ValueError(f"contact at {cell}/{contact.direction} double-counts an internal face")
-            available = self.grid.dx*self.grid.dy if axis == 0 else (self.grid.dy if axis == 2 else self.grid.dx)*float(self.grid.thickness[cell[0],0,0])
+            surface_factor = float(np.sqrt(1+self.metrics.sx[cell[1:]]**2+self.metrics.sy[cell[1:]]**2)) if axis == 0 else 1.0
+            available = self.grid.dx*self.grid.dy*surface_factor if axis == 0 else (self.grid.dy if axis == 2 else self.grid.dx)*float(self.grid.thickness[cell[0],0,0])
             key = (cell,contact.direction)
             areas[key] = areas.get(key,0) + contact.area
             if areas[key] > available*(1+1e-12):
                 raise ValueError(f"subface areas exceed exterior face at {key}")
             normal = (self.ex if axis == 2 else self.ey if axis == 1 else self.azz)[cell]
-            conductance = normal*contact.area/contact.distance if contact.conductance is None else contact.conductance
-            scale = contact.area if contact.conductance is None else (conductance*contact.distance/normal if normal > 0 else 0)
+            projected_area = contact.area/surface_factor
+            conductance = normal*projected_area/contact.distance if contact.conductance is None else contact.conductance
+            scale = projected_area if contact.conductance is None else (conductance*contact.distance/normal if normal > 0 else 0)
             if axis == 2:
                 cross = (sign*self.ex[cell]*self.metrics.sx[cell[1:]]*scale, 0, 0)
             elif axis == 1:
