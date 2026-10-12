@@ -71,14 +71,28 @@ def terrain_divergence_kernel(h: wp.array(dtype=wp.float64), y: wp.array(dtype=w
     active: wp.array(dtype=wp.int32), fixed: wp.array(dtype=wp.int32),
     scale: wp.array(dtype=wp.float64), row_scaled: int,
     out: wp.array(dtype=wp.float64), alpha: wp.float64, beta: wp.float64,
+    datum: wp.float64,
     nx: int, ny: int, nz: int):
+    """Conservative divergence with a frozen per-outer discharge gate.
+
+    Boundary columns: [0] conductance, [1] hz coupling, [2] hx coupling,
+    [3] hy coupling, [4] prescribed head minus datum, [5] gate state
+    (1 = contributes, 0 = skipped). The gate is evaluated once per outer
+    iteration at the accepted head and FROZEN for the linear solve:
+    re-evaluating it against live Krylov iterates would make the operator
+    nonlinear inside GMRES."""
     c = wp.tid()
     i = c % nx
     j = (c // nx) % ny
     k = c // (nx*ny)
     value = h[c]
     if active[c] != 0 and fixed[c] == 0:
-        value = qx[c]+qy[c]+qz[c]+(storage[c]+boundary[c,0])*h[c]-boundary[c,1]*gz[c]-boundary[c,2]*gx[c]-boundary[c,3]*gy[c]
+        open_gate = boundary[c,5] != wp.float64(0.0)
+        conductance = wp.where(open_gate, boundary[c,0], wp.float64(0.0))
+        bz = wp.where(open_gate, boundary[c,1], wp.float64(0.0))
+        bx = wp.where(open_gate, boundary[c,2], wp.float64(0.0))
+        by = wp.where(open_gate, boundary[c,3], wp.float64(0.0))
+        value = qx[c]+qy[c]+qz[c]+(storage[c]+conductance)*h[c]-bz*gz[c]-bx*gx[c]-by*gy[c]
         if i > 0:
             value -= qx[c-1]
         if j > 0:

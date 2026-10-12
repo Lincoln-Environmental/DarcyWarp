@@ -38,14 +38,18 @@ def pack_terrain_coefficients(*, operator):
 
 
 def pack_terrain_boundaries(*, operator, head, datum):
-    packed = np.zeros((np.prod(operator.shape),4))
+    """Six-column per-cell boundary rows: (conductance, hz/hx/hy metric
+    couplings, hb-datum, discharge-only flag). Closed discharge contacts
+    contribute zero columns; the device divergence kernel additionally
+    evaluates the gate itself, so an ungated pack is also valid input."""
+    packed = np.zeros((np.prod(operator.shape),6))
     rhs = np.zeros(operator.shape)
     flux = operator.fluxes(head=head)[3]
     for index,record in enumerate(operator.contact_records):
         cell,c,bz,bx,by,hb,discharge = record
         if discharge and flux[index] <= 0:
             continue
-        packed[cell] += (c,bz,bx,by)
+        packed[cell] += (c,bz,bx,by,hb-datum,1.0)
         rhs.ravel()[cell] += c*(hb-datum)
     return packed,rhs
 
@@ -113,11 +117,13 @@ def seed_discharge_only_components_3d(*, operator, head, source, fixed, storage,
 
 class TerrainGPUWorkspace3D:
     def __init__(self, *, operator, fixed, storage, boundary, device,
-                 max_levels, min_coarse_n, restart, maxiter, rel_tol, abs_tol):
+                 max_levels, min_coarse_n, restart, maxiter, rel_tol, abs_tol,
+                 datum=0.0):
         self.shape = operator.shape
         self.nz,self.ny,self.nx = self.shape
         self.n = int(np.prod(self.shape))
         self.device = device
+        self.datum = float(datum)
         self.max_levels,self.min_coarse_n = max_levels,min_coarse_n
         self.x = wp.zeros(self.n,dtype=wp.float64,device=device)
         self.b = wp.zeros_like(self.x)
@@ -189,7 +195,7 @@ class TerrainGPUWorkspace3D:
             self.coefficients,self.qx,self.qy,self.qz,self.nx,self.ny,self.nz],device=self.device)
         wp.launch(terrain_divergence_kernel,dim=self.n,inputs=[x,y,self.gx,self.gy,self.gz,
             self.qx,self.qy,self.qz,self.storage,self.boundary,self.active,self.fixed,self.scale,int(row_scaled),z,
-            float(alpha),float(beta),self.nx,self.ny,self.nz],device=self.device)
+            float(alpha),float(beta),wp.float64(self.datum),self.nx,self.ny,self.nz],device=self.device)
 
     def smooth(self, *, level, iterations):
         source,out = level["x"],level["work"]
@@ -399,7 +405,7 @@ class TerrainOperatorSession3D:
                 packed_coefficients = pack_terrain_coefficients(operator=operator)
                 self.workspace = TerrainGPUWorkspace3D(operator=operator,fixed=fixed,storage=storage,boundary=boundary,
                     device=device,max_levels=max_levels,min_coarse_n=min_coarse_n,restart=krylov_restart,
-                    maxiter=max_cycles,rel_tol=rel_tol,abs_tol=abs_tol_min)
+                    maxiter=max_cycles,rel_tol=rel_tol,abs_tol=abs_tol_min,datum=datum)
                 self.workspace_key = key
             elif not unchanged:
                 packed_coefficients = pack_terrain_coefficients(operator=operator)
@@ -412,7 +418,7 @@ class TerrainOperatorSession3D:
                         self.workspace.close()
                     self.workspace = TerrainGPUWorkspace3D(operator=operator,fixed=fixed,storage=storage,boundary=boundary,
                         device=device,max_levels=max_levels,min_coarse_n=min_coarse_n,restart=krylov_restart,
-                        maxiter=max_cycles,rel_tol=rel_tol,abs_tol=abs_tol_min)
+                        maxiter=max_cycles,rel_tol=rel_tol,abs_tol=abs_tol_min,datum=datum)
                     self.workspace_key = key
             self.snapshot = snapshot
             if packed_coefficients is not None:

@@ -15,7 +15,7 @@ def flat_workspace(*, restart, maxiter, tol=1e-11, atol=1e-12):
     fixed[:, :, 0] = fixed[:, :, -1] = 1
     values = np.zeros(grid.shape)
     values[:, :, 0], values[:, :, -1] = 3., 1.
-    boundary = np.zeros((int(np.prod(grid.shape)), 4))
+    boundary = np.zeros((int(np.prod(grid.shape)), 6))
     workspace = TerrainGPUWorkspace3D(operator=reference, fixed=fixed, storage=np.zeros(grid.shape),
         boundary=boundary, device=device(), max_levels=3, min_coarse_n=2,
         restart=restart, maxiter=maxiter, rel_tol=tol, abs_tol=atol)
