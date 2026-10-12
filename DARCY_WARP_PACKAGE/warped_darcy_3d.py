@@ -277,6 +277,7 @@ class WarpDarcySolver3D:
         fields = tuple(field_3d(value=value,shape=self.shape,name=name,nonnegative=True)
             for name,value in (("kx",kx_field),("ky",ky_field),("kz",kz_field)))
         self._session.kx[:],self._session.ky[:],self._session.kz[:] = fields
+        self._session.k_version += 1
 
     def update_terrain_contacts(self, *, contacts):
         """Refresh coastal heads/subfaces; retain stable aggregate GPU buffers."""

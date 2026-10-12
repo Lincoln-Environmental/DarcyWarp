@@ -1,6 +1,33 @@
 kimi --model kimi-code/k3
 # DarcyWarp — Agent System Memory
 
+> 2026-10-13 variable geological geometry (baseline `3c203e2`, report
+> `docs/3D_VARIABLE_GEOMETRY_SCIENTIFIC_REPORT_2026-10-13.md`):
+> `build_from_terrain(z_interfaces=...)` accepts independently varying
+> interface elevations `z_interfaces (nz+1,ny,nx)` — layers may thicken,
+> thin and slope independently; strict per-column ordering is validated
+> (crossing/touching/inverted/zero-thickness raise; the legacy DEM +
+> `zeta_faces` form remains the exact parallel special case). The mapping
+> is the stretched coordinate `z=(1-u)z_k+u z_{k+1}` with tensor
+> `A=|det J|J⁻¹KJ⁻ᵀ`. Horizontal faces use harmonic half-cell
+> transmissivities `K·f·T` on unit-s map areas with in-layer face slopes;
+> vertical faces evaluate the shared interface's own slopes with harmonic
+> resistance weights plus metric-defect terms `−γ·∂h/∂s` that make affine
+> total-head fields exact for uniform K on arbitrary interfaces (γ vanishes
+> in the parallel limit). Slope-based cross weights were REJECTED: they put
+> transmissive-neighbour-scaled couplings on low-K rows (row-scaled cond
+> ~1e16, restarted GMRES diverges). GPU packs 13 coefficients/cell; the
+> s-gradient divides by per-cell centre distances. `TerrainGMRES3D`
+> treats `max_cycles` as an exact Krylov budget with a shortened final
+> restart block (graphs only for full blocks); Picard info reports proposed
+> AND accepted head changes. SHANZ-style demonstration:
+> `working_tests/shanz_terrain_case_study.py` (parallel vs variable layers
+> differ ~2 m RMSE / 6 m max head and 2-30× in inter-unit leakage; the
+> 0.01→0.001 floor cuts excess transmission ~10×). Remaining: nearly-dry
+> floor transmission (diagnostics, not hidden), slow Picard tails on
+> extreme cases (reported honestly, `converged:false`), MF6 validation
+> still flat-terrain only, pinch-outs/faults rejected.
+
 > 2026-10-12 terrain extension: `docs/3D_TERRAIN_SCIENTIFIC_ACCEPTANCE_2026-10-12.md`
 > describes the explicit fast-only `build_from_terrain` API and full conservative
 > transformed operator. `physics/terrain_grid_3d.py` owns common, possibly

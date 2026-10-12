@@ -56,14 +56,22 @@ class TerrainContact3D:
 
 
 class TerrainReferenceOperator3D:
-    def __init__(self, *, metrics, kx, ky, kz, head=None, min_sat=0.01, contacts=()):
+    def __init__(self, *, metrics, kx, ky, kz, head=None, min_sat=0.01, contacts=(),
+                 trusted_k=False):
         self.metrics = metrics
         self.grid = metrics.grid
         self.shape = self.grid.shape
         self.active = self.grid.active.astype(bool)
-        self.kx = field_3d(value=kx, shape=self.shape, name="kx", nonnegative=True)
-        self.ky = field_3d(value=ky, shape=self.shape, name="ky", nonnegative=True)
-        self.kz = field_3d(value=kz, shape=self.shape, name="kz", nonnegative=True)
+        if trusted_k:
+            # The session owns and validates these fields once; rebuilding
+            # operators per nonlinear iteration then costs no re-validation
+            # copies. The fields must not be mutated during the operator's
+            # lifetime (the session only replaces them wholesale).
+            self.kx, self.ky, self.kz = kx, ky, kz
+        else:
+            self.kx = field_3d(value=kx, shape=self.shape, name="kx", nonnegative=True)
+            self.ky = field_3d(value=ky, shape=self.shape, name="ky", nonnegative=True)
+            self.kz = field_3d(value=kz, shape=self.shape, name="kz", nonnegative=True)
         nonflat = np.any(metrics.zx != 0) or np.any(metrics.zy != 0) or np.any(metrics.zxf != 0) or np.any(metrics.zyf != 0)
         active_fields = (self.kx[self.active],self.ky[self.active],self.kz[self.active])
         has_contacts = bool(contacts)

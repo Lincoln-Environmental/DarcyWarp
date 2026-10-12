@@ -165,8 +165,11 @@ class TerrainGPUWorkspace3D:
                 active=operator.grid.active,bc_mask=fixed,bc_values=values,rhs=values,
                 storage_diag=principal_storage,max_levels=self.max_levels,min_coarse_n=self.min_coarse_n)
 
-    def refresh(self, *, operator, fixed, storage, boundary):
-        self.coefficients.assign(pack_terrain_coefficients(operator=operator))
+    def refresh(self, *, operator, fixed, storage, boundary, coefficients=None):
+        # The caller's freshly packed coefficients are reused when provided,
+        # so the nonlinear loop packs each outer iteration exactly once.
+        self.coefficients.assign(pack_terrain_coefficients(operator=operator)
+            if coefficients is None else coefficients)
         self.storage.assign(storage.ravel())
         self.boundary.assign(boundary)
         self.refresh_metrics(metrics=operator.metrics)
@@ -260,6 +263,7 @@ class TerrainOperatorSession3D:
         self.snapshot = None
         self.topology_cache = {}
         self.geometry_revision = 0
+        self.k_version = 0
 
     def update_rhs(self, rhs):
         self.rhs[...] = field_3d(value=rhs,shape=self.shape,name="rhs")
@@ -353,7 +357,7 @@ class TerrainOperatorSession3D:
         for outer in range(outer_limit):
             start = perf_counter()
             operator = TerrainReferenceOperator3D(metrics=self.metrics,kx=self.kx,ky=self.ky,kz=self.kz,
-                head=head if unconfined else None,min_sat=unconfined_min_sat,contacts=self.contacts)
+                head=head if unconfined else None,min_sat=unconfined_min_sat,contacts=self.contacts,trusted_k=True)
             storage,change = self.storage_terms(head=head,previous=previous,transient=transient,unconfined=unconfined,
                 mode=unconfined_storage_mode,sy=sy_field,ss=ss_field,coeff=coeff,dt=dt)
             seeded = seed_discharge_only_components_3d(operator=operator,head=head,source=self.rhs,
@@ -361,7 +365,7 @@ class TerrainOperatorSession3D:
             if seeded:
                 discharge_seeds += seeded
                 operator = TerrainReferenceOperator3D(metrics=self.metrics,kx=self.kx,ky=self.ky,kz=self.kz,
-                    head=head if unconfined else None,min_sat=unconfined_min_sat,contacts=self.contacts)
+                    head=head if unconfined else None,min_sat=unconfined_min_sat,contacts=self.contacts,trusted_k=True)
                 storage,change = self.storage_terms(head=head,previous=previous,transient=transient,unconfined=unconfined,
                     mode=unconfined_storage_mode,sy=sy_field,ss=ss_field,coeff=coeff,dt=dt)
             initial_budget = compute_terrain_budget_3d(operator=operator,head=head,source=self.rhs,fixed=self.bc_mask,
@@ -378,19 +382,43 @@ class TerrainOperatorSession3D:
             fixed = self.bc_mask.copy()
             fixed[isolated] = 1
             rhs[isolated] = head[isolated]-datum
-            snapshot = (pack_terrain_coefficients(operator=operator),storage.copy(),boundary.copy(),fixed.copy(),self.grid.active.copy(),self.geometry_revision)
-            unchanged = self.snapshot is not None and all(np.array_equal(a,b) for a,b in zip(snapshot,self.snapshot))
-            same_topology = self.snapshot is not None and np.array_equal(snapshot[3],self.snapshot[3]) and np.array_equal(snapshot[4],self.snapshot[4]) and np.array_equal(snapshot[0][:,(0,3,6)] > 0,self.snapshot[0][:,(0,3,6)] > 0)
-            if self.workspace is None or self.workspace_key != key or not same_topology:
+            # Coefficients are a deterministic function of the versioned
+            # inputs below (K fields, geometry revision, floor, and the head
+            # for unconfined constitutive updates), so equal inputs imply an
+            # equal operator and neither a pack nor a device refresh is
+            # needed. This replaces the per-outer 13-column array compare.
+            snapshot = (self.k_version,self.geometry_revision,unconfined_min_sat,
+                head.copy() if unconfined else None,storage.copy(),boundary.copy(),
+                fixed.copy(),self.grid.active.copy())
+            unchanged = self.snapshot is not None and all(
+                a is None and b is None or np.array_equal(a,b) for a,b in zip(snapshot,self.snapshot))
+            packed_coefficients = None
+            if self.workspace is None or self.workspace_key != key:
                 if self.workspace is not None:
                     self.workspace.close()
+                packed_coefficients = pack_terrain_coefficients(operator=operator)
                 self.workspace = TerrainGPUWorkspace3D(operator=operator,fixed=fixed,storage=storage,boundary=boundary,
                     device=device,max_levels=max_levels,min_coarse_n=min_coarse_n,restart=krylov_restart,
                     maxiter=max_cycles,rel_tol=rel_tol,abs_tol=abs_tol_min)
                 self.workspace_key = key
             elif not unchanged:
-                self.workspace.refresh(operator=operator,fixed=fixed,storage=storage,boundary=boundary)
+                packed_coefficients = pack_terrain_coefficients(operator=operator)
+                same_topology = np.array_equal(snapshot[6],self.snapshot[6]) and np.array_equal(snapshot[7],self.snapshot[7]) and np.array_equal(packed_coefficients[:,(0,3,6)] > 0,self.snapshot_packed_positive)
+                if same_topology:
+                    self.workspace.refresh(operator=operator,fixed=fixed,storage=storage,boundary=boundary,
+                        coefficients=packed_coefficients)
+                else:
+                    if self.workspace is not None:
+                        self.workspace.close()
+                    self.workspace = TerrainGPUWorkspace3D(operator=operator,fixed=fixed,storage=storage,boundary=boundary,
+                        device=device,max_levels=max_levels,min_coarse_n=min_coarse_n,restart=krylov_restart,
+                        maxiter=max_cycles,rel_tol=rel_tol,abs_tol=abs_tol_min)
+                    self.workspace_key = key
             self.snapshot = snapshot
+            if packed_coefficients is not None:
+                # Persist across unchanged outers: topology comparisons on
+                # later changed outers still need the last known pattern.
+                self.snapshot_packed_positive = packed_coefficients[:,(0,3,6)] > 0
             self.workspace.b.assign((rhs/self.workspace.scale_host).ravel())
             relative_head = np.where(self.grid.active != 0,head-datum,0)
             self.workspace.x.assign(relative_head.ravel())
@@ -423,7 +451,7 @@ class TerrainOperatorSession3D:
             else:
                 head = candidate
             final_operator = TerrainReferenceOperator3D(metrics=self.metrics,kx=self.kx,ky=self.ky,kz=self.kz,
-                head=head if unconfined else None,min_sat=unconfined_min_sat,contacts=self.contacts)
+                head=head if unconfined else None,min_sat=unconfined_min_sat,contacts=self.contacts,trusted_k=True)
             final_storage,final_change = self.storage_terms(head=head,previous=previous,transient=transient,unconfined=unconfined,
                 mode=unconfined_storage_mode,sy=sy_field,ss=ss_field,coeff=coeff,dt=dt)
             budget = compute_terrain_budget_3d(operator=final_operator,head=head,source=self.rhs,fixed=self.bc_mask,
@@ -437,7 +465,7 @@ class TerrainOperatorSession3D:
                 relaxation *= 0.5
                 head[free] = starting_head[free]+relaxation*dh[free]
                 final_operator = TerrainReferenceOperator3D(metrics=self.metrics,kx=self.kx,ky=self.ky,kz=self.kz,
-                    head=head if unconfined else None,min_sat=unconfined_min_sat,contacts=self.contacts)
+                    head=head if unconfined else None,min_sat=unconfined_min_sat,contacts=self.contacts,trusted_k=True)
                 final_storage,final_change = self.storage_terms(head=head,previous=previous,transient=transient,unconfined=unconfined,
                     mode=unconfined_storage_mode,sy=sy_field,ss=ss_field,coeff=coeff,dt=dt)
                 budget = compute_terrain_budget_3d(operator=final_operator,head=head,source=self.rhs,fixed=self.bc_mask,

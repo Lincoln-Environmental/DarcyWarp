@@ -1,0 +1,137 @@
+{
+  "nx": 96,
+  "ny": 96,
+  "dx": 20.0,
+  "device": "cuda:0",
+  "layers": 4,
+  "relief_m": 137.46020310943396,
+  "shallow_domain_depth_m": 51.0,
+  "variants": {
+    "variable_floor_0.010": {
+      "converged": false,
+      "outer_iterations": 800,
+      "krylov_iterations": 1884536,
+      "seconds": 575.9357533909997,
+      "operator_refresh_seconds": 13.94954539599803,
+      "head_min": 2.0,
+      "head_max": 132.25337799733208,
+      "water_table_depth_mean": 4.563062390657497,
+      "water_table_depth_max": 26.9224799514934,
+      "lateral_flow_abs_total": 231909.947570798,
+      "aquifer_leakage_downward": 818.5657807705641,
+      "weathered_to_basement_leakage": 344.45077626850036,
+      "coastal_discharge_total": 0.0019870087881857434,
+      "coastal_subface_outflows": [
+        0.0004032278962440881,
+        0.0009029968691847493,
+        0.0006807840227569061
+      ],
+      "surface_discharge_potential_cells": 1264,
+      "cell_residual_rms": 0.00014238633306429648,
+      "relative_cell_imbalance": 0.00013181476550845815,
+      "horizontal_floor_excess_flow": 586.282072776583,
+      "floor_excess_to_recharge": 0.13253265895738006,
+      "shape": [
+        4,
+        96,
+        96
+      ]
+    },
+    "variable_floor_0.001": {
+      "converged": false,
+      "outer_iterations": 800,
+      "krylov_iterations": 458832,
+      "seconds": 154.6881001949996,
+      "operator_refresh_seconds": 12.74688820099891,
+      "head_min": 2.0,
+      "head_max": 132.4144972198632,
+      "water_table_depth_mean": 4.514806571870311,
+      "water_table_depth_max": 26.568388078891516,
+      "lateral_flow_abs_total": 231948.54787611746,
+      "aquifer_leakage_downward": 818.8219417826263,
+      "weathered_to_basement_leakage": 344.5270814387651,
+      "coastal_discharge_total": 0.00019769628900363285,
+      "coastal_subface_outflows": [
+        4.002521923038929e-05,
+        8.982610247633446e-05,
+        6.784496729690908e-05
+      ],
+      "surface_discharge_potential_cells": 1266,
+      "cell_residual_rms": 0.0001439065710886742,
+      "relative_cell_imbalance": 0.00012756736636310563,
+      "horizontal_floor_excess_flow": 59.17856762707681,
+      "floor_excess_to_recharge": 0.013377678228777128,
+      "shape": [
+        4,
+        96,
+        96
+      ],
+      "head_rmse_vs_variable_0.010": 0.09088937637774801,
+      "head_max_abs_diff_vs_variable_0.010": 0.7142872402582015,
+      "water_table_depth_rmse_vs_variable_0.010": 0.09570815215408418
+    },
+    "parallel_floor_0.010": {
+      "converged": false,
+      "outer_iterations": 800,
+      "krylov_iterations": 1166784,
+      "seconds": 374.8768718450001,
+      "operator_refresh_seconds": 14.795052442008455,
+      "head_min": 2.0,
+      "head_max": 132.21774473614977,
+      "water_table_depth_mean": 5.106386498648629,
+      "water_table_depth_max": 26.83330973938861,
+      "lateral_flow_abs_total": 232390.59538591953,
+      "aquifer_leakage_downward": 1095.505451913056,
+      "weathered_to_basement_leakage": 560.629743549706,
+      "coastal_discharge_total": 0.0012872092764271924,
+      "coastal_subface_outflows": [
+        0.000371007668912041,
+        0.0005476147197255342,
+        0.00036858688778961706
+      ],
+      "surface_discharge_potential_cells": 986,
+      "cell_residual_rms": 0.00013665183120381365,
+      "relative_cell_imbalance": 0.00010313401817346621,
+      "horizontal_floor_excess_flow": 605.8460184904004,
+      "floor_excess_to_recharge": 0.1369552088963036,
+      "shape": [
+        4,
+        96,
+        96
+      ],
+      "head_rmse_vs_variable_0.010": 1.1363843712783765,
+      "head_max_abs_diff_vs_variable_0.010": 2.7008817034292747,
+      "water_table_depth_rmse_vs_variable_0.010": 1.1620758662166362
+    },
+    "parallel_floor_0.001": {
+      "converged": false,
+      "outer_iterations": 800,
+      "krylov_iterations": 1212864,
+      "seconds": 370.5785185140003,
+      "operator_refresh_seconds": 11.987729465015036,
+      "head_min": 2.0,
+      "head_max": 132.38184989450454,
+      "water_table_depth_mean": 5.057116638034974,
+      "water_table_depth_max": 26.44593957409691,
+      "lateral_flow_abs_total": 232419.03581479937,
+      "aquifer_leakage_downward": 1095.8002805240453,
+      "weathered_to_basement_leakage": 560.731240630311,
+      "coastal_discharge_total": 0.00012783528256213,
+      "coastal_subface_outflows": [
+        3.685299434771115e-05,
+        5.436979241030043e-05,
+        3.661249580411842e-05
+      ],
+      "surface_discharge_potential_cells": 988,
+      "cell_residual_rms": 0.00012182233256110813,
+      "relative_cell_imbalance": 0.00010341571917053522,
+      "horizontal_floor_excess_flow": 61.22795796955055,
+      "floor_excess_to_recharge": 0.013840955487185001,
+      "shape": [
+        4,
+        96,
+        96
+      ]
+    }
+  }
+}
