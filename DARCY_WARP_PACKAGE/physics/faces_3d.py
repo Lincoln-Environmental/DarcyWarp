@@ -4,7 +4,7 @@ from __future__ import annotations
 import numpy as np
 
 
-def validate_reciprocal_faces(*, faces, active, canonicalize=False):
+def validate_reciprocal_faces(*, faces, active, canonicalize=False, copy_arrays=True):
     """Validate nonnegative finite internal faces, with no absolute cutoff.
 
     Reciprocal values may differ by at most 32 machine epsilons relative to
@@ -22,7 +22,9 @@ def validate_reciprocal_faces(*, faces, active, canonicalize=False):
             bad = ~np.isfinite(a) | (a < 0.0)
             location = tuple(np.argwhere(bad)[0])
             raise ValueError(f"Face {index} at {location} must be nonnegative finite; got {a[location]}.")
-    result = tuple(a.copy() for a in arrays) if canonicalize else arrays
+    # Diagnostic callers may borrow exact inputs; canonicalization copies a
+    # negative-direction array only if accepted roundoff actually differs.
+    result = [a.copy() for a in arrays] if canonicalize and copy_arrays else list(arrays)
     for axis, p, m in ((2, 0, 1), (1, 2, 3), (0, 4, 5)):
         here = [slice(None)] * 3
         there = [slice(None)] * 3
@@ -41,6 +43,8 @@ def validate_reciprocal_faces(*, faces, active, canonicalize=False):
             raise ValueError(f"Nonreciprocal or inactive internal face axis={axis} at {location}: "
                              f"positive={left[location]}, neighbour negative={right[location]}, "
                              f"difference={left[location] - right[location]}.")
-        if canonicalize:
+        if canonicalize and (copy_arrays or np.any(left != right)):
+            if not copy_arrays:
+                result[m] = arrays[m].copy()
             result[m][there] = left
-    return result
+    return tuple(result)

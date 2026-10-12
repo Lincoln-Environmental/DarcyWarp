@@ -80,7 +80,7 @@ def compute_3d_flow_budget(
     if src.shape != shape or act.shape != shape or bcm.shape != shape:
         raise ValueError("head, source, active, bc_mask shapes must match.")
     tx_p, tx_m, ty_p, ty_m, tz_p, tz_m = validate_reciprocal_faces(
-        faces=faces, active=active, canonicalize=True)
+        faces=faces, active=active, canonicalize=True, copy_arrays=False)
     if any(value.shape != shape for value in (tx_p, tx_m, ty_p, ty_m, tz_p, tz_m)):
         raise ValueError("face shapes must match head.")
     free = act & ~bcm
@@ -100,47 +100,42 @@ def compute_3d_flow_budget(
         if hp.shape != shape:
             raise ValueError("head_prev shape must match head.")
 
-    # Net outflow divergence per cell: sum c*(h_self - h_nb) + storage*h.
-    # (The Dirichlet exchange below reports the free<->bc face part of it.)
-    div = s * (h - hp)
-    bc_exchange = np.zeros(shape, dtype=np.float64)  # c * (h_bc - h_free), inflow +
-    bc_inflow = np.zeros(shape, dtype=np.float64)
-    bc_outflow = np.zeros(shape, dtype=np.float64)
+    # Compute each physical face once, then add its equal/opposite cell fluxes.
+    # Reciprocity and inactive connections have already been validated above.
+    storage_change = s * (h - hp)
+    div = storage_change.copy()
     diag_c = np.zeros(shape, dtype=np.float64)
-    for face, sl_self, sl_nb in (
-        (tx_p, (slice(None), slice(None), slice(None, -1)), (slice(None), slice(None), slice(1, None))),
-        (tx_m, (slice(None), slice(None), slice(1, None)), (slice(None), slice(None), slice(None, -1))),
-        (ty_p, (slice(None), slice(None, -1), slice(None)), (slice(None), slice(1, None), slice(None))),
-        (ty_m, (slice(None), slice(1, None), slice(None)), (slice(None), slice(None, -1), slice(None))),
-        (tz_p, (slice(None, -1), slice(None), slice(None)), (slice(1, None), slice(None), slice(None))),
-        (tz_m, (slice(1, None), slice(None), slice(None)), (slice(None, -1), slice(None), slice(None))),
-    ):
-        c = face[sl_self]
-        both_act = act[sl_self] & act[sl_nb]
-        c = np.where(both_act, c, 0.0)
-        diag_c[sl_self] += c
-        div[sl_self] += c * (h[sl_self] - h[sl_nb])
-        is_bc_nb = bcm[sl_nb] & act[sl_nb]
-        exchange = np.where(is_bc_nb, c * (h[sl_nb] - h[sl_self]), 0.0)
-        bc_exchange[sl_self] += exchange
-        # Count gross face exchanges before opposing boundaries cancel at
-        # one free cell. The net exchange alone understates throughput.
-        bc_inflow[sl_self] += np.maximum(exchange, 0.0)
-        bc_outflow[sl_self] += np.minimum(exchange, 0.0)
+    bc_in = 0.0
+    bc_out = 0.0
+    for face, axis in ((tx_p, 2), (ty_p, 1), (tz_p, 0)):
+        here, there = [slice(None)] * 3, [slice(None)] * 3
+        here[axis], there[axis] = slice(None, -1), slice(1, None)
+        here, there = tuple(here), tuple(there)
+        c = face[here]
+        q = np.zeros_like(c, dtype=np.float64)
+        np.subtract(h[here], h[there], out=q, where=c > 0.0)
+        q *= c
+        div[here] += q
+        div[there] -= q
+        diag_c[here] += c
+        diag_c[there] += c
+        # Gross exchanges are accumulated before opposing boundaries cancel.
+        into_here = -q[free[here] & bcm[there]]
+        into_there = q[bcm[here] & free[there]]
+        bc_in += float(np.sum(np.maximum(into_here, 0.0)) + np.sum(np.maximum(into_there, 0.0)))
+        bc_out += float(np.sum(np.minimum(into_here, 0.0)) + np.sum(np.minimum(into_there, 0.0)))
 
-    # Cellwise balance residual: source + storage release - net outflow = 0.
     residual = src - div
-    residual = np.where(free, residual, 0.0)
-
-    source_total = float(np.sum(src[free]))
-    storage_uptake = float(np.sum((s * (h - hp))[free]))
-    bc_net = float(np.sum(bc_exchange[free]))
-    bc_in = float(np.sum(bc_inflow[free]))
-    bc_out = float(np.sum(bc_outflow[free]))
+    residual[~free] = 0.0
+    source_free = src[free]
+    storage_free = storage_change[free]
+    source_total = float(np.sum(source_free))
+    storage_uptake = float(np.sum(storage_free))
+    bc_net = bc_in + bc_out
     domain_imbalance = float(np.sum(residual[free]))
     throughput = max(
-        float(np.sum(np.abs(src[free]))) + abs(bc_in) + abs(bc_out)
-        + float(np.sum(np.abs((s * (h - hp))[free]))),
+        float(np.sum(np.abs(source_free))) + abs(bc_in) + abs(bc_out)
+        + float(np.sum(np.abs(storage_free))),
         np.finfo(np.float64).tiny,
     )
     if n_free > 0:

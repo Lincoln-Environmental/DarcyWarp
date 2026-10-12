@@ -67,10 +67,12 @@ def _sanitise_faces_and_diagonal(
     faces: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray],
     active: np.ndarray,
     storage: np.ndarray,
+    validate_faces: bool = True,
 ) -> tuple[tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray], np.ndarray]:
     """Apply the classic active-neighbour contract and form the FP64 diagonal."""
     from DARCY_WARP_PACKAGE.physics.faces_3d import validate_reciprocal_faces
-    validate_reciprocal_faces(faces=faces, active=active)
+    if validate_faces:
+        validate_reciprocal_faces(faces=faces, active=active)
     tx_p, tx_m, ty_p, ty_m, tz_p, tz_m = (np.asarray(value, dtype=np.float64).copy() for value in faces)
     tx_m[:, :, 1:] = tx_p[:, :, :-1]
     ty_m[:, 1:, :] = ty_p[:, :-1, :]
@@ -163,9 +165,10 @@ def _upload_levels(
 ) -> list[dict[str, Any]]:
     """Upload host levels to fresh device arrays (first build)."""
     levels: list[dict[str, Any]] = []
-    for host in host_levels:
+    for level_index, host in enumerate(host_levels):
         cleaned_faces, diagonal = _sanitise_faces_and_diagonal(
-            faces=host["faces"], active=host["active"], storage=host["storage"]
+            faces=host["faces"], active=host["active"], storage=host["storage"],
+            validate_faces=level_index == 0,
         )
         nz, ny, nx = host["active"].shape
         n_cells = int(nz * ny * nx)
@@ -219,12 +222,13 @@ def _refresh_levels_in_place(
     )
     if len(host_levels) != len(levels):
         raise RuntimeError("fast 3D refresh changed the level count; rebuild the workspace.")
-    for level, host in zip(levels, host_levels):
+    for level_index, (level, host) in enumerate(zip(levels, host_levels)):
         nz, ny, nx = host["active"].shape
         if (level["nz"], level["ny"], level["nx"]) != (int(nz), int(ny), int(nx)):
             raise RuntimeError("fast 3D refresh changed a level shape; rebuild the workspace.")
         cleaned_faces, diagonal = _sanitise_faces_and_diagonal(
-            faces=host["faces"], active=host["active"], storage=host["storage"]
+            faces=host["faces"], active=host["active"], storage=host["storage"],
+            validate_faces=level_index == 0,
         )
         for device_arr, value in zip(level["faces"], cleaned_faces):
             device_arr.assign(value)
@@ -310,7 +314,10 @@ def _run_kcycles(
         residual_into(level, x, out)
         return float(level["num"].numpy()[0])
 
+    head_rms_cached = None
+
     def head_residual_norm() -> float:
+        nonlocal head_rms_cached
         fine["partials_a"].fill_(0.0)
         wp.launch(head_residual_partials_3d_f64_kernel, dim=fine["n_cells"],
                   inputs=[fine["residual"], fine["diag"], fine["active"], fine["bc_mask"],
@@ -318,7 +325,8 @@ def _run_kcycles(
                   device=device)
         wp.launch(combine_partials_3d_f64_kernel, dim=1,
                   inputs=[fine["partials_a"], fine["num"], fine["n_partials"]], device=device)
-        return float(np.sqrt(max(float(fine["num"].numpy()[0]), 0.0) / n_free))
+        head_rms_cached = float(np.sqrt(max(float(fine["num"].numpy()[0]), 0.0) / n_free))
+        return head_rms_cached
 
     def smooth(level: dict[str, Any], omegas: tuple[float, ...]) -> None:
         x_in, x_out = level["x"], level["work"]
@@ -430,6 +438,7 @@ def _run_kcycles(
         if converged:
             break
         cycles = cycle + 1
+        head_rms_cached = None
         if str(device).startswith("cuda") and graph is not False:
             if graph is None:
                 try:
@@ -469,18 +478,10 @@ def _run_kcycles(
         if rms <= tolerance and dh_ok and head_residual_norm() <= head_tolerance:
             converged = True
             break
-    rtr_end = residual_norm(fine, fine["x"], fine["residual"])
-    # Head-equivalent (Jacobi-preconditioned) residual RMS [m] on the fine
-    # level: reused from the last residual evaluation.
-    fine["partials_a"].fill_(0.0)
-    wp.launch(
-        head_residual_partials_3d_f64_kernel, dim=fine["n_cells"],
-        inputs=[fine["residual"], fine["diag"], fine["active"], fine["bc_mask"],
-                fine["partials_a"], fine["nx"], fine["ny"], fine["nz"], BLOCK_SIZE_3D],
-        device=device,
-    )
-    wp.launch(combine_partials_3d_f64_kernel, dim=1, inputs=[fine["partials_a"], fine["num"], fine["n_partials"]], device=device)
-    h_rms_end = float(np.sqrt(max(float(fine["num"].numpy()[0]), 0.0) / n_free))
+    # Every terminal cycle is checked, including an iteration-limit exit.
+    # Neither h nor the operator changes between that check and this return.
+    rtr_end = rtr if cycles else rtr0
+    h_rms_end = head_residual_norm() if head_rms_cached is None else head_rms_cached
     info = {
         "solver_type": "kcycle_7point_3d", "implementation": "fast", "fast_operator": "fp64_face_arrays",
         "n_levels": len(levels), "level_shapes": [(level["nz"], level["ny"], level["nx"]) for level in levels],
@@ -643,11 +644,12 @@ def solve_fast_confined_kcycle_3d(
     faces = (tx_p, tx_m, ty_p, ty_m, tz_p, tz_m)
     values = (active_work, bc_mask, bc_values, storage, *faces)
     cached = None if workspace_holder is None else workspace_holder.get("workspace")
-    if (cached is not None and cached["key"] == cache_key
-            and _same_topology(record=cached, active=active_work, bc_mask=bc_mask, faces=faces)):
+    compatible = cached is not None and cached["key"] == cache_key
+    unchanged = compatible and all(np.array_equal(old, new)
+                                    for old, new in zip(cached["operator_snapshot"], values))
+    if compatible and (unchanged or _same_topology(record=cached, active=active_work, bc_mask=bc_mask, faces=faces)):
         levels = cached["levels"]
-        operator_refreshed = not all(np.array_equal(old, new)
-                                     for old, new in zip(cached["operator_snapshot"], values))
+        operator_refreshed = not unchanged
         if operator_refreshed:
             _refresh_levels_in_place(levels=levels, faces=faces, active=active_work,
                                      bc_mask=bc_mask, bc_values=bc_values,

@@ -609,10 +609,22 @@ def _resolve_isolated_free_cells(
         if topology_cache is not None:
             topology_cache["components"] = dict(active=act.copy(), positive=positive,
                                                  labels=labels, count=count)
-    sizes = np.bincount(labels[act], minlength=count)
+    sizes = cached["sizes"] if reused else np.bincount(labels[act], minlength=count)
+    if topology_cache is not None and not reused:
+        topology_cache["components"]["sizes"] = sizes
     fixed = np.bincount(labels[act & bcm], minlength=count)
     stored = np.bincount(labels[act & (np.asarray(storage_diag) > 0.0)], minlength=count)
     unconstrained = (sizes > 0) & (fixed == 0) & (stored == 0)
+    if topology_cache is not None:
+        topology_cache["component_diagnostics"] = dict(
+            n_hydraulic_components=int(np.count_nonzero(sizes)),
+            n_fixed_head_components=int(np.count_nonzero((sizes > 0) & (fixed > 0))),
+            n_storage_constrained_components=int(np.count_nonzero((sizes > 0) & (stored > 0))),
+            component_topology_reused=bool(reused))
+    # Net-source compatibility is relevant only for unconstrained components.
+    # This avoids repeated full source reductions on grounded aquifers.
+    if not np.any(unconstrained):
+        return np.zeros(act.shape, dtype=bool)
     rhs = np.asarray(rhs_eff, dtype=np.float64)
     net = np.bincount(labels[act], weights=rhs[act], minlength=count)
     throughput = np.bincount(labels[act], weights=np.abs(rhs[act]), minlength=count)
@@ -630,12 +642,6 @@ def _resolve_isolated_free_cells(
         raise ValueError(f"Source-balanced disconnected component at {location} "
                          f"({sizes[component]} cells) has an undetermined head datum. "
                          "Supply an explicit fixed-head datum; no artificial boundary was added.")
-    if topology_cache is not None:
-        topology_cache["component_diagnostics"] = dict(
-            n_hydraulic_components=int(np.count_nonzero(sizes)),
-            n_fixed_head_components=int(np.count_nonzero((sizes > 0) & (fixed > 0))),
-            n_storage_constrained_components=int(np.count_nonzero((sizes > 0) & (stored > 0))),
-            component_topology_reused=bool(reused))
     return act & unconstrained[labels] & (sizes[labels] == 1)
 
 
