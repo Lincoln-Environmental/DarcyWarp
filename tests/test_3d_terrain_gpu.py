@@ -530,3 +530,36 @@ def test_transient_sy_contrast_across_nonparallel_interfaces_volume_exact():
             assert change == pytest.approx(forcing-outflow,rel=1e-6,abs=1e-7),(step,change,forcing,outflow)
             assert info["budget"]["relative_cell_imbalance"] < 1e-9
             previous = head
+
+
+def test_coastal_gating_on_nonparallel_interfaces():
+    """Discharge-only coastal subfaces on independently sloping layers.
+
+    A gated subface whose elevation sits above the local water table stays
+    closed, the head-kind subface flows, reported outflows equal the
+    independent sparse contact evaluation at the solution, and the domain
+    water budget closes.
+    """
+    y,x = np.mgrid[:2,:3]
+    surface = 12+.5*x+.3*y
+    mid = surface-(2.5+.1*x)
+    base = mid-(5+.4*y)
+    grid = TerrainGrid3D(z_interfaces=np.stack((surface,mid,base)),dx=2.,dy=2.)
+    k = np.full(grid.shape,1.)
+    k[-1] = 1e-3
+    contacts = (TerrainContact3D(cell=(0,0,0),direction="west",area=1.,distance=1.,
+        elevation=float(grid.z_interfaces[1][0,0]+.5),head=float(surface[0,0]-1.),conductance=.8),
+        TerrainContact3D(cell=(0,0,0),direction="west",area=.5,distance=1.,
+        elevation=float(surface[0,0]-.5),head=float(surface[0,0]-4.),kind="discharge_only",conductance=.6))
+    with build_solver(grid=grid,kx=k,ky=k,kz=.1*k,fixed=np.zeros(grid.shape,dtype=np.int32),
+        values=np.zeros(grid.shape),source=np.full(grid.shape,.05),initial=np.broadcast_to(surface[None]-1.,grid.shape).copy(),
+        contacts=contacts) as solver:
+        h,info = solver.solve(unconfined=True,unconfined_head_tol=1e-9,final_head_residual_tol=1e-9,
+            rel_tol=1e-12,final_budget_relative_tol=1e-11,unconfined_max_picard_iter=300)
+    assert info["converged"],info
+    outflows = info["budget"]["coastal_subface_outflows"]
+    assert outflows[1] == 0
+    assert outflows[0] > 0
+    assert info["budget"]["relative_cell_imbalance"] < 1e-9
+    reference = TerrainReferenceOperator3D(metrics=TerrainMetrics3D(grid=grid),kx=k,ky=k,kz=.1*k,contacts=contacts)
+    np.testing.assert_allclose(reference.fluxes(head=h)[3],outflows,rtol=1e-10,atol=1e-12)
