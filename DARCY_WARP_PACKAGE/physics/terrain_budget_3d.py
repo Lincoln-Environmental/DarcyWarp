@@ -27,8 +27,9 @@ def compute_terrain_budget_3d(*, operator, head, source, fixed, storage_change,
     denominator = max(throughput,np.finfo(np.float64).tiny)
     imbalance = float(np.sum(residual))
     diagonal = sum(operator.principal_faces()) + storage_diagonal
-    for record in operator.contact_records:
-        diagonal.ravel()[record[0]] += record[1]
+    for index,record in enumerate(operator.contact_records):
+        if not record[6] or fluxes[3][index] > 0:
+            diagonal.ravel()[record[0]] += record[1]
     equivalent = np.divide(residual,diagonal,out=np.zeros_like(residual),where=diagonal > 0)
     equivalent[(diagonal <= 0) & (residual != 0)] = np.inf
     result = dict(cell_residual_max=float(np.max(np.abs(residual[free]))) if free.any() else 0,

@@ -274,6 +274,12 @@ class WarpDarcySolver3D:
             for name,value in (("kx",kx_field),("ky",ky_field),("kz",kz_field)))
         self._session.kx[:],self._session.ky[:],self._session.kz[:] = fields
 
+    def update_terrain_contacts(self, *, contacts):
+        """Refresh coastal heads/subfaces; retain stable aggregate GPU buffers."""
+        if self.geometry != "terrain" or self._session is None:
+            raise RuntimeError("build_from_terrain is required first")
+        self._session.update_contacts(contacts=contacts)
+
     def update_terrain_geometry(self, *, surface_elevation, zeta_faces, active_columns=None):
         """Explicit metric refresh; stable GPU buffers survive value changes."""
         if self.geometry != "terrain" or self._session is None:

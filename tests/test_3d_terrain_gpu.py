@@ -262,3 +262,96 @@ def test_terrain_rejected_storage_roundoff_cannot_hide_sources():
     assert info["budget"]["domain_imbalance"] == 0
     assert info["budget"]["cell_residual_max"] == 1
     assert info["budget"]["relative_cell_imbalance"] == 1
+
+
+def test_sloping_coastal_gpu_operator_matches_independent_contact_matrix():
+    grid,metrics = terrain_case()
+    directions = ("west","east","south","north","top","bottom")
+    cells = ((0,2,0),(1,1,4),(1,0,2),(0,3,2),(0,2,2),(2,2,2))
+    contacts = tuple(TerrainContact3D(cell=cell,direction=direction,area=.1,
+        distance=float(grid.thickness[cell[0],0,0])/2 if direction in {"top","bottom"} else .1,
+        elevation=grid.tops[cell] if direction == "top" else grid.bottoms[cell] if direction == "bottom" else grid.elevations[cell],head=-1 if index%2 else 3,
+        kind="discharge_only" if index%2 else "head",conductance=.3+.1*index)
+        for index,(direction,cell) in enumerate(zip(directions,cells)))
+    h = np.random.default_rng(72).normal(size=grid.shape)
+    operator = TerrainReferenceOperator3D(metrics=metrics,kx=1,ky=2,kz=.03,contacts=contacts)
+    boundary,unused = pack_terrain_boundaries(operator=operator,head=h,datum=0)
+    storage = .1*grid.volumes
+    workspace = TerrainGPUWorkspace3D(operator=operator,fixed=np.zeros(grid.shape,dtype=np.int32),
+        storage=storage,boundary=boundary,device=device(),max_levels=3,min_coarse_n=2,
+        restart=12,maxiter=120,rel_tol=1e-12,abs_tol=1e-12)
+    value = wp.array(h.ravel(),dtype=wp.float64,device=device())
+    result = wp.zeros_like(value)
+    workspace.matvec(value,result,result,alpha=1,beta=0)
+    matrix,offset = operator.sparse_matrix(head_for_contacts=h)
+    expected = matrix @ h.ravel()+storage.ravel()*h.ravel()
+    np.testing.assert_allclose(result.numpy(),expected,rtol=3e-13,atol=2e-13)
+    np.testing.assert_allclose(expected-storage.ravel()*h.ravel()+offset.ravel(),
+        operator.divergence(fluxes=operator.fluxes(head=h)).ravel(),rtol=3e-13,atol=2e-13)
+
+
+@pytest.mark.parametrize("old", [4.,5.])
+def test_storage_only_drainage_from_saturated_sy_only_state(old):
+    grid = TerrainGrid3D(surface_elevation=np.array([[4.]]),zeta_faces=np.array([0,4]),dx=2,dy=2)
+    previous = np.full(grid.shape,old)
+    with build_solver(grid=grid,kx=0,ky=0,kz=0,fixed=np.zeros(grid.shape,dtype=np.int32),
+        values=previous,source=np.full(grid.shape,-.24),initial=previous) as solver:
+        head,info = solver.solve(unconfined=True,transient=True,head_prev=previous,dt=1,sy=.3,
+            unconfined_head_tol=1e-9,final_head_residual_tol=1e-9)
+    assert info["converged"]
+    np.testing.assert_allclose(head,3.8,rtol=0,atol=1e-10)
+    assert info["budget"]["storage_uptake"] == pytest.approx(-.24,abs=1e-12)
+
+
+def test_discharge_only_steady_component_opens_without_artificial_head_pin():
+    grid = TerrainGrid3D(surface_elevation=np.zeros((1,2)),zeta_faces=np.array([0,1]),dx=1,dy=1)
+    contact = TerrainContact3D(cell=(0,0,0),direction="west",area=1,distance=.5,elevation=-.5,
+                              head=2,kind="discharge_only",conductance=3)
+    with build_solver(grid=grid,kx=1,ky=1,kz=1,fixed=np.zeros(grid.shape,dtype=np.int32),
+        values=np.zeros(grid.shape),source=np.full(grid.shape,.5),initial=np.full(grid.shape,1),contacts=(contact,)) as solver:
+        h,info = solver.solve(rel_tol=1e-12,final_budget_relative_tol=1e-11)
+        assert info["converged"]
+        assert info["n_discharge_component_seeds"] == 1
+        np.testing.assert_allclose(h.ravel(),[2+1/3,2+1/3+.5],rtol=0,atol=2e-9)
+        assert info["budget"]["coastal_subface_outflows"] == pytest.approx([1],abs=1e-10)
+        workspace = solver._session.workspace
+        from dataclasses import replace
+        solver.update_terrain_contacts(contacts=(replace(contact,head=3),))
+        solver.update_initial_head(initial_head=h)
+        changed,updated = solver.solve(rel_tol=1e-12,final_budget_relative_tol=1e-11)
+        assert updated["converged"]
+        assert solver._session.workspace is workspace
+        np.testing.assert_allclose(changed,h+1,rtol=0,atol=2e-9)
+
+
+@pytest.mark.parametrize("source", [np.array([.5,-.5]),np.array([-.5,-.5])])
+def test_discharge_only_datum_or_incompatible_inflow_is_rejected(source):
+    grid = TerrainGrid3D(surface_elevation=np.zeros((1,2)),zeta_faces=np.array([0,1]),dx=1,dy=1)
+    contact = TerrainContact3D(cell=(0,0,0),direction="west",area=1,distance=.5,elevation=-.5,
+        head=2,kind="discharge_only",conductance=3)
+    with build_solver(grid=grid,kx=1,ky=1,kz=1,fixed=np.zeros(grid.shape,dtype=np.int32),
+        values=np.zeros(grid.shape),source=source.reshape(grid.shape),initial=np.full(grid.shape,3),contacts=(contact,)) as solver:
+        with pytest.raises(ValueError,match="datum|no valid steady"):
+            solver.solve()
+
+
+def test_discharge_boundary_releases_saturated_sy_only_storage():
+    grid = TerrainGrid3D(surface_elevation=np.array([[4.]]),zeta_faces=np.array([0,4]),dx=2,dy=2)
+    contact = TerrainContact3D(cell=(0,0,0),direction="west",area=1,distance=1,elevation=2.,
+        head=3,kind="discharge_only",conductance=1.2)
+    previous = np.full(grid.shape,5.)
+    with build_solver(grid=grid,kx=1,ky=1,kz=1,fixed=np.zeros(grid.shape,dtype=np.int32),
+        values=previous,source=np.zeros(grid.shape),initial=previous,contacts=(contact,)) as solver:
+        h,info = solver.solve(unconfined=True,transient=True,head_prev=previous,dt=1,sy=.3,
+            unconfined_head_tol=1e-10,final_head_residual_tol=1e-10,final_budget_relative_tol=1e-10)
+    assert info["converged"]
+    assert h.item() == pytest.approx(3.5,abs=2e-8)
+    assert info["budget"]["storage_uptake"] == pytest.approx(-.6,abs=2e-8)
+
+
+def test_mixed_exactly_impermeable_sloping_material_fails_explicitly():
+    grid,metrics = terrain_case()
+    k = np.ones(grid.shape)
+    k[:,:,2] = 0
+    with pytest.raises(ValueError,match="exactly-zero.*unsupported"):
+        TerrainReferenceOperator3D(metrics=metrics,kx=k,ky=k,kz=k)

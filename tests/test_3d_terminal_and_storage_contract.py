@@ -87,3 +87,20 @@ def test_scalar_specific_storage_is_validated(bad):
         with pytest.raises(ValueError,match="finite|>= 0"):
             solver.solve(unconfined=True,transient=True,dt=1,head_prev=initial,
                 sy=.2,ss=bad,zbot_field=np.zeros(initial.shape))
+
+
+@pytest.mark.parametrize("implementation", ["fast","classic"])
+@pytest.mark.parametrize("old,new", [(4.,3.8),(5.,3.8),(-1.,.3)])
+def test_cartesian_zero_tangent_storage_states_can_start_a_valid_step(implementation,old,new):
+    shape = (1,1,1)
+    zero = np.zeros(shape)
+    source = .3*(np.clip(new,0,4)-np.clip(old,0,4))
+    with WarpDarcySolver3D(nx=1,ny=1,nz=1,dx=1,dz=4,device=device(),implementation=implementation) as solver:
+        solver.build_from_K_fields(kx_field=zero,ky_field=zero,kz_field=zero,
+            active=np.ones(shape,dtype=np.int32),bc_mask=np.zeros(shape,dtype=np.int32),
+            bc_values=zero,rhs=np.full(shape,source),initial_head=np.full(shape,old))
+        head,info = solver.solve(unconfined=True,transient=True,dt=1,sy=.3,head_prev=np.full(shape,old),
+            zbot_field=zero,unconfined_head_tol=1e-9,final_head_residual_tol=1e-9)
+    assert info["converged"]
+    assert head.item() == pytest.approx(new,abs=1e-10)
+    assert info["budget"]["storage_uptake"] == pytest.approx(source,abs=1e-12)

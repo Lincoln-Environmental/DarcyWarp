@@ -583,37 +583,11 @@ def _resolve_isolated_free_cells(
     undetermined-datum diagnostic; no artificial boundary is manufactured.
     Source-free singleton null rows retain their initial heads and are excluded.
     """
-    from scipy.sparse import coo_matrix
-    from scipy.sparse.csgraph import connected_components
-
+    from DARCY_WARP_PACKAGE.physics.components_3d import hydraulic_component_labels_3d
     act = np.asarray(active) != 0
     bcm = np.asarray(bc_mask) != 0
-    positive = tuple(np.asarray(faces[index]) > 0.0 for index in (0, 2, 4))
-    cached = None if topology_cache is None else topology_cache.get("components")
-    reused = (cached is not None and np.array_equal(cached["active"], act)
-              and all(np.array_equal(old, new) for old, new in zip(cached["positive"], positive)))
-    if reused:
-        labels, count = cached["labels"], cached["count"]
-    else:
-        indices = np.arange(act.size).reshape(act.shape)
-        rows, cols = [], []
-        for axis, edges in zip((2, 1, 0), positive):
-            here, there = [slice(None)] * 3, [slice(None)] * 3
-            here[axis], there[axis] = slice(None, -1), slice(1, None)
-            here, there = tuple(here), tuple(there)
-            connected = edges[here] & act[here] & act[there]
-            rows.append(indices[here][connected])
-            cols.append(indices[there][connected])
-        row, col = np.concatenate(rows), np.concatenate(cols)
-        graph = coo_matrix((np.ones(row.size), (row, col)), shape=(act.size, act.size)).tocsr()
-        count, labels = connected_components(csgraph=graph, directed=False)
-        labels = labels.reshape(act.shape)
-        if topology_cache is not None:
-            topology_cache["components"] = dict(active=act.copy(), positive=positive,
-                                                 labels=labels, count=count)
-    sizes = cached["sizes"] if reused else np.bincount(labels[act], minlength=count)
-    if topology_cache is not None and not reused:
-        topology_cache["components"]["sizes"] = sizes
+    labels,count,sizes,reused = hydraulic_component_labels_3d(
+        faces=faces,active=act,topology_cache=topology_cache)
     fixed = np.bincount(labels[act & bcm], minlength=count)
     stored = np.bincount(labels[act & (np.asarray(storage_diag) > 0.0)], minlength=count)
     unconstrained = (sizes > 0) & (fixed == 0) & (stored == 0)
@@ -1657,6 +1631,12 @@ def _picard_unconfined_7point_3d(
             raise ValueError("initial_head must be finite.")
     h_iter[bc_mask0] = bcv[bc_mask0]
     h_iter[~active_mask] = NP_FLOAT(0.0)
+    storage_seeds = 0
+    if secant_active:
+        from DARCY_WARP_PACKAGE.physics.storage_3d import seed_zero_capacity_state_3d
+        storage_seeds = seed_zero_capacity_state_3d(head=h_iter,previous=h_prev_storage,
+            bottoms=zbot64,thickness=dz_f,sy=sy_field if sy_field is not None else 0.,
+            ss=ss_field if ss_field is not None else 0.,source=b,free=free_mask,area=area_f,dt=float(dt))
 
     def _conductances_from_sat(sat_arr):
         # Unconfined quasi-3D conductance: horizontal faces use the harmonic
@@ -2113,6 +2093,7 @@ def _picard_unconfined_7point_3d(
                 else float("nan")
             ),
             "unconfined_storage_mode": str(storage_mode),
+            "n_zero_capacity_storage_seeds": storage_seeds,
             "phreatic_storage_active": bool(phreatic_active),
             "sy": sy_summary,
             "ss": ss_summary,

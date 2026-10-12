@@ -172,3 +172,23 @@ def test_tiny_confined_elastic_increment_is_not_lost_in_yield_potential():
     # Subtracting the two full stored-water potentials would lose this change.
     assert (storage_potential_3d(head=new,bottoms=0,thickness=10,sy=.2,ss=1e-4)-
             storage_potential_3d(head=old,bottoms=0,thickness=10,sy=.2,ss=1e-4)).item() == 0
+
+
+def test_vertical_flow_has_no_lateral_flux_at_distinct_coastal_elevations():
+    grid,metrics = terrain_case()
+    cell = (0,2,0)
+    sx = metrics.sx[cell[1:]]
+    face_centre = grid.elevations[cell]-sx*grid.dx/2
+    contacts = tuple(TerrainContact3D(cell=cell,direction="west",area=.1,distance=grid.dx/2,
+        elevation=face_centre-depth_offset,head=face_centre-depth_offset,conductance=1)
+        for depth_offset in (-.03,.04))
+    operator = TerrainReferenceOperator3D(metrics=metrics,kx=1,ky=2,kz=.01,contacts=contacts)
+    np.testing.assert_allclose(operator.fluxes(head=grid.elevations)[3],0,atol=2e-12)
+
+
+def test_contact_geometry_discrepancies_are_rejected():
+    grid,metrics = terrain_case()
+    invalid = TerrainContact3D(cell=(0,2,2),direction="top",area=.1,distance=.1,
+        elevation=grid.elevations[0,2,2],head=3)
+    with pytest.raises(ValueError,match="elevation must match"):
+        TerrainReferenceOperator3D(metrics=metrics,kx=1,ky=1,kz=1,contacts=(invalid,))

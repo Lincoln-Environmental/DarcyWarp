@@ -21,7 +21,8 @@ from DARCY_WARP_PACKAGE.physics.terrain_grid_3d import TerrainMetrics3D
 from DARCY_WARP_PACKAGE.physics.terrain_reference_3d import TerrainReferenceOperator3D, field_3d
 from DARCY_WARP_PACKAGE.physics.terrain_budget_3d import compute_terrain_budget_3d, terrain_dry_diagnostics_3d
 from DARCY_WARP_PACKAGE.physics.storage_contract_3d import validate_unconfined_storage_inputs
-from DARCY_WARP_PACKAGE.physics.storage_3d import storage_increment_3d
+from DARCY_WARP_PACKAGE.physics.storage_3d import storage_increment_3d, seed_zero_capacity_state_3d
+from DARCY_WARP_PACKAGE.physics.components_3d import hydraulic_component_labels_3d
 
 
 def pack_terrain_coefficients(*, operator):
@@ -47,6 +48,67 @@ def pack_terrain_boundaries(*, operator, head, datum):
         packed[cell] += (c,bz,bx,by)
         rhs.ravel()[cell] += c*(hb-datum)
     return packed,rhs
+
+
+def seed_discharge_only_components_3d(*, operator, head, source, fixed, storage, potential_storage, topology_cache):
+    """Open a physically available discharge branch with a numerical guess.
+
+    A positive net source fixes the datum through outflow. A balanced component
+    with only discharge contacts still has an undetermined datum; negative
+    net source cannot be supplied by discharge-only contacts. No boundary or
+    storage term is manufactured and all final flux gates remain authoritative.
+    """
+    records = operator.contact_records
+    if not any(record[6] and record[1] > 0 for record in records):
+        return 0
+    labels,count,sizes,reused = hydraulic_component_labels_3d(faces=operator.principal_faces(),
+        active=operator.grid.active,topology_cache=topology_cache)
+    active = operator.grid.active != 0
+    constrained = np.bincount(labels[active&((np.asarray(fixed) != 0)|(storage > 0))],minlength=count) > 0
+    potential = np.bincount(labels[active&potential_storage],minlength=count) > 0
+    for record in records:
+        if not record[6] and record[1] > 0:
+            constrained[labels.ravel()[record[0]]] = True
+    net = np.bincount(labels[active],weights=source[active],minlength=count)
+    magnitude = np.bincount(labels[active],weights=np.abs(source[active]),minlength=count)
+    gradients = tuple(gradient @ head.ravel() for gradient in (operator.metrics.gz,operator.metrics.gx,operator.metrics.gy))
+    candidates = {}
+    for record in records:
+        cell,c,bz,bx,by,hb,discharge = record
+        if discharge and c > 0:
+            component = int(labels.ravel()[cell])
+            threshold = hb-head.ravel()[cell]+(bz*gradients[0][cell]+bx*gradients[1][cell]+by*gradients[2][cell])/c
+            candidates.setdefault(component,[]).append((threshold,c))
+    seeded = 0
+    for component,contacts in candidates.items():
+        if constrained[component]:
+            continue
+        opening = min(threshold for threshold,c in contacts)
+        if potential[component] and opening < 0:
+            continue
+        tolerance = 64*np.finfo(np.float64).eps*magnitude[component]
+        if abs(net[component]) <= tolerance:
+            raise ValueError("source-balanced discharge-only component has an undetermined head datum; provide an explicit physical head constraint")
+        if net[component] < 0:
+            raise ValueError("negative net source in a discharge-only component: no boundary can provide inflow; no valid steady solution")
+        if opening >= 0:
+            selected = active&(labels == component)
+            # A fully saturated GUESS gives fixed metric coefficients and a
+            # guaranteed open branch, including bottom contacts whose ratio
+            # changes during wetting. The physical old storage is untouched.
+            full = TerrainReferenceOperator3D(metrics=operator.metrics,kx=operator.kx,ky=operator.ky,kz=operator.kz,contacts=operator.contacts)
+            full_thresholds = []
+            for record in full.contact_records:
+                cell,c,bz,bx,by,hb,discharge = record
+                if discharge and c > 0 and labels.ravel()[cell] == component:
+                    threshold = hb-head.ravel()[cell]+(bz*gradients[0][cell]+bx*gradients[1][cell]+by*gradients[2][cell])/c
+                    full_thresholds.append((threshold,c))
+            lift = max(float(np.max(operator.grid.tops[selected]-head[selected])),
+                min(threshold for threshold,c in full_thresholds)+net[component]/sum(c for threshold,c in full_thresholds))
+            proposed = head[selected]+lift
+            head[selected] = np.maximum(proposed,np.nextafter(head[selected],np.inf))
+            seeded += 1
+    return seeded
 
 
 class TerrainGPUWorkspace3D:
@@ -208,6 +270,13 @@ class TerrainOperatorSession3D:
     def update_boundary_values(self, bc_values):
         self.bc_values[...] = field_3d(value=bc_values,shape=self.shape,name="bc_values")
 
+    def update_contacts(self, *, contacts):
+        records = tuple(contacts)
+        TerrainReferenceOperator3D(metrics=self.metrics,kx=self.kx,ky=self.ky,kz=self.kz,contacts=records)
+        if any(self.bc_mask[contact.cell] for contact in records):
+            raise ValueError("a fixed-head cell cannot also own an exchange subface")
+        self.contacts = records
+
     def update_geometry(self, *, grid):
         if grid.shape != self.shape:
             raise ValueError("terrain geometry updates must retain grid shape")
@@ -241,6 +310,8 @@ class TerrainOperatorSession3D:
             raise ValueError("terrain tolerances must be finite and nonnegative, with positive head tolerance")
         initial = self.initial_head if initial_head is None else initial_head
         if unconfined:
+            if not np.isfinite(unconfined_min_sat) or unconfined_min_sat <= 0:
+                raise ValueError("terrain unconfined solves require a positive numerical saturation floor")
             unconfined_storage_mode = validate_unconfined_storage_inputs(transient=transient,mode=unconfined_storage_mode,sy=sy,ss=ss,
                 storage_coeff=storage_coeff,storage_diag=storage_diag,head_prev=head_prev,initial_head=initial,dt=dt)
             if unconfined_storage_mode == "phreatic_sy":
@@ -262,22 +333,19 @@ class TerrainOperatorSession3D:
         sy_field = field_3d(value=0 if sy is None else sy,shape=self.shape,name="sy",nonnegative=True)
         ss_field = field_3d(value=0 if ss is None else ss,shape=self.shape,name="ss",nonnegative=True)
         coeff = field_3d(value=0 if storage_coeff is None else storage_coeff,shape=self.shape,name="storage_coeff",nonnegative=True)
+        storage_seeds = 0
         if unconfined and transient and unconfined_storage_mode == "secant_sy":
-            # Seed only the nonlinear iterate, retaining the exact dry old
-            # potential. Positive injection can create wet storage even when
-            # its tangent at the old dry state is zero. This is not a floor
-            # contribution to physical storage or an artificial boundary.
-            rewet = (head <= self.grid.bottoms)&(self.rhs > 0)&((sy_field > 0)|(ss_field > 0))&(self.grid.active != 0)&(self.bc_mask == 0)
-            target = np.maximum(self.rhs*dt/(self.grid.dx*self.grid.dy),0)
-            denom = sy_field+np.sqrt(sy_field**2+2*ss_field*target)
-            wet_guess = np.divide(2*target,denom,out=np.zeros_like(target),where=denom > 0)
-            head[rewet] = (self.grid.bottoms+np.minimum(wet_guess,self.grid.thickness))[rewet]
+            storage_seeds = seed_zero_capacity_state_3d(head=head,previous=previous,
+                bottoms=self.grid.bottoms,thickness=self.grid.thickness,sy=sy_field,ss=ss_field,
+                source=self.rhs,free=(self.grid.active != 0)&(self.bc_mask == 0),
+                area=self.grid.dx*self.grid.dy,dt=dt)
         datum = float(self.grid.surface_elevation.flat[0])
         free = (self.grid.active != 0)&(self.bc_mask == 0)
         key = (device,max_levels,min_coarse_n,krylov_restart,max_cycles,rel_tol,abs_tol_min)
         total_iterations = 0
         history = []
         refresh_seconds = 0.0
+        discharge_seeds = 0
         starting_workspace = self.workspace
         workspace_reused = self.workspace is not None and self.workspace_key == key
         graph_captures_before = getattr(self.workspace.krylov,"graph_captures",0) if workspace_reused else 0
@@ -288,6 +356,14 @@ class TerrainOperatorSession3D:
                 head=head if unconfined else None,min_sat=unconfined_min_sat,contacts=self.contacts)
             storage,change = self.storage_terms(head=head,previous=previous,transient=transient,unconfined=unconfined,
                 mode=unconfined_storage_mode,sy=sy_field,ss=ss_field,coeff=coeff,dt=dt)
+            seeded = seed_discharge_only_components_3d(operator=operator,head=head,source=self.rhs,
+                fixed=self.bc_mask,storage=storage,potential_storage=bool(transient)&((sy_field > 0)|(ss_field > 0)),topology_cache=self.topology_cache)
+            if seeded:
+                discharge_seeds += seeded
+                operator = TerrainReferenceOperator3D(metrics=self.metrics,kx=self.kx,ky=self.ky,kz=self.kz,
+                    head=head if unconfined else None,min_sat=unconfined_min_sat,contacts=self.contacts)
+                storage,change = self.storage_terms(head=head,previous=previous,transient=transient,unconfined=unconfined,
+                    mode=unconfined_storage_mode,sy=sy_field,ss=ss_field,coeff=coeff,dt=dt)
             initial_budget = compute_terrain_budget_3d(operator=operator,head=head,source=self.rhs,fixed=self.bc_mask,
                 storage_change=change,storage_diagonal=storage)
             boundary,boundary_rhs = pack_terrain_boundaries(operator=operator,head=head,datum=datum)
@@ -378,7 +454,7 @@ class TerrainOperatorSession3D:
             krylov_iterations=total_iterations,n_outer_iterations=len(history),outer_history=history,
             n_levels=len(self.workspace.levels),workspace_reused=workspace_reused and starting_workspace is self.workspace,
             operator_refreshes=self.workspace.refresh_count,operator_refresh_seconds=refresh_seconds,
-            geometry_revision=self.geometry_revision,n_isolated_cells_excluded=int(np.sum(isolated)),
+            n_zero_capacity_storage_seeds=storage_seeds,n_discharge_component_seeds=discharge_seeds,geometry_revision=self.geometry_revision,n_isolated_cells_excluded=int(np.sum(isolated)),
             cuda_graph_captures=getattr(self.workspace.krylov,"graph_captures",0),
             cuda_graph_replays=getattr(self.workspace.krylov,"graph_replays",0),
             cuda_graph_reused=workspace_reused and graph_captures_before > 0 and getattr(self.workspace.krylov,"graph_captures",0) == graph_captures_before,

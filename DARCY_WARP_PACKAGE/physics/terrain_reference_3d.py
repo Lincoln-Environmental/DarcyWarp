@@ -51,6 +51,8 @@ class TerrainContact3D:
     head: float
     kind: str = "head"
     conductance: float | None = None
+    x_offset: float = 0.0
+    y_offset: float = 0.0
 
 
 class TerrainReferenceOperator3D:
@@ -62,6 +64,11 @@ class TerrainReferenceOperator3D:
         self.kx = field_3d(value=kx, shape=self.shape, name="kx", nonnegative=True)
         self.ky = field_3d(value=ky, shape=self.shape, name="ky", nonnegative=True)
         self.kz = field_3d(value=kz, shape=self.shape, name="kz", nonnegative=True)
+        nonflat = np.any(metrics.sx != 0) or np.any(metrics.sy != 0) or np.any(metrics.sxf != 0) or np.any(metrics.syf != 0)
+        active_fields = (self.kx[self.active],self.ky[self.active],self.kz[self.active])
+        has_contacts = bool(contacts)
+        if (nonflat or has_contacts) and any(np.any(field == 0) for field in active_fields) and not (not has_contacts and all(np.all(field == 0) for field in active_fields)):
+            raise ValueError("nonflat terrain or explicit coastal contacts require positive Kx/Ky/Kz on hydraulic cells; mixed exactly-zero material needs an impermeable-interface closure, which is unsupported (no small positive K cutoff)")
         if not np.isfinite(min_sat) or min_sat < 0:
             raise ValueError("unconfined_min_sat must be finite and nonnegative")
         self.true_sat = self.grid.thickness if head is None else np.clip(np.asarray(head) - self.grid.bottoms, 0, self.grid.thickness)
@@ -114,11 +121,13 @@ class TerrainReferenceOperator3D:
                 raise ValueError(f"contact cell {cell} is outside the active terrain")
             if contact.direction not in directions or contact.kind not in {"head", "discharge_only"}:
                 raise ValueError("contact direction or kind unsupported")
-            if not all(np.isfinite(v) for v in (contact.area,contact.distance,contact.elevation,contact.head)) or min(contact.area,contact.distance) <= 0:
+            if not all(np.isfinite(v) for v in (contact.area,contact.distance,contact.elevation,contact.head,contact.x_offset,contact.y_offset)) or min(contact.area,contact.distance) <= 0:
                 raise ValueError("contact area/distance must be positive, all contact values finite")
             if contact.conductance is not None and (not np.isfinite(contact.conductance) or contact.conductance < 0):
                 raise ValueError("contact conductance must be finite and nonnegative")
             axis, sign = directions[contact.direction]
+            if abs(contact.x_offset) > self.grid.dx/2 or abs(contact.y_offset) > self.grid.dy/2 or (axis == 2 and contact.x_offset != 0) or (axis == 1 and contact.y_offset != 0):
+                raise ValueError("contact offsets must be tangential and within the owning face")
             neighbor = list(cell)
             neighbor[axis] += sign
             if 0 <= neighbor[axis] < self.shape[axis] and self.active[tuple(neighbor)]:
@@ -133,13 +142,27 @@ class TerrainReferenceOperator3D:
             projected_area = contact.area/surface_factor
             conductance = normal*projected_area/contact.distance if contact.conductance is None else contact.conductance
             scale = projected_area if contact.conductance is None else (conductance*contact.distance/normal if normal > 0 else 0)
+            sx,sy = self.metrics.sx[cell[1:]],self.metrics.sy[cell[1:]]
+            depth_centre = .5*(self.grid.zeta_faces[cell[0]]+self.grid.zeta_faces[cell[0]+1])
+            dx_point = sign*contact.distance if axis == 2 else contact.x_offset
+            dy_point = sign*contact.distance if axis == 1 else contact.y_offset
+            surface_point = self.grid.surface_elevation[cell[1:]]+sx*dx_point+sy*dy_point
+            contact_depth = surface_point-contact.elevation
+            depth_offset = contact_depth-depth_centre
+            tolerance = 64*np.finfo(np.float64).eps*max(abs(surface_point),abs(contact.elevation),1.)
+            if axis != 0 and not self.grid.zeta_faces[cell[0]]-tolerance <= contact_depth <= self.grid.zeta_faces[cell[0]+1]+tolerance:
+                raise ValueError(f"contact elevation is outside its layer at {cell}/{contact.direction}")
+            if axis == 0 and abs(depth_offset-sign*contact.distance) > tolerance:
+                raise ValueError("top/bottom contact elevation must match its logical distance and centroid offsets")
+            if (self.shape[0] == 1 and axis != 0 and abs(depth_offset) > tolerance) or (self.shape[2] == 1 and contact.x_offset != 0) or (self.shape[1] == 1 and contact.y_offset != 0):
+                raise ValueError("offset subfaces require enough cells to reconstruct tangential gradients")
             if axis == 2:
-                cross = (sign*self.ex[cell]*self.metrics.sx[cell[1:]]*scale, 0, 0)
+                cross = (sign*self.ex[cell]*sx*scale-conductance*depth_offset,0,-conductance*contact.y_offset)
             elif axis == 1:
-                cross = (sign*self.ey[cell]*self.metrics.sy[cell[1:]]*scale, 0, 0)
+                cross = (sign*self.ey[cell]*sy*scale-conductance*depth_offset,-conductance*contact.x_offset,0)
             else:
-                cross = (0, sign*self.ex[cell]*self.metrics.sx[cell[1:]]*scale,
-                         sign*self.ey[cell]*self.metrics.sy[cell[1:]]*scale)
+                cross = (0,sign*self.ex[cell]*sx*scale-conductance*contact.x_offset,
+                         sign*self.ey[cell]*sy*scale-conductance*contact.y_offset)
             records.append((np.ravel_multi_index(cell,self.shape),conductance,*cross,contact.head,contact.kind == "discharge_only"))
         return tuple(records)
 
