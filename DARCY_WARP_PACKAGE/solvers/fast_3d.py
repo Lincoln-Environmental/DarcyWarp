@@ -860,6 +860,8 @@ def solve_fast_unconfined_kcycle_3d(
         transient=transient, mode=unconfined_storage_mode, sy=sy, ss=ss,
         storage_coeff=storage_coeff, storage_diag=storage_diag,
         head_prev=head_prev, initial_head=initial_head, dt=dt)
+    if transient and head_prev is None:
+        head_prev = np.asarray(initial_head, dtype=NP_FLOAT).copy()
     shape = np.asarray(tx_p).shape
     if len(shape) != 3:
         raise ValueError("3D face arrays must have shape (nz, ny, nx).")
@@ -905,7 +907,8 @@ def solve_fast_unconfined_kcycle_3d(
     }
 
     def _inner_solve_fast(txp_i, txm_i, typ_i, tym_i, tzp_i, tzm_i, h0, mcycles,
-                          storage_diag_iter=None, rhs_eff_iter=None):
+                          storage_diag_iter=None, rhs_eff_iter=None,
+                          head_residual_tol_override=None):
         faces_i = (txp_i, txm_i, typ_i, tym_i, tzp_i, tzm_i)
         if storage_diag_iter is not None:
             # Secant / phreatic path: Picard-built storage + RHS, no extra
@@ -993,8 +996,8 @@ def solve_fast_unconfined_kcycle_3d(
             coarse_omegas=coarse_omegas,
             max_cycles=int(mcycles),
             rel_tol=float(rel_tol),
-            abs_tol_min=float(abs_tol_min),
-            dh_rms_tol=dh_rms_tol,
+            abs_tol_min=float(abs_tol_min) if head_residual_tol_override is None else 0.0,
+            dh_rms_tol=dh_rms_tol if head_residual_tol_override is None else min(float(dh_rms_tol) if dh_rms_tol is not None else np.inf,float(head_residual_tol_override)),
             dh_max_tol=dh_max_tol,
             check_every_no=int(check_every_no),
             transient=bool(transient_i),

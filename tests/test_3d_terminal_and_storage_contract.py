@@ -61,3 +61,29 @@ def test_ignored_storage_combinations_are_rejected(bad):
         with pytest.raises(ValueError, match="incompatible|unsupported"):
             solver.solve(unconfined=True, transient=True, dt=1, head_prev=initial,
                          zbot_field=np.zeros(initial.shape), **bad)
+
+
+@pytest.mark.parametrize("implementation", ["fast","classic"])
+def test_legacy_volume_initial_head_is_fixed_previous_timestep(implementation):
+    shape = (1,1,1)
+    zero = np.zeros(shape)
+    with WarpDarcySolver3D(nx=1,ny=1,nz=1,dx=1,device=device(),implementation=implementation) as solver:
+        solver.build_from_K_fields(kx_field=zero,ky_field=zero,kz_field=zero,
+            active=np.ones(shape,dtype=np.int32),bc_mask=np.zeros(shape,dtype=np.int32),
+            bc_values=zero,rhs=np.full(shape,.05),initial_head=np.full(shape,.5))
+        h,info = solver.solve(unconfined=True,transient=True,dt=1,storage_coeff=.1,
+            unconfined_storage_mode="confined_volume",zbot_field=zero,
+            unconfined_head_tol=1e-9,final_head_residual_tol=1e-9,
+            unconfined_max_picard_iter=100,chebyshev_enabled=False)
+    assert info["converged"]
+    assert h.item() == pytest.approx(1,abs=2e-8)
+    assert info["budget"]["storage_uptake"] == pytest.approx(.05,abs=2e-9)
+
+
+@pytest.mark.parametrize("bad", [-.1,np.inf,np.nan])
+def test_scalar_specific_storage_is_validated(bad):
+    initial = np.full((1,1,5),.5)
+    with make_solver(initial=initial) as solver:
+        with pytest.raises(ValueError,match="finite|>= 0"):
+            solver.solve(unconfined=True,transient=True,dt=1,head_prev=initial,
+                sy=.2,ss=bad,zbot_field=np.zeros(initial.shape))

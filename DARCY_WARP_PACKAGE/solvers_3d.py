@@ -509,6 +509,8 @@ def _prepare_7point_transient_terms(
     sdiag[~free] = NP_FLOAT(0.0)
 
     if not bool(transient):
+        if any(value is not None for value in (storage_coeff, dt, head_prev)):
+            raise ValueError("storage_coeff, dt and head_prev require transient=True")
         return b, sdiag, None, float("nan")
 
     dt_f = float(dt) if dt is not None else float("nan")
@@ -1508,6 +1510,8 @@ def _picard_unconfined_7point_3d(
         if value is None:
             return None
         arr = np.asarray(value, dtype=np.float64)
+        if not np.all(np.isfinite(arr)) or np.any(arr < 0):
+            raise ValueError(f"{name} must be finite and >= 0.")
         if arr.shape == ():
             return np.full(shape, float(arr.reshape(()).item()), dtype=np.float64)
         if arr.shape != shape:
@@ -1552,21 +1556,6 @@ def _picard_unconfined_7point_3d(
     dz_f = float(dz)
     area_f = float(dx) * (float(dx) if dy is None else float(dy))
 
-    def _storage_potential(h_arr: np.ndarray) -> np.ndarray:
-        """Stored-water potential per unit plan area [m] at head field h_arr."""
-        rel = np.asarray(h_arr, dtype=np.float64) - zbot64
-        b_sat = np.clip(rel, 0.0, dz_f)
-        pot = (
-            sy_field * b_sat
-            if sy_field is not None
-            else np.zeros(shape, dtype=np.float64)
-        )
-        if ss_field is not None:
-            pot = pot + ss_field * (
-                0.5 * b_sat * b_sat + dz_f * np.maximum(rel - dz_f, 0.0)
-            )
-        return pot
-
     def _storage_tangent(h_arr: np.ndarray) -> np.ndarray:
         """dS/dh at h_arr: Sy where the water table is inside the cell plus
         Ss times the saturated thickness (elastic)."""
@@ -1596,15 +1585,10 @@ def _picard_unconfined_7point_3d(
         if not np.all(np.isfinite(h_prev_storage)):
             raise ValueError("head_prev contains non-finite values.")
 
-    # Previous-timestep storage potential, fixed for the whole nonlinear loop.
-    pot_old: np.ndarray | None = None
-    if secant_active:
-        pot_old = _storage_potential(h_prev_storage)
-
     def _current_storage_terms(h_ref: np.ndarray):
         """Storage diagonal + backward-Euler RHS for the iterate ``h_ref``.
 
-        The previous-timestep state (``h_prev_storage`` / ``pot_old``) is
+        The previous-timestep state (``h_prev_storage``) is
         fixed for the whole nonlinear loop; only the current state moves.
         """
         if secant_active:
@@ -1613,13 +1597,17 @@ def _picard_unconfined_7point_3d(
             # FIXED previous-timestep head and ``h_ref``, so the converged
             # inner solution satisfies exactly
             #   storage = area * (S(h_new) - S(h_old)) / dt.
-            pot_new = _storage_potential(h_ref)
+            from DARCY_WARP_PACKAGE.physics.storage_3d import storage_increment_3d
+            potential_increment = storage_increment_3d(
+                head=h_ref,previous=h_prev_storage,bottoms=zbot64,thickness=dz_f,
+                sy=sy_field if sy_field is not None else 0.0,
+                ss=ss_field if ss_field is not None else 0.0)
             dh = np.asarray(h_ref, dtype=np.float64) - h_prev_storage.astype(np.float64, copy=False)
-            moving = np.abs(dh) > 1.0e-12
+            moving = dh != 0.0
             s_sec = _storage_tangent(h_ref)
             s_sec = np.where(
                 moving,
-                (pot_new - pot_old) / np.where(moving, dh, 1.0),
+                potential_increment / np.where(moving, dh, 1.0),
                 s_sec,
             )
             s_sec = np.maximum(s_sec, 0.0)
@@ -1775,17 +1763,32 @@ def _picard_unconfined_7point_3d(
         txp_i, txm_i, typ_i, tym_i, tzp_i, tzm_i = _conductances_from_sat(sat_use)
 
         iter_storage_kwargs: dict = {}
+        final_inner_target = float(hclose_f) if final_head_residual_tol is None else float(final_head_residual_tol)
+        if np.isfinite(previous_measure) and previous_measure <= hclose_f:
+            iter_storage_kwargs["head_residual_tol_override"] = final_inner_target
         if secant_active or phreatic_active:
             storage_diag_iter, rhs_eff_iter = _current_storage_terms(h_iter)
-            iter_storage_kwargs = {
+            iter_storage_kwargs.update({
                 "storage_diag_iter": storage_diag_iter,
                 "rhs_eff_iter": rhs_eff_iter,
-            }
+            })
 
         head_lin, info_lin = inner_solve(
             txp_i, txm_i, typ_i, tym_i, tzp_i, tzm_i, h_iter, inner_max_cycles,
             **iter_storage_kwargs,
         )
+        # An inner solve can accept its initial iterate under a loose default
+        # tolerance. Retry immediately at the final target rather than feed a
+        # zero update into nonlinear damping and report false stagnation.
+        if n_free > 0 and isinstance(info_lin, dict):
+            raw_update = np.asarray(head_lin, dtype=np.float64)-h_iter
+            reported_head_residual = float(info_lin.get("h_rms_end", np.inf))
+            if np.max(np.abs(raw_update[free_mask])) <= hclose_f and reported_head_residual > final_inner_target:
+                iter_storage_kwargs["head_residual_tol_override"] = final_inner_target
+                head_lin, info_lin = inner_solve(
+                    txp_i, txm_i, typ_i, tym_i, tzp_i, tzm_i, h_iter, inner_max_cycles,
+                    **iter_storage_kwargs)
+                info_lin["terminal_accuracy_retry"] = True
         last_linear_info = dict(info_lin) if isinstance(info_lin, dict) else {}
         inner_converged = bool(last_linear_info.get("converged", False))
 
@@ -2005,7 +2008,7 @@ def _picard_unconfined_7point_3d(
         )
 
         head_change_converged = final_max_abs_head_change < hclose_f
-        if head_change_converged and inner_usable_for_picard:
+        if head_change_converged and picard_update_max <= final_inner_target and inner_usable_for_picard and (n_free == 0 or (h_rms_end is not None and h_rms_end <= final_inner_target)):
             converged_nonlinear = True
             break
 
@@ -2282,6 +2285,8 @@ def solve_chebyshev_7point_3d(
             transient=transient, mode=unconfined_storage_mode, sy=sy, ss=ss,
             storage_coeff=storage_coeff, storage_diag=storage_diag,
             head_prev=head_prev, initial_head=initial_head, dt=dt)
+        if transient and head_prev is None:
+            head_prev = np.asarray(initial_head, dtype=NP_FLOAT).copy()
 
     if bool(unconfined):
         if kx_field is None or ky_field is None or kz_field is None or zbot_field is None:
@@ -2313,7 +2318,8 @@ def solve_chebyshev_7point_3d(
             raise ValueError("unconfined_head_tol must be >= 0.")
 
         def _inner_solve_cheb(txp_i, txm_i, typ_i, tym_i, tzp_i, tzm_i, h0, mcycles,
-                              storage_diag_iter=None, rhs_eff_iter=None):
+                              storage_diag_iter=None, rhs_eff_iter=None,
+                              head_residual_tol_override=None):
             if storage_diag_iter is not None:
                 # Phreatic Sy path: the storage diagonal and head_prev RHS were
                 # built by the Picard loop from the current saturated thickness.
@@ -2337,7 +2343,7 @@ def solve_chebyshev_7point_3d(
                     cheby_lambda_min=float(cheby_lambda_min),
                     cheby_lambda_max=float(cheby_lambda_max),
                     rel_tol=float(rel_tol),
-                    abs_tol_min=float(abs_tol_min),
+                    abs_tol_min=float(abs_tol_min) if head_residual_tol_override is None else 0.0,
                     transient=False,
                     storage_coeff=None,
                     dt=None,
@@ -2371,7 +2377,7 @@ def solve_chebyshev_7point_3d(
                 cheby_lambda_min=float(cheby_lambda_min),
                 cheby_lambda_max=float(cheby_lambda_max),
                 rel_tol=float(rel_tol),
-                abs_tol_min=float(abs_tol_min),
+                abs_tol_min=float(abs_tol_min) if head_residual_tol_override is None else 0.0,
                 transient=legacy_transient,
                 storage_coeff=(storage_coeff if legacy_transient else None),
                 dt=(dt if legacy_transient else None),
@@ -2626,6 +2632,8 @@ def solve_multigrid_kcycle_7point_3d(
             transient=transient, mode=unconfined_storage_mode, sy=sy, ss=ss,
             storage_coeff=storage_coeff, storage_diag=storage_diag,
             head_prev=head_prev, initial_head=initial_head, dt=dt)
+        if transient and head_prev is None:
+            head_prev = np.asarray(initial_head, dtype=NP_FLOAT).copy()
 
     if bool(unconfined):
         if kx_field is None or ky_field is None or kz_field is None or zbot_field is None:
@@ -2657,7 +2665,8 @@ def solve_multigrid_kcycle_7point_3d(
             raise ValueError("unconfined_head_tol must be >= 0.")
 
         def _inner_solve_kc(txp_i, txm_i, typ_i, tym_i, tzp_i, tzm_i, h0, mcycles,
-                            storage_diag_iter=None, rhs_eff_iter=None):
+                            storage_diag_iter=None, rhs_eff_iter=None,
+                            head_residual_tol_override=None):
             common_kwargs = dict(
                 tx_p=txp_i,
                 tx_m=txm_i,
@@ -2685,9 +2694,9 @@ def solve_multigrid_kcycle_7point_3d(
                 cheby_lambda_min=float(cheby_lambda_min),
                 cheby_lambda_max=float(cheby_lambda_max),
                 rel_tol=float(rel_tol),
-                abs_tol_min=float(abs_tol_min),
+                abs_tol_min=float(abs_tol_min) if head_residual_tol_override is None else 0.0,
                 check_every_no=int(check_every_no),
-                dh_rms_tol=dh_rms_tol,
+                dh_rms_tol=dh_rms_tol if head_residual_tol_override is None else min(float(dh_rms_tol) if dh_rms_tol is not None else np.inf,float(head_residual_tol_override)),
                 dh_max_tol=dh_max_tol,
                 dh_max_factor=float(dh_max_factor),
                 dx=float(dx),
