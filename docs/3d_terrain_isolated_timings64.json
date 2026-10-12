@@ -1,0 +1,387 @@
+{
+  "provenance": {
+    "branch": "dev",
+    "measurement": "Prior isolated timing run, before final zero-capacity/coastal guards; identical benchmark coefficients, fine residuals and iteration counts. Raw timing rows recovered from the saved run log.",
+    "base_commit": "e098def",
+    "final_core_commit": "7223d7e"
+  },
+  "cases": {
+    "cartesian_confined_steady": [
+      {
+        "geometry": "cartesian",
+        "unconfined": false,
+        "transient": false,
+        "repeat": 0,
+        "seconds": 0.11645925510674715,
+        "converged": true,
+        "iterations": 30
+      },
+      {
+        "geometry": "cartesian",
+        "unconfined": false,
+        "transient": false,
+        "repeat": 1,
+        "seconds": 0.07500553491991013,
+        "converged": true,
+        "iterations": 30
+      },
+      {
+        "geometry": "cartesian",
+        "unconfined": false,
+        "transient": false,
+        "repeat": 2,
+        "seconds": 0.07297626393847167,
+        "converged": true,
+        "iterations": 30
+      }
+    ],
+    "cartesian_confined_transient": [
+      {
+        "geometry": "cartesian",
+        "unconfined": false,
+        "transient": true,
+        "repeat": 0,
+        "seconds": 0.10183486703317612,
+        "converged": true,
+        "iterations": 35
+      },
+      {
+        "geometry": "cartesian",
+        "unconfined": false,
+        "transient": true,
+        "repeat": 1,
+        "seconds": 0.08213228802196681,
+        "converged": true,
+        "iterations": 35
+      },
+      {
+        "geometry": "cartesian",
+        "unconfined": false,
+        "transient": true,
+        "repeat": 2,
+        "seconds": 0.08216319896746427,
+        "converged": true,
+        "iterations": 35
+      }
+    ],
+    "cartesian_unconfined_steady": [
+      {
+        "geometry": "cartesian",
+        "unconfined": true,
+        "transient": false,
+        "repeat": 0,
+        "seconds": 0.6457452210597694,
+        "converged": true,
+        "iterations": 5
+      },
+      {
+        "geometry": "cartesian",
+        "unconfined": true,
+        "transient": false,
+        "repeat": 1,
+        "seconds": 0.6209001309471205,
+        "converged": true,
+        "iterations": 5
+      },
+      {
+        "geometry": "cartesian",
+        "unconfined": true,
+        "transient": false,
+        "repeat": 2,
+        "seconds": 0.6234387879958376,
+        "converged": true,
+        "iterations": 5
+      }
+    ],
+    "cartesian_unconfined_transient": [
+      {
+        "geometry": "cartesian",
+        "unconfined": true,
+        "transient": true,
+        "repeat": 0,
+        "seconds": 0.6209408970316872,
+        "converged": true,
+        "iterations": 5
+      },
+      {
+        "geometry": "cartesian",
+        "unconfined": true,
+        "transient": true,
+        "repeat": 1,
+        "seconds": 0.6034275130368769,
+        "converged": true,
+        "iterations": 5
+      },
+      {
+        "geometry": "cartesian",
+        "unconfined": true,
+        "transient": true,
+        "repeat": 2,
+        "seconds": 0.6026318420190364,
+        "converged": true,
+        "iterations": 5
+      }
+    ],
+    "cartesian_layered_transient": [
+      {
+        "geometry": "cartesian",
+        "unconfined": true,
+        "transient": true,
+        "repeat": 0,
+        "seconds": 0.6199790890095755,
+        "converged": true,
+        "iterations": 5
+      },
+      {
+        "geometry": "cartesian",
+        "unconfined": true,
+        "transient": true,
+        "repeat": 1,
+        "seconds": 0.6045619229553267,
+        "converged": true,
+        "iterations": 5
+      },
+      {
+        "geometry": "cartesian",
+        "unconfined": true,
+        "transient": true,
+        "repeat": 2,
+        "seconds": 0.6014038509456441,
+        "converged": true,
+        "iterations": 5
+      }
+    ],
+    "terrain_confined_steady": [
+      {
+        "geometry": "terrain",
+        "unconfined": false,
+        "transient": false,
+        "repeat": 0,
+        "seconds": 0.06792820803821087,
+        "converged": true,
+        "iterations": 84
+      },
+      {
+        "geometry": "terrain",
+        "unconfined": false,
+        "transient": false,
+        "repeat": 1,
+        "seconds": 0.028881547041237354,
+        "converged": true,
+        "iterations": 84
+      },
+      {
+        "geometry": "terrain",
+        "unconfined": false,
+        "transient": false,
+        "repeat": 2,
+        "seconds": 0.02949707000516355,
+        "converged": true,
+        "iterations": 84
+      }
+    ],
+    "terrain_confined_transient": [
+      {
+        "geometry": "terrain",
+        "unconfined": false,
+        "transient": true,
+        "repeat": 0,
+        "seconds": 0.05108299304265529,
+        "converged": true,
+        "iterations": 72
+      },
+      {
+        "geometry": "terrain",
+        "unconfined": false,
+        "transient": true,
+        "repeat": 1,
+        "seconds": 0.025281377020291984,
+        "converged": true,
+        "iterations": 72
+      },
+      {
+        "geometry": "terrain",
+        "unconfined": false,
+        "transient": true,
+        "repeat": 2,
+        "seconds": 0.025075603974983096,
+        "converged": true,
+        "iterations": 72
+      }
+    ],
+    "terrain_unconfined_steady": [
+      {
+        "geometry": "terrain",
+        "unconfined": true,
+        "transient": false,
+        "repeat": 0,
+        "seconds": 0.5427709020441398,
+        "converged": true,
+        "iterations": 960
+      },
+      {
+        "geometry": "terrain",
+        "unconfined": true,
+        "transient": false,
+        "repeat": 1,
+        "seconds": 0.4969155549770221,
+        "converged": true,
+        "iterations": 960
+      },
+      {
+        "geometry": "terrain",
+        "unconfined": true,
+        "transient": false,
+        "repeat": 2,
+        "seconds": 0.46866262808907777,
+        "converged": true,
+        "iterations": 960
+      }
+    ],
+    "terrain_unconfined_transient": [
+      {
+        "geometry": "terrain",
+        "unconfined": true,
+        "transient": true,
+        "repeat": 0,
+        "seconds": 0.3889549730811268,
+        "converged": true,
+        "iterations": 480
+      },
+      {
+        "geometry": "terrain",
+        "unconfined": true,
+        "transient": true,
+        "repeat": 1,
+        "seconds": 0.3710291739553213,
+        "converged": true,
+        "iterations": 480
+      },
+      {
+        "geometry": "terrain",
+        "unconfined": true,
+        "transient": true,
+        "repeat": 2,
+        "seconds": 0.3728313270257786,
+        "converged": true,
+        "iterations": 480
+      }
+    ],
+    "terrain_layered_transient": [
+      {
+        "geometry": "terrain",
+        "unconfined": true,
+        "transient": true,
+        "repeat": 0,
+        "seconds": 0.29930232802871615,
+        "converged": true,
+        "iterations": 420
+      },
+      {
+        "geometry": "terrain",
+        "unconfined": true,
+        "transient": true,
+        "repeat": 1,
+        "seconds": 0.27116862195543945,
+        "converged": true,
+        "iterations": 420
+      },
+      {
+        "geometry": "terrain",
+        "unconfined": true,
+        "transient": true,
+        "repeat": 2,
+        "seconds": 0.29424932796973735,
+        "converged": true,
+        "iterations": 420
+      }
+    ],
+    "representative_floor_0.1": [
+      {
+        "geometry": "terrain",
+        "unconfined": true,
+        "transient": true,
+        "repeat": 0,
+        "seconds": 6.463983553927392,
+        "converged": true,
+        "iterations": 4440
+      },
+      {
+        "geometry": "terrain",
+        "unconfined": true,
+        "transient": true,
+        "repeat": 1,
+        "seconds": 7.088698470033705,
+        "converged": true,
+        "iterations": 4440
+      },
+      {
+        "geometry": "terrain",
+        "unconfined": true,
+        "transient": true,
+        "repeat": 2,
+        "seconds": 6.725518626044504,
+        "converged": true,
+        "iterations": 4440
+      }
+    ],
+    "representative_floor_0.01": [
+      {
+        "geometry": "terrain",
+        "unconfined": true,
+        "transient": true,
+        "repeat": 0,
+        "seconds": 6.753985041053966,
+        "converged": true,
+        "iterations": 4704
+      },
+      {
+        "geometry": "terrain",
+        "unconfined": true,
+        "transient": true,
+        "repeat": 1,
+        "seconds": 6.6012908859411255,
+        "converged": true,
+        "iterations": 4704
+      },
+      {
+        "geometry": "terrain",
+        "unconfined": true,
+        "transient": true,
+        "repeat": 2,
+        "seconds": 7.482595448032953,
+        "converged": true,
+        "iterations": 4704
+      }
+    ],
+    "representative_floor_0.001": [
+      {
+        "geometry": "terrain",
+        "unconfined": true,
+        "transient": true,
+        "repeat": 0,
+        "seconds": 7.035363620962016,
+        "converged": true,
+        "iterations": 4932
+      },
+      {
+        "geometry": "terrain",
+        "unconfined": true,
+        "transient": true,
+        "repeat": 1,
+        "seconds": 7.092894296045415,
+        "converged": true,
+        "iterations": 4932
+      },
+      {
+        "geometry": "terrain",
+        "unconfined": true,
+        "transient": true,
+        "repeat": 2,
+        "seconds": 7.060270406072959,
+        "converged": true,
+        "iterations": 4932
+      }
+    ]
+  }
+}

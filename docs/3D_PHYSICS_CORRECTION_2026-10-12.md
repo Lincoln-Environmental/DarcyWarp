@@ -1,5 +1,13 @@
 # 3D Physics Correction — dev branch, 2026-10-12
 
+> Superseding terrain extension
+
+The subsequent [terrain scientific acceptance report](3D_TERRAIN_SCIENTIFIC_ACCEPTANCE_2026-10-12.md)
+adds a separate terrain mode and changes the **3D default** conductance floor
+to 0.01 m. The 0.1 m results below are historical measurements of the previous
+default, retained for comparison. Cartesian geometry restrictions still apply
+to the Cartesian stencil; terrain uses explicit DEM/depth-interface construction.
+
 > Follow-up: [remaining scientific audit](3D_SCIENTIFIC_AUDIT_2026-10-12.md)
 > corrects residual low-K identity cutoffs, component detection, cache mutation,
 > geometry validation and reciprocal inputs. The Galerkin evidence below used

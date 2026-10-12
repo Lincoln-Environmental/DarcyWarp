@@ -40,6 +40,20 @@ bash scripts/generate_docs.sh
 
 Generated HTML docs are written to `build/html/index.html`.
 
+## 3D terrain-following groundwater flow
+
+The FP64 fast 3D API supports a separate conservative terrain operator via
+`WarpDarcySolver3D.build_from_terrain(surface_elevation=..., zeta_faces=..., ...)`.
+It solves total hydraulic head on common depth interfaces following the DEM,
+including metric cross terms, nonuniform layer thickness, irregular active
+columns and exterior coastal subfaces. Cartesian mode retains its existing
+seven-point solver. The default 3D conductance floor is now **0.01 m**, capped
+at each layer's actual thickness; physical storage uses unfloored saturation.
+
+See [the terrain API and scientific acceptance report](docs/3D_TERRAIN_SCIENTIFIC_ACCEPTANCE_2026-10-12.md)
+for equations, supported geometry, storage input contracts, independent
+validation, timings and the remaining quasi-3D dry-cell approximation.
+
 ## 3D river-loss case study
 
 `DARCY_WARP_PACKAGE.case_studies.river_loss_cross_section` is an example

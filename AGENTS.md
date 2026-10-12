@@ -1,6 +1,22 @@
 kimi --model kimi-code/k3
 # DarcyWarp — Agent System Memory
 
+> 2026-10-12 terrain extension: `docs/3D_TERRAIN_SCIENTIFIC_ACCEPTANCE_2026-10-12.md`
+> describes the explicit fast-only `build_from_terrain` API and full conservative
+> transformed operator. `physics/terrain_grid_3d.py` owns common, possibly
+> nonuniform depth interfaces beneath a DEM; `terrain_reference_3d.py` independently
+> assembles sparse equations/physical fluxes. `solvers/terrain_fast_3d.py` retains
+> FP64 buffers and captured restarted GMRES with seven-point principal V-cycle
+> preconditioning. Cartesian 3D remains separate; production 2D is unchanged.
+> The 3D saturation floor is now 0.01 m, capped by actual thickness; storage
+> remains physical and unfloored. Explicit storage combinations are validated
+> in `physics/storage_contract_3d.py`; previous heads stay fixed within a step.
+> Coastal subfaces retain physical centroids/elevations and discharge-only gates.
+> Nonflat flowing terrain requires positive physical K in all directions;
+> unsupported exactly-zero material closures raise instead of dropping terms.
+> See the terrain report and JSON artifacts for independent sparse/MF6 checks,
+> floor sensitivity, reuse measurements and remaining dry-flow limitations.
+
 > 2026-10-12 follow-up scientific audit: see
 > `docs/3D_SCIENTIFIC_AUDIT_2026-10-12.md` and
 > `docs/3d_scientific_audit_results.json`. Live fast 3D keeps all positive

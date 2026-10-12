@@ -1,5 +1,10 @@
 # Remaining 3D scientific defects: correction and acceptance report
 
+Superseded for terrain geometry and the current 0.01 m 3D floor by
+[the terrain extension report](3D_TERRAIN_SCIENTIFIC_ACCEPTANCE_2026-10-12.md).
+The 0.1 m sensitivity measurements here remain historical evidence, not the
+current default. All regression gates from this audit remain in the suite.
+
 Branch: `dev`. Reference: previously corrected baseline `9d2a8a4`.
 Execution path: `WarpDarcySolver3D.solve` → `ThreeDOperatorSession.solve` →
 `solve_fast_confined_kcycle_3d` / `solve_fast_unconfined_kcycle_3d`.

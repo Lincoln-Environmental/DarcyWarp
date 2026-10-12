@@ -31,10 +31,11 @@ def run_case(*, shape, dx, dz, conductivity, recharge, storage, sy, dt,
         for name in ("unconfined_head_tol", "final_head_residual_tol", "unconfined_max_picard_iter"):
             options.pop(name)
     if unconfined:
-        options.update(unconfined=True, zbot_field=bottoms, sy=sy, ss=storage,
+        options.update(unconfined=True, zbot_field=bottoms,
                        chebyshev_enabled=False)
     if transient:
-        options.update(transient=True, storage_coeff=storage, dt=dt, head_prev=h0)
+        options.update(transient=True, dt=dt, head_prev=h0)
+        options.update(dict(sy=sy,ss=storage) if unconfined else dict(storage_coeff=storage))
     with WarpDarcySolver3D(nx=nx, ny=ny, nz=nz, dx=dx, dy=dx, dz=dz,
                           device=device, implementation="fast") as solver:
         solver.build_from_K_fields(kx_field=k, ky_field=k, kz_field=k,
