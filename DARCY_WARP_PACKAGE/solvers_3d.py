@@ -2032,7 +2032,7 @@ def _picard_unconfined_7point_3d(
         s_final[free_mask] = (
             sc[free_mask] * (area_f * dz_f) / float(dt)
         )
-        hp_final = np.asarray(head_prev, dtype=np.float64)
+        hp_final = np.asarray(head_prev if head_prev is not None else initial_head, dtype=np.float64)
     else:
         s_final = None
         hp_final = None
@@ -2206,7 +2206,7 @@ def solve_chebyshev_7point_3d(
     ky_field: np.ndarray | None = None,
     kz_field: np.ndarray | None = None,
     zbot_field: np.ndarray | None = None,
-    unconfined_min_sat: float = 0.1,
+    unconfined_min_sat: float = 0.01,
     unconfined_max_picard_iter: int = 8,
     unconfined_relax: float = 0.7,
     unconfined_head_tol: float = 1.0e-3,
@@ -2276,39 +2276,12 @@ def solve_chebyshev_7point_3d(
     free = (act != 0) & (bcm == 0)
     n_free = int(np.count_nonzero(free))
 
-    if bool(unconfined) and bool(transient):
-        # Resolve the transient unconfined storage mode.  The production
-        # default is the volume-conservative secant-Sy formulation, which
-        # requires a specific yield and/or specific storage.  When only the
-        # legacy storage_coeff argument is supplied the confined-volume
-        # approximation is retained for backward compatibility.  A clean
-        # storage diagonal is forced so the inner solve rebuilds / replaces it
-        # on every outer iteration (no double-counting of a caller-supplied
-        # diagonal).  A transient solve NEVER falls back to a steady inner
-        # problem: missing storage inputs raise.
-        _storage_mode = str(unconfined_storage_mode).strip().lower()
-        if _storage_mode not in {"secant_sy", "phreatic_sy", "confined_volume"}:
-            raise ValueError(
-                "unconfined_storage_mode must be 'secant_sy', 'phreatic_sy', or 'confined_volume'."
-            )
-        if _storage_mode in {"secant_sy", "phreatic_sy"} and sy is None and ss is None:
-            if storage_coeff is not None:
-                # Caller used the legacy storage_coeff argument: keep the
-                # confined-volume approximation so existing callers/tests
-                # behave as before.
-                _storage_mode = "confined_volume"
-            else:
-                raise ValueError(
-                    f"unconfined_storage_mode='{_storage_mode}' requires sy and/or ss; "
-                    "no valid storage formulation was supplied for a transient solve."
-                )
-        if _storage_mode == "confined_volume" and storage_coeff is None:
-            raise ValueError(
-                "unconfined_storage_mode='confined_volume' requires storage_coeff "
-                "for a transient solve."
-            )
-        unconfined_storage_mode = _storage_mode
-        storage_diag = None
+    if bool(unconfined):
+        from DARCY_WARP_PACKAGE.physics.storage_contract_3d import validate_unconfined_storage_inputs
+        unconfined_storage_mode = validate_unconfined_storage_inputs(
+            transient=transient, mode=unconfined_storage_mode, sy=sy, ss=ss,
+            storage_coeff=storage_coeff, storage_diag=storage_diag,
+            head_prev=head_prev, initial_head=initial_head, dt=dt)
 
     if bool(unconfined):
         if kx_field is None or ky_field is None or kz_field is None or zbot_field is None:
@@ -2557,7 +2530,7 @@ def solve_multigrid_kcycle_7point_3d(
     ky_field: np.ndarray | None = None,
     kz_field: np.ndarray | None = None,
     zbot_field: np.ndarray | None = None,
-    unconfined_min_sat: float = 0.1,
+    unconfined_min_sat: float = 0.01,
     unconfined_max_picard_iter: int = 8,
     unconfined_relax: float = 0.7,
     unconfined_head_tol: float = 1.0e-3,
@@ -2647,39 +2620,12 @@ def solve_multigrid_kcycle_7point_3d(
     free0 = (act0 != 0) & (bcm0 == 0)
     n_free0 = int(np.count_nonzero(free0))
 
-    if bool(unconfined) and bool(transient):
-        # Resolve the transient unconfined storage mode.  The production
-        # default is the volume-conservative secant-Sy formulation, which
-        # requires a specific yield and/or specific storage.  When only the
-        # legacy storage_coeff argument is supplied the confined-volume
-        # approximation is retained for backward compatibility.  A clean
-        # storage diagonal is forced so the inner solve rebuilds / replaces it
-        # on every outer iteration (no double-counting of a caller-supplied
-        # diagonal).  A transient solve NEVER falls back to a steady inner
-        # problem: missing storage inputs raise.
-        _storage_mode = str(unconfined_storage_mode).strip().lower()
-        if _storage_mode not in {"secant_sy", "phreatic_sy", "confined_volume"}:
-            raise ValueError(
-                "unconfined_storage_mode must be 'secant_sy', 'phreatic_sy', or 'confined_volume'."
-            )
-        if _storage_mode in {"secant_sy", "phreatic_sy"} and sy is None and ss is None:
-            if storage_coeff is not None:
-                # Caller used the legacy storage_coeff argument: keep the
-                # confined-volume approximation so existing callers/tests
-                # behave as before.
-                _storage_mode = "confined_volume"
-            else:
-                raise ValueError(
-                    f"unconfined_storage_mode='{_storage_mode}' requires sy and/or ss; "
-                    "no valid storage formulation was supplied for a transient solve."
-                )
-        if _storage_mode == "confined_volume" and storage_coeff is None:
-            raise ValueError(
-                "unconfined_storage_mode='confined_volume' requires storage_coeff "
-                "for a transient solve."
-            )
-        unconfined_storage_mode = _storage_mode
-        storage_diag = None
+    if bool(unconfined):
+        from DARCY_WARP_PACKAGE.physics.storage_contract_3d import validate_unconfined_storage_inputs
+        unconfined_storage_mode = validate_unconfined_storage_inputs(
+            transient=transient, mode=unconfined_storage_mode, sy=sy, ss=ss,
+            storage_coeff=storage_coeff, storage_diag=storage_diag,
+            head_prev=head_prev, initial_head=initial_head, dt=dt)
 
     if bool(unconfined):
         if kx_field is None or ky_field is None or kz_field is None or zbot_field is None:

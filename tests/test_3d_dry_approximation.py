@@ -61,7 +61,7 @@ def test_live_dry_floor_budget_can_conserve_while_artificial_flow_is_large(sourc
                           device=device(), implementation="fast") as s:
         s.build_from_K_fields(kx_field=k, ky_field=k, kz_field=k, active=np.ones(shape, dtype=np.int32),
                               bc_mask=bc, bc_values=values, rhs=source, initial_head=np.full(shape, -1.5))
-        head, info = s.solve(unconfined=True, zbot_field=np.zeros(shape), chebyshev_enabled=False,
+        head, info = s.solve(unconfined=True, zbot_field=np.zeros(shape), unconfined_min_sat=0.1, chebyshev_enabled=False,
                              unconfined_head_tol=1e-9, final_head_residual_tol=1e-9,
                              rel_tol=1e-11, dh_rms_tol=1e-10, check_every_no=1)
         assert info["converged"] and info["final_physical_acceptance"]
@@ -90,14 +90,14 @@ def test_default_floor_cannot_exceed_thin_layer_thickness():
     k = np.ones(shape)
     bc = np.array([[[1, 0, 1]]], dtype=np.int32)
     values = np.array([[[-1.0, 0.0, -2.0]]])
-    with WarpDarcySolver3D(nx=3, ny=1, nz=1, dx=1.0, dz=0.05,
+    with WarpDarcySolver3D(nx=3, ny=1, nz=1, dx=1.0, dz=0.005,
                           device=device(), implementation="fast") as s:
         s.build_from_K_fields(kx_field=k, ky_field=k, kz_field=k, active=np.ones(shape, dtype=np.int32),
                               bc_mask=bc, bc_values=values, rhs=np.zeros(shape), initial_head=np.full(shape, -1.5))
         head, info = s.solve(unconfined=True, zbot_field=np.zeros(shape),
                              unconfined_head_tol=1e-9, final_head_residual_tol=1e-9)
     assert info["converged"]
-    assert info["requested_min_saturated_thickness"] == 0.1
-    assert info["min_saturated_thickness"] == 0.05
+    assert info["requested_min_saturated_thickness"] == 0.01
+    assert info["min_saturated_thickness"] == 0.005
     assert head[0, 0, 1] == pytest.approx(-1.5, abs=1e-7)
-    assert info["budget"]["boundary_inflow"] == pytest.approx(0.025, abs=1e-9)
+    assert info["budget"]["boundary_inflow"] == pytest.approx(0.0025, abs=1e-9)

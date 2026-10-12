@@ -410,6 +410,15 @@ def _run_kcycles(
             "implementation": "fast",
             "converged": True,
             "n_cycles_used": 0,
+            "max_cycles": int(max_cycles),
+            "r_rms0": 0.0, "r_rms_end": 0.0, "h_rms_end": 0.0,
+            "tol_abs": float(abs_tol_min),
+            "dh_rms_lastcheck": 0.0, "dh_max_lastcheck": 0.0,
+            "workspace_reused": bool(workspace_record.get("reused", False)),
+            "cuda_graph_built_this_call": False,
+            "cuda_graph_capture_failed": False,
+            "cuda_graph_reused": workspace_record.get("cycle_graph") not in (None, False),
+            "cuda_graph_replayed": False,
             "n_isolated_cells_excluded": n_isolated,
             "transient": bool(transient),
             "transient_formulation": "confined" if bool(transient) else "steady",
@@ -432,8 +441,8 @@ def _run_kcycles(
     # head-equivalent residual as well, including at the initial iterate.
     head_tolerance = float(dh_rms_tol) if dh_rms_tol is not None else max(float(rel_tol), np.finfo(np.float64).eps)
     converged = rms0 <= tolerance and head_residual_norm() <= head_tolerance
-    dh_rms = float("nan")
-    dh_max = float("nan")
+    dh_rms = 0.0
+    dh_max = 0.0
     for cycle in range(int(max_cycles)):
         if converged:
             break
@@ -795,7 +804,7 @@ def solve_fast_unconfined_kcycle_3d(
     dh_rms_tol: float | None = 1.0e-4,
     dh_max_tol: float | None = None,
     check_every_no: int = 5,
-    unconfined_min_sat: float = 0.1,
+    unconfined_min_sat: float = 0.01,
     unconfined_max_picard_iter: int = 30,
     unconfined_relax: float = 0.7,
     unconfined_head_tol: float = 1.0e-3,
@@ -846,6 +855,11 @@ def solve_fast_unconfined_kcycle_3d(
     if unsupported:
         names = ", ".join(sorted(unsupported))
         raise TypeError(f"Unsupported fast 3D unconfined solver controls: {names}.")
+    from DARCY_WARP_PACKAGE.physics.storage_contract_3d import validate_unconfined_storage_inputs
+    unconfined_storage_mode = validate_unconfined_storage_inputs(
+        transient=transient, mode=unconfined_storage_mode, sy=sy, ss=ss,
+        storage_coeff=storage_coeff, storage_diag=storage_diag,
+        head_prev=head_prev, initial_head=initial_head, dt=dt)
     shape = np.asarray(tx_p).shape
     if len(shape) != 3:
         raise ValueError("3D face arrays must have shape (nz, ny, nx).")
