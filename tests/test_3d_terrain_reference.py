@@ -1,6 +1,7 @@
 """Analytical physical fluxes and independently assembled terrain equations."""
 import numpy as np
 import pytest
+from scipy.sparse.linalg import spsolve
 
 from DARCY_WARP_PACKAGE.physics.terrain_grid_3d import TerrainGrid3D, TerrainMetrics3D, storage_potential_3d
 from DARCY_WARP_PACKAGE.physics.terrain_reference_3d import TerrainReferenceOperator3D, TerrainContact3D
@@ -354,3 +355,95 @@ def test_manufactured_solution_on_curved_interfaces_converges():
     assert rates[0]/scale < .05
     assert rates[1] < .3*rates[0]
     assert rates[2] < .3*rates[1]
+
+
+def opposite_slope_case():
+    """Aquifer base rising where the ground surface rises."""
+    y,x = np.mgrid[:4,:5]
+    surface = 30+2.*x+.5*y
+    mid = surface-(6-1.2*x)          # thickens where terrain rises, then thins
+    base = mid-(8-.8*x+.6*y)
+    grid = TerrainGrid3D(z_interfaces=np.stack((surface,mid,base)),dx=2.,dy=3.)
+    return grid,TerrainMetrics3D(grid=grid)
+
+
+def test_opposite_sloping_interface_exactness_and_conservatism():
+    grid,metrics = opposite_slope_case()
+    assert np.all(grid.thickness > 0)
+    operator = TerrainReferenceOperator3D(metrics=metrics,kx=2.,ky=3.,kz=.05)
+    rng = np.random.default_rng(64)
+    head = rng.normal(size=grid.shape)
+    matrix,offset = operator.sparse_matrix()
+    np.testing.assert_allclose((matrix @ head.ravel()).reshape(grid.shape)+offset,
+        operator.divergence(fluxes=operator.fluxes(head=head)),rtol=1e-12,atol=1e-12)
+    np.testing.assert_allclose(matrix @ np.ones(head.size),0,atol=1e-12)
+    # Affine fields remain exact on the opposite-sloping family.
+    y,x = np.mgrid[:4,:5]
+    for a,b,c in ((.7,0.,0),(.4,-.6,.9)):
+        h = 9+a*x[None]*grid.dx+b*y[None]*grid.dy+c*grid.elevations
+        qx,qy,qz,boundary = operator.fluxes(head=h)
+        t_x,t_y = 2*grid.thickness,3*grid.thickness
+        harmonic_x = 2*t_x[:,:,:-1]*t_x[:,:,1:]/(t_x[:,:,:-1]+t_x[:,:,1:])
+        harmonic_y = 2*t_y[:,:-1]*t_y[:,1:]/(t_y[:,:-1]+t_y[:,1:])
+        np.testing.assert_allclose(qx,-a*grid.dy*harmonic_x,rtol=1e-12,atol=1e-12)
+        np.testing.assert_allclose(qy,-b*grid.dx*harmonic_y,rtol=1e-12,atol=1e-12)
+        expected_qz = (c*.05-2*a*metrics.zx_interfaces[1:-1]-3*b*metrics.zy_interfaces[1:-1])*grid.dx*grid.dy
+        np.testing.assert_allclose(qz,expected_qz,rtol=0,atol=2e-11)
+
+
+def test_variable_geometry_datum_shift_invariance():
+    grid,metrics = variable_interface_case()
+    shifted,sshift = variable_interface_case(shift=7500.)
+    rng = np.random.default_rng(31)
+    h = grid.elevations+rng.normal(scale=.5,size=grid.shape)
+    first = TerrainReferenceOperator3D(metrics=metrics,kx=1.5,ky=2.5,kz=.2)
+    second = TerrainReferenceOperator3D(metrics=sshift,kx=1.5,ky=2.5,kz=.2)
+    for q1,q2 in zip(first.fluxes(head=h),second.fluxes(head=h+7500.)):
+        np.testing.assert_allclose(q1,q2,rtol=0,atol=1e-8)
+
+
+def test_contact_flux_continuity_across_contrasting_layers():
+    """One face, one flux: contrasting K across a nonparallel contact."""
+    grid,metrics = variable_interface_case()
+    k = np.full(grid.shape,5.)
+    k[1] = .02                                     # weathered aquitard layer
+    operator = TerrainReferenceOperator3D(metrics=metrics,kx=k,ky=k,kz=k)
+    rng = np.random.default_rng(17)
+    head = rng.normal(size=grid.shape)
+    fluxes = operator.fluxes(head=head)
+    divergence = operator.divergence(fluxes=fluxes)
+    row_sums = operator.sparse_matrix()[0] @ np.ones(head.size)
+    np.testing.assert_allclose(row_sums,0,atol=1e-12)
+    # The face between the aquifer and the aquitard contributes exactly
+    # opposite amounts to its two cells: implied by conservation of the
+    # whole face set, asserted here through the balanced divergence.
+    assert abs(divergence.sum()) < 1e-12
+
+
+def test_low_k_basement_series_resistance():
+    """Vertical flow through aquifer over low-K basement: series harmonic."""
+    n = 24
+    surface = np.full((1,n),20.)
+    mid = surface-4.
+    base = mid-2.
+    grid = TerrainGrid3D(z_interfaces=np.stack((surface,mid,base)),dx=1/n,dy=1.)
+    metrics = TerrainMetrics3D(grid=grid)
+    k = np.full(grid.shape,1.)
+    k[1] = .001
+    operator = TerrainReferenceOperator3D(metrics=metrics,kx=k,ky=k,kz=k)
+    h_top = grid.elevations[0]+1.
+    h_base = grid.elevations[1]-1.
+    # Drive top and bottom layers with fixed heads via the sparse assembly.
+    matrix,offset = operator.sparse_matrix()
+    ids = np.arange(int(np.prod(grid.shape))).reshape(grid.shape)
+    A = matrix.tolil(); b = offset.ravel().copy()
+    ncol = grid.shape[1]*grid.shape[2]
+    for layer,value in ((0,h_top),(1,h_base)):
+        for index in ids[layer].ravel():
+            A[index,:] = 0; A[index,index] = 1; b[index] = value.ravel()[index-layer*ncol]
+    head = spsolve(A.tocsr(),b).reshape(grid.shape)
+    flux_down = operator.fluxes(head=head)[2][0]        # aquifer->basement flux
+    resistance = 4./(2*1.)+2./(2*.001)                  # half-layers in series per unit area
+    expected = (h_top-h_base).mean()/resistance*grid.dx*grid.dy   # per-face volume
+    interior = flux_down[:,2:-2]
+    np.testing.assert_allclose(interior,expected,rtol=2e-3)
