@@ -117,30 +117,57 @@ def run_variant(case, *, interfaces, floor, device, max_cycles, warm_start=None)
         contacts=case["contacts"])
     qx, qy, qz, boundary = operator.fluxes(head=head)
     surface = case["surface"]
-    water_table = head.max(axis=0)
+    from DARCY_WARP_PACKAGE.physics.terrain_shanz_diagnostics import (
+        water_table_profile, coastal_exchange, surface_discharge_potential)
+    wt_elevation, wt_kind, wt_depth = water_table_profile(head=head,
+        z_interfaces=interfaces, surface=surface)
+    phreatic = wt_kind == "water_table"
+    potentiometric = wt_kind == "potentiometric"
+    unresolvable = int(np.count_nonzero(potentiometric))
+    exchange = coastal_exchange(operator=operator, head=head, fixed=case["fixed"],
+        spring_outflows=np.maximum(boundary, 0.0))
+    discharge = surface_discharge_potential(head=head, z_interfaces=interfaces,
+        surface=surface)
     free = case["fixed"] == 0
     diagnostics = info.get("dry_cell_approximation", {})
     return head, dict(
         converged=bool(info["converged"]),
+        comparison_status="accepted" if info["converged"] else "preliminary",
         outer_iterations=int(info["n_outer_iterations"]),
         krylov_iterations=int(info["krylov_iterations"]),
+        krylov_per_outer=float(info["krylov_iterations"])/max(info["n_outer_iterations"],1),
         seconds=elapsed,
         operator_refresh_seconds=info.get("operator_refresh_seconds"),
         head_min=float(head.min()), head_max=float(head.max()),
-        water_table_depth_mean=float(np.mean(surface-water_table)),
-        water_table_depth_max=float(np.max(surface-water_table)),
+        phreatic_columns=int(np.count_nonzero(phreatic)),
+        potentiometric_columns=unresolvable,
+        dry_columns=int(np.count_nonzero(wt_kind == "dry")),
+        water_table_depth_mean=float(np.mean(wt_depth[phreatic])) if phreatic.any() else None,
+        water_table_depth_max=float(np.max(wt_depth[phreatic])) if phreatic.any() else None,
         lateral_flow_abs_total=float(np.abs(qx).sum()+np.abs(qy).sum()),
         aquifer_leakage_downward=float(qz[1].sum()),
         weathered_to_basement_leakage=float(qz[2].sum()),
-        coastal_discharge_total=float(boundary.sum()),
+        fixed_head_inflow=exchange["fixed_head_inflow"],
+        fixed_head_outflow=exchange["fixed_head_outflow"],
+        spring_outflow=exchange["spring_outflow"],
+        net_coastal_exchange=exchange["net_coastal_exchange"],
         coastal_subface_outflows=[float(v) for v in boundary],
-        surface_discharge_potential_cells=int(np.count_nonzero((head > surface+1e-6).any(axis=0))),
+        artesian_cells=discharge["artesian_cells"],
+        water_table_at_surface_cells=discharge["water_table_at_surface_cells"],
+        deep_head_above_surface_cells=discharge["deep_head_above_surface_cells"],
         cell_residual_rms=info["budget"]["cell_residual_rms"],
         relative_cell_imbalance=info["budget"]["relative_cell_imbalance"],
         horizontal_floor_excess_flow=diagnostics.get("horizontal_floor_excess_flow"),
         floor_excess_to_recharge=diagnostics.get("horizontal_floor_to_recharge"),
         shape=[int(v) for v in head.shape],
     )
+
+
+def water_table_elevations(case, head):
+    from DARCY_WARP_PACKAGE.physics.terrain_shanz_diagnostics import water_table_profile
+    elevation, kind, unused_depth = water_table_profile(head=head,
+        z_interfaces=case["interfaces"], surface=case["surface"])
+    return elevation
 
 
 def main():
@@ -176,16 +203,25 @@ def main():
         results["variants"][label] = summary
         print(" ", {key: summary[key] for key in ("converged", "outer_iterations",
               "krylov_iterations", "seconds")}, flush=True)
-    variable = heads["variable_floor_0.010"]
-    for other in ("parallel_floor_0.010", "variable_floor_0.001"):
-        difference = heads[other]-variable
+    # Quantitative cross-variant conclusions are drawn only between states
+    # that satisfy the stated acceptance requirements; anything else is
+    # marked preliminary and carries no head-comparison statistics.
+    variable_label = "variable_floor_0.010"
+    for other in ("parallel_floor_0.010", "variable_floor_0.001", "parallel_floor_0.001"):
+        accepted = results["variants"][variable_label]["converged"] and \
+            results["variants"][other]["converged"]
+        results["variants"][other]["comparison_accepted"] = bool(accepted)
+        if not accepted:
+            continue
+        wt_other = water_table_elevations(case, heads[other])
+        wt_var = water_table_elevations(case, heads[variable_label])
+        difference = heads[other]-heads[variable_label]
         results["variants"][other]["head_rmse_vs_variable_0.010"] = float(
             np.sqrt(np.mean(difference**2)))
         results["variants"][other]["head_max_abs_diff_vs_variable_0.010"] = float(
             np.abs(difference).max())
         results["variants"][other]["water_table_depth_rmse_vs_variable_0.010"] = float(
-            np.sqrt(np.mean(((case["surface"]-heads[other].max(axis=0))
-                             -(case["surface"]-variable.max(axis=0)))**2)))
+            np.sqrt(np.nanmean((wt_other-wt_var)**2)))
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(results, indent=2, default=float))
