@@ -1,6 +1,27 @@
 kimi --model kimi-code/k3
 # DarcyWarp — Agent System Memory
 
+> 2026-10-12 follow-up scientific audit: see
+> `docs/3D_SCIENTIFIC_AUDIT_2026-10-12.md` and
+> `docs/3d_scientific_audit_results.json`. Live fast 3D keeps all positive
+> conductances (no 1e-12 identity cutoffs); cached hydraulic component analysis
+> rejects incompatible/undetermined steady components; owned value snapshots
+> detect in-place storage mutations, preserving GPU buffers/graphs on value
+> refreshes. Internal face reciprocity and inferred layer contiguity are
+> validated. Actual block restriction + bilinear prolongation are NOT exact
+> Galerkin; irregular domains use a device energy projection of coarse
+> corrections after a reproduced divergence. Independent budgets count each
+> face once and gross boundary exchange before cancellation. Dry-floor
+> diagnostics quantify excess horizontal flow and dry-interface vertical flow;
+> effective min_sat is capped at dz. Matching-time MF6 histories, nonzero Ss,
+> different-Sy layer crossings and Newton smoothing are independently tested.
+> Final acceptance includes independent cell conservation (dimensional RMS or
+> throughput-normalized L1), retaining original forcing even when assembled
+> storage RHS rounding loses it; precision-limited unrepresentable increments
+> report failure, including source-balanced cells with cancelling domain errors.
+> `storage_coeff * cell_volume` uses specific storage [1/m]. Production 2D is
+> unchanged. Serial performance comparisons use baseline commit `9d2a8a4`.
+
 > Last updated: 2026-07-18 by ingest of the full repo.
 > Purpose: prevent re-ingesting the project from scratch. Read this first, then grep/read the specific files listed below.
 

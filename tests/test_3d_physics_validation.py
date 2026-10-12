@@ -438,7 +438,7 @@ def test_isolated_region_excluded_and_reported(implementation):
                                  bc_values, rhs, dx, dy, dz,
                                  initial_head=initial)
     # Two disconnected sub-domains each solve their own Dirichlet problem.
-    assert info["n_isolated_cells_excluded"] == 0 or True
+    assert info["n_isolated_cells_excluded"] == 2
     assert head[0, 0, 0] == 4.0 and head[0, 0, -1] == 2.0
     assert head[0, 0, 1] == pytest.approx(4.0, abs=1e-10)
     assert head[0, 0, 4] == pytest.approx(2.0, abs=1e-10)
@@ -495,7 +495,6 @@ def test_coarse_face_reciprocity_and_conservation():
     # Reciprocity across every coarse internal face.
     np.testing.assert_array_equal(txp_c[:, :, :-1], txm_c[:, :, 1:])
     np.testing.assert_array_equal(typ_c[:, :-1], tym_c[:, 1:])
-    np.testing.assert_array_equal(tzp_c[:-1], tzp_c[:-1])
     np.testing.assert_array_equal(tzp_c[:-1], tzm_c[1:])
     # Non-negative, and springs ground the Dirichlet fringe.
     assert all(np.all(f >= 0.0) for f in fc)
@@ -573,7 +572,9 @@ MF6_AVAILABLE = _mf6_available()
 
 def _build_mf6_unconfined(workspace, nx, ny, nlay, dx, dz, k, kz, recharge,
                           chd_cells, chd_head, top, transient=False, nper=1,
-                          perlen=1.0, sy=None, ss=None, strt=None):
+                          perlen=1.0, sy=None, ss=None, strt=None, confined=False,
+                          recharge_history=None, abstraction_history=None, return_details=False,
+                          abstraction_cell=None, newton=False):
     """Rectangular confined/unconfined MF6 model matching the Warp case."""
     import flopy
     from DARCY_WARP_PACKAGE.project_base import require_mf6
@@ -582,12 +583,14 @@ def _build_mf6_unconfined(workspace, nx, ny, nlay, dx, dz, k, kz, recharge,
     sim = flopy.mf6.MFSimulation(sim_name=name, exe_name=str(require_mf6()),
                                  version="mf6", sim_ws=str(workspace))
     if transient:
-        perioddata = [(float(perlen), 1, 1.0)] * int(nper)
+        durations = np.broadcast_to(np.asarray(perlen, dtype=float), (int(nper),))
+        perioddata = [(float(duration), 1, 1.0) for duration in durations]
     else:
         perioddata = [(1.0, 1, 1.0)]
     flopy.mf6.ModflowTdis(sim, pname="tdis", time_units="DAYS",
                           nper=len(perioddata), perioddata=perioddata)
-    gwf = flopy.mf6.ModflowGwf(sim, modelname=name, model_nam_file=f"{name}.nam")
+    gwf = flopy.mf6.ModflowGwf(sim, modelname=name, model_nam_file=f"{name}.nam",
+                            newtonoptions="NEWTON" if newton else None)
     flopy.mf6.ModflowIms(
         sim, pname="ims", print_option="SUMMARY", complexity="COMPLEX",
         linear_acceleration="BICGSTAB",
@@ -597,7 +600,7 @@ def _build_mf6_unconfined(workspace, nx, ny, nlay, dx, dz, k, kz, recharge,
     )
     botm = [top - (ilay + 1) * dz for ilay in range(nlay)]
     flopy.mf6.ModflowGwfdis(
-        gwf, pname="dis", nogrb=True, nlay=nlay, nrow=ny, ncol=nx,
+        gwf, pname="dis", nogrb=False, nlay=nlay, nrow=ny, ncol=nx,
         delr=dx, delc=dx, top=top, botm=botm,
     )
     if strt is None:
@@ -605,38 +608,62 @@ def _build_mf6_unconfined(workspace, nx, ny, nlay, dx, dz, k, kz, recharge,
     flopy.mf6.ModflowGwfic(gwf, pname="ic", strt=strt)
     flopy.mf6.ModflowGwfnpf(
         gwf, pname="npf", save_flows=True,
-        icelltype=1,  # convertible (unconfined-capable) cells
+        icelltype=0 if confined else 1,
         k=k, k33=kz,
     )
     if transient:
         flopy.mf6.ModflowGwfsto(
             gwf, pname="sto", save_flows=True,
-            iconvert=1, ss=ss, sy=sy,
+            iconvert=0 if confined else 1, ss=ss, sy=sy,
             steady_state={0: False}, transient={0: True},
         )
     # Constant-head cells (all layers) from the mask list of (lay, row, col).
-    flopy.mf6.ModflowGwfchd(
-        gwf, pname="chd", save_flows=True, maxbound=len(chd_cells),
-        stress_period_data=[[(c[0], c[1], c[2]), chd_head] for c in chd_cells],
-    )
+    if chd_cells:
+        flopy.mf6.ModflowGwfchd(
+            gwf, pname="chd", save_flows=True, maxbound=len(chd_cells),
+            stress_period_data=[[(c[0], c[1], c[2]), chd_head] for c in chd_cells],
+        )
     flopy.mf6.ModflowGwfrch(
         gwf, pname="rch", save_flows=True, fixed_cell=True,
         maxbound=nx * ny,
-        stress_period_data=[[(0, r, c), recharge] for r in range(ny) for c in range(nx)],
+        stress_period_data={period: [[(0, r, c), rate] for r in range(ny) for c in range(nx)]
+                            for period, rate in enumerate(recharge_history if recharge_history is not None
+                                                          else [recharge] * len(perioddata))},
     )
+    if abstraction_history is not None:
+        well_cell = (0, ny // 2, nx // 2) if abstraction_cell is None else abstraction_cell
+        flopy.mf6.ModflowGwfwel(gwf, pname="wel", save_flows=True,
+                               stress_period_data={period: [[well_cell, rate]]
+                                                   for period, rate in enumerate(abstraction_history)})
     flopy.mf6.ModflowGwfoc(
         gwf, pname="oc", head_filerecord=f"{name}.hds",
         budget_filerecord=f"{name}.cbc",
         saverecord=[("HEAD", "ALL"), ("BUDGET", "ALL")],
     )
     sim.write_simulation()
-    ok, _ = sim.run_simulation()
-    assert ok, "MF6 run failed"
+    ok, output = sim.run_simulation(report=True, silent=True)
+    assert ok and any("Normal termination" in line for line in output), "MF6 run failed"
+    budget_file = flopy.utils.CellBudgetFile(str(workspace / f"{name}.cbc"), precision="double")
     head_file = flopy.utils.HeadFile(str(workspace / f"{name}.hds"))
     if transient:
         heads = np.stack([head_file.get_data(totim=t) for t in head_file.get_times()])
     else:
         heads = head_file.get_data()
+    assert np.all(np.isfinite(heads)), "MF6 saved nonfinite heads"
+    if return_details:
+        from flopy.mf6.utils.postprocessing import get_structured_faceflows
+        times = np.asarray(head_file.get_times())
+        details = []
+        available_terms = {name.decode().strip() for name in budget_file.get_unique_record_names()}
+        for time in times:
+            flowja = budget_file.get_data(text="FLOW-JA-FACE", totim=time)[0]
+            faceflows = get_structured_faceflows(flowja, grb_file=str(workspace / f"{name}.dis.grb"))
+            fields = {}
+            for term in ("CHD", "RCH", "WEL", "STO-SS", "STO-SY"):
+                records = budget_file.get_data(text=term, totim=time) if term in available_terms else []
+                fields[term] = records[0] if records else None
+            details.append(dict(faceflows=faceflows, terms=fields))
+        return dict(heads=heads, times=times, periods=details)
     return heads
 
 
@@ -690,72 +717,256 @@ def test_steady_unconfined_vs_mf6(tmp_path, implementation):
     assert info["budget"]["relative_imbalance"] < 1e-6
 
 
-@pytest.mark.skipif(not MF6_AVAILABLE, reason="flopy/MF6 unavailable")
+def _sum_mf6_term(record):
+    if record is None:
+        return 0.0
+    return float(np.sum(record["q"] if record.dtype.names else record))
+
+
+def _mf6_storage_field(record, shape):
+    if record is None:
+        return np.zeros(shape)
+    if record.dtype.names:
+        field = np.zeros(shape)
+        field.ravel()[record["node"] - 1] = -record["q"]
+        return field
+    return -np.asarray(record).reshape(shape)
+
+
+def _water_table(head, bottoms):
+    wet = head > bottoms
+    valid = wet & (np.abs(head) < 1e20)
+    first_wet = np.argmax(valid, axis=0)
+    table = np.take_along_axis(head, first_wet[None], axis=0)[0]
+    return np.where(np.any(valid, axis=0), table, np.nan)
+
+
+@pytest.mark.skipif(not MF6_AVAILABLE, reason="LIVE MF6 comparisons SKIPPED: flopy/MF6 unavailable")
 @pytest.mark.parametrize("implementation", IMPLEMENTATIONS)
-def test_transient_unconfined_vs_mf6(tmp_path, implementation):
-    """Transient unconfined drainage vs MF6 STO/NPF convertible: 4 weekly
-    stress periods with recharge switched off, secant-Sy storage."""
-    nx, ny, nlay = 10, 10, 2
-    dx, dz = 25.0, 10.0
-    top = 40.0
-    k, kz = 8.0, 0.8
-    sy, ss = 0.15, 1.0e-5
+@pytest.mark.parametrize("case", ["confined", "drain_recharge", "layered_basement"])
+def test_identical_transient_histories_vs_mf6(tmp_path, implementation, case):
+    """Matching start, forcing and times; no warmup/offset comparison.
+
+    Head/water table: 2e-5 m; faces/storage/global exchanges: 2e-5 m3/day
+    absolute + 2e-5 relative. Independent per-cell conservation: 2e-7 m3/day.
+    Nonzero Ss is tested in both confined and convertible cases. The retained
+    integrated potential matches the revised MF6 specific-storage formulation.
+    """
+    nx, ny, nlay = 8, 4, 3
+    dx, dz, top = 25.0, 10.0, 40.0
     shape = (nlay, ny, nx)
-    zbot = np.zeros(shape)
-    zbot[0] = top - dz
-    zbot[1] = top - 2 * dz
-    ztop = zbot + dz
+    durations = [1.0, 3.0, 7.0, 2.0]
+    recharge = [0.0, 0.0, 3e-4, 5e-4]
+    abstraction = [-0.03, -0.02, -0.01, 0.0]
+    sy = np.broadcast_to(np.array([0.15, 0.25, 0.05])[:, None, None], shape).copy()
+    ss = np.full(shape, 1e-4 if case == "confined" else 1e-5)
+    k = np.full(shape, 8.0)
+    kz = np.full(shape, 0.8)
+    if case == "layered_basement":
+        k[1], k[2] = 0.8, 1e-14
+        kz[1], kz[2] = 0.08, 1e-14
+    zbot = np.broadcast_to((top - dz * (np.arange(nlay) + 1))[:, None, None], shape).copy()
     active = np.ones(shape, dtype=np.int32)
-    bc_mask = np.zeros(shape, dtype=np.int32)
-    bc_values = np.zeros(shape)
-    bc_mask[:, :, 0] = 1
-    bc_values[:, :, 0] = 32.0
-    rhs0 = np.zeros(shape)
-    rhs0[0] = 2.0e-4 * dx * dx
-
-    # Warp: steady pre-solve with recharge, then 4 draining periods.
-    with WarpDarcySolver3D(nx=nx, ny=ny, nz=nlay, dx=dx, dy=dx, dz=dz,
-                           device=_device(), implementation=implementation) as s:
-        s.build_from_K_fields(np.full(shape, k), np.full(shape, k),
-                              np.full(shape, kz), active, bc_mask, bc_values,
-                              rhs0, None)
-        h_steady, info_s = s.solve(
-            unconfined=True, zbot_field=zbot, ztop_field=ztop,
-            unconfined_max_picard_iter=200, unconfined_head_tol=1e-8,
-            final_head_residual_tol=1e-8,
-            max_cycles=200, rel_tol=1e-11, abs_tol_min=1e-13,
-            dh_rms_tol=1e-11, check_every_no=1,
-        )
-        assert info_s["converged"]
-        h_prev = h_steady
-        warp_period_heads = []
-        for _ in range(4):
-            h_new, info_t = s.solve(
-                unconfined=True, transient=True, zbot_field=zbot, ztop_field=ztop,
-                sy=sy, ss=ss, dt=7.0, head_prev=h_prev,
-                unconfined_max_picard_iter=200, unconfined_head_tol=1e-8,
-                final_head_residual_tol=1e-8,
-                max_cycles=200, rel_tol=1e-11, abs_tol_min=1e-13,
-                dh_rms_tol=1e-11, check_every_no=1,
-            )
-            assert info_t["converged"] and info_t["final_physical_acceptance"]
-            assert info_t["budget"]["relative_imbalance"] < 1e-5
-            warp_period_heads.append(h_new)
-            h_prev = h_new
-            s.update_rhs(np.zeros(shape))
-            s.update_initial_head(h_new)
-
-    # MF6: period 1 steady with recharge (to get the same start), then 4
-    # draining periods.
+    bc = np.zeros(shape, dtype=np.int32)
+    bc[:, :, 0] = 1
+    values = np.full(shape, 32.0)
+    start = np.full(shape, 35.0)
+    start[bc != 0] = values[bc != 0]
     chd_cells = [(lay, row, 0) for lay in range(nlay) for row in range(ny)]
-    head_mf6_all = _build_mf6_unconfined(
-        tmp_path / "mf6_transient", nx, ny, nlay, dx, dz, k, kz, 2.0e-4,
-        chd_cells, 32.0, top, transient=True, nper=5, perlen=7.0,
-        sy=sy, ss=ss, strt=h_steady,
-    )
-    # MF6 period 1 is transient too here; compare only the trend over the last
-    # three periods (formulation differences in early drainage are expected at
-    # the water table).
-    for per in range(1, 4):
-        diff = np.abs(warp_period_heads[per] - head_mf6_all[per + 1])
-        assert np.nanmax(diff) < 5.0e-2, f"period {per}: max diff {np.nanmax(diff)}"
+    reference = _build_mf6_unconfined(
+        workspace=tmp_path / "mf6_matched", nx=nx, ny=ny, nlay=nlay, dx=dx, dz=dz,
+        k=k, kz=kz, recharge=0.0, chd_cells=chd_cells, chd_head=32.0, top=top,
+        transient=True, nper=len(durations), perlen=durations, sy=sy, ss=ss,
+        strt=start, confined=case == "confined", recharge_history=recharge,
+        abstraction_history=abstraction, return_details=True)
+    np.testing.assert_array_equal(reference["times"], np.cumsum(durations))
+    from DARCY_WARP_PACKAGE.solvers_3d import build_7point_face_conductance_from_k
+    from DARCY_WARP_PACKAGE.solvers_3d import build_7point_face_conductance_unconfined_from_sat
+    from test_3d_scientific_audit import independent_system
+    worst_head, worst_flux, worst_cell, worst_storage = 0.0, 0.0, 0.0, 0.0
+    with WarpDarcySolver3D(nx=nx, ny=ny, nz=nlay, dx=dx, dy=dx, dz=dz,
+                          device=_device(), implementation=implementation) as solver:
+        solver.build_from_K_fields(kx_field=k, ky_field=k, kz_field=kz, active=active,
+                                   bc_mask=bc, bc_values=values, rhs=np.zeros(shape), initial_head=start)
+        previous = start
+        for period, (dt, rate, pump) in enumerate(zip(durations, recharge, abstraction)):
+            source = np.zeros(shape)
+            source[0] = rate * dx * dx
+            source[0, ny // 2, nx // 2] += pump
+            solver.update_rhs(rhs=source)
+            solver.update_initial_head(initial_head=previous)
+            controls = dict(transient=True, head_prev=previous, dt=dt,
+                            # Independent sparse reference RMS is 1.45e-12 m3/day and
+                            # head-ULP*diag is 2.98e-12: require an attainable FP64
+                            # solve, while preserving every head/flux/budget gate.
+                            max_cycles=500, rel_tol=1e-12, abs_tol_min=1e-11,
+                            dh_rms_tol=1e-10, check_every_no=1)
+            if case == "confined":
+                controls.update(storage_coeff=ss)
+            else:
+                controls.update(unconfined=True, zbot_field=zbot, sy=sy, ss=ss,
+                                unconfined_max_picard_iter=300, unconfined_head_tol=1e-10,
+                                final_head_residual_tol=1e-10, chebyshev_enabled=False)
+            head, info = solver.solve(**controls)
+            if not info["converged"]:
+                print("CONVERGENCE_DIAGNOSTIC", info, flush=True)
+            assert info["converged"], info
+            mfhead = reference["heads"][period]
+            np.testing.assert_allclose(head, mfhead, atol=2e-5, rtol=0.0)
+            np.testing.assert_allclose(_water_table(head=head, bottoms=zbot),
+                                       _water_table(head=mfhead, bottoms=zbot), atol=2e-5, rtol=0.0)
+            if case == "confined":
+                faces = build_7point_face_conductance_from_k(kx_field=k, ky_field=k, kz_field=kz,
+                                                            active=active, dx=dx, dy=dx, dz=dz)
+                uptake = ss * dx * dx * dz * (head - previous) / dt
+            else:
+                sat = np.clip(head - zbot, 0.1, dz)
+                faces = build_7point_face_conductance_unconfined_from_sat(kx_field=k, ky_field=k,
+                    kz_field=kz, sat=sat, active=active, dx=dx, dy=dx, dz=dz)
+                uptake = sy * dx * dx * (np.clip(head - zbot, 0, dz) - np.clip(previous - zbot, 0, dz)) / dt
+                new_sat, old_sat = np.clip(head - zbot, 0, dz), np.clip(previous - zbot, 0, dz)
+                elastic_change = ss * (0.5 * (new_sat**2 - old_sat**2)
+                    + dz * (np.maximum(head - zbot - dz, 0) - np.maximum(previous - zbot - dz, 0)))
+                uptake += dx * dx * elastic_change / dt
+            # Independent face-pair traversal, without the solver's budget or residual kernels.
+            _, matrix, rhs = independent_system(faces=faces, active=active, bc=bc, values=values,
+                                                source=source - uptake, storage=np.zeros(shape), previous=np.zeros(shape))
+            residual = (rhs - matrix @ head.ravel()).reshape(shape)
+            assert np.max(np.abs(residual[bc == 0])) < 2e-7
+            details = reference["periods"][period]
+            warp_fluxes = [np.zeros(shape) for _ in range(3)]
+            for axis, f_index, q_index in ((2, 0, 0), (1, 2, 1), (0, 4, 2)):
+                here, there = [slice(None)] * 3, [slice(None)] * 3
+                here[axis], there[axis] = slice(None, -1), slice(1, None)
+                here, there = tuple(here), tuple(there)
+                warp_fluxes[q_index][here] = faces[f_index][here] * (head[here] - head[there])
+            for q, mfq in zip(warp_fluxes, details["faceflows"]):
+                np.testing.assert_allclose(q, mfq, atol=2e-5, rtol=2e-5)
+                worst_flux = max(worst_flux, float(np.max(np.abs(q - mfq))))
+            mf_storage = -(_sum_mf6_term(record=details["terms"]["STO-SS"])
+                          + _sum_mf6_term(record=details["terms"]["STO-SY"]))
+            mf_storage_field = _mf6_storage_field(record=details["terms"]["STO-SS"], shape=shape)
+            mf_storage_field += _mf6_storage_field(record=details["terms"]["STO-SY"], shape=shape)
+            np.testing.assert_allclose(uptake[bc == 0], mf_storage_field[bc == 0], atol=2e-5, rtol=2e-5)
+            np.testing.assert_allclose(np.sum(uptake[bc == 0]), mf_storage, atol=2e-5, rtol=2e-5)
+            mf_boundary = _sum_mf6_term(record=details["terms"]["CHD"])
+            mf_source = _sum_mf6_term(record=details["terms"]["RCH"]) + _sum_mf6_term(record=details["terms"]["WEL"])
+            np.testing.assert_allclose(mf_source, np.sum(source[bc == 0]), atol=1e-12, rtol=1e-12)
+            assert abs(mf_source + mf_boundary - mf_storage) < 2e-5
+            # Both solvers omit recharge/storage on prescribed-head rows.
+            np.testing.assert_allclose(info["budget"]["boundary_net"], mf_boundary,
+                                       atol=2e-5, rtol=2e-5)
+            worst_head = max(worst_head, float(np.max(np.abs(head - mfhead))))
+            worst_cell = max(worst_cell, float(np.max(np.abs(residual[bc == 0]))))
+            worst_storage = max(worst_storage, abs(float(np.sum(uptake[bc == 0])) - mf_storage))
+            previous = head
+    print(f"LIVE_MF6 {implementation} {case}: head={worst_head:.3g} m; "
+          f"flux={worst_flux:.3g}; cell={worst_cell:.3g}; storage={worst_storage:.3g} m3/day")
+
+
+@pytest.mark.skipif(not MF6_AVAILABLE, reason="LIVE MF6 elastic-storage reference SKIPPED: unavailable")
+@pytest.mark.parametrize("implementation", IMPLEMENTATIONS)
+@pytest.mark.parametrize("old_head,source_rate", [(15.0, 20.0), (19.5, 20.0), (21.0, -20.0)])
+def test_convertible_elastic_storage_analytical_and_mf6(tmp_path, implementation, old_head, source_rate):
+    """Test each storage potential independently, including layer-top crossing.
+
+    MF6 Newton uses quadratic saturation smoothing with eps=1e-6; DarcyWarp
+    retains clipped saturation. The mismatch is predicted, never hidden by
+    widening the 2e-5 m comparison gate. See MF6 6.6.2 SmoothingFunctions.f90
+    and GwfStorageUtils.f90 (SsTerms/SyTerms).
+    """
+    from scipy.optimize import brentq
+    bottom, dz, sy, ss, area = 10.0, 10.0, 0.2, 1e-3, 100.0
+    shape = (1, 1, 1)
+    previous = np.full(shape, old_head)
+    source = np.full(shape, source_rate)
+    target = _storage_potential_1cell(h=old_head, zbot=bottom, dz=dz, sy=sy, ss=ss) + source_rate / area
+    exact = _invert_potential_1cell(p=target, zbot=bottom, dz=dz, sy=sy, ss=ss)
+    smoothing_epsilon = 1e-6
+
+    def mf6_potential(h):
+        fraction = np.clip((h - bottom) / dz, 0.0, 1.0)
+        slope = 1.0 / (1.0 - smoothing_epsilon)
+        if fraction < smoothing_epsilon:
+            saturation = slope * fraction**2 / (2.0 * smoothing_epsilon)
+        elif fraction < 1.0 - smoothing_epsilon:
+            saturation = slope * fraction + 0.5 * (1.0 - slope)
+        else:
+            saturation = 1.0 - slope * (1.0 - fraction)**2 / (2.0 * smoothing_epsilon)
+        return sy * dz * saturation + ss * dz * saturation * (h - bottom - 0.5 * dz * saturation)
+
+    def mf6_equation(h):
+        return mf6_potential(h=h) - mf6_potential(h=old_head) - source_rate / area
+
+    mf6_exact = brentq(f=mf6_equation, a=bottom, b=bottom + 10.0 * dz, xtol=1e-12)
+    mf6 = _build_mf6_unconfined(workspace=tmp_path / "elastic", nx=1, ny=1, nlay=1,
+        dx=10.0, dz=dz, k=1.0, kz=1.0, recharge=0.0, chd_cells=[], chd_head=0.0,
+        top=bottom + dz, transient=True, nper=1, perlen=1.0, sy=sy, ss=ss,
+        strt=previous, abstraction_history=[source_rate], newton=True, return_details=True)
+    head, info = _run_unconfined_column(impl=implementation, rhs=source, h_old=previous,
+        zbot=[bottom], dz=dz, dx=10.0, sy=sy, ss=ss, dt=1.0)
+    assert info["converged"]
+    assert float(head[0, 0, 0]) == pytest.approx(exact, abs=1e-7)
+    np.testing.assert_allclose(mf6["heads"][0], mf6_exact, atol=2e-5, rtol=0.0)
+    np.testing.assert_allclose(head - mf6["heads"][0], exact - mf6_exact, atol=2e-5, rtol=0.0)
+    assert -sum(_sum_mf6_term(record=mf6["periods"][0]["terms"][term])
+                for term in ("STO-SS", "STO-SY")) == pytest.approx(source_rate, abs=2e-7)
+    assert info["budget"]["domain_imbalance"] == pytest.approx(0.0, abs=2e-7)
+    print(f"LIVE_MF6_ELASTIC {implementation} old={old_head}: "
+          f"Warp={float(head[0,0,0]):.12g}, MF6={float(mf6['heads'][0,0,0,0]):.12g}, "
+          f"clipped_exact={exact:.12g}, smoothed_exact={mf6_exact:.12g}")
+
+
+@pytest.mark.skipif(not MF6_AVAILABLE, reason="LIVE MF6 layer-transition comparison SKIPPED: unavailable")
+@pytest.mark.parametrize("implementation", IMPLEMENTATIONS)
+def test_mf6_layer_interface_different_sy_and_rewetting(tmp_path, implementation):
+    """Closed column crosses the interface in both directions, Sy=.2/.35.
+
+    Integrated water volumes and water-table elevations have exact analytical
+    references. Both runs use constant full-thickness vertical C=10 here,
+    without MF6 VARIABLECV/DEWATERED/PERCHED options. The lower-layer pressure
+    head during recharge is distinct from the topmost wet-cell water table.
+    """
+    shape = (2, 1, 1)
+    bottoms = np.array([10.0, 0.0]).reshape(shape)
+    sy = np.array([0.2, 0.35]).reshape(shape)
+    k = np.ones(shape)
+    previous = np.full(shape, 12.0)
+    rates = [-215.0, 235.0]
+    ref = _build_mf6_unconfined(
+        workspace=tmp_path / "mf6_transition", nx=1, ny=1, nlay=2, dx=10.0, dz=10.0,
+        k=k, kz=k, recharge=0.0, chd_cells=[], chd_head=0.0, top=20.0,
+        transient=True, nper=2, perlen=[1.0, 1.0], sy=sy, ss=0.0, strt=previous,
+        recharge_history=[0.0, 0.0], abstraction_history=rates,
+        abstraction_cell=(1, 0, 0), newton=True, return_details=True)
+    np.testing.assert_array_equal(ref["times"], [1.0, 2.0])
+    with WarpDarcySolver3D(nx=1, ny=1, nz=2, dx=10.0, dz=10.0,
+                          device=_device(), implementation=implementation) as s:
+        s.build_from_K_fields(kx_field=k, ky_field=k, kz_field=k,
+                              active=np.ones(shape, dtype=np.int32), bc_mask=np.zeros(shape, dtype=np.int32),
+                              bc_values=np.zeros(shape), rhs=np.zeros(shape), initial_head=previous)
+        for period, rate in enumerate(rates):
+            source = np.array([0.0, rate]).reshape(shape)
+            s.update_rhs(rhs=source)
+            s.update_initial_head(initial_head=previous)
+            head, info = s.solve(unconfined=True, transient=True, zbot_field=bottoms, sy=sy, ss=0.0,
+                                 dt=1.0, head_prev=previous, max_cycles=500, check_every_no=1,
+                                 rel_tol=1e-11, abs_tol_min=1e-12, dh_rms_tol=1e-10,
+                                 unconfined_max_picard_iter=500, unconfined_head_tol=1e-9,
+                                 final_head_residual_tol=1e-9, chebyshev_enabled=False)
+            print("LAYER_TRANSITION", implementation, period, head.ravel(), ref["heads"][period].ravel(), info["budget"], flush=True)
+            assert info["converged"] and info["final_physical_acceptance"]
+            np.testing.assert_allclose(head.ravel(), [9.0, 5.0] if period == 0 else [13.0, 19.0], atol=1e-7, rtol=0.0)
+            np.testing.assert_allclose(head, ref["heads"][period], atol=2e-5, rtol=0.0)
+            np.testing.assert_allclose(_water_table(head=head, bottoms=bottoms),
+                                       _water_table(head=ref["heads"][period], bottoms=bottoms), atol=2e-5, rtol=0.0)
+            stored_change = 100.0 * sy * (np.clip(head - bottoms, 0, 10) - np.clip(previous - bottoms, 0, 10))
+            assert float(np.sum(stored_change)) == pytest.approx(rate, abs=2e-7)
+            details = ref["periods"][period]
+            assert -_sum_mf6_term(record=details["terms"]["STO-SY"]) == pytest.approx(rate, abs=2e-5)
+            np.testing.assert_allclose(_mf6_storage_field(record=details["terms"]["STO-SY"], shape=shape),
+                                       stored_change, atol=2e-5, rtol=2e-5)
+            vertical = 10.0 * (head[0, 0, 0] - head[1, 0, 0])
+            assert vertical == pytest.approx(40.0 if period == 0 else -60.0, abs=2e-7)
+            np.testing.assert_allclose(details["faceflows"][2][0, 0, 0], vertical, atol=2e-5, rtol=2e-5)
+            previous = head

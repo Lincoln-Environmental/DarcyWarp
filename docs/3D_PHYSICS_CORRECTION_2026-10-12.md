@@ -1,5 +1,12 @@
 # 3D Physics Correction — dev branch, 2026-10-12
 
+> Follow-up: [remaining scientific audit](3D_SCIENTIFIC_AUDIT_2026-10-12.md)
+> corrects residual low-K identity cutoffs, component detection, cache mutation,
+> geometry validation and reciprocal inputs. The Galerkin evidence below used
+> hypothetical constant injection; the live bilinear transfer hierarchy is an
+> approximate coarse operator, not exact Galerkin. `storage_coeff` multiplied
+> by cell volume is specific storage [1/m], not dimensionless storativity.
+
 Comprehensive scientific correction of the DarcyWarp 3D implementation on
 `dev`, targeting the **fast** execution path
 (`WarpDarcySolver3D(implementation="fast")`,
