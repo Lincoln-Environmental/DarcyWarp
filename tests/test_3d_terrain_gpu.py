@@ -355,3 +355,23 @@ def test_mixed_exactly_impermeable_sloping_material_fails_explicitly():
     k[:,:,2] = 0
     with pytest.raises(ValueError,match="exactly-zero.*unsupported"):
         TerrainReferenceOperator3D(metrics=metrics,kx=k,ky=k,kz=k)
+
+
+def test_diagnostics_separate_proposed_and_accepted_updates():
+    grid = TerrainGrid3D(surface_elevation=np.zeros((1,2)),zeta_faces=np.array([0,1,2]),dx=2,dy=2)
+    contacts = (TerrainContact3D(cell=(0,0,0),direction="west",area=1,distance=1,elevation=-.5,head=2,conductance=3),)
+    fixed = np.zeros(grid.shape,dtype=np.int32)
+    with build_solver(grid=grid,kx=1,ky=1,kz=1,fixed=fixed,values=np.zeros(grid.shape),
+        source=np.full(grid.shape,1.),initial=np.full(grid.shape,3.),contacts=contacts) as solver:
+        h,info = solver.solve(unconfined=True,unconfined_relax=.5,unconfined_head_tol=1e-10,
+            rel_tol=1e-12,final_budget_relative_tol=1e-12)
+    assert info["converged"]
+    first,second = info["outer_history"][0],info["outer_history"][1]
+    # Under fixed 0.5 relaxation the accepted change is half the proposed one.
+    assert first["accepted_head_change_max"] == pytest.approx(.5*first["proposed_head_change_max"],rel=1e-12)
+    assert first["proposed_head_change_max"] > first["accepted_head_change_max"] > 0
+    assert second["accepted_head_change_max"] == pytest.approx(.5*second["proposed_head_change_max"],rel=1e-12)
+    # The reported last-check head change is the ACCEPTED update.
+    assert info["dh_max_lastcheck"] == pytest.approx(info["outer_history"][-1]["accepted_head_change_max"],rel=1e-12)
+    assert info["proposed_dh_max_lastcheck"] == pytest.approx(info["outer_history"][-1]["proposed_head_change_max"],rel=1e-12)
+    assert info["proposed_dh_max_lastcheck"] > info["dh_max_lastcheck"]

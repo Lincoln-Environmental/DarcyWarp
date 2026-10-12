@@ -443,8 +443,14 @@ class TerrainOperatorSession3D:
                 budget = compute_terrain_budget_3d(operator=final_operator,head=head,source=self.rhs,fixed=self.bc_mask,
                     storage_change=final_change,storage_diagonal=final_storage)
             converged = np.all(np.isfinite(head)) and budget["head_residual_rms"] <= head_tolerance and (budget["cell_residual_rms"] <= abs_tol_min or budget["relative_cell_imbalance"] <= final_budget_relative_tol)
-            change_max = float(np.max(np.abs(dh[free]))) if free.any() else 0
-            history.append(dict(outer_iteration=outer+1,krylov_iterations=iterations,head_change_max=change_max,
+            proposed_change_max = float(np.max(np.abs(dh[free]))) if free.any() else 0
+            # Convergence diagnostics must describe the state that was
+            # actually accepted: a small DAMPED update is not convergence.
+            accepted = head-starting_head
+            accepted_change_max = float(np.max(np.abs(accepted[free]))) if free.any() else 0
+            history.append(dict(outer_iteration=outer+1,krylov_iterations=iterations,
+                proposed_head_change_max=proposed_change_max,accepted_head_change_max=accepted_change_max,
+                head_change_max=accepted_change_max,
                 physical_residual_rms=budget["cell_residual_rms"],head_residual_rms=budget["head_residual_rms"],relaxation=relaxation))
             if converged:
                 break
@@ -462,8 +468,10 @@ class TerrainOperatorSession3D:
             min_saturated_thickness=unconfined_min_sat if unconfined else None,
             final_head_residual_rms=budget["head_residual_rms"])
         info.update(r_rms_end=budget["cell_residual_rms"],h_rms_end=budget["head_residual_rms"],
-            dh_rms_lastcheck=float(np.sqrt(np.mean(dh[free]**2))) if free.any() else 0,
-            dh_max_lastcheck=change_max,requested_min_saturated_thickness=unconfined_min_sat,
+            dh_rms_lastcheck=float(np.sqrt(np.mean(accepted[free]**2))) if free.any() else 0,
+            dh_max_lastcheck=accepted_change_max,
+            proposed_dh_rms_lastcheck=float(np.sqrt(np.mean(dh[free]**2))) if free.any() else 0,
+            proposed_dh_max_lastcheck=proposed_change_max,requested_min_saturated_thickness=unconfined_min_sat,
             effective_layer_min_saturated_thickness=np.minimum(unconfined_min_sat,self.grid.thickness[:,0,0]).tolist(),
             multigrid_cycles=(total_iterations+self.workspace.krylov._restart-1)//self.workspace.krylov._restart,
             multigrid_hierarchy="conservative approximate principal part; not exact Galerkin")
