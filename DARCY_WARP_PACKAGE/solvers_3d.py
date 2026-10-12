@@ -351,7 +351,15 @@ def build_diag_preconditioner_7point(    tx_p: np.ndarray,
             raise ValueError(f"{name} must be >= 0")
 
     free = (act != 0) & (bc == 0)
-    diag = txp + txm + typ + tym + tzp + tzm
+    diag = np.zeros(shape, dtype=np.float64)
+    for face, axis, direction in ((txp, 2, 1), (txm, 2, -1),
+                                  (typ, 1, 1), (tym, 1, -1),
+                                  (tzp, 0, 1), (tzm, 0, -1)):
+        here, there = [slice(None)] * 3, [slice(None)] * 3
+        here[axis] = slice(None, -1) if direction > 0 else slice(1, None)
+        there[axis] = slice(1, None) if direction > 0 else slice(None, -1)
+        here, there = tuple(here), tuple(there)
+        diag[here] += np.where((act[here] != 0) & (act[there] != 0), face[here], 0.0)
 
     if storage_diag is not None:
         sdiag = np.asarray(storage_diag, dtype=np.float64)

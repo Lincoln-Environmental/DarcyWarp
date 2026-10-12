@@ -103,6 +103,32 @@ def test_low_k_default_absolute_tolerance_cannot_accept_initial_head():
     assert head[0, 0, 1] == pytest.approx(5.0, abs=1e-5)
 
 
+def test_host_and_gpu_diagonal_use_only_actual_positive_connections():
+    from DARCY_WARP_PACKAGE.solvers_3d import build_diag_preconditioner_7point
+    from DARCY_WARP_PACKAGE.kernels_3d import build_diag_preconditioner_7point_kernel
+    from DARCY_WARP_PACKAGE.config import WP_FLOAT
+
+    shape = (1, 1, 4)
+    faces = [np.full(shape, 99.0) for _ in range(6)]  # unused exterior slots
+    faces[0][0, 0, :3] = [1e-20, 99.0, 99.0]
+    faces[1][0, 0, 1:] = [1e-20, 99.0, 99.0]
+    active = np.array([[[1, 1, 0, 1]]], dtype=np.int32)
+    bc = np.zeros(shape, dtype=np.int32)
+    storage = np.zeros(shape)
+    host = build_diag_preconditioner_7point(tx_p=faces[0], tx_m=faces[1], ty_p=faces[2], ty_m=faces[3],
+        tz_p=faces[4], tz_m=faces[5], active=active, bc_mask=bc, storage_diag=storage)
+    dev = device()
+    buffers = [wp.array(f, dtype=WP_FLOAT, device=dev) for f in faces]
+    act = wp.array(active, dtype=wp.int32, device=dev)
+    bcm = wp.array(bc, dtype=wp.int32, device=dev)
+    sto = wp.array(storage, dtype=WP_FLOAT, device=dev)
+    out = wp.zeros(shape, dtype=WP_FLOAT, device=dev)
+    wp.launch(kernel=build_diag_preconditioner_7point_kernel, dim=shape,
+              inputs=[*buffers, act, bcm, sto, out, 4, 1, 1], device=dev)
+    np.testing.assert_allclose(host, [[[1e20, 1e20, 1.0, 0.0]]], rtol=1e-15, atol=0.0)
+    np.testing.assert_allclose(out.numpy(), host, rtol=1e-15, atol=0.0)
+
+
 @pytest.mark.parametrize("left,right", [(1e-200, 1e-200), (1e-200, 1e200), (1e200, 1e200), (0.0, 1e200)])
 def test_stable_harmonic_extreme_contrasts(left, right):
     k = np.array([[[left, right]]])
