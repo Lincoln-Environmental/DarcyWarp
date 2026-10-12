@@ -1252,17 +1252,21 @@ def _solve_chebyshev_7point_3d_linear(
     h_rms_end = float(np.sqrt(max(hrTr_end, 0.0) / float(n_free)))
 
     # Physical water budget of the solved discrete system (host, one pass).
-    from DARCY_WARP_PACKAGE.physics.budget_3d import compute_3d_flow_budget
+    from DARCY_WARP_PACKAGE.physics.budget_3d import (
+        compute_3d_flow_budget, prepare_3d_budget_source, is_3d_budget_conserved,
+    )
 
     budget_lin = compute_3d_flow_budget(
         head=head_out,
-        source=np.asarray(b, dtype=np.float64),
+        source=prepare_3d_budget_source(source=b, head_prev=h_prev_used, extra_storage_diag=storage_diag),
         faces=(txp, txm, typ, tym, tzp, tzm),
         active=act,
         bc_mask=bcm,
-        storage_diag=sdiag if bool(transient) else None,
-        head_prev=h_prev_used if bool(transient) else None,
+        storage_diag=sdiag,
+        head_prev=h_prev_used,
     )
+    budget_acceptance = is_3d_budget_conserved(budget=budget_lin, absolute_tolerance=tol_abs)
+    converged = bool(converged and budget_acceptance)
 
     info = {
         "solver_type": "chebyshev_7point_3d",
@@ -1288,6 +1292,7 @@ def _solve_chebyshev_7point_3d_linear(
         "diag_preconditioner_backend": diag_mode,
         "n_isolated_cells_excluded": n_isolated,
         "budget": budget_lin,
+        "final_budget_acceptance": budget_acceptance,
     }
 
     return (head_out, info) if return_info else head_out
@@ -1355,6 +1360,7 @@ def _picard_unconfined_7point_3d(
     solver_type_label="kcycle_7point_3d_unconfined_picard",
     dry_cell_flag_threshold=0.1,
     final_head_residual_tol=None,
+    final_budget_relative_tol=1e-3,
     legacy_storage_coeff=None,
     return_info=True,
 ):
@@ -2067,7 +2073,11 @@ def _picard_unconfined_7point_3d(
         if final_head_residual_tol is None
         else float(final_head_residual_tol)
     )
-    final_physical_acceptance = bool(final_head_residual_rms <= final_res_tol_f)
+    from DARCY_WARP_PACKAGE.physics.budget_3d import is_3d_budget_conserved
+    final_budget_acceptance = is_3d_budget_conserved(
+        budget=budget, absolute_tolerance=float(last_linear_info.get("tol_abs", 0.0)),
+        relative_tolerance=float(final_budget_relative_tol))
+    final_physical_acceptance = bool(final_head_residual_rms <= final_res_tol_f and final_budget_acceptance)
     if converged_nonlinear and not final_physical_acceptance:
         converged_nonlinear = False
 
@@ -2134,6 +2144,8 @@ def _picard_unconfined_7point_3d(
             "final_physical_residual_rms": float(budget["cell_residual_rms"]),
             "final_physical_residual_max": float(budget["cell_residual_max"]),
             "budget": budget,
+            "final_budget_acceptance": final_budget_acceptance,
+            "final_budget_relative_tolerance": float(final_budget_relative_tol),
             "dry_cell_approximation": dry_diagnostics,
             "residual_floor_tol": None if residual_floor_tol_f is None else float(residual_floor_tol_f),
             "inner_residual_converged": bool(inner_residual_converged),
@@ -3537,17 +3549,21 @@ def solve_multigrid_kcycle_7point_3d(
     h_rms_end = float(np.sqrt(max(hrTr_end, 0.0) / float(n_free0)))
 
     # Physical water budget of the solved discrete system (host, one pass).
-    from DARCY_WARP_PACKAGE.physics.budget_3d import compute_3d_flow_budget
+    from DARCY_WARP_PACKAGE.physics.budget_3d import (
+        compute_3d_flow_budget, prepare_3d_budget_source, is_3d_budget_conserved,
+    )
 
     budget0 = compute_3d_flow_budget(
         head=head_out,
-        source=np.asarray(b0, dtype=np.float64),
+        source=prepare_3d_budget_source(source=b0, head_prev=h_prev_used, extra_storage_diag=storage_diag),
         faces=(txp0, txm0, typ0, tym0, tzp0, tzm0),
         active=act0,
         bc_mask=bcm0,
-        storage_diag=sdiag0 if bool(transient) else None,
-        head_prev=h_prev_used if bool(transient) else None,
+        storage_diag=sdiag0,
+        head_prev=h_prev_used,
     )
+    budget_acceptance = is_3d_budget_conserved(budget=budget0, absolute_tolerance=tol_abs)
+    converged = bool(converged and budget_acceptance)
 
     info = {
         "solver_type": "kcycle_7point_3d",
@@ -3596,6 +3612,7 @@ def solve_multigrid_kcycle_7point_3d(
         "diag_preconditioner_backend": diag_mode,
         "n_isolated_cells_excluded": n_isolated0,
         "budget": budget0,
+        "final_budget_acceptance": budget_acceptance,
     }
 
     # Release the multigrid device arrays so the unconfined Picard loop (which

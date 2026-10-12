@@ -10,6 +10,33 @@ import numpy as np
 from DARCY_WARP_PACKAGE.physics.faces_3d import validate_reciprocal_faces
 
 
+def prepare_3d_budget_source(*, source, head_prev, extra_storage_diag):
+    """Retain declared forcing without subtracting a large assembled RHS.
+
+    An extra preassembled diagonal requires its own corresponding RHS; only
+    that explicit extra term is removed to express a previous-head budget.
+    Ordinary storage_coeff forcing is used directly, even when Q + S*h_prev
+    loses Q to floating-point rounding.
+    """
+    result = np.asarray(source, dtype=np.float64)
+    if head_prev is not None and extra_storage_diag is not None:
+        result = result - np.asarray(extra_storage_diag, dtype=np.float64) * head_prev
+    return result
+
+
+def is_3d_budget_conserved(*, budget, absolute_tolerance, relative_tolerance=1e-3):
+    """Dimensional RMS or throughput-normalized L1 cell conservation gate.
+
+    L1 errors prevent opposing cell errors from cancelling in a domain sum.
+    The absolute criterion uses the requested linear volumetric tolerance,
+    so a near-zero-throughput case is not judged solely by an undefined ratio.
+    """
+    if not np.isfinite(relative_tolerance) or relative_tolerance < 0.0:
+        raise ValueError("final_budget_relative_tol must be nonnegative finite.")
+    return bool(budget["cell_residual_rms"] <= absolute_tolerance
+                or budget["relative_cell_imbalance"] <= relative_tolerance)
+
+
 @dataclass(frozen=True)
 class BoundaryInterfaceFluxPlan:
     """Prevalidated sparse boundary-interface flux evaluation plan."""
@@ -154,6 +181,7 @@ def compute_3d_flow_budget(
         "storage_uptake": storage_uptake,
         "domain_imbalance": domain_imbalance,
         "relative_imbalance": abs(domain_imbalance) / throughput,
+        "relative_cell_imbalance": float(np.sum(np.abs(residual[free]))) / throughput,
         "throughput": throughput,
         "n_free_cells": float(n_free),
     }

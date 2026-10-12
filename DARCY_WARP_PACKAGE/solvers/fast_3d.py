@@ -544,6 +544,7 @@ def solve_fast_confined_kcycle_3d(
     cheby_lambda_max: float = 2.0,
     rel_tol: float = 5.0e-7,
     abs_tol_min: float = 5.0e-7,
+    final_budget_relative_tol: float = 1e-3,
     dh_rms_tol: float | None = 1.0e-4,
     dh_max_tol: float | None = None,
     check_every_no: int = 5,
@@ -715,14 +716,16 @@ def solve_fast_confined_kcycle_3d(
         restore_values=restore0,
         return_info=True,
     )
-    from DARCY_WARP_PACKAGE.physics.budget_3d import compute_3d_flow_budget
+    from DARCY_WARP_PACKAGE.physics.budget_3d import (
+        compute_3d_flow_budget, prepare_3d_budget_source, is_3d_budget_conserved,
+    )
 
     info["operator_refreshed_in_place"] = bool(operator_refreshed)
     if workspace_holder is not None:
         info.update(workspace_holder.get("component_diagnostics", {}))
     info["budget"] = compute_3d_flow_budget(
         head=head,
-        source=rhs_effective if h_prev_used is None else rhs_effective - storage * h_prev_used,
+        source=prepare_3d_budget_source(source=rhs, head_prev=h_prev_used, extra_storage_diag=storage_diag),
         faces=(tx_p, tx_m, ty_p, ty_m, tz_p, tz_m),
         active=active_work,
         bc_mask=bc_f,
@@ -737,9 +740,14 @@ def solve_fast_confined_kcycle_3d(
     np.divide(physical, diagonal, out=head_residual, where=diagonal > 0.0)
     head_residual[(diagonal == 0.0) & (physical != 0.0)] = np.inf
     info["final_physical_head_residual_rms"] = float(np.sqrt(np.mean(head_residual[free] ** 2))) if np.any(free) else 0.0
+    info["final_budget_acceptance"] = is_3d_budget_conserved(
+        budget=info["budget"], absolute_tolerance=info.get("tol_abs", 0.0),
+        relative_tolerance=float(final_budget_relative_tol))
+    info["final_budget_relative_tolerance"] = float(final_budget_relative_tol)
     info["final_physical_acceptance"] = bool(
         np.all(np.isfinite(head[active_work != 0]))
-        and info["final_physical_head_residual_rms"] <= info.get("head_residual_tolerance", np.inf))
+        and info["final_physical_head_residual_rms"] <= info.get("head_residual_tolerance", np.inf)
+        and info["final_budget_acceptance"])
     info["converged"] = bool(info["converged"] and info["final_physical_acceptance"])
     return (head, info) if return_info else head
 
@@ -815,6 +823,7 @@ def solve_fast_unconfined_kcycle_3d(
     max_head_change_per_outer_iteration: float = 10.0,
     dry_cell_flag_threshold: float = 0.1,
     final_head_residual_tol: float | None = None,
+    final_budget_relative_tol: float = 1e-3,
     device: str = "cuda:0",
     return_info: bool = True,
     **unsupported: Any,
@@ -1040,6 +1049,7 @@ def solve_fast_unconfined_kcycle_3d(
         unconfined_storage_mode=unconfined_storage_mode,
         dry_cell_flag_threshold=dry_cell_flag_threshold,
         final_head_residual_tol=final_head_residual_tol,
+        final_budget_relative_tol=final_budget_relative_tol,
         legacy_storage_coeff=storage_coeff,
         return_info=return_info,
     )

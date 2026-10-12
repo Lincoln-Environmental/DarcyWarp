@@ -129,6 +129,39 @@ def test_host_and_gpu_diagonal_use_only_actual_positive_connections():
     np.testing.assert_allclose(out.numpy(), host, rtol=1e-15, atol=0.0)
 
 
+@pytest.mark.parametrize("unconfined", [False, True])
+@pytest.mark.parametrize("balanced_sources", [False, True])
+def test_storage_rhs_roundoff_cannot_hide_declared_source_or_claim_conservation(unconfined, balanced_sources):
+    shape = (1, 1, 2 if balanced_sources else 1)
+    previous = np.full(shape, 5.0)
+    source = np.ones(shape)
+    if balanced_sources:
+        source[0, 0, 1] = -1.0
+    storage = 1e16
+    # The exact increment is smaller than the spacing of representable heads.
+    assert 1.0 / storage < 0.5 * np.spacing(previous[0, 0, 0])
+    zero = np.zeros(shape)
+    with WarpDarcySolver3D(nx=shape[2], ny=1, nz=1, dx=1.0, device=device(), implementation="fast") as s:
+        s.build_from_K_fields(kx_field=np.ones(shape), ky_field=np.ones(shape), kz_field=np.ones(shape),
+                              active=np.ones(shape, dtype=np.int32), bc_mask=np.zeros(shape, dtype=np.int32),
+                              bc_values=zero, rhs=source, initial_head=previous)
+        controls = dict(transient=True, dt=1.0, head_prev=previous)
+        if unconfined:
+            controls.update(unconfined=True, zbot_field=zero, sy=0.2, ss=storage, chebyshev_enabled=False)
+        else:
+            controls.update(storage_coeff=storage)
+        head, info = s.solve(**controls)
+    assert not info["converged"]
+    assert not info["final_physical_acceptance"] and not info["final_budget_acceptance"]
+    assert info["budget"]["source_total"] == (0.0 if balanced_sources else 1.0)
+    assert info["budget"]["storage_uptake"] == 0.0
+    assert info["budget"]["cell_residual_max"] == 1.0
+    assert info["budget"]["relative_cell_imbalance"] == 1.0
+    if balanced_sources:
+        assert info["budget"]["domain_imbalance"] == 0.0
+    np.testing.assert_array_equal(head, previous)
+
+
 @pytest.mark.parametrize("left,right", [(1e-200, 1e-200), (1e-200, 1e200), (1e200, 1e200), (0.0, 1e200)])
 def test_stable_harmonic_extreme_contrasts(left, right):
     k = np.array([[[left, right]]])
