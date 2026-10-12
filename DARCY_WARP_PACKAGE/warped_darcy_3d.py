@@ -229,17 +229,21 @@ class WarpDarcySolver3D:
         self._initial_head = self._session.initial_head
         return self
 
-    def build_from_terrain(self, *, surface_elevation, zeta_faces, kx_field,
+    def build_from_terrain(self, *, surface_elevation=None, zeta_faces=None,
+                           z_interfaces=None, kx_field,
                            ky_field, kz_field, bc_mask, bc_values, rhs,
                            active_columns=None, initial_head=None, contacts=()):
-        """Build a fixed-depth terrain grid, with optional exterior subfaces.
+        """Build a terrain grid with independently varying geological layers.
 
         Head and boundary head are TOTAL hydraulic head [m]. rhs is volumetric
         injection [m³/day]; recharge rate [m/day] must be multiplied by dx*dy.
-        zeta_faces is a common increasing (nz+1,) depth vector from zero;
-        dz is unused in terrain mode. Layer thickness can vary with depth.
-        All active columns contain the complete stack. Variable local depth,
-        pinches, internal holes and nonparallel contacts are unsupported.
+        The geometry is either z_interfaces with shape (nz+1,ny,nx) —
+        independently specified geological interface elevations that may
+        curve and slope independently but must stay strictly ordered on
+        every active column — or the legacy parallel form surface_elevation
+        plus common zeta_faces depths. dz is unused in terrain mode.
+        All active columns contain the complete stack. Pinches, internal
+        holes and nonparallel contacts are unsupported and rejected.
         Contacts are TerrainContact3D records, preserving each physical
         subface; fixed cells must not also own exchange contacts.
         """
@@ -248,7 +252,7 @@ class WarpDarcySolver3D:
         from DARCY_WARP_PACKAGE.physics.terrain_grid_3d import TerrainGrid3D
         from DARCY_WARP_PACKAGE.solvers.terrain_fast_3d import TerrainOperatorSession3D
         grid = TerrainGrid3D(surface_elevation=surface_elevation,zeta_faces=zeta_faces,
-                             dx=self.dx,dy=self.dy,active_columns=active_columns)
+                             z_interfaces=z_interfaces,dx=self.dx,dy=self.dy,active_columns=active_columns)
         if grid.shape != self.shape:
             raise ValueError(f"terrain grid shape {grid.shape} expected {self.shape}")
         if self._session is not None:
@@ -280,13 +284,15 @@ class WarpDarcySolver3D:
             raise RuntimeError("build_from_terrain is required first")
         self._session.update_contacts(contacts=contacts)
 
-    def update_terrain_geometry(self, *, surface_elevation, zeta_faces, active_columns=None):
+    def update_terrain_geometry(self, *, surface_elevation=None, zeta_faces=None,
+                                z_interfaces=None, active_columns=None):
         """Explicit metric refresh; stable GPU buffers survive value changes."""
         if self.geometry != "terrain" or self._session is None:
             raise RuntimeError("build_from_terrain is required first")
         from DARCY_WARP_PACKAGE.physics.terrain_grid_3d import TerrainGrid3D
         grid = TerrainGrid3D(surface_elevation=surface_elevation,zeta_faces=zeta_faces,
-            dx=self.dx,dy=self.dy,active_columns=self._session.grid.active_columns if active_columns is None else active_columns)
+            z_interfaces=z_interfaces,dx=self.dx,dy=self.dy,
+            active_columns=self._session.grid.active_columns if active_columns is None else active_columns)
         self._session.update_geometry(grid=grid)
         self._active = grid.active
 
