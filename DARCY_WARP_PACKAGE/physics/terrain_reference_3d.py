@@ -189,14 +189,18 @@ class TerrainReferenceOperator3D:
             conductance = normal*projected_area/contact.distance if contact.conductance is None else contact.conductance
             scale = projected_area if contact.conductance is None else (conductance*contact.distance/normal if normal > 0 else 0)
             # Reconstruct the layer's bounding interfaces at the physical
-            # contact point; its elevation offset is measured from the layer
-            # centre surface there, so coastal geometry never inherits the
-            # owning cell's centre elevation.
+            # contact point. Top/bottom subface elevations are measured
+            # against their bounding interface there; lateral subface
+            # elevations are measured against the OWNING CELL's centre
+            # elevation, so the hz coupling represents exactly the vertical
+            # head change between the cell centre and the subface and affine
+            # head fields reproduce the physical plane flux for any subface
+            # elevation.
             dx_point = sign*contact.distance if axis == 2 else contact.x_offset
             dy_point = sign*contact.distance if axis == 1 else contact.y_offset
             top_point = self.grid.z_interfaces[layer][column] + m.zx_interfaces[layer][column]*dx_point + m.zy_interfaces[layer][column]*dy_point
             bottom_point = self.grid.z_interfaces[layer+1][column] + m.zx_interfaces[layer+1][column]*dx_point + m.zy_interfaces[layer+1][column]*dy_point
-            centre_point = .5*(top_point+bottom_point)
+            centre_point = .5*(top_point+bottom_point) if axis == 0 else float(self.grid.elevations[cell])
             depth_offset = centre_point-contact.elevation
             tolerance = 64*np.finfo(np.float64).eps*max(abs(centre_point),abs(contact.elevation),1.)
             if axis != 0 and not bottom_point-tolerance <= contact.elevation <= top_point+tolerance:
@@ -207,12 +211,31 @@ class TerrainReferenceOperator3D:
                 raise ValueError("offset subfaces require enough cells to reconstruct tangential gradients")
             zx,zy = m.zx[cell],m.zy[cell]
             if axis == 2:
-                cross = (sign*self.ex[cell]*zx*scale-conductance*depth_offset,0,-conductance*contact.y_offset)
+                # Lateral exterior faces are physical x/y-constant planes:
+                # the true-trace affine flux carries no slope-dependent hz
+                # metric term (w.n = -Kx*h_x there), so only the subface
+                # elevation offset couples the vertical gradient. The former
+                # cell-slope metric term extrapolated the head along the
+                # cell-centre surface and breaks exactness whenever the
+                # interface slope differs from it.
+                cross = (-conductance*depth_offset,0,-conductance*contact.y_offset)
             elif axis == 1:
-                cross = (sign*self.ey[cell]*zy*scale-conductance*depth_offset,-conductance*contact.x_offset,0)
+                cross = (-conductance*depth_offset,-conductance*contact.x_offset,0)
             else:
-                cross = (0,sign*self.ex[cell]*zx*scale-conductance*contact.x_offset,
-                         sign*self.ey[cell]*zy*scale-conductance*contact.y_offset)
+                # Top/bottom exterior faces evaluate their cross-gradient
+                # metric terms on the SHARED BOUNDING INTERFACE's slopes (the
+                # same interface the normal conductance uses), not the
+                # cell-centre layer slopes; on nonparallel interfaces the two
+                # differ and the mismatch leaves both a spurious horizontal
+                # response and a metric defect in the vertical response of
+                # affine head fields. The hz coupling cancels the remaining
+                # centre-versus-interface defect exactly (also for overridden
+                # conductance) and vanishes for parallel interfaces.
+                azz_coupled = (self.kz[cell]
+                    + self.ex[cell]*zx_interface*zx + self.ey[cell]*zy_interface*zy)
+                cross = (sign*(projected_area*azz_coupled-conductance*contact.distance),
+                    sign*self.ex[cell]*zx_interface*scale-conductance*contact.x_offset,
+                    sign*self.ey[cell]*zy_interface*scale-conductance*contact.y_offset)
             records.append((np.ravel_multi_index(cell,self.shape),conductance,*cross,contact.head,contact.kind == "discharge_only"))
         return tuple(records)
 

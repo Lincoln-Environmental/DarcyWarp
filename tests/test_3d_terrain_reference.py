@@ -121,9 +121,15 @@ def test_analytic_exterior_total_head_and_transformed_flux_sign(direction):
     sx,sy = metrics.sx[cell[1:]],metrics.sy[cell[1:]]
     distance = (2 if axis == 2 else 3 if axis == 1 else 1)/2
     area = 3 if axis == 2 else 2 if axis == 1 else 6
-    derivative = a+c*sx if axis == 2 else b+c*sy if axis == 1 else -c
-    boundary_head = h[cell]+sign*distance*derivative
-    elevation = grid.elevations[cell]+sign*distance*(sx if axis == 2 else sy if axis == 1 else -1)
+    if axis == 0:
+        # Top/bottom subfaces sit on their bounding interface (enforced).
+        elevation = grid.elevations[cell]-sign*distance
+        boundary_head = h[cell]+sign*distance*(-c)
+    else:
+        # Centred lateral subface with the head traced to the physical
+        # subface location (x_f,y_f,e).
+        elevation = grid.elevations[cell]
+        boundary_head = h[cell]+sign*distance*(a if axis == 2 else b)
     physical_area = area*np.sqrt(1+sx**2+sy**2) if axis == 0 else area
     contact = TerrainContact3D(cell=cell,direction=direction,area=physical_area,distance=distance,
                               elevation=elevation,head=boundary_head)
@@ -447,3 +453,106 @@ def test_low_k_basement_series_resistance():
     expected = (h_top-h_base).mean()/resistance*grid.dx*grid.dy   # per-face volume
     interior = flux_down[:,2:-2]
     np.testing.assert_allclose(interior,expected,rtol=2e-3)
+
+
+def nonparallel_boundary_case():
+    """Flat ground over a strongly sloping aquifer base and its mirror."""
+    n = 6
+    x = np.arange(n)*1.0
+    surface = 10+0.0*x[None,:]
+    mid = surface-3.-2.0*x[None,:]
+    base = mid-2.
+    grid = TerrainGrid3D(z_interfaces=np.stack((surface,mid,base)),dx=1.,dy=1.)
+    return grid,TerrainMetrics3D(grid=grid)
+
+
+def test_exterior_top_bottom_flux_exact_for_physical_vertical_gradient():
+    """Mandatory h = z test on nonparallel interfaces.
+
+    The physical Darcy flux is (0,0,-Kz); the contact flux is the outward
+    w.n*area through each exterior subface, with n taken from the subface's
+    own interface slope (substantially different from the cell-centre
+    layer slope here)."""
+    grid,metrics = nonparallel_boundary_case()
+    head = grid.elevations.copy()
+    column = (0,3)
+    for direction,layer,interface in (("top",0,0),("bottom",1,2)):
+        cell = (layer,*column)
+        zx_if = float(metrics.zx_interfaces[interface][column])
+        zy_if = float(metrics.zy_interfaces[interface][column])
+        # Outward normal: upward through the top interface, downward
+        # through the bottom interface.
+        normal_out = np.array([-zx_if,-zy_if,1.])/np.sqrt(1+zx_if**2+zy_if**2)
+        if direction == "bottom":
+            normal_out = -normal_out
+        w = np.array([0.,0.,-1.])                       # Kx=Ky=Kz=1, h=z
+        expected = float(w @ normal_out)                # per unit physical area
+        distance = .5*float(grid.thickness[cell])
+        elevation = float(grid.z_interfaces[interface][column])
+        contact = TerrainContact3D(cell=cell,direction=direction,area=1.,
+            distance=distance,elevation=elevation,head=elevation)
+        operator = TerrainReferenceOperator3D(metrics=metrics,kx=1.,ky=1.,kz=1.,contacts=(contact,))
+        flux = operator.fluxes(head=head)[3][0]
+        assert flux == pytest.approx(expected,rel=1e-12),(direction,flux,expected)
+
+
+@pytest.mark.parametrize("gradient", [(.8,0.,0.),(0.,-.5,0.),(0.3,.2,.7)])
+@pytest.mark.parametrize("kz", [1.,.02])
+def test_exterior_top_bottom_affine_exact_with_anisotropy(gradient,kz):
+    grid,metrics = nonparallel_boundary_case()
+    y,x = np.mgrid[:1,:6]
+    a,b,c = gradient
+    head = 9+a*x[None]*1.+b*y[None]*1.+c*grid.elevations
+    column = (0,3)
+    for direction,layer,interface in (("top",0,0),("bottom",1,2)):
+        cell = (layer,*column)
+        zx_if = float(metrics.zx_interfaces[interface][column])
+        zy_if = float(metrics.zy_interfaces[interface][column])
+        # Total-head gradient of the affine field is (a,b,c) in physical
+        # coordinates; the outward flux is -K.grad(h) . n_out * area.
+        kvec = np.array([1.,1.,kz])
+        normal_out = np.array([zx_if,zy_if,-1.])
+        if direction == "top":
+            normal_out = -normal_out
+        normal_out /= np.linalg.norm(normal_out)
+        expected = float((-kvec*np.array([a,b,c])) @ normal_out)
+        distance = .5*float(grid.thickness[cell])
+        elevation = float(grid.z_interfaces[interface][column])
+        hb = float(9+a*x[0,column[1]]+b*y[0,column[0]]+c*elevation)
+        contact = TerrainContact3D(cell=cell,direction=direction,area=1.,
+            distance=distance,elevation=elevation,head=hb)
+        operator = TerrainReferenceOperator3D(metrics=metrics,kx=1.,ky=1.,kz=kz,contacts=(contact,))
+        flux = operator.fluxes(head=head)[3][0]
+        assert flux == pytest.approx(expected,rel=1e-12,abs=1e-12),(direction,flux,expected)
+
+
+def test_exterior_top_bottom_conductance_override_stays_exact():
+    grid,metrics = nonparallel_boundary_case()
+    head = grid.elevations.copy()
+    cell = (0,0,3)
+    elevation = float(grid.z_interfaces[0][0,3])
+    for conductance in (0.5,7.,1e-3):
+        contact = TerrainContact3D(cell=cell,direction="top",area=1.,distance=4.5,
+            elevation=elevation,head=elevation,conductance=conductance)
+        operator = TerrainReferenceOperator3D(metrics=metrics,kx=1.,ky=1.,kz=1.,contacts=(contact,))
+        assert operator.fluxes(head=head)[3][0] == pytest.approx(-1.,rel=1e-12)
+
+
+def test_lateral_contacts_exact_on_nonparallel_interfaces():
+    grid,metrics = nonparallel_boundary_case()
+    y,x = np.mgrid[:1,:6]
+    a,b,c = .4,-.3,.6
+    head = 9+a*x[None]*1.+b*y[None]*1.+c*grid.elevations
+    cell = (0,0,5)
+    elevation = float(grid.elevations[cell])
+    face_x = 5.5                                     # east face of the last column
+    # h = z gives zero through a vertical plane; the affine trace at the
+    # physical subface location gives -Kx*a*area.
+    zero = TerrainContact3D(cell=cell,direction="east",area=3.,distance=.5,
+        elevation=elevation,head=elevation)
+    operator = TerrainReferenceOperator3D(metrics=metrics,kx=1.,ky=1.,kz=1.,contacts=(zero,))
+    assert operator.fluxes(head=grid.elevations)[3][0] == pytest.approx(0.,abs=1e-12)
+    contact = TerrainContact3D(cell=cell,direction="east",area=3.,distance=.5,
+        elevation=elevation,head=float(9+a*face_x+b*0.+c*elevation))
+    operator = TerrainReferenceOperator3D(metrics=metrics,kx=2.,ky=1.,kz=1.,contacts=(contact,))
+    assert operator.fluxes(head=head)[3][0] == pytest.approx(-2.*a*3.,rel=1e-12)
