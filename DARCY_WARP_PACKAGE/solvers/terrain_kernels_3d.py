@@ -30,9 +30,9 @@ def terrain_gradients_kernel(h: wp.array(dtype=wp.float64),
         y += horizontal[col,5]*(h[c+nx]-h[c])
     if nz > 1:
         if k+1 < nz:
-            z = (h[c+ncol]-h[c])/depths[k]
+            z = (h[c+ncol]-h[c])/depths[c]
         else:
-            z = (h[c]-h[c-ncol])/depths[k-1]
+            z = (h[c]-h[c-ncol])/depths[c-ncol]
     gx[c] = x
     gy[c] = y
     gz[c] = z
@@ -57,7 +57,7 @@ def terrain_faces_kernel(h: wp.array(dtype=wp.float64), gx: wp.array(dtype=wp.fl
     if j+1 < ny:
         y = coefficients[c,3]*(h[c]-h[c+nx])-coefficients[c,4]*gz[c]-coefficients[c,5]*gz[c+nx]
     if k+1 < nz:
-        z = coefficients[c,6]*(h[c]-h[c+ncol])-coefficients[c,7]*gx[c]-coefficients[c,8]*gx[c+ncol]-coefficients[c,9]*gy[c]-coefficients[c,10]*gy[c+ncol]
+        z = coefficients[c,6]*(h[c]-h[c+ncol])-coefficients[c,7]*gx[c]-coefficients[c,8]*gx[c+ncol]-coefficients[c,9]*gy[c]-coefficients[c,10]*gy[c+ncol]-coefficients[c,11]*gz[c]-coefficients[c,12]*gz[c+ncol]
     qx[c] = x
     qy[c] = y
     qz[c] = z

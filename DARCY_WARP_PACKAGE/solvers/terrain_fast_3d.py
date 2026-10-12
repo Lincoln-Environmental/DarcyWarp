@@ -26,7 +26,7 @@ from DARCY_WARP_PACKAGE.physics.components_3d import hydraulic_component_labels_
 
 
 def pack_terrain_coefficients(*, operator):
-    packed = np.zeros((*operator.shape,11))
+    packed = np.zeros((*operator.shape,13))
     start = 0
     for axis,values in zip((2,1,0),operator.coefficients):
         selection = [slice(None)]*3
@@ -34,7 +34,7 @@ def pack_terrain_coefficients(*, operator):
         for index,value in enumerate(values):
             packed[tuple(selection)+(start+index,)] = value
         start += len(values)
-    return packed.reshape(-1,11)
+    return packed.reshape(-1,13)
 
 
 def pack_terrain_boundaries(*, operator, head, datum):
@@ -131,7 +131,7 @@ class TerrainGPUWorkspace3D:
         self.active = wp.array(operator.grid.active.ravel(),dtype=wp.int32,device=device)
         self.fixed = wp.array(np.asarray(fixed,dtype=np.int32).ravel(),dtype=wp.int32,device=device)
         self.horizontal = wp.zeros((self.ny*self.nx,6),dtype=wp.float64,device=device)
-        self.depths = wp.zeros(max(self.nz-1,1),dtype=wp.float64,device=device)
+        self.depths = wp.zeros(max(self.nz-1,1)*self.ny*self.nx,dtype=wp.float64,device=device)
         self.refresh_metrics(metrics=operator.metrics)
         self.levels = None
         self.refresh_principal(operator=operator,fixed=fixed,storage=storage,boundary=boundary)
@@ -144,8 +144,8 @@ class TerrainGPUWorkspace3D:
     def refresh_metrics(self, *, metrics):
         horizontal = np.stack((*metrics.x_coefficients,*metrics.y_coefficients),axis=-1).reshape(-1,6)
         self.horizontal.assign(horizontal)
-        depths = metrics.depth_distances if self.nz > 1 else np.ones(1)
-        self.depths.assign(depths)
+        depths = metrics.depth_distances if self.nz > 1 else np.ones((1,self.ny,self.nx))
+        self.depths.assign(depths.ravel())
 
     def refresh_principal(self, *, operator, fixed, storage, boundary):
         principal_storage = storage + boundary[:,0].reshape(self.shape)
@@ -472,7 +472,7 @@ class TerrainOperatorSession3D:
             dh_max_lastcheck=accepted_change_max,
             proposed_dh_rms_lastcheck=float(np.sqrt(np.mean(dh[free]**2))) if free.any() else 0,
             proposed_dh_max_lastcheck=proposed_change_max,requested_min_saturated_thickness=unconfined_min_sat,
-            effective_layer_min_saturated_thickness=np.minimum(unconfined_min_sat,self.grid.thickness[:,0,0]).tolist(),
+            effective_layer_min_saturated_thickness=np.minimum(unconfined_min_sat,self.grid.thickness.min(axis=(1,2))).tolist(),
             multigrid_cycles=(total_iterations+self.workspace.krylov._restart-1)//self.workspace.krylov._restart,
             multigrid_hierarchy="conservative approximate principal part; not exact Galerkin")
         if unconfined:
