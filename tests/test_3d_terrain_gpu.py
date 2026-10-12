@@ -454,3 +454,79 @@ def test_manufactured_solution_on_variable_interfaces_with_actual_hierarchy():
     assert info["converged"], info
     np.testing.assert_allclose(h[free],exact[free],rtol=0,atol=2e-7)
     assert info["budget"]["relative_cell_imbalance"] < 1e-8
+
+
+def test_storage_only_nonuniform_layers_exact_per_cell_volume():
+    """Storage-only cells of different thickness: exact integrated law.
+
+    W(h) = Sy*clip(h-bottom,0,T) per map area; each cell receives exactly
+    the integrated difference between its previous and target state, so the
+    analytic target head is the unique fixed point of the cell equation.
+    """
+    surface = np.array([[20.]])
+    interfaces = np.stack((surface,surface-9.,surface-20.))    # thickness 11, 9
+    grid = TerrainGrid3D(z_interfaces=interfaces,dx=10.,dy=10.)
+    sy = np.array([.2,.35]).reshape(grid.shape)
+    fixed = np.zeros(grid.shape,dtype=np.int32)
+    previous = np.full(grid.shape,12.)
+    with build_solver(grid=grid,kx=0,ky=0,kz=0,fixed=fixed,values=previous,
+        source=np.zeros(grid.shape),initial=previous) as solver:
+        # Targets stay strictly inside the wet range where the per-cell
+        # integrated law is uniquely invertible.
+        for target in (np.array([16.,4.]).reshape(grid.shape), np.array([13.,8.]).reshape(grid.shape),
+                       np.array([19.5,2.]).reshape(grid.shape)):
+            wet = lambda h: np.clip(h-grid.bottoms,0,grid.thickness)
+            potential = lambda h: sy*wet(h)
+            source = ((potential(target)-potential(previous))*100.).reshape(grid.shape)
+            solver.update_rhs(rhs=source)
+            solver.update_initial_head(initial_head=previous)
+            head,info = solver.solve(unconfined=True,transient=True,head_prev=previous,dt=1.,
+                sy=sy,unconfined_head_tol=1e-10,final_head_residual_tol=1e-10,rel_tol=1e-13,
+                unconfined_max_picard_iter=200)
+            assert info["converged"],info
+            np.testing.assert_allclose(head,target,rtol=0,atol=2e-8)
+            change = (100.*sy*(wet(head)-wet(previous))).sum()
+            assert change == pytest.approx(float(source.sum()),abs=2e-7)
+            assert info["budget"]["storage_uptake"] == pytest.approx(float(source.sum()),abs=2e-7)
+            previous = head
+
+
+def test_transient_sy_contrast_across_nonparallel_interfaces_volume_exact():
+    """Drainage and rewetting through nonparallel layers behind one gated
+    coastal contact: the closed-domain stored volume must equal the summed
+    forcing plus the reported contact flux every period."""
+    y,x = np.mgrid[:2,:3]
+    surface = 20+.4*x+.25*y
+    mid = surface-(3.5+.2*x-.15*y)                 # aquifer base, own gradient
+    base = mid-(6+.3*y)                            # basement, different slope again
+    grid = TerrainGrid3D(z_interfaces=np.stack((surface,mid,base)),dx=5.,dy=5.)
+    sy = np.broadcast_to(np.array([.25,.1])[:,None,None],grid.shape).copy()
+    k = np.full(grid.shape,1.)
+    k[-1] = 1e-3
+    contact = TerrainContact3D(cell=(1,0,0),direction="west",area=10.,distance=2.5,
+        elevation=float(base[0,0]),head=float(surface[0,0]-4.),kind="discharge_only",conductance=.5)
+    values = np.zeros(grid.shape)
+    initial = np.broadcast_to(surface[None]-1.5,grid.shape).copy()
+    with build_solver(grid=grid,kx=k,ky=k,kz=.1*k,fixed=np.zeros(grid.shape,dtype=np.int32),
+        values=values,source=np.zeros(grid.shape),initial=initial,contacts=(contact,)) as solver:
+        previous = initial
+        for step,rate in enumerate((.02,-.04,.03,0.)):
+            source = np.zeros(grid.shape)
+            source[0,0,2] = rate*25.
+            source[0,1,0] = -.5*rate*25.
+            solver.update_rhs(rhs=source)
+            solver.update_initial_head(initial_head=previous)
+            head,info = solver.solve(unconfined=True,transient=True,head_prev=previous,dt=1.,
+                sy=sy,ss=1e-5,unconfined_head_tol=1e-9,final_head_residual_tol=1e-9,
+                rel_tol=1e-13,final_budget_relative_tol=1e-11,unconfined_max_picard_iter=300)
+            assert info["converged"],(step,info)
+            from DARCY_WARP_PACKAGE.physics.terrain_grid_3d import storage_potential_3d
+            potential = lambda h: 25.*storage_potential_3d(head=h,bottoms=grid.bottoms,
+                thickness=grid.thickness,sy=sy,ss=1e-5)
+            change = float((potential(head)-potential(previous)).sum())
+            forcing = float(source.sum())
+            outflow = float(np.sum(info["budget"]["coastal_subface_outflows"]))
+            # Outflow leaves the domain: storage change = forcing - outflow.
+            assert change == pytest.approx(forcing-outflow,rel=1e-6,abs=1e-7),(step,change,forcing,outflow)
+            assert info["budget"]["relative_cell_imbalance"] < 1e-9
+            previous = head
