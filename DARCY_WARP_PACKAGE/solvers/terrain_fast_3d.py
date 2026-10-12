@@ -386,7 +386,7 @@ class TerrainOperatorSession3D:
                     self.workspace.close()
                 self.workspace = TerrainGPUWorkspace3D(operator=operator,fixed=fixed,storage=storage,boundary=boundary,
                     device=device,max_levels=max_levels,min_coarse_n=min_coarse_n,restart=krylov_restart,
-                    maxiter=max(1,max_cycles),rel_tol=rel_tol,abs_tol=abs_tol_min)
+                    maxiter=max_cycles,rel_tol=rel_tol,abs_tol=abs_tol_min)
                 self.workspace_key = key
             elif not unchanged:
                 self.workspace.refresh(operator=operator,fixed=fixed,storage=storage,boundary=boundary)
@@ -465,7 +465,7 @@ class TerrainOperatorSession3D:
             dh_rms_lastcheck=float(np.sqrt(np.mean(dh[free]**2))) if free.any() else 0,
             dh_max_lastcheck=change_max,requested_min_saturated_thickness=unconfined_min_sat,
             effective_layer_min_saturated_thickness=np.minimum(unconfined_min_sat,self.grid.thickness[:,0,0]).tolist(),
-            multigrid_cycles=total_iterations+total_iterations//self.workspace.krylov._restart,
+            multigrid_cycles=(total_iterations+self.workspace.krylov._restart-1)//self.workspace.krylov._restart,
             multigrid_hierarchy="conservative approximate principal part; not exact Galerkin")
         if unconfined:
             info["dry_cell_approximation"] = terrain_dry_diagnostics_3d(operator=final_operator,head=head,source=self.rhs,fixed=self.bc_mask,budget=budget)

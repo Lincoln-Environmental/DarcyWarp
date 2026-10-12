@@ -79,7 +79,13 @@ class TerrainGMRES3D(GMRES):
             )
             normalize_arnoldi_vec.launch()
 
-        def do_restart_cycle():
+        def do_restart_cycle(iterations):
+            # A shortened final block leaves stale Hessenberg columns that
+            # would pollute the least-squares solve; zeroing restores the
+            # exact solution of the shorter Krylov system (their y entries
+            # become zero, so the full-width update below stays correct).
+            if iterations < restart:
+                H.zero_()
             if M is not None and is_left_preconditioner:
                 M.matvec(r, w, w, alpha=1, beta=0)
                 rh = w
@@ -93,7 +99,7 @@ class TerrainGMRES3D(GMRES):
             normalize_arnoldi_vec.set_params([rh, V[0], tiled_dot.col(0), beta, batch_offsets, dofs_per_entry])
             normalize_arnoldi_vec.launch()
 
-            for j in range(restart):
+            for j in range(iterations):
                 do_arnoldi_iteration(j)
 
             least_squares_solve.launch()
@@ -149,17 +155,20 @@ class TerrainGMRES3D(GMRES):
             self.graph_replays = 0
             self._cycle_graph = None
         while error > tolerance and used < maxiter:
-            if use_cuda_graph and self._device.is_cuda:
+            # maxiter is the exact permitted Krylov-iteration budget, not a
+            # number of whole restart blocks: the final block is shortened.
+            iterations = min(cycle_size, maxiter - used)
+            if use_cuda_graph and iterations == cycle_size and self._device.is_cuda:
                 if self._cycle_graph is None:
                     with wp.ScopedCapture(device=self._device) as capture:
-                        do_cycle()
+                        do_cycle(cycle_size)
                     self._cycle_graph = capture.graph
                     self.graph_captures += 1
                 wp.capture_launch(self._cycle_graph)
                 self.graph_replays += 1
             else:
-                do_cycle()
-            used += cycle_size
+                do_cycle(iterations)
+            used += iterations
             error = math.sqrt(max(float(r_norm_sq.numpy().max()), 0.0))
             if callback is not None:
                 callback(used, error, tolerance)
