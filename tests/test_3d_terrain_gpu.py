@@ -10,7 +10,7 @@ from DARCY_WARP_PACKAGE.physics.terrain_reference_3d import TerrainReferenceOper
 from DARCY_WARP_PACKAGE.solvers.terrain_fast_3d import TerrainGPUWorkspace3D, pack_terrain_boundaries
 from DARCY_WARP_PACKAGE.warped_darcy_3d import WarpDarcySolver3D
 from test_3d_scientific_audit import device
-from test_3d_terrain_reference import terrain_case
+from test_3d_terrain_reference import terrain_case, variable_interface_case
 
 
 @pytest.mark.parametrize("irregular", [False,True])
@@ -46,7 +46,7 @@ def test_gpu_full_matvec_and_faces_against_independent_sparse(irregular,heteroge
 def build_solver(*, grid, kx, ky, kz, fixed, values, source, initial, contacts=()):
     solver = WarpDarcySolver3D(nx=grid.shape[2],ny=grid.shape[1],nz=grid.shape[0],
         dx=grid.dx,dy=grid.dy,implementation="fast",device=device())
-    solver.build_from_terrain(surface_elevation=grid.surface_elevation,zeta_faces=grid.zeta_faces,
+    solver.build_from_terrain(z_interfaces=grid.z_interfaces,
         active_columns=grid.active_columns,kx_field=kx,ky_field=ky,kz_field=kz,
         bc_mask=fixed,bc_values=values,rhs=source,initial_head=initial,contacts=contacts)
     return solver
@@ -375,3 +375,82 @@ def test_diagnostics_separate_proposed_and_accepted_updates():
     assert info["dh_max_lastcheck"] == pytest.approx(info["outer_history"][-1]["accepted_head_change_max"],rel=1e-12)
     assert info["proposed_dh_max_lastcheck"] == pytest.approx(info["outer_history"][-1]["proposed_head_change_max"],rel=1e-12)
     assert info["proposed_dh_max_lastcheck"] > info["dh_max_lastcheck"]
+
+
+def test_variable_geometry_cache_refresh_and_stale_guard():
+    grid,metrics = variable_interface_case()
+    head = np.full(grid.shape,60.)
+    fixed = np.zeros(grid.shape,dtype=np.int32)
+    fixed[:,:,0] = 1
+    interfaces = grid.z_interfaces.copy()
+    with build_solver(grid=grid,kx=1.,ky=1.,kz=.1,fixed=fixed,values=head,
+        source=np.zeros(grid.shape),initial=head) as solver:
+        h,info = solver.solve(max_cycles=0)
+        assert info["converged"]
+        workspace = solver._session.workspace
+        revision = info["geometry_revision"]
+        # Hydrostatic heads on NEW independently sloping interfaces stay
+        # converged with zero Krylov work: metrics refreshed in place, no
+        # workspace rebuild, no stale operator reuse.
+        moved = interfaces.copy()
+        moved[2] -= 1.5-0.1*np.mgrid[:grid.shape[1],:grid.shape[2]][1]
+        solver.update_terrain_geometry(z_interfaces=moved)
+        h,info = solver.solve(max_cycles=0)
+        assert info["converged"] and info["krylov_iterations"] == 0
+        assert solver._session.workspace is workspace
+        assert info["geometry_revision"] == revision+1
+        np.testing.assert_allclose(h,head,rtol=0,atol=1e-9)
+        # A mask topology change must rebuild rather than refresh.
+        active = grid.active_columns.copy()
+        active[1,2] = False
+        solver.update_terrain_geometry(z_interfaces=moved,active_columns=active)
+        h,info = solver.solve(max_cycles=0)
+        assert info["converged"]
+        assert solver._session.workspace is not workspace
+        assert not info["workspace_reused"]
+
+
+def test_gpu_variable_geometry_matvec_matches_independent_sparse():
+    grid,metrics = variable_interface_case()
+    rng = np.random.default_rng(23)
+    k = np.exp(rng.uniform(-24,3,grid.shape))
+    reference = TerrainReferenceOperator3D(metrics=metrics,kx=k,ky=2*k,kz=.003*k,
+        head=grid.bottoms+rng.uniform(-.1,1,grid.shape))
+    fixed = np.zeros(grid.shape,dtype=np.int32)
+    fixed[:,:,0] = grid.active[:,:,0]
+    storage = .1*grid.volumes
+    h = rng.normal(size=grid.shape)
+    h[grid.active == 0] = 0
+    boundary,unused = pack_terrain_boundaries(operator=reference,head=h,datum=0)
+    workspace = TerrainGPUWorkspace3D(operator=reference,fixed=fixed,storage=storage,boundary=boundary,
+        device=device(),max_levels=3,min_coarse_n=2,restart=12,maxiter=120,rel_tol=1e-10,abs_tol=1e-12)
+    value = wp.array(h.ravel(),dtype=wp.float64,device=device())
+    result = wp.zeros_like(value)
+    workspace.matvec(value,result,result,alpha=1,beta=0)
+    matrix,offset = reference.sparse_matrix()
+    exact = (matrix @ h.ravel()).reshape(grid.shape)+storage*h
+    exact[(fixed != 0)|(grid.active == 0)] = h[(fixed != 0)|(grid.active == 0)]
+    np.testing.assert_allclose(result.numpy().reshape(grid.shape),exact,rtol=3e-13,atol=2e-13)
+    for axis,devflux,expected in zip((2,1,0),(workspace.qx,workspace.qy,workspace.qz),reference.fluxes(head=h)[:3]):
+        selection = [slice(None)]*3
+        selection[axis] = slice(None,-1)
+        np.testing.assert_allclose(devflux.numpy().reshape(grid.shape)[tuple(selection)],expected,rtol=3e-13,atol=2e-13)
+
+
+def test_manufactured_solution_on_variable_interfaces_with_actual_hierarchy():
+    grid,metrics = variable_interface_case()
+    y,x = np.mgrid[:4,:5]
+    exact = 10+.03*x[None]+.05*y[None]+.1*grid.elevations
+    k = np.broadcast_to((1+.2*x+.1*y)[None],grid.shape).copy()
+    k[-1] *= 1e-6
+    reference = TerrainReferenceOperator3D(metrics=metrics,kx=k,ky=.6*k,kz=.05*k)
+    source = reference.divergence(fluxes=reference.fluxes(head=exact))
+    fixed = np.zeros(grid.shape,dtype=np.int32)
+    fixed[:,:,0] = grid.active[:,:,0]
+    fixed[:,:,-1] = grid.active[:,:,-1]
+    with build_solver(grid=grid,kx=k,ky=.6*k,kz=.05*k,fixed=fixed,values=exact,source=source,initial=exact-.2) as solver:
+        h,info = solver.solve(max_levels=4,max_cycles=2000,abs_tol_min=1e-16,rel_tol=1e-13,dh_rms_tol=1e-9)
+    free = (grid.active != 0)&(fixed == 0)
+    assert info["converged"], info
+    np.testing.assert_allclose(h[free],exact[free],rtol=0,atol=2e-7)
+    assert info["budget"]["relative_cell_imbalance"] < 1e-8
