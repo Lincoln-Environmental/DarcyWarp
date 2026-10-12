@@ -28,8 +28,10 @@ def test_affine_physical_head_fluxes(gradient,irregular):
     qx,qy,qz,boundary = operator.fluxes(head=head)
     validx = grid.active_columns[:,:-1]&grid.active_columns[:,1:]
     validy = grid.active_columns[:-1]&grid.active_columns[1:]
-    np.testing.assert_allclose(qx,-3*a*grid.dy*grid.thickness*validx[None],atol=2e-12)
-    np.testing.assert_allclose(qy,-5*b*grid.dx*grid.thickness*validy[None],atol=2e-12)
+    face_thickness_x = .5*(grid.thickness[:,:,:-1]+grid.thickness[:,:,1:])
+    face_thickness_y = .5*(grid.thickness[:,:-1]+grid.thickness[:,1:])
+    np.testing.assert_allclose(qx,-3*a*grid.dy*face_thickness_x*validx[None],atol=2e-12)
+    np.testing.assert_allclose(qy,-5*b*grid.dx*face_thickness_y*validy[None],atol=2e-12)
     expected = (-3*a*metrics.sx-5*b*metrics.sy+0.02*c)*grid.dx*grid.dy*grid.active_columns
     np.testing.assert_allclose(qz,np.broadcast_to(expected,qz.shape),atol=4e-12)
     assert abs(operator.divergence(fluxes=(qx,qy,qz,boundary)).sum()) < 5e-13
@@ -44,7 +46,9 @@ def test_independent_sparse_matches_face_divergence(irregular):
     head = rng.normal(size=grid.shape)
     matrix,offset = operator.sparse_matrix()
     row,col = matrix.nonzero()
-    allowed = {0,1,-1,5,-5,20,-20,19,-19,21,-21,15,-15,25,-25}
+    # The metric-defect terms reach two layers through the one-sided
+    # vertical gradient, so +-2*ncol (=+-40) is expected alongside +-ncol.
+    allowed = {0,1,-1,5,-5,20,-20,40,-40,19,-19,21,-21,15,-15,25,-25}
     assert set((col-row).tolist()).issubset(allowed)
     np.testing.assert_allclose((matrix @ head.ravel()).reshape(grid.shape)+offset,
         operator.divergence(fluxes=operator.fluxes(head=head)),rtol=1e-13,atol=1e-13)
@@ -60,7 +64,11 @@ def test_datum_shift_and_unit_jacobian():
     second = TerrainReferenceOperator3D(metrics=sm,kx=3,ky=2,kz=0.1)
     for q1,q2 in zip(first.fluxes(head=h),second.fluxes(head=h+10000)):
         np.testing.assert_allclose(q1,q2,rtol=0,atol=3e-10)
-    np.testing.assert_array_equal(grid.volumes,shifted.volumes)
+    np.testing.assert_allclose(grid.volumes,shifted.volumes,rtol=0,atol=1e-9)
+    # Unit Jacobian: volumes are dx*dy*depth-thickness exactly for the
+    # legacy parallel form, independent of the DEM datum.
+    np.testing.assert_allclose(grid.volumes,
+        grid.dx*grid.dy*np.broadcast_to(np.diff(grid.zeta_faces)[:,None,None],grid.shape),rtol=0,atol=1e-12)
     np.testing.assert_allclose(grid.volumes.sum(),grid.dx*grid.dy*20*3)
     with pytest.raises(ValueError):
         grid.zeta_faces[1] = 0.1
@@ -192,3 +200,157 @@ def test_contact_geometry_discrepancies_are_rejected():
         elevation=grid.elevations[0,2,2],head=3)
     with pytest.raises(ValueError,match="elevation must match"):
         TerrainReferenceOperator3D(metrics=metrics,kx=1,ky=1,kz=1,contacts=(invalid,))
+
+
+def variable_interface_case(*, shift=0, thin_middle=False):
+    """Independently curving geological interfaces with no shared morphology."""
+    y,x = np.mgrid[:4,:5]
+    surface = shift+25+1.3*x+0.7*y+0.15*x*y
+    topsoil = surface-0.3-0.1*np.sin(x)                     # 0.2..0.4 m topsoil
+    aquifer = topsoil-5-2*np.cos(y)+0.2*x                   # aquifer base, own gradient
+    basement = aquifer-(0.02 if thin_middle else 6)-0.001*x
+    interfaces = np.stack((surface,topsoil,aquifer,basement))
+    active = np.ones(surface.shape,dtype=bool)
+    grid = TerrainGrid3D(z_interfaces=interfaces,dx=2,dy=3,active_columns=active)
+    return grid,TerrainMetrics3D(grid=grid)
+
+
+def test_variable_interface_construction_and_validation():
+    grid,metrics = variable_interface_case()
+    thickness = grid.thickness
+    assert thickness.shape == grid.shape
+    assert np.all(thickness > 0)
+    np.testing.assert_allclose(grid.tops,grid.z_interfaces[:-1])
+    np.testing.assert_allclose(grid.bottoms,grid.z_interfaces[1:])
+    assert grid.surface_elevation is not grid.z_interfaces[0]
+    # Independent morphologies: interface slopes differ from the DEM's.
+    assert not np.allclose(metrics.zx_interfaces[2],metrics.zx_interfaces[0])
+    assert not np.allclose(metrics.zxf[1],metrics.sxf)
+    # Legacy construction still reproduces the same parallel interfaces.
+    parallel = TerrainGrid3D(surface_elevation=grid.z_interfaces[0],
+        zeta_faces=np.array([0.,.5,5.,12.]),dx=2,dy=3)
+    assert parallel.zeta_faces is not None
+    assert parallel.thickness.shape == parallel.shape
+
+
+@pytest.mark.parametrize("interfaces", [
+    np.stack((np.zeros((4,5)),np.ones((4,5)))),                       # inverted
+    np.stack((np.zeros((4,5)),np.zeros((4,5)))),                      # zero thickness
+    np.stack((np.zeros((4,5)),np.full((4,5),-1.),np.full((4,5),-1.+.5),np.full((4,5),-2.))),  # crossing
+    np.stack((np.zeros((4,5)),np.full((4,5),np.nan))),
+])
+def test_invalid_variable_interfaces_are_rejected(interfaces):
+    with pytest.raises(ValueError):
+        TerrainGrid3D(z_interfaces=interfaces,dx=1,dy=1)
+
+
+def test_variable_interface_affine_exactness():
+    grid,metrics = variable_interface_case()
+    thickness = grid.thickness
+    operator = TerrainReferenceOperator3D(metrics=metrics,kx=3,ky=5,kz=.02)
+    face_tx = .5*(thickness[:,:,:-1]+thickness[:,:,1:])
+    face_ty = .5*(thickness[:,:-1]+thickness[:,1:])
+    y,x = np.mgrid[:4,:5]
+    for flux in operator.fluxes(head=np.full(grid.shape,9.)):
+        np.testing.assert_allclose(flux,0,atol=1e-12)
+    # Pure physical vertical gradient: no spurious lateral flux on any of
+    # the independently sloping interfaces, and the vertical flux is exactly
+    # Kz per map area (the interface-consistent face scheme cancels the
+    # metric terms of affine fields exactly).
+    vertical = operator.fluxes(head=grid.elevations)
+    np.testing.assert_allclose(vertical[0],0,atol=1e-11)
+    np.testing.assert_allclose(vertical[1],0,atol=1e-11)
+    np.testing.assert_allclose(vertical[2],.02*grid.dx*grid.dy,rtol=0,atol=1e-11)
+    # Independent horizontal physical gradients act through the harmonic
+    # series of the face transmissivities (exact variable-thickness result).
+    for a,b,c in ((1.,0.,0),(0.,-1.,0),(.3,-.2,.7)):
+        head = 9+a*x[None]*grid.dx+b*y[None]*grid.dy+c*grid.elevations
+        qx,qy,qz,boundary = operator.fluxes(head=head)
+        tx,ty = 3*thickness,5*thickness
+        harmonic_x = 2*tx[:,:,:-1]*tx[:,:,1:]/(tx[:,:,:-1]+tx[:,:,1:])
+        harmonic_y = 2*ty[:,:-1]*ty[:,1:]/(ty[:,:-1]+ty[:,1:])
+        np.testing.assert_allclose(qx,-a*grid.dy*harmonic_x,rtol=1e-12,atol=1e-12)
+        np.testing.assert_allclose(qy,-b*grid.dx*harmonic_y,rtol=1e-12,atol=1e-12)
+        expected_qz = (c*.02-3*a*metrics.zx_interfaces[1:-1]-5*b*metrics.zy_interfaces[1:-1])*grid.dx*grid.dy
+        np.testing.assert_allclose(qz,expected_qz,rtol=0,atol=2e-11)
+        assert abs(operator.divergence(fluxes=(qx,qy,qz,boundary)).sum()) < 5e-12
+
+
+def test_variable_interface_sparse_matches_flux_divergence():
+    grid,metrics = variable_interface_case()
+    rng = np.random.default_rng(11)
+    k = np.exp(rng.uniform(-20,3,grid.shape))
+    operator = TerrainReferenceOperator3D(metrics=metrics,kx=k,ky=2*k,kz=.01*k)
+    head = rng.normal(size=grid.shape)
+    matrix,offset = operator.sparse_matrix()
+    np.testing.assert_allclose((matrix @ head.ravel()).reshape(grid.shape)+offset,
+        operator.divergence(fluxes=operator.fluxes(head=head)),rtol=1e-12,atol=1e-12)
+    np.testing.assert_allclose(matrix @ np.ones(head.size),0,atol=1e-12)
+
+
+def test_thin_strictly_positive_layer_is_represented():
+    grid,metrics = variable_interface_case(thin_middle=True)
+    assert np.all(grid.thickness > 0)
+    assert grid.thickness[2].min() < .05
+    rng = np.random.default_rng(5)
+    operator = TerrainReferenceOperator3D(metrics=metrics,kx=1.,ky=1.,kz=1.)
+    head = rng.normal(size=grid.shape)
+    matrix,offset = operator.sparse_matrix()
+    np.testing.assert_allclose((matrix @ head.ravel()).reshape(grid.shape)+offset,
+        operator.divergence(fluxes=operator.fluxes(head=head)),rtol=1e-12,atol=1e-12)
+    np.testing.assert_allclose(matrix @ np.ones(head.size),0,atol=1e-12)
+
+
+def test_nonparallel_contact_elevations_are_interface_exact():
+    grid,metrics = variable_interface_case()
+    cell = (2,2,4)
+    # A coastal subface pinned to the true basement-interface elevation at
+    # an offset point must validate against the reconstructed interface.
+    elevation = float(grid.z_interfaces[3][2,4]+metrics.zx_interfaces[3][2,4]*grid.dx/2)
+    contact = TerrainContact3D(cell=cell,direction="east",area=1.,distance=grid.dx/2,
+        elevation=elevation,head=elevation)
+    operator = TerrainReferenceOperator3D(metrics=metrics,kx=1.,ky=1.,kz=1.,contacts=(contact,))
+    np.testing.assert_allclose(operator.fluxes(head=grid.elevations)[3],0,atol=1e-12)
+    with pytest.raises(ValueError,match="outside its layer"):
+        TerrainReferenceOperator3D(metrics=metrics,kx=1.,ky=1.,kz=1.,contacts=(
+            TerrainContact3D(cell=cell,direction="east",area=1.,distance=grid.dx/2,
+                elevation=float(grid.z_interfaces[3][2,4]-1.),head=0.),))
+
+
+def test_manufactured_solution_on_curved_interfaces_converges():
+    """Continuous calculus source, independently curved interface family.
+
+    Interfaces: z0 = sin-based rolling surface, z1 offset by a differing
+    thickness function, z2 a differently sloping base. The source is derived
+    from -div(K grad h) with h analytic, NOT from the discrete operator.
+    """
+    from DARCY_WARP_PACKAGE.physics.terrain_grid_3d import storage_potential_3d  # noqa: F401  (import guard)
+    rates = []
+    for n in (16, 32, 64):
+        spacing = 1.0/n
+        x = (np.arange(n)+.5)*spacing
+        y = (np.arange(n)+.5)*spacing
+        X,Y = np.meshgrid(x,y,indexing="ij")
+        surface = 40+8*np.sin(2*X)*np.cos(3*Y)
+        mid = surface-(4+1.5*np.sin(X+2*Y))          # independent thickness + own curvature
+        base = mid-(9-2*np.cos(2*X-Y))               # differently sloping bottom
+        interfaces = np.stack((surface,mid,base))
+        grid = TerrainGrid3D(z_interfaces=interfaces,dx=spacing,dy=spacing)
+        metrics = TerrainMetrics3D(grid=grid)
+        operator = TerrainReferenceOperator3D(metrics=metrics,kx=3.,ky=2.,kz=.5)
+        h = (1+np.sin(3*X)*np.sin(2*Y))[None]+grid.elevations*.05
+        # Continuous source: -Kx h_xx - Ky h_yy - Kz h_zz with h = f(x,y) + .05 z
+        # and z measured through the exact linear-in-s layer mapping.
+        hx = 3*np.cos(3*X)*np.sin(2*Y)
+        hxx = -9*np.sin(3*X)*np.sin(2*Y)
+        hyy = -4*np.sin(3*X)*np.sin(2*Y)
+        # Volume-integrated continuous source; the .05*z part contributes
+        # no second derivative and the interface metric cancels exactly.
+        source = -(3*hxx+2*hyy)[None]*grid.volumes
+        discrete = operator.divergence(fluxes=operator.fluxes(head=h))
+        error = float(np.max(np.abs((discrete-source)[1,2:-2,2:-2])))
+        rates.append(error)
+    scale = float(np.max(np.abs(-(3*hxx+2*hyy)))*16*4*.5)
+    assert rates[0]/scale < .05
+    assert rates[1] < .3*rates[0]
+    assert rates[2] < .3*rates[1]

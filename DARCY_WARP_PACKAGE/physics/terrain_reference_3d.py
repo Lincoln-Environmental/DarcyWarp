@@ -64,7 +64,7 @@ class TerrainReferenceOperator3D:
         self.kx = field_3d(value=kx, shape=self.shape, name="kx", nonnegative=True)
         self.ky = field_3d(value=ky, shape=self.shape, name="ky", nonnegative=True)
         self.kz = field_3d(value=kz, shape=self.shape, name="kz", nonnegative=True)
-        nonflat = np.any(metrics.sx != 0) or np.any(metrics.sy != 0) or np.any(metrics.sxf != 0) or np.any(metrics.syf != 0)
+        nonflat = np.any(metrics.zx != 0) or np.any(metrics.zy != 0) or np.any(metrics.zxf != 0) or np.any(metrics.zyf != 0)
         active_fields = (self.kx[self.active],self.ky[self.active],self.kz[self.active])
         has_contacts = bool(contacts)
         if (nonflat or has_contacts) and any(np.any(field == 0) for field in active_fields) and not (not has_contacts and all(np.all(field == 0) for field in active_fields)):
@@ -76,45 +76,70 @@ class TerrainReferenceOperator3D:
         fraction = self.regularized_sat / self.grid.thickness
         # Derive the tensor from physical diag(Kx*f,Ky*f,Kz), rather than
         # multiplying the entire transformed tensor by an arbitrary factor.
+        # b = local layer thickness; A00 = b*Kx*f, A02 = Kx*f*z_x with z_x
+        # the in-layer centred interface slope, A22 = (Kx*f*z_x²+Ky*f*z_y²+Kz)/b.
         self.ex = self.kx * fraction
         self.ey = self.ky * fraction
-        self.azz = self.ex * metrics.sx[None]**2 + self.ey * metrics.sy[None]**2 + self.kz
         self.coefficients = self._build_face_coefficients()
         self.contacts = tuple(contacts)
         self.contact_records = self._validate_contacts()
 
     def _build_face_coefficients(self):
         g, m = self.grid, self.metrics
-        specs = ((2, self.ex, g.dx/2, g.dx/2, g.dy*g.thickness),
-                 (1, self.ey, g.dy/2, g.dy/2, g.dx*g.thickness),
-                 (0, self.azz, g.thickness[:-1]/2, g.thickness[1:]/2, g.dx*g.dy))
+        # Horizontal faces: the normal conductance is the harmonic series of
+        # half-cell TRANSMISSIVITIES (K*f*thickness), so the face area is the
+        # unit-s map width and variable layer thickness enters physically.
+        transmissivity_x = self.ex * g.thickness
+        transmissivity_y = self.ey * g.thickness
+        specs = ((2, transmissivity_x, g.dx/2, g.dx/2, g.dy, m.zxf),
+                 (1, transmissivity_y, g.dy/2, g.dy/2, g.dx, m.zyf))
         result = []
-        for axis, conductivity, dl, dr, area in specs:
+        for axis, conductivity, dl, dr, area, face_slope in specs:
             left, right = [slice(None)]*3, [slice(None)]*3
             left[axis], right[axis] = slice(None, -1), slice(1, None)
             left, right = tuple(left), tuple(right)
             normal, wl, wr = harmonic_resistance(left=conductivity[left], right=conductivity[right], dl=dl, dr=dr)
             valid = self.active[left] & self.active[right]
             normal = normal * area * valid
-            if axis == 2:
-                bl = wl * self.ex[left] * m.sxf[None] * area * valid
-                br = wr * self.ex[right] * m.sxf[None] * area * valid
-                result.append((normal, bl, br))
-            elif axis == 1:
-                bl = wl * self.ey[left] * m.syf[None] * area * valid
-                br = wr * self.ey[right] * m.syf[None] * area * valid
-                result.append((normal, bl, br))
-            else:
-                result.append((normal, wl*self.ex[left]*m.sx[None]*area*valid,
-                    wr*self.ex[right]*m.sx[None]*area*valid,
-                    wl*self.ey[left]*m.sy[None]*area*valid,
-                    wr*self.ey[right]*m.sy[None]*area*valid))
+            bl = wl * conductivity[left] * face_slope * area * valid
+            br = wr * conductivity[right] * face_slope * area * valid
+            result.append((normal, bl, br))
+        # Vertical (s-direction) faces share one interface, so both the
+        # normal conductance and the metric cross terms evaluate THAT
+        # interface's own slopes. The cross split keeps the harmonic
+        # resistance weights of the face: low-permeability cells never
+        # receive couplings scaled to their transmissive neighbour, which
+        # preserves the row structure that stiff aquifer-basement contrasts
+        # rely on. Because the resistance-weighted mean of the cell-centre
+        # slopes differs from the interface slope, the metric terms of an
+        # affine total-head field would not cancel on nonparallel contacts;
+        # the gamma terms subtract exactly that defect (resistance-weighted
+        # too, and identically zero when the interface parallels the cell
+        # centre surfaces), restoring exactness for uniform conductivity.
+        interface_x = m.zx_interfaces[1:-1]
+        interface_y = m.zy_interfaces[1:-1]
+        left, right = (slice(None, -1), slice(None), slice(None)), (slice(1, None), slice(None), slice(None))
+        valid = self.active[left] & self.active[right]
+        azz_top = self.ex[left]*interface_x**2 + self.ey[left]*interface_y**2 + self.kz[left]
+        azz_bottom = self.ex[right]*interface_x**2 + self.ey[right]*interface_y**2 + self.kz[right]
+        normal, wl, wr = harmonic_resistance(left=azz_top, right=azz_bottom,
+            dl=g.thickness[:-1]/2, dr=g.thickness[1:]/2)
+        normal = normal*g.dx*g.dy*valid
+        area = g.dx*g.dy
+        result.append((normal,
+            wl*self.ex[left]*interface_x*area*valid,
+            wr*self.ex[right]*interface_x*area*valid,
+            wl*self.ey[left]*interface_y*area*valid,
+            wr*self.ey[right]*interface_y*area*valid,
+            wl*(self.ex[left]*interface_x*(m.zx[:-1]-interface_x)+self.ey[left]*interface_y*(m.zy[:-1]-interface_y))*area*valid,
+            wr*(self.ex[right]*interface_x*(m.zx[1:]-interface_x)+self.ey[right]*interface_y*(m.zy[1:]-interface_y))*area*valid))
         return tuple(result)
 
     def _validate_contacts(self):
         directions = {"west": (2,-1), "east": (2,1), "south": (1,-1), "north": (1,1), "top": (0,-1), "bottom": (0,1)}
         records = []
         areas = {}
+        m = self.metrics
         for contact in self.contacts:
             cell = contact.cell
             if len(cell) != 3 or any(c < 0 or c >= s for c,s in zip(cell,self.shape)) or not self.active[cell]:
@@ -132,37 +157,54 @@ class TerrainReferenceOperator3D:
             neighbor[axis] += sign
             if 0 <= neighbor[axis] < self.shape[axis] and self.active[tuple(neighbor)]:
                 raise ValueError(f"contact at {cell}/{contact.direction} double-counts an internal face")
-            surface_factor = float(np.sqrt(1+self.metrics.sx[cell[1:]]**2+self.metrics.sy[cell[1:]]**2)) if axis == 0 else 1.0
-            available = self.grid.dx*self.grid.dy*surface_factor if axis == 0 else (self.grid.dy if axis == 2 else self.grid.dx)*float(self.grid.thickness[cell[0],0,0])
+            layer = cell[0]
+            column = cell[1:]
+            if axis == 0:
+                # Top/bottom exterior faces follow their own bounding interface.
+                interface = layer if sign < 0 else layer + 1
+                zx_interface = m.zx_interfaces[interface][column]
+                zy_interface = m.zy_interfaces[interface][column]
+                surface_factor = float(np.sqrt(1+zx_interface**2+zy_interface**2))
+                available = self.grid.dx*self.grid.dy*surface_factor
+            else:
+                surface_factor = 1.0
+                available = (self.grid.dy if axis == 2 else self.grid.dx)*self.grid.thickness[cell]
             key = (cell,contact.direction)
             areas[key] = areas.get(key,0) + contact.area
             if areas[key] > available*(1+1e-12):
                 raise ValueError(f"subface areas exceed exterior face at {key}")
-            normal = (self.ex if axis == 2 else self.ey if axis == 1 else self.azz)[cell]
+            if axis == 0:
+                normal = self.ex[cell]*zx_interface**2 + self.ey[cell]*zy_interface**2 + self.kz[cell]
+            else:
+                normal = (self.ex if axis == 2 else self.ey)[cell]
             projected_area = contact.area/surface_factor
             conductance = normal*projected_area/contact.distance if contact.conductance is None else contact.conductance
             scale = projected_area if contact.conductance is None else (conductance*contact.distance/normal if normal > 0 else 0)
-            sx,sy = self.metrics.sx[cell[1:]],self.metrics.sy[cell[1:]]
-            depth_centre = .5*(self.grid.zeta_faces[cell[0]]+self.grid.zeta_faces[cell[0]+1])
+            # Reconstruct the layer's bounding interfaces at the physical
+            # contact point; its elevation offset is measured from the layer
+            # centre surface there, so coastal geometry never inherits the
+            # owning cell's centre elevation.
             dx_point = sign*contact.distance if axis == 2 else contact.x_offset
             dy_point = sign*contact.distance if axis == 1 else contact.y_offset
-            surface_point = self.grid.surface_elevation[cell[1:]]+sx*dx_point+sy*dy_point
-            contact_depth = surface_point-contact.elevation
-            depth_offset = contact_depth-depth_centre
-            tolerance = 64*np.finfo(np.float64).eps*max(abs(surface_point),abs(contact.elevation),1.)
-            if axis != 0 and not self.grid.zeta_faces[cell[0]]-tolerance <= contact_depth <= self.grid.zeta_faces[cell[0]+1]+tolerance:
+            top_point = self.grid.z_interfaces[layer][column] + m.zx_interfaces[layer][column]*dx_point + m.zy_interfaces[layer][column]*dy_point
+            bottom_point = self.grid.z_interfaces[layer+1][column] + m.zx_interfaces[layer+1][column]*dx_point + m.zy_interfaces[layer+1][column]*dy_point
+            centre_point = .5*(top_point+bottom_point)
+            depth_offset = centre_point-contact.elevation
+            tolerance = 64*np.finfo(np.float64).eps*max(abs(centre_point),abs(contact.elevation),1.)
+            if axis != 0 and not bottom_point-tolerance <= contact.elevation <= top_point+tolerance:
                 raise ValueError(f"contact elevation is outside its layer at {cell}/{contact.direction}")
             if axis == 0 and abs(depth_offset-sign*contact.distance) > tolerance:
                 raise ValueError("top/bottom contact elevation must match its logical distance and centroid offsets")
             if (self.shape[0] == 1 and axis != 0 and abs(depth_offset) > tolerance) or (self.shape[2] == 1 and contact.x_offset != 0) or (self.shape[1] == 1 and contact.y_offset != 0):
                 raise ValueError("offset subfaces require enough cells to reconstruct tangential gradients")
+            zx,zy = m.zx[cell],m.zy[cell]
             if axis == 2:
-                cross = (sign*self.ex[cell]*sx*scale-conductance*depth_offset,0,-conductance*contact.y_offset)
+                cross = (sign*self.ex[cell]*zx*scale-conductance*depth_offset,0,-conductance*contact.y_offset)
             elif axis == 1:
-                cross = (sign*self.ey[cell]*sy*scale-conductance*depth_offset,-conductance*contact.x_offset,0)
+                cross = (sign*self.ey[cell]*zy*scale-conductance*depth_offset,-conductance*contact.x_offset,0)
             else:
-                cross = (0,sign*self.ex[cell]*sx*scale-conductance*contact.x_offset,
-                         sign*self.ey[cell]*sy*scale-conductance*contact.y_offset)
+                cross = (0,sign*self.ex[cell]*zx*scale-conductance*contact.x_offset,
+                         sign*self.ey[cell]*zy*scale-conductance*contact.y_offset)
             records.append((np.ravel_multi_index(cell,self.shape),conductance,*cross,contact.head,contact.kind == "discharge_only"))
         return tuple(records)
 
@@ -176,7 +218,7 @@ class TerrainReferenceOperator3D:
         cx, cy, cz = self.coefficients
         qx = cx[0]*(h[:,:,:-1]-h[:,:,1:])-cx[1]*hz[:,:,:-1]-cx[2]*hz[:,:,1:]
         qy = cy[0]*(h[:,:-1]-h[:,1:])-cy[1]*hz[:,:-1]-cy[2]*hz[:,1:]
-        qz = cz[0]*(h[:-1]-h[1:])-cz[1]*hx[:-1]-cz[2]*hx[1:]-cz[3]*hy[:-1]-cz[4]*hy[1:]
+        qz = cz[0]*(h[:-1]-h[1:])-cz[1]*hx[:-1]-cz[2]*hx[1:]-cz[3]*hy[:-1]-cz[4]*hy[1:]-cz[5]*hz[:-1]-cz[6]*hz[1:]
         boundary = np.empty(len(self.contact_records))
         for index, record in enumerate(self.contact_records):
             cell,c,bz,bx,by,hb,discharge = record
@@ -215,7 +257,7 @@ class TerrainReferenceOperator3D:
                 face -= sparse.diags(coeff[1].ravel()) @ select_l @ self.metrics.gz
                 face -= sparse.diags(coeff[2].ravel()) @ select_r @ self.metrics.gz
             else:
-                for value, select, gradient in ((coeff[1],select_l,self.metrics.gx),(coeff[2],select_r,self.metrics.gx),(coeff[3],select_l,self.metrics.gy),(coeff[4],select_r,self.metrics.gy)):
+                for value, select, gradient in ((coeff[1],select_l,self.metrics.gx),(coeff[2],select_r,self.metrics.gx),(coeff[3],select_l,self.metrics.gy),(coeff[4],select_r,self.metrics.gy),(coeff[5],select_l,self.metrics.gz),(coeff[6],select_r,self.metrics.gz)):
                     face -= sparse.diags(value.ravel()) @ select @ gradient
             matrix += jump.T @ face
         offset = np.zeros(n)
