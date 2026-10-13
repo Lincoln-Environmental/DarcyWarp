@@ -1,6 +1,32 @@
 kimi --model kimi-code/k3
 # DarcyWarp — Agent System Memory
 
+> 2026-10-13 evening session (baseline `09c2433`): nonparallel exterior
+> boundary fluxes FIXED (`9cc289f`) — top/bottom contacts evaluate cross
+> terms on the bounding interface's own slopes with an hz coupling
+> cancelling the centre-versus-interface defect (vanishes for parallel
+> interfaces); lateral contacts are physical x/y-planes with the subface
+> elevation measured from the owning cell's centre. h=z through sloping
+> top/bottom interfaces is exact (mandatory test). SHANZ hydro-diagnostics:
+> `physics/terrain_shanz_diagnostics.py` — pressure-zero phreatic water
+> table (potentiometric/dry columns separated), fixed-head vs spring
+> coastal exchange split, artesian/at-surface/deep-head discharge
+> separation; non-converged variants are preliminary. GPU-RESIDENT PICARD:
+> `solvers/terrain_device_3d.py` + `terrain_device_kernels.py`
+> (`device_picard=True`; host path stays reference/default) — device-side
+> saturation/coefficients(13-col)/secant storage/RHS/gates frozen per
+> outer, correction-form GMRES under 2D-style adaptive inexact control
+> (block rollback, E-W forcing, usable-inexact acceptance), 2 scalar
+> readbacks/outer, independent host final acceptance. ~140x less work on
+> 96² SHANZ (9600 Krylov/4 s vs 1.88M/576 s), device==host heads 2e-7.
+> STAGNATION ISOLATED (`docs/terrain_stagnation_isolation.json`): the 96²
+> residual plateau is the head-DECOUPLED dry-region conductance (min_sat
+> floor + saturation-independent vertical K) creating a nonzero local
+> minimum of the true residual — not springs, not floor magnitude, not the
+> linear solver; dry cells 735/2643/8651 at 16/32/64 explain the
+> resolution trend. Remedy = smoothed dry-region constitutive law (physics
+> change, future pass). Ladder tool: `working_tests/terrain_convergence_baseline.py`.
+
 > 2026-10-13 variable geological geometry (baseline `3c203e2`, report
 > `docs/3D_VARIABLE_GEOMETRY_SCIENTIFIC_REPORT_2026-10-13.md`):
 > `build_from_terrain(z_interfaces=...)` accepts independently varying
