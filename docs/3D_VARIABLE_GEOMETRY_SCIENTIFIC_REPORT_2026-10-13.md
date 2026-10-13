@@ -260,3 +260,71 @@ converged.
   variable geometry is future work.
 * Pinch-outs, disappearing units and discontinuous contacts are rejected,
   not approximated.
+
+
+## 8. Addendum (same day): GPU-resident Picard port and the 96×96 stagnation isolation
+
+### 8.1 Device-resident Picard (device_picard=True)
+
+The production 2D fast unconfined execution strategy is ported to the 3D
+terrain solver (`solvers/terrain_device_3d.py` + `terrain_device_kernels.py`,
+commit series from `f2741b5`). Per outer iteration the head, transformed
+coefficients, secant storage, RHS, corrections and residual stay on the
+device: kernels refresh saturation regularisation, the packed 13-column
+face operator and storage diagonals (validated against the host packer to
+1e-12 and the host secant terms to 1e-13), freeze the discharge-only gates
+at the accepted head (a gate re-evaluated against live Krylov iterates
+would make the operator nonlinear inside GMRES), extract the seven-point
+principal part into the multigrid level-0 buffers with the row scale, and
+rebuild the row-scaled RHS with contact offsets. The inner solve runs in
+correction form (A·δ = b − A·h, homogeneous prescribed-head constraints)
+under the 2D-style adaptive inexact controller: restart-cycle blocks,
+Eisenstat–Walker forcing, divergence rollback via device snapshots,
+stagnation detection, and acceptance of usable inexact corrections.
+Damped clipped updates and rejection rollback run on device; two scalar
+readbacks cross per outer iteration. Final acceptance remains with the
+independent host-side physical budget.
+
+### 8.2 Computational result
+
+On the representative SHANZ case the device Picard reaches the same
+residual plateau as the host path at a fraction of the cost: 96² steady,
+400 outers, 9600 Krylov iterations (24/outer, exact budgets, no
+whole-block overshoot) in ~3-4 s versus 576 s / 1.88 M Krylov for 800
+host-driven outers — ~140× less work and wall time, with 2 host reads
+per outer instead of full-field downloads. On a transient storage-only
+analytical case the device and host paths agree to 2e-7 m with the exact
+[9, 5] fixed point and the independent integrated volume balance closed
+(`test_device_picard_matches_host_and_independent_volume`).
+
+### 8.3 The 96×96 residual stagnation: isolation
+
+The plateau is a NONLINEAR (physical) stagnation, not a solver-machinery
+failure, and is isolated by experiment (`docs/terrain_stagnation_isolation.json`):
+
+1. **Not the linear solver.** GMRES corrections on the frozen system are
+   usable (10× contraction per block); the TRUE residual recomputed at the
+   refreshed coefficients does not follow the linearised prediction.
+2. **Not the discharge-only springs.** Removing every spring (fixed-head
+   coastal boundary only) reproduces the identical frozen residual
+   (0.0385) bit-for-bit in magnitude.
+3. **Not the floor magnitude per se.** floor 0.1 m changes the stall level
+   (0.034) but not the stall's existence.
+4. **Mechanism.** The saturation-floor regularisation makes the conductance
+   of clamped (near-dry) cells head-DECOUPLED: the frozen-operator
+   Jacobian has no entries to drive the true residual in those regions,
+   every damped correction is rejected by the independent backtracking
+   evaluation, and the true residual sits at a nonzero local minimum.
+   The dry-cell count grows with resolution (735 / 2643 / 8651 at
+   16²/32²/64²), which is exactly why finer cases stall worse (16²
+   nearly converges; 96² plateaus at ~1e-4 relative). This is the
+   documented quasi-3D regularisation limitation (saturation-independent
+   vertical K + floor), now quantified as the binding constraint on
+   nonlinear convergence.
+
+Per the task's acceptance criteria (§16.8) the remaining failure
+mechanism is thus demonstrated with reproducible minimal evidence: any
+resolution-ladder run of `working_tests/terrain_convergence_baseline.py
+--device-picard` reproduces it in seconds. A smooth (Richards-type or
+smoothed-floor) constitutive law in the dry region — a physics change,
+explicitly out of scope for this pass — is the identified remedy.

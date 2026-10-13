@@ -549,23 +549,23 @@ class TerrainOperatorSession3D:
         """GPU-resident Picard: identical physics and final acceptance to the
         host path, with the constitutive refresh, RHS, corrections and
         nonlinear acceptance running on device. Requires the unconfined
-        secant-Sy storage mode (the representative terrain use); confined
+        secant-Sy storage mode (steady solves carry zero storage); confined
         and legacy storage modes stay on the host path."""
         from DARCY_WARP_PACKAGE.solvers.terrain_device_3d import (
             DeviceTerrainState, DeviceTerrainPicard, DevicePicardControls)
-        if not unconfined or unconfined_storage_mode != "secant_sy" or not transient:
-            raise ValueError("the device Picard path currently requires transient unconfined secant_sy storage")
+        if not unconfined or unconfined_storage_mode != "secant_sy":
+            raise ValueError("the device Picard path currently requires unconfined secant_sy storage")
         start = perf_counter()
         operator = TerrainReferenceOperator3D(metrics=self.metrics,kx=self.kx,ky=self.ky,kz=self.kz,
             head=head,min_sat=unconfined_min_sat,contacts=self.contacts,trusted_k=True)
-        storage,change = self.storage_terms(head=head,previous=previous,transient=True,
+        storage,change = self.storage_terms(head=head,previous=previous,transient=transient,
             unconfined=True,mode=unconfined_storage_mode,sy=sy_field,ss=ss_field,coeff=None,dt=dt)
         seeded = seed_discharge_only_components_3d(operator=operator,head=head,source=self.rhs,
             fixed=self.bc_mask,storage=storage,potential_storage=True,topology_cache=self.topology_cache)
         if seeded:
             operator = TerrainReferenceOperator3D(metrics=self.metrics,kx=self.kx,ky=self.ky,kz=self.kz,
                 head=head,min_sat=unconfined_min_sat,contacts=self.contacts,trusted_k=True)
-            storage,change = self.storage_terms(head=head,previous=previous,transient=True,
+            storage,change = self.storage_terms(head=head,previous=previous,transient=transient,
                 unconfined=True,mode=unconfined_storage_mode,sy=sy_field,ss=ss_field,coeff=None,dt=dt)
         boundary,boundary_rhs = pack_terrain_boundaries(operator=operator,head=head,datum=datum)
         ungated,contact_rhs = pack_device_boundaries(operator=operator,datum=datum)
@@ -600,7 +600,7 @@ class TerrainOperatorSession3D:
             state.update_previous(previous)
         driver = DeviceTerrainPicard(session=self,state=state,workspace=self.workspace,
             device=device,controls=DevicePicardControls(),datum=datum,restart=krylov_restart,
-            krylov_budget=max_cycles,unconfined=True,transient=True,dt=dt,
+            krylov_budget=max_cycles,unconfined=True,transient=transient,dt=dt,
             abs_tol_min=abs_tol_min,head_tolerance=head_tolerance,
             budget_relative_tol=final_budget_relative_tol,rel_tol=rel_tol,
             min_sat=unconfined_min_sat,outer_limit=outer_limit,
@@ -613,7 +613,8 @@ class TerrainOperatorSession3D:
         final_operator = TerrainReferenceOperator3D(metrics=self.metrics,kx=self.kx,ky=self.ky,kz=self.kz,
             head=head_device,min_sat=unconfined_min_sat,contacts=self.contacts,trusted_k=True)
         final_storage,final_change = self.storage_terms(head=head_device,previous=previous,
-            transient=True,unconfined=True,mode=unconfined_storage_mode,sy=sy_field,ss=ss_field,coeff=None,dt=dt)
+            transient=transient,unconfined=True,mode=unconfined_storage_mode,sy=sy_field,
+            ss=ss_field,coeff=None,dt=dt)
         budget = compute_terrain_budget_3d(operator=final_operator,head=head_device,source=self.rhs,
             fixed=self.bc_mask,storage_change=final_change,storage_diagonal=final_storage)
         converged = bool(np.all(np.isfinite(head_device))
@@ -632,7 +633,7 @@ class TerrainOperatorSession3D:
             n_discharge_component_seeds=int(result["history"][0]["inner_reached"]) if result["history"] else 0,
             workspace_reused=False,operator_refreshes=0,geometry_revision=self.geometry_revision,
             n_isolated_cells_excluded=int(np.sum(isolated)),
-            transient=True,dt=dt,unconfined_storage_mode=unconfined_storage_mode,
+            transient=transient,dt=dt,unconfined_storage_mode=unconfined_storage_mode,
             min_saturated_thickness=unconfined_min_sat,
             final_head_residual_rms=budget["head_residual_rms"],
             device_picard=True)

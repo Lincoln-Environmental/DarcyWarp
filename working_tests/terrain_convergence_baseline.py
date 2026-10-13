@@ -24,7 +24,7 @@ from DARCY_WARP_PACKAGE.warped_darcy_3d import WarpDarcySolver3D
 
 
 def run_size(case, *, interfaces, floor, device, max_cycles, max_outer, warm_start=None,
-             unconfined_relax=0.7):
+             unconfined_relax=0.7, device_picard=False):
     ny, nx = case["surface"].shape
     solver = WarpDarcySolver3D(nx=nx, ny=ny, nz=case["layers"], dx=case["dx"], dy=case["dx"],
         dz=5., device=device, implementation="fast")
@@ -38,18 +38,19 @@ def run_size(case, *, interfaces, floor, device, max_cycles, max_outer, warm_sta
         head, info = solver.solve(unconfined=True, unconfined_min_sat=floor,
             unconfined_head_tol=1e-6, final_head_residual_tol=1e-6, rel_tol=1e-12,
             final_budget_relative_tol=1e-8, unconfined_max_picard_iter=max_outer,
-            unconfined_relax=unconfined_relax,
+            unconfined_relax=unconfined_relax, device_picard=device_picard,
             max_cycles=max_cycles, krylov_restart=24, max_levels=6, min_coarse_n=16)
     elapsed = perf_counter()-start
     history = []
     for entry in info["outer_history"]:
         history.append(dict(outer=entry["outer_iteration"],
             krylov=entry["krylov_iterations"],
-            proposed=float(entry["proposed_head_change_max"]),
-            accepted=float(entry["accepted_head_change_max"]),
-            head_residual=float(entry["head_residual_rms"]),
-            cell_residual=float(entry["physical_residual_rms"]),
-            relaxation=float(entry["relaxation"])))
+            proposed=float(entry.get("proposed_head_change_max", 0.0)),
+            accepted=float(entry.get("accepted_head_change_max", 0.0)),
+            head_residual=float(entry.get("head_residual_rms", 0.0)),
+            cell_residual=float(entry.get("physical_residual_rms",
+                entry.get("cell_residual", 0.0))),
+            relaxation=float(entry.get("relaxation", 1.0))))
     budget = info["budget"]
     dry = info.get("dry_cell_approximation", {})
     from DARCY_WARP_PACKAGE.physics.terrain_reference_3d import TerrainReferenceOperator3D
@@ -92,6 +93,7 @@ def main():
     parser.add_argument("--max-outer", type=int, default=400)
     parser.add_argument("--floor", type=float, default=.01)
     parser.add_argument("--variant", choices=("variable", "parallel"), default="variable")
+    parser.add_argument("--device-picard", action="store_true")
     parser.add_argument("--out", default="docs/terrain_convergence_baseline.json")
     args = parser.parse_args()
     results = dict(device=args.device, floor=args.floor, variant=args.variant, sizes={})
@@ -102,7 +104,7 @@ def main():
         print(f"running {args.variant} {n}x{n} ...", flush=True)
         head, summary = run_size(case, interfaces=np.asarray(interfaces), floor=args.floor,
             device=args.device, max_cycles=args.max_cycles, max_outer=args.max_outer,
-            warm_start=warm)
+            warm_start=warm, device_picard=args.device_picard)
         if summary["converged"]:
             warm = head
         results["sizes"][n] = summary

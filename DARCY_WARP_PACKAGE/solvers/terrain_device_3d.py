@@ -407,6 +407,19 @@ class DeviceTerrainPicard:
             krylov._tol = 0.0
             krylov._atol = max(targets[0]*np.sqrt(self.n_free), 1e-300)
             outcome = self.run_inner((head_residual, targets[1]), targets)
+            if not outcome["usable"] and not outcome["reached"]:
+                # A frozen-operator correction that no damping can use is a
+                # genuine linear/nonlinear failure (active-set kink or
+                # preconditioner stagnation), not progress: stop and report
+                # instead of applying a rejected proposal forever.
+                history.append(dict(outer_iteration=outer+1,
+                    krylov_iterations=outcome["cycles"],
+                    inner_reached=False, inner_stagnated=outcome["stagnated"],
+                    inner_diverged=outcome["diverged"], inner_usable=False,
+                    proposed_head_change_max=0.0, accepted_head_change_max=0.0,
+                    head_residual_rms=head_residual, relaxation=0.0))
+                accepted_head_residual = head_residual
+                break
             total_krylov += outcome["cycles"]
             # damped nonlinear update with refreshed-operator backtracking
             relaxation = self.unconfined_relax if self.outer_limit_val > 1 else 1.0
@@ -431,7 +444,7 @@ class DeviceTerrainPicard:
                 combined = self.dual_check(s.head_rel, s.candidate_rel)
                 trial_head_residual = float(np.sqrt(max(combined[3], 0.0)/n))
                 trial_flow_rms = float(np.sqrt(max(combined[2], 0.0)/n))
-                if backtrack == 0 or trial_head_residual <= accepted_head_residual \
+                if trial_head_residual <= accepted_head_residual \
                         or trial_head_residual <= self.head_tolerance:
                     accepted = True
                     break

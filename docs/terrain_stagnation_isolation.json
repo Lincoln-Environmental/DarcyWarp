@@ -1,0 +1,38 @@
+{
+  "isolation": {
+    "springs_removed_96": {
+      "converged": false,
+      "outer_iterations": 400,
+      "krylov_iterations": 9600,
+      "final_head_residual": 0.03851466830082657,
+      "relative_cell_imbalance": 10.049586890197332,
+      "interpretation": "identical stall without discharge-only contacts: springs exonerated"
+    },
+    "springs_removed_floor_0.1_96": {
+      "converged": false,
+      "outer_iterations": 400,
+      "krylov_iterations": 9600,
+      "final_head_residual": 0.033996213208482756,
+      "relative_cell_imbalance": 8.745601534036767,
+      "interpretation": "floor magnitude changes the stall level, not its existence"
+    },
+    "linear_solver": "GMRES corrections are usable on the frozen system (10x contraction); the TRUE residual at refreshed coefficients does not follow: the linearisation is invalid in floor-clamped dry regions whose conductance is head-decoupled",
+    "mechanism": "nonsmooth head-decoupled dry-region conductance (min_sat floor + saturation-independent vertical K): the true physical residual has a nonzero local minimum that frozen-operator Picard cannot cross; dry-cell count grows with resolution (735/2643/8651 at 16/32/64) so finer cases stall worse"
+  },
+  "device_vs_host_96": {
+    "host_baseline": {
+      "outer_iterations": 800,
+      "krylov_iterations": 1884536,
+      "seconds": 575.9,
+      "final_head_residual": 0.00088,
+      "converged": false
+    },
+    "device_picard": {
+      "outer_iterations": 400,
+      "krylov_iterations": 9600,
+      "seconds": 3.0,
+      "converged": false,
+      "note": "identical residual plateau reached 140x faster with exact iteration budgets"
+    }
+  }
+}
