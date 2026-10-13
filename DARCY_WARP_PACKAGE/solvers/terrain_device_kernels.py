@@ -147,16 +147,15 @@ def terrain_rhs_kernel(rhs: wp.array(dtype=wp.float64), source: wp.array(dtype=w
     contact_rhs: wp.array(dtype=wp.float64), boundary: wp.array2d(dtype=wp.float64),
     active: wp.array(dtype=wp.int32), scale: wp.array(dtype=wp.float64)):
     """Row-scaled rhs = (source + storage_diag*(previous-datum)
-    + gated contact c*(hb-datum))/diagonal, with prescribed-head rows
-    carrying their datum-relative value and inactive rows zero. The contact
-    offset respects the frozen per-outer gate in boundary column 5."""
+    + open contact c*(hb-datum))/diagonal, with prescribed-head rows
+    carrying their datum-relative value and inactive rows zero. The
+    contact offset buffer is aggregated per outer iteration over the
+    gate-open subfaces only (boundary arg kept for layout compatibility)."""
     c = wp.tid()
     zero = wp.float64(0.0)
     value = source[c]
     if active[c] != 0:
-        value = value + storage_diag[c]*(previous[c]-datum)
-        if boundary[c, 5] != wp.float64(0.0):
-            value = value + contact_rhs[c]
+        value = value + storage_diag[c]*(previous[c]-datum) + contact_rhs[c]
     if fixed[c] != 0:
         value = bc_values[c]-datum
     if active[c] == 0:
@@ -325,18 +324,134 @@ def terrain_scale_multiply_kernel(scaled: wp.array(dtype=wp.float64),
 
 
 @wp.kernel
-def terrain_gate_kernel(boundary: wp.array2d(dtype=wp.float64),
+def terrain_coarse_faces_kernel(
+    txp_f: wp.array(dtype=wp.float64, ndim=3), txm_f: wp.array(dtype=wp.float64, ndim=3),
+    typ_f: wp.array(dtype=wp.float64, ndim=3), tym_f: wp.array(dtype=wp.float64, ndim=3),
+    tzp_f: wp.array(dtype=wp.float64, ndim=3), tzm_f: wp.array(dtype=wp.float64, ndim=3),
+    storage_f: wp.array(dtype=wp.float64, ndim=3),
+    active_f: wp.array(dtype=wp.int32, ndim=3), bc_f: wp.array(dtype=wp.int32, ndim=3),
+    txp_c: wp.array(dtype=wp.float64, ndim=3), txm_c: wp.array(dtype=wp.float64, ndim=3),
+    typ_c: wp.array(dtype=wp.float64, ndim=3), tym_c: wp.array(dtype=wp.float64, ndim=3),
+    tzp_c: wp.array(dtype=wp.float64, ndim=3), tzm_c: wp.array(dtype=wp.float64, ndim=3),
+    storage_c: wp.array(dtype=wp.float64, ndim=3),
+    active_c: wp.array(dtype=wp.int32, ndim=3), bc_c: wp.array(dtype=wp.int32, ndim=3),
+    fy: int, fx: int, nx_f: int, ny_f: int, nz_f: int):
+    """Semi-coarsened 7-point operator refresh replicating the host
+    _coarsen_faces_consistent_axes: crossing fine faces on coarse cell
+    boundaries over both-free fine pairs, 1/(fy*fx) block scaling,
+    Dirichlet springs riding on the coarse storage slot. Launch over the
+    FINE grid; each fine cell contributes to its coarse cell."""
+    k, j, i = wp.tid()
+    one = wp.float64(1.0)
+    zero = wp.float64(0.0)
+    inv = one/(wp.float64(fy)*wp.float64(fx))
+    free_f = (active_f[k, j, i] != 0) and (bc_f[k, j, i] == 0)
+    jco = j//fy
+    ico = i//fx
+    # x-face plane between coarse ico and ico+1 sits at fine i = (ico+1)*fx-1
+    if i == (ico+1)*fx-1 and ico+1 < (nx_f+fx-1)//fx and i+1 < nx_f:
+        both = free_f and (active_f[k, j, i+1] != 0) and (bc_f[k, j, i+1] == 0)
+        if both:
+            wp.atomic_add(txp_c, k, jco, ico, txp_f[k, j, i]*inv)
+    # y-face plane between coarse jco and jco+1 at fine j = (jco+1)*fy-1
+    if j == (jco+1)*fy-1 and jco+1 < (ny_f+fy-1)//fy and j+1 < ny_f:
+        both = free_f and (active_f[k, j+1, i] != 0) and (bc_f[k, j+1, i] == 0)
+        if both:
+            wp.atomic_add(typ_c, k, jco, ico, typ_f[k, j, i]*inv)
+    # z faces: block-summed over the fy x fx fine patch, k -> k+1
+    if k+1 < nz_f:
+        both = free_f and (active_f[k+1, j, i] != 0) and (bc_f[k+1, j, i] == 0)
+        if both:
+            wp.atomic_add(tzp_c, k, jco, ico, tzp_f[k, j, i]*inv)
+    # Dirichlet springs: this fine cell free, neighbour fixed
+    spr = zero
+    if free_f:
+        if i+1 < nx_f and bc_f[k, j, i+1] != 0:
+            spr += txp_f[k, j, i]
+        if i > 0 and bc_f[k, j, i-1] != 0:
+            spr += txm_f[k, j, i]
+        if j+1 < ny_f and bc_f[k, j+1, i] != 0:
+            spr += typ_f[k, j, i]
+        if j > 0 and bc_f[k, j-1, i] != 0:
+            spr += tym_f[k, j, i]
+        if k+1 < nz_f and bc_f[k+1, j, i] != 0:
+            spr += tzp_f[k, j, i]
+        if k > 0 and bc_f[k-1, j, i] != 0:
+            spr += tzm_f[k, j, i]
+        wp.atomic_add(storage_c, k, jco, ico, storage_f[k, j, i]*inv + spr*inv)
+
+
+@wp.kernel
+def terrain_coarse_shifts_kernel(
+    txp_c: wp.array(dtype=wp.float64, ndim=3), txm_c: wp.array(dtype=wp.float64, ndim=3),
+    typ_c: wp.array(dtype=wp.float64, ndim=3), tym_c: wp.array(dtype=wp.float64, ndim=3),
+    tzp_c: wp.array(dtype=wp.float64, ndim=3), tzm_c: wp.array(dtype=wp.float64, ndim=3),
+    storage_c: wp.array(dtype=wp.float64, ndim=3),
+    active_c: wp.array(dtype=wp.int32, ndim=3), bc_c: wp.array(dtype=wp.int32, ndim=3),
+    faces_sum: wp.array(dtype=wp.float64, ndim=3)):
+    """Reciprocity shifts (txm[jc,ic] = txp[jc,ic-1] etc.), the inactive/
+    fixed zeroing of the coarse storage slot, and the coarse diagonal."""
+    k, j, i = wp.tid()
+    zero = wp.float64(0.0)
+    # Single-writer reciprocity: each txm/ty/tzm slot is written exactly
+    # once (edge threads write the zero), so no ordering hazard exists.
+    if i == 0:
+        txm_c[k, j, i] = zero
+    else:
+        txm_c[k, j, i] = txp_c[k, j, i-1]
+    if j == 0:
+        tym_c[k, j, i] = zero
+    else:
+        tym_c[k, j, i] = typ_c[k, j-1, i]
+    if k == 0:
+        tzm_c[k, j, i] = zero
+    else:
+        tzm_c[k, j, i] = tzp_c[k-1, j, i]
+    if active_c[k, j, i] == 0 or bc_c[k, j, i] != 0:
+        storage_c[k, j, i] = zero
+    diag = txp_c[k, j, i] + txm_c[k, j, i] + typ_c[k, j, i] + tym_c[k, j, i] \
+        + tzp_c[k, j, i] + tzm_c[k, j, i] + storage_c[k, j, i]
+    faces_sum[k, j, i] = diag
+
+
+@wp.kernel
+def terrain_subface_gate_kernel(sub_cell: wp.array(dtype=wp.int32),
+    sub_c: wp.array(dtype=wp.float64), sub_bz: wp.array(dtype=wp.float64),
+    sub_bx: wp.array(dtype=wp.float64), sub_by: wp.array(dtype=wp.float64),
+    sub_hb: wp.array(dtype=wp.float64), sub_discharge: wp.array(dtype=wp.int32),
     gx: wp.array(dtype=wp.float64), gy: wp.array(dtype=wp.float64),
-    gz: wp.array(dtype=wp.float64), head_relative: wp.array(dtype=wp.float64)):
-    """Freeze the per-outer discharge gate: column 5 is set from the
-    contact flux evaluated at the ACCEPTED head (relative units, datum
-    already excluded via column 4). Non-discharge contacts always pass."""
-    c = wp.tid()
-    if boundary[c, 0] <= wp.float64(0.0):
+    gz: wp.array(dtype=wp.float64), head_relative: wp.array(dtype=wp.float64),
+    sub_open: wp.array(dtype=wp.int32)):
+    """Evaluate every exterior subface INDEPENDENTLY at the accepted head:
+    a discharge-only subface is open exactly when its own physical flux
+    (relative units; hb carries the datum shift) is outgoing."""
+    s = wp.tid()
+    if sub_discharge[s] == 0:
+        sub_open[s] = 1
         return
-    if boundary[c, 6] == wp.float64(0.0):
-        boundary[c, 5] = wp.float64(1.0)
+    cell = sub_cell[s]
+    q = sub_c[s]*(head_relative[cell]-sub_hb[s]) \
+        - sub_bz[s]*gz[cell] - sub_bx[s]*gx[cell] - sub_by[s]*gy[cell]
+    sub_open[s] = wp.where(q > wp.float64(0.0), 1, 0)
+
+
+@wp.kernel
+def terrain_subface_scatter_kernel(sub_cell: wp.array(dtype=wp.int32),
+    sub_c: wp.array(dtype=wp.float64), sub_bz: wp.array(dtype=wp.float64),
+    sub_bx: wp.array(dtype=wp.float64), sub_by: wp.array(dtype=wp.float64),
+    sub_hb: wp.array(dtype=wp.float64), sub_open: wp.array(dtype=wp.int32),
+    boundary: wp.array2d(dtype=wp.float64), contact_rhs: wp.array(dtype=wp.float64),
+    open_col0: wp.array(dtype=wp.float64)):
+    """Aggregate only the gate-open subfaces into the per-cell boundary
+    rows (columns 0-3), the contact RHS offset c*(hb-datum), and the open
+    conductance column used by the preconditioner extraction."""
+    s = wp.tid()
+    if sub_open[s] == 0:
         return
-    q = boundary[c, 0]*(head_relative[c]-boundary[c, 4]) \
-        - boundary[c, 1]*gz[c] - boundary[c, 2]*gx[c] - boundary[c, 3]*gy[c]
-    boundary[c, 5] = wp.where(q > wp.float64(0.0), wp.float64(1.0), wp.float64(0.0))
+    cell = sub_cell[s]
+    wp.atomic_add(boundary, cell, 0, sub_c[s])
+    wp.atomic_add(boundary, cell, 1, sub_bz[s])
+    wp.atomic_add(boundary, cell, 2, sub_bx[s])
+    wp.atomic_add(boundary, cell, 3, sub_by[s])
+    wp.atomic_add(contact_rhs, cell, sub_c[s]*sub_hb[s])
+    wp.atomic_add(open_col0, cell, sub_c[s])

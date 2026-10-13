@@ -54,19 +54,18 @@ def pack_terrain_boundaries(*, operator, head, datum):
     return packed,rhs
 
 
-def pack_device_boundaries(*, operator, datum):
-    """Ungated seven-column device boundary pack: all contacts contribute
-    their columns; the per-outer gate state lives in column 5 and is
-    refreshed on device by the gate kernel; column 6 carries the raw
-    discharge-only flag. Returns (packed, contact_rhs) where contact_rhs
-    holds the accumulated c*(hb-datum) per cell (gated on device)."""
-    packed = np.zeros((np.prod(operator.shape),7))
-    contact_rhs = np.zeros(np.prod(operator.shape))
-    for record in operator.contact_records:
+def pack_device_subfaces(*, operator, datum):
+    """Per-SUBFACE device contact rows: (cell, c, bz, bx, by, hb-datum,
+    discharge). Gating is evaluated independently per subface on device
+    and only gate-open subfaces are aggregated into the per-cell boundary
+    rows, matching the CPU reference for multiple contacts per cell."""
+    records = operator.contact_records
+    count = max(len(records), 1)
+    subfaces = np.zeros((count, 7))
+    for index, record in enumerate(records):
         cell,c,bz,bx,by,hb,discharge = record
-        packed[cell] += (c,bz,bx,by,hb-datum,1.0,float(discharge))
-        contact_rhs[cell] += c*(hb-datum)
-    return packed,contact_rhs
+        subfaces[index] = (cell, c, bz, bx, by, hb-datum, int(discharge))
+    return subfaces, len(records)
 
 
 def seed_discharge_only_components_3d(*, operator, head, source, fixed, storage, potential_storage, topology_cache):
@@ -210,7 +209,7 @@ class TerrainGPUWorkspace3D:
             self.coefficients,self.qx,self.qy,self.qz,self.nx,self.ny,self.nz],device=self.device)
         wp.launch(terrain_divergence_kernel,dim=self.n,inputs=[x,y,self.gx,self.gy,self.gz,
             self.qx,self.qy,self.qz,self.storage,self.boundary,self.active,self.fixed,self.scale,int(row_scaled),z,
-            float(alpha),float(beta),wp.float64(self.datum),self.nx,self.ny,self.nz],device=self.device)
+            float(alpha),float(beta),self.nx,self.ny,self.nz],device=self.device)
 
     def smooth(self, *, level, iterations):
         source,out = level["x"],level["work"]
@@ -568,7 +567,10 @@ class TerrainOperatorSession3D:
             storage,change = self.storage_terms(head=head,previous=previous,transient=transient,
                 unconfined=True,mode=unconfined_storage_mode,sy=sy_field,ss=ss_field,coeff=None,dt=dt)
         boundary,boundary_rhs = pack_terrain_boundaries(operator=operator,head=head,datum=datum)
-        ungated,contact_rhs = pack_device_boundaries(operator=operator,datum=datum)
+        subfaces,subface_count = pack_device_subfaces(operator=operator,datum=datum)
+        contact_rhs = np.zeros(np.prod(self.shape))
+        for record in operator.contact_records:
+            contact_rhs[record[0]] += record[1]*(record[5]-datum)
         rhs = self.rhs+boundary_rhs+(storage*(previous-datum) if transient else 0)
         rhs[self.bc_mask != 0] = self.bc_values[self.bc_mask != 0]-datum
         rhs[self.grid.active == 0] = 0
@@ -584,20 +586,22 @@ class TerrainOperatorSession3D:
             if self.workspace is not None:
                 self.workspace.close()
             self.workspace = TerrainGPUWorkspace3D(operator=operator,fixed=fixed,storage=storage,
-                boundary=ungated,device=device,max_levels=max_levels,min_coarse_n=min_coarse_n,
+                boundary=boundary,device=device,max_levels=max_levels,min_coarse_n=min_coarse_n,
                 restart=krylov_restart,maxiter=max_cycles,rel_tol=rel_tol,abs_tol=abs_tol_min,datum=datum)
             self.workspace_key = key
         else:
             self.workspace.refresh(operator=operator,fixed=fixed,storage=storage,
-                boundary=ungated)
+                boundary=boundary)
         self.snapshot = snapshot
         state = DeviceTerrainState(session=self,device=device,workspace=self.workspace)
         state.upload_static(source=self.rhs,sy=sy_field,ss=ss_field,
             free=(self.grid.active != 0)&(self.bc_mask == 0)&(~isolated),
-            ungated_boundary=ungated,contact_rhs=contact_rhs)
+            subfaces=subfaces)
         state.update_head(head)
         if previous is not None:
             state.update_previous(previous)
+        else:
+            state.update_previous(head)
         driver = DeviceTerrainPicard(session=self,state=state,workspace=self.workspace,
             device=device,controls=DevicePicardControls(),datum=datum,restart=krylov_restart,
             krylov_budget=max_cycles,unconfined=True,transient=transient,dt=dt,
@@ -630,15 +634,19 @@ class TerrainOperatorSession3D:
             seconds=result["seconds"],host_scalar_reads=result["host_scalar_reads"],
             rejected_updates=result["rejected"],
             n_zero_capacity_storage_seeds=storage_seeds,
-            n_discharge_component_seeds=int(result["history"][0]["inner_reached"]) if result["history"] else 0,
+            n_discharge_component_seeds=int(seeded),
+            n_discharge_subfaces=int(subface_count),
             workspace_reused=False,operator_refreshes=0,geometry_revision=self.geometry_revision,
             n_isolated_cells_excluded=int(np.sum(isolated)),
             transient=transient,dt=dt,unconfined_storage_mode=unconfined_storage_mode,
             min_saturated_thickness=unconfined_min_sat,
             final_head_residual_rms=budget["head_residual_rms"],
             device_picard=True)
+        last_trial = result["history"][-1] if result["history"] else {}
         info.update(r_rms_end=budget["cell_residual_rms"],h_rms_end=budget["head_residual_rms"],
-            dh_rms_lastcheck=0.0,dh_max_lastcheck=0.0,
+            dh_rms_lastcheck=float(last_trial.get("accepted_head_change_rms", 0.0)),
+            dh_max_lastcheck=float(last_trial.get("accepted_head_change_max", 0.0)),
+            proposed_dh_max_lastcheck=float(last_trial.get("proposed_head_change_max", 0.0)),
             multigrid_cycles=(result["krylov_iterations"]+krylov_restart-1)//krylov_restart,
             multigrid_hierarchy="conservative approximate principal part; not exact Galerkin")
         state.close()

@@ -11,6 +11,7 @@ from DARCY_WARP_PACKAGE.solvers.terrain_fast_3d import TerrainGPUWorkspace3D, pa
 from DARCY_WARP_PACKAGE.warped_darcy_3d import WarpDarcySolver3D
 from test_3d_scientific_audit import device
 from test_3d_terrain_reference import terrain_case, variable_interface_case
+from DARCY_WARP_PACKAGE.solvers.terrain_fast_3d import pack_device_subfaces
 
 
 @pytest.mark.parametrize("irregular", [False,True])
@@ -592,3 +593,177 @@ def test_device_picard_matches_host_and_independent_volume():
     change = 100*sy*(np.clip(results["device"][0]-grid.bottoms,0,grid.thickness)
         - np.clip(previous-grid.bottoms,0,grid.thickness))
     assert change.sum() == pytest.approx(-215.,abs=2e-6)
+
+
+def test_device_boundary_subface_gate_matches_cpu_reference():
+    """Two discharge subfaces on ONE cell with different elevations: the
+    per-subface device gates must open/close independently and the
+    aggregated rows must reproduce the CPU reference fluxes exactly."""
+    grid = TerrainGrid3D(surface_elevation=np.zeros((1, 2)), zeta_faces=np.array([0, 1, 2]),
+        dx=2., dy=2.)
+    metrics = TerrainMetrics3D(grid=grid)
+    contacts = (TerrainContact3D(cell=(0, 0, 0), direction="west", area=1., distance=1.,
+                    elevation=-.2, head=2., kind="discharge_only", conductance=3.),
+                TerrainContact3D(cell=(0, 0, 0), direction="west", area=1., distance=1.,
+                    elevation=-.8, head=4., kind="discharge_only", conductance=5.))
+    head = np.full(grid.shape, 3.)
+    reference = TerrainReferenceOperator3D(metrics=metrics, kx=1., ky=1., kz=1., head=head,
+        contacts=contacts)
+    reference_fluxes = reference.fluxes(head=head)[3]
+    # CPU gates: deep subface closed at h=3 (q<=0), shallow open.
+    assert reference_fluxes[0] > 0 and reference_fluxes[1] <= 0
+    # Device per-subface evaluation via the gate kernel.
+    from DARCY_WARP_PACKAGE.solvers.terrain_device_kernels import (
+        terrain_subface_gate_kernel, terrain_subface_scatter_kernel)
+    dev = device()
+    datum = 0.
+    sub_cell = np.array([0, 0], dtype=np.int32)
+    sub_c = np.array([3., 5.])
+    sub_bz = sub_bx = sub_by = np.zeros(2)
+    sub_hb = np.array([2. - datum, 4. - datum])
+    sub_discharge = np.array([1, 1], dtype=np.int32)
+    sub_open = wp.zeros(2, dtype=wp.int32, device=dev)
+    h_rel = wp.array((head.ravel() - datum), dtype=wp.float64, device=dev)
+    gx = wp.zeros(head.size, dtype=wp.float64, device=dev)
+    gy = wp.zeros(head.size, dtype=wp.float64, device=dev)
+    gz = wp.zeros(head.size, dtype=wp.float64, device=dev)
+    wp.launch(terrain_subface_gate_kernel, dim=2,
+        inputs=[wp.array(sub_cell, dtype=wp.int32, device=dev),
+                wp.array(sub_c, dtype=wp.float64, device=dev),
+                wp.array(sub_bz, dtype=wp.float64, device=dev),
+                wp.array(sub_bx, dtype=wp.float64, device=dev),
+                wp.array(sub_by, dtype=wp.float64, device=dev),
+                wp.array(sub_hb, dtype=wp.float64, device=dev),
+                wp.array(sub_discharge, dtype=wp.int32, device=dev),
+                gx, gy, gz, h_rel, sub_open], device=dev)
+    assert sub_open.numpy().tolist() == [1, 0]
+    boundary = wp.zeros((head.size, 6), dtype=wp.float64, device=dev)
+    contact_rhs = wp.zeros(head.size, dtype=wp.float64, device=dev)
+    open_col0 = wp.zeros(head.size, dtype=wp.float64, device=dev)
+    wp.launch(terrain_subface_scatter_kernel, dim=2,
+        inputs=[wp.array(sub_cell, dtype=wp.int32, device=dev),
+                wp.array(sub_c, dtype=wp.float64, device=dev),
+                wp.array(sub_bz, dtype=wp.float64, device=dev),
+                wp.array(sub_bx, dtype=wp.float64, device=dev),
+                wp.array(sub_by, dtype=wp.float64, device=dev),
+                wp.array(sub_hb, dtype=wp.float64, device=dev),
+                sub_open, boundary, contact_rhs, open_col0], device=dev)
+    bnp = boundary.numpy()
+    # Aggregated columns hold ONLY the open subface; contact RHS its offset.
+    np.testing.assert_allclose(bnp[0, :4], [3., 0., 0., 0.], rtol=0, atol=1e-15)
+    np.testing.assert_allclose(contact_rhs.numpy()[0], 3.*(2. - datum), rtol=0, atol=1e-15)
+    # Flip both heads high: both subfaces open, aggregated rows match CPU.
+    head2 = np.full(grid.shape, 5.)
+    reference2 = TerrainReferenceOperator3D(metrics=metrics, kx=1., ky=1., kz=1., head=head2,
+        contacts=contacts)
+    reference2.fluxes(head=head2)
+    h_rel.assign((head2.ravel() - datum))
+    wp.launch(terrain_subface_gate_kernel, dim=2,
+        inputs=[wp.array(sub_cell, dtype=wp.int32, device=dev),
+                wp.array(sub_c, dtype=wp.float64, device=dev),
+                wp.array(sub_bz, dtype=wp.float64, device=dev),
+                wp.array(sub_bx, dtype=wp.float64, device=dev),
+                wp.array(sub_by, dtype=wp.float64, device=dev),
+                wp.array(sub_hb, dtype=wp.float64, device=dev),
+                wp.array(sub_discharge, dtype=wp.int32, device=dev),
+                gx, gy, gz, h_rel, sub_open], device=dev)
+    assert sub_open.numpy().tolist() == [1, 1]
+
+
+def test_device_picard_drying_rewetting_nonparallel_matches_host():
+    """Drying/rewetting across nonparallel interfaces on the device path:
+    same heads as the host path, independent volume balance closed."""
+    y, x = np.mgrid[:2, :3]
+    surface = 20+.4*x+.25*y
+    mid = surface-(3.5+.2*x-.15*y)
+    base = mid-(6+.3*y)
+    grid = TerrainGrid3D(z_interfaces=np.stack((surface, mid, base)), dx=5., dy=5.)
+    sy = np.broadcast_to(np.array([.25, .1])[:, None, None], grid.shape).copy()
+    k = np.full(grid.shape, 1.)
+    k[-1] = 1e-3
+    fixed = np.zeros(grid.shape, dtype=np.int32)
+    fixed[:, :, 0] = 1
+    values = np.broadcast_to(surface[None]-.5, grid.shape).copy()
+    if not device().startswith("cuda"):
+        pytest.skip("device Picard requires CUDA")
+    heads = {}
+    for mode in ("host", "device"):
+        previous = values-.5
+        source = np.zeros(grid.shape)
+        source[0] = .01*25.
+        with build_solver(grid=grid, kx=k, ky=k, kz=.1*k, fixed=fixed, values=values,
+            source=source, initial=previous) as solver:
+            kwargs = dict(unconfined=True, transient=True, sy=sy, ss=1e-5, dt=1.,
+                head_prev=previous, unconfined_head_tol=1e-9,
+                final_head_residual_tol=1e-9, rel_tol=1e-13,
+                final_budget_relative_tol=1e-9, unconfined_max_picard_iter=400,
+                unconfined_min_sat=.01)
+            if mode == "device":
+                kwargs["device_picard"] = True
+            head, info = solver.solve(**kwargs)
+            assert info["converged"], (mode, info.get("n_outer_iterations"))
+            heads[mode] = head
+    np.testing.assert_allclose(heads["device"], heads["host"], rtol=0, atol=2e-7)
+
+
+def test_device_coarse_hierarchy_refresh_matches_host_coarsening():
+    """After a device evaluate() at a nontrivial head, every coarse level's
+    faces/storage/diag must equal the HOST coarsening math applied to the
+    refreshed level-0 principal faces (preconditioner contract)."""
+    grid, metrics = variable_interface_case()
+    k = np.full(grid.shape, 2.)
+    k[-1] = 1e-4
+    rng = np.random.default_rng(9)
+    head = grid.bottoms + rng.uniform(-.1, 1.5, grid.shape)
+    head[grid.active == 0] = 0.
+    if not device().startswith("cuda"):
+        pytest.skip("device coarse refresh requires CUDA")
+    from DARCY_WARP_PACKAGE.solvers.terrain_device_3d import DeviceTerrainState
+    fixed = np.zeros(grid.shape, dtype=np.int32)
+    fixed[:, :, 0] = 1
+    with build_solver(grid=grid, kx=k, ky=.6*k, kz=.1*k, fixed=fixed,
+        values=np.full(grid.shape, 5.), source=np.zeros(grid.shape), initial=head) as solver:
+        solver.solve(max_cycles=0)          # construct the workspace/levels
+        session = solver._session
+        state = DeviceTerrainState(session=session, device=device(),
+            workspace=session.workspace)
+        state.upload_static(source=np.zeros(grid.shape), sy=np.full(grid.shape, .2),
+            ss=np.full(grid.shape, 1e-5),
+            free=(grid.active != 0)&(fixed == 0),
+            subfaces=np.zeros((1, 7)))
+        state.update_head(head)
+        state.update_previous(head)
+        from DARCY_WARP_PACKAGE.solvers.terrain_device_3d import DeviceTerrainPicard, DevicePicardControls
+        driver = DeviceTerrainPicard(session=session, state=state,
+            workspace=session.workspace, device=device(), controls=DevicePicardControls(),
+            datum=0., restart=12, krylov_budget=200, unconfined=True, transient=False,
+            dt=1., abs_tol_min=1e-12, head_tolerance=1e-9, budget_relative_tol=1e-10,
+            rel_tol=1e-12, min_sat=.01, outer_limit=1, unconfined_relax=.7)
+        driver.evaluate(state.head, state.head_rel)
+        levels = session.workspace.levels
+        for level_index in range(len(levels)-1):
+            fine, coarse = levels[level_index], levels[level_index+1]
+            faces_f = tuple(array.numpy().reshape(fine["active"].shape) for array in fine["faces"])
+            from DARCY_WARP_PACKAGE.solvers_3d import _coarsen_faces_consistent_axes
+            faces_c, springs_c = _coarsen_faces_consistent_axes(
+                faces_f, fine["active"].numpy().reshape(fine["active"].shape),
+                fine["bc_mask"].numpy().reshape(fine["bc_mask"].shape),
+                coarsen_y=fine["coarsen_y"], coarsen_x=fine["coarsen_x"])
+            storage_c = coarse["storage"].numpy().reshape(coarse["active"].shape)
+            free_f = (fine["active"].numpy() != 0)&(fine["bc_mask"].numpy() == 0)
+            from DARCY_WARP_PACKAGE.solvers.fast_3d import _masked_block_sum_axes
+            expected_storage = _masked_block_sum_axes(
+                fine["storage"].numpy().reshape(fine["active"].shape),
+                free_f.astype(np.float64), coarsen_y=fine["coarsen_y"],
+                coarsen_x=fine["coarsen_x"])/float(fine["coarsen_y"]*fine["coarsen_x"]) \
+                + springs_c
+            expected_storage[(coarse["active"].numpy() == 0)
+                | (coarse["bc_mask"].numpy() != 0)] = 0.
+            for face_index, (dev_face, host_face) in enumerate(
+                    zip(coarse["faces"], faces_c)):
+                np.testing.assert_allclose(dev_face.numpy().reshape(host_face.shape),
+                    host_face, rtol=1e-12, atol=1e-14,
+                    err_msg=f"level {level_index+1} face {face_index}")
+            np.testing.assert_allclose(storage_c, expected_storage, rtol=1e-12, atol=1e-14,
+                err_msg=f"level {level_index+1} storage")
+        state.close()

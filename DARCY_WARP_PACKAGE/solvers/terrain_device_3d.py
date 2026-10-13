@@ -39,7 +39,9 @@ from DARCY_WARP_PACKAGE.solvers.terrain_device_kernels import (
     terrain_secant_storage_kernel, terrain_rhs_kernel, terrain_relaxed_update_kernel,
     terrain_copy_kernel, terrain_dual_check_kernel, terrain_combine_partials_kernel,
     terrain_relative_head_kernel, terrain_extract_principal_kernel,
-    terrain_gate_kernel, terrain_scale_divide_kernel,
+    terrain_subface_gate_kernel, terrain_subface_scatter_kernel,
+    terrain_coarse_faces_kernel, terrain_coarse_shifts_kernel,
+    terrain_scale_divide_kernel,
     terrain_scale_multiply_kernel, BLOCK_SIZE)
 from DARCY_WARP_PACKAGE.solvers.terrain_kernels_3d import (terrain_combine_kernel,
     terrain_gradients_kernel)
@@ -121,15 +123,16 @@ class DeviceTerrainState:
         self.storage_change = wp.zeros(self.n, dtype=wp.float64, device=device)
         self.residual = wp.zeros(self.n, dtype=wp.float64, device=device)
         self.bc_values = f64(session.bc_values)
-        self.boundary_col0_device = wp.zeros(self.n, dtype=wp.float64, device=device)
+        self.open_col0 = wp.zeros(self.n, dtype=wp.float64, device=device)
         self.contact_rhs = wp.zeros(self.n, dtype=wp.float64, device=device)
+        self.starting = wp.zeros(self.n, dtype=wp.float64, device=device)
         self.free = wp.zeros(self.n, dtype=wp.int32, device=device)
         blocks = (self.n + BLOCK_SIZE - 1)//BLOCK_SIZE
         self.partials = wp.zeros((blocks, 7), dtype=wp.float64, device=device)
         self.blocks = blocks
         self.combined = wp.zeros(7, dtype=wp.float64, device=device)
 
-    def upload_static(self, *, source, sy, ss, free, ungated_boundary, contact_rhs):
+    def upload_static(self, *, source, sy, ss, free, subfaces):
         self.source = wp.array(np.ascontiguousarray(source, dtype=np.float64).ravel(),
             dtype=wp.float64, device=self.device)
         self.sy = wp.array(np.ascontiguousarray(sy, dtype=np.float64).ravel(),
@@ -137,17 +140,23 @@ class DeviceTerrainState:
         self.ss = wp.array(np.ascontiguousarray(ss, dtype=np.float64).ravel(),
             dtype=wp.float64, device=self.device)
         self.free.assign(np.ascontiguousarray(free.ravel(), dtype=np.int32))
-        # Ungated device pack: columns 0-4 always carry the contact data,
-        # column 5 is the frozen gate refreshed per outer by the gate
-        # kernel, column 6 the raw discharge-only flag.
-        full = np.zeros((self.n, 7))
-        width = min(ungated_boundary.shape[1], 6)
-        full[:, :width] = ungated_boundary[:, :width]
-        full[:, 5] = np.where(full[:, 0] > 0, 1.0, 0.0)
-        self.boundary.assign(full)
-        self.boundary_col0_device.assign(np.ascontiguousarray(
-            ungated_boundary[:, 0], dtype=np.float64))
-        self.contact_rhs.assign(np.ascontiguousarray(contact_rhs, dtype=np.float64))
+        # Per-SUBFACE contact rows: gating is evaluated independently for
+        # each subface and only the open ones are aggregated per outer.
+        self.sub_cell = wp.array(np.ascontiguousarray(subfaces[:, 0], dtype=np.int32),
+            dtype=wp.int32, device=self.device)
+        self.sub_c = wp.array(np.ascontiguousarray(subfaces[:, 1], dtype=np.float64),
+            dtype=wp.float64, device=self.device)
+        self.sub_bz = wp.array(np.ascontiguousarray(subfaces[:, 2], dtype=np.float64),
+            dtype=wp.float64, device=self.device)
+        self.sub_bx = wp.array(np.ascontiguousarray(subfaces[:, 3], dtype=np.float64),
+            dtype=wp.float64, device=self.device)
+        self.sub_by = wp.array(np.ascontiguousarray(subfaces[:, 4], dtype=np.float64),
+            dtype=wp.float64, device=self.device)
+        self.sub_hb = wp.array(np.ascontiguousarray(subfaces[:, 5], dtype=np.float64),
+            dtype=wp.float64, device=self.device)
+        self.sub_discharge = wp.array(np.ascontiguousarray(subfaces[:, 6], dtype=np.int32),
+            dtype=wp.int32, device=self.device)
+        self.sub_open = wp.zeros(subfaces.shape[0], dtype=wp.int32, device=self.device)
 
     def update_head(self, host_head):
         self.head.assign(np.ascontiguousarray(host_head, dtype=np.float64).ravel())
@@ -177,7 +186,9 @@ class DeviceTerrainState:
                      "free", "partials", "combined", "bottoms", "thickness",
                      "zx_interfaces", "zy_interfaces", "zx_centre", "zy_centre",
                      "zxf", "zyf", "kx", "ky", "kz", "source", "sy", "ss",
-                     "boundary_col0_device", "contact_rhs"):
+                     "open_col0", "contact_rhs", "starting", "sub_cell", "sub_c",
+                     "sub_bz", "sub_bx", "sub_by", "sub_hb", "sub_discharge",
+                     "sub_open"):
             setattr(self, name, None)
 
 
@@ -210,11 +221,16 @@ class DeviceTerrainPicard:
         self.dx = float(session.grid.dx)
         self.dy = float(session.grid.dy)
 
-    # ---- device-side outer refresh -------------------------------------
-    def refresh(self):
+    # ---- device-side operator evaluation --------------------------------
+    def evaluate(self, head_buffer, rel_buffer):
+        """Full nonlinear evaluation at the given head: saturation,
+        transformed coefficients, secant storage, per-subface discharge
+        gates with aggregation, level-0 extraction, the FULL coarse
+        hierarchy refresh, and the row-scaled RHS. The accepted head_rel
+        buffer is never touched when evaluating a candidate."""
         s = self.state
         wp.launch(terrain_saturation_kernel, dim=s.n,
-            inputs=[s.head, s.bottoms, s.thickness, wp.float64(self.min_sat),
+            inputs=[head_buffer, s.bottoms, s.thickness, wp.float64(self.min_sat),
                     s.true_sat, s.fraction], device=self.device)
         wp.launch(terrain_face_coefficients_kernel, dim=s.n,
             inputs=[s.fraction, s.kx, s.ky, s.kz, s.thickness,
@@ -224,7 +240,7 @@ class DeviceTerrainPicard:
             device=self.device)
         if self.transient and self.unconfined:
             wp.launch(terrain_secant_storage_kernel, dim=s.n,
-                inputs=[s.head, s.previous, s.bottoms, s.thickness, s.sy, s.ss,
+                inputs=[head_buffer, s.previous, s.bottoms, s.thickness, s.sy, s.ss,
                         s.free, wp.float64(self.dx), wp.float64(self.dy),
                         wp.float64(self.dt), s.storage_diag, s.storage_change],
                 device=self.device)
@@ -234,26 +250,55 @@ class DeviceTerrainPicard:
         # The adopted Krylov matvec reads workspace.storage: keep it
         # identical to the freshly computed diagonals.
         wp.copy(src=s.storage_diag, dest=s.storage)
+        wp.launch(terrain_relative_head_kernel, dim=s.n,
+            inputs=[head_buffer, rel_buffer, wp.float64(self.datum), s.active],
+            device=self.device)
+        wp.launch(terrain_gradients_kernel, dim=s.n,
+            inputs=[rel_buffer, self.workspace.horizontal, self.workspace.depths,
+                    self.workspace.gx, self.workspace.gy, self.workspace.gz,
+                    s.nx, s.ny, s.nz], device=self.device)
+        # Per-subface independent gating, then aggregation of the open set.
+        s.boundary.zero_()
+        s.contact_rhs.zero_()
+        s.open_col0.zero_()
+        wp.launch(terrain_subface_gate_kernel, dim=s.sub_open.shape[0],
+            inputs=[s.sub_cell, s.sub_c, s.sub_bz, s.sub_bx, s.sub_by, s.sub_hb,
+                    s.sub_discharge, self.workspace.gx, self.workspace.gy,
+                    self.workspace.gz, rel_buffer, s.sub_open], device=self.device)
+        wp.launch(terrain_subface_scatter_kernel, dim=s.sub_open.shape[0],
+            inputs=[s.sub_cell, s.sub_c, s.sub_bz, s.sub_bx, s.sub_by, s.sub_hb,
+                    s.sub_open, s.boundary, s.contact_rhs, s.open_col0],
+            device=self.device)
+        # Level-0 principal part with the OPEN contact conductances riding
+        # on the storage slot (preconditioner approximation, as on host).
         level0 = self.workspace.levels[0]
         wp.launch(terrain_extract_principal_kernel, dim=s.n,
-            inputs=[s.coefficients, s.active, s.storage_diag, s.boundary_col0_device,
+            inputs=[s.coefficients, s.active, s.storage_diag, s.open_col0,
                     level0["faces"][0], level0["faces"][1], level0["faces"][2],
                     level0["faces"][3], level0["faces"][4], level0["faces"][5],
                     level0["diag"], level0["storage"], s.scale, s.nx, s.ny, s.nz],
             device=self.device)
-
-    def gate_and_rhs(self):
-        s = self.state
-        wp.launch(terrain_relative_head_kernel, dim=s.n,
-            inputs=[s.head, s.head_rel, wp.float64(self.datum), s.active],
-            device=self.device)
-        wp.launch(terrain_gradients_kernel, dim=s.n,
-            inputs=[s.head_rel, self.workspace.horizontal, self.workspace.depths,
-                    self.workspace.gx, self.workspace.gy, self.workspace.gz,
-                    s.nx, s.ny, s.nz], device=self.device)
-        wp.launch(terrain_gate_kernel, dim=s.n,
-            inputs=[s.boundary, self.workspace.gx, self.workspace.gy,
-                    self.workspace.gz, s.head_rel], device=self.device)
+        # Full coarse refresh (2D fast-path contract): every coarse level
+        # recomputed from its fine level whenever saturation changes.
+        for level_index in range(len(self.workspace.levels)-1):
+            fine = self.workspace.levels[level_index]
+            coarse = self.workspace.levels[level_index+1]
+            for array in (*coarse["faces"], coarse["storage"]):
+                array.zero_()
+            wp.launch(terrain_coarse_faces_kernel, dim=fine["dim"],
+                inputs=[fine["faces"][0], fine["faces"][1], fine["faces"][2],
+                        fine["faces"][3], fine["faces"][4], fine["faces"][5],
+                        fine["storage"], fine["active"], fine["bc_mask"],
+                        coarse["faces"][0], coarse["faces"][1], coarse["faces"][2],
+                        coarse["faces"][3], coarse["faces"][4], coarse["faces"][5],
+                        coarse["storage"], coarse["active"], coarse["bc_mask"],
+                        fine["coarsen_y"], fine["coarsen_x"],
+                        fine["nx"], fine["ny"], fine["nz"]], device=self.device)
+            wp.launch(terrain_coarse_shifts_kernel, dim=coarse["dim"],
+                inputs=[coarse["faces"][0], coarse["faces"][1], coarse["faces"][2],
+                        coarse["faces"][3], coarse["faces"][4], coarse["faces"][5],
+                        coarse["storage"], coarse["active"], coarse["bc_mask"],
+                        coarse["diag"]], device=self.device)
         wp.launch(terrain_rhs_kernel, dim=s.n,
             inputs=[s.rhs, s.source, s.storage_diag, s.previous,
                     wp.float64(self.datum), s.fixed, s.bc_values,
@@ -373,8 +418,7 @@ class DeviceTerrainPicard:
         rejected = 0
         start = perf_counter()
         for outer in range(max_outer):
-            self.refresh()
-            self.gate_and_rhs()
+            self.evaluate(s.head, s.head_rel)
             # Raw physical residual at the accepted head (units m^3/day),
             # then the row-scaled correction RHS for the Krylov system.
             wp.launch(terrain_scale_multiply_kernel, dim=s.n,
@@ -407,6 +451,7 @@ class DeviceTerrainPicard:
             krylov._tol = 0.0
             krylov._atol = max(targets[0]*np.sqrt(self.n_free), 1e-300)
             outcome = self.run_inner((head_residual, targets[1]), targets)
+            total_krylov += outcome["cycles"]
             if not outcome["usable"] and not outcome["reached"]:
                 # A frozen-operator correction that no damping can use is a
                 # genuine linear/nonlinear failure (active-set kink or
@@ -420,30 +465,35 @@ class DeviceTerrainPicard:
                     head_residual_rms=head_residual, relaxation=0.0))
                 accepted_head_residual = head_residual
                 break
-            total_krylov += outcome["cycles"]
-            # damped nonlinear update with refreshed-operator backtracking
+            # Damped nonlinear update with the FULL operator, storage, gates
+            # and RHS re-evaluated at every candidate head; the accepted
+            # state (head, operator, gates, RHS) is preserved untouched
+            # until a candidate passes the physical residual test.
             relaxation = self.unconfined_relax if self.outer_limit_val > 1 else 1.0
-            starting = wp.zeros(s.n, dtype=wp.float64, device=self.device)
             wp.launch(terrain_copy_kernel, dim=s.n,
-                inputs=[s.head], outputs=[starting], device=self.device)
+                inputs=[s.head], outputs=[s.starting], device=self.device)
             accepted = False
             trial_head_residual = np.inf
+            trial_flow_rms = 0.0
+            proposed_max = 0.0
             for backtrack in range(12):
                 wp.launch(terrain_copy_kernel, dim=s.n,
-                    inputs=[starting], outputs=[s.candidate], device=self.device)
+                    inputs=[s.starting], outputs=[s.candidate], device=self.device)
                 wp.launch(terrain_relaxed_update_kernel, dim=s.n,
                     inputs=[s.candidate, s.delta, wp.float64(relaxation),
                             wp.float64(c.max_head_change_per_outer), s.fixed,
                             s.bc_values, s.active], device=self.device)
-                self.refresh()
-                self.gate_and_rhs()
-                wp.launch(terrain_relative_head_kernel, dim=s.n,
-                    inputs=[s.candidate, s.candidate_rel, wp.float64(self.datum), s.active],
-                    device=self.device)
+                # Everything at the CANDIDATE: coefficients, storage, gates,
+                # aggregated boundary, full hierarchy, RHS. The accepted
+                # head_rel is left untouched for the dh comparison.
+                self.evaluate(s.candidate, s.candidate_rel)
+                wp.launch(terrain_scale_multiply_kernel, dim=s.n,
+                    inputs=[s.rhs, s.scale, s.rhs_raw], device=self.device)
                 self.matvec_residual(s.candidate_rel, s.rhs_raw)
                 combined = self.dual_check(s.head_rel, s.candidate_rel)
                 trial_head_residual = float(np.sqrt(max(combined[3], 0.0)/n))
                 trial_flow_rms = float(np.sqrt(max(combined[2], 0.0)/n))
+                proposed_max = float(combined[1])/max(relaxation, 1e-300)
                 if trial_head_residual <= accepted_head_residual \
                         or trial_head_residual <= self.head_tolerance:
                     accepted = True
@@ -451,27 +501,33 @@ class DeviceTerrainPicard:
                 relaxation *= 0.5
             if not accepted:
                 rejected += 1
-                # restore the refreshed state at the starting head
+                # Roll the accepted state back in full: head, operator,
+                # gates, aggregated boundary, hierarchy and RHS.
                 wp.launch(terrain_copy_kernel, dim=s.n,
-                    inputs=[starting], outputs=[s.head], device=self.device)
-                self.refresh()
-                self.gate_and_rhs()
+                    inputs=[s.starting], outputs=[s.head], device=self.device)
+                self.evaluate(s.head, s.head_rel)
                 trial_head_residual = accepted_head_residual
+                accepted_dh_rms = 0.0
+                accepted_dh_max = 0.0
             else:
                 accepted_head_residual = min(accepted_head_residual, trial_head_residual)
-                # Commit the accepted candidate as the new nonlinear state.
+                # Commit the accepted candidate as the new nonlinear state
+                # (operator/gates/RHS already evaluated at it).
                 wp.launch(terrain_copy_kernel, dim=s.n,
                     inputs=[s.candidate], outputs=[s.head], device=self.device)
-            previous_dh_rms = float(np.sqrt(max(combined[1], 0.0)))
+                accepted_dh_rms = float(np.sqrt(max(combined[0], 0.0))/n)
+                accepted_dh_max = float(combined[1])
+            previous_dh_rms = accepted_dh_rms
             history.append(dict(outer_iteration=outer+1,
                 krylov_iterations=outcome["cycles"],
                 inner_reached=outcome["reached"], inner_stagnated=outcome["stagnated"],
                 inner_diverged=outcome["diverged"], inner_usable=outcome["usable"],
-                proposed_head_change_max=float(outcome["dh_max"]),
-                accepted_head_change_max=float(np.sqrt(max(combined[0], 0.0))/n),
+                proposed_head_change_max=proposed_max,
+                accepted_head_change_max=accepted_dh_max,
+                accepted_head_change_rms=accepted_dh_rms,
                 head_residual_rms=trial_head_residual,
                 relaxation=float(relaxation)))
-            if trial_head_residual <= self.head_tolerance and (
+            if accepted and trial_head_residual <= self.head_tolerance and (
                     trial_flow_rms <= self.abs_tol_min*np.sqrt(n)):
                 converged = True
                 accepted_head_residual = trial_head_residual
