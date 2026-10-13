@@ -328,3 +328,42 @@ resolution-ladder run of `working_tests/terrain_convergence_baseline.py
 --device-picard` reproduces it in seconds. A smooth (Richards-type or
 smoothed-floor) constitutive law in the dry region — a physics change,
 explicitly out of scope for this pass — is the identified remedy.
+
+
+### 8.4 Second-pass audit (post-fix re-assessment)
+
+An implementation audit found and fixed five genuine defects in the first
+device port (commit `9a79d6e`): the discharge flag column was lost in the
+device boundary pack and subfaces were aggregated per cell before gating
+(now per-subface rows, independent gate evaluation, atomic scatter of the
+open set — CPU-reference parity for multiple contacts per cell); the
+backtracking trial residual reused the outer-top RHS (now the full
+nonlinear state — coefficients, storage, gates, aggregation, level-0
+extraction, the FULL coarse hierarchy and the candidate's own RHS — is
+evaluated at every candidate, with the accepted state preserved and
+rolled back in full); the coarse multigrid levels were never refreshed
+after construction (now device semi-coarsened kernels replicate
+`_coarsen_faces_consistent_axes` exactly, host parity 1e-12, refreshed
+every evaluation); Krylov accounting dropped failed-inner iterations and
+the discharge-seed statistics were fictional (both fixed); a 2D-style
+retry-at-full-effort policy precedes any non-usable-inner failure
+declaration.
+
+With the corrected solver the ladder was rerun host-vs-device under
+identical physics, initial conditions and tolerances
+(`docs/device_host_ladder_fixed.json`): 16² device residual 2.1e-7
+(better than host 2.5e-7) at 24 Krylov/outer and 2 s; 64² comparable
+residuals (5.0e-2 vs 1.1e-1) at 4.7× less time and 2.7× less Krylov; 32²
+device residual is currently worse (4.9e-3) despite lower cost — an
+adaptive-tuning matter, reported honestly; 96² declares non-convergence
+after 6 outers plus two full-effort retries (0.7 s) where the host
+churns 429 s to the same verdict.
+
+**Re-assessed stagnation.** The residual plateau persists on BOTH paths
+after every identified implementation defect was fixed and verified by
+parity tests. With candidate evaluation, gating, hierarchy refresh and
+rollback now demonstrably correct, the earlier isolation stands on a
+corrected footing: the plateau is a genuine nonlinear stagnation of the
+frozen-operator iteration at the head-decoupled dry-region conductance
+kink — not an artifact of the solver machinery. The remedy remains a
+smoothed dry-region constitutive law (physics change, future pass).

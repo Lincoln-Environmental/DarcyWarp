@@ -410,6 +410,7 @@ class DeviceTerrainPicard:
         c = self.controls
         self._eta = None
         self._eta_residual = None
+        self._retries = 0
         history = []
         total_krylov = 0
         converged = False
@@ -453,18 +454,43 @@ class DeviceTerrainPicard:
             outcome = self.run_inner((head_residual, targets[1]), targets)
             total_krylov += outcome["cycles"]
             if not outcome["usable"] and not outcome["reached"]:
-                # A frozen-operator correction that no damping can use is a
-                # genuine linear/nonlinear failure (active-set kink or
-                # preconditioner stagnation), not progress: stop and report
-                # instead of applying a rejected proposal forever.
-                history.append(dict(outer_iteration=outer+1,
-                    krylov_iterations=outcome["cycles"],
-                    inner_reached=False, inner_stagnated=outcome["stagnated"],
-                    inner_diverged=outcome["diverged"], inner_usable=False,
-                    proposed_head_change_max=0.0, accepted_head_change_max=0.0,
-                    head_residual_rms=head_residual, relaxation=0.0))
-                accepted_head_residual = head_residual
-                break
+                if self._retries < 2:
+                    # 2D retry-first policy: one full-effort retry with a
+                    # tight tolerance before declaring a genuine failure.
+                    self._retries += 1
+                    s.delta.zero_()
+                    krylov._maxiter = self.krylov_budget
+                    krylov._tol = 0.0
+                    krylov._atol = max(self.abs_tol_min*np.sqrt(self.n_free), 1e-300)
+                    used, error, tolerance = krylov()
+                    total_krylov += used
+                    outcome = dict(cycles=used, reached=error <= tolerance,
+                        stagnated=False, diverged=not np.isfinite(error),
+                        usable=np.isfinite(error) and error <= 1.0,
+                        head_rms=error, flow_rms=0.0, dh_max=0.0)
+                    history.append(dict(outer_iteration=outer+1,
+                        krylov_iterations=used, inner_reached=outcome["reached"],
+                        inner_stagnated=False, inner_diverged=outcome["diverged"],
+                        inner_usable=outcome["usable"], inner_retried=True,
+                        proposed_head_change_max=0.0, accepted_head_change_max=0.0,
+                        head_residual_rms=head_residual, relaxation=0.0))
+                    if not outcome["usable"] or not outcome["reached"]:
+                        accepted_head_residual = head_residual
+                        break
+                else:
+                    # A frozen-operator correction that no damping can use
+                    # is a genuine linear/nonlinear failure (active-set kink
+                    # or preconditioner stagnation), not progress: stop and
+                    # report instead of applying rejected proposals forever.
+                    history.append(dict(outer_iteration=outer+1,
+                        krylov_iterations=0,
+                        inner_reached=False, inner_stagnated=outcome["stagnated"],
+                        inner_diverged=outcome["diverged"], inner_usable=False,
+                        inner_retried=True,
+                        proposed_head_change_max=0.0, accepted_head_change_max=0.0,
+                        head_residual_rms=head_residual, relaxation=0.0))
+                    accepted_head_residual = head_residual
+                    break
             # Damped nonlinear update with the FULL operator, storage, gates
             # and RHS re-evaluated at every candidate head; the accepted
             # state (head, operator, gates, RHS) is preserved untouched
