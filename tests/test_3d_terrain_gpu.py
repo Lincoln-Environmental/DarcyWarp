@@ -563,3 +563,32 @@ def test_coastal_gating_on_nonparallel_interfaces():
     assert info["budget"]["relative_cell_imbalance"] < 1e-9
     reference = TerrainReferenceOperator3D(metrics=TerrainMetrics3D(grid=grid),kx=k,ky=k,kz=.1*k,contacts=contacts)
     np.testing.assert_allclose(reference.fluxes(head=h)[3],outflows,rtol=1e-10,atol=1e-12)
+
+
+def test_device_picard_matches_host_and_independent_volume():
+    """GPU-resident Picard: same physics, same fixed point, few host reads."""
+    grid = TerrainGrid3D(surface_elevation=np.array([[20.]]),zeta_faces=np.array([0,10,20]),dx=10,dy=10)
+    fixed = np.zeros(grid.shape,dtype=np.int32)
+    previous = np.full(grid.shape,12.)
+    sy = np.array([.2,.35]).reshape(grid.shape)
+    if not device().startswith("cuda"):
+        pytest.skip("device Picard requires CUDA")
+    results = {}
+    for mode in ("host", "device"):
+        source = np.array([0.,-215.]).reshape(grid.shape)
+        with build_solver(grid=grid,kx=1,ky=1,kz=1,fixed=fixed,values=np.zeros(grid.shape),
+            source=source,initial=previous) as solver:
+            kwargs = dict(unconfined=True,transient=True,sy=sy,dt=1,head_prev=previous,
+                unconfined_head_tol=1e-8,final_head_residual_tol=1e-8,
+                abs_tol_min=1e-11,rel_tol=1e-12,unconfined_max_picard_iter=400)
+            if mode == "device":
+                kwargs["device_picard"] = True
+            head,info = solver.solve(**kwargs)
+            assert info["converged"],(mode,info)
+            results[mode] = (head,info)
+    np.testing.assert_allclose(results["device"][0],results["host"][0],rtol=0,atol=2e-7)
+    np.testing.assert_allclose(results["device"][0].ravel(),[9.,5.],rtol=0,atol=2e-7)
+    assert results["device"][1]["host_scalar_reads"] <= 3*results["device"][1]["n_outer_iterations"]
+    change = 100*sy*(np.clip(results["device"][0]-grid.bottoms,0,grid.thickness)
+        - np.clip(previous-grid.bottoms,0,grid.thickness))
+    assert change.sum() == pytest.approx(-215.,abs=2e-6)

@@ -54,6 +54,21 @@ def pack_terrain_boundaries(*, operator, head, datum):
     return packed,rhs
 
 
+def pack_device_boundaries(*, operator, datum):
+    """Ungated seven-column device boundary pack: all contacts contribute
+    their columns; the per-outer gate state lives in column 5 and is
+    refreshed on device by the gate kernel; column 6 carries the raw
+    discharge-only flag. Returns (packed, contact_rhs) where contact_rhs
+    holds the accumulated c*(hb-datum) per cell (gated on device)."""
+    packed = np.zeros((np.prod(operator.shape),7))
+    contact_rhs = np.zeros(np.prod(operator.shape))
+    for record in operator.contact_records:
+        cell,c,bz,bx,by,hb,discharge = record
+        packed[cell] += (c,bz,bx,by,hb-datum,1.0,float(discharge))
+        contact_rhs[cell] += c*(hb-datum)
+    return packed,contact_rhs
+
+
 def seed_discharge_only_components_3d(*, operator, head, source, fixed, storage, potential_storage, topology_cache):
     """Open a physically available discharge branch with a numerical guess.
 
@@ -308,7 +323,7 @@ class TerrainOperatorSession3D:
               unconfined_head_tol=1e-6, final_head_residual_tol=None,
               final_budget_relative_tol=1e-8, max_cycles=300, max_levels=6,
               min_coarse_n=2, krylov_restart=12, rel_tol=1e-10, abs_tol_min=1e-12,
-              dh_rms_tol=1e-6, return_info=True, **unsupported):
+              dh_rms_tol=1e-6, return_info=True, device_picard=False, **unsupported):
         if WP_FLOAT is not wp.float64:
             raise ValueError("terrain fast solver requires DARCY_FLOAT=float64")
         if unsupported:
@@ -360,6 +375,18 @@ class TerrainOperatorSession3D:
         workspace_reused = self.workspace is not None and self.workspace_key == key
         graph_captures_before = getattr(self.workspace.krylov,"graph_captures",0) if workspace_reused else 0
         outer_limit = unconfined_max_picard_iter if unconfined or any(c.kind == "discharge_only" for c in self.contacts) else 1
+        if device_picard:
+            return self._solve_device(head=head,previous=previous,device=device,
+                unconfined=unconfined,transient=transient,dt=dt,datum=datum,free=free,
+                outer_limit=outer_limit,unconfined_relax=unconfined_relax,
+                unconfined_storage_mode=unconfined_storage_mode,sy_field=sy_field,
+                ss_field=ss_field,dt_unused=dt,key=key,max_levels=max_levels,
+                min_coarse_n=min_coarse_n,krylov_restart=krylov_restart,
+                max_cycles=max_cycles,rel_tol=rel_tol,abs_tol_min=abs_tol_min,
+                head_tolerance=head_tolerance,
+                final_budget_relative_tol=final_budget_relative_tol,
+                unconfined_min_sat=unconfined_min_sat,storage_seeds=storage_seeds,
+                return_info=return_info)
         for outer in range(outer_limit):
             start = perf_counter()
             operator = TerrainReferenceOperator3D(metrics=self.metrics,kx=self.kx,ky=self.ky,kz=self.kz,
@@ -512,6 +539,109 @@ class TerrainOperatorSession3D:
         if unconfined:
             info["dry_cell_approximation"] = terrain_dry_diagnostics_3d(operator=final_operator,head=head,source=self.rhs,fixed=self.bc_mask,budget=budget)
         return (head,info) if return_info else head
+
+    def _solve_device(self, *, head, previous, device, unconfined, transient, dt, datum,
+                      free, outer_limit, unconfined_relax, unconfined_storage_mode,
+                      sy_field, ss_field, dt_unused, key, max_levels, min_coarse_n,
+                      krylov_restart, max_cycles, rel_tol, abs_tol_min, head_tolerance,
+                      final_budget_relative_tol, unconfined_min_sat, storage_seeds,
+                      return_info):
+        """GPU-resident Picard: identical physics and final acceptance to the
+        host path, with the constitutive refresh, RHS, corrections and
+        nonlinear acceptance running on device. Requires the unconfined
+        secant-Sy storage mode (the representative terrain use); confined
+        and legacy storage modes stay on the host path."""
+        from DARCY_WARP_PACKAGE.solvers.terrain_device_3d import (
+            DeviceTerrainState, DeviceTerrainPicard, DevicePicardControls)
+        if not unconfined or unconfined_storage_mode != "secant_sy" or not transient:
+            raise ValueError("the device Picard path currently requires transient unconfined secant_sy storage")
+        start = perf_counter()
+        operator = TerrainReferenceOperator3D(metrics=self.metrics,kx=self.kx,ky=self.ky,kz=self.kz,
+            head=head,min_sat=unconfined_min_sat,contacts=self.contacts,trusted_k=True)
+        storage,change = self.storage_terms(head=head,previous=previous,transient=True,
+            unconfined=True,mode=unconfined_storage_mode,sy=sy_field,ss=ss_field,coeff=None,dt=dt)
+        seeded = seed_discharge_only_components_3d(operator=operator,head=head,source=self.rhs,
+            fixed=self.bc_mask,storage=storage,potential_storage=True,topology_cache=self.topology_cache)
+        if seeded:
+            operator = TerrainReferenceOperator3D(metrics=self.metrics,kx=self.kx,ky=self.ky,kz=self.kz,
+                head=head,min_sat=unconfined_min_sat,contacts=self.contacts,trusted_k=True)
+            storage,change = self.storage_terms(head=head,previous=previous,transient=True,
+                unconfined=True,mode=unconfined_storage_mode,sy=sy_field,ss=ss_field,coeff=None,dt=dt)
+        boundary,boundary_rhs = pack_terrain_boundaries(operator=operator,head=head,datum=datum)
+        ungated,contact_rhs = pack_device_boundaries(operator=operator,datum=datum)
+        rhs = self.rhs+boundary_rhs+(storage*(previous-datum) if transient else 0)
+        rhs[self.bc_mask != 0] = self.bc_values[self.bc_mask != 0]-datum
+        rhs[self.grid.active == 0] = 0
+        topology_diag = storage + boundary[:,0].reshape(self.shape)
+        isolated = _resolve_isolated_free_cells(faces=operator.principal_faces(),active=self.grid.active,
+            bc_mask=self.bc_mask,rhs_eff=rhs,storage_diag=topology_diag,topology_cache=self.topology_cache)
+        fixed = self.bc_mask.copy()
+        fixed[isolated] = 1
+        rhs[isolated] = head[isolated]-datum
+        snapshot = (pack_terrain_coefficients(operator=operator),storage.copy(),boundary.copy(),
+            fixed.copy(),self.grid.active.copy(),self.geometry_revision)
+        if self.workspace is None or self.workspace_key != key:
+            if self.workspace is not None:
+                self.workspace.close()
+            self.workspace = TerrainGPUWorkspace3D(operator=operator,fixed=fixed,storage=storage,
+                boundary=ungated,device=device,max_levels=max_levels,min_coarse_n=min_coarse_n,
+                restart=krylov_restart,maxiter=max_cycles,rel_tol=rel_tol,abs_tol=abs_tol_min,datum=datum)
+            self.workspace_key = key
+        else:
+            self.workspace.refresh(operator=operator,fixed=fixed,storage=storage,
+                boundary=ungated)
+        self.snapshot = snapshot
+        state = DeviceTerrainState(session=self,device=device,workspace=self.workspace)
+        state.upload_static(source=self.rhs,sy=sy_field,ss=ss_field,
+            free=(self.grid.active != 0)&(self.bc_mask == 0)&(~isolated),
+            ungated_boundary=ungated,contact_rhs=contact_rhs)
+        state.update_head(head)
+        if previous is not None:
+            state.update_previous(previous)
+        driver = DeviceTerrainPicard(session=self,state=state,workspace=self.workspace,
+            device=device,controls=DevicePicardControls(),datum=datum,restart=krylov_restart,
+            krylov_budget=max_cycles,unconfined=True,transient=True,dt=dt,
+            abs_tol_min=abs_tol_min,head_tolerance=head_tolerance,
+            budget_relative_tol=final_budget_relative_tol,rel_tol=rel_tol,
+            min_sat=unconfined_min_sat,outer_limit=outer_limit,
+            unconfined_relax=unconfined_relax)
+        result = driver.run(outer_limit)
+        head_device = state.head.numpy().reshape(self.shape)
+        head_device[self.grid.active == 0] = 0
+        head_device[self.bc_mask != 0] = self.bc_values[self.bc_mask != 0]
+        # Independent final host acceptance at the completed physical state.
+        final_operator = TerrainReferenceOperator3D(metrics=self.metrics,kx=self.kx,ky=self.ky,kz=self.kz,
+            head=head_device,min_sat=unconfined_min_sat,contacts=self.contacts,trusted_k=True)
+        final_storage,final_change = self.storage_terms(head=head_device,previous=previous,
+            transient=True,unconfined=True,mode=unconfined_storage_mode,sy=sy_field,ss=ss_field,coeff=None,dt=dt)
+        budget = compute_terrain_budget_3d(operator=final_operator,head=head_device,source=self.rhs,
+            fixed=self.bc_mask,storage_change=final_change,storage_diagonal=final_storage)
+        converged = bool(np.all(np.isfinite(head_device))
+            and budget["head_residual_rms"] <= head_tolerance
+            and (budget["cell_residual_rms"] <= abs_tol_min
+                 or budget["relative_cell_imbalance"] <= final_budget_relative_tol))
+        info = dict(implementation="fast",geometry="terrain",solver_type="terrain_device_picard_3d",
+            fast_operator="fp64_conservative_transformed_faces_device",
+            converged=converged,final_physical_acceptance=converged,budget=budget,
+            krylov_iterations=result["krylov_iterations"],
+            n_outer_iterations=result["outer_iterations"],
+            outer_history=result["history"],
+            seconds=result["seconds"],host_scalar_reads=result["host_scalar_reads"],
+            rejected_updates=result["rejected"],
+            n_zero_capacity_storage_seeds=storage_seeds,
+            n_discharge_component_seeds=int(result["history"][0]["inner_reached"]) if result["history"] else 0,
+            workspace_reused=False,operator_refreshes=0,geometry_revision=self.geometry_revision,
+            n_isolated_cells_excluded=int(np.sum(isolated)),
+            transient=True,dt=dt,unconfined_storage_mode=unconfined_storage_mode,
+            min_saturated_thickness=unconfined_min_sat,
+            final_head_residual_rms=budget["head_residual_rms"],
+            device_picard=True)
+        info.update(r_rms_end=budget["cell_residual_rms"],h_rms_end=budget["head_residual_rms"],
+            dh_rms_lastcheck=0.0,dh_max_lastcheck=0.0,
+            multigrid_cycles=(result["krylov_iterations"]+krylov_restart-1)//krylov_restart,
+            multigrid_hierarchy="conservative approximate principal part; not exact Galerkin")
+        state.close()
+        return (head_device,info) if return_info else head_device
 
     def storage_terms(self, *, head, previous, transient, unconfined, mode, sy, ss, coeff, dt):
         zero = np.zeros(self.shape)
