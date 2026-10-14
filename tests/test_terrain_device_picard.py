@@ -14,7 +14,172 @@ from DARCY_WARP_PACKAGE.physics.terrain_reference_3d import (
 from DARCY_WARP_PACKAGE.physics.terrain_grid_3d import TerrainGrid3D
 from DARCY_WARP_PACKAGE.physics.terrain_budget_3d import compute_terrain_budget_3d
 from test_3d_terrain_gpu import build_solver
+from DARCY_WARP_PACKAGE.solvers.terrain_gmres_3d import TerrainGMRES3D
 from test_3d_scientific_audit import device
+
+
+@pytest.fixture(params=["cpu", "cuda:0"])
+def terrain_test_device(request, monkeypatch):
+    wp.init()
+    backend = request.param
+    if backend.startswith("cuda") and not wp.is_cuda_available():
+        pytest.skip("CUDA is unavailable")
+
+    def selected_device():
+        return backend
+
+    monkeypatch.setattr("test_3d_terrain_gpu.device", selected_device)
+    return backend
+
+
+def reuse_controls():
+    return {"unconfined": True, "device_picard": True, "max_cycles": 13,
+        "krylov_restart": 4, "max_levels": 3, "min_coarse_n": 2,
+        "unconfined_max_picard_iter": 100, "rel_tol": 1e-12, "abs_tol_min": 1e-12,
+        "final_head_residual_tol": 1e-9, "final_budget_relative_tol": 1e-9}
+
+
+def assert_installed_terrain_state(*, solver, head, info, expected_fixed):
+    session = solver._session
+    workspace = session.workspace
+    np.testing.assert_array_equal(workspace.active.numpy().reshape(session.shape), session.grid.active)
+    np.testing.assert_array_equal(workspace.fixed.numpy().reshape(session.shape), expected_fixed)
+    np.testing.assert_array_equal(session.snapshot[6], expected_fixed)
+    np.testing.assert_array_equal(session.snapshot[7], session.grid.active)
+    np.testing.assert_array_equal(session.snapshot_packed_positive,
+        workspace.coefficients.numpy()[:, (0, 3, 6)] > 0)
+    np.testing.assert_array_equal(workspace.levels[0]["active"].numpy(), session.grid.active)
+    np.testing.assert_array_equal(workspace.levels[0]["bc_mask"].numpy(), expected_fixed)
+    np.testing.assert_array_equal(head[session.bc_mask != 0], session.bc_values[session.bc_mask != 0])
+    np.testing.assert_array_equal(head[session.grid.active == 0], 0.)
+    reference = TerrainReferenceOperator3D(metrics=session.metrics, kx=session.kx,
+        ky=session.ky, kz=session.kz, head=head, contacts=session.contacts)
+    budget = compute_terrain_budget_3d(operator=reference, head=head, source=session.rhs,
+        fixed=expected_fixed, storage_change=np.zeros(session.shape),
+        storage_diagonal=np.zeros(session.shape), return_fields=True)
+    assert info["converged"], info
+    assert budget["head_residual_rms"] <= 1e-9
+    assert budget["cell_residual_rms"] <= 1e-12 or budget["relative_cell_imbalance"] <= 1e-9
+    for field in ("cell_residual_rms", "head_residual_rms", "relative_cell_imbalance"):
+        assert info["budget"][field] == pytest.approx(budget[field], rel=1e-10, abs=1e-14)
+
+
+def assert_workspace_transition(*, old_workspace, new_workspace, reused, backend):
+    if reused:
+        assert new_workspace is old_workspace
+    else:
+        assert new_workspace is not old_workspace
+        assert old_workspace.krylov._cycle_graph is None
+        assert old_workspace.krylov._A is None and old_workspace.krylov._M is None
+    if backend.startswith("cuda"):
+        assert old_workspace.krylov.graph_captures == 1
+        assert new_workspace.krylov.graph_captures == 1
+        assert new_workspace.krylov.graph_replays > 0
+
+
+def test_device_workspace_rebuilds_when_contact_connects_isolated_cell(terrain_test_device):
+    grid = TerrainGrid3D(surface_elevation=np.zeros((1, 5)), zeta_faces=np.array([0., 1.]),
+        active_columns=np.array([[1, 1, 1, 0, 1]]), dx=1., dy=1.)
+    fixed = np.array([1, 0, 0, 0, 0], dtype=np.int32).reshape(grid.shape)
+    initial = np.array([2., 2., 2., 0., 7.]).reshape(grid.shape)
+    source = np.array([0., .01, .01, 0., 0.]).reshape(grid.shape)
+    contact = TerrainContact3D(cell=(0, 0, 4), direction="east", area=1.,
+        distance=.5, elevation=-.5, head=4.)
+    options = reuse_controls()
+    with build_solver(grid=grid, kx=1., ky=1., kz=1., fixed=fixed, values=initial,
+        source=source, initial=initial) as solver:
+        old_head, old_info = solver.solve(**options)
+        expected_fixed = fixed.copy()
+        expected_fixed[0, 0, 4] = 1
+        assert old_info["n_isolated_cells_excluded"] == 1
+        assert old_head[0, 0, 4] == 7.
+        assert_installed_terrain_state(solver=solver, head=old_head, info=old_info,
+            expected_fixed=expected_fixed)
+        old_workspace = solver._session.workspace
+        solver._session.update_contacts(contacts=(contact,))
+        head, info = solver.solve(**options)
+        assert info["n_isolated_cells_excluded"] == 0
+        assert head[0, 0, 4] == pytest.approx(4., abs=1e-9)
+        assert_installed_terrain_state(solver=solver, head=head, info=info, expected_fixed=fixed)
+        assert not info["workspace_reused"]
+        assert_workspace_transition(old_workspace=old_workspace,
+            new_workspace=solver._session.workspace, reused=False, backend=terrain_test_device)
+        with build_solver(grid=grid, kx=1., ky=1., kz=1., fixed=fixed, values=initial,
+            source=source, initial=initial, contacts=(contact,)) as fresh:
+            fresh_head, fresh_info = fresh.solve(**options)
+            assert_installed_terrain_state(solver=fresh, head=fresh_head, info=fresh_info,
+                expected_fixed=fixed)
+        np.testing.assert_allclose(head, fresh_head, rtol=0., atol=2e-9)
+
+
+@pytest.mark.parametrize("update", ["active", "reactivate", "geometry", "source", "missing_snapshot"])
+def test_device_workspace_topology_update_and_numeric_reuse(terrain_test_device, update):
+    columns = np.ones((3, 6), dtype=bool)
+    if update == "reactivate":
+        columns[1, 2] = False
+    grid = TerrainGrid3D(surface_elevation=np.zeros((3, 6)), zeta_faces=np.array([0., 1., 3.]),
+        active_columns=columns, dx=2., dy=3.)
+    fixed = np.zeros(grid.shape, dtype=np.int32)
+    fixed[:, :, 0] = fixed[:, :, -1] = 1
+    values = np.full(grid.shape, 3.)
+    values[:, :, 0], values[:, :, -1] = 2., 4.
+    initial = np.full(grid.shape, 3.)
+    source = np.zeros(grid.shape)
+    options = reuse_controls()
+    with build_solver(grid=grid, kx=1., ky=.6, kz=.1, fixed=fixed, values=values,
+        source=source, initial=initial) as solver:
+        _unused_head, old_info = solver.solve(**options)
+        assert old_info["converged"]
+        old_workspace = solver._session.workspace
+        old_graph = getattr(old_workspace.krylov, "_cycle_graph", None)
+        old_replays = getattr(old_workspace.krylov, "graph_replays", 0)
+        reused = update in ("geometry", "source")
+        if update in ("active", "reactivate"):
+            columns = grid.active_columns.copy()
+            columns[1, 2] = update == "reactivate"
+            grid = TerrainGrid3D(z_interfaces=grid.z_interfaces, dx=grid.dx, dy=grid.dy,
+                active_columns=columns)
+            solver._session.update_geometry(grid=grid)
+        elif update == "geometry":
+            y, x = np.mgrid[:3, :6]
+            grid = TerrainGrid3D(surface_elevation=.1*x+.05*y,
+                zeta_faces=np.array([0., 1., 3.]), active_columns=columns,
+                dx=grid.dx, dy=grid.dy)
+            solver._session.update_geometry(grid=grid)
+        else:
+            source[fixed == 0] = .01
+            solver.update_rhs(rhs=source)
+            if update == "missing_snapshot":
+                solver._session.snapshot = None
+        head, info = solver.solve(**options)
+        assert_installed_terrain_state(solver=solver, head=head, info=info, expected_fixed=fixed)
+        assert info["workspace_reused"] == reused
+        workspace = solver._session.workspace
+        assert_workspace_transition(old_workspace=old_workspace, new_workspace=workspace,
+            reused=reused, backend=terrain_test_device)
+        if reused and terrain_test_device.startswith("cuda"):
+            assert workspace.krylov._cycle_graph is old_graph
+            assert workspace.krylov.graph_replays > old_replays
+        with build_solver(grid=grid, kx=1., ky=.6, kz=.1, fixed=fixed, values=values,
+            source=source, initial=initial) as fresh:
+            fresh_head, fresh_info = fresh.solve(**options)
+            assert_installed_terrain_state(solver=fresh, head=fresh_head, info=fresh_info,
+                expected_fixed=fixed)
+            assert len(workspace.levels) == len(fresh._session.workspace.levels)
+            for installed, expected in zip(workspace.levels, fresh._session.workspace.levels):
+                for field in ("active", "bc_mask"):
+                    np.testing.assert_array_equal(installed[field].numpy(), expected[field].numpy())
+        np.testing.assert_allclose(head, fresh_head, rtol=0., atol=2e-9)
+        if update == "missing_snapshot":
+            # The shared host check must also fail safely when its cache
+            # metadata is absent, rather than indexing a missing snapshot.
+            solver._session.snapshot = None
+            host_options = dict(options, device_picard=False)
+            host_head, host_info = solver.solve(**host_options)
+            assert not host_info["workspace_reused"]
+            assert_installed_terrain_state(solver=solver, head=host_head,
+                info=host_info, expected_fixed=fixed)
+            np.testing.assert_allclose(host_head, fresh_head, rtol=0., atol=2e-9)
 
 
 class ScriptedKrylov:
@@ -281,7 +446,7 @@ def test_first_candidate_backtracks_against_current_residual():
     assert update["metrics"]["flow"] < .96
 
 
-def test_histories_budgets_and_host_device_handoff(physical_driver):
+def test_histories_budgets_and_host_device_handoff(physical_driver, monkeypatch):
     session = physical_driver.session
     previous = physical_driver.state.head.numpy().reshape(session.shape)
     options = dict(device=device(), unconfined=True, transient=True, dt=1.,
@@ -304,11 +469,29 @@ def test_histories_budgets_and_host_device_handoff(physical_driver):
         assert history[-1]["physical_residual_rms"] == pytest.approx(info["budget"]["cell_residual_rms"], abs=1e-12)
     # Switching drivers on an existing session must preserve valid cache
     # snapshots and refresh the principal hierarchy/row scaling as needed.
-    options["unconfined_max_picard_iter"] = 2
-    unused_head, host_info = session.solve(device_picard=False, **options)
-    assert np.isfinite(host_info["budget"]["cell_residual_rms"])
+    workspace = session.workspace
+    assert 0 < workspace.krylov._maxiter < options["max_cycles"]
+    host_budgets = []
+    original_call = TerrainGMRES3D.__call__
+
+    def record_host_budget(self, *args, **kwargs):
+        host_budgets.append(self._maxiter)
+        return original_call(self, *args, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(TerrainGMRES3D, "__call__", record_host_budget)
+        host_head, host_info = session.solve(device_picard=False, **options)
+    assert session.workspace is workspace and host_info["workspace_reused"]
+    assert host_budgets and set(host_budgets) == {options["max_cycles"]}
+    with build_solver(grid=session.grid, kx=session.kx, ky=session.ky, kz=session.kz,
+        fixed=session.bc_mask, values=session.bc_values, source=session.rhs,
+        initial=session.initial_head, contacts=session.contacts) as fresh:
+        fresh_head, fresh_info = fresh._session.solve(device_picard=False, **options)
+    assert host_info["converged"] and fresh_info["converged"]
+    np.testing.assert_allclose(host_head, fresh_head, rtol=0., atol=2e-8)
     unused_head, device_info = session.solve(device_picard=True, **options)
-    assert np.isfinite(device_info["budget"]["cell_residual_rms"])
+    assert session.workspace is workspace and device_info["workspace_reused"]
+    assert device_info["converged"]
 
 
 def test_original_small_source_is_not_lost_to_transient_rhs_rounding():
@@ -370,13 +553,21 @@ def test_shallow_aquifer_32_converges_through_bounded_picard_recovery():
 
 
 
-def test_isolated_exclusion_preserves_head_and_normalizes_only_free_equations():
+@pytest.mark.parametrize("mirrored", [False, True])
+def test_isolated_exclusion_preserves_head_and_normalizes_only_free_equations(mirrored):
     grid = TerrainGrid3D(surface_elevation=np.zeros((1, 3)), zeta_faces=np.array([0., 1.]),
         dx=1., dy=1.)
     fixed = np.array([1, 0, 0], dtype=np.int32).reshape(grid.shape)
     initial = np.array([1., 2., 7.]).reshape(grid.shape)
     values = np.array([1., 0., 0.]).reshape(grid.shape)
     kx = np.array([1., 1., 0.]).reshape(grid.shape)
+    isolated_index = 2
+    if mirrored:
+        fixed = fixed[:, :, ::-1].copy()
+        initial = initial[:, :, ::-1].copy()
+        values = values[:, :, ::-1].copy()
+        kx = kx[:, :, ::-1].copy()
+        isolated_index = 0
     with build_solver(grid=grid, kx=kx, ky=1., kz=1., fixed=fixed,
         values=values, source=np.zeros(grid.shape), initial=initial) as solver:
         head, info = solver.solve(device_picard=True, unconfined=True, max_cycles=7,
@@ -384,7 +575,7 @@ def test_isolated_exclusion_preserves_head_and_normalizes_only_free_equations():
     assert info["converged"]
     assert info["n_free_cells"] == 1
     assert info["n_isolated_cells_excluded"] == 1
-    assert head.ravel()[2] == 7.
+    assert head.ravel()[isolated_index] == 7.
     assert head.ravel()[1] == pytest.approx(1., abs=1e-8)
     assert info["outer_history"][-1]["head_residual_rms"] == pytest.approx(
         info["budget"]["head_residual_rms"], abs=1e-12)

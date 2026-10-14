@@ -32,6 +32,25 @@ def terrain_saturation_kernel(head: wp.array(dtype=wp.float64),
     fraction[c] = wp.clamp(head[c]-bottoms[c], local, thickness[c])/thickness[c]
 
 
+@wp.func
+def terrain_harmonic_resistance(left: wp.float64, right: wp.float64,
+    dl: wp.float64, dr: wp.float64):
+    """Scaled series conductance and weights, matching the CPU reference."""
+    zero = wp.float64(0.0)
+    one = wp.float64(1.0)
+    tl = left/dl
+    tr = right/dr
+    small = wp.min(tl, tr)
+    large = wp.max(tl, tr)
+    if large > zero:
+        conductance = small/(one + small/large)
+        scaled_l = tl/large
+        scaled_r = tr/large
+        denom = scaled_l + scaled_r
+        return conductance, scaled_r/denom, scaled_l/denom
+    return zero, zero, zero
+
+
 @wp.kernel
 def terrain_face_coefficients_kernel(fraction: wp.array(dtype=wp.float64),
     kx: wp.array(dtype=wp.float64), ky: wp.array(dtype=wp.float64),
@@ -56,7 +75,6 @@ def terrain_face_coefficients_kernel(fraction: wp.array(dtype=wp.float64),
     if active[c] == 0:
         return
     half = wp.float64(0.5)
-    one = wp.float64(1.0)
     fx = kx[c]*fraction[c]
     fy = ky[c]*fraction[c]
     tz = thickness[c]
@@ -65,21 +83,19 @@ def terrain_face_coefficients_kernel(fraction: wp.array(dtype=wp.float64),
     if i+1 < nx and active[c+1] != 0:
         cn = c+1
         txr = kx[cn]*fraction[cn]*thickness[cn]
-        inv = one/((half*dx)/tx + (half*dx)/txr)
+        inv, wl, wr = terrain_harmonic_resistance(left=tx, right=txr, dl=half*dx, dr=half*dx)
         coefficients[c, 0] = inv*dy
-        wl = (one/tx)/(one/tx + one/txr)
         slope = zxf[c]
         coefficients[c, 1] = wl*tx*slope*dy
-        coefficients[c, 2] = (one-wl)*txr*slope*dy
+        coefficients[c, 2] = wr*txr*slope*dy
     if j+1 < ny and active[c+nx] != 0:
         cn = c+nx
         tyr = ky[cn]*fraction[cn]*thickness[cn]
-        inv = one/((half*dy)/ty + (half*dy)/tyr)
+        inv, wl, wr = terrain_harmonic_resistance(left=ty, right=tyr, dl=half*dy, dr=half*dy)
         coefficients[c, 3] = inv*dx
-        wl = (one/ty)/(one/ty + one/tyr)
         slope = zyf[c]
         coefficients[c, 4] = wl*ty*slope*dx
-        coefficients[c, 5] = (one-wl)*tyr*slope*dx
+        coefficients[c, 5] = wr*tyr*slope*dx
     if k+1 < nz and active[c+ncol] != 0:
         cn = c+ncol
         ifx = (k+1)*ncol + (c % ncol)
@@ -90,12 +106,10 @@ def terrain_face_coefficients_kernel(fraction: wp.array(dtype=wp.float64),
         azz_t = fx*zxif*zxif + fy*zyif*zyif + kz[c]
         azz_b = fxn*zxif*zxif + fyn*zyif*zyif + kz[cn]
         tb = thickness[cn]
-        rt = half*tz/azz_t
-        rb = half*tb/azz_b
+        inv, wl, wr = terrain_harmonic_resistance(left=azz_t, right=azz_b,
+            dl=half*tz, dr=half*tb)
         area = dx*dy
-        coefficients[c, 6] = area/(rt+rb)
-        wl = rt/(rt+rb)
-        wr = one-wl
+        coefficients[c, 6] = inv*area
         coefficients[c, 7] = wl*fx*zxif*area
         coefficients[c, 8] = wr*fxn*zxif*area
         coefficients[c, 9] = wl*fy*zyif*area

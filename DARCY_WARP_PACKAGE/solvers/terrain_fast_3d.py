@@ -307,6 +307,7 @@ class TerrainOperatorSession3D:
         self.workspace = None
         self.workspace_key = None
         self.snapshot = None
+        self.snapshot_packed_positive = None
         self.topology_cache = {}
         self.geometry_revision = 0
         self.k_version = 0
@@ -340,6 +341,20 @@ class TerrainOperatorSession3D:
         if self.workspace is not None:
             self.workspace.close()
         self.workspace = None
+
+    def workspace_topology_matches(self, *, fixed, active, coefficients):
+        """Compare against the topology installed with the last snapshot.
+
+        Numeric refresh preserves buffers and captured Krylov graphs only
+        when both masks and positive-face connectivity remain unchanged.
+        Missing metadata cannot establish that the hierarchy is compatible.
+        """
+        return (self.workspace is not None and self.snapshot is not None
+            and self.snapshot_packed_positive is not None
+            and np.array_equal(fixed, self.snapshot[6])
+            and np.array_equal(active, self.snapshot[7])
+            and np.array_equal(coefficients[:, (0, 3, 6)] > 0,
+                self.snapshot_packed_positive))
 
     def solve(self, *, device, unconfined=False, transient=False, dt=None, head_prev=None,
               initial_head=None, sy=None, ss=None, storage_coeff=None, storage_diag=None,
@@ -461,7 +476,8 @@ class TerrainOperatorSession3D:
                 self.workspace_key = key
             elif not unchanged:
                 packed_coefficients = pack_terrain_coefficients(operator=operator)
-                same_topology = np.array_equal(snapshot[6],self.snapshot[6]) and np.array_equal(snapshot[7],self.snapshot[7]) and np.array_equal(packed_coefficients[:,(0,3,6)] > 0,self.snapshot_packed_positive)
+                same_topology = self.workspace_topology_matches(fixed=fixed,
+                    active=self.grid.active, coefficients=packed_coefficients)
                 if same_topology:
                     self.workspace.refresh(operator=operator,fixed=fixed,storage=storage,boundary=boundary,
                         coefficients=packed_coefficients)
@@ -492,6 +508,7 @@ class TerrainOperatorSession3D:
             inner_head_target = min(relative_target,0.05*flow_target/scale_max,0.05*head_tolerance)
             self.workspace.krylov._tol = 0.0
             self.workspace.krylov._atol = inner_head_target*np.sqrt(n_free)
+            self.workspace.krylov._maxiter = int(max_cycles)
             refresh_seconds += perf_counter()-start
             if max_cycles > 0:
                 iterations,error,tolerance = self.workspace.krylov()
@@ -593,7 +610,6 @@ class TerrainOperatorSession3D:
             storage,change = self.storage_terms(head=head,previous=previous,transient=transient,
                 unconfined=True,mode=unconfined_storage_mode,sy=sy_field,ss=ss_field,coeff=None,dt=dt)
         boundary,boundary_rhs = pack_terrain_boundaries(operator=operator,head=head,datum=datum)
-        workspace_reused = self.workspace is not None and self.workspace_key == key
         subfaces,subface_count = pack_device_subfaces(operator=operator,datum=datum)
         contact_rhs = np.zeros(np.prod(self.shape))
         for record in operator.contact_records:
@@ -607,7 +623,11 @@ class TerrainOperatorSession3D:
         fixed = self.bc_mask.copy()
         fixed[isolated] = 1
         rhs[isolated] = head[isolated]-datum
-        if self.workspace is None or self.workspace_key != key:
+        packed_coefficients = pack_terrain_coefficients(operator=operator)
+        workspace_reused = (self.workspace is not None and self.workspace_key == key
+            and self.workspace_topology_matches(fixed=fixed, active=self.grid.active,
+                coefficients=packed_coefficients))
+        if not workspace_reused:
             if self.workspace is not None:
                 self.workspace.close()
             self.workspace = TerrainGPUWorkspace3D(operator=operator,fixed=fixed,storage=storage,
@@ -616,7 +636,7 @@ class TerrainOperatorSession3D:
             self.workspace_key = key
         else:
             self.workspace.refresh(operator=operator,fixed=fixed,storage=storage,
-                boundary=boundary)
+                boundary=boundary,coefficients=packed_coefficients)
         state = DeviceTerrainState(session=self,device=device,workspace=self.workspace)
         state.upload_static(source=self.rhs,sy=sy_field,ss=ss_field,
             free=(self.grid.active != 0)&(self.bc_mask == 0)&(~isolated),

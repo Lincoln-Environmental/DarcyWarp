@@ -7,11 +7,78 @@ from scipy.sparse.linalg import spsolve
 
 from DARCY_WARP_PACKAGE.physics.terrain_grid_3d import TerrainGrid3D, TerrainMetrics3D, storage_potential_3d
 from DARCY_WARP_PACKAGE.physics.terrain_reference_3d import TerrainReferenceOperator3D, TerrainContact3D
-from DARCY_WARP_PACKAGE.solvers.terrain_fast_3d import TerrainGPUWorkspace3D, pack_terrain_boundaries
+from DARCY_WARP_PACKAGE.solvers.terrain_fast_3d import (
+    TerrainGPUWorkspace3D, pack_terrain_boundaries, pack_terrain_coefficients)
 from DARCY_WARP_PACKAGE.warped_darcy_3d import WarpDarcySolver3D
 from test_3d_scientific_audit import device
 from test_3d_terrain_reference import terrain_case, variable_interface_case
 from DARCY_WARP_PACKAGE.solvers.terrain_fast_3d import pack_device_subfaces
+from DARCY_WARP_PACKAGE.solvers.terrain_device_kernels import terrain_face_coefficients_kernel
+
+
+def device_face_coefficients(*, grid, metrics, kx, ky, kz, fraction, backend):
+    def upload(values):
+        return wp.array(np.ascontiguousarray(values).ravel(), dtype=wp.float64, device=backend)
+
+    zxf, zyf = np.zeros(grid.shape), np.zeros(grid.shape)
+    zxf[:, :, :-1], zyf[:, :-1, :] = metrics.zxf, metrics.zyf
+    coefficients = wp.zeros((grid.active.size, 13), dtype=wp.float64, device=backend)
+    wp.launch(terrain_face_coefficients_kernel, dim=grid.active.size,
+        inputs=[upload(values=fraction), upload(values=kx), upload(values=ky), upload(values=kz),
+            upload(values=grid.thickness), upload(values=metrics.zx_interfaces),
+            upload(values=metrics.zy_interfaces), upload(values=metrics.zx), upload(values=metrics.zy),
+            upload(values=zxf), upload(values=zyf),
+            wp.array(grid.active.ravel(), dtype=wp.int32, device=backend), coefficients,
+            wp.float64(grid.dx), wp.float64(grid.dy), *grid.shape[::-1]], device=backend)
+    return coefficients.numpy()
+
+
+@pytest.mark.parametrize("backend", ["cpu", "cuda:0"])
+@pytest.mark.parametrize("axis", [2, 1, 0], ids=["x", "y", "vertical"])
+@pytest.mark.parametrize("endpoints", [(1., 0.), (0., 1.), (0., 0.), (2., 3.),
+    (1e-20, 1.), (1., 1e-20), (1e-310, 1e-300)])
+def test_device_face_coefficients_zero_safe_reference_parity(backend, axis, endpoints):
+    wp.init()
+    if backend.startswith("cuda") and not wp.is_cuda_available():
+        pytest.skip("CUDA is unavailable")
+    # Mixed-zero materials are supported on flat terrain without contacts.
+    # Positive materials additionally exercise every cross/metric coefficient.
+    y, x = np.mgrid[:2, :3]
+    nonflat = min(endpoints) > 0
+    top = 10. + (.2*x + .1*y if nonflat else np.zeros_like(x))
+    middle = top - (1. + (.04*x if nonflat else np.zeros_like(x)))
+    bottom = middle - (2. + (.03*y if nonflat else np.zeros_like(y)))
+    grid = TerrainGrid3D(z_interfaces=np.stack((top, middle, bottom)), dx=2., dy=3.)
+    metrics = TerrainMetrics3D(grid=grid)
+    material = np.full(grid.shape, endpoints[1])
+    selection = [slice(None)] * 3
+    selection[axis] = 0
+    material[tuple(selection)] = endpoints[0]
+    fraction = np.linspace(.3, .9, grid.active.size).reshape(grid.shape)
+    head = grid.bottoms + fraction*grid.thickness
+    reference = TerrainReferenceOperator3D(metrics=metrics, kx=material, ky=.6*material,
+        kz=.1*material, head=head)
+    # Use the reference's exact saturation fraction to isolate face arithmetic.
+    fraction = reference.regularized_sat / grid.thickness
+    actual = device_face_coefficients(grid=grid, metrics=metrics, kx=material,
+        ky=.6*material, kz=.1*material, fraction=fraction, backend=backend)
+    expected = pack_terrain_coefficients(operator=reference)
+    assert np.all(np.isfinite(actual))
+    np.testing.assert_allclose(actual, expected, rtol=5e-13, atol=0.)
+    if min(endpoints) == 0:
+        start, stop = {2: (0, 3), 1: (3, 6), 0: (6, 13)}[axis]
+        face = actual.reshape((*grid.shape, 13))[tuple(selection)][..., start:stop]
+        np.testing.assert_array_equal(face, 0.)
+
+
+def test_mixed_zero_material_with_contact_remains_rejected():
+    grid = TerrainGrid3D(surface_elevation=np.zeros((1, 2)), zeta_faces=np.array([0., 1.]),
+        dx=1., dy=1.)
+    contact = TerrainContact3D(cell=(0, 0, 1), direction="east", area=1., distance=.5,
+        elevation=-.5, head=2.)
+    with pytest.raises(ValueError, match="require positive Kx/Ky/Kz"):
+        TerrainReferenceOperator3D(metrics=TerrainMetrics3D(grid=grid),
+            kx=np.array([0., 1.]).reshape(grid.shape), ky=1., kz=1., contacts=(contact,))
 
 
 @pytest.mark.parametrize("irregular", [False,True])
