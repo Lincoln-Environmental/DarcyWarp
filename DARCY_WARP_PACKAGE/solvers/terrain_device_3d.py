@@ -5,7 +5,7 @@ secant storage, RHS, corrections and residual on the device: per outer
 iteration it refreshes saturation, the packed 13-column face operator and
 the storage diagonals with the terrain device kernels, freezes the
 discharge-only gates at the accepted head, extracts the seven-point
-principal part into the multigrid level-0 buffers, rebuilds the row-scaled
+principal part into the multigrid level-0 buffers, refreshes head-dependent contact conductances and rebuilds the row-scaled
 RHS, and runs restarted GMRES in CORRECTION FORM (A·delta = b − A·h with
 homogeneous prescribed-head constraints) under an adaptive inexact inner
 controller modelled on the production 2D driver:
@@ -37,14 +37,15 @@ import warp as wp
 from DARCY_WARP_PACKAGE.solvers.terrain_device_kernels import (
     terrain_saturation_kernel, terrain_face_coefficients_kernel,
     terrain_secant_storage_kernel, terrain_rhs_kernel, terrain_relaxed_update_kernel,
-    terrain_copy_kernel, terrain_dual_check_kernel, terrain_combine_partials_kernel,
+    terrain_dual_check_kernel, terrain_combine_partials_kernel,
     terrain_relative_head_kernel, terrain_extract_principal_kernel,
     terrain_subface_gate_kernel, terrain_subface_scatter_kernel,
     terrain_coarse_faces_kernel, terrain_coarse_shifts_kernel,
     terrain_scale_divide_kernel,
-    terrain_scale_multiply_kernel, BLOCK_SIZE)
-from DARCY_WARP_PACKAGE.solvers.terrain_kernels_3d import (terrain_combine_kernel,
-    terrain_gradients_kernel)
+    terrain_contact_refresh_kernel,
+    terrain_contact_flux_kernel, terrain_physical_residual_kernel, BLOCK_SIZE)
+from DARCY_WARP_PACKAGE.solvers.terrain_kernels_3d import (
+    terrain_gradients_kernel, terrain_faces_kernel)
 
 
 @dataclass
@@ -53,7 +54,6 @@ class DevicePicardControls:
     initial_block_cycles: int = 2          # restart cycles per inner block
     min_block_cycles: int = 1
     max_block_cycles: int = 4
-    min_total_cycles: int = 1
     eta_initial: float = 0.05
     eta_min: float = 0.005
     eta_max: float = 0.10
@@ -64,7 +64,7 @@ class DevicePicardControls:
     stall_contraction_ratio: float = 0.9995
     divergence_ratio: float = 1.10
     stall_patience: int = 3
-    minimum_usable_reduction: float = 0.10
+    nonlinear_growth_limit: float = 1.10  # recovery only after descent search fails
     max_head_change_per_outer: float = 50.0
     residual_floor: float = 1e-12
 
@@ -124,15 +124,18 @@ class DeviceTerrainState:
         self.residual = wp.zeros(self.n, dtype=wp.float64, device=device)
         self.bc_values = f64(session.bc_values)
         self.open_col0 = wp.zeros(self.n, dtype=wp.float64, device=device)
+        self.contact_net = wp.zeros(self.n, dtype=wp.float64, device=device)
+        self.contact_gross = wp.zeros(self.n, dtype=wp.float64, device=device)
+        self.throughput = wp.zeros(self.n, dtype=wp.float64, device=device)
         self.contact_rhs = wp.zeros(self.n, dtype=wp.float64, device=device)
         self.starting = wp.zeros(self.n, dtype=wp.float64, device=device)
         self.free = wp.zeros(self.n, dtype=wp.int32, device=device)
         blocks = (self.n + BLOCK_SIZE - 1)//BLOCK_SIZE
-        self.partials = wp.zeros((blocks, 7), dtype=wp.float64, device=device)
+        self.partials = wp.zeros((blocks, 8), dtype=wp.float64, device=device)
         self.blocks = blocks
-        self.combined = wp.zeros(7, dtype=wp.float64, device=device)
+        self.combined = wp.zeros(8, dtype=wp.float64, device=device)
 
-    def upload_static(self, *, source, sy, ss, free, subfaces):
+    def upload_static(self, *, source, sy, ss, free, subfaces, contact_refresh=None):
         self.source = wp.array(np.ascontiguousarray(source, dtype=np.float64).ravel(),
             dtype=wp.float64, device=self.device)
         self.sy = wp.array(np.ascontiguousarray(sy, dtype=np.float64).ravel(),
@@ -140,6 +143,7 @@ class DeviceTerrainState:
         self.ss = wp.array(np.ascontiguousarray(ss, dtype=np.float64).ravel(),
             dtype=wp.float64, device=self.device)
         self.free.assign(np.ascontiguousarray(free.ravel(), dtype=np.int32))
+        self.n_free = int(np.count_nonzero(free))
         # Per-SUBFACE contact rows: gating is evaluated independently for
         # each subface and only the open ones are aggregated per outer.
         self.sub_cell = wp.array(np.ascontiguousarray(subfaces[:, 0], dtype=np.int32),
@@ -157,6 +161,10 @@ class DeviceTerrainState:
         self.sub_discharge = wp.array(np.ascontiguousarray(subfaces[:, 6], dtype=np.int32),
             dtype=wp.int32, device=self.device)
         self.sub_open = wp.zeros(subfaces.shape[0], dtype=wp.int32, device=self.device)
+        self.contact_refresh = None
+        if contact_refresh is not None:
+            self.contact_refresh = tuple(wp.array(np.ascontiguousarray(array),
+                dtype=wp.float64, device=self.device) for array in contact_refresh)
 
     def update_head(self, host_head):
         self.head.assign(np.ascontiguousarray(host_head, dtype=np.float64).ravel())
@@ -186,7 +194,8 @@ class DeviceTerrainState:
                      "free", "partials", "combined", "bottoms", "thickness",
                      "zx_interfaces", "zy_interfaces", "zx_centre", "zy_centre",
                      "zxf", "zyf", "kx", "ky", "kz", "source", "sy", "ss",
-                     "open_col0", "contact_rhs", "starting", "sub_cell", "sub_c",
+                     "open_col0", "contact_rhs", "contact_net", "contact_gross", "throughput",
+                     "contact_refresh", "starting", "sub_cell", "sub_c",
                      "sub_bz", "sub_bx", "sub_by", "sub_hb", "sub_discharge",
                      "sub_open"):
             setattr(self, name, None)
@@ -207,7 +216,10 @@ class DeviceTerrainPicard:
         self.min_sat = float(min_sat)
         self.outer_limit_val = int(outer_limit)
         self.unconfined_relax = float(unconfined_relax)
-        self.restart = restart
+        self.requested_restart = int(restart)
+        # Warp caps the allocated restart at its initial maxiter. Count
+        # the actual blocks used by this persistent Krylov workspace.
+        self.restart = int(workspace.krylov._restart)
         self.krylov_budget = krylov_budget
         self.unconfined = unconfined
         self.transient = transient
@@ -216,8 +228,10 @@ class DeviceTerrainPicard:
         self.head_tolerance = head_tolerance
         self.budget_relative_tol = budget_relative_tol
         self.rel_tol = rel_tol
-        self.n_free = max(int(np.count_nonzero((session.grid.active != 0))), 1)
+        self.n_free = state.n_free
+        self.sqrt_free = float(np.sqrt(max(self.n_free, 1)))
         self.host_scalar_reads = 0
+        self.operator_evaluations = 0
         self.dx = float(session.grid.dx)
         self.dy = float(session.grid.dy)
 
@@ -229,6 +243,7 @@ class DeviceTerrainPicard:
         hierarchy refresh, and the row-scaled RHS. The accepted head_rel
         buffer is never touched when evaluating a candidate."""
         s = self.state
+        self.operator_evaluations += 1
         wp.launch(terrain_saturation_kernel, dim=s.n,
             inputs=[head_buffer, s.bottoms, s.thickness, wp.float64(self.min_sat),
                     s.true_sat, s.fraction], device=self.device)
@@ -257,6 +272,11 @@ class DeviceTerrainPicard:
             inputs=[rel_buffer, self.workspace.horizontal, self.workspace.depths,
                     self.workspace.gx, self.workspace.gy, self.workspace.gz,
                     s.nx, s.ny, s.nz], device=self.device)
+        # Refresh the constitutive contact rows before evaluating their gates.
+        if s.contact_refresh is not None:
+            wp.launch(terrain_contact_refresh_kernel, dim=s.sub_open.shape[0],
+                inputs=[s.sub_cell, s.fraction, *s.contact_refresh,
+                        s.sub_c, s.sub_bz, s.sub_bx, s.sub_by], device=self.device)
         # Per-subface independent gating, then aggregation of the open set.
         s.boundary.zero_()
         s.contact_rhs.zero_()
@@ -273,7 +293,7 @@ class DeviceTerrainPicard:
         # on the storage slot (preconditioner approximation, as on host).
         level0 = self.workspace.levels[0]
         wp.launch(terrain_extract_principal_kernel, dim=s.n,
-            inputs=[s.coefficients, s.active, s.storage_diag, s.open_col0,
+            inputs=[s.coefficients, s.active, s.fixed, s.storage_diag, s.open_col0,
                     level0["faces"][0], level0["faces"][1], level0["faces"][2],
                     level0["faces"][3], level0["faces"][4], level0["faces"][5],
                     level0["diag"], level0["storage"], s.scale, s.nx, s.ny, s.nz],
@@ -309,21 +329,78 @@ class DeviceTerrainPicard:
         s = self.state
         s.partials.zero_()
         wp.launch(terrain_dual_check_kernel, dim=s.n,
-            inputs=[head_buffer, candidate_buffer, s.residual, self.workspace.b,
-                    s.scale, s.free, s.partials, BLOCK_SIZE], device=self.device)
+            inputs=[head_buffer, candidate_buffer, s.residual, s.throughput,
+                    s.scale, s.free, s.delta, s.partials, BLOCK_SIZE], device=self.device)
         wp.launch(terrain_combine_partials_kernel, dim=1,
             inputs=[s.partials, s.combined, s.blocks], device=self.device)
         self.host_scalar_reads += 1
         return s.combined.numpy()
 
-    def matvec_residual(self, x_buffer, rhs_buffer):
+    def physical_residual(self, *, head):
+        """Evaluate original forcing minus face fluxes and exact storage.
+
+        This never reconstructs forcing from a rounded storage RHS and
+        never uses GMRES's frozen-system residual for nonlinear acceptance.
+        evaluate() must first refresh the state and gates at this head.
+        """
         s = self.state
-        self.workspace.apply_operator(x=x_buffer, y=rhs_buffer, z=s.residual,
-            alpha=-1.0, beta=1.0, row_scaled=False)
-        return s.residual
+        w = self.workspace
+        wp.launch(terrain_gradients_kernel, dim=s.n,
+            inputs=[head, w.horizontal, w.depths, w.gx, w.gy, w.gz,
+                    s.nx, s.ny, s.nz], device=self.device)
+        wp.launch(terrain_faces_kernel, dim=s.n,
+            inputs=[head, w.gx, w.gy, w.gz, s.coefficients, w.qx, w.qy, w.qz,
+                    s.nx, s.ny, s.nz], device=self.device)
+        s.contact_net.zero_()
+        s.contact_gross.zero_()
+        wp.launch(terrain_contact_flux_kernel, dim=s.sub_open.shape[0],
+            inputs=[s.sub_cell, s.sub_c, s.sub_bz, s.sub_bx, s.sub_by, s.sub_hb,
+                    s.sub_open, head, w.gx, w.gy, w.gz, s.contact_net,
+                    s.contact_gross], device=self.device)
+        wp.launch(terrain_physical_residual_kernel, dim=s.n,
+            inputs=[s.source, s.storage_change, s.free, s.fixed, w.qx, w.qy,
+                    w.qz, s.contact_net, s.contact_gross, s.residual,
+                    s.throughput, s.nx, s.ny, s.nz], device=self.device)
+
+    def residual_metrics(self, *, combined):
+        n = max(self.n_free, 1)
+        return dict(head=float(np.sqrt(combined[3]/n)),
+            flow=float(np.sqrt(combined[2]/n)),
+            relative=float(combined[6]/max(combined[4], np.finfo(float).tiny)),
+            finite=bool(combined[5] == 0 and np.all(np.isfinite(combined))))
+
+    def physically_converged(self, *, metrics):
+        return metrics["finite"] and metrics["head"] <= self.head_tolerance and (
+            metrics["flow"] <= self.abs_tol_min
+            or metrics["relative"] <= self.budget_relative_tol)
+
+    def candidate_improves(self, *, current, candidate):
+        """Decrease a balanced merit of BOTH independently evaluated norms.
+
+        Freeze the normalization at the accepted state for every candidate.
+        Requiring separate descent of both norms can reject a useful Picard
+        correction when one norm grows slightly and the other drops sharply.
+        Final physical convergence still uses the unchanged absolute gates.
+        """
+        if not candidate["finite"]:
+            return False
+        old, new = self.residual_merit(current=current, candidate=candidate)
+        return new < old or self.physically_converged(metrics=candidate)
+
+    def residual_merit(self, *, current, candidate):
+        head_scale = max(current["head"], self.head_tolerance)
+        flow_scale = max(current["flow"], self.abs_tol_min, np.finfo(float).tiny)
+        old = (current["head"]/head_scale)**2+(current["flow"]/flow_scale)**2
+        head_ratio = candidate["head"]/head_scale
+        flow_ratio = candidate["flow"]/flow_scale
+        safe_ratio = 0.5*np.sqrt(np.finfo(float).max)
+        if max(abs(head_ratio), abs(flow_ratio)) > safe_ratio:
+            return old, np.inf
+        new = head_ratio**2+flow_ratio**2
+        return old, new
 
     # ---- adaptive inner controller -------------------------------------
-    def inner_target(self, head_rms, flow_rms, rhs_rms, scale_max, previous_dh_rms):
+    def inner_target(self, *, head_rms, previous_dh_rms):
         c = self.controls
         if self._eta is None:
             eta = c.eta_initial
@@ -331,235 +408,228 @@ class DeviceTerrainPicard:
             ratio = min(head_rms/max(self._eta_residual, c.residual_floor), 1e3)
             eta = float(np.clip(c.eta_gamma*ratio**c.eta_power, c.eta_min, c.eta_max))
         self._eta = eta
-        self._eta_residual = max(head_rms, c.residual_floor)
-        target = float(np.clip(eta*self._eta_residual, c.residual_floor, 1e-2))
-        picard_bound = 0.10*max(self.head_tolerance, previous_dh_rms)
-        target = min(target, picard_bound)
-        return target, max(c.residual_floor, eta*max(flow_rms, c.residual_floor))
+        self._eta_residual = head_rms
+        target = min(eta*head_rms, 1e-2,
+            0.10*max(self.head_tolerance, previous_dh_rms))
+        # Do not ask for a tolerance larger than an already tiny residual.
+        return min(max(target, min(c.residual_floor, 0.1*head_rms)), 0.5*head_rms)
 
-    def run_inner(self, initial, targets):
-        """Adaptive inexact inner solve on the frozen correction system.
+    def krylov_block(self, *, budget, target_rms):
+        """The only RMS/L2 conversion boundary; budget is Krylov iterations."""
+        krylov = self.workspace.krylov
+        krylov._maxiter = int(budget)
+        krylov._tol = 0.0
+        krylov._atol = max(target_rms*self.sqrt_free, np.finfo(float).tiny)
+        used, error_l2, tolerance_l2 = krylov()
+        return used, error_l2/self.sqrt_free, tolerance_l2/self.sqrt_free
 
-        Contraction is measured from GMRES's own restart-check norms (the
-        row-scaled correction residual), so no extra device reductions are
-        needed inside the block loop; the outer dual check provides the
-        physical acceptance quantities."""
+    def run_inner(self, *, initial_rms, target_rms):
         s = self.state
         c = self.controls
-        krylov = self.workspace.krylov
-        head_target, flow_target_scaled = targets
-        total_cycles = 0
+        used_total = 0
+        blocks = 0
         block_cycles = c.initial_block_cycles
-        stall_patience = 0
-        stagnated = False
-        diverged = False
-        reached = False
-        usable = True
-        prev_error = max(initial[0], c.residual_floor)
-        while total_cycles < self.krylov_budget:
-            wp.launch(terrain_copy_kernel, dim=s.n,
-                inputs=[s.delta], outputs=[s.delta_snapshot], device=self.device)
-            cycles = min(block_cycles, self.krylov_budget-total_cycles)
-            krylov._maxiter = cycles*self.restart
-            used, error, tolerance = krylov()
-            total_cycles += used
-            if not np.isfinite(error):
-                wp.launch(terrain_copy_kernel, dim=s.n,
-                    inputs=[s.delta_snapshot], outputs=[s.delta], device=self.device)
+        patience = 0
+        error = initial_rms
+        reached = error <= target_rms
+        stagnated = diverged = retried = False
+        while used_total < self.krylov_budget and not reached:
+            wp.copy(src=s.delta, dest=s.delta_snapshot)
+            budget = min(block_cycles*self.restart, self.krylov_budget-used_total)
+            used, trial, tolerance = self.krylov_block(budget=budget, target_rms=target_rms)
+            used_total += used
+            blocks += (used+self.restart-1)//self.restart
+            rho = trial/max(error, np.finfo(float).tiny)
+            if not np.isfinite(trial) or rho > c.divergence_ratio:
+                wp.copy(src=s.delta_snapshot, dest=s.delta)
                 diverged = True
-                usable = False
                 break
-            if error <= tolerance and total_cycles >= c.min_total_cycles:
-                reached = True
-                break
-            rho = error/max(prev_error, c.residual_floor)
-            per_cycle = rho**(1.0/max(used/max(self.restart, 1), 1.0))
-            if rho > c.divergence_ratio:
-                wp.launch(terrain_copy_kernel, dim=s.n,
-                    inputs=[s.delta_snapshot], outputs=[s.delta], device=self.device)
-                diverged = True
-                usable = False
-                break
-            if per_cycle >= c.stall_contraction_ratio:
-                stall_patience += 1
-                if stall_patience >= c.stall_patience:
-                    stagnated = True
-                    usable = prev_error/max(initial[0], c.residual_floor) \
-                        <= c.minimum_usable_reduction
-                    break
+            # Retain the best correction, including on a stagnating block.
+            if trial > error:
+                wp.copy(src=s.delta_snapshot, dest=s.delta)
             else:
-                stall_patience = 0
+                error = trial
+            reached = error <= tolerance
+            if reached or used == 0:
+                break
+            per_restart = rho**(self.restart/max(used, 1))
+            patience = patience+1 if per_restart >= c.stall_contraction_ratio else 0
+            if patience >= c.stall_patience:
+                stagnated = True
+                break
             if rho <= c.good_contraction_ratio:
-                block_cycles = min(2*max(block_cycles, c.min_block_cycles),
-                                   c.max_block_cycles)
+                block_cycles = min(2*block_cycles, c.max_block_cycles)
             elif rho > c.weak_contraction_ratio:
                 block_cycles = c.min_block_cycles
-            prev_error = error
-        if not reached and not stagnated and not diverged:
-            # Budget exhausted: keep the correction only if it reduced the
-            # correction residual substantially (a usable inexact step).
-            usable = prev_error/max(initial[0], c.residual_floor) \
-                <= c.minimum_usable_reduction
-        return dict(cycles=total_cycles, reached=reached, stagnated=stagnated,
-            diverged=diverged, usable=usable, head_rms=prev_error, flow_rms=0.0,
-            dh_max=float(np.sqrt(max(s.combined.numpy()[1] if hasattr(s, "combined") else 0.0, 0.0))))
+        outcome = dict(cycles=used_total, restart_blocks=blocks, reached=reached,
+            stagnated=stagnated, diverged=diverged, retried=retried,
+            usable=bool(np.isfinite(error) and error < initial_rms), head_rms=error,
+            target_rms=target_rms)
+        # Exhaust the remaining budget before declaring an unusable solve.
+        if not outcome["usable"] and not reached:
+            outcome = self.refine_inner(outcome=outcome, initial_rms=initial_rms,
+                target_rms=target_rms)
+        return outcome
+
+    def refine_inner(self, *, outcome, initial_rms, target_rms):
+        """Retry from the best correction within this outer iteration's budget.
+        Missing a target never discards a useful finite correction.
+        """
+        remaining = self.krylov_budget-outcome["cycles"]
+        if remaining <= 0:
+            return outcome
+        s = self.state
+        wp.copy(src=s.delta, dest=s.delta_snapshot)
+        used, trial, tolerance = self.krylov_block(budget=remaining, target_rms=target_rms)
+        outcome["cycles"] += used
+        outcome["restart_blocks"] += (used+self.restart-1)//self.restart
+        outcome["retried"] = True
+        outcome["target_rms"] = target_rms
+        if np.isfinite(trial) and trial <= outcome["head_rms"]:
+            outcome["head_rms"] = trial
+        else:
+            wp.copy(src=s.delta_snapshot, dest=s.delta)
+        outcome["reached"] = outcome["head_rms"] <= tolerance
+        outcome["usable"] = bool(np.isfinite(outcome["head_rms"])
+            and outcome["head_rms"] < initial_rms)
+        return outcome
+
+    def backtrack(self, *, current, allow_growth=False):
+        s = self.state
+        relaxation = self.unconfined_relax if self.outer_limit_val > 1 else 1.0
+        wp.copy(src=s.head, dest=s.starting)
+        proposed_max = clipped_max = 0.0
+        trials = []
+        for attempt in range(12):
+            wp.copy(src=s.starting, dest=s.candidate)
+            wp.launch(terrain_relaxed_update_kernel, dim=s.n,
+                inputs=[s.candidate, s.delta, wp.float64(relaxation),
+                        wp.float64(self.controls.max_head_change_per_outer),
+                        s.fixed, s.bc_values, s.active], device=self.device)
+            self.evaluate(head_buffer=s.candidate, rel_buffer=s.candidate_rel)
+            self.physical_residual(head=s.candidate_rel)
+            combined = self.dual_check(head_buffer=s.head_rel, candidate_buffer=s.candidate_rel)
+            trial = self.residual_metrics(combined=combined)
+            proposed_max = max(proposed_max, float(combined[7]))
+            clipped_max = max(clipped_max, float(combined[1])/relaxation)
+            trials.append(dict(relaxation=relaxation, head_residual_rms=trial["head"],
+                physical_residual_rms=trial["flow"], finite=trial["finite"]))
+            improves = self.candidate_improves(current=current, candidate=trial)
+            old_merit, new_merit = self.residual_merit(current=current, candidate=trial)
+            recoverable = (allow_growth and trial["finite"] and combined[1] > 0
+                and new_merit <= self.controls.nonlinear_growth_limit**2*old_merit)
+            if improves or recoverable:
+                wp.copy(src=s.candidate, dest=s.head)
+                return dict(accepted=True, metrics=trial, relaxation=relaxation,
+                    dh_rms=float(np.sqrt(combined[0]/max(self.n_free, 1))),
+                    dh_max=float(combined[1]), proposed_max=proposed_max, clipped_max=clipped_max,
+                    backtracks=attempt, trials=trials,
+                    acceptance_mode="merit_decrease" if improves else "bounded_recovery")
+            relaxation *= 0.5
+        # Candidate evaluation overwrote coefficients/gates/hierarchy/RHS.
+        # Restore every derived field before a retry or returning failure.
+        self.evaluate(head_buffer=s.head, rel_buffer=s.head_rel)
+        self.physical_residual(head=s.head_rel)
+        return dict(accepted=False, metrics=current, relaxation=0.0, dh_rms=0.0,
+            dh_max=0.0, proposed_max=proposed_max, clipped_max=clipped_max, backtracks=12, trials=trials,
+            acceptance_mode="rejected")
 
     # ---- main loop ------------------------------------------------------
     def run(self, max_outer):
         s = self.state
-        c = self.controls
-        self._eta = None
-        self._eta_residual = None
-        self._retries = 0
+        self._eta = self._eta_residual = None
         history = []
-        total_krylov = 0
-        converged = False
-        accepted_head_residual = np.inf
+        total_krylov = rejected = 0
         previous_dh_rms = np.inf
-        rejected = 0
+        converged = False
+        stop_reason = "outer_budget"
         start = perf_counter()
+        norm_reads_before = getattr(self.workspace.krylov, "norm_readbacks", 0)
+        current = dict(head=np.inf, flow=np.inf, relative=np.inf, finite=False)
         for outer in range(max_outer):
-            self.evaluate(s.head, s.head_rel)
-            # Raw physical residual at the accepted head (units m^3/day),
-            # then the row-scaled correction RHS for the Krylov system.
-            wp.launch(terrain_scale_multiply_kernel, dim=s.n,
-                inputs=[s.rhs, s.scale, s.rhs_raw], device=self.device)
-            self.matvec_residual(s.head_rel, s.rhs_raw)
+            self.evaluate(head_buffer=s.head, rel_buffer=s.head_rel)
+            self.physical_residual(head=s.head_rel)
+            combined = self.dual_check(head_buffer=s.head_rel, candidate_buffer=s.head_rel)
+            current = self.residual_metrics(combined=combined)
+            if self.physically_converged(metrics=current):
+                converged = True
+                stop_reason = "converged"
+                break
+            if not current["finite"]:
+                stop_reason = "nonfinite_residual"
+                break
             wp.launch(terrain_scale_divide_kernel, dim=s.n,
                 inputs=[s.residual, s.scale, s.rhs], device=self.device)
+            # Candidate evaluations overwrite rhs; keep the correction system
+            # for a possible full-effort retry on this same frozen operator.
+            wp.copy(src=s.rhs, dest=s.rhs_original)
             s.delta.zero_()
-            wp.launch(terrain_copy_kernel, dim=s.n,
-                inputs=[s.head_rel], outputs=[s.candidate_rel], device=self.device)
-            combined = self.dual_check(s.head_rel, s.candidate_rel)
-            n = max(self.n_free, 1)
-            # Channel semantics: c2 = squared residual in the units the dual
-            # check was fed (RAW here), c3 = head-equivalent (raw/scale)^2.
-            flow_rms = float(np.sqrt(max(combined[2], 0.0)/n))
-            head_residual = float(np.sqrt(max(combined[3], 0.0)/n))
-            rhs_rms = float(np.sqrt(max(combined[4], 0.0)/n))
-            scale_max = float(combined[6]) + 1e-300
-            if float(combined[5]) > 0:
-                break
-            if head_residual <= self.head_tolerance and (
-                    flow_rms <= self.abs_tol_min*np.sqrt(n)
-                    or flow_rms/max(rhs_rms, 1e-300) <= self.budget_relative_tol):
-                converged = True
-                accepted_head_residual = head_residual
-                break
-            targets = self.inner_target(head_residual, flow_rms, rhs_rms, scale_max,
-                                        previous_dh_rms)
-            krylov = self.workspace.krylov
-            krylov._tol = 0.0
-            krylov._atol = max(targets[0]*np.sqrt(self.n_free), 1e-300)
-            outcome = self.run_inner((head_residual, targets[1]), targets)
+            target = self.inner_target(head_rms=current["head"],
+                previous_dh_rms=previous_dh_rms)
+            outcome = self.run_inner(initial_rms=current["head"], target_rms=target)
+            update = dict(accepted=False, metrics=current, relaxation=0.0,
+                dh_rms=0.0, dh_max=0.0, proposed_max=0.0, clipped_max=0.0, backtracks=0, trials=[],
+                acceptance_mode="rejected")
+            if outcome["usable"] or outcome["reached"]:
+                update = self.backtrack(current=current)
+                if not update["accepted"]:
+                    # Picard directions need not descend the true nonlinear
+                    # residual. Prefer descent, then allow a bounded recovery
+                    # relative to THIS accepted state's physical dual merit.
+                    # This changes globalization, never final tolerances.
+                    descent_trials = update["trials"]
+                    update = self.backtrack(current=current, allow_growth=True)
+                    update["trials"] = descent_trials+update["trials"]
+                if not update["accepted"] and outcome["cycles"] < self.krylov_budget:
+                    # backtrack restored the accepted operator and hierarchy.
+                    previous_trials = update["trials"]
+                    wp.copy(src=s.rhs_original, dest=s.rhs)
+                    outcome = self.refine_inner(outcome=outcome,
+                        initial_rms=current["head"],
+                        target_rms=min(0.1*outcome["head_rms"], self.controls.residual_floor))
+                    if outcome["usable"]:
+                        update = self.backtrack(current=current)
+                        if not update["accepted"]:
+                            retry_trials = update["trials"]
+                            update = self.backtrack(current=current, allow_growth=True)
+                            update["trials"] = retry_trials+update["trials"]
+                        update["trials"] = previous_trials+update["trials"]
             total_krylov += outcome["cycles"]
-            if not outcome["usable"] and not outcome["reached"]:
-                if self._retries < 2:
-                    # 2D retry-first policy: one full-effort retry with a
-                    # tight tolerance before declaring a genuine failure.
-                    self._retries += 1
-                    s.delta.zero_()
-                    krylov._maxiter = self.krylov_budget
-                    krylov._tol = 0.0
-                    krylov._atol = max(self.abs_tol_min*np.sqrt(self.n_free), 1e-300)
-                    used, error, tolerance = krylov()
-                    total_krylov += used
-                    outcome = dict(cycles=used, reached=error <= tolerance,
-                        stagnated=False, diverged=not np.isfinite(error),
-                        usable=np.isfinite(error) and error <= 1.0,
-                        head_rms=error, flow_rms=0.0, dh_max=0.0)
-                    history.append(dict(outer_iteration=outer+1,
-                        krylov_iterations=used, inner_reached=outcome["reached"],
-                        inner_stagnated=False, inner_diverged=outcome["diverged"],
-                        inner_usable=outcome["usable"], inner_retried=True,
-                        proposed_head_change_max=0.0, accepted_head_change_max=0.0,
-                        head_residual_rms=head_residual, relaxation=0.0))
-                    if not outcome["usable"] or not outcome["reached"]:
-                        accepted_head_residual = head_residual
-                        break
-                else:
-                    # A frozen-operator correction that no damping can use
-                    # is a genuine linear/nonlinear failure (active-set kink
-                    # or preconditioner stagnation), not progress: stop and
-                    # report instead of applying rejected proposals forever.
-                    history.append(dict(outer_iteration=outer+1,
-                        krylov_iterations=0,
-                        inner_reached=False, inner_stagnated=outcome["stagnated"],
-                        inner_diverged=outcome["diverged"], inner_usable=False,
-                        inner_retried=True,
-                        proposed_head_change_max=0.0, accepted_head_change_max=0.0,
-                        head_residual_rms=head_residual, relaxation=0.0))
-                    accepted_head_residual = head_residual
-                    break
-            # Damped nonlinear update with the FULL operator, storage, gates
-            # and RHS re-evaluated at every candidate head; the accepted
-            # state (head, operator, gates, RHS) is preserved untouched
-            # until a candidate passes the physical residual test.
-            relaxation = self.unconfined_relax if self.outer_limit_val > 1 else 1.0
-            wp.launch(terrain_copy_kernel, dim=s.n,
-                inputs=[s.head], outputs=[s.starting], device=self.device)
-            accepted = False
-            trial_head_residual = np.inf
-            trial_flow_rms = 0.0
-            proposed_max = 0.0
-            for backtrack in range(12):
-                wp.launch(terrain_copy_kernel, dim=s.n,
-                    inputs=[s.starting], outputs=[s.candidate], device=self.device)
-                wp.launch(terrain_relaxed_update_kernel, dim=s.n,
-                    inputs=[s.candidate, s.delta, wp.float64(relaxation),
-                            wp.float64(c.max_head_change_per_outer), s.fixed,
-                            s.bc_values, s.active], device=self.device)
-                # Everything at the CANDIDATE: coefficients, storage, gates,
-                # aggregated boundary, full hierarchy, RHS. The accepted
-                # head_rel is left untouched for the dh comparison.
-                self.evaluate(s.candidate, s.candidate_rel)
-                wp.launch(terrain_scale_multiply_kernel, dim=s.n,
-                    inputs=[s.rhs, s.scale, s.rhs_raw], device=self.device)
-                self.matvec_residual(s.candidate_rel, s.rhs_raw)
-                combined = self.dual_check(s.head_rel, s.candidate_rel)
-                trial_head_residual = float(np.sqrt(max(combined[3], 0.0)/n))
-                trial_flow_rms = float(np.sqrt(max(combined[2], 0.0)/n))
-                proposed_max = float(combined[1])/max(relaxation, 1e-300)
-                if trial_head_residual <= accepted_head_residual \
-                        or trial_head_residual <= self.head_tolerance:
-                    accepted = True
-                    break
-                relaxation *= 0.5
-            if not accepted:
-                rejected += 1
-                # Roll the accepted state back in full: head, operator,
-                # gates, aggregated boundary, hierarchy and RHS.
-                wp.launch(terrain_copy_kernel, dim=s.n,
-                    inputs=[s.starting], outputs=[s.head], device=self.device)
-                self.evaluate(s.head, s.head_rel)
-                trial_head_residual = accepted_head_residual
-                accepted_dh_rms = 0.0
-                accepted_dh_max = 0.0
-            else:
-                accepted_head_residual = min(accepted_head_residual, trial_head_residual)
-                # Commit the accepted candidate as the new nonlinear state
-                # (operator/gates/RHS already evaluated at it).
-                wp.launch(terrain_copy_kernel, dim=s.n,
-                    inputs=[s.candidate], outputs=[s.head], device=self.device)
-                accepted_dh_rms = float(np.sqrt(max(combined[0], 0.0))/n)
-                accepted_dh_max = float(combined[1])
-            previous_dh_rms = accepted_dh_rms
+            rejected += int(not update["accepted"])
             history.append(dict(outer_iteration=outer+1,
-                krylov_iterations=outcome["cycles"],
+                krylov_iterations=outcome["cycles"], restart_blocks=outcome["restart_blocks"],
                 inner_reached=outcome["reached"], inner_stagnated=outcome["stagnated"],
                 inner_diverged=outcome["diverged"], inner_usable=outcome["usable"],
-                proposed_head_change_max=proposed_max,
-                accepted_head_change_max=accepted_dh_max,
-                accepted_head_change_rms=accepted_dh_rms,
-                head_residual_rms=trial_head_residual,
-                relaxation=float(relaxation)))
-            if accepted and trial_head_residual <= self.head_tolerance and (
-                    trial_flow_rms <= self.abs_tol_min*np.sqrt(n)):
+                inner_retried=outcome["retried"], inner_residual_rms=outcome["head_rms"],
+                inner_target_rms=outcome["target_rms"], forcing_target_rms=target,
+                initial_head_residual_rms=current["head"],
+                initial_physical_residual_rms=current["flow"],
+                proposed_head_change_max=update["proposed_max"],
+                clipped_head_change_max=update["clipped_max"],
+                accepted_head_change_max=update["dh_max"],
+                accepted_head_change_rms=update["dh_rms"],
+                head_residual_rms=update["metrics"]["head"],
+                physical_residual_rms=update["metrics"]["flow"],
+                relative_cell_imbalance=update["metrics"]["relative"],
+                accepted=update["accepted"], acceptance_mode=update["acceptance_mode"],
+                backtracks=len(update["trials"])-int(update["accepted"]),
+                backtracking_evaluations=len(update["trials"]),
+                backtracking_trials=update["trials"],
+                relaxation=update["relaxation"]))
+            current = update["metrics"]
+            previous_dh_rms = update["dh_rms"]
+            if self.physically_converged(metrics=current):
                 converged = True
-                accepted_head_residual = trial_head_residual
+                stop_reason = "converged"
                 break
-        seconds = perf_counter()-start
+            if not update["accepted"]:
+                stop_reason = "line_search_failed" if outcome["usable"] else "linear_solve_failed"
+                break
+        norm_readbacks = getattr(self.workspace.krylov, "norm_readbacks", 0)-norm_reads_before
         return dict(converged=converged, outer_iterations=len(history),
-            krylov_iterations=total_krylov, seconds=seconds,
-            host_scalar_reads=self.host_scalar_reads, rejected=rejected,
-            history=history, final_head_residual=accepted_head_residual)
+            krylov_iterations=total_krylov, seconds=perf_counter()-start,
+            host_scalar_reads=self.host_scalar_reads+norm_readbacks,
+            host_outer_reductions=self.host_scalar_reads, gmres_norm_readbacks=norm_readbacks,
+            rejected=rejected,
+            operator_evaluations=self.operator_evaluations, stop_reason=stop_reason,
+            history=history, final_head_residual=current["head"])

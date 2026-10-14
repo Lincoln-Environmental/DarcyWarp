@@ -1,6 +1,24 @@
 kimi --model kimi-code/k3
 # DarcyWarp — Agent System Memory
 
+> 2026-10-15 numerical audit of device terrain Picard/GMRES (baseline
+> `947d20d`; report `docs/3D_DEVICE_PICARD_AUDIT_2026-10-15.md`): consistent
+> free-cell RMS/L2 conversions; exact per-outer Krylov budgets shared by
+> adaptive blocks and fallback; shortened GMRES solves use only active
+> columns. Nonlinear acceptance evaluates original source minus physical
+> fluxes and exact storage at BOTH current and candidate states; refreshes
+> saturation-dependent contact rows, gates and all MG levels. Prefer dual
+> residual merit descent, then permit a bounded recovery (norm growth <=1.10
+> relative to the CURRENT state); final physical/head tolerances unchanged.
+> Original variable-geology SHANZ ladder converges at 16/32/64/96 in
+> 152/139/859/985 outers with the SAME 0.01 m floor and K law (allow 2000
+> outers for 64/96). This supersedes the earlier inference that the floor
+> physics prevents that case from converging. Stronger basement-contrast
+> stress results and explicit budget failures are in the report/artifacts.
+> Candidate rollback, per-subface gates, hierarchy refresh, isolated-cell
+> counts, raw/clipped/accepted updates, histories, readbacks, host/device
+> cache handoff and unrepresentable storage increments have regressions.
+
 > 2026-10-13 evening session (baseline `09c2433`): nonparallel exterior
 > boundary fluxes FIXED (`9cc289f`) — top/bottom contacts evaluate cross
 > terms on the bounding interface's own slopes with an hz coupling

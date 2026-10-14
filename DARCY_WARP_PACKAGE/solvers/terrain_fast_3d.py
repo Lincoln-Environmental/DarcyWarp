@@ -68,6 +68,32 @@ def pack_device_subfaces(*, operator, datum):
     return subfaces, len(records)
 
 
+def pack_device_contact_refresh(*, operator, datum):
+    """Endpoint constitutive rows for exact device contact refresh.
+
+    All rows are affine in saturated fraction, except overridden top/bottom
+    tangential terms: their affine numerators divide by the normal K.
+    """
+    endpoints = []
+    for head in (operator.grid.bottoms, operator.grid.tops):
+        reference = TerrainReferenceOperator3D(metrics=operator.metrics,
+            kx=operator.kx, ky=operator.ky, kz=operator.kz, head=head,
+            min_sat=0.0, contacts=operator.contacts, trusted_k=True)
+        rows, unused_count = pack_device_subfaces(operator=reference, datum=datum)
+        endpoints.append(rows)
+    normals = np.zeros((endpoints[0].shape[0], 3))
+    for index, contact in enumerate(operator.contacts):
+        if contact.direction in ("top", "bottom") and contact.conductance is not None:
+            layer, j, i = contact.cell
+            interface = layer + int(contact.direction == "bottom")
+            zx = operator.metrics.zx_interfaces[interface, j, i]
+            zy = operator.metrics.zy_interfaces[interface, j, i]
+            normals[index] = (operator.kz[contact.cell],
+                operator.kz[contact.cell]+operator.kx[contact.cell]*zx*zx
+                + operator.ky[contact.cell]*zy*zy, 1.0)
+    return (*endpoints, normals)
+
+
 def seed_discharge_only_components_3d(*, operator, head, source, fixed, storage, potential_storage, topology_cache):
     """Open a physically available discharge branch with a numerical guess.
 
@@ -567,6 +593,7 @@ class TerrainOperatorSession3D:
             storage,change = self.storage_terms(head=head,previous=previous,transient=transient,
                 unconfined=True,mode=unconfined_storage_mode,sy=sy_field,ss=ss_field,coeff=None,dt=dt)
         boundary,boundary_rhs = pack_terrain_boundaries(operator=operator,head=head,datum=datum)
+        workspace_reused = self.workspace is not None and self.workspace_key == key
         subfaces,subface_count = pack_device_subfaces(operator=operator,datum=datum)
         contact_rhs = np.zeros(np.prod(self.shape))
         for record in operator.contact_records:
@@ -580,8 +607,6 @@ class TerrainOperatorSession3D:
         fixed = self.bc_mask.copy()
         fixed[isolated] = 1
         rhs[isolated] = head[isolated]-datum
-        snapshot = (pack_terrain_coefficients(operator=operator),storage.copy(),boundary.copy(),
-            fixed.copy(),self.grid.active.copy(),self.geometry_revision)
         if self.workspace is None or self.workspace_key != key:
             if self.workspace is not None:
                 self.workspace.close()
@@ -592,16 +617,17 @@ class TerrainOperatorSession3D:
         else:
             self.workspace.refresh(operator=operator,fixed=fixed,storage=storage,
                 boundary=boundary)
-        self.snapshot = snapshot
         state = DeviceTerrainState(session=self,device=device,workspace=self.workspace)
         state.upload_static(source=self.rhs,sy=sy_field,ss=ss_field,
             free=(self.grid.active != 0)&(self.bc_mask == 0)&(~isolated),
-            subfaces=subfaces)
-        state.update_head(head)
+            subfaces=subfaces,
+            contact_refresh=pack_device_contact_refresh(operator=operator, datum=datum))
+        state.bc_values.assign(np.where(isolated, head, self.bc_values).ravel())
+        state.update_head(host_head=head)
         if previous is not None:
-            state.update_previous(previous)
+            state.update_previous(host_previous=previous)
         else:
-            state.update_previous(head)
+            state.update_previous(host_previous=head)
         driver = DeviceTerrainPicard(session=self,state=state,workspace=self.workspace,
             device=device,controls=DevicePicardControls(),datum=datum,restart=krylov_restart,
             krylov_budget=max_cycles,unconfined=True,transient=transient,dt=dt,
@@ -609,7 +635,7 @@ class TerrainOperatorSession3D:
             budget_relative_tol=final_budget_relative_tol,rel_tol=rel_tol,
             min_sat=unconfined_min_sat,outer_limit=outer_limit,
             unconfined_relax=unconfined_relax)
-        result = driver.run(outer_limit)
+        result = driver.run(max_outer=outer_limit)
         head_device = state.head.numpy().reshape(self.shape)
         head_device[self.grid.active == 0] = 0
         head_device[self.bc_mask != 0] = self.bc_values[self.bc_mask != 0]
@@ -620,7 +646,17 @@ class TerrainOperatorSession3D:
             transient=transient,unconfined=True,mode=unconfined_storage_mode,sy=sy_field,
             ss=ss_field,coeff=None,dt=dt)
         budget = compute_terrain_budget_3d(operator=final_operator,head=head_device,source=self.rhs,
-            fixed=self.bc_mask,storage_change=final_change,storage_diagonal=final_storage)
+            fixed=fixed,storage_change=final_change,storage_diagonal=final_storage)
+        # Reconcile host cache metadata with the final DEVICE state so a
+        # later host solve refreshes safely instead of reading an old layout.
+        final_boundary, unused_rhs = pack_terrain_boundaries(operator=final_operator,
+            head=head_device, datum=datum)
+        self.snapshot = (self.k_version, self.geometry_revision, unconfined_min_sat,
+            head_device.copy(), final_storage.copy(), final_boundary.copy(),
+            fixed.copy(), self.grid.active.copy())
+        packed_final = pack_terrain_coefficients(operator=final_operator)
+        self.snapshot_packed_positive = packed_final[:, (0, 3, 6)] > 0
+        self.workspace.scale_host = state.scale.numpy().reshape(self.shape)
         converged = bool(np.all(np.isfinite(head_device))
             and budget["head_residual_rms"] <= head_tolerance
             and (budget["cell_residual_rms"] <= abs_tol_min
@@ -632,22 +668,29 @@ class TerrainOperatorSession3D:
             n_outer_iterations=result["outer_iterations"],
             outer_history=result["history"],
             seconds=result["seconds"],host_scalar_reads=result["host_scalar_reads"],
+            host_outer_reductions=result["host_outer_reductions"],
+            gmres_norm_readbacks=result["gmres_norm_readbacks"],
             rejected_updates=result["rejected"],
             n_zero_capacity_storage_seeds=storage_seeds,
             n_discharge_component_seeds=int(seeded),
             n_discharge_subfaces=int(subface_count),
-            workspace_reused=False,operator_refreshes=0,geometry_revision=self.geometry_revision,
+            workspace_reused=workspace_reused,operator_refreshes=result["operator_evaluations"],geometry_revision=self.geometry_revision,
             n_isolated_cells_excluded=int(np.sum(isolated)),
             transient=transient,dt=dt,unconfined_storage_mode=unconfined_storage_mode,
             min_saturated_thickness=unconfined_min_sat,
             final_head_residual_rms=budget["head_residual_rms"],
-            device_picard=True)
+            dry_cell_approximation=terrain_dry_diagnostics_3d(operator=final_operator,
+                head=head_device, source=self.rhs, fixed=self.bc_mask, budget=budget),
+            device_picard=True, device_stop_reason=result["stop_reason"],
+            n_free_cells=driver.n_free)
         last_trial = result["history"][-1] if result["history"] else {}
         info.update(r_rms_end=budget["cell_residual_rms"],h_rms_end=budget["head_residual_rms"],
             dh_rms_lastcheck=float(last_trial.get("accepted_head_change_rms", 0.0)),
             dh_max_lastcheck=float(last_trial.get("accepted_head_change_max", 0.0)),
             proposed_dh_max_lastcheck=float(last_trial.get("proposed_head_change_max", 0.0)),
-            multigrid_cycles=(result["krylov_iterations"]+krylov_restart-1)//krylov_restart,
+            gmres_restart_blocks=sum(row["restart_blocks"] for row in result["history"]),
+            multigrid_cycles=result["krylov_iterations"]
+                + sum(row["restart_blocks"] for row in result["history"]),
             multigrid_hierarchy="conservative approximate principal part; not exact Galerkin")
         state.close()
         return (head_device,info) if return_info else head_device

@@ -1,6 +1,7 @@
 """Terrain GMRES iteration-budget semantics: max_cycles is exact Krylov work."""
 import numpy as np
 import pytest
+import warp as wp
 
 from DARCY_WARP_PACKAGE.physics.terrain_grid_3d import TerrainGrid3D, TerrainMetrics3D
 from DARCY_WARP_PACKAGE.physics.terrain_reference_3d import TerrainReferenceOperator3D
@@ -72,8 +73,8 @@ def test_single_shortened_block_solves_and_reports_actual_iterations(reference_s
     workspace = flat_workspace(restart=64, maxiter=13)
     iterations, error, unused_tolerance, value = run_gmres(workspace)
     assert iterations == 13
-    if error <= workspace.krylov._atol**.5 + 1e-30:
-        np.testing.assert_allclose(value, solution, rtol=0, atol=1e-9)
+    assert error <= unused_tolerance
+    np.testing.assert_allclose(value, solution, rtol=0, atol=1e-9)
     workspace.close()
 
 
@@ -108,3 +109,22 @@ def test_shortened_final_block_keeps_single_graph_capture(reference_solution):
     run_gmres(workspace)
     assert workspace.krylov.graph_captures == 1
     workspace.close()
+
+
+@pytest.mark.parametrize("budget", [1, 3, 7, 13])
+def test_shortened_block_norm_is_independently_recomputed(budget):
+    workspace = flat_workspace(restart=4, maxiter=budget)
+    try:
+        for unused_repeat in range(2):
+            used, error, tolerance, value = run_gmres(workspace=workspace)
+            assert used <= budget
+            assert used == budget or error <= tolerance
+            physical_residual = wp.zeros_like(workspace.b)
+            workspace.krylov_matvec(x=workspace.x, y=workspace.b, z=physical_residual,
+                alpha=-1., beta=1.)
+            independently_evaluated = np.linalg.norm(physical_residual.numpy())
+            assert np.isfinite(value).all()
+            assert error == pytest.approx(independently_evaluated, rel=1e-8, abs=1e-14)
+            # A shortened eager tail must not change subsequent full graph blocks.
+    finally:
+        workspace.close()

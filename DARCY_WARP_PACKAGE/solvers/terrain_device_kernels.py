@@ -11,11 +11,9 @@ coefficient-by-coefficient against pack_terrain_coefficients.
 
 Static geometry (interface/centre/face slopes, thickness, masks) is
 uploaded once per geometry revision; head-dependent constitutive fields
-are refreshed in place every outer iteration. Contact coefficients
-(conductance, metric couplings, prescribed-head offset) are packed
-host-side once per contact set: they change only through
-update_terrain_contacts, and the discharge-only gate is evaluated
-on-device inside the divergence kernel from the current head.
+are refreshed in place every outer iteration. Contact geometry is packed host-side; head-dependent conductance and
+metric couplings are refreshed on device at each nonlinear state before
+independent per-subface discharge-only gating and aggregation.
 """
 import warp as wp
 
@@ -176,7 +174,8 @@ def terrain_relative_head_kernel(head: wp.array(dtype=wp.float64),
 
 @wp.kernel
 def terrain_extract_principal_kernel(coefficients: wp.array2d(dtype=wp.float64),
-    active: wp.array(dtype=wp.int32), storage_diag: wp.array(dtype=wp.float64),
+    active: wp.array(dtype=wp.int32), fixed: wp.array(dtype=wp.int32),
+    storage_diag: wp.array(dtype=wp.float64),
     boundary_col0: wp.array(dtype=wp.float64),
     tx_p: wp.array(dtype=wp.float64, ndim=3), tx_m: wp.array(dtype=wp.float64, ndim=3),
     ty_p: wp.array(dtype=wp.float64, ndim=3), ty_m: wp.array(dtype=wp.float64, ndim=3),
@@ -214,7 +213,7 @@ def terrain_extract_principal_kernel(coefficients: wp.array2d(dtype=wp.float64),
     tz_m[k,j,i] = tzm
     principal = storage_diag[c] + boundary_col0[c]
     principal_storage[k,j,i] = principal
-    if active[c] == 0:
+    if active[c] == 0 or fixed[c] != 0:
         diag[k,j,i] = one
         scale_flat[c] = one
         return
@@ -252,11 +251,13 @@ def terrain_copy_kernel(source: wp.array(dtype=wp.float64),
 def terrain_dual_check_kernel(head: wp.array(dtype=wp.float64),
     candidate: wp.array(dtype=wp.float64), residual: wp.array(dtype=wp.float64),
     rhs: wp.array(dtype=wp.float64), scale: wp.array(dtype=wp.float64),
-    free: wp.array(dtype=wp.int32), partials: wp.array2d(dtype=wp.float64),
-    block_span: int):
+    free: wp.array(dtype=wp.int32), delta: wp.array(dtype=wp.float64),
+    partials: wp.array2d(dtype=wp.float64), block_span: int):
     """Block partials over free cells: [0] dh^2, [1] dh_max, [2] flow r^2,
-    [3] head-equivalent r^2, [4] rhs^2, [5] nonfinite flag, [6] scale max.
-    residual must already hold rhs - A*head for the current operator."""
+    [3] head-equivalent r^2, [4] gross physical throughput, [5] nonfinite flag, [6] residual L1,
+    [7] unrelaxed, unclipped correction maximum.
+    residual holds the independently evaluated physical balance. The rhs
+    argument carries per-cell gross throughput, not a Krylov-system RHS."""
     t = wp.tid()
     block = t//block_span
     dh = candidate[t]-head[t]
@@ -269,15 +270,17 @@ def terrain_dual_check_kernel(head: wp.array(dtype=wp.float64),
     dhmax = wp.where(is_free, wp.abs(dh), zero)
     r2 = wp.where(is_free, r*r, zero)
     heq = wp.where(is_free and sc > 0.0, (r/sc)*(r/sc), zero)
-    rhs2 = wp.where(is_free, rhs[t]*rhs[t], zero)
-    bad = wp.where(is_free and (wp.abs(candidate[t]) > 1e300 or r != r), one, zero)
+    gross = wp.where(is_free, rhs[t], zero)
+    bad = wp.where(is_free and (not wp.isfinite(candidate[t]) or not wp.isfinite(r)
+        or not wp.isfinite(sc) or sc <= zero), one, zero)
     wp.atomic_add(partials, block, 0, dh2)
     wp.atomic_max(partials, block, 1, dhmax)
     wp.atomic_add(partials, block, 2, r2)
     wp.atomic_add(partials, block, 3, heq)
-    wp.atomic_add(partials, block, 4, rhs2)
+    wp.atomic_add(partials, block, 4, gross)
     wp.atomic_add(partials, block, 5, bad)
-    wp.atomic_max(partials, block, 6, wp.where(is_free, sc, zero))
+    wp.atomic_add(partials, block, 6, wp.where(is_free, wp.abs(r), zero))
+    wp.atomic_max(partials, block, 7, wp.where(is_free, wp.abs(delta[t]), zero))
 
 
 @wp.kernel
@@ -288,24 +291,27 @@ def terrain_combine_partials_kernel(partials: wp.array2d(dtype=wp.float64),
         max_dh = wp.float64(0.0)
         sum_r2 = wp.float64(0.0)
         sum_heq = wp.float64(0.0)
-        sum_rhs2 = wp.float64(0.0)
+        sum_throughput = wp.float64(0.0)
         sum_bad = wp.float64(0.0)
-        max_scale = wp.float64(0.0)
+        sum_abs_residual = wp.float64(0.0)
+        max_delta = wp.float64(0.0)
         for index in range(blocks):
             sum_dh2 = sum_dh2 + partials[index, 0]
             max_dh = wp.max(max_dh, partials[index, 1])
             sum_r2 = sum_r2 + partials[index, 2]
             sum_heq = sum_heq + partials[index, 3]
-            sum_rhs2 = sum_rhs2 + partials[index, 4]
+            sum_throughput = sum_throughput + partials[index, 4]
             sum_bad = sum_bad + partials[index, 5]
-            max_scale = wp.max(max_scale, partials[index, 6])
+            sum_abs_residual = sum_abs_residual + partials[index, 6]
+            max_delta = wp.max(max_delta, partials[index, 7])
         out[0] = sum_dh2
         out[1] = max_dh
         out[2] = sum_r2
         out[3] = sum_heq
-        out[4] = sum_rhs2
+        out[4] = sum_throughput
         out[5] = sum_bad
-        out[6] = max_scale
+        out[6] = sum_abs_residual
+        out[7] = max_delta
 
 
 @wp.kernel
@@ -455,3 +461,81 @@ def terrain_subface_scatter_kernel(sub_cell: wp.array(dtype=wp.int32),
     wp.atomic_add(boundary, cell, 3, sub_by[s])
     wp.atomic_add(contact_rhs, cell, sub_c[s]*sub_hb[s])
     wp.atomic_add(open_col0, cell, sub_c[s])
+
+
+@wp.kernel
+def terrain_contact_refresh_kernel(cell: wp.array(dtype=wp.int32),
+    fraction: wp.array(dtype=wp.float64), dry: wp.array2d(dtype=wp.float64),
+    wet: wp.array2d(dtype=wp.float64), normals: wp.array2d(dtype=wp.float64),
+    conductance: wp.array(dtype=wp.float64), bz: wp.array(dtype=wp.float64),
+    bx: wp.array(dtype=wp.float64), by: wp.array(dtype=wp.float64)):
+    """Contact rows are affine in wet fraction except overridden top/bottom
+    tangential couplings, whose affine numerator divides by normal K."""
+    t = wp.tid()
+    f = fraction[cell[t]]
+    weight = f
+    normal = (wp.float64(1.0)-f)*normals[t, 0]+f*normals[t, 1]
+    if normals[t, 2] != wp.float64(0.0) and normal > wp.float64(0.0):
+        weight = f*normals[t, 1]/normal
+    conductance[t] = dry[t, 1]+f*(wet[t, 1]-dry[t, 1])
+    bz[t] = dry[t, 2]+f*(wet[t, 2]-dry[t, 2])
+    bx[t] = dry[t, 3]+weight*(wet[t, 3]-dry[t, 3])
+    by[t] = dry[t, 4]+weight*(wet[t, 4]-dry[t, 4])
+
+
+@wp.kernel
+def terrain_contact_flux_kernel(cell: wp.array(dtype=wp.int32),
+    conductance: wp.array(dtype=wp.float64), bz: wp.array(dtype=wp.float64),
+    bx: wp.array(dtype=wp.float64), by: wp.array(dtype=wp.float64),
+    hb: wp.array(dtype=wp.float64), opened: wp.array(dtype=wp.int32),
+    head: wp.array(dtype=wp.float64), gx: wp.array(dtype=wp.float64),
+    gy: wp.array(dtype=wp.float64), gz: wp.array(dtype=wp.float64),
+    net: wp.array(dtype=wp.float64), gross: wp.array(dtype=wp.float64)):
+    t = wp.tid()
+    c = cell[t]
+    if opened[t] != 0:
+        q = conductance[t]*(head[c]-hb[t])-bz[t]*gz[c]-bx[t]*gx[c]-by[t]*gy[c]
+        wp.atomic_add(net, c, q)
+        wp.atomic_add(gross, c, wp.abs(q))
+
+
+@wp.kernel
+def terrain_physical_residual_kernel(source: wp.array(dtype=wp.float64),
+    storage_change: wp.array(dtype=wp.float64), free: wp.array(dtype=wp.int32),
+    fixed: wp.array(dtype=wp.int32), qx: wp.array(dtype=wp.float64),
+    qy: wp.array(dtype=wp.float64), qz: wp.array(dtype=wp.float64),
+    contact: wp.array(dtype=wp.float64), contact_gross: wp.array(dtype=wp.float64),
+    residual: wp.array(dtype=wp.float64), throughput: wp.array(dtype=wp.float64),
+    nx: int, ny: int, nz: int):
+    """Independent flux balance, preserving source and exact volume change.
+    Count each free/fixed exchange and each contact before cancellation."""
+    c = wp.tid()
+    residual[c] = wp.float64(0.0)
+    throughput[c] = wp.float64(0.0)
+    if free[c] == 0:
+        return
+    i = c % nx
+    j = (c//nx) % ny
+    k = c//(nx*ny)
+    divergence = qx[c]+qy[c]+qz[c]+contact[c]
+    gross = wp.abs(source[c])+wp.abs(storage_change[c])+contact_gross[c]
+    if i+1 < nx and fixed[c+1] != 0:
+        gross += wp.abs(qx[c])
+    if j+1 < ny and fixed[c+nx] != 0:
+        gross += wp.abs(qy[c])
+    if k+1 < nz and fixed[c+nx*ny] != 0:
+        gross += wp.abs(qz[c])
+    if i > 0:
+        divergence -= qx[c-1]
+        if fixed[c-1] != 0:
+            gross += wp.abs(qx[c-1])
+    if j > 0:
+        divergence -= qy[c-nx]
+        if fixed[c-nx] != 0:
+            gross += wp.abs(qy[c-nx])
+    if k > 0:
+        divergence -= qz[c-nx*ny]
+        if fixed[c-nx*ny] != 0:
+            gross += wp.abs(qz[c-nx*ny])
+    residual[c] = source[c]-divergence-storage_change[c]
+    throughput[c] = gross

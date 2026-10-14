@@ -80,10 +80,8 @@ class TerrainGMRES3D(GMRES):
             normalize_arnoldi_vec.launch()
 
         def do_restart_cycle(iterations):
-            # A shortened final block leaves stale Hessenberg columns that
-            # would pollute the least-squares solve; zeroing restores the
-            # exact solution of the shorter Krylov system (their y entries
-            # become zero, so the full-width update below stays correct).
+            # Shortened blocks solve and update only their active Krylov
+            # columns. Clear the unused columns for subsequent graph reuse.
             if iterations < restart:
                 H.zero_()
             if M is not None and is_left_preconditioner:
@@ -102,6 +100,7 @@ class TerrainGMRES3D(GMRES):
             for j in range(iterations):
                 do_arnoldi_iteration(j)
 
+            least_squares_solve.set_param_at_index(0, iterations)
             least_squares_solve.launch()
 
             # update x
@@ -110,14 +109,14 @@ class TerrainGMRES3D(GMRES):
                     _gmres_update_x_kernel,
                     dim=x.shape,
                     device=device,
-                    inputs=[restart, scalar_dtype(1.0), y, V, x, batch_offsets, dofs_per_entry],
+                    inputs=[iterations, scalar_dtype(1.0), y, V, x, batch_offsets, dofs_per_entry],
                 )
             else:
                 wp.launch(
                     _gmres_update_x_kernel,
                     dim=x.shape,
                     device=device,
-                    inputs=[restart, scalar_dtype(0.0), y, V, w, batch_offsets, dofs_per_entry],
+                    inputs=[iterations, scalar_dtype(0.0), y, V, w, batch_offsets, dofs_per_entry],
                 )
                 M.matvec(w, r, r, alpha=1, beta=0)
                 wp.launch(
@@ -147,6 +146,7 @@ class TerrainGMRES3D(GMRES):
     def _run_cached_cycle(self, *, do_cycle, cur_iter_and_condition, cycle_size,
                           r_norm_sq, maxiter, atol_sq, callback,
                           check_every, use_cuda_graph):
+        self.norm_readbacks = getattr(self, "norm_readbacks", 0)+2
         tolerance = math.sqrt(float(atol_sq.numpy().max()))
         error = math.sqrt(float(r_norm_sq.numpy().max()))
         used = 0
@@ -169,6 +169,7 @@ class TerrainGMRES3D(GMRES):
             else:
                 do_cycle(iterations)
             used += iterations
+            self.norm_readbacks += 1
             error = math.sqrt(max(float(r_norm_sq.numpy().max()), 0.0))
             if callback is not None:
                 callback(used, error, tolerance)
