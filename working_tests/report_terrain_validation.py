@@ -123,11 +123,12 @@ def generate_tables(*,root,cases,seed,cluster_threshold):
             success=bool(info.get('converged',False))
             independent=row.get('independent_native_balance',{}).get('conservation',False) if is_mf6 else row['independent_accepted']
             comparison=comparisons.get(label,{})
-            same_root='not_equation_equivalent' if is_mf6 else ('not_accepted' if not success or not independent else 'reference' if label==reference else 'same_numerical_cluster' if comparison.get('head_max',np.inf)<=cluster_threshold else 'different_or_unconverged')
+            same_root='not_equation_equivalent' if is_mf6 else ('not_accepted' if not success or not independent else 'reference' if label==reference else 'same_numerical_cluster' if comparison.get('head_max',np.inf)<=cluster_threshold else 'different_numerical_cluster')
             entry=dict(case=case.case_id,solver=label,native_success=success,independent_conservation=independent,
                 equation_equivalent_to_DarcyWarp=not is_mf6,same_root=same_root,
+                nonlinear_residual_evaluation='independent_DarcyWarp' if not is_mf6 else 'independent_native_TPFA' if label=='mf6_coupled' else 'native_reported_flows_only_XT3D_cross_evaluation_unavailable',
                 physical_output_agreement='quantified separately; no cross-formulation pass threshold',
-                validation_incomplete=bool(not success or not independent or is_mf6 or same_root=='different_or_unconverged'),
+                validation_incomplete=bool(not success or not independent or is_mf6 or same_root=='different_numerical_cluster'),
                 stop_reason=info.get('device_stop_reason',info.get('stop_reason')))
             matrix.append(entry)
             budget=row.get('independent_native_balance',{}) if is_mf6 else row['budget']
