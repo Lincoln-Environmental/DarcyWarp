@@ -33,6 +33,35 @@ def field_3d(*, value, shape, name, nonnegative=False):
     return array
 
 
+def validate_contact_tangential_stencils(*, contact, metrics, x_metric, y_metric):
+    """Require local derivatives for couplings possible over all wet states.
+
+    Positive physical K is validated before contacts. An offset or a bounding
+    interface slope can therefore require a derivative even at a dry endpoint
+    or a closed discharge gate. Only explicit zero exchange removes that need.
+    The neighbour coefficients come directly from derivative_matrix(); stored
+    zero diagonal entries in its sparse rows do not establish availability.
+    """
+    if contact.conductance == 0:
+        return
+    column = contact.cell[1:]
+    for axis, offset, metric, coefficients in (
+        ("x", contact.x_offset, x_metric, metrics.x_coefficients),
+        ("y", contact.y_offset, y_metric, metrics.y_coefficients),
+    ):
+        if (
+            (offset != 0 or metric != 0)
+            and coefficients[1][column] == 0
+            and coefficients[2][column] == 0
+        ):
+            raise ValueError(
+                f"contact at {contact.cell}/{contact.direction} requires the {axis} "
+                "tangential derivative: missing active-neighbour stencil; "
+                "the specified offset/metric coupling cannot be reconstructed "
+                "on the local active mask"
+            )
+
+
 @dataclass(frozen=True)
 class TerrainContact3D:
     """One exterior subface: total prescribed head or discharge-only head.
@@ -211,8 +240,11 @@ class TerrainReferenceOperator3D:
                 raise ValueError(f"contact elevation is outside its layer at {cell}/{contact.direction}")
             if axis == 0 and abs(depth_offset-sign*contact.distance) > tolerance:
                 raise ValueError("top/bottom contact elevation must match its logical distance and centroid offsets")
-            if (self.shape[0] == 1 and axis != 0 and abs(depth_offset) > tolerance) or (self.shape[2] == 1 and contact.x_offset != 0) or (self.shape[1] == 1 and contact.y_offset != 0):
+            if self.shape[0] == 1 and axis != 0 and abs(depth_offset) > tolerance:
                 raise ValueError("offset subfaces require enough cells to reconstruct tangential gradients")
+            validate_contact_tangential_stencils(contact=contact, metrics=m,
+                x_metric=zx_interface if axis == 0 else 0.,
+                y_metric=zy_interface if axis == 0 else 0.)
             zx,zy = m.zx[cell],m.zy[cell]
             if axis == 2:
                 # Lateral exterior faces are physical x/y-constant planes:
