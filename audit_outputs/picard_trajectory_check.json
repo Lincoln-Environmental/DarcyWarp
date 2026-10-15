@@ -1,0 +1,15 @@
+{
+  "paired_outers": 2000,
+  "discrete_differences": {
+    "krylov_iterations": 0,
+    "relaxation": 0,
+    "acceptance_mode": 0,
+    "accepted": 0
+  },
+  "max_absolute_differences": {
+    "head_residual_rms": 6.947567521287112e-16,
+    "physical_residual_rms": 1.254552017826427e-13,
+    "relative_cell_imbalance": 2.120525977034049e-13
+  },
+  "prefix_krylov": 48264
+}

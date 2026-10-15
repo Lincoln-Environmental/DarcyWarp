@@ -81,6 +81,14 @@ See [the terrain API and scientific acceptance report](docs/3D_TERRAIN_SCIENTIFI
 for equations, supported geometry, storage input contracts, independent
 validation, timings and the remaining quasi-3D dry-cell approximation.
 
+Steady unconfined terrain also has an opt-in analytic Newton–Krylov path:
+`solver.solve(unconfined=True, terrain_nonlinear_method="newton", ...)`.
+Picard remains the default and the safeguarded fallback. The Newton path is
+experimental: the original 64×64 low-K case converges faster to the same
+solution, while some controls reach different near-roots of the existing
+floor law. See the [discrete Jacobian derivation](docs/TERRAIN_NEWTON_DERIVATION_2026-10-16.md)
+and [validation and limitations](docs/TERRAIN_NEWTON_VALIDATION_2026-10-16.md).
+
 ## 3D river-loss case study
 
 `DARCY_WARP_PACKAGE.case_studies.river_loss_cross_section` is an example

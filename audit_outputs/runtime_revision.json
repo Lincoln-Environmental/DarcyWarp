@@ -1,0 +1,37 @@
+{
+  "starting_branch": "dev",
+  "starting_commit": "d056eaf666268e3c5f3e0017c91d51c3160162de",
+  "fix_branch": "fix/terrain-newton-krylov",
+  "worktree": "/tmp/darcy-terrain-newton",
+  "recorded_utc": "2026-10-15T18:53:33.650719+00:00",
+  "python": "3.12.2 | packaged by conda-forge | (main, Feb 16 2024, 20:50:58) [GCC 12.3.0]",
+  "executable": "/home/patrickdurney/miniconda3/bin/python",
+  "packages": {
+    "warp-lang": "1.17.0",
+    "numpy": "2.2.5",
+    "scipy": "1.15.3",
+    "pytest": "9.1.0"
+  },
+  "precision": "float64",
+  "cuda_toolkit_reported_by_warp": "12.9",
+  "driver_api": "13.2",
+  "nvidia_driver": "595.91.07",
+  "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+  "gpu_memory_mib": 16376,
+  "environment_modified": false,
+  "physics_changed": false,
+  "default_solver_changed": false,
+  "pushed": false,
+  "merged": false,
+  "source_sha256": {
+    "DARCY_WARP_PACKAGE/solvers/terrain_newton_3d.py": "0ba62132bf6cd3abbe142881e133b9d476b9d3298fb77b2075b1533bf43b1fd5",
+    "DARCY_WARP_PACKAGE/solvers/terrain_newton_kernels.py": "4587f8d9adbcf0dd63009b794338004786d2089b2c06cf98a62114024192e27f",
+    "DARCY_WARP_PACKAGE/solvers/terrain_device_3d.py": "c314ab359b805a1f694880ebdf6f281fb18517a2f46a5df43924a1926facec44",
+    "DARCY_WARP_PACKAGE/solvers/terrain_fast_3d.py": "a87719f5ca5372a9ff95822338c6eae7cc89e03e97e2310c7273dcd7bf2a2d6e"
+  },
+  "reports_read": [
+    "/tmp/darcy-low-k-diagnosis/docs/LOW_K_64_DIAGNOSIS_2026-10-15.md"
+  ],
+  "requested_report_unavailable": "docs/TERRAIN_LOW_K_64_DIAGNOSIS_2026-10-15.md",
+  "timing_note": "Final primary low-K pairs ran without other GPU compute processes observed at sample boundaries. Later controls record other GPU jobs. Earlier overlapping validation samples are excluded from timing claims."
+}

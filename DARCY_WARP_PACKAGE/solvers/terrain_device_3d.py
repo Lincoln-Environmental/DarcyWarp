@@ -494,9 +494,11 @@ class DeviceTerrainPicard:
             and outcome["head_rms"] < initial_rms)
         return outcome
 
-    def backtrack(self, *, current, allow_growth=False):
+    def backtrack(self, *, current, allow_growth=False, initial_relaxation=None):
         s = self.state
         relaxation = self.unconfined_relax if self.outer_limit_val > 1 else 1.0
+        if initial_relaxation is not None:
+            relaxation = initial_relaxation
         wp.copy(src=s.head, dest=s.starting)
         proposed_max = clipped_max = 0.0
         trials = []

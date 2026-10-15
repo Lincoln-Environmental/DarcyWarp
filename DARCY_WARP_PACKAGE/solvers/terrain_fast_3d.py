@@ -363,9 +363,20 @@ class TerrainOperatorSession3D:
               unconfined_head_tol=1e-6, final_head_residual_tol=None,
               final_budget_relative_tol=1e-8, max_cycles=300, max_levels=6,
               min_coarse_n=2, krylov_restart=12, rel_tol=1e-10, abs_tol_min=1e-12,
-              dh_rms_tol=1e-6, return_info=True, device_picard=False, **unsupported):
+              dh_rms_tol=1e-6, return_info=True, device_picard=False, terrain_nonlinear_method="picard", terrain_newton_controls=None, **unsupported):
         if WP_FLOAT is not wp.float64:
             raise ValueError("terrain fast solver requires DARCY_FLOAT=float64")
+        if terrain_nonlinear_method not in ("picard", "newton"):
+            raise ValueError("terrain_nonlinear_method must be picard or newton")
+        if terrain_nonlinear_method == "newton" and (not unconfined or transient):
+            raise ValueError("terrain Newton currently supports steady unconfined solves only")
+        if terrain_newton_controls is not None:
+            if terrain_nonlinear_method != "newton":
+                raise ValueError("terrain_newton_controls requires terrain_nonlinear_method=newton")
+            from DARCY_WARP_PACKAGE.solvers.terrain_newton_3d import TerrainNewtonControls
+            if not isinstance(terrain_newton_controls, TerrainNewtonControls):
+                raise TypeError("terrain_newton_controls must be TerrainNewtonControls")
+            terrain_newton_controls.validate()
         if unsupported:
             raise TypeError(f"unsupported terrain controls: {', '.join(sorted(unsupported))}")
         if max_cycles < 0 or krylov_restart < 1 or max_levels < 1 or unconfined_max_picard_iter < 1 or not 0 < unconfined_relax <= 1:
@@ -415,7 +426,7 @@ class TerrainOperatorSession3D:
         workspace_reused = self.workspace is not None and self.workspace_key == key
         graph_captures_before = getattr(self.workspace.krylov,"graph_captures",0) if workspace_reused else 0
         outer_limit = unconfined_max_picard_iter if unconfined or any(c.kind == "discharge_only" for c in self.contacts) else 1
-        if device_picard:
+        if device_picard or terrain_nonlinear_method == "newton":
             return self._solve_device(head=head,previous=previous,device=device,
                 unconfined=unconfined,transient=transient,dt=dt,datum=datum,free=free,
                 outer_limit=outer_limit,unconfined_relax=unconfined_relax,
@@ -426,7 +437,8 @@ class TerrainOperatorSession3D:
                 head_tolerance=head_tolerance,
                 final_budget_relative_tol=final_budget_relative_tol,
                 unconfined_min_sat=unconfined_min_sat,storage_seeds=storage_seeds,
-                return_info=return_info)
+                return_info=return_info, terrain_nonlinear_method=terrain_nonlinear_method,
+                terrain_newton_controls=terrain_newton_controls)
         for outer in range(outer_limit):
             start = perf_counter()
             operator = TerrainReferenceOperator3D(metrics=self.metrics,kx=self.kx,ky=self.ky,kz=self.kz,
@@ -587,7 +599,7 @@ class TerrainOperatorSession3D:
                       sy_field, ss_field, dt_unused, key, max_levels, min_coarse_n,
                       krylov_restart, max_cycles, rel_tol, abs_tol_min, head_tolerance,
                       final_budget_relative_tol, unconfined_min_sat, storage_seeds,
-                      return_info):
+                      return_info, terrain_nonlinear_method="picard", terrain_newton_controls=None):
         """GPU-resident Picard: identical physics and final acceptance to the
         host path, with the constitutive refresh, RHS, corrections and
         nonlinear acceptance running on device. Requires the unconfined
@@ -648,13 +660,19 @@ class TerrainOperatorSession3D:
             state.update_previous(host_previous=previous)
         else:
             state.update_previous(host_previous=head)
-        driver = DeviceTerrainPicard(session=self,state=state,workspace=self.workspace,
+        driver_options = {}
+        driver_class = DeviceTerrainPicard
+        if terrain_nonlinear_method == "newton":
+            from DARCY_WARP_PACKAGE.solvers.terrain_newton_3d import DeviceTerrainNewton
+            driver_class = DeviceTerrainNewton
+            driver_options["newton_controls"] = terrain_newton_controls
+        driver = driver_class(session=self,state=state,workspace=self.workspace,
             device=device,controls=DevicePicardControls(),datum=datum,restart=krylov_restart,
             krylov_budget=max_cycles,unconfined=True,transient=transient,dt=dt,
             abs_tol_min=abs_tol_min,head_tolerance=head_tolerance,
             budget_relative_tol=final_budget_relative_tol,rel_tol=rel_tol,
             min_sat=unconfined_min_sat,outer_limit=outer_limit,
-            unconfined_relax=unconfined_relax)
+            unconfined_relax=unconfined_relax, **driver_options)
         result = driver.run(max_outer=outer_limit)
         head_device = state.head.numpy().reshape(self.shape)
         head_device[self.grid.active == 0] = 0
@@ -703,6 +721,16 @@ class TerrainOperatorSession3D:
                 head=head_device, source=self.rhs, fixed=self.bc_mask, budget=budget),
             device_picard=True, device_stop_reason=result["stop_reason"],
             n_free_cells=driver.n_free)
+        info.update(terrain_nonlinear_method=terrain_nonlinear_method,
+            jacobian_vector_products=result.get("jacobian_vector_products", 0),
+            fallback_count=result.get("fallback_count", 0),
+            candidate_evaluations=sum(row["backtracking_evaluations"] for row in result["history"]),
+            nonlinear_residual_evaluations=driver.operator_evaluations,
+            newton_attempts=sum(row.get("newton_attempted", False) for row in result["history"]),
+            newton_accepted_steps=sum(row.get("direction") == "newton" for row in result["history"]),
+            nonlinear_backtracks=sum(row["backtracks"] for row in result["history"]))
+        if terrain_nonlinear_method == "newton":
+            info["solver_type"] = "terrain_device_newton_3d"
         last_trial = result["history"][-1] if result["history"] else {}
         info.update(r_rms_end=budget["cell_residual_rms"],h_rms_end=budget["head_residual_rms"],
             dh_rms_lastcheck=float(last_trial.get("accepted_head_change_rms", 0.0)),
@@ -712,6 +740,8 @@ class TerrainOperatorSession3D:
             multigrid_cycles=result["krylov_iterations"]
                 + sum(row["restart_blocks"] for row in result["history"]),
             multigrid_hierarchy="conservative approximate principal part; not exact Galerkin")
+        if terrain_nonlinear_method == "newton":
+            driver.close()
         state.close()
         return (head_device,info) if return_info else head_device
 
