@@ -1,0 +1,20 @@
+terrain_32_k0.0001 newton False outer_budget 6000 0.7889513387950161
+terrain_32_k0.0001 picard True converged 707 1.271874383504942e-08
+Traceback (most recent call last):
+  File "/tmp/darcy-terrain-validation/working_tests/validate_terrain_cpu_runs.py", line 60, in <module>
+    run_cpu(case=case,directory=directory,controls=CPUControls(method=method,max_outer=max_outer,relaxation=1. if method=='newton' else .7))
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/darcy-terrain-validation/working_tests/validate_terrain_cpu_runs.py", line 14, in run_cpu
+    head,result=solve_cpu(case=case,controls=controls,initial=initial)
+                ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/darcy-terrain-validation/DARCY_WARP_PACKAGE/validation/terrain_cpu.py", line 198, in solve_cpu
+    warnings.simplefilter('error')
+           ^^^^^^^^^
+  File "/home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/scipy/sparse/linalg/_dsolve/linsolve.py", line 433, in splu
+    return _superlu.gstrf(N, A.nnz, A.data, indices, indptr,
+           ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                          csc_construct_func=csc_construct_func,
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                          ilu=False, options=_options)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt

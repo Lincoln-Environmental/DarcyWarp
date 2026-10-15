@@ -1,0 +1,48 @@
+{
+  "native_success": true,
+  "independent_conservation": true,
+  "invalid_heads": 0,
+  "cell_residual_rms": 4.3262060600568475e-12,
+  "cell_residual_max": 8.652412120113695e-12,
+  "cell_residual_l1": 8.652412120113695e-12,
+  "gross_external_throughput": 10.533333333336216,
+  "signed_imbalance": 8.652412120113695e-12,
+  "relative_cell_imbalance": 8.214315303903158e-13,
+  "reciprocity_max": 0.0,
+  "source_allocation_max_error": 0.0,
+  "packages": {
+    "WEL": [
+      {
+        "node": 0,
+        "inflow": 0.8
+      }
+    ],
+    "CHD": [
+      {
+        "node": 1,
+        "inflow": 4.466666666672435
+      },
+      {
+        "node": 2,
+        "inflow": -2.2666666666637827
+      },
+      {
+        "node": 3,
+        "inflow": -3.0
+      }
+    ],
+    "DRN": [],
+    "GHB": []
+  },
+  "head_min": -1.0,
+  "head_max": 2.0,
+  "formulation_equivalence": false,
+  "nonlinear_cross_residual": "not established; saved FLOW-JA-FACE is native final reported flux, not a fixed-head nonlinear reevaluation",
+  "returncode": 0,
+  "run_hash": "35f77635817de0b357b202b04b7302d7d51ae427919e466beb0da7203f682203",
+  "seconds": 0.07806007500039414,
+  "input_hash": "027c1343605013f7b4b9707aaf7a76b713bf7c33bbe55eee6add4bb6d6b64497",
+  "executable": "/bin/modflow/mf6",
+  "executable_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+  "mf6_version": "mf6: 6.6.2 05/12/2025"
+}

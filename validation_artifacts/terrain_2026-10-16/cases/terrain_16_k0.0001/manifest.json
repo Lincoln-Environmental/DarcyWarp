@@ -1,0 +1,91 @@
+{
+  "schema": 1,
+  "case_id": "terrain_16_k0.0001",
+  "input_hash": "31a6f5c0c0486ec7404cc6d2d7fdd7a71604ee5f2d7a4042b2f11ab9de071e08",
+  "physical": {
+    "dx": 20.0,
+    "dy": 20.0,
+    "floor": 0.01,
+    "steady": true,
+    "storage": 0,
+    "conductivity_frame": "Cartesian"
+  },
+  "controls": {
+    "head_tol": 1e-06,
+    "flow_tol": 1e-12,
+    "relative_tol": 1e-08,
+    "relaxation": 0.7,
+    "outer_cap": 2000,
+    "krylov_budget": 2000,
+    "restart": 24,
+    "max_levels": 6,
+    "min_coarse_n": 16
+  },
+  "contacts": [
+    {
+      "cell": [
+        0,
+        4,
+        0
+      ],
+      "direction": "west",
+      "area": 1.4999999999999991,
+      "distance": 10.0,
+      "elevation": -2.06056022454014,
+      "head": 2.0,
+      "kind": "discharge_only",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        8,
+        0
+      ],
+      "direction": "west",
+      "area": 1.4999999999999991,
+      "distance": 10.0,
+      "elevation": -0.8566553416101614,
+      "head": 2.0,
+      "kind": "discharge_only",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        12,
+        0
+      ],
+      "direction": "west",
+      "area": 1.4999999999999991,
+      "distance": 10.0,
+      "elevation": -2.3322422530018825,
+      "head": 2.0,
+      "kind": "discharge_only",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    }
+  ],
+  "checks": {
+    "active": 1024,
+    "free": 976,
+    "source_total": 122.87999999999997,
+    "source_free": 122.87999999999997,
+    "source_fixed": 0.0,
+    "volume": 5222400.0,
+    "minimum_thickness": 0.14394527008472835
+  },
+  "coordinates": "C-order (k top-down,j south-to-north,i west-to-east); centres x=(i+.5)dx,y=(j+.5)dy",
+  "units": {
+    "head": "m",
+    "conductivity": "m/day",
+    "source": "m3/day",
+    "flux": "m3/day"
+  },
+  "source_fixed_semantics": "Original source retained; fixed cells are reservoirs, excluded from free-cell balance."
+}

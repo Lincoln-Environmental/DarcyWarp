@@ -1,0 +1,33 @@
+{
+  "archive": "archives/angle_default__xt3d_no_angle2.tar.xz",
+  "archive_sha256": "79f9728b743ed27257d694dfa9362643b9973d8fa4de1a0be095c49645541c32",
+  "original_directory": "angle_default/xt3d_no_angle2",
+  "files": {
+    "angle_default/xt3d_no_angle2/adapter.json": "e70a643c55af937f80cd31616d53c3cd0f311b5620a2f9ff54759944cc59af33",
+    "angle_default/xt3d_no_angle2/extracted.npz": "4e65b975afb897a8629273cf3bf1fabb279fa668e873a46dd91e007fedd91842",
+    "angle_default/xt3d_no_angle2/head.npz": "717ce627d8180d6331b0ff87f3c4c2b805bc3d8e39da4b2a22ed212774c3c769",
+    "angle_default/xt3d_no_angle2/inner.csv": "a8f385b957c308b6ed7863988bf1ddfcc83c539d72f33cf90c8f5fa63225db85",
+    "angle_default/xt3d_no_angle2/mfsim.lst": "e95036ecb8f0ffc196396f380d2d0a9a72c5e99ae3ba6ab20bc40c5b93bb3f22",
+    "angle_default/xt3d_no_angle2/mfsim.nam": "206282fa601f36b2fdf184dca991c3d48f369e5576970af623459e3198b24fa7",
+    "angle_default/xt3d_no_angle2/outer.csv": "b1d918beb81ce8dfb4de9a0b88eebd5835528c3731688a7bc77589f13bf1790c",
+    "angle_default/xt3d_no_angle2/request.json": "225b5374135c14fdad1bacbd445a7fcb4e5a103ac704c47f218a77e1a2076297",
+    "angle_default/xt3d_no_angle2/stdout.log": "910de3c383f4ed5e26d252c9664e2f5c2799daa5cc2ff1a73bb5a3102b5f8ed1",
+    "angle_default/xt3d_no_angle2/summary.json": "7a75b947b935b220fbd661226b87b5f322e205f858ed711f6b8ac3d910a1265f",
+    "angle_default/xt3d_no_angle2/terrain.cbc": "44db2ff540277be206cae746f6cb495dd66a1af325c4d35a27a25e2870ca0ec0",
+    "angle_default/xt3d_no_angle2/terrain.dis": "4be2086339bd2a4af58e215795de08cda60be7d77a1bdd064d2443f275459842",
+    "angle_default/xt3d_no_angle2/terrain.dis.grb": "6a5034ada6047b7c5d037f43eec1c955ef97a4d100d53f61c73d25374b8a770b",
+    "angle_default/xt3d_no_angle2/terrain.ghb": "8c3c804b0d3f4f1434817f38277520d5138331fdc9ed7560ada97e715ffe3e04",
+    "angle_default/xt3d_no_angle2/terrain.hds": "1e26e36d13996cf3d87d33b2152d90153cd900aa172cf602eed0c5833eaeddc6",
+    "angle_default/xt3d_no_angle2/terrain.ic": "871a22cd6ec2a200eb72fe106c4776512c8a01805c6cbdf6489ea7abd21532c4",
+    "angle_default/xt3d_no_angle2/terrain.ims": "88686ea19d6985c294845517679c212a40e878e70361d1d293da7240d5307e93",
+    "angle_default/xt3d_no_angle2/terrain.lst": "c38e6f141354daa00aa228979cca405c388f5988bfc39818af984dfaa9b3b9cf",
+    "angle_default/xt3d_no_angle2/terrain.nam": "c00850f74542303574de1e4bb782eb5e053d9f8fc4b7c207d516e6add65f5bf5",
+    "angle_default/xt3d_no_angle2/terrain.npf": "f38192534a83e6781fcc7060be2d7c3eafc5ba62f177db7e0da81b7bafbf58b7",
+    "angle_default/xt3d_no_angle2/terrain.oc": "51157c72310d2315a79162432c47c186ae33ba1af0758c8223b5a23dba603cd8",
+    "angle_default/xt3d_no_angle2/terrain.tdis": "cd9383535bec74acac574b6bd04a51d133ac869a10f6a493fdaaf0faac169638"
+  },
+  "verified_members": 22,
+  "encoding": "tar.xz",
+  "superseded_archive": "archives/angle_default__xt3d_no_angle2.tar.gz",
+  "superseded_sha256": "ad5afab87255cad4ff814d63961009b8c8c1e132bd4fcb240bca059b63a6d885"
+}

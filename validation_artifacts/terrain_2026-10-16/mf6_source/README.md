@@ -1,0 +1,3 @@
+These are selected unmodified official MODFLOW 6 source/definition files at tag `6.6.2`, commit `7cb7958940186ecfdcd3ea9e6a563cc4609581c9`, obtained from https://github.com/MODFLOW-ORG/modflow6/tree/6.6.2 . Their delivered hashes are in the campaign manifest. They support the version-specific conductance, geometry, saturation, contact and solver interpretation in the methods report.
+
+The existing executable was not compiled in this campaign. Its SHA256/version are recorded separately; the source tag is not claimed to establish its exact build provenance. Versioned official input documentation is linked in the methods report. Measurements from executed decks are distinguished from source-derived statements and unresolved hypotheses.

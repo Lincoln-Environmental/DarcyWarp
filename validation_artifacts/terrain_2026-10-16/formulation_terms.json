@@ -1,0 +1,387 @@
+{
+  "terrain_32_k0.0001": {
+    "interpretation": "same fixed head; term-removal/local sensitivity only, not altered-physics solution validation",
+    "terms": {
+      "(False, 0.0)": {
+        "L1_difference_by_direction": [
+          1963.8110706004409,
+          503.0340261013378,
+          7175.2443254081645
+        ]
+      },
+      "(False, 0.01)": {
+        "L1_difference_by_direction": [
+          1637.2381730899194,
+          410.5280604897763,
+          7175.2443254081645
+        ]
+      },
+      "(True, 0.0)": {
+        "L1_difference_by_direction": [
+          357.6847948516556,
+          100.188737779512,
+          584.9018860632729
+        ]
+      },
+      "(True, 0.01)": {
+        "L1_difference_by_direction": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    "geometry_floor_interaction_L1": [
+      31.111897341134114,
+      7.682772167950524,
+      584.9018860632729
+    ],
+    "remaining_TPFA_upstream_vs_unfloored_harmonic_L1": [
+      822.7564058181745,
+      277.8938718721404,
+      0.0
+    ],
+    "natural_terrain_contacts": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "native_full_C_DRN": [
+      0.10989025393754795,
+      0.19349731918983137,
+      0.18719384134659733
+    ],
+    "vertical_comparison": "MF6 TPFA default vertical C matches full physical Kz half-cell series; terrain adds saturation-dependent slope normal/metric terms",
+    "integrated_source": 491.52
+  },
+  "terrain_64_k0.0001": {
+    "interpretation": "same fixed head; term-removal/local sensitivity only, not altered-physics solution validation",
+    "terms": {
+      "(False, 0.0)": {
+        "L1_difference_by_direction": [
+          4849.271593812287,
+          1168.092471627094,
+          20432.16108083177
+        ]
+      },
+      "(False, 0.01)": {
+        "L1_difference_by_direction": [
+          4472.018094176881,
+          1040.4338966475116,
+          20432.16108083177
+        ]
+      },
+      "(True, 0.0)": {
+        "L1_difference_by_direction": [
+          392.47115357816557,
+          132.9249895995497,
+          434.22610738048814
+        ]
+      },
+      "(True, 0.01)": {
+        "L1_difference_by_direction": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    "geometry_floor_interaction_L1": [
+      15.062302030309741,
+      5.234753087668004,
+      434.2261073804882
+    ],
+    "remaining_TPFA_upstream_vs_unfloored_harmonic_L1": [
+      2475.65448573713,
+      723.193926584413,
+      0.0
+    ],
+    "natural_terrain_contacts": [
+      0.00026074758980842105,
+      0.0007802078760101748,
+      0.0007296413874337236
+    ],
+    "native_full_C_DRN": [
+      0.05795993798406892,
+      0.07894046459629322,
+      0.06651918649545384
+    ],
+    "vertical_comparison": "MF6 TPFA default vertical C matches full physical Kz half-cell series; terrain adds saturation-dependent slope normal/metric terms",
+    "integrated_source": 1966.08
+  },
+  "terrain_64_k0.1": {
+    "interpretation": "same fixed head; term-removal/local sensitivity only, not altered-physics solution validation",
+    "terms": {
+      "(False, 0.0)": {
+        "L1_difference_by_direction": [
+          5365.365379295746,
+          1355.449100143891,
+          14592.428104853407
+        ]
+      },
+      "(False, 0.01)": {
+        "L1_difference_by_direction": [
+          4934.873164097303,
+          1232.48722021927,
+          14592.428104853407
+        ]
+      },
+      "(True, 0.0)": {
+        "L1_difference_by_direction": [
+          448.92882858437764,
+          127.66728060741295,
+          398.3433887411773
+        ]
+      },
+      "(True, 0.01)": {
+        "L1_difference_by_direction": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    "geometry_floor_interaction_L1": [
+      18.377382089637578,
+      4.702121306816206,
+      398.3433887411774
+    ],
+    "remaining_TPFA_upstream_vs_unfloored_harmonic_L1": [
+      2017.951109965256,
+      411.7043312145203,
+      0.0
+    ],
+    "natural_terrain_contacts": [
+      0.0002558983253588402,
+      0.0007586013876839147,
+      0.0007024175637294226
+    ],
+    "native_full_C_DRN": [
+      0.056882025559365265,
+      0.0767543469227681,
+      0.06403727327439174
+    ],
+    "vertical_comparison": "MF6 TPFA default vertical C matches full physical Kz half-cell series; terrain adds saturation-dependent slope normal/metric terms",
+    "integrated_source": 1966.08
+  },
+  "terrain_64_k0.01": {
+    "interpretation": "same fixed head; term-removal/local sensitivity only, not altered-physics solution validation",
+    "terms": {
+      "(False, 0.0)": {
+        "L1_difference_by_direction": [
+          4939.78863847391,
+          1204.1623534984394,
+          19676.44420758792
+        ]
+      },
+      "(False, 0.01)": {
+        "L1_difference_by_direction": [
+          4552.721010118095,
+          1072.4546025771667,
+          19676.44420758792
+        ]
+      },
+      "(True, 0.0)": {
+        "L1_difference_by_direction": [
+          402.30540249169144,
+          136.83206244487135,
+          434.9833301858049
+        ]
+      },
+      "(True, 0.01)": {
+        "L1_difference_by_direction": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    "geometry_floor_interaction_L1": [
+      15.13288919498776,
+      5.083099063072589,
+      434.98333018580496
+    ],
+    "remaining_TPFA_upstream_vs_unfloored_harmonic_L1": [
+      2405.0978300549073,
+      682.2587619302464,
+      0.0
+    ],
+    "natural_terrain_contacts": [
+      0.00025988727987603173,
+      0.0007784986899103605,
+      0.0007227938208881136
+    ],
+    "native_full_C_DRN": [
+      0.05776870511259756,
+      0.07876753126794615,
+      0.06589491467654077
+    ],
+    "vertical_comparison": "MF6 TPFA default vertical C matches full physical Kz half-cell series; terrain adds saturation-dependent slope normal/metric terms",
+    "integrated_source": 1966.08
+  },
+  "terrain_64_k0.001": {
+    "interpretation": "same fixed head; term-removal/local sensitivity only, not altered-physics solution validation",
+    "terms": {
+      "(False, 0.0)": {
+        "L1_difference_by_direction": [
+          4858.048546280425,
+          1171.4353962083733,
+          20363.927499590343
+        ]
+      },
+      "(False, 0.01)": {
+        "L1_difference_by_direction": [
+          4479.157485605316,
+          1043.250856490724,
+          20363.927499590343
+        ]
+      },
+      "(True, 0.0)": {
+        "L1_difference_by_direction": [
+          394.2372032475721,
+          133.46646710980932,
+          434.87449635378357
+        ]
+      },
+      "(True, 0.01)": {
+        "L1_difference_by_direction": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    "geometry_floor_interaction_L1": [
+      15.196560715212986,
+      5.235536753683385,
+      434.87449635378374
+    ],
+    "remaining_TPFA_upstream_vs_unfloored_harmonic_L1": [
+      2471.340757482598,
+      721.6980162226962,
+      0.0
+    ],
+    "natural_terrain_contacts": [
+      0.00026066875395829893,
+      0.0007800511952138691,
+      0.0007291296385149451
+    ],
+    "native_full_C_DRN": [
+      0.057942414059926874,
+      0.07892461182777585,
+      0.06647253190272724
+    ],
+    "vertical_comparison": "MF6 TPFA default vertical C matches full physical Kz half-cell series; terrain adds saturation-dependent slope normal/metric terms",
+    "integrated_source": 1966.08
+  },
+  "terrain_16_k0.0001": {
+    "interpretation": "same fixed head; term-removal/local sensitivity only, not altered-physics solution validation",
+    "terms": {
+      "(False, 0.0)": {
+        "L1_difference_by_direction": [
+          504.3972149847504,
+          136.19084977007407,
+          3940.057918380194
+        ]
+      },
+      "(False, 0.01)": {
+        "L1_difference_by_direction": [
+          344.3995152954606,
+          92.79822661128837,
+          3940.057918380194
+        ]
+      },
+      "(True, 0.0)": {
+        "L1_difference_by_direction": [
+          177.82066580055633,
+          47.92126845688259,
+          561.024202389516
+        ]
+      },
+      "(True, 0.01)": {
+        "L1_difference_by_direction": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    "geometry_floor_interaction_L1": [
+      17.822966111266496,
+      4.528645298096891,
+      561.024202389516
+    ],
+    "remaining_TPFA_upstream_vs_unfloored_harmonic_L1": [
+      227.85820590383832,
+      50.360938229040315,
+      0.0
+    ],
+    "natural_terrain_contacts": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "native_full_C_DRN": [
+      0.194845319362541,
+      0.24447679309177553,
+      0.23749548083276098
+    ],
+    "vertical_comparison": "MF6 TPFA default vertical C matches full physical Kz half-cell series; terrain adds saturation-dependent slope normal/metric terms",
+    "integrated_source": 122.87999999999997
+  },
+  "terrain_96_k0.0001": {
+    "interpretation": "same fixed head; term-removal/local sensitivity only, not altered-physics solution validation",
+    "terms": {
+      "(False, 0.0)": {
+        "L1_difference_by_direction": [
+          7846.762315992944,
+          1752.3862699258618,
+          46694.62396918703
+        ]
+      },
+      "(False, 0.01)": {
+        "L1_difference_by_direction": [
+          7521.2502988204615,
+          1670.7113704028131,
+          46694.62396918703
+        ]
+      },
+      "(True, 0.0)": {
+        "L1_difference_by_direction": [
+          332.16657996579386,
+          83.25692585329091,
+          315.0103728900313
+        ]
+      },
+      "(True, 0.01)": {
+        "L1_difference_by_direction": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    "geometry_floor_interaction_L1": [
+      6.333944395161563,
+      1.5279573934311366,
+      315.0103728900315
+    ],
+    "remaining_TPFA_upstream_vs_unfloored_harmonic_L1": [
+      4140.18141759287,
+      1192.4713347614438,
+      0.0
+    ],
+    "natural_terrain_contacts": [
+      0.00042887757668124945,
+      0.0009397874201617703,
+      0.0007406972462221909
+    ],
+    "native_full_C_DRN": [
+      0.03369443731577196,
+      0.05792400112409096,
+      0.04251723406463015
+    ],
+    "vertical_comparison": "MF6 TPFA default vertical C matches full physical Kz half-cell series; terrain adds saturation-dependent slope normal/metric terms",
+    "integrated_source": 4423.68
+  }
+}

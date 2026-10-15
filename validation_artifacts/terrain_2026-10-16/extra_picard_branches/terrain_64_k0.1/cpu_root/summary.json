@@ -1,0 +1,53 @@
+{
+  "converged": true,
+  "stop_reason": "converged",
+  "outers": 1,
+  "seconds": 0.11616935199708678,
+  "factorizations": 1,
+  "discharge_component_seeds": 0,
+  "residual_evaluations": 4,
+  "budget": {
+    "cell_residual_max": 3.197497822071682e-12,
+    "cell_residual_rms": 5.419901191167473e-13,
+    "head_residual_rms": 4.347148152858677e-15,
+    "source_total": 1966.0799999999997,
+    "boundary_inflow": 0.0,
+    "boundary_outflow": -1966.0800000000004,
+    "boundary_net": -1966.0800000000004,
+    "storage_uptake": 0.0,
+    "imbalance": -2.537802325057459e-13,
+    "domain_imbalance": -2.537802325057459e-13,
+    "relative_imbalance": 6.453965060062304e-17,
+    "relative_cell_imbalance": 1.2348345615001169e-12,
+    "throughput": 3932.16,
+    "physical_diagonal_scaling": "seven-point principal part",
+    "coastal_subface_outflows": [
+      0.00025588245743502457,
+      0.0007586451389798915,
+      0.000702265614462705
+    ],
+    "finite_physical_state": true
+  },
+  "run_hash": "8aa30bf93a9841c916d8116fe8933bda2fd212fcd418b16f117c564a080175ae",
+  "input_hash": "ea54cc0fbd544112bac4d0eff6bfd10127009c2db0b0af6e3cf41564ed43ecdf",
+  "controls": {
+    "method": "newton",
+    "max_outer": 100,
+    "head_tol": 1e-10,
+    "flow_tol": 1e-11,
+    "relative_tol": 1e-11,
+    "relaxation": 1.0,
+    "max_change": 50.0,
+    "line_search_steps": 20,
+    "recovery_growth": 1.0,
+    "fallback": false,
+    "physical_merit": true,
+    "adequate_alpha": 0.125,
+    "adequate_merit_ratio": 0.8,
+    "retry_contraction": 0.5,
+    "stagnation_window": 0,
+    "stagnation_ratio": 0.995
+  },
+  "cold_start": false,
+  "source_revision": "99b78edd57a4110ae68180c05397c2b56ae63692"
+}

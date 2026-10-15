@@ -1,0 +1,8 @@
+verified validation_artifacts/terrain_2026-10-16/archives/scalar_roots__case.tar.gz 2
+verified validation_artifacts/terrain_2026-10-16/archives/scalar_roots__mf6.tar.gz 24
+verified validation_artifacts/terrain_2026-10-16/archives/scalar_roots__root_0_cpu.tar.gz 5
+verified validation_artifacts/terrain_2026-10-16/archives/scalar_roots__root_0_gpu.tar.gz 5
+verified validation_artifacts/terrain_2026-10-16/archives/scalar_roots__root_1_cpu.tar.gz 5
+verified validation_artifacts/terrain_2026-10-16/archives/scalar_roots__root_1_gpu.tar.gz 5
+verified validation_artifacts/terrain_2026-10-16/archives/scalar_roots__root_2_cpu.tar.gz 5
+verified validation_artifacts/terrain_2026-10-16/archives/scalar_roots__root_2_gpu.tar.gz 5

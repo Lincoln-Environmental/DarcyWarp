@@ -1,0 +1,16 @@
+{
+  "archive": "archives/scalar_roots__root_1_gpu.tar.xz",
+  "archive_sha256": "eed30b3e9a18bccc85ed2531504515e949c3dca6c2e51ba450315e900b9f4317",
+  "original_directory": "scalar_roots/root_1_gpu",
+  "files": {
+    "scalar_roots/root_1_gpu/complete.json": "8f76600edc0243467337d662a30396dad11cd5cf481dce362007c03a54081bad",
+    "scalar_roots/root_1_gpu/head.npz": "66be262280cf04ba069c77c1bcb209ed2b1e7b7d45d1ae33d4bab23640b3a9c7",
+    "scalar_roots/root_1_gpu/history.json.gz": "669c5ee924a0d404baea4f3fd466d105dfbe1d669935e34df11a652a7b78e636",
+    "scalar_roots/root_1_gpu/request.json": "597efd743c0fa1e9820b948b881dab7278b015d7d7e18dda27cf3573f44b1be5",
+    "scalar_roots/root_1_gpu/summary.json": "999daa4a83d830d30cfeeb08033a37e9b95fcdf576b1130d2018693c8a2e1501"
+  },
+  "verified_members": 5,
+  "encoding": "tar.xz",
+  "superseded_archive": "archives/scalar_roots__root_1_gpu.tar.gz",
+  "superseded_sha256": "b176e1a71c1b1fb5d479ac0ee2f93381000c8272c46e8cbe91d2f8701adb8080"
+}

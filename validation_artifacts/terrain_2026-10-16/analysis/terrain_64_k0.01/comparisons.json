@@ -1,0 +1,1556 @@
+{
+  "gpu_before/newton": {
+    "head_max": 0.26826607406643177,
+    "head_rms": 0.004542184438287288,
+    "floor_switches": 1,
+    "saturated_thickness_max": 0.2585305454302045,
+    "regimes": {
+      "wet_both": {
+        "count": 10922,
+        "rms": 0.003161663333846569,
+        "maximum": 0.2585305454302045
+      },
+      "dry_both": {
+        "count": 5269,
+        "rms": 0.005771958914060397,
+        "maximum": 0.26826607406643177
+      },
+      "wet_dry_mismatch": {
+        "count": 1,
+        "rms": 0.22214247422042632,
+        "maximum": 0.22214247422042632
+      },
+      "thin_either": {
+        "count": 305,
+        "rms": 0.001817516845827987,
+        "maximum": 0.03138125877319453
+      }
+    },
+    "qx": {
+      "max_abs": 1.59490316893719,
+      "l1": 12.009811547106523,
+      "net_difference": 1.211497890585278e-05,
+      "relative_l1": 0.0002015388096992096,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "qy": {
+      "max_abs": 0.9762614410878041,
+      "l1": 6.361329383610716,
+      "net_difference": 1.02821168892443,
+      "relative_l1": 0.0006040068327100411,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "qz": {
+      "max_abs": 1.0524373809938496,
+      "l1": 4.82106898615581,
+      "net_difference": 0.0012453370181720398,
+      "relative_l1": 0.0009596073971300538,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "contacts": {
+      "max_abs": 6.42279099553715e-08,
+      "l1": 6.445548047097176e-08,
+      "net_difference": -6.44553958988655e-08,
+      "relative_l1": 3.6596559855216806e-05,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "water_table": {
+      "selected_layer_changes": 1,
+      "shared_phreatic_columns": 3830,
+      "classification_mismatches": 0,
+      "max_abs": 0.8544154990664126,
+      "rms": 0.014719513583558216
+    },
+    "layerwise_head_rms": [
+      0.006325517698735102,
+      0.006182189749439229,
+      0.0018353539397111369,
+      0.0007861035792349577
+    ]
+  },
+  "gpu_before/picard": {
+    "head_max": 0.00039256668080156487,
+    "head_rms": 1.8037365894417534e-05,
+    "floor_switches": 0,
+    "saturated_thickness_max": 6.659104357709111e-05,
+    "regimes": {
+      "wet_both": {
+        "count": 10923,
+        "rms": 8.6791694160149e-06,
+        "maximum": 6.659104357709111e-05
+      },
+      "dry_both": {
+        "count": 5269,
+        "rms": 2.9045693712012395e-05,
+        "maximum": 0.00039256668080156487
+      },
+      "wet_dry_mismatch": {
+        "count": 0,
+        "rms": null,
+        "maximum": null
+      },
+      "thin_either": {
+        "count": 304,
+        "rms": 1.7920725117035313e-05,
+        "maximum": 6.639449513556883e-05
+      }
+    },
+    "qx": {
+      "max_abs": 0.0013500982338372491,
+      "l1": 0.2837080955107427,
+      "net_difference": 0.04504306454107865,
+      "relative_l1": 4.760956626754104e-06,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "qy": {
+      "max_abs": 0.0003462669773759419,
+      "l1": 0.05716738437691552,
+      "net_difference": -0.030322914809905184,
+      "relative_l1": 5.428030634725466e-06,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "qz": {
+      "max_abs": 0.0008200836055936023,
+      "l1": 0.13388842015646782,
+      "net_difference": 0.029526278607783854,
+      "relative_l1": 2.6649757292655927e-05,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "contacts": {
+      "max_abs": 3.235019170946818e-10,
+      "l1": 5.226806598212369e-10,
+      "net_difference": 5.226806598212369e-10,
+      "relative_l1": 2.9676784522499614e-07,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "water_table": {
+      "selected_layer_changes": 0,
+      "shared_phreatic_columns": 3830,
+      "classification_mismatches": 0,
+      "max_abs": 6.659104357709111e-05,
+      "rms": 1.0060536078919284e-05
+    },
+    "layerwise_head_rms": [
+      2.044741669125484e-05,
+      2.059141000492297e-05,
+      2.027028871959444e-05,
+      6.850286624841749e-06
+    ]
+  },
+  "gpu_after/newton": {
+    "head_max": 0.2682660740743188,
+    "head_rms": 0.004542184438223445,
+    "floor_switches": 1,
+    "saturated_thickness_max": 0.2585305454378499,
+    "regimes": {
+      "wet_both": {
+        "count": 10922,
+        "rms": 0.0031616633338364874,
+        "maximum": 0.2585305454378499
+      },
+      "dry_both": {
+        "count": 5269,
+        "rms": 0.0057719589139572595,
+        "maximum": 0.2682660740743188
+      },
+      "wet_dry_mismatch": {
+        "count": 1,
+        "rms": 0.22214247421497646,
+        "maximum": 0.22214247421497646
+      },
+      "thin_either": {
+        "count": 305,
+        "rms": 0.0018175168454646203,
+        "maximum": 0.03138125876476039
+      }
+    },
+    "qx": {
+      "max_abs": 1.5949031689367446,
+      "l1": 12.009811555834107,
+      "net_difference": 1.2094331629186605e-05,
+      "relative_l1": 0.00020153880984566876,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "qy": {
+      "max_abs": 0.9762614411253097,
+      "l1": 6.36132939122163,
+      "net_difference": 1.0282116863675972,
+      "relative_l1": 0.0006040068334326957,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "qz": {
+      "max_abs": 1.052437381010324,
+      "l1": 4.821069010480809,
+      "net_difference": 0.001245348426717085,
+      "relative_l1": 0.0009596074019718116,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "contacts": {
+      "max_abs": 6.42279109925193e-08,
+      "l1": 6.445548167660457e-08,
+      "net_difference": -6.445539710146254e-08,
+      "relative_l1": 3.659656053975151e-05,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "water_table": {
+      "selected_layer_changes": 1,
+      "shared_phreatic_columns": 3830,
+      "classification_mismatches": 0,
+      "max_abs": 0.8544154990621351,
+      "rms": 0.01471951358348035
+    },
+    "layerwise_head_rms": [
+      0.006325517698653605,
+      0.0061821897493583525,
+      0.0018353539395539542,
+      0.0007861035794227527
+    ]
+  },
+  "gpu_after/picard": {
+    "head_max": 0.0003925666808157757,
+    "head_rms": 1.803736589450294e-05,
+    "floor_switches": 0,
+    "saturated_thickness_max": 6.659104357709111e-05,
+    "regimes": {
+      "wet_both": {
+        "count": 10923,
+        "rms": 8.679169415950433e-06,
+        "maximum": 6.659104357709111e-05
+      },
+      "dry_both": {
+        "count": 5269,
+        "rms": 2.9045693712215314e-05,
+        "maximum": 0.0003925666808157757
+      },
+      "wet_dry_mismatch": {
+        "count": 0,
+        "rms": null,
+        "maximum": null
+      },
+      "thin_either": {
+        "count": 304,
+        "rms": 1.7920725116988234e-05,
+        "maximum": 6.63944951284634e-05
+      }
+    },
+    "qx": {
+      "max_abs": 0.0013500982336904777,
+      "l1": 0.2837080955119323,
+      "net_difference": 0.04504306453737775,
+      "relative_l1": 4.760956626774067e-06,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "qy": {
+      "max_abs": 0.0003462669774778604,
+      "l1": 0.057167384375783115,
+      "net_difference": -0.030322914805055844,
+      "relative_l1": 5.428030634617945e-06,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "qz": {
+      "max_abs": 0.0008200836042642212,
+      "l1": 0.13388842044808322,
+      "net_difference": 0.02952627858199638,
+      "relative_l1": 2.6649757350700378e-05,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "contacts": {
+      "max_abs": 3.235019170946818e-10,
+      "l1": 5.226806583033539e-10,
+      "net_difference": 5.226806583033539e-10,
+      "relative_l1": 2.967678443631719e-07,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "water_table": {
+      "selected_layer_changes": 0,
+      "shared_phreatic_columns": 3830,
+      "classification_mismatches": 0,
+      "max_abs": 6.659104357709111e-05,
+      "rms": 1.0060536078976645e-05
+    },
+    "layerwise_head_rms": [
+      2.0447416691324453e-05,
+      2.0591410005155068e-05,
+      2.027028871959723e-05,
+      6.8502866248278545e-06
+    ]
+  },
+  "cpu_hybrid/newton": {
+    "head_max": 0.2682660758965767,
+    "head_rms": 0.004542184425882781,
+    "floor_switches": 1,
+    "saturated_thickness_max": 0.258530547202966,
+    "regimes": {
+      "wet_both": {
+        "count": 10922,
+        "rms": 0.0031616633318234974,
+        "maximum": 0.258530547202966
+      },
+      "dry_both": {
+        "count": 5269,
+        "rms": 0.0057719588944935485,
+        "maximum": 0.2682660758965767
+      },
+      "wet_dry_mismatch": {
+        "count": 1,
+        "rms": 0.22214247310682111,
+        "maximum": 0.22214247310682111
+      },
+      "thin_either": {
+        "count": 305,
+        "rms": 0.0018175167452604741,
+        "maximum": 0.0313812571255383
+      }
+    },
+    "qx": {
+      "max_abs": 1.5949031688123823,
+      "l1": 12.009837614146539,
+      "net_difference": 1.6373202057939906e-05,
+      "relative_l1": 0.00020153924713490096,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "qy": {
+      "max_abs": 0.9762614497386213,
+      "l1": 6.361353333509131,
+      "net_difference": 1.0282052090809803,
+      "relative_l1": 0.0006040091067476539,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "qz": {
+      "max_abs": 1.0524373850334383,
+      "l1": 4.8210784362151164,
+      "net_difference": 0.0012455571942126494,
+      "relative_l1": 0.0009596092781126408,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "contacts": {
+      "max_abs": 6.422789583667397e-08,
+      "l1": 6.445546002378615e-08,
+      "net_difference": -6.445536729414274e-08,
+      "relative_l1": 3.659654824570514e-05,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "water_table": {
+      "selected_layer_changes": 1,
+      "shared_phreatic_columns": 3830,
+      "classification_mismatches": 0,
+      "max_abs": 0.8544154982570973,
+      "rms": 0.014719513571947894
+    },
+    "layerwise_head_rms": [
+      0.006325517688391046,
+      0.006182189738466923,
+      0.0018353539069281566,
+      0.0007861035387857976
+    ]
+  },
+  "cpu_direct_newton": {
+    "head_max": 15.141387744088242,
+    "head_rms": 0.8890529147297721,
+    "floor_switches": 184,
+    "saturated_thickness_max": 5.6938315308460155,
+    "regimes": {
+      "wet_both": {
+        "count": 10847,
+        "rms": 0.8527041679643558,
+        "maximum": 13.943223654124038
+      },
+      "dry_both": {
+        "count": 5166,
+        "rms": 0.49626160804228375,
+        "maximum": 5.257556784460249
+      },
+      "wet_dry_mismatch": {
+        "count": 179,
+        "rms": 4.508985435453524,
+        "maximum": 15.141387744088242
+      },
+      "thin_either": {
+        "count": 405,
+        "rms": 0.5274333258144095,
+        "maximum": 4.546287734451369
+      }
+    },
+    "qx": {
+      "max_abs": 80.97935042022203,
+      "l1": 4914.096768190917,
+      "net_difference": -584.5114454287485,
+      "relative_l1": 0.08246434255219756,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "qy": {
+      "max_abs": 51.64370989011244,
+      "l1": 2294.7451740228275,
+      "net_difference": -741.3355137078601,
+      "relative_l1": 0.21788555203715257,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "qz": {
+      "max_abs": 66.81257777715119,
+      "l1": 2541.266086343101,
+      "net_difference": -495.8509943836442,
+      "relative_l1": 0.5058251067415381,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "contacts": {
+      "max_abs": 1.8201587036258387e-05,
+      "l1": 2.4052002255911704e-05,
+      "net_difference": 2.4052002255911704e-05,
+      "relative_l1": 0.013656255973341157,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "water_table": {
+      "selected_layer_changes": 180,
+      "shared_phreatic_columns": 3776,
+      "classification_mismatches": 55,
+      "max_abs": 12.502220377735512,
+      "rms": 0.7369708420536434
+    },
+    "layerwise_head_rms": [
+      1.0465828171415348,
+      1.0177990081745136,
+      0.8237400199163932,
+      0.5890859853252132
+    ]
+  },
+  "gpu_crossstarts/newton_from_picard": {
+    "head_max": 6.988347536207584e-07,
+    "head_rms": 1.7887140651507172e-08,
+    "floor_switches": 0,
+    "saturated_thickness_max": 9.241590248620923e-08,
+    "regimes": {
+      "wet_both": {
+        "count": 10923,
+        "rms": 3.198412166843986e-09,
+        "maximum": 9.241590248620923e-08
+      },
+      "dry_both": {
+        "count": 5269,
+        "rms": 3.101645718138876e-08,
+        "maximum": 6.988347536207584e-07
+      },
+      "wet_dry_mismatch": {
+        "count": 0,
+        "rms": null,
+        "maximum": null
+      },
+      "thin_either": {
+        "count": 304,
+        "rms": 2.9250405512615723e-09,
+        "maximum": 2.4041412416409003e-08
+      }
+    },
+    "qx": {
+      "max_abs": 1.8437146520611236e-07,
+      "l1": 4.506441139720332e-05,
+      "net_difference": 1.848971395321887e-07,
+      "relative_l1": 7.56234000605613e-10,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "qy": {
+      "max_abs": 4.810611597960701e-08,
+      "l1": 9.576196380006767e-06,
+      "net_difference": -4.9419851472182625e-06,
+      "relative_l1": 9.092577504003066e-10,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "qz": {
+      "max_abs": 1.1260370658128238e-07,
+      "l1": 2.065023393993316e-05,
+      "net_difference": 4.954855658731195e-06,
+      "relative_l1": 4.110316051923329e-09,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "contacts": {
+      "max_abs": 5.216096651827762e-14,
+      "l1": 9.883868896942705e-14,
+      "net_difference": 9.883868896942705e-14,
+      "relative_l1": 5.611867246121639e-11,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "water_table": {
+      "selected_layer_changes": 0,
+      "shared_phreatic_columns": 3830,
+      "classification_mismatches": 0,
+      "max_abs": 9.241590248620923e-08,
+      "rms": 4.158798300763481e-09
+    },
+    "layerwise_head_rms": [
+      2.0406559825654124e-08,
+      2.054745651054181e-08,
+      2.0454929562887223e-08,
+      4.608471696993728e-09
+    ]
+  },
+  "gpu_crossstarts/picard_from_newton": {
+    "head_max": 0.26822758121306833,
+    "head_rms": 0.004553758745612737,
+    "floor_switches": 2,
+    "saturated_thickness_max": 0.25849248576868433,
+    "regimes": {
+      "wet_both": {
+        "count": 10922,
+        "rms": 0.003178257958433699,
+        "maximum": 0.25849248576868433
+      },
+      "dry_both": {
+        "count": 5269,
+        "rms": 0.00578092889847419,
+        "maximum": 0.26822758121306833
+      },
+      "wet_dry_mismatch": {
+        "count": 1,
+        "rms": 0.22216401481278325,
+        "maximum": 0.22216401481278325
+      },
+      "thin_either": {
+        "count": 305,
+        "rms": 0.0020226322698577402,
+        "maximum": 0.03140927949387162
+      }
+    },
+    "qx": {
+      "max_abs": 1.5949062527523112,
+      "l1": 21.060433753625276,
+      "net_difference": 4.620543824750218,
+      "relative_l1": 0.0003534189303309513,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "qy": {
+      "max_abs": 0.9761382166559698,
+      "l1": 8.1821679514049,
+      "net_difference": 0.1805292018044757,
+      "relative_l1": 0.0007768950562067157,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "qz": {
+      "max_abs": 1.0523251310511363,
+      "l1": 9.389214985752467,
+      "net_difference": 2.5765904020204524,
+      "relative_l1": 0.0018688718579728764,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "contacts": {
+      "max_abs": 6.331236729263841e-08,
+      "l1": 7.814172489021415e-08,
+      "net_difference": -4.848300969506267e-08,
+      "relative_l1": 4.436734147723114e-05,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "water_table": {
+      "selected_layer_changes": 1,
+      "shared_phreatic_columns": 3830,
+      "classification_mismatches": 0,
+      "max_abs": 0.8544357336174926,
+      "rms": 0.014724219134239637
+    },
+    "layerwise_head_rms": [
+      0.0063354258498719285,
+      0.006192469269805756,
+      0.0018661064544480044,
+      0.0008199233938344908
+    ]
+  },
+  "cpu_final/newton": {
+    "head_max": 0.2682660758965767,
+    "head_rms": 0.004542184425882781,
+    "floor_switches": 1,
+    "saturated_thickness_max": 0.258530547202966,
+    "regimes": {
+      "wet_both": {
+        "count": 10922,
+        "rms": 0.0031616633318234974,
+        "maximum": 0.258530547202966
+      },
+      "dry_both": {
+        "count": 5269,
+        "rms": 0.0057719588944935485,
+        "maximum": 0.2682660758965767
+      },
+      "wet_dry_mismatch": {
+        "count": 1,
+        "rms": 0.22214247310682111,
+        "maximum": 0.22214247310682111
+      },
+      "thin_either": {
+        "count": 305,
+        "rms": 0.0018175167452604741,
+        "maximum": 0.0313812571255383
+      }
+    },
+    "qx": {
+      "max_abs": 1.5949031688123823,
+      "l1": 12.009837614146539,
+      "net_difference": 1.6373202057939906e-05,
+      "relative_l1": 0.00020153924713490096,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "qy": {
+      "max_abs": 0.9762614497386213,
+      "l1": 6.361353333509131,
+      "net_difference": 1.0282052090809803,
+      "relative_l1": 0.0006040091067476539,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "qz": {
+      "max_abs": 1.0524373850334383,
+      "l1": 4.8210784362151164,
+      "net_difference": 0.0012455571942126494,
+      "relative_l1": 0.0009596092781126408,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "contacts": {
+      "max_abs": 6.422789583667397e-08,
+      "l1": 6.445546002378615e-08,
+      "net_difference": -6.445536729414274e-08,
+      "relative_l1": 3.659654824570514e-05,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "water_table": {
+      "selected_layer_changes": 1,
+      "shared_phreatic_columns": 3830,
+      "classification_mismatches": 0,
+      "max_abs": 0.8544154982570973,
+      "rms": 0.014719513571947894
+    },
+    "layerwise_head_rms": [
+      0.006325517688391046,
+      0.006182189738466923,
+      0.0018353539069281566,
+      0.0007861035387857976
+    ]
+  },
+  "extra/gpu_picard_from_cpu": {
+    "head_max": 0.2682660763537541,
+    "head_rms": 0.004542184383719125,
+    "floor_switches": 1,
+    "saturated_thickness_max": 0.25853054764974104,
+    "regimes": {
+      "wet_both": {
+        "count": 10922,
+        "rms": 0.003161663296138656,
+        "maximum": 0.25853054764974104
+      },
+      "dry_both": {
+        "count": 5269,
+        "rms": 0.005771958840923442,
+        "maximum": 0.2682660763537541
+      },
+      "wet_dry_mismatch": {
+        "count": 1,
+        "rms": 0.2221424720284304,
+        "maximum": 0.2221424720284304
+      },
+      "thin_either": {
+        "count": 305,
+        "rms": 0.00181751661805561,
+        "maximum": 0.03138125494088939
+      }
+    },
+    "qx": {
+      "max_abs": 1.5949031688952495,
+      "l1": 12.010017123298177,
+      "net_difference": 0.00015462557781087405,
+      "relative_l1": 0.00020154225951029165,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "qy": {
+      "max_abs": 0.9762614488528709,
+      "l1": 6.36136157262921,
+      "net_difference": 1.0282029746341679,
+      "relative_l1": 0.0006040098890503022,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "qz": {
+      "max_abs": 1.0524373839297962,
+      "l1": 4.821166833009844,
+      "net_difference": 0.0013211661521790314,
+      "relative_l1": 0.0009596268730108567,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "contacts": {
+      "max_abs": 6.422787496339691e-08,
+      "l1": 6.445579504399217e-08,
+      "net_difference": -6.445508280296212e-08,
+      "relative_l1": 3.6596738463618854e-05,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "water_table": {
+      "selected_layer_changes": 1,
+      "shared_phreatic_columns": 3830,
+      "classification_mismatches": 0,
+      "max_abs": 0.854415497161412,
+      "rms": 0.014719513542307057
+    },
+    "layerwise_head_rms": [
+      0.00632551764687916,
+      0.006182189695550838,
+      0.0018353538147757257,
+      0.0007861034524098656
+    ]
+  },
+  "extra/cpu_root_perturbed": {
+    "head_max": 0.26826607594274776,
+    "head_rms": 0.0045421844258028395,
+    "floor_switches": 1,
+    "saturated_thickness_max": 0.2585305472475028,
+    "regimes": {
+      "wet_both": {
+        "count": 10922,
+        "rms": 0.0031616633320454527,
+        "maximum": 0.2585305472475028
+      },
+      "dry_both": {
+        "count": 5269,
+        "rms": 0.005771958894214652,
+        "maximum": 0.26826607594274776
+      },
+      "wet_dry_mismatch": {
+        "count": 1,
+        "rms": 0.222142473084034,
+        "maximum": 0.222142473084034
+      },
+      "thin_either": {
+        "count": 305,
+        "rms": 0.0018175167435173982,
+        "maximum": 0.031381257098395565
+      }
+    },
+    "qx": {
+      "max_abs": 1.5949031688082915,
+      "l1": 12.009811103624454,
+      "net_difference": 4.67571249740395e-06,
+      "relative_l1": 0.00020153880225705717,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "qy": {
+      "max_abs": 0.976261449965045,
+      "l1": 6.361329571747487,
+      "net_difference": 1.0282107637429576,
+      "relative_l1": 0.0006040068505735864,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "qz": {
+      "max_abs": 1.0524373851244095,
+      "l1": 4.821068494271237,
+      "net_difference": 0.001245366161798437,
+      "relative_l1": 0.0009596072992231214,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "contacts": {
+      "max_abs": 6.422789542597819e-08,
+      "l1": 6.44554576038469e-08,
+      "net_difference": -6.445537272165881e-08,
+      "relative_l1": 3.6596546871711015e-05,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "water_table": {
+      "selected_layer_changes": 1,
+      "shared_phreatic_columns": 3830,
+      "classification_mismatches": 0,
+      "max_abs": 0.8544154982363352,
+      "rms": 0.014719513571761628
+    },
+    "layerwise_head_rms": [
+      0.006325517688445377,
+      0.006182189738478392,
+      0.001835353906268441,
+      0.0007861035379368056
+    ]
+  },
+  "extra/gpu_newton_from_cpu": {
+    "head_max": 0.2682660802977921,
+    "head_rms": 0.004542184382307428,
+    "floor_switches": 1,
+    "saturated_thickness_max": 0.2585305514725178,
+    "regimes": {
+      "wet_both": {
+        "count": 10922,
+        "rms": 0.0031616633124159294,
+        "maximum": 0.2585305514725178
+      },
+      "dry_both": {
+        "count": 5269,
+        "rms": 0.005771958833564888,
+        "maximum": 0.2682660802977921
+      },
+      "wet_dry_mismatch": {
+        "count": 1,
+        "rms": 0.2221424700381931,
+        "maximum": 0.2221424700381931
+      },
+      "thin_either": {
+        "count": 305,
+        "rms": 0.0018175164033742241,
+        "maximum": 0.03138125138367798
+      }
+    },
+    "qx": {
+      "max_abs": 1.5949031685805428,
+      "l1": 12.009822882234467,
+      "net_difference": -5.597093076792348e-07,
+      "relative_l1": 0.0002015389999160323,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "qy": {
+      "max_abs": 0.9762614688629525,
+      "l1": 6.361333258738525,
+      "net_difference": 1.0282105660932737,
+      "relative_l1": 0.0006040072006525785,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "qz": {
+      "max_abs": 1.0524373953930084,
+      "l1": 4.821075183964398,
+      "net_difference": 0.00124528247533886,
+      "relative_l1": 0.0009596086307699341,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "contacts": {
+      "max_abs": 6.422790572676619e-08,
+      "l1": 6.445546825114591e-08,
+      "net_difference": -6.445536790780117e-08,
+      "relative_l1": 3.6596552917038936e-05,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "water_table": {
+      "selected_layer_changes": 1,
+      "shared_phreatic_columns": 3830,
+      "classification_mismatches": 0,
+      "max_abs": 0.8544154962537363,
+      "rms": 0.014719513533466747
+    },
+    "layerwise_head_rms": [
+      0.0063255176371567155,
+      0.006182189688508293,
+      0.0018353538266075839,
+      0.000786103526888387
+    ]
+  },
+  "extra/cpu_root": {
+    "head_max": 0.26826607594274776,
+    "head_rms": 0.0045421844258028265,
+    "floor_switches": 1,
+    "saturated_thickness_max": 0.2585305472475028,
+    "regimes": {
+      "wet_both": {
+        "count": 10922,
+        "rms": 0.0031616633320454383,
+        "maximum": 0.2585305472475028
+      },
+      "dry_both": {
+        "count": 5269,
+        "rms": 0.005771958894214636,
+        "maximum": 0.26826607594274776
+      },
+      "wet_dry_mismatch": {
+        "count": 1,
+        "rms": 0.222142473084034,
+        "maximum": 0.222142473084034
+      },
+      "thin_either": {
+        "count": 305,
+        "rms": 0.001817516743517393,
+        "maximum": 0.031381257098395565
+      }
+    },
+    "qx": {
+      "max_abs": 1.5949031688082915,
+      "l1": 12.009811103548467,
+      "net_difference": 4.675176953128357e-06,
+      "relative_l1": 0.000201538802255782,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "qy": {
+      "max_abs": 0.976261449965045,
+      "l1": 6.361329571569454,
+      "net_difference": 1.0282107638796096,
+      "relative_l1": 0.0006040068505566822,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "qz": {
+      "max_abs": 1.0524373851244082,
+      "l1": 4.821068494142986,
+      "net_difference": 0.0012453661998632676,
+      "relative_l1": 0.0009596072991975939,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "contacts": {
+      "max_abs": 6.422789542597819e-08,
+      "l1": 6.445545761143631e-08,
+      "net_difference": -6.445537272924823e-08,
+      "relative_l1": 3.6596546876020136e-05,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "water_table": {
+      "selected_layer_changes": 1,
+      "shared_phreatic_columns": 3830,
+      "classification_mismatches": 0,
+      "max_abs": 0.8544154982363352,
+      "rms": 0.01471951357176163
+    },
+    "layerwise_head_rms": [
+      0.006325517688445362,
+      0.00618218973847839,
+      0.0018353539062683883,
+      0.0007861035379367642
+    ]
+  },
+  "branches/newton_perturb_0.0001": {
+    "head_max": 0.26826607594179563,
+    "head_rms": 0.004542184426038118,
+    "floor_switches": 1,
+    "saturated_thickness_max": 0.2585305472465791,
+    "regimes": {
+      "wet_both": {
+        "count": 10922,
+        "rms": 0.0031616633322574346,
+        "maximum": 0.2585305472465791
+      },
+      "dry_both": {
+        "count": 5269,
+        "rms": 0.005771958894535308,
+        "maximum": 0.26826607594179563
+      },
+      "wet_dry_mismatch": {
+        "count": 1,
+        "rms": 0.2221424730850785,
+        "maximum": 0.2221424730850785
+      },
+      "thin_either": {
+        "count": 305,
+        "rms": 0.0018175167438021788,
+        "maximum": 0.03138125709934769
+      }
+    },
+    "qx": {
+      "max_abs": 1.594903168808293,
+      "l1": 12.009811109391089,
+      "net_difference": 4.683527779159036e-06,
+      "relative_l1": 0.00020153880235382812,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "qy": {
+      "max_abs": 0.9762614499598692,
+      "l1": 6.361329573528044,
+      "net_difference": 1.0282107646226886,
+      "relative_l1": 0.0006040068507426499,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "qz": {
+      "max_abs": 1.0524373851235098,
+      "l1": 4.82106849415985,
+      "net_difference": 0.0012453662799491226,
+      "relative_l1": 0.0009596072992009506,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "contacts": {
+      "max_abs": 6.422789539930682e-08,
+      "l1": 6.44554575856323e-08,
+      "net_difference": -6.445537270170949e-08,
+      "relative_l1": 3.659654686136913e-05,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "water_table": {
+      "selected_layer_changes": 1,
+      "shared_phreatic_columns": 3830,
+      "classification_mismatches": 0,
+      "max_abs": 0.854415498237401,
+      "rms": 0.014719513571848197
+    },
+    "layerwise_head_rms": [
+      0.006325517688636903,
+      0.006182189738677495,
+      0.0018353539068465155,
+      0.0007861035389151384
+    ]
+  },
+  "branches/newton_perturb_0.01": {
+    "head_max": 0.26826607594274776,
+    "head_rms": 0.00454218442580283,
+    "floor_switches": 1,
+    "saturated_thickness_max": 0.2585305472475028,
+    "regimes": {
+      "wet_both": {
+        "count": 10922,
+        "rms": 0.0031616633320454414,
+        "maximum": 0.2585305472475028
+      },
+      "dry_both": {
+        "count": 5269,
+        "rms": 0.0057719588942146405,
+        "maximum": 0.26826607594274776
+      },
+      "wet_dry_mismatch": {
+        "count": 1,
+        "rms": 0.222142473084034,
+        "maximum": 0.222142473084034
+      },
+      "thin_either": {
+        "count": 305,
+        "rms": 0.001817516743517408,
+        "maximum": 0.031381257098395565
+      }
+    },
+    "qx": {
+      "max_abs": 1.5949031688082915,
+      "l1": 12.009811103542333,
+      "net_difference": 4.675169980150606e-06,
+      "relative_l1": 0.00020153880225567906,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "qy": {
+      "max_abs": 0.976261449965045,
+      "l1": 6.361329571567118,
+      "net_difference": 1.0282107638826288,
+      "relative_l1": 0.0006040068505564604,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "qz": {
+      "max_abs": 1.0524373851244095,
+      "l1": 4.821068494158104,
+      "net_difference": 0.0012453661859295894,
+      "relative_l1": 0.000959607299200603,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "contacts": {
+      "max_abs": 6.422789542597819e-08,
+      "l1": 6.445545761143631e-08,
+      "net_difference": -6.445537272924823e-08,
+      "relative_l1": 3.6596546876020136e-05,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "water_table": {
+      "selected_layer_changes": 1,
+      "shared_phreatic_columns": 3830,
+      "classification_mismatches": 0,
+      "max_abs": 0.8544154982363352,
+      "rms": 0.014719513571761624
+    },
+    "layerwise_head_rms": [
+      0.00632551768844537,
+      0.006182189738478387,
+      0.0018353539062683792,
+      0.0007861035379368101
+    ]
+  },
+  "branches/newton_perturb_0": {
+    "head_max": 0.26826607594274776,
+    "head_rms": 0.0045421844258028265,
+    "floor_switches": 1,
+    "saturated_thickness_max": 0.2585305472475028,
+    "regimes": {
+      "wet_both": {
+        "count": 10922,
+        "rms": 0.0031616633320454427,
+        "maximum": 0.2585305472475028
+      },
+      "dry_both": {
+        "count": 5269,
+        "rms": 0.005771958894214632,
+        "maximum": 0.26826607594274776
+      },
+      "wet_dry_mismatch": {
+        "count": 1,
+        "rms": 0.222142473084034,
+        "maximum": 0.222142473084034
+      },
+      "thin_either": {
+        "count": 305,
+        "rms": 0.0018175167435174008,
+        "maximum": 0.031381257098395565
+      }
+    },
+    "qx": {
+      "max_abs": 1.5949031688082915,
+      "l1": 12.009811103542285,
+      "net_difference": 4.675169872125906e-06,
+      "relative_l1": 0.00020153880225567828,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "qy": {
+      "max_abs": 0.976261449965045,
+      "l1": 6.361329571567321,
+      "net_difference": 1.0282107638820388,
+      "relative_l1": 0.0006040068505564797,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "qz": {
+      "max_abs": 1.0524373851244095,
+      "l1": 4.821068494138284,
+      "net_difference": 0.0012453661505211252,
+      "relative_l1": 0.000959607299196658,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "contacts": {
+      "max_abs": 6.422789542597819e-08,
+      "l1": 6.445545761143631e-08,
+      "net_difference": -6.445537272924823e-08,
+      "relative_l1": 3.6596546876020136e-05,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "water_table": {
+      "selected_layer_changes": 1,
+      "shared_phreatic_columns": 3830,
+      "classification_mismatches": 0,
+      "max_abs": 0.8544154982363352,
+      "rms": 0.014719513571761628
+    },
+    "layerwise_head_rms": [
+      0.006325517688445358,
+      0.0061821897384783855,
+      0.0018353539062684133,
+      0.0007861035379367579
+    ]
+  },
+  "branches/picard_perturb_0.0001": {
+    "head_max": 1.478156690382093e-07,
+    "head_rms": 5.121054045101841e-09,
+    "floor_switches": 0,
+    "saturated_thickness_max": 2.3202105126074457e-08,
+    "regimes": {
+      "wet_both": {
+        "count": 10923,
+        "rms": 1.4208775664806469e-09,
+        "maximum": 2.3202105126074457e-08
+      },
+      "dry_both": {
+        "count": 5269,
+        "rms": 8.741082607195477e-09,
+        "maximum": 1.478156690382093e-07
+      },
+      "wet_dry_mismatch": {
+        "count": 0,
+        "rms": null,
+        "maximum": null
+      },
+      "thin_either": {
+        "count": 304,
+        "rms": 2.4355307125994012e-09,
+        "maximum": 9.074334172964882e-09
+      }
+    },
+    "qx": {
+      "max_abs": 1.85140705655229e-07,
+      "l1": 4.0472492359967414e-05,
+      "net_difference": 4.678254717752426e-06,
+      "relative_l1": 6.791761805582509e-10,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "qy": {
+      "max_abs": 4.828748667584648e-08,
+      "l1": 8.288452785779603e-06,
+      "net_difference": -4.4210911301949825e-06,
+      "relative_l1": 7.869867779687064e-10,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "qz": {
+      "max_abs": 1.1248513731576537e-07,
+      "l1": 1.895905561649962e-05,
+      "net_difference": 4.916599810975275e-06,
+      "relative_l1": 3.773696262060737e-09,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "contacts": {
+      "max_abs": 4.247405378798863e-14,
+      "l1": 7.768763930771083e-14,
+      "net_difference": 7.768763930771083e-14,
+      "relative_l1": 4.4109520573903025e-11,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "water_table": {
+      "selected_layer_changes": 0,
+      "shared_phreatic_columns": 3830,
+      "classification_mismatches": 0,
+      "max_abs": 2.3202105126074457e-08,
+      "rms": 1.700448156940535e-09
+    },
+    "layerwise_head_rms": [
+      5.8300635111062144e-09,
+      5.8703765772606154e-09,
+      5.833770926566508e-09,
+      1.5144926644286587e-09
+    ]
+  },
+  "branches/picard_perturb_0.01": {
+    "head_max": 0.15724045251084107,
+    "head_rms": 0.0024648406515647672,
+    "floor_switches": 2,
+    "saturated_thickness_max": 0.14901916656823033,
+    "regimes": {
+      "wet_both": {
+        "count": 10922,
+        "rms": 0.0020825375534635512,
+        "maximum": 0.14901916656823033
+      },
+      "dry_both": {
+        "count": 5269,
+        "rms": 0.0030449157384088376,
+        "maximum": 0.15724045251084107
+      },
+      "wet_dry_mismatch": {
+        "count": 1,
+        "rms": 0.046407038529736155,
+        "maximum": 0.046407038529736155
+      },
+      "thin_either": {
+        "count": 304,
+        "rms": 0.009685324546783199,
+        "maximum": 0.14901916656823033
+      }
+    },
+    "qx": {
+      "max_abs": 0.5233230624091905,
+      "l1": 13.398871500623889,
+      "net_difference": -0.33696088593317897,
+      "relative_l1": 0.00022484887485174537,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "qy": {
+      "max_abs": 0.1364628597843545,
+      "l1": 3.078183351301064,
+      "net_difference": 0.24186761410352214,
+      "relative_l1": 0.00029227283550357854,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "qz": {
+      "max_abs": 0.6028228809557332,
+      "l1": 4.1506941641239266,
+      "net_difference": -0.13031690421722805,
+      "relative_l1": 0.000826172957606614,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "contacts": {
+      "max_abs": 3.2331582970569414e-08,
+      "l1": 3.590331256538189e-08,
+      "net_difference": 3.590331256538189e-08,
+      "relative_l1": 2.0385197933499268e-05,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "water_table": {
+      "selected_layer_changes": 1,
+      "shared_phreatic_columns": 3830,
+      "classification_mismatches": 0,
+      "max_abs": 0.6910780363571405,
+      "rms": 0.011649999220173643
+    },
+    "layerwise_head_rms": [
+      0.0034534803102615036,
+      0.0033177525909976824,
+      0.0010986199086137792,
+      0.00026059383048283825
+    ]
+  },
+  "branches/picard_perturb_0": {
+    "head_max": 1.4781568324906402e-07,
+    "head_rms": 5.121057068327592e-09,
+    "floor_switches": 0,
+    "saturated_thickness_max": 2.3202133547783887e-08,
+    "regimes": {
+      "wet_both": {
+        "count": 10923,
+        "rms": 1.4208860716904171e-09,
+        "maximum": 2.3202133547783887e-08
+      },
+      "dry_both": {
+        "count": 5269,
+        "rms": 8.741085184079054e-09,
+        "maximum": 1.4781568324906402e-07
+      },
+      "wet_dry_mismatch": {
+        "count": 0,
+        "rms": null,
+        "maximum": null
+      },
+      "thin_either": {
+        "count": 304,
+        "rms": 2.435441796548993e-09,
+        "maximum": 9.074064166725293e-09
+      }
+    },
+    "qx": {
+      "max_abs": 1.851353361725927e-07,
+      "l1": 4.047261653642582e-05,
+      "net_difference": 4.675170189484584e-06,
+      "relative_l1": 6.791782643857551e-10,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "qy": {
+      "max_abs": 4.8287041032324396e-08,
+      "l1": 8.288429117867941e-06,
+      "net_difference": -4.4213480332781465e-06,
+      "relative_l1": 7.869845307056742e-10,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "qz": {
+      "max_abs": 1.1248438958055829e-07,
+      "l1": 1.89590462400425e-05,
+      "net_difference": 4.916590257952135e-06,
+      "relative_l1": 3.773694395728263e-09,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "contacts": {
+      "max_abs": 4.2477523234940584e-14,
+      "l1": 7.773859680981765e-14,
+      "net_difference": 7.773859680981765e-14,
+      "relative_l1": 4.413845324591629e-11,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "water_table": {
+      "selected_layer_changes": 0,
+      "shared_phreatic_columns": 3830,
+      "classification_mismatches": 0,
+      "max_abs": 2.3202133547783887e-08,
+      "rms": 1.7004545611020917e-09
+    },
+    "layerwise_head_rms": [
+      5.830066186379061e-09,
+      5.870379301645159e-09,
+      5.833773930912516e-09,
+      1.5145011225194157e-09
+    ]
+  },
+  "mf6_native": {
+    "head_max": 3.3139264111535525,
+    "head_rms": 0.95321391200268,
+    "saturated_thickness_max": 2.398435790590341,
+    "regimes": {
+      "wet_both": {
+        "count": 10772,
+        "rms": 1.1406388007071846,
+        "maximum": 3.3139264111535525
+      },
+      "dry_both": {
+        "count": 5217,
+        "rms": 0.343690303870153,
+        "maximum": 2.1130584248093385
+      },
+      "wet_dry_mismatch": {
+        "count": 203,
+        "rms": 0.632027569703304,
+        "maximum": 2.094665135311132
+      },
+      "thin_either": {
+        "count": 542,
+        "rms": 0.16121923025237828,
+        "maximum": 0.5868987835021997
+      }
+    },
+    "contacts": {
+      "max_abs": 0.0007080978468345458,
+      "l1": 0.001530540987775585,
+      "net_difference": 0.001530540987775585,
+      "relative_l1": 0.8690112068161173,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "water_table": {
+      "selected_layer_changes": 212,
+      "shared_phreatic_columns": 3827,
+      "classification_mismatches": 12,
+      "max_abs": 11.493701214132585,
+      "rms": 0.9255484486865547
+    },
+    "layerwise_head_rms": [
+      0.2968736401405474,
+      0.28713847829075895,
+      0.3346180654283056,
+      1.8343769708198072
+    ],
+    "common_floor_threshold_crossings": 233,
+    "native_floor_applicable": false,
+    "flux_mapping": "Compare integrated transfer between corresponding geological units and across complete Cartesian map planes. Native stepped and terrain faces are not claimed identical.",
+    "interlayer_transfer": [
+      {
+        "native_net": 1966.076708220115,
+        "darcy_net": 1966.078234161956,
+        "net_difference": -0.0015259418410205061,
+        "native_downward": 1968.206726000611,
+        "native_upward": 2.1300177804961242,
+        "darcy_downward": 1967.4349166828817,
+        "darcy_upward": 1.3566825209258029
+      },
+      {
+        "native_net": 887.7786829991575,
+        "darcy_net": 192.356742522824,
+        "net_difference": 695.4219404763334,
+        "native_downward": 1667.5990552976195,
+        "native_upward": 779.820372298462,
+        "darcy_downward": 1527.7373813170248,
+        "darcy_upward": 1335.3806387942009
+      },
+      {
+        "native_net": 50.644730071393525,
+        "darcy_net": 23.253476579597873,
+        "net_difference": 27.391253491795652,
+        "native_downward": 120.18393650001127,
+        "native_upward": 69.53920642861775,
+        "darcy_downward": 107.67267006801137,
+        "darcy_upward": 84.4191934884135
+      }
+    ],
+    "full_column_x_plane_max_difference": 7.642859145562397e-07,
+    "full_column_y_plane_max_difference": 6.408544052487642
+  },
+  "mf6_coupled": {
+    "head_max": 3.823867171302325,
+    "head_rms": 1.009747416527612,
+    "saturated_thickness_max": 3.012855021089642,
+    "regimes": {
+      "wet_both": {
+        "count": 10736,
+        "rms": 1.206821158817868,
+        "maximum": 3.823867171302325
+      },
+      "dry_both": {
+        "count": 5213,
+        "rms": 0.38736879014300457,
+        "maximum": 2.082321261593208
+      },
+      "wet_dry_mismatch": {
+        "count": 243,
+        "rms": 0.6115083439144036,
+        "maximum": 2.0639279720948878
+      },
+      "thin_either": {
+        "count": 554,
+        "rms": 0.3480342210383574,
+        "maximum": 2.0639279720948878
+      }
+    },
+    "contacts": {
+      "max_abs": 0.0007674765804960169,
+      "l1": 0.0017325426516667155,
+      "net_difference": -0.0017325426516667155,
+      "relative_l1": 0.9837037966382421,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "water_table": {
+      "selected_layer_changes": 254,
+      "shared_phreatic_columns": 3830,
+      "classification_mismatches": 11,
+      "max_abs": 11.46296405091634,
+      "rms": 0.9369553746045771
+    },
+    "layerwise_head_rms": [
+      0.33450564207800826,
+      0.32615647048817475,
+      0.36714825194828243,
+      1.9338297091970202
+    ],
+    "common_floor_threshold_crossings": 276,
+    "native_floor_applicable": false,
+    "flux_mapping": "Compare integrated transfer between corresponding geological units and across complete Cartesian map planes. Native stepped and terrain faces are not claimed identical.",
+    "interlayer_transfer": [
+      {
+        "native_net": 1966.07997127497,
+        "darcy_net": 1966.078234161956,
+        "net_difference": 0.0017371130140979019,
+        "native_downward": 1968.3853646031557,
+        "native_upward": 2.3053933281858487,
+        "darcy_downward": 1967.4349166828817,
+        "darcy_upward": 1.3566825209258029
+      },
+      {
+        "native_net": 884.2710064146136,
+        "darcy_net": 192.356742522824,
+        "net_difference": 691.9142638917896,
+        "native_downward": 1664.3027758891749,
+        "native_upward": 780.0317694745614,
+        "darcy_downward": 1527.7373813170248,
+        "darcy_upward": 1335.3806387942009
+      },
+      {
+        "native_net": 50.87775567589267,
+        "darcy_net": 23.253476579597873,
+        "net_difference": 27.624279096294792,
+        "native_downward": 120.61447742763667,
+        "native_upward": 69.736721751744,
+        "darcy_downward": 107.67267006801137,
+        "darcy_upward": 84.4191934884135
+      }
+    ],
+    "full_column_x_plane_max_difference": 5.424346909421729e-07,
+    "full_column_y_plane_max_difference": 7.074417269468896
+  },
+  "mf6_xt3d_coupled": {
+    "head_max": 3.3139264110803097,
+    "head_rms": 0.953213911654074,
+    "saturated_thickness_max": 2.3984357904266815,
+    "regimes": {
+      "wet_both": {
+        "count": 10772,
+        "rms": 1.1406388007002355,
+        "maximum": 3.3139264110803097
+      },
+      "dry_both": {
+        "count": 5220,
+        "rms": 0.34363315749369183,
+        "maximum": 2.11305842480904
+      },
+      "wet_dry_mismatch": {
+        "count": 200,
+        "rms": 0.6361634933360474,
+        "maximum": 2.094665135310791
+      },
+      "thin_either": {
+        "count": 542,
+        "rms": 0.1612192305854285,
+        "maximum": 0.5868987841663014
+      }
+    },
+    "contacts": {
+      "max_abs": 0.0007674765805134784,
+      "l1": 0.0017325426517107298,
+      "net_difference": -0.0017325426517107298,
+      "relative_l1": 0.9837037966632326,
+      "denominator": "L1 of reference flux; tiny denominator uses float64.tiny"
+    },
+    "water_table": {
+      "selected_layer_changes": 209,
+      "shared_phreatic_columns": 3830,
+      "classification_mismatches": 9,
+      "max_abs": 11.493701214132244,
+      "rms": 0.9251858914144577
+    },
+    "layerwise_head_rms": [
+      0.2968736357884925,
+      0.28713847864663833,
+      0.3346180658947284,
+      1.8343769706670574
+    ],
+    "common_floor_threshold_crossings": 233,
+    "native_floor_applicable": false,
+    "flux_mapping": "Compare integrated transfer between corresponding geological units and across complete Cartesian map planes. Native stepped and terrain faces are not claimed identical.",
+    "interlayer_transfer": [
+      {
+        "native_net": 1966.0799712678613,
+        "darcy_net": 1966.078234161956,
+        "net_difference": 0.0017371059053730153,
+        "native_downward": 1968.2099890508039,
+        "native_upward": 2.13001778294252,
+        "darcy_downward": 1967.4349166828817,
+        "darcy_upward": 1.3566825209258029
+      },
+      {
+        "native_net": 887.7786854645553,
+        "darcy_net": 192.356742522824,
+        "net_difference": 695.4219429417313,
+        "native_downward": 1667.5990565861432,
+        "native_upward": 779.8203711215879,
+        "darcy_downward": 1527.7373813170248,
+        "darcy_upward": 1335.3806387942009
+      },
+      {
+        "native_net": 50.64473009535861,
+        "darcy_net": 23.253476579597873,
+        "net_difference": 27.391253515760734,
+        "native_downward": 120.18393651485741,
+        "native_upward": 69.53920641949878,
+        "darcy_downward": 107.67267006801137,
+        "darcy_upward": 84.4191934884135
+      }
+    ],
+    "full_column_x_plane_max_difference": 6.551326805492863e-07,
+    "full_column_y_plane_max_difference": 6.408544092033182
+  }
+}

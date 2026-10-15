@@ -1,0 +1,21 @@
+{
+  "archive": "archives/physics_controls__control_dry_contactFalse_floor0.01_slope0.tar.xz",
+  "archive_sha256": "e08056d8582c1c019bec637bfc3756ab31f6f46ca875a7436797154bb4563c2c",
+  "original_directory": "physics_controls/control_dry_contactFalse_floor0.01_slope0",
+  "files": {
+    "physics_controls/control_dry_contactFalse_floor0.01_slope0/case/inputs.npz": "562e73a15d84dd408d53abb968a00fc9f1a64abbeb463768306fa6358e255866",
+    "physics_controls/control_dry_contactFalse_floor0.01_slope0/case/manifest.json": "4f8d4443b542591b11dbb081caeb56a67927f2bdfe49d15b7b7284e7ec3680f1",
+    "physics_controls/control_dry_contactFalse_floor0.01_slope0/cpu/head.npz": "8aba75542f33e313016676303cb26e0ff678a5d502c0adb53382105c22ec48b0",
+    "physics_controls/control_dry_contactFalse_floor0.01_slope0/cpu/history.json.gz": "de953bc7ffd4df363311874d72c4a175623255e751d8800b160959169ccce69f",
+    "physics_controls/control_dry_contactFalse_floor0.01_slope0/cpu/request.json": "a98877d9c97b4501fcae21c98209e30bfa191bcb9bc3e293c1ea0efb8c9701cb",
+    "physics_controls/control_dry_contactFalse_floor0.01_slope0/cpu/summary.json": "4c839fbf59a7c9976c8e800bc13f2f0373df674ea77968460c45b8792954e17a",
+    "physics_controls/control_dry_contactFalse_floor0.01_slope0/gpu/head.npz": "bbea7668a360027d3b54b70c678373343acd541dc4b594d431b8fa36e4138cc6",
+    "physics_controls/control_dry_contactFalse_floor0.01_slope0/gpu/history.json.gz": "f6d21591ba668568b01a0c8c870b75b33f125960ab6e03f010fa110b9a52dbca",
+    "physics_controls/control_dry_contactFalse_floor0.01_slope0/gpu/request.json": "44c537366a84011692803db8aa2429af1006ff9689c3476a6407abab9a3c75f2",
+    "physics_controls/control_dry_contactFalse_floor0.01_slope0/gpu/summary.json": "5f11a112ebbec16af1801ca588bd4268c2bfa8c029de57c74ca9c984713ac238"
+  },
+  "verified_members": 10,
+  "encoding": "tar.xz",
+  "superseded_archive": "archives/physics_controls__control_dry_contactFalse_floor0.01_slope0.tar.gz",
+  "superseded_sha256": "787fa275425f7039470363fb0a1bd6c1abb441c0aadd31f9f9b0e250591a8888"
+}

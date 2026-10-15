@@ -1,0 +1,47 @@
+{
+  "input_hash": "910d75186f3ae6c056055f066f8c77577f7ac6b7c9a285986c9e5b0f2c83cfd8",
+  "kind": "gpu",
+  "settings": {
+    "method": "newton",
+    "outer_cap": 2000,
+    "initial_hash": "0d0bc2ffda41492ed9035503eeaecb228b7041eb047491c11be5329cac0c4b92",
+    "controls": {
+      "head_tol": 1e-06,
+      "flow_tol": 1e-12,
+      "relative_tol": 1e-08,
+      "relaxation": 0.7,
+      "outer_cap": 2000,
+      "krylov_budget": 2000,
+      "restart": 24,
+      "max_levels": 6,
+      "min_coarse_n": 16
+    }
+  },
+  "implementation": {
+    "source_sha256": {
+      "physics/terrain_reference_3d.py": "494050696fddfa06a33f6460304b786eb678ca6ff9963300ea7c8c29ebfb1acc",
+      "physics/terrain_grid_3d.py": "184ccd6cef94376a6d7af2ef23c40eb77a75cba434d8c55bfe7fc7149bc4d9c5",
+      "physics/terrain_budget_3d.py": "730c3e4f0cfc8e3e25898a12ebe87358d96af1c0ef6cb30b56027c0669b6cdb9",
+      "validation/terrain_case.py": "79409b3896ae42356ac8b75672ad483edec79fb05b49963f22161af75e6cdb6f",
+      "solvers/terrain_device_3d.py": "c314ab359b805a1f694880ebdf6f281fb18517a2f46a5df43924a1926facec44",
+      "solvers/terrain_device_kernels.py": "7291a37e3a4f23dff2646d6b74c8466dd7b6e58516b37606339d46d3687b3d0f",
+      "solvers/terrain_newton_3d.py": "8d91ae7710ea7f25cbe0ace85730573fff508cf25f8cf33faf3595110c4f25ab",
+      "solvers/terrain_newton_kernels.py": "4587f8d9adbcf0dd63009b794338004786d2089b2c06cf98a62114024192e27f",
+      "solvers/terrain_fast_3d.py": "3e15616844f4346a4cc0cf67de531ba4ab47ad6be5e07abf25a10b3eefb80fe6",
+      "solvers/terrain_gmres_3d.py": "8b2bc36d214a4bc077cad50aa11c27723aeabed3f7a3b30a3aced3c12a405d1f",
+      "solvers/terrain_kernels_3d.py": "bb4fd908773b99b3e8d4ce4e46fa7555fda4aa63b3d65ef3df35082bd26980ee"
+    },
+    "versions": {
+      "numpy": "2.3.5",
+      "scipy": "1.16.3",
+      "warp-lang": "1.17.0",
+      "flopy": "3.9.5"
+    },
+    "python": "3.14.7 | packaged by conda-forge | (main, Aug 30 2026, 16:54:41) [GCC 15.3.0]",
+    "interpreter": "/home/patrickdurney/miniconda3/envs/darcywarp/bin/python",
+    "system": "Linux-7.0.0-38-generic-x86_64-with-glibc2.39",
+    "precision": "float64",
+    "blas_threads": "1"
+  },
+  "run_hash": "51a2035f4aa91c4aa06b4531d778d5d48b89f5a32d50aa61325d1e3acabe4101"
+}

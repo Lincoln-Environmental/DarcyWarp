@@ -1,0 +1,62 @@
+{
+  "fixed_boundaries_refinement_8": {
+    "mf6_tpfa": {
+      "native": true,
+      "conservation": true,
+      "head_rms": 0.0703549071438991,
+      "qx_max": 16.601818956287616,
+      "qy_max": 5.350897078679964,
+      "qz_error_max": 12.867297888974889,
+      "boundary_surface": "same analytic top/bottom physical surfaces, lateral physical x/y planes no-flow; top/bottom physical Kz projected-area GHB on MF6 stepped grid"
+    },
+    "mf6_xt3d": {
+      "native": true,
+      "conservation": true,
+      "head_rms": 1.201127914301157e-13,
+      "qx_max": 2.4780177909633494e-12,
+      "qy_max": 7.331912854624534e-13,
+      "qz_error_max": 2.0605739337042905e-11,
+      "boundary_surface": "same analytic top/bottom physical surfaces, lateral physical x/y planes no-flow; top/bottom physical Kz projected-area GHB on MF6 stepped grid"
+    }
+  },
+  "fixed_boundaries_refinement_16": {
+    "mf6_tpfa": {
+      "native": true,
+      "conservation": true,
+      "head_rms": 0.09103666572247855,
+      "qx_max": 8.307608094638567,
+      "qy_max": 2.684277178442244,
+      "qz_error_max": 5.789997668779122,
+      "boundary_surface": "same analytic top/bottom physical surfaces, lateral physical x/y planes no-flow; top/bottom physical Kz projected-area GHB on MF6 stepped grid"
+    },
+    "mf6_xt3d": {
+      "native": true,
+      "conservation": true,
+      "head_rms": 1.4215655113040178e-13,
+      "qx_max": 3.749889287973929e-12,
+      "qy_max": 1.1601830607332886e-12,
+      "qz_error_max": 1.4004797321831575e-11,
+      "boundary_surface": "same analytic top/bottom physical surfaces, lateral physical x/y planes no-flow; top/bottom physical Kz projected-area GHB on MF6 stepped grid"
+    }
+  },
+  "fixed_boundaries_refinement_32": {
+    "mf6_tpfa": {
+      "native": true,
+      "conservation": true,
+      "head_rms": 0.10662800320852169,
+      "qx_max": 4.155022577720189,
+      "qy_max": 1.3437056108471381,
+      "qz_error_max": 2.2281464077038677,
+      "boundary_surface": "same analytic top/bottom physical surfaces, lateral physical x/y planes no-flow; top/bottom physical Kz projected-area GHB on MF6 stepped grid"
+    },
+    "mf6_xt3d": {
+      "native": true,
+      "conservation": true,
+      "head_rms": 6.079403941532664e-13,
+      "qx_max": 1.7814416608530337e-11,
+      "qy_max": 9.090950214840632e-12,
+      "qz_error_max": 1.517008740847814e-11,
+      "boundary_surface": "same analytic top/bottom physical surfaces, lateral physical x/y planes no-flow; top/bottom physical Kz projected-area GHB on MF6 stepped grid"
+    }
+  }
+}

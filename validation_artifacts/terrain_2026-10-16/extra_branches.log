@@ -1,0 +1,37 @@
+terrain_32_k0.0001 newton True converged 0 7.842553395410897e-13
+terrain_32_k0.0001 newton True converged 2 6.090966094420222e-13
+✅ CUDA driver reports 1 device(s).
+cuda_device_found = True
+Warp 1.17.0 initialized:
+   CUDA Toolkit 12.9, Driver 13.2
+   Devices:
+     "cpu"      : "x86_64"
+     "cuda:0"   : "NVIDIA GeForce RTX 4070 Ti SUPER" (16 GiB, sm_89, mempool enabled)
+   Kernel cache:
+     /home/patrickdurney/.cache/warp/1.17.0
+Module _create_tiled_dot_kernels__locals__block_dot_kernel_7cdd1072 cb8e22e load on device 'cuda:0' took 0.59 ms  (cached)
+Module _create_tiled_dot_kernels__locals__block_sum_kernel_85ad7d89 bba3435 load on device 'cuda:0' took 0.98 ms  (cached)
+Module make_gmres_solve_least_squares_kernel_tiled__locals__gmres_solve_least_squares_tiled_535e4c66 cb8c4a4 load on device 'cuda:0' took 0.48 ms  (cached)
+Module warp.optim.linear 7055af3 load on device 'cuda:0' took 1.35 ms  (cached)
+Module warp.optim.linear 52ebbe0 load on device 'cuda:0' took 1.24 ms  (cached)
+Module DARCY_WARP_PACKAGE.solvers.terrain_device_kernels 02fec7a load on device 'cuda:0' took 2.14 ms  (cached)
+Module DARCY_WARP_PACKAGE.solvers.terrain_kernels_3d 9ad49ac load on device 'cuda:0' took 1.23 ms  (cached)
+Module DARCY_WARP_PACKAGE.solvers.face_kernels_3d_f64 5cc2919 load on device 'cuda:0' took 1.61 ms  (cached)
+Module DARCY_WARP_PACKAGE.kernels_3d 9a855ae load on device 'cuda:0' took 3.05 ms  (cached)
+terrain_32_k0.0001 picard True 1128
+Module DARCY_WARP_PACKAGE.solvers.terrain_newton_kernels 5fc7430 load on device 'cuda:0' took 1.17 ms  (cached)
+terrain_32_k0.0001 newton True 4
+terrain_32_k0.0001_radius8 newton True converged 0 6.308616692062541e-13
+terrain_32_k0.0001_radius8 newton True converged 4 5.709749595791109e-13
+terrain_64_k0.0001 newton True converged 0 2.5878780935532607e-12
+terrain_64_k0.0001 newton True converged 3 5.98016983656329e-13
+terrain_64_k0.0001 picard False 2000
+terrain_64_k0.0001 newton True 4
+terrain_64_k0.0001_radius8 newton True converged 0 8.845871502944058e-13
+terrain_64_k0.0001_radius8 newton True converged 0 8.846807478524424e-13
+terrain_64_k0.1 newton True converged 1 1.43439224871785e-12
+terrain_64_k0.1 newton True converged 2 6.1767836824804854e-12
+terrain_64_k0.1 picard True 387
+terrain_64_k0.1 newton True 4
+terrain_64_k0.1_radius8 newton True converged 0 7.219408841866578e-13
+terrain_64_k0.1_radius8 newton True converged 3 7.404977275043183e-13

@@ -1,0 +1,13 @@
+{
+  "archive": "archives/scalar_roots__case.tar.xz",
+  "archive_sha256": "f040c7860cf1f8b560218140b554c801b089e6e46ebfec45148e5daa0ffdcbad",
+  "original_directory": "scalar_roots/case",
+  "files": {
+    "scalar_roots/case/inputs.npz": "5edb72d564dc8edb68e723fcc590c514bdec7c825efd4f95cacb5af118ef54dd",
+    "scalar_roots/case/manifest.json": "3de7cd58c642e3b8e7cdef91f9a20a15c975b92fd0d3e8c46996f17a7e103113"
+  },
+  "verified_members": 2,
+  "encoding": "tar.xz",
+  "superseded_archive": "archives/scalar_roots__case.tar.gz",
+  "superseded_sha256": "f52e7a6e5c985f6034bdb97f0b519e7e6fd630f56b8d2b401a843429226973e7"
+}

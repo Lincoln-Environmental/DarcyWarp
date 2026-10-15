@@ -1,0 +1,12 @@
+{
+  "native_success": false,
+  "independent_conservation": false,
+  "extraction": "missing_output",
+  "returncode": 2,
+  "run_hash": "11e51275b95e435208985a0c57c5cdfffb0feba5d785d0732b5aaf9c55ccf76f",
+  "seconds": 0.0028552910007419996,
+  "input_hash": "9fe2806a48443c5c6eafa72028785449981f00aeaf6c2e0440fd71a4774ca17d",
+  "executable": "/bin/modflow/mf6",
+  "executable_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+  "mf6_version": "mf6: 6.6.2 05/12/2025"
+}

@@ -1,0 +1,73 @@
+terrain_32_k0.0001 newton progress 100 0.015920391867125946
+terrain_32_k0.0001 newton progress 200 0.013238680025549442
+terrain_32_k0.0001 newton progress 300 0.011777010090719742
+terrain_32_k0.0001 newton progress 400 0.014811709598363693
+terrain_32_k0.0001 newton progress 500 0.013237792421765255
+terrain_32_k0.0001 newton progress 600 0.011777009458593944
+terrain_32_k0.0001 newton progress 700 0.014811709595042716
+terrain_32_k0.0001 newton progress 800 0.013237792421742637
+terrain_32_k0.0001 newton progress 900 0.011777009458589215
+terrain_32_k0.0001 newton progress 1000 0.0148117095950391
+terrain_32_k0.0001 newton progress 1100 0.013237792421726229
+terrain_32_k0.0001 newton progress 1200 0.0117770094585825
+terrain_32_k0.0001 newton progress 1300 0.014811709595016964
+terrain_32_k0.0001 newton progress 1400 0.013237792421773366
+terrain_32_k0.0001 newton progress 1500 0.011777009458554187
+terrain_32_k0.0001 newton progress 1600 0.014811709595048734
+terrain_32_k0.0001 newton progress 1700 0.013237792421753592
+terrain_32_k0.0001 newton progress 1800 0.011777009458587952
+terrain_32_k0.0001 newton progress 1900 0.014811709595051131
+terrain_32_k0.0001 newton progress 2000 0.013237792421753639
+terrain_32_k0.0001 newton progress 2100 0.011777009458578904
+terrain_32_k0.0001 newton progress 2200 0.014811709594997977
+terrain_32_k0.0001 newton progress 2300 0.01323779242176552
+terrain_32_k0.0001 newton progress 2400 0.011777009458592579
+terrain_32_k0.0001 newton progress 2500 0.014811709595041163
+terrain_32_k0.0001 newton progress 2600 0.01323779242175903
+terrain_32_k0.0001 newton progress 2700 0.011777009458579199
+terrain_32_k0.0001 newton progress 2800 0.014811709595054364
+terrain_32_k0.0001 newton progress 2900 0.013237792421765688
+terrain_32_k0.0001 newton progress 3000 0.011777009458553289
+terrain_32_k0.0001 newton progress 3100 0.01481170959503314
+terrain_32_k0.0001 newton progress 3200 0.013237792421721642
+terrain_32_k0.0001 newton progress 3300 0.011777009458558878
+terrain_32_k0.0001 newton progress 3400 0.014811709595018886
+terrain_32_k0.0001 newton progress 3500 0.013237792421717026
+terrain_32_k0.0001 newton progress 3600 0.011777009458542155
+terrain_32_k0.0001 newton progress 3700 0.014811709595055969
+terrain_32_k0.0001 newton progress 3800 0.013237792421765827
+terrain_32_k0.0001 newton progress 3900 0.011777009458557294
+terrain_32_k0.0001 newton progress 4000 0.014811709595063163
+terrain_32_k0.0001 newton progress 4100 0.01323779242175529
+terrain_32_k0.0001 newton progress 4200 0.011777009458576562
+terrain_32_k0.0001 newton progress 4300 0.014811709595000644
+terrain_32_k0.0001 newton progress 4400 0.013237792421752569
+terrain_32_k0.0001 newton progress 4500 0.01177700945858428
+terrain_32_k0.0001 newton progress 4600 0.014811709595063938
+terrain_32_k0.0001 newton progress 4700 0.013237792421709424
+terrain_32_k0.0001 newton progress 4800 0.011777009458538016
+Traceback (most recent call last):
+  File "/tmp/darcy-terrain-validation/working_tests/validate_terrain_cpu_runs.py", line 60, in <module>
+    run_cpu(case=case,directory=directory,controls=CPUControls(method=method,max_outer=max_outer,relaxation=1. if method=='newton' else .7))
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/darcy-terrain-validation/working_tests/validate_terrain_cpu_runs.py", line 14, in run_cpu
+    head,result=solve_cpu(case=case,controls=controls,initial=initial)
+                ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/darcy-terrain-validation/DARCY_WARP_PACKAGE/validation/terrain_cpu.py", line 221, in solve_cpu
+    unused,unused_r,trial=ref.evaluate(head=candidate)
+                          ~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "/tmp/darcy-terrain-validation/DARCY_WARP_PACKAGE/validation/terrain_cpu.py", line 61, in evaluate
+    fluxes=op.fluxes(head=head)
+  File "/tmp/darcy-terrain-validation/DARCY_WARP_PACKAGE/physics/terrain_reference_3d.py", line 288, in fluxes
+    hz = (self.metrics.gz @ h.ravel()).reshape(self.shape)
+          ~~~~~~~~~~~~~~~~^~~~~~~~~~~
+  File "/home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/scipy/sparse/_base.py", line 908, in __matmul__
+    return self._matmul_dispatch(other)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/scipy/sparse/_base.py", line 793, in _matmul_dispatch
+    return self._matmul_vector(other)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/scipy/sparse/_compressed.py", line 395, in _matmul_vector
+    fn(M, N, self.indptr, self.indices, self.data, other, result)
+    ~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt

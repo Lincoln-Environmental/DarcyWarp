@@ -1,0 +1,21 @@
+Traceback (most recent call last):
+  File "/tmp/darcy-terrain-validation/working_tests/validate_terrain_mf6_feedback.py", line 55, in <module>
+    run_feedback(case=case,directory=path,executable=executable,max_feedback=max_feedback,
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        contact_tolerance=contact_tolerance,relaxation=relaxation,xt3d=xt3d)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/darcy-terrain-validation/working_tests/validate_terrain_mf6_feedback.py", line 21, in run_feedback
+    result=run_mf6(case=case,directory=path,executable=executable,xt3d=xt3d,convertible=True,
+        drains=False,initial=head,outer_cap=4000,contact_mode='prescribed_flux',contact_fluxes=q)
+  File "/tmp/darcy-terrain-validation/DARCY_WARP_PACKAGE/validation/terrain_mf6.py", line 186, in run_mf6
+    result=extract_mf6(case=case,directory=directory,native_success=success)
+  File "/tmp/darcy-terrain-validation/DARCY_WARP_PACKAGE/validation/terrain_mf6.py", line 146, in extract_mf6
+    for records in budget.get_data(text='WEL',paknam='SOURCE'):
+                   ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/flopy/utils/binaryfile/__init__.py", line 1561, in get_data
+    paknam16 = self._find_paknam(paknam)
+  File "/home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/flopy/utils/binaryfile/__init__.py", line 1299, in _find_paknam
+    raise Exception(
+        "The specified package name string is not in the budget file."
+    )
+Exception: The specified package name string is not in the budget file.

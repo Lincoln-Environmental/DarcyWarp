@@ -1,0 +1,27 @@
+{
+  "input_hash": "31a6f5c0c0486ec7404cc6d2d7fdd7a71604ee5f2d7a4042b2f11ab9de071e08",
+  "converged": true,
+  "stop_reason": "coupled_converged",
+  "history": [
+    {
+      "outer": 0,
+      "requested_contact_flux": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "recomputed_contact_flux": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mismatch": 0.0
+    }
+  ],
+  "contact_tolerance_m3_day": 1e-08,
+  "relaxation": 0.5,
+  "xt3d": true,
+  "initial_guess": "canonical_cold",
+  "formulation_equivalence": false,
+  "contact_law": "independently recomputed exact DarcyWarp natural contacts; MF6 interior law retained"
+}

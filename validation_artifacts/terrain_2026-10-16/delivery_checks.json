@@ -1,0 +1,105 @@
+{
+  "evidence_files_checked": 2432,
+  "implementation_files_checked": 81,
+  "archives": 60,
+  "archived_members_checked": 7934,
+  "archived_members_verified": true,
+  "before_after_gpu": [
+    {
+      "experiment": "terrain_32_k0.0001/newton",
+      "input_hash": "b27607e0be9247e9b8ef98745b35e54f60e033b7a545e462f854c2dbdc8291c5",
+      "outer_rows": 666,
+      "max_head_difference": 2.459304795365824e-07,
+      "stopping_and_acceptance_decisions_equal": true,
+      "krylov_work_changes": [
+        {
+          "outer_iteration": 665,
+          "before": 480,
+          "after": 456
+        }
+      ],
+      "investigation_threshold_m": 0.0001
+    },
+    {
+      "experiment": "terrain_32_k0.0001/picard",
+      "input_hash": "b27607e0be9247e9b8ef98745b35e54f60e033b7a545e462f854c2dbdc8291c5",
+      "outer_rows": 1955,
+      "max_head_difference": 1.5631940186722204e-13,
+      "stopping_and_acceptance_decisions_equal": true,
+      "krylov_work_changes": [],
+      "investigation_threshold_m": 0.0001
+    },
+    {
+      "experiment": "terrain_64_k0.0001/newton",
+      "input_hash": "a4eb2b300de51636411e77d4cae8b94679f83b0479b540051a05781029f02907",
+      "outer_rows": 924,
+      "max_head_difference": 8.526512829121202e-14,
+      "stopping_and_acceptance_decisions_equal": true,
+      "krylov_work_changes": [],
+      "investigation_threshold_m": 0.0001
+    },
+    {
+      "experiment": "terrain_64_k0.0001/picard",
+      "input_hash": "a4eb2b300de51636411e77d4cae8b94679f83b0479b540051a05781029f02907",
+      "outer_rows": 2000,
+      "max_head_difference": 8.526512829121202e-14,
+      "stopping_and_acceptance_decisions_equal": true,
+      "krylov_work_changes": [],
+      "investigation_threshold_m": 0.0001
+    },
+    {
+      "experiment": "terrain_64_k0.001/newton",
+      "input_hash": "910d75186f3ae6c056055f066f8c77577f7ac6b7c9a285986c9e5b0f2c83cfd8",
+      "outer_rows": 556,
+      "max_head_difference": 8.828777708913549e-10,
+      "stopping_and_acceptance_decisions_equal": true,
+      "krylov_work_changes": [],
+      "investigation_threshold_m": 0.0001
+    },
+    {
+      "experiment": "terrain_64_k0.001/picard",
+      "input_hash": "910d75186f3ae6c056055f066f8c77577f7ac6b7c9a285986c9e5b0f2c83cfd8",
+      "outer_rows": 2000,
+      "max_head_difference": 7.105427357601002e-14,
+      "stopping_and_acceptance_decisions_equal": true,
+      "krylov_work_changes": [],
+      "investigation_threshold_m": 0.0001
+    },
+    {
+      "experiment": "terrain_64_k0.01/newton",
+      "input_hash": "1b7fb65eededfa91f7aa7216138738ae8ea2b3f9c08e70f25893203760a18727",
+      "outer_rows": 665,
+      "max_head_difference": 1.9993535715912003e-09,
+      "stopping_and_acceptance_decisions_equal": true,
+      "krylov_work_changes": [],
+      "investigation_threshold_m": 0.0001
+    },
+    {
+      "experiment": "terrain_64_k0.01/picard",
+      "input_hash": "1b7fb65eededfa91f7aa7216138738ae8ea2b3f9c08e70f25893203760a18727",
+      "outer_rows": 2000,
+      "max_head_difference": 1.1368683772161603e-13,
+      "stopping_and_acceptance_decisions_equal": true,
+      "krylov_work_changes": [],
+      "investigation_threshold_m": 0.0001
+    },
+    {
+      "experiment": "terrain_64_k0.1/newton",
+      "input_hash": "ea54cc0fbd544112bac4d0eff6bfd10127009c2db0b0af6e3cf41564ed43ecdf",
+      "outer_rows": 307,
+      "max_head_difference": 1.4908607681718422e-10,
+      "stopping_and_acceptance_decisions_equal": true,
+      "krylov_work_changes": [],
+      "investigation_threshold_m": 0.0001
+    },
+    {
+      "experiment": "terrain_64_k0.1/picard",
+      "input_hash": "ea54cc0fbd544112bac4d0eff6bfd10127009c2db0b0af6e3cf41564ed43ecdf",
+      "outer_rows": 859,
+      "max_head_difference": 2.842170943040401e-14,
+      "stopping_and_acceptance_decisions_equal": true,
+      "krylov_work_changes": [],
+      "investigation_threshold_m": 0.0001
+    }
+  ]
+}

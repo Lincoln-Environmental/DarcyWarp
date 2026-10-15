@@ -1,0 +1,8 @@
+terrain_32_k0.0001 newton progress 100 0.8933326296903763
+terrain_32_k0.0001 newton False line_search_or_factorization_failed 148 0.46459438622547694
+terrain_64_k0.0001 newton False line_search_or_factorization_failed 46 0.8718083377413359
+terrain_64_k0.1 newton False line_search_or_factorization_failed 83 1.1151531774289576
+terrain_64_k0.01 newton False line_search_or_factorization_failed 45 1.7788952828775124
+terrain_64_k0.001 newton False line_search_or_factorization_failed 89 0.8010611825326543
+terrain_16_k0.0001 newton False line_search_or_factorization_failed 75 29.749075472531857
+terrain_96_k0.0001 newton False line_search_or_factorization_failed 67 0.010775598363381324

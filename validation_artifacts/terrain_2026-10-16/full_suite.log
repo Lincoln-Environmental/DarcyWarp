@@ -1,0 +1,48 @@
+........................................................................ [  4%]
+........................................................................ [  9%]
+........................................................................ [ 14%]
+........................................................................ [ 18%]
+........................................................................ [ 23%]
+........................................................................ [ 28%]
+........................................................................ [ 32%]
+........................................................................ [ 37%]
+........................................................................ [ 42%]
+........................................................................ [ 46%]
+........................................................................ [ 51%]
+........................................................................ [ 56%]
+........................................................................ [ 61%]
+........................................................................ [ 65%]
+........................................................................ [ 70%]
+........................................................................ [ 75%]
+........................................................................ [ 79%]
+........................................................................ [ 84%]
+........................................................................ [ 89%]
+........................................................................ [ 93%]
+........................................................................ [ 98%]
+....................                                                     [100%]
+=============================== warnings summary ===============================
+../../home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/warp/_src/apic/types.py:49
+  /home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/warp/_src/apic/types.py:49: DeprecationWarning: Due to '_pack_', the 'APICLaunchParamRecord' Structure will use memory layout compatible with MSVC (Windows). If this is intended, set _layout_ to 'ms'. The implicit default is deprecated and slated to become an error in Python 3.19.
+    class APICLaunchParamRecord(ctypes.Structure):
+
+../../home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/warp/_src/apic/types.py:69
+  /home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/warp/_src/apic/types.py:69: DeprecationWarning: Due to '_pack_', the 'APICLaunchPtrLocation' Structure will use memory layout compatible with MSVC (Windows). If this is intended, set _layout_ to 'ms'. The implicit default is deprecated and slated to become an error in Python 3.19.
+    class APICLaunchPtrLocation(ctypes.Structure):
+
+tests/test_fas_2d.py: 16 warnings
+tests/test_fas_transient_multistep.py: 97 warnings
+tests/test_unconfined_solvers_500x500.py: 52 warnings
+  /tmp/darcy-terrain-validation/DARCY_WARP_PACKAGE/solvers/registry.py:62: UserWarning: solver='unconfined_fas' is experimental and not validated for production runs.
+    backend = select_backend(
+
+tests/test_fas_2d.py::test_fas_preserves_a_narrow_active_connection_and_isolated_side_cell
+  /tmp/darcy-terrain-validation/DARCY_WARP_PACKAGE/warped_darcy.py:5879: RuntimeWarning: MG level 1 coarsening ratio 0.50 is outside [0.7, 1.3]; coarse-grid geometry may be inconsistent.
+    self._two_level_coarsening_diag = self._coarsening_diag_entry(
+
+tests/test_fas_transient_multistep.py: 26 warnings
+tests/test_unconfined_solvers_500x500.py: 1 warning
+  /tmp/darcy-terrain-validation/DARCY_WARP_PACKAGE/solvers/transient_unconfined.py:2465: UserWarning: solver='unconfined_fas' is experimental and not validated for production runs.
+    backend = select_backend(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+1532 passed, 195 warnings in 879.76s (0:14:39)

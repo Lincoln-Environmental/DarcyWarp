@@ -1,0 +1,31 @@
+fixed_boundaries_refinement_8 newton True converged 2 7.359399770591256e-11
+✅ CUDA driver reports 1 device(s).
+cuda_device_found = True
+Warp 1.17.0 initialized:
+   CUDA Toolkit 12.9, Driver 13.2
+   Devices:
+     "cpu"      : "x86_64"
+     "cuda:0"   : "NVIDIA GeForce RTX 4070 Ti SUPER" (16 GiB, sm_89, mempool enabled)
+   Kernel cache:
+     /home/patrickdurney/.cache/warp/1.17.0
+Module _create_tiled_dot_kernels__locals__block_dot_kernel_7cdd1072 cb8e22e load on device 'cuda:0' took 0.40 ms  (cached)
+Module _create_tiled_dot_kernels__locals__block_sum_kernel_85ad7d89 bba3435 load on device 'cuda:0' took 0.31 ms  (cached)
+Module make_gmres_solve_least_squares_kernel_tiled__locals__gmres_solve_least_squares_tiled_535e4c66 cb8c4a4 load on device 'cuda:0' took 0.30 ms  (cached)
+Module warp.optim.linear 7055af3 load on device 'cuda:0' took 1.32 ms  (cached)
+Module warp.optim.linear 52ebbe0 load on device 'cuda:0' took 1.06 ms  (cached)
+Module DARCY_WARP_PACKAGE.solvers.terrain_device_kernels 02fec7a load on device 'cuda:0' took 2.26 ms  (cached)
+Module DARCY_WARP_PACKAGE.solvers.terrain_kernels_3d 9ad49ac load on device 'cuda:0' took 0.61 ms  (cached)
+Module DARCY_WARP_PACKAGE.solvers.terrain_newton_kernels 5fc7430 load on device 'cuda:0' took 1.59 ms  (cached)
+Module DARCY_WARP_PACKAGE.solvers.face_kernels_3d_f64 5cc2919 load on device 'cuda:0' took 1.44 ms  (cached)
+Module DARCY_WARP_PACKAGE.kernels_3d 9a855ae load on device 'cuda:0' took 2.79 ms  (cached)
+fixed_boundaries_refinement_8 newton True 2
+fixed_boundaries_refinement_8 MF6 False True True
+fixed_boundaries_refinement_8 MF6 True True True
+fixed_boundaries_refinement_16 newton True converged 2 1.841475443730826e-11
+fixed_boundaries_refinement_16 newton True 2
+fixed_boundaries_refinement_16 MF6 False True True
+fixed_boundaries_refinement_16 MF6 True True True
+fixed_boundaries_refinement_32 newton True converged 2 4.60777885508758e-12
+fixed_boundaries_refinement_32 newton True 2
+fixed_boundaries_refinement_32 MF6 False True True
+fixed_boundaries_refinement_32 MF6 True True True

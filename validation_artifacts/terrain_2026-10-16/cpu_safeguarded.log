@@ -1,0 +1,88 @@
+terrain_32_k0.0001 newton progress 100 5.498355469496997
+terrain_32_k0.0001 newton progress 200 0.003365274802441085
+terrain_32_k0.0001 newton progress 300 0.0034390888068177774
+terrain_32_k0.0001 newton progress 400 0.00348013163785667
+terrain_32_k0.0001 newton progress 500 0.0036514984422286443
+terrain_32_k0.0001 newton progress 600 0.0037202826242707355
+terrain_32_k0.0001 newton progress 700 0.0035997724259856693
+terrain_32_k0.0001 newton progress 800 0.003988762417383058
+terrain_32_k0.0001 newton progress 900 0.004032208973160317
+terrain_32_k0.0001 newton progress 1000 0.003355920275102403
+terrain_32_k0.0001 newton progress 1100 0.0033696781815519415
+terrain_32_k0.0001 newton progress 1200 0.0029332783993317947
+terrain_32_k0.0001 newton progress 1300 0.0029461940987918914
+terrain_32_k0.0001 newton progress 1400 0.0029398714193287004
+terrain_32_k0.0001 newton progress 1500 0.0029567887968912515
+terrain_32_k0.0001 newton progress 1600 0.0030804232508258697
+terrain_32_k0.0001 newton progress 1700 0.0031097216497071017
+terrain_32_k0.0001 newton progress 1800 0.0032173860745786645
+terrain_32_k0.0001 newton progress 1900 0.003288176932636827
+terrain_32_k0.0001 newton progress 2000 0.0033077370463961957
+terrain_32_k0.0001 newton progress 2100 0.003481683088959681
+terrain_32_k0.0001 newton progress 2200 0.003506422230840934
+terrain_32_k0.0001 newton progress 2300 0.003692443821113805
+terrain_32_k0.0001 newton progress 2400 0.003723662928318764
+terrain_32_k0.0001 newton progress 2500 0.003922731260910881
+terrain_32_k0.0001 newton progress 2600 0.003962171050062539
+terrain_32_k0.0001 newton progress 2700 0.0032498322462752235
+terrain_32_k0.0001 newton progress 2800 0.0032616150223798547
+terrain_32_k0.0001 newton progress 2900 0.0028772834500276814
+terrain_32_k0.0001 newton progress 3000 0.0029075739991014974
+terrain_32_k0.0001 newton progress 3100 0.0028725382665952246
+terrain_32_k0.0001 newton progress 3200 0.0031914225026942115
+terrain_32_k0.0001 newton progress 3300 0.003203691316990843
+terrain_32_k0.0001 newton progress 3400 0.0035068147530861603
+terrain_32_k0.0001 newton progress 3500 0.0035250989633054796
+terrain_32_k0.0001 newton progress 3600 0.0036824560901751427
+terrain_32_k0.0001 newton progress 3700 0.0037058228682777493
+terrain_32_k0.0001 newton progress 3800 0.003192112790479767
+terrain_32_k0.0001 newton progress 3900 0.0031980612080823637
+terrain_32_k0.0001 newton progress 4000 0.0030816827266621064
+terrain_32_k0.0001 newton progress 4100 0.003115306879987761
+terrain_32_k0.0001 newton progress 4200 0.0031698290320971664
+terrain_32_k0.0001 newton progress 4300 0.0031266248068837084
+terrain_32_k0.0001 newton progress 4400 0.003142536847435952
+terrain_32_k0.0001 newton progress 4500 0.00322392560118508
+terrain_32_k0.0001 newton progress 4600 0.0032489365157300667
+terrain_32_k0.0001 newton progress 4700 0.0034488760094612343
+terrain_32_k0.0001 newton progress 4800 0.0034868399180761405
+terrain_32_k0.0001 newton progress 4900 0.0036807875174278953
+terrain_32_k0.0001 newton progress 5000 0.0037284834777831432
+terrain_32_k0.0001 newton progress 5100 0.003923497705785713
+terrain_32_k0.0001 newton progress 5200 0.003998882944772294
+terrain_32_k0.0001 newton progress 5300 0.003856392177093248
+terrain_32_k0.0001 newton progress 5400 0.0033590999501169117
+terrain_32_k0.0001 newton progress 5500 0.0033718661967513316
+terrain_32_k0.0001 newton progress 5600 0.0029362198678227333
+terrain_32_k0.0001 newton progress 5700 0.0029482567839749243
+terrain_32_k0.0001 newton progress 5800 0.0029434573635742116
+terrain_32_k0.0001 newton progress 5900 0.002959555194522328
+terrain_32_k0.0001 newton progress 6000 0.003092407337778696
+terrain_32_k0.0001 newton False outer_budget 6000 0.003092407337778696
+terrain_32_k0.0001 picard progress 100 2.493495177319951
+terrain_32_k0.0001 picard progress 200 0.547582871954089
+terrain_32_k0.0001 picard progress 300 0.0548986625718795
+terrain_32_k0.0001 picard progress 400 0.001778418939919254
+terrain_32_k0.0001 picard progress 500 3.968013784711157e-05
+terrain_32_k0.0001 picard progress 600 8.41342972763721e-07
+terrain_32_k0.0001 picard progress 700 1.6269586406946468e-08
+terrain_32_k0.0001 picard True converged 707 1.271874383504942e-08
+terrain_64_k0.0001 newton progress 100 0.6559917841113927
+Traceback (most recent call last):
+  File "/tmp/darcy-terrain-validation/working_tests/validate_terrain_cpu_runs.py", line 60, in <module>
+    run_cpu(case=case,directory=directory,controls=CPUControls(method=method,max_outer=max_outer,relaxation=1. if method=='newton' else .7))
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/darcy-terrain-validation/working_tests/validate_terrain_cpu_runs.py", line 14, in run_cpu
+    head,result=solve_cpu(case=case,controls=controls,initial=initial)
+                ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/darcy-terrain-validation/DARCY_WARP_PACKAGE/validation/terrain_cpu.py", line 199, in solve_cpu
+    f=ref.free.ravel()
+                   ~^^
+  File "/home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/scipy/sparse/linalg/_dsolve/linsolve.py", line 433, in splu
+    return _superlu.gstrf(N, A.nnz, A.data, indices, indptr,
+           ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                          csc_construct_func=csc_construct_func,
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                          ilu=False, options=_options)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt

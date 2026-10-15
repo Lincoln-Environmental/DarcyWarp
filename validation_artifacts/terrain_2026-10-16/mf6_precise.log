@@ -1,0 +1,7 @@
+terrain_32_k0.0001 MF6 True False False
+terrain_64_k0.0001 MF6 True True True
+terrain_64_k0.1 MF6 True True True
+terrain_64_k0.01 MF6 True True True
+terrain_64_k0.001 MF6 True True True
+terrain_16_k0.0001 MF6 True True True
+terrain_96_k0.0001 MF6 True True True

@@ -1,0 +1,45 @@
+{
+  "roots": [
+    {
+      "root": -0.15707317073170723,
+      "analytic_residual": 0.0,
+      "jacobian": 1.0199004975124377,
+      "floor_active": true,
+      "cpu_head": -0.15707317073170723,
+      "cpu_converged": true,
+      "gpu_head": -0.15707317073170735,
+      "gpu_converged": true
+    },
+    {
+      "root": 0.07364044395311349,
+      "analytic_residual": 0.0,
+      "jacobian": -2.4418869603140116,
+      "floor_active": false,
+      "cpu_head": 0.07364044394992648,
+      "cpu_converged": true,
+      "gpu_head": 0.07364044394992648,
+      "gpu_converged": true
+    },
+    {
+      "root": 1.0863595560468864,
+      "analytic_residual": -2.220446049250313e-16,
+      "jacobian": 1.6406369603140112,
+      "floor_active": false,
+      "cpu_head": 1.0863595560471773,
+      "cpu_converged": true,
+      "gpu_head": 1.0863595560471773,
+      "gpu_converged": true
+    }
+  ],
+  "wet_polynomial": [
+    5.0,
+    -5.8,
+    0.4
+  ],
+  "equation": "4*h/(h+2)*(h-2) + (h+1) = 0.8 for floor<h<4; replace h in conductance by floor on dry branch",
+  "mf6_head": 1.2666666666637825,
+  "mf6_native": true,
+  "mf6_balance": true,
+  "mf6_upstream_expected": 1.2666666666666666,
+  "interpretation": "Analytic nonuniqueness of this declared control only. Two smooth wet roots have inactive floor. It does not prove original-case uniqueness, nonuniqueness, physical stability, or that one formulation is preferred."
+}

@@ -1,0 +1,49 @@
+{
+  "input_hash": "dcbef36f8ab35b362a49ee98646a7388bac6b65e8b5fc4565cff9c0334599ab7",
+  "kind": "cpu",
+  "settings": {
+    "controls": {
+      "method": "newton",
+      "max_outer": 50,
+      "head_tol": 1e-06,
+      "flow_tol": 1e-12,
+      "relative_tol": 1e-08,
+      "relaxation": 1.0,
+      "max_change": 50.0,
+      "line_search_steps": 20,
+      "recovery_growth": 1.1,
+      "fallback": true,
+      "physical_merit": true,
+      "adequate_alpha": 0.125,
+      "adequate_merit_ratio": 0.8,
+      "retry_contraction": 0.5,
+      "stagnation_window": 0,
+      "stagnation_ratio": 0.995
+    },
+    "initial_hash": null
+  },
+  "implementation": {
+    "hardware": {
+      "cpu_model": "Intel(R) Core(TM) Ultra 9 285K"
+    },
+    "source_sha256": {
+      "physics/terrain_reference_3d.py": "494050696fddfa06a33f6460304b786eb678ca6ff9963300ea7c8c29ebfb1acc",
+      "physics/terrain_grid_3d.py": "184ccd6cef94376a6d7af2ef23c40eb77a75cba434d8c55bfe7fc7149bc4d9c5",
+      "physics/terrain_budget_3d.py": "730c3e4f0cfc8e3e25898a12ebe87358d96af1c0ef6cb30b56027c0669b6cdb9",
+      "validation/terrain_case.py": "79409b3896ae42356ac8b75672ad483edec79fb05b49963f22161af75e6cdb6f",
+      "validation/terrain_cpu.py": "afdc977deccb656348627f49f8c5f2bb61626f9d8cae4f716f17673cebb570af"
+    },
+    "versions": {
+      "numpy": "2.3.5",
+      "scipy": "1.16.3",
+      "warp-lang": "1.17.0",
+      "flopy": "3.9.5"
+    },
+    "python": "3.14.7 | packaged by conda-forge | (main, Aug 30 2026, 16:54:41) [GCC 15.3.0]",
+    "interpreter": "/home/patrickdurney/miniconda3/envs/darcywarp/bin/python",
+    "system": "Linux-7.0.0-38-generic-x86_64-with-glibc2.39",
+    "precision": "float64",
+    "blas_threads": "1"
+  },
+  "run_hash": "ed2f6ffe1e0d5a18311b8ce462ab6b59b81ed9e40a94d8120d95324465abb87f"
+}

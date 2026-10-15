@@ -1,0 +1,31 @@
+{
+  "archive": "archives/mf6_feedback__terrain_32_k0.0001.tar.xz",
+  "archive_sha256": "4bbbda8dd26d67e554f614e6ceb32ac1bee0308b5ec9a2e113bcfa4c4defdfa2",
+  "original_directory": "mf6_feedback/terrain_32_k0.0001",
+  "files": {
+    "mf6_feedback/terrain_32_k0.0001/feedback_000/adapter.json": "f77d6dd07785565f5797ec0d124df7873a5308e7994af09d7ba7b42b7876c8aa",
+    "mf6_feedback/terrain_32_k0.0001/feedback_000/contact.wel": "4f8385844a3c26981c8b0e583d90edaeb216784ef79678557528fcae0d74629e",
+    "mf6_feedback/terrain_32_k0.0001/feedback_000/inner.csv": "f0c0b3e0d80a903e39daec7f873a1bc14171679a87e91b70d15620a23d4b7fd0",
+    "mf6_feedback/terrain_32_k0.0001/feedback_000/mfsim.lst": "917f90739454fe1be193a9ef924fb51b4c4ee4ee7532a4c429234fc357af48d0",
+    "mf6_feedback/terrain_32_k0.0001/feedback_000/mfsim.nam": "5381118738b662200f72c1d267c5760d039b726661f3bb52e64a54d731376b77",
+    "mf6_feedback/terrain_32_k0.0001/feedback_000/outer.csv": "50cc68e6d9302339455fb951baf7655f84a14af7832eb77e1a57b743f19fdab8",
+    "mf6_feedback/terrain_32_k0.0001/feedback_000/stdout.log": "d1cb7e92abc771a969b18ebd8ef015041d8807d6ee0eb0c9aa1a7c173948f4ab",
+    "mf6_feedback/terrain_32_k0.0001/feedback_000/terrain.cbc": "2cf241d84c0da91ef50a6ada72f676d33d698812c67b8ef32144856587a765cc",
+    "mf6_feedback/terrain_32_k0.0001/feedback_000/terrain.chd": "f35d3fd1926bad359f74c246f6b4c2b6b8c015bcdf7bcad3a1d9c7b020cfa795",
+    "mf6_feedback/terrain_32_k0.0001/feedback_000/terrain.dis": "b1463cc2fd83274a9610dc1ca9076b713fd21adbad4c97032f3c7bf77b88d6ed",
+    "mf6_feedback/terrain_32_k0.0001/feedback_000/terrain.dis.grb": "34cf13482e3c956959269cd936a477ecb1ace200a167da1287911b8c1f47fc77",
+    "mf6_feedback/terrain_32_k0.0001/feedback_000/terrain.hds": "dfac5ea2bb0a74bc6957b8364acc5b047ca17095c43d9ffe17a6f69548700a93",
+    "mf6_feedback/terrain_32_k0.0001/feedback_000/terrain.ic": "cca975a82e2739f8433b67f787eb9c99fe908b110eb8d179e74d80057cdea648",
+    "mf6_feedback/terrain_32_k0.0001/feedback_000/terrain.ims": "776aacaf74613d6f325f6c28ebeb1875cf44994a986e67da437625f0105f232c",
+    "mf6_feedback/terrain_32_k0.0001/feedback_000/terrain.lst": "a7bbd1d2d290d3c94f4791dc856be043b2f136bc78938343e4185162fc45d183",
+    "mf6_feedback/terrain_32_k0.0001/feedback_000/terrain.nam": "cd3ff43f85a3bb6b5e18ebdc3371db0fba4bd86f00c7164db19e7b7791418caf",
+    "mf6_feedback/terrain_32_k0.0001/feedback_000/terrain.npf": "a25853b5b4c404e37e23692731530651cc2d7c87a7a859159ed2b892fe3593a5",
+    "mf6_feedback/terrain_32_k0.0001/feedback_000/terrain.oc": "9d801b1d8c315a3ea0ba61d47b0f3694229a55aaae4874a7b5d40a4d27532fa4",
+    "mf6_feedback/terrain_32_k0.0001/feedback_000/terrain.tdis": "eb8a4b6e6bcad4726e5635a01895fc50a0697a751d2780fb62b3aa83db115d62",
+    "mf6_feedback/terrain_32_k0.0001/feedback_000/terrain.wel": "f2ce3d060e81d5321f1c955405638a3a8d589487c63dabbaf429f2783e566049"
+  },
+  "verified_members": 20,
+  "encoding": "tar.xz",
+  "superseded_archive": "archives/mf6_feedback__terrain_32_k0.0001.tar.gz",
+  "superseded_sha256": "70c6e2a48599298559463f7f95729507bce22b72b86a74582e6aa9464d66e954"
+}

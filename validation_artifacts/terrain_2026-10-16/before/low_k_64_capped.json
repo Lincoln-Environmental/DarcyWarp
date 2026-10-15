@@ -1,0 +1,49 @@
+{
+  "device": "cuda:0",
+  "device_picard": true,
+  "floor": 0.01,
+  "variant": "variable",
+  "max_cycles": 2000,
+  "max_outer": 2000,
+  "solve_controls": {
+    "unconfined_head_tol": 1e-06,
+    "final_head_residual_tol": 1e-06,
+    "rel_tol": 1e-12,
+    "abs_tol_min": 1e-12,
+    "final_budget_relative_tol": 1e-08,
+    "unconfined_relax": 0.7,
+    "krylov_restart": 24,
+    "max_levels": 6,
+    "min_coarse_n": 16
+  },
+  "ky_ratio": 0.6,
+  "kz_ratio": 0.15,
+  "purpose": "Scientific convergence verification; no GPU performance conclusions",
+  "sizes": {
+    "64": {
+      "converged": false,
+      "stop_reason": "outer_budget",
+      "active_cells": 16384,
+      "free_cells": 16192,
+      "basement_k": 0.0001,
+      "outer_iterations": 2000,
+      "krylov_iterations": 48264,
+      "krylov_per_outer": 24.132,
+      "seconds": 17.771823332004715,
+      "final_head_residual": 3.9445828355680385e-07,
+      "device_host_head_residual_difference": 7.406244332554789e-20,
+      "device_host_flow_residual_difference": 5.6107462426124854e-18,
+      "final_cell_residual": 6.202167451281926e-05,
+      "relative_cell_imbalance": 6.0080322607875216e-05,
+      "domain_imbalance": -0.0026818507505952296,
+      "throughput": 3932.1626818507502,
+      "zero_capacity_seeds": 0,
+      "discharge_seeds": 0,
+      "operator_refreshes": 15085,
+      "floor_excess_horizontal": 525.3962155882259,
+      "floor_excess_to_throughput": 0.13361507600212963,
+      "dry_cells": 5154
+    }
+  },
+  "history_archive": "low_k_64_capped.history.json.gz"
+}

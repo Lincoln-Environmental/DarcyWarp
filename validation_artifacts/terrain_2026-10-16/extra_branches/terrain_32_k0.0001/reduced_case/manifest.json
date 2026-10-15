@@ -1,0 +1,42 @@
+{
+  "schema": 1,
+  "case_id": "terrain_32_k0.0001_radius8",
+  "input_hash": "84be4054cacaab3908cd5e77dfec118f350d001d08e4a90e36c5fc4f1b3d67e2",
+  "physical": {
+    "dx": 20.0,
+    "dy": 20.0,
+    "floor": 0.01,
+    "steady": true,
+    "storage": 0,
+    "conductivity_frame": "Cartesian"
+  },
+  "controls": {
+    "head_tol": 1e-06,
+    "flow_tol": 1e-12,
+    "relative_tol": 1e-08,
+    "relaxation": 0.7,
+    "outer_cap": 2000,
+    "krylov_budget": 2000,
+    "restart": 24,
+    "max_levels": 6,
+    "min_coarse_n": 16
+  },
+  "contacts": [],
+  "checks": {
+    "active": 4096,
+    "free": 1088,
+    "source_total": 491.52,
+    "source_free": 129.63085721801238,
+    "source_fixed": 361.8891427819876,
+    "volume": 20889600.0,
+    "minimum_thickness": 0.13719160513821294
+  },
+  "coordinates": "C-order (k top-down,j south-to-north,i west-to-east); centres x=(i+.5)dx,y=(j+.5)dy",
+  "units": {
+    "head": "m",
+    "conductivity": "m/day",
+    "source": "m3/day",
+    "flux": "m3/day"
+  },
+  "source_fixed_semantics": "Original source retained; fixed cells are reservoirs, excluded from free-cell balance."
+}

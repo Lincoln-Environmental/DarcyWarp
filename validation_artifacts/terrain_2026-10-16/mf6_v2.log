@@ -1,0 +1,18 @@
+Traceback (most recent call last):
+  File "/tmp/darcy-terrain-validation/working_tests/validate_terrain_mf6_runs.py", line 18, in <module>
+    run_mf6(case=case,directory=path,executable=executable,xt3d=xt3d,convertible=convertible,outer_cap=outer_cap)
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/darcy-terrain-validation/DARCY_WARP_PACKAGE/validation/terrain_mf6.py", line 173, in run_mf6
+    result=extract_mf6(case=case,directory=directory,native_success=success)
+  File "/tmp/darcy-terrain-validation/DARCY_WARP_PACKAGE/validation/terrain_mf6.py", line 85, in extract_mf6
+    heads=flopy.utils.HeadFile(str(paths[0]),precision='double').get_data()
+          ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/flopy/utils/binaryfile/__init__.py", line 510, in __init__
+    super().__init__(filename, precision, verbose, **kwargs)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/flopy/utils/binaryfile/__init__.py", line 314, in __init__
+    super().__init__(filename, precision, verbose, **kwargs)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/flopy/utils/datafile.py", line 182, in __init__
+    raise ValueError(f"datafile error: file is empty: {filename}")
+ValueError: datafile error: file is empty: validation_artifacts/terrain_2026-10-16/mf6/terrain_32_k0.0001/native_xt3d_v2/terrain.hds

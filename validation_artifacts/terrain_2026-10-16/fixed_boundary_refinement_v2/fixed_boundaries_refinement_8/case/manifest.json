@@ -1,0 +1,2094 @@
+{
+  "schema": 1,
+  "case_id": "fixed_boundaries_refinement_8",
+  "input_hash": "9fe2806a48443c5c6eafa72028785449981f00aeaf6c2e0440fd71a4774ca17d",
+  "physical": {
+    "dx": 40.0,
+    "dy": 40.0,
+    "floor": 0.01,
+    "steady": true,
+    "storage": 0,
+    "physical_extent": [
+      320.0,
+      320.0
+    ]
+  },
+  "controls": {
+    "head_tol": 1e-06,
+    "flow_tol": 1e-12,
+    "relative_tol": 1e-08,
+    "relaxation": 0.7,
+    "outer_cap": 2000,
+    "krylov_budget": 2000,
+    "restart": 24,
+    "max_levels": 6,
+    "min_coarse_n": 4
+  },
+  "contacts": [
+    {
+      "cell": [
+        0,
+        0,
+        0
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 1.038268343236509,
+      "elevation": 13.0,
+      "head": 13.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        0,
+        1
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 1.0923879532511283,
+      "elevation": 17.0,
+      "head": 17.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        0,
+        2
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 1.0923879532511283,
+      "elevation": 21.0,
+      "head": 21.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        0,
+        3
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 1.0382683432365098,
+      "elevation": 25.0,
+      "head": 25.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        0,
+        4
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 0.9617316567634902,
+      "elevation": 29.0,
+      "head": 29.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        0,
+        5
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 0.9076120467488717,
+      "elevation": 33.0,
+      "head": 33.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        0,
+        6
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 0.90761204674887,
+      "elevation": 37.0,
+      "head": 37.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        0,
+        7
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 0.9617316567634902,
+      "elevation": 41.0,
+      "head": 41.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        1,
+        0
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 1.038268343236509,
+      "elevation": 15.0,
+      "head": 15.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        1,
+        1
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 1.0923879532511283,
+      "elevation": 19.0,
+      "head": 19.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        1,
+        2
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 1.0923879532511283,
+      "elevation": 23.0,
+      "head": 23.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        1,
+        3
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 1.0382683432365098,
+      "elevation": 27.0,
+      "head": 27.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        1,
+        4
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 0.9617316567634902,
+      "elevation": 31.0,
+      "head": 31.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        1,
+        5
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 0.90761204674887,
+      "elevation": 35.0,
+      "head": 35.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        1,
+        6
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 0.90761204674887,
+      "elevation": 39.0,
+      "head": 39.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        1,
+        7
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 0.9617316567634902,
+      "elevation": 43.0,
+      "head": 43.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        2,
+        0
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 1.038268343236509,
+      "elevation": 17.0,
+      "head": 17.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        2,
+        1
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 1.0923879532511283,
+      "elevation": 21.0,
+      "head": 21.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        2,
+        2
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 1.0923879532511283,
+      "elevation": 25.0,
+      "head": 25.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        2,
+        3
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 1.0382683432365098,
+      "elevation": 29.0,
+      "head": 29.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        2,
+        4
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 0.9617316567634902,
+      "elevation": 33.0,
+      "head": 33.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        2,
+        5
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 0.90761204674887,
+      "elevation": 37.0,
+      "head": 37.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        2,
+        6
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 0.90761204674887,
+      "elevation": 41.0,
+      "head": 41.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        2,
+        7
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 0.9617316567634902,
+      "elevation": 45.0,
+      "head": 45.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        3,
+        0
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 1.0382683432365098,
+      "elevation": 19.0,
+      "head": 19.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        3,
+        1
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 1.0923879532511283,
+      "elevation": 23.0,
+      "head": 23.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        3,
+        2
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 1.0923879532511283,
+      "elevation": 27.0,
+      "head": 27.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        3,
+        3
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 1.0382683432365098,
+      "elevation": 31.0,
+      "head": 31.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        3,
+        4
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 0.9617316567634902,
+      "elevation": 35.0,
+      "head": 35.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        3,
+        5
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 0.90761204674887,
+      "elevation": 39.0,
+      "head": 39.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        3,
+        6
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 0.90761204674887,
+      "elevation": 43.0,
+      "head": 43.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        3,
+        7
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 0.9617316567634902,
+      "elevation": 47.0,
+      "head": 47.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        4,
+        0
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 1.0382683432365098,
+      "elevation": 21.0,
+      "head": 21.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        4,
+        1
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 1.0923879532511283,
+      "elevation": 25.0,
+      "head": 25.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        4,
+        2
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 1.0923879532511283,
+      "elevation": 29.0,
+      "head": 29.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        4,
+        3
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 1.0382683432365098,
+      "elevation": 33.0,
+      "head": 33.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        4,
+        4
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 0.9617316567634902,
+      "elevation": 37.0,
+      "head": 37.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        4,
+        5
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 0.90761204674887,
+      "elevation": 41.0,
+      "head": 41.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        4,
+        6
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 0.90761204674887,
+      "elevation": 45.0,
+      "head": 45.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        4,
+        7
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 0.9617316567634902,
+      "elevation": 49.0,
+      "head": 49.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        5,
+        0
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 1.0382683432365098,
+      "elevation": 23.0,
+      "head": 23.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        5,
+        1
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 1.0923879532511283,
+      "elevation": 27.0,
+      "head": 27.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        5,
+        2
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 1.0923879532511283,
+      "elevation": 31.0,
+      "head": 31.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        5,
+        3
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 1.0382683432365098,
+      "elevation": 35.0,
+      "head": 35.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        5,
+        4
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 0.9617316567634902,
+      "elevation": 39.0,
+      "head": 39.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        5,
+        5
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 0.90761204674887,
+      "elevation": 43.0,
+      "head": 43.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        5,
+        6
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 0.90761204674887,
+      "elevation": 47.0,
+      "head": 47.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        5,
+        7
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 0.9617316567634902,
+      "elevation": 51.0,
+      "head": 51.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        6,
+        0
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 1.0382683432365098,
+      "elevation": 25.0,
+      "head": 25.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        6,
+        1
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 1.0923879532511283,
+      "elevation": 29.0,
+      "head": 29.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        6,
+        2
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 1.0923879532511283,
+      "elevation": 33.0,
+      "head": 33.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        6,
+        3
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 1.0382683432365098,
+      "elevation": 37.0,
+      "head": 37.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        6,
+        4
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 0.9617316567634902,
+      "elevation": 41.0,
+      "head": 41.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        6,
+        5
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 0.90761204674887,
+      "elevation": 45.0,
+      "head": 45.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        6,
+        6
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 0.90761204674887,
+      "elevation": 49.0,
+      "head": 49.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        6,
+        7
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 0.9617316567634902,
+      "elevation": 53.0,
+      "head": 53.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        7,
+        0
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 1.0382683432365098,
+      "elevation": 27.0,
+      "head": 27.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        7,
+        1
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 1.0923879532511283,
+      "elevation": 31.0,
+      "head": 31.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        7,
+        2
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 1.09238795325113,
+      "elevation": 35.0,
+      "head": 35.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        7,
+        3
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 1.0382683432365098,
+      "elevation": 39.0,
+      "head": 39.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        7,
+        4
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 0.9617316567634902,
+      "elevation": 43.0,
+      "head": 43.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        7,
+        5
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 0.90761204674887,
+      "elevation": 47.0,
+      "head": 47.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        7,
+        6
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 0.90761204674887,
+      "elevation": 51.0,
+      "head": 51.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        0,
+        7,
+        7
+      ],
+      "direction": "top",
+      "area": 1609.9689437998486,
+      "distance": 0.9617316567634902,
+      "elevation": 55.0,
+      "head": 55.0,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        0,
+        0
+      ],
+      "direction": "bottom",
+      "area": 1609.880292532777,
+      "distance": 2.0,
+      "elevation": 3.6462994537735955,
+      "head": 3.6462994537735955,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        0,
+        1
+      ],
+      "direction": "bottom",
+      "area": 1610.0910621511766,
+      "distance": 2.0,
+      "elevation": 7.538060233744357,
+      "head": 7.538060233744357,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        0,
+        2
+      ],
+      "direction": "bottom",
+      "area": 1610.5212480546409,
+      "distance": 2.0,
+      "elevation": 11.538060233744357,
+      "head": 11.538060233744357,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        0,
+        3
+      ],
+      "direction": "bottom",
+      "area": 1610.8323896170361,
+      "distance": 2.0,
+      "elevation": 15.646299453773594,
+      "head": 15.646299453773594,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        0,
+        4
+      ],
+      "direction": "bottom",
+      "area": 1610.8323896170361,
+      "distance": 2.0,
+      "elevation": 19.799372826719633,
+      "head": 19.799372826719633,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        0,
+        5
+      ],
+      "direction": "bottom",
+      "area": 1610.5212480546409,
+      "distance": 2.0,
+      "elevation": 23.90761204674887,
+      "head": 23.90761204674887,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        0,
+        6
+      ],
+      "direction": "bottom",
+      "area": 1610.0910621511766,
+      "distance": 2.0,
+      "elevation": 27.907612046748874,
+      "head": 27.907612046748874,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        0,
+        7
+      ],
+      "direction": "bottom",
+      "area": 1609.880292532777,
+      "distance": 2.0,
+      "elevation": 31.799372826719633,
+      "head": 31.799372826719633,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        1,
+        0
+      ],
+      "direction": "bottom",
+      "area": 1609.9531171559106,
+      "distance": 2.0,
+      "elevation": 5.808658283817454,
+      "head": 5.808658283817454,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        1,
+        1
+      ],
+      "direction": "bottom",
+      "area": 1610.163877241605,
+      "distance": 2.0,
+      "elevation": 9.700419063788217,
+      "head": 9.700419063788217,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        1,
+        2
+      ],
+      "direction": "bottom",
+      "area": 1610.594043696329,
+      "distance": 2.0,
+      "elevation": 13.700419063788217,
+      "head": 13.700419063788217,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        1,
+        3
+      ],
+      "direction": "bottom",
+      "area": 1610.9051711984616,
+      "distance": 2.0,
+      "elevation": 17.808658283817454,
+      "head": 17.808658283817454,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        1,
+        4
+      ],
+      "direction": "bottom",
+      "area": 1610.9051711984616,
+      "distance": 2.0,
+      "elevation": 21.961731656763494,
+      "head": 21.961731656763494,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        1,
+        5
+      ],
+      "direction": "bottom",
+      "area": 1610.594043696329,
+      "distance": 2.0,
+      "elevation": 26.069970876792734,
+      "head": 26.069970876792734,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        1,
+        6
+      ],
+      "direction": "bottom",
+      "area": 1610.163877241605,
+      "distance": 2.0,
+      "elevation": 30.06997087679273,
+      "head": 30.06997087679273,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        1,
+        7
+      ],
+      "direction": "bottom",
+      "area": 1609.9531171559106,
+      "distance": 2.0,
+      "elevation": 33.96173165676349,
+      "head": 33.96173165676349,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        2,
+        0
+      ],
+      "direction": "bottom",
+      "area": 1609.9531171559106,
+      "distance": 2.0,
+      "elevation": 8.03826834323651,
+      "head": 8.03826834323651,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        2,
+        1
+      ],
+      "direction": "bottom",
+      "area": 1610.163877241605,
+      "distance": 2.0,
+      "elevation": 11.93002912320727,
+      "head": 11.93002912320727,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        2,
+        2
+      ],
+      "direction": "bottom",
+      "area": 1610.594043696329,
+      "distance": 2.0,
+      "elevation": 15.93002912320727,
+      "head": 15.93002912320727,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        2,
+        3
+      ],
+      "direction": "bottom",
+      "area": 1610.9051711984616,
+      "distance": 2.0,
+      "elevation": 20.038268343236506,
+      "head": 20.038268343236506,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        2,
+        4
+      ],
+      "direction": "bottom",
+      "area": 1610.9051711984616,
+      "distance": 2.0,
+      "elevation": 24.191341716182546,
+      "head": 24.191341716182546,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        2,
+        5
+      ],
+      "direction": "bottom",
+      "area": 1610.594043696329,
+      "distance": 2.0,
+      "elevation": 28.29958093621179,
+      "head": 28.29958093621179,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        2,
+        6
+      ],
+      "direction": "bottom",
+      "area": 1610.163877241605,
+      "distance": 2.0,
+      "elevation": 32.29958093621179,
+      "head": 32.29958093621179,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        2,
+        7
+      ],
+      "direction": "bottom",
+      "area": 1609.9531171559106,
+      "distance": 2.0,
+      "elevation": 36.19134171618255,
+      "head": 36.19134171618255,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        3,
+        0
+      ],
+      "direction": "bottom",
+      "area": 1609.7090965642356,
+      "distance": 2.0,
+      "elevation": 10.200627173280367,
+      "head": 10.200627173280367,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        3,
+        1
+      ],
+      "direction": "bottom",
+      "area": 1609.9198885954952,
+      "distance": 2.0,
+      "elevation": 14.09238795325113,
+      "head": 14.09238795325113,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        3,
+        2
+      ],
+      "direction": "bottom",
+      "area": 1610.350120225942,
+      "distance": 2.0,
+      "elevation": 18.09238795325113,
+      "head": 18.09238795325113,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        3,
+        3
+      ],
+      "direction": "bottom",
+      "area": 1610.6612948461752,
+      "distance": 2.0,
+      "elevation": 22.200627173280367,
+      "head": 22.200627173280367,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        3,
+        4
+      ],
+      "direction": "bottom",
+      "area": 1610.6612948461752,
+      "distance": 2.0,
+      "elevation": 26.353700546226406,
+      "head": 26.353700546226406,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        3,
+        5
+      ],
+      "direction": "bottom",
+      "area": 1610.350120225942,
+      "distance": 2.0,
+      "elevation": 30.461939766255647,
+      "head": 30.461939766255647,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        3,
+        6
+      ],
+      "direction": "bottom",
+      "area": 1609.9198885954952,
+      "distance": 2.0,
+      "elevation": 34.46193976625565,
+      "head": 34.46193976625565,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        3,
+        7
+      ],
+      "direction": "bottom",
+      "area": 1609.7090965642356,
+      "distance": 2.0,
+      "elevation": 38.353700546226406,
+      "head": 38.353700546226406,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        4,
+        0
+      ],
+      "direction": "bottom",
+      "area": 1609.386305101844,
+      "distance": 2.0,
+      "elevation": 12.200627173280367,
+      "head": 12.200627173280367,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        4,
+        1
+      ],
+      "direction": "bottom",
+      "area": 1609.597139405712,
+      "distance": 2.0,
+      "elevation": 16.09238795325113,
+      "head": 16.09238795325113,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        4,
+        2
+      ],
+      "direction": "bottom",
+      "area": 1610.0274572812182,
+      "distance": 2.0,
+      "elevation": 20.09238795325113,
+      "head": 20.09238795325113,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        4,
+        3
+      ],
+      "direction": "bottom",
+      "area": 1610.3386942513919,
+      "distance": 2.0,
+      "elevation": 24.200627173280367,
+      "head": 24.200627173280367,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        4,
+        4
+      ],
+      "direction": "bottom",
+      "area": 1610.3386942513919,
+      "distance": 2.0,
+      "elevation": 28.353700546226406,
+      "head": 28.353700546226406,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        4,
+        5
+      ],
+      "direction": "bottom",
+      "area": 1610.0274572812182,
+      "distance": 2.0,
+      "elevation": 32.46193976625565,
+      "head": 32.46193976625565,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        4,
+        6
+      ],
+      "direction": "bottom",
+      "area": 1609.597139405712,
+      "distance": 2.0,
+      "elevation": 36.46193976625565,
+      "head": 36.46193976625565,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        4,
+        7
+      ],
+      "direction": "bottom",
+      "area": 1609.386305101844,
+      "distance": 2.0,
+      "elevation": 40.353700546226406,
+      "head": 40.353700546226406,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        5,
+        0
+      ],
+      "direction": "bottom",
+      "area": 1609.173837267892,
+      "distance": 2.0,
+      "elevation": 14.038268343236506,
+      "head": 14.038268343236506,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        5,
+        1
+      ],
+      "direction": "bottom",
+      "area": 1609.384699405694,
+      "distance": 2.0,
+      "elevation": 17.93002912320727,
+      "head": 17.93002912320727,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        5,
+        2
+      ],
+      "direction": "bottom",
+      "area": 1609.815074068301,
+      "distance": 2.0,
+      "elevation": 21.93002912320727,
+      "head": 21.93002912320727,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        5,
+        3
+      ],
+      "direction": "bottom",
+      "area": 1610.1263520920902,
+      "distance": 2.0,
+      "elevation": 26.038268343236506,
+      "head": 26.038268343236506,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        5,
+        4
+      ],
+      "direction": "bottom",
+      "area": 1610.1263520920902,
+      "distance": 2.0,
+      "elevation": 30.19134171618255,
+      "head": 30.19134171618255,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        5,
+        5
+      ],
+      "direction": "bottom",
+      "area": 1609.815074068301,
+      "distance": 2.0,
+      "elevation": 34.29958093621179,
+      "head": 34.29958093621179,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        5,
+        6
+      ],
+      "direction": "bottom",
+      "area": 1609.384699405694,
+      "distance": 2.0,
+      "elevation": 38.29958093621179,
+      "head": 38.29958093621179,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        5,
+        7
+      ],
+      "direction": "bottom",
+      "area": 1609.173837267892,
+      "distance": 2.0,
+      "elevation": 42.19134171618255,
+      "head": 42.19134171618255,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        6,
+        0
+      ],
+      "direction": "bottom",
+      "area": 1609.173837267892,
+      "distance": 2.0,
+      "elevation": 15.808658283817454,
+      "head": 15.808658283817454,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        6,
+        1
+      ],
+      "direction": "bottom",
+      "area": 1609.384699405694,
+      "distance": 2.0,
+      "elevation": 19.700419063788217,
+      "head": 19.700419063788217,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        6,
+        2
+      ],
+      "direction": "bottom",
+      "area": 1609.815074068301,
+      "distance": 2.0,
+      "elevation": 23.700419063788217,
+      "head": 23.700419063788217,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        6,
+        3
+      ],
+      "direction": "bottom",
+      "area": 1610.1263520920902,
+      "distance": 2.0,
+      "elevation": 27.808658283817454,
+      "head": 27.808658283817454,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        6,
+        4
+      ],
+      "direction": "bottom",
+      "area": 1610.1263520920902,
+      "distance": 2.0,
+      "elevation": 31.96173165676349,
+      "head": 31.96173165676349,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        6,
+        5
+      ],
+      "direction": "bottom",
+      "area": 1609.815074068301,
+      "distance": 2.0,
+      "elevation": 36.06997087679273,
+      "head": 36.06997087679273,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        6,
+        6
+      ],
+      "direction": "bottom",
+      "area": 1609.384699405694,
+      "distance": 2.0,
+      "elevation": 40.06997087679273,
+      "head": 40.06997087679273,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        6,
+        7
+      ],
+      "direction": "bottom",
+      "area": 1609.173837267892,
+      "distance": 2.0,
+      "elevation": 43.96173165676349,
+      "head": 43.96173165676349,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        7,
+        0
+      ],
+      "direction": "bottom",
+      "area": 1609.2347135395937,
+      "distance": 2.0,
+      "elevation": 17.646299453773594,
+      "head": 17.646299453773594,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        7,
+        1
+      ],
+      "direction": "bottom",
+      "area": 1609.4455677016672,
+      "distance": 2.0,
+      "elevation": 21.538060233744357,
+      "head": 21.538060233744357,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        7,
+        2
+      ],
+      "direction": "bottom",
+      "area": 1609.875926092106,
+      "distance": 2.0,
+      "elevation": 25.538060233744353,
+      "head": 25.538060233744353,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        7,
+        3
+      ],
+      "direction": "bottom",
+      "area": 1610.1871923521092,
+      "distance": 2.0,
+      "elevation": 29.646299453773594,
+      "head": 29.646299453773594,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        7,
+        4
+      ],
+      "direction": "bottom",
+      "area": 1610.1871923521092,
+      "distance": 2.0,
+      "elevation": 33.79937282671963,
+      "head": 33.79937282671963,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        7,
+        5
+      ],
+      "direction": "bottom",
+      "area": 1609.8759260921063,
+      "distance": 2.0,
+      "elevation": 37.90761204674887,
+      "head": 37.90761204674887,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        7,
+        6
+      ],
+      "direction": "bottom",
+      "area": 1609.4455677016676,
+      "distance": 2.0,
+      "elevation": 41.90761204674887,
+      "head": 41.90761204674887,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    },
+    {
+      "cell": [
+        2,
+        7,
+        7
+      ],
+      "direction": "bottom",
+      "area": 1609.2347135395937,
+      "distance": 2.0,
+      "elevation": 45.79937282671963,
+      "head": 45.79937282671963,
+      "kind": "head",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    }
+  ],
+  "checks": {
+    "active": 192,
+    "free": 192,
+    "source_total": 0.0,
+    "source_free": 0.0,
+    "source_fixed": 0.0,
+    "volume": 921599.9999999999,
+    "minimum_thickness": 1.81522409349774
+  },
+  "coordinates": "C-order (k top-down,j south-to-north,i west-to-east); centres x=(i+.5)dx,y=(j+.5)dy",
+  "units": {
+    "head": "m",
+    "conductivity": "m/day",
+    "source": "m3/day",
+    "flux": "m3/day"
+  },
+  "source_fixed_semantics": "Original source retained; fixed cells are reservoirs, excluded from free-cell balance."
+}

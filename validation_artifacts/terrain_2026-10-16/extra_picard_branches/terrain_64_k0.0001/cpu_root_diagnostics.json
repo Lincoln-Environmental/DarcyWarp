@@ -1,0 +1,50 @@
+{
+  "budget": {
+    "cell_residual_max": 8.191416156488884e-08,
+    "cell_residual_rms": 6.978988911633853e-09,
+    "head_residual_rms": 5.0099191946199855e-11,
+    "source_total": 1966.0799999999997,
+    "boundary_inflow": 0.0,
+    "boundary_outflow": -1966.0799999433975,
+    "boundary_net": -1966.0799999433975,
+    "storage_uptake": 0.0,
+    "imbalance": 5.660264287730293e-08,
+    "domain_imbalance": 5.660264287730293e-08,
+    "relative_imbalance": 1.4394796467620268e-11,
+    "relative_cell_imbalance": 9.981264952228565e-09,
+    "throughput": 3932.1599999433975,
+    "physical_diagonal_scaling": "seven-point principal part",
+    "coastal_subface_outflows": [
+      0.00026074758982457826,
+      0.0007802058389310205,
+      0.0007297063114448433
+    ],
+    "finite_physical_state": true
+  },
+  "scaled_condition_1_estimate": 36546.06818131627,
+  "minimum_abs_U_pivot": 0.007787525366717641,
+  "correction_max": 4.574224756688159e-09,
+  "correction_l2": 1.3689047647679144e-07,
+  "positive_offdiagonal_count": 56028,
+  "offdiagonal_count": 191154,
+  "near_zero_eigenvalues": [
+    {
+      "real": 0.0006971293152241885,
+      "imag": -6.458630508238921e-05
+    },
+    {
+      "real": 0.0006971293152241885,
+      "imag": 6.458630508238921e-05
+    },
+    {
+      "real": 0.0006064124415018524,
+      "imag": 0.0
+    },
+    {
+      "real": 0.0005118636629880041,
+      "imag": 0.0
+    }
+  ],
+  "free_unknowns": 16192,
+  "nnz": 207346
+}

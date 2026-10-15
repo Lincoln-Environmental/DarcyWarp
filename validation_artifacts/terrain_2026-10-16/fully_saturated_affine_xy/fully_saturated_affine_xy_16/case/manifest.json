@@ -1,0 +1,45 @@
+{
+  "schema": 1,
+  "case_id": "fully_saturated_affine_xy_16",
+  "input_hash": "70911b18faffffae1ef6566d267872a16d8fdad24e99cdd255139b64171abf81",
+  "physical": {
+    "dx": 20.0,
+    "dy": 20.0,
+    "floor": 0.01,
+    "steady": true,
+    "storage": 0,
+    "physical_extent": [
+      320.0,
+      320.0
+    ]
+  },
+  "controls": {
+    "head_tol": 1e-06,
+    "flow_tol": 1e-12,
+    "relative_tol": 1e-08,
+    "relaxation": 0.7,
+    "outer_cap": 2000,
+    "krylov_budget": 2000,
+    "restart": 24,
+    "max_levels": 6,
+    "min_coarse_n": 4
+  },
+  "contacts": [],
+  "checks": {
+    "active": 768,
+    "free": 196,
+    "source_total": 0.0,
+    "source_free": 0.0,
+    "source_fixed": 0.0,
+    "volume": 921600.0,
+    "minimum_thickness": 1.8038429439193528
+  },
+  "coordinates": "C-order (k top-down,j south-to-north,i west-to-east); centres x=(i+.5)dx,y=(j+.5)dy",
+  "units": {
+    "head": "m",
+    "conductivity": "m/day",
+    "source": "m3/day",
+    "flux": "m3/day"
+  },
+  "source_fixed_semantics": "Original source retained; fixed cells are reservoirs, excluded from free-cell balance."
+}

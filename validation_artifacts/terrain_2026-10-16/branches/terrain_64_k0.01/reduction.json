@@ -1,0 +1,104 @@
+{
+  "original_hotspot": [
+    0,
+    57,
+    21
+  ],
+  "radius": 3,
+  "prescribed_boundary": "all outside square fixed to independently polished Picard field; original full geometry retained",
+  "free_unknowns": 196,
+  "input_difference": 0.2682660759314217,
+  "final_difference": 0.2668609817084757,
+  "diagnostics": {
+    "a": {
+      "budget": {
+        "cell_residual_max": 2.2751800443643333e-12,
+        "cell_residual_rms": 6.142181166892323e-13,
+        "head_residual_rms": 4.126557591838297e-15,
+        "source_total": 32.472268923694216,
+        "boundary_inflow": 104.54058525559171,
+        "boundary_outflow": -137.01285417928594,
+        "boundary_net": -32.47226892369423,
+        "storage_uptake": 0.0,
+        "imbalance": -1.4838661983179735e-14,
+        "domain_imbalance": -1.4838661983179735e-14,
+        "relative_imbalance": 5.415061992564161e-17,
+        "relative_cell_imbalance": 2.5144990820975596e-13,
+        "throughput": 274.0257083585718,
+        "physical_diagonal_scaling": "seven-point principal part",
+        "coastal_subface_outflows": []
+      },
+      "scaled_condition_1_estimate": 1706.5096802836692,
+      "minimum_abs_U_pivot": 0.04434169102576151,
+      "correction_max": 1.009411715651621e-14,
+      "correction_l2": 4.6828991449503e-14,
+      "positive_offdiagonal_count": 595,
+      "offdiagonal_count": 2072,
+      "near_zero_eigenvalues": [
+        {
+          "real": 0.011144389621237264,
+          "imag": 0.0
+        },
+        {
+          "real": 0.009753403003667838,
+          "imag": 0.0
+        },
+        {
+          "real": 0.008729715036867036,
+          "imag": 0.0
+        },
+        {
+          "real": 0.004621838076400135,
+          "imag": 0.0
+        }
+      ],
+      "free_unknowns": 196,
+      "nnz": 2268
+    },
+    "b": {
+      "budget": {
+        "cell_residual_max": 2.2556401191309305e-12,
+        "cell_residual_rms": 5.434924319442752e-13,
+        "head_residual_rms": 3.93291847086635e-15,
+        "source_total": 32.472268923694216,
+        "boundary_inflow": 104.38848593876575,
+        "boundary_outflow": -136.8607548624601,
+        "boundary_net": -32.47226892369436,
+        "storage_uptake": 0.0,
+        "imbalance": -1.1798016990444138e-13,
+        "domain_imbalance": -1.1798016990444138e-13,
+        "relative_imbalance": 4.3102264788400094e-16,
+        "relative_cell_imbalance": 2.138793254630478e-13,
+        "throughput": 273.7215097249201,
+        "physical_diagonal_scaling": "seven-point principal part",
+        "coastal_subface_outflows": []
+      },
+      "scaled_condition_1_estimate": 1536.352141891343,
+      "minimum_abs_U_pivot": 0.03671730740428625,
+      "correction_max": 6.911689137275315e-15,
+      "correction_l2": 4.456526094586692e-14,
+      "positive_offdiagonal_count": 592,
+      "offdiagonal_count": 2072,
+      "near_zero_eigenvalues": [
+        {
+          "real": 0.011210421636793332,
+          "imag": 0.0
+        },
+        {
+          "real": 0.010090876205226938,
+          "imag": 0.0
+        },
+        {
+          "real": 0.009080873487912656,
+          "imag": 0.0
+        },
+        {
+          "real": 0.005167477397419495,
+          "imag": 0.0
+        }
+      ],
+      "free_unknowns": 196,
+      "nnz": 2268
+    }
+  }
+}

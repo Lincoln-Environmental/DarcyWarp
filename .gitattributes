@@ -1,0 +1,2 @@
+# Preserve checksummed evidence byte-for-byte, including native CSV and log whitespace.
+validation_artifacts/terrain_2026-10-16/** -text -whitespace

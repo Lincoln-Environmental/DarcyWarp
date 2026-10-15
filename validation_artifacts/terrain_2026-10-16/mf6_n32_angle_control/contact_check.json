@@ -1,0 +1,14 @@
+{
+  "requested": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "actual": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "maximum_mismatch": 0.0,
+  "meaning": "Altered connection geometry, not a fix or an equivalent physical terrain model."
+}

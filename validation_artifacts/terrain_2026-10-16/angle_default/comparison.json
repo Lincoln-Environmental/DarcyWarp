@@ -1,0 +1,9 @@
+{
+  "native_success": true,
+  "independent_conservation": true,
+  "head_rms_error": 0.07035490714390014,
+  "qx_max": 16.601818956287573,
+  "qy_max": 5.350897078679947,
+  "physical_tensor_unchanged": true,
+  "only_difference": "ANGLE2/ANGLE3 omitted rather than explicitly zero; XT3D nozee flag"
+}

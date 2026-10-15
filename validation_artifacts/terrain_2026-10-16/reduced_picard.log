@@ -1,0 +1,38 @@
+terrain_32_k0.0001_radius8 picard progress 100 2.9795876233976912e-05
+terrain_32_k0.0001_radius8 picard progress 200 7.971761614308423e-06
+terrain_32_k0.0001_radius8 picard progress 300 2.1607665213914242e-06
+terrain_32_k0.0001_radius8 picard progress 400 5.769261494808811e-07
+terrain_32_k0.0001_radius8 picard progress 500 1.5619718738269403e-07
+terrain_32_k0.0001_radius8 picard progress 600 4.2058172561153644e-08
+terrain_32_k0.0001_radius8 picard True converged 699 1.2362481075465351e-08
+terrain_32_k0.0001_radius8 picard progress 100 5.435103430939145e-06
+terrain_32_k0.0001_radius8 picard progress 200 1.743279377729727e-06
+terrain_32_k0.0001_radius8 picard progress 300 5.123635451748694e-07
+terrain_32_k0.0001_radius8 picard progress 400 1.4291346114376784e-07
+terrain_32_k0.0001_radius8 picard progress 500 4.0014219754863656e-08
+terrain_32_k0.0001_radius8 picard True converged 592 1.2434407831066326e-08
+terrain_64_k0.0001_cpu_local picard False nonlinear_stagnation 100 0.0018052635359209635
+terrain_64_k0.0001_cpu_local picard False nonlinear_stagnation 100 0.009582660641085943
+terrain_64_k0.1_cpu_local picard True converged 12 2.488944798585881e-08
+terrain_64_k0.1_cpu_local picard True converged 13 2.0534890207177274e-08
+terrain_64_k0.01_local_dirichlet picard progress 100 0.0002777177167255527
+terrain_64_k0.01_local_dirichlet picard progress 200 6.77458418983636e-05
+terrain_64_k0.01_local_dirichlet picard progress 300 1.5649006739970156e-05
+terrain_64_k0.01_local_dirichlet picard progress 400 3.667128640851543e-06
+terrain_64_k0.01_local_dirichlet picard progress 500 8.471515628778129e-07
+terrain_64_k0.01_local_dirichlet picard progress 600 2.0339009472373194e-07
+terrain_64_k0.01_local_dirichlet picard progress 700 4.694816965379575e-08
+terrain_64_k0.01_local_dirichlet picard True converged 729 3.256930881203629e-08
+terrain_64_k0.01_local_dirichlet picard progress 100 0.0005649329228415783
+terrain_64_k0.01_local_dirichlet picard progress 200 0.00038875930781646554
+terrain_64_k0.01_local_dirichlet picard False nonlinear_stagnation 215 0.00038875930494996434
+terrain_64_k0.001_cpu_local picard progress 100 0.00041077987076269335
+terrain_64_k0.001_cpu_local picard progress 200 0.00011458265297251966
+terrain_64_k0.001_cpu_local picard progress 300 3.068812211646193e-05
+terrain_64_k0.001_cpu_local picard progress 400 8.650165696988684e-06
+terrain_64_k0.001_cpu_local picard progress 500 2.4407799161768647e-06
+terrain_64_k0.001_cpu_local picard progress 600 6.588856168892247e-07
+terrain_64_k0.001_cpu_local picard progress 700 1.8323894761215107e-07
+terrain_64_k0.001_cpu_local picard progress 800 5.1785195281942595e-08
+terrain_64_k0.001_cpu_local picard True converged 831 3.496985812080588e-08
+terrain_64_k0.001_cpu_local picard False nonlinear_stagnation 100 0.0018884901520246082

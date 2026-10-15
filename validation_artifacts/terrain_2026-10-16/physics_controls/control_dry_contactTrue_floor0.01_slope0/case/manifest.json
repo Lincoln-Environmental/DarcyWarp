@@ -1,0 +1,58 @@
+{
+  "schema": 1,
+  "case_id": "control_dry_contactTrue_floor0.01_slope0",
+  "input_hash": "f1120937ac989035466e0b2ed40009d1a5ee081d81e4285ea498aa0c02e073e2",
+  "physical": {
+    "dx": 20.0,
+    "dy": 20.0,
+    "floor": 0.01,
+    "steady": true,
+    "storage": 0
+  },
+  "controls": {
+    "head_tol": 1e-06,
+    "flow_tol": 1e-12,
+    "relative_tol": 1e-08,
+    "relaxation": 0.7,
+    "outer_cap": 2000,
+    "krylov_budget": 2000,
+    "restart": 24,
+    "max_levels": 6,
+    "min_coarse_n": 4
+  },
+  "contacts": [
+    {
+      "cell": [
+        0,
+        4,
+        0
+      ],
+      "direction": "west",
+      "area": 5.0,
+      "distance": 10.0,
+      "elevation": 9.5,
+      "head": 2.0,
+      "kind": "discharge_only",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    }
+  ],
+  "checks": {
+    "active": 256,
+    "free": 193,
+    "source_total": 1.92,
+    "source_free": 1.9200000000000002,
+    "source_fixed": 0.0,
+    "volume": 768000.0,
+    "minimum_thickness": 1.0
+  },
+  "coordinates": "C-order (k top-down,j south-to-north,i west-to-east); centres x=(i+.5)dx,y=(j+.5)dy",
+  "units": {
+    "head": "m",
+    "conductivity": "m/day",
+    "source": "m3/day",
+    "flux": "m3/day"
+  },
+  "source_fixed_semantics": "Original source retained; fixed cells are reservoirs, excluded from free-cell balance."
+}

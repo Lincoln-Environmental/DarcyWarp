@@ -1,0 +1,1358 @@
+{
+  "mf6/terrain_16_k0.0001/native_xt3d_confined_contact": {
+    "outers": 81,
+    "linear_iterations": 679
+  },
+  "mf6/terrain_16_k0.0001/native_xt3d_precise": {
+    "outers": 81,
+    "linear_iterations": 658
+  },
+  "mf6/terrain_32_k0.0001/native_xt3d_confined_contact": {
+    "outers": 3000,
+    "linear_iterations": 54605
+  },
+  "mf6/terrain_32_k0.0001/native_xt3d_precise": {
+    "outers": 3000,
+    "linear_iterations": 56032
+  },
+  "mf6/terrain_32_k0.0001/native_xt3d_v2": {
+    "outers": 0,
+    "linear_iterations": 0
+  },
+  "mf6/terrain_64_k0.0001/native_xt3d_confined_contact": {
+    "outers": 168,
+    "linear_iterations": 4562
+  },
+  "mf6/terrain_64_k0.0001/native_xt3d_precise": {
+    "outers": 170,
+    "linear_iterations": 4458
+  },
+  "mf6/terrain_64_k0.001/native_xt3d_confined_contact": {
+    "outers": 70,
+    "linear_iterations": 1303
+  },
+  "mf6/terrain_64_k0.001/native_xt3d_precise": {
+    "outers": 70,
+    "linear_iterations": 1320
+  },
+  "mf6/terrain_64_k0.01/native_xt3d_confined_contact": {
+    "outers": 48,
+    "linear_iterations": 977
+  },
+  "mf6/terrain_64_k0.01/native_xt3d_precise": {
+    "outers": 48,
+    "linear_iterations": 998
+  },
+  "mf6/terrain_64_k0.1/native_xt3d_confined_contact": {
+    "outers": 76,
+    "linear_iterations": 2026
+  },
+  "mf6/terrain_64_k0.1/native_xt3d_precise": {
+    "outers": 76,
+    "linear_iterations": 2064
+  },
+  "mf6/terrain_96_k0.0001/native_xt3d_confined_contact": {
+    "outers": 111,
+    "linear_iterations": 3491
+  },
+  "mf6/terrain_96_k0.0001/native_xt3d_precise": {
+    "outers": 111,
+    "linear_iterations": 3484
+  },
+  "mf6_feedback/terrain_32_k0.0001/feedback_000": {
+    "outers": 72,
+    "linear_iterations": 1153
+  },
+  "mf6_feedback_v2/terrain_32_k0.0001/feedback_000": {
+    "outers": 72,
+    "linear_iterations": 1153
+  },
+  "mf6_feedback_v3/terrain_16_k0.0001/feedback_000": {
+    "outers": 56,
+    "linear_iterations": 417
+  },
+  "mf6_feedback_v3/terrain_32_k0.0001/feedback_000": {
+    "outers": 72,
+    "linear_iterations": 1153
+  },
+  "mf6_feedback_v3/terrain_64_k0.0001/feedback_000": {
+    "outers": 55,
+    "linear_iterations": 1526
+  },
+  "mf6_feedback_v3/terrain_64_k0.0001/feedback_001": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.0001/feedback_002": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.0001/feedback_003": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.0001/feedback_004": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.0001/feedback_005": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.0001/feedback_006": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.0001/feedback_007": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.0001/feedback_008": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.0001/feedback_009": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.0001/feedback_010": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.0001/feedback_011": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.0001/feedback_012": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.0001/feedback_013": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.0001/feedback_014": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.0001/feedback_015": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.0001/feedback_016": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.0001/feedback_017": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_feedback_v3/terrain_64_k0.0001/feedback_018": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_feedback_v3/terrain_64_k0.0001/feedback_019": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_feedback_v3/terrain_64_k0.0001/feedback_020": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_feedback_v3/terrain_64_k0.001/feedback_000": {
+    "outers": 68,
+    "linear_iterations": 1496
+  },
+  "mf6_feedback_v3/terrain_64_k0.001/feedback_001": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.001/feedback_002": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.001/feedback_003": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.001/feedback_004": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.001/feedback_005": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.001/feedback_006": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.001/feedback_007": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.001/feedback_008": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.001/feedback_009": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.001/feedback_010": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.001/feedback_011": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.001/feedback_012": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.001/feedback_013": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.001/feedback_014": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.001/feedback_015": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.001/feedback_016": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.001/feedback_017": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_feedback_v3/terrain_64_k0.001/feedback_018": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_feedback_v3/terrain_64_k0.001/feedback_019": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_feedback_v3/terrain_64_k0.001/feedback_020": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_feedback_v3/terrain_64_k0.01/feedback_000": {
+    "outers": 48,
+    "linear_iterations": 973
+  },
+  "mf6_feedback_v3/terrain_64_k0.01/feedback_001": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.01/feedback_002": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.01/feedback_003": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.01/feedback_004": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.01/feedback_005": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.01/feedback_006": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.01/feedback_007": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.01/feedback_008": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.01/feedback_009": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.01/feedback_010": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.01/feedback_011": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.01/feedback_012": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.01/feedback_013": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.01/feedback_014": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.01/feedback_015": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.01/feedback_016": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.01/feedback_017": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_feedback_v3/terrain_64_k0.01/feedback_018": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_feedback_v3/terrain_64_k0.01/feedback_019": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_feedback_v3/terrain_64_k0.01/feedback_020": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_feedback_v3/terrain_64_k0.1/feedback_000": {
+    "outers": 64,
+    "linear_iterations": 1453
+  },
+  "mf6_feedback_v3/terrain_64_k0.1/feedback_001": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.1/feedback_002": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.1/feedback_003": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.1/feedback_004": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.1/feedback_005": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.1/feedback_006": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.1/feedback_007": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.1/feedback_008": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.1/feedback_009": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.1/feedback_010": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.1/feedback_011": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.1/feedback_012": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.1/feedback_013": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.1/feedback_014": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.1/feedback_015": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.1/feedback_016": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_64_k0.1/feedback_017": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_feedback_v3/terrain_64_k0.1/feedback_018": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_feedback_v3/terrain_64_k0.1/feedback_019": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_feedback_v3/terrain_64_k0.1/feedback_020": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_feedback_v3/terrain_96_k0.0001/feedback_000": {
+    "outers": 94,
+    "linear_iterations": 3488
+  },
+  "mf6_feedback_v3/terrain_96_k0.0001/feedback_001": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_96_k0.0001/feedback_002": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_96_k0.0001/feedback_003": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_96_k0.0001/feedback_004": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_96_k0.0001/feedback_005": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_96_k0.0001/feedback_006": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_96_k0.0001/feedback_007": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_96_k0.0001/feedback_008": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_96_k0.0001/feedback_009": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_96_k0.0001/feedback_010": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_96_k0.0001/feedback_011": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_96_k0.0001/feedback_012": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_96_k0.0001/feedback_013": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_96_k0.0001/feedback_014": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_96_k0.0001/feedback_015": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_96_k0.0001/feedback_016": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_96_k0.0001/feedback_017": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_v3/terrain_96_k0.0001/feedback_018": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_feedback_v3/terrain_96_k0.0001/feedback_019": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_feedback_v3/terrain_96_k0.0001/feedback_020": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_feedback_v3/terrain_96_k0.0001/feedback_021": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_feedback_xt3d/terrain_16_k0.0001/feedback_000": {
+    "outers": 81,
+    "linear_iterations": 622
+  },
+  "mf6_feedback_xt3d/terrain_32_k0.0001/feedback_000": {
+    "outers": 4000,
+    "linear_iterations": 73087
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.0001/feedback_000": {
+    "outers": 169,
+    "linear_iterations": 4594
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.0001/feedback_001": {
+    "outers": 4,
+    "linear_iterations": 11
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.0001/feedback_002": {
+    "outers": 3,
+    "linear_iterations": 8
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.0001/feedback_003": {
+    "outers": 3,
+    "linear_iterations": 7
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.0001/feedback_004": {
+    "outers": 2,
+    "linear_iterations": 4
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.0001/feedback_005": {
+    "outers": 2,
+    "linear_iterations": 4
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.0001/feedback_006": {
+    "outers": 2,
+    "linear_iterations": 4
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.0001/feedback_007": {
+    "outers": 2,
+    "linear_iterations": 4
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.0001/feedback_008": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.0001/feedback_009": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.0001/feedback_010": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.0001/feedback_011": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.0001/feedback_012": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.0001/feedback_013": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.0001/feedback_014": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.0001/feedback_015": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.0001/feedback_016": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.0001/feedback_017": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.0001/feedback_018": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.0001/feedback_019": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.0001/feedback_020": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.001/feedback_000": {
+    "outers": 70,
+    "linear_iterations": 1337
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.001/feedback_001": {
+    "outers": 4,
+    "linear_iterations": 10
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.001/feedback_002": {
+    "outers": 3,
+    "linear_iterations": 7
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.001/feedback_003": {
+    "outers": 3,
+    "linear_iterations": 7
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.001/feedback_004": {
+    "outers": 2,
+    "linear_iterations": 4
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.001/feedback_005": {
+    "outers": 2,
+    "linear_iterations": 4
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.001/feedback_006": {
+    "outers": 2,
+    "linear_iterations": 4
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.001/feedback_007": {
+    "outers": 2,
+    "linear_iterations": 4
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.001/feedback_008": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.001/feedback_009": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.001/feedback_010": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.001/feedback_011": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.001/feedback_012": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.001/feedback_013": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.001/feedback_014": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.001/feedback_015": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.001/feedback_016": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.001/feedback_017": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.001/feedback_018": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.001/feedback_019": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.001/feedback_020": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.01/feedback_000": {
+    "outers": 51,
+    "linear_iterations": 1010
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.01/feedback_001": {
+    "outers": 4,
+    "linear_iterations": 11
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.01/feedback_002": {
+    "outers": 3,
+    "linear_iterations": 7
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.01/feedback_003": {
+    "outers": 3,
+    "linear_iterations": 7
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.01/feedback_004": {
+    "outers": 2,
+    "linear_iterations": 4
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.01/feedback_005": {
+    "outers": 2,
+    "linear_iterations": 4
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.01/feedback_006": {
+    "outers": 2,
+    "linear_iterations": 4
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.01/feedback_007": {
+    "outers": 2,
+    "linear_iterations": 4
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.01/feedback_008": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.01/feedback_009": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.01/feedback_010": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.01/feedback_011": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.01/feedback_012": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.01/feedback_013": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.01/feedback_014": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.01/feedback_015": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.01/feedback_016": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.01/feedback_017": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.01/feedback_018": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.01/feedback_019": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.01/feedback_020": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.1/feedback_000": {
+    "outers": 96,
+    "linear_iterations": 2131
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.1/feedback_001": {
+    "outers": 3,
+    "linear_iterations": 9
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.1/feedback_002": {
+    "outers": 3,
+    "linear_iterations": 7
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.1/feedback_003": {
+    "outers": 2,
+    "linear_iterations": 5
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.1/feedback_004": {
+    "outers": 2,
+    "linear_iterations": 4
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.1/feedback_005": {
+    "outers": 2,
+    "linear_iterations": 4
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.1/feedback_006": {
+    "outers": 2,
+    "linear_iterations": 4
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.1/feedback_007": {
+    "outers": 2,
+    "linear_iterations": 4
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.1/feedback_008": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.1/feedback_009": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.1/feedback_010": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.1/feedback_011": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.1/feedback_012": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.1/feedback_013": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.1/feedback_014": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.1/feedback_015": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.1/feedback_016": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.1/feedback_017": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.1/feedback_018": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.1/feedback_019": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_feedback_xt3d/terrain_64_k0.1/feedback_020": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_feedback_xt3d/terrain_96_k0.0001/feedback_000": {
+    "outers": 116,
+    "linear_iterations": 3603
+  },
+  "mf6_feedback_xt3d/terrain_96_k0.0001/feedback_001": {
+    "outers": 5,
+    "linear_iterations": 25
+  },
+  "mf6_feedback_xt3d/terrain_96_k0.0001/feedback_002": {
+    "outers": 4,
+    "linear_iterations": 11
+  },
+  "mf6_feedback_xt3d/terrain_96_k0.0001/feedback_003": {
+    "outers": 4,
+    "linear_iterations": 11
+  },
+  "mf6_feedback_xt3d/terrain_96_k0.0001/feedback_004": {
+    "outers": 3,
+    "linear_iterations": 8
+  },
+  "mf6_feedback_xt3d/terrain_96_k0.0001/feedback_005": {
+    "outers": 3,
+    "linear_iterations": 7
+  },
+  "mf6_feedback_xt3d/terrain_96_k0.0001/feedback_006": {
+    "outers": 2,
+    "linear_iterations": 4
+  },
+  "mf6_feedback_xt3d/terrain_96_k0.0001/feedback_007": {
+    "outers": 2,
+    "linear_iterations": 4
+  },
+  "mf6_feedback_xt3d/terrain_96_k0.0001/feedback_008": {
+    "outers": 2,
+    "linear_iterations": 4
+  },
+  "mf6_feedback_xt3d/terrain_96_k0.0001/feedback_009": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_96_k0.0001/feedback_010": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_96_k0.0001/feedback_011": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_96_k0.0001/feedback_012": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_96_k0.0001/feedback_013": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_96_k0.0001/feedback_014": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_96_k0.0001/feedback_015": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_96_k0.0001/feedback_016": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_96_k0.0001/feedback_017": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_feedback_xt3d/terrain_96_k0.0001/feedback_018": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_feedback_xt3d/terrain_96_k0.0001/feedback_019": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_feedback_xt3d/terrain_96_k0.0001/feedback_020": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_feedback_xt3d/terrain_96_k0.0001/feedback_021": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_initial_shift/terrain_32_k0.0001/feedback_000": {
+    "outers": 4000,
+    "linear_iterations": 71706
+  },
+  "mf6_initial_shift/terrain_64_k0.0001/feedback_000": {
+    "outers": 236,
+    "linear_iterations": 6206
+  },
+  "mf6_initial_shift/terrain_64_k0.0001/feedback_001": {
+    "outers": 6,
+    "linear_iterations": 152
+  },
+  "mf6_initial_shift/terrain_64_k0.0001/feedback_002": {
+    "outers": 6,
+    "linear_iterations": 20
+  },
+  "mf6_initial_shift/terrain_64_k0.0001/feedback_003": {
+    "outers": 5,
+    "linear_iterations": 18
+  },
+  "mf6_initial_shift/terrain_64_k0.0001/feedback_004": {
+    "outers": 5,
+    "linear_iterations": 14
+  },
+  "mf6_initial_shift/terrain_64_k0.0001/feedback_005": {
+    "outers": 4,
+    "linear_iterations": 11
+  },
+  "mf6_initial_shift/terrain_64_k0.0001/feedback_006": {
+    "outers": 4,
+    "linear_iterations": 10
+  },
+  "mf6_initial_shift/terrain_64_k0.0001/feedback_007": {
+    "outers": 3,
+    "linear_iterations": 8
+  },
+  "mf6_initial_shift/terrain_64_k0.0001/feedback_008": {
+    "outers": 3,
+    "linear_iterations": 7
+  },
+  "mf6_initial_shift/terrain_64_k0.0001/feedback_009": {
+    "outers": 2,
+    "linear_iterations": 5
+  },
+  "mf6_initial_shift/terrain_64_k0.0001/feedback_010": {
+    "outers": 2,
+    "linear_iterations": 4
+  },
+  "mf6_initial_shift/terrain_64_k0.0001/feedback_011": {
+    "outers": 2,
+    "linear_iterations": 4
+  },
+  "mf6_initial_shift/terrain_64_k0.0001/feedback_012": {
+    "outers": 2,
+    "linear_iterations": 4
+  },
+  "mf6_initial_shift/terrain_64_k0.0001/feedback_013": {
+    "outers": 2,
+    "linear_iterations": 4
+  },
+  "mf6_initial_shift/terrain_64_k0.0001/feedback_014": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_initial_shift/terrain_64_k0.0001/feedback_015": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_initial_shift/terrain_64_k0.0001/feedback_016": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_initial_shift/terrain_64_k0.0001/feedback_017": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_initial_shift/terrain_64_k0.0001/feedback_018": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_initial_shift/terrain_64_k0.0001/feedback_019": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_initial_shift/terrain_64_k0.0001/feedback_020": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_initial_shift/terrain_64_k0.0001/feedback_021": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_initial_shift/terrain_64_k0.0001/feedback_022": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_initial_shift/terrain_64_k0.0001/feedback_023": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_initial_shift/terrain_64_k0.0001/feedback_024": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_initial_shift/terrain_64_k0.0001/feedback_025": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_initial_shift/terrain_64_k0.0001/feedback_026": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_initial_shift/terrain_64_k0.1/feedback_000": {
+    "outers": 140,
+    "linear_iterations": 3806
+  },
+  "mf6_initial_shift/terrain_64_k0.1/feedback_001": {
+    "outers": 6,
+    "linear_iterations": 20
+  },
+  "mf6_initial_shift/terrain_64_k0.1/feedback_002": {
+    "outers": 5,
+    "linear_iterations": 15
+  },
+  "mf6_initial_shift/terrain_64_k0.1/feedback_003": {
+    "outers": 5,
+    "linear_iterations": 15
+  },
+  "mf6_initial_shift/terrain_64_k0.1/feedback_004": {
+    "outers": 5,
+    "linear_iterations": 12
+  },
+  "mf6_initial_shift/terrain_64_k0.1/feedback_005": {
+    "outers": 4,
+    "linear_iterations": 10
+  },
+  "mf6_initial_shift/terrain_64_k0.1/feedback_006": {
+    "outers": 4,
+    "linear_iterations": 10
+  },
+  "mf6_initial_shift/terrain_64_k0.1/feedback_007": {
+    "outers": 3,
+    "linear_iterations": 7
+  },
+  "mf6_initial_shift/terrain_64_k0.1/feedback_008": {
+    "outers": 3,
+    "linear_iterations": 7
+  },
+  "mf6_initial_shift/terrain_64_k0.1/feedback_009": {
+    "outers": 2,
+    "linear_iterations": 4
+  },
+  "mf6_initial_shift/terrain_64_k0.1/feedback_010": {
+    "outers": 2,
+    "linear_iterations": 4
+  },
+  "mf6_initial_shift/terrain_64_k0.1/feedback_011": {
+    "outers": 2,
+    "linear_iterations": 4
+  },
+  "mf6_initial_shift/terrain_64_k0.1/feedback_012": {
+    "outers": 2,
+    "linear_iterations": 4
+  },
+  "mf6_initial_shift/terrain_64_k0.1/feedback_013": {
+    "outers": 2,
+    "linear_iterations": 4
+  },
+  "mf6_initial_shift/terrain_64_k0.1/feedback_014": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_initial_shift/terrain_64_k0.1/feedback_015": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_initial_shift/terrain_64_k0.1/feedback_016": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_initial_shift/terrain_64_k0.1/feedback_017": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_initial_shift/terrain_64_k0.1/feedback_018": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_initial_shift/terrain_64_k0.1/feedback_019": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_initial_shift/terrain_64_k0.1/feedback_020": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_initial_shift/terrain_64_k0.1/feedback_021": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "mf6_initial_shift/terrain_64_k0.1/feedback_022": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_initial_shift/terrain_64_k0.1/feedback_023": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_initial_shift/terrain_64_k0.1/feedback_024": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_initial_shift/terrain_64_k0.1/feedback_025": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_initial_shift/terrain_64_k0.1/feedback_026": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "mf6_solver_recovery/n32_xt3d_simple": {
+    "outers": 8000,
+    "linear_iterations": 142956
+  },
+  "geometry/geometry_n16_slope0.1_variableTrue_vertical_affine/mf6_tpfa": {
+    "outers": 2,
+    "linear_iterations": 4
+  },
+  "geometry/geometry_n16_slope0.1_variableTrue_vertical_affine/mf6_xt3d": {
+    "outers": 2,
+    "linear_iterations": 6
+  },
+  "geometry/geometry_n32_slope0.1_variableTrue_vertical_affine/mf6_tpfa": {
+    "outers": 2,
+    "linear_iterations": 5
+  },
+  "geometry/geometry_n32_slope0.1_variableTrue_vertical_affine/mf6_xt3d": {
+    "outers": 2,
+    "linear_iterations": 6
+  },
+  "geometry/geometry_n8_slope0.1_variableFalse_vertical_affine/mf6_tpfa": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "geometry/geometry_n8_slope0.1_variableFalse_vertical_affine/mf6_xt3d": {
+    "outers": 2,
+    "linear_iterations": 5
+  },
+  "geometry/geometry_n8_slope0.1_variableTrue_constant/mf6_tpfa": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "geometry/geometry_n8_slope0.1_variableTrue_constant/mf6_xt3d": {
+    "outers": 2,
+    "linear_iterations": 5
+  },
+  "geometry/geometry_n8_slope0.1_variableTrue_vertical_affine/mf6_tpfa": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "geometry/geometry_n8_slope0.1_variableTrue_vertical_affine/mf6_xt3d": {
+    "outers": 2,
+    "linear_iterations": 5
+  },
+  "geometry/geometry_n8_slope0_variableFalse_constant/mf6_tpfa": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "geometry/geometry_n8_slope0_variableFalse_constant/mf6_xt3d": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "geometry/geometry_n8_slope0_variableFalse_vertical_affine/mf6_tpfa": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "geometry/geometry_n8_slope0_variableFalse_vertical_affine/mf6_xt3d": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "physics_controls/control_dry_contactTrue_floor0.001_slope0/mf6_coupled/feedback_000": {
+    "outers": 0,
+    "linear_iterations": 0
+  },
+  "physics_controls/control_dry_contactTrue_floor0.01_slope0/mf6_coupled/feedback_000": {
+    "outers": 0,
+    "linear_iterations": 0
+  },
+  "physics_controls/control_wet_contactTrue_floor0.01_slope0/mf6_coupled/feedback_000": {
+    "outers": 7,
+    "linear_iterations": 26
+  },
+  "physics_controls/control_wet_contactTrue_floor0.01_slope0/mf6_coupled/feedback_001": {
+    "outers": 2,
+    "linear_iterations": 4
+  },
+  "physics_controls/control_wet_contactTrue_floor0.01_slope0/mf6_coupled/feedback_002": {
+    "outers": 2,
+    "linear_iterations": 4
+  },
+  "physics_controls/control_wet_contactTrue_floor0.01_slope0/mf6_coupled/feedback_003": {
+    "outers": 2,
+    "linear_iterations": 4
+  },
+  "physics_controls/control_wet_contactTrue_floor0.01_slope0/mf6_coupled/feedback_004": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "physics_controls/control_wet_contactTrue_floor0.01_slope0/mf6_coupled/feedback_005": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "physics_controls/control_wet_contactTrue_floor0.01_slope0/mf6_coupled/feedback_006": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "physics_controls/control_wet_contactTrue_floor0.01_slope0/mf6_coupled/feedback_007": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "physics_controls/control_wet_contactTrue_floor0.01_slope0/mf6_coupled/feedback_008": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "physics_controls/control_wet_contactTrue_floor0.01_slope0/mf6_coupled/feedback_009": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "physics_controls/control_wet_contactTrue_floor0.01_slope0/mf6_coupled/feedback_010": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "physics_controls/control_wet_contactTrue_floor0.01_slope0/mf6_coupled/feedback_011": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "physics_controls/control_wet_contactTrue_floor0.01_slope0/mf6_coupled/feedback_012": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "physics_controls/control_wet_contactTrue_floor0.01_slope0/mf6_coupled/feedback_013": {
+    "outers": 2,
+    "linear_iterations": 3
+  },
+  "physics_controls/control_wet_contactTrue_floor0.01_slope0/mf6_coupled/feedback_014": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "physics_controls/control_wet_contactTrue_floor0.01_slope0/mf6_coupled/feedback_015": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "physics_controls/control_wet_contactTrue_floor0.01_slope0/mf6_coupled/feedback_016": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "physics_controls/control_wet_contactTrue_floor0.01_slope0/mf6_coupled/feedback_017": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "physics_controls/control_wet_contactTrue_floor0.01_slope0/mf6_coupled/feedback_018": {
+    "outers": 1,
+    "linear_iterations": 1
+  },
+  "fixed_boundary_refinement_v2/fixed_boundaries_refinement_16/mf6_tpfa": {
+    "outers": 2,
+    "linear_iterations": 5
+  },
+  "fixed_boundary_refinement_v2/fixed_boundaries_refinement_16/mf6_xt3d": {
+    "outers": 2,
+    "linear_iterations": 5
+  },
+  "fixed_boundary_refinement_v2/fixed_boundaries_refinement_32/mf6_tpfa": {
+    "outers": 2,
+    "linear_iterations": 6
+  },
+  "fixed_boundary_refinement_v2/fixed_boundaries_refinement_32/mf6_xt3d": {
+    "outers": 2,
+    "linear_iterations": 6
+  },
+  "fixed_boundary_refinement_v2/fixed_boundaries_refinement_8/mf6_tpfa": {
+    "outers": 2,
+    "linear_iterations": 4
+  },
+  "fixed_boundary_refinement_v2/fixed_boundaries_refinement_8/mf6_xt3d": {
+    "outers": 2,
+    "linear_iterations": 4
+  },
+  "angle_default/xt3d_no_angle2": {
+    "outers": 2,
+    "linear_iterations": 4
+  },
+  "fully_saturated_affine/fully_saturated_affine_16/mf6": {
+    "outers": 2,
+    "linear_iterations": 6
+  },
+  "fully_saturated_affine/fully_saturated_affine_32/mf6": {
+    "outers": 2,
+    "linear_iterations": 6
+  },
+  "fully_saturated_affine/fully_saturated_affine_8/mf6": {
+    "outers": 2,
+    "linear_iterations": 5
+  },
+  "fully_saturated_affine_xy/fully_saturated_affine_xy_16/mf6": {
+    "outers": 2,
+    "linear_iterations": 6
+  },
+  "fully_saturated_affine_xy/fully_saturated_affine_xy_32/mf6": {
+    "outers": 2,
+    "linear_iterations": 6
+  },
+  "fully_saturated_affine_xy/fully_saturated_affine_xy_8/mf6": {
+    "outers": 2,
+    "linear_iterations": 5
+  },
+  "mf6_n32_angle_control": {
+    "outers": 79,
+    "linear_iterations": 1427
+  },
+  "scalar_roots/mf6": {
+    "outers": 5,
+    "linear_iterations": 8
+  }
+}

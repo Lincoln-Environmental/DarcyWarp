@@ -1,0 +1,203 @@
+{
+  "input_hash": "78faf6585f07cdc5455afc0c969d640566de9342be4cf8584388fe370447faf5",
+  "converged": true,
+  "stop_reason": "coupled_converged",
+  "history": [
+    {
+      "outer": 0,
+      "requested_contact_flux": [
+        0.25
+      ],
+      "recomputed_contact_flux": [
+        0.24824102494366035
+      ],
+      "mismatch": 0.0017589750563396511
+    },
+    {
+      "outer": 1,
+      "requested_contact_flux": [
+        0.24912051247183017
+      ],
+      "recomputed_contact_flux": [
+        0.2482473150223275
+      ],
+      "mismatch": 0.0008731974495026773
+    },
+    {
+      "outer": 2,
+      "requested_contact_flux": [
+        0.24868391374707882
+      ],
+      "recomputed_contact_flux": [
+        0.24825043760121565
+      ],
+      "mismatch": 0.00043347614586317085
+    },
+    {
+      "outer": 3,
+      "requested_contact_flux": [
+        0.24846717567414722
+      ],
+      "recomputed_contact_flux": [
+        0.2482519877252626
+      ],
+      "mismatch": 0.00021518794888461534
+    },
+    {
+      "outer": 4,
+      "requested_contact_flux": [
+        0.2483595816997049
+      ],
+      "recomputed_contact_flux": [
+        0.24825275724446952
+      ],
+      "mismatch": 0.00010682445523538253
+    },
+    {
+      "outer": 5,
+      "requested_contact_flux": [
+        0.24830616947208722
+      ],
+      "recomputed_contact_flux": [
+        0.24825313925380607
+      ],
+      "mismatch": 5.303021828115262e-05
+    },
+    {
+      "outer": 6,
+      "requested_contact_flux": [
+        0.24827965436294663
+      ],
+      "recomputed_contact_flux": [
+        0.24825332889249277
+      ],
+      "mismatch": 2.632547045386402e-05
+    },
+    {
+      "outer": 7,
+      "requested_contact_flux": [
+        0.2482664916277197
+      ],
+      "recomputed_contact_flux": [
+        0.24825342303383116
+      ],
+      "mismatch": 1.3068593888526658e-05
+    },
+    {
+      "outer": 8,
+      "requested_contact_flux": [
+        0.24825995733077544
+      ],
+      "recomputed_contact_flux": [
+        0.24825346976798288
+      ],
+      "mismatch": 6.487562792562018e-06
+    },
+    {
+      "outer": 9,
+      "requested_contact_flux": [
+        0.24825671354937917
+      ],
+      "recomputed_contact_flux": [
+        0.24825349296804491
+      ],
+      "mismatch": 3.2205813342567335e-06
+    },
+    {
+      "outer": 10,
+      "requested_contact_flux": [
+        0.24825510325871203
+      ],
+      "recomputed_contact_flux": [
+        0.2482535044851957
+      ],
+      "mismatch": 1.5987735163258687e-06
+    },
+    {
+      "outer": 11,
+      "requested_contact_flux": [
+        0.24825430387195385
+      ],
+      "recomputed_contact_flux": [
+        0.24825351020264017
+      ],
+      "mismatch": 7.936693136867401e-07
+    },
+    {
+      "outer": 12,
+      "requested_contact_flux": [
+        0.248253907037297
+      ],
+      "recomputed_contact_flux": [
+        0.24825351304094828
+      ],
+      "mismatch": 3.93996348713177e-07
+    },
+    {
+      "outer": 13,
+      "requested_contact_flux": [
+        0.24825371003912264
+      ],
+      "recomputed_contact_flux": [
+        0.2482535144499488
+      ],
+      "mismatch": 1.955891738292248e-07
+    },
+    {
+      "outer": 14,
+      "requested_contact_flux": [
+        0.24825361224453574
+      ],
+      "recomputed_contact_flux": [
+        0.24825351513398625
+      ],
+      "mismatch": 9.711054949068654e-08
+    },
+    {
+      "outer": 15,
+      "requested_contact_flux": [
+        0.248253563689261
+      ],
+      "recomputed_contact_flux": [
+        0.24825351546994667
+      ],
+      "mismatch": 4.821931431919779e-08
+    },
+    {
+      "outer": 16,
+      "requested_contact_flux": [
+        0.24825353957960383
+      ],
+      "recomputed_contact_flux": [
+        0.24825351563144904
+      ],
+      "mismatch": 2.3948154792563514e-08
+    },
+    {
+      "outer": 17,
+      "requested_contact_flux": [
+        0.24825352760552644
+      ],
+      "recomputed_contact_flux": [
+        0.24825351571251797
+      ],
+      "mismatch": 1.1893008466934418e-08
+    },
+    {
+      "outer": 18,
+      "requested_contact_flux": [
+        0.2482535216590222
+      ],
+      "recomputed_contact_flux": [
+        0.24825351575543503
+      ],
+      "mismatch": 5.903587174671543e-09
+    }
+  ],
+  "contact_tolerance_m3_day": 1e-08,
+  "relaxation": 0.5,
+  "xt3d": true,
+  "initial_guess": "canonical_cold",
+  "formulation_equivalence": false,
+  "contact_law": "independently recomputed exact DarcyWarp natural contacts; MF6 interior law retained"
+}

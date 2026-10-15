@@ -1,0 +1,653 @@
+{
+  "native_success": true,
+  "independent_conservation": false,
+  "invalid_heads": 0,
+  "cell_residual_rms": 2.6733925309299746e-12,
+  "cell_residual_max": 1.2375624334838774e-11,
+  "cell_residual_l1": 1.5777702953658134e-10,
+  "gross_external_throughput": 1.5041012245222066e-10,
+  "signed_imbalance": 4.7183285849834125e-11,
+  "relative_cell_imbalance": 1.0489787985293402,
+  "reciprocity_max": 0.0,
+  "source_allocation_max_error": 0.0,
+  "packages": {
+    "WEL": [],
+    "CHD": [
+      {
+        "node": 56,
+        "inflow": 0.0
+      },
+      {
+        "node": 57,
+        "inflow": 0.0
+      },
+      {
+        "node": 58,
+        "inflow": 0.0
+      },
+      {
+        "node": 59,
+        "inflow": 0.0
+      },
+      {
+        "node": 60,
+        "inflow": 0.0
+      },
+      {
+        "node": 61,
+        "inflow": 0.0
+      },
+      {
+        "node": 62,
+        "inflow": 0.0
+      },
+      {
+        "node": 63,
+        "inflow": 0.0
+      },
+      {
+        "node": 48,
+        "inflow": 0.0
+      },
+      {
+        "node": 49,
+        "inflow": 1.3642420526593924e-12
+      },
+      {
+        "node": 50,
+        "inflow": 0.0
+      },
+      {
+        "node": 51,
+        "inflow": 1.3642420526593924e-12
+      },
+      {
+        "node": 52,
+        "inflow": 1.3642420526593924e-12
+      },
+      {
+        "node": 53,
+        "inflow": 0.0
+      },
+      {
+        "node": 54,
+        "inflow": 0.0
+      },
+      {
+        "node": 55,
+        "inflow": 0.0
+      },
+      {
+        "node": 40,
+        "inflow": 0.0
+      },
+      {
+        "node": 41,
+        "inflow": 0.0
+      },
+      {
+        "node": 42,
+        "inflow": -4.092726157978177e-12
+      },
+      {
+        "node": 43,
+        "inflow": -4.092726157978177e-12
+      },
+      {
+        "node": 44,
+        "inflow": -2.7284841053187847e-12
+      },
+      {
+        "node": 45,
+        "inflow": -2.7284841053187847e-12
+      },
+      {
+        "node": 46,
+        "inflow": -2.7284841053187847e-12
+      },
+      {
+        "node": 47,
+        "inflow": 0.0
+      },
+      {
+        "node": 32,
+        "inflow": 0.0
+      },
+      {
+        "node": 33,
+        "inflow": 0.0
+      },
+      {
+        "node": 34,
+        "inflow": -4.092726157978177e-12
+      },
+      {
+        "node": 35,
+        "inflow": 5.4569682106375694e-12
+      },
+      {
+        "node": 36,
+        "inflow": 6.821210263296962e-12
+      },
+      {
+        "node": 37,
+        "inflow": 6.821210263296962e-12
+      },
+      {
+        "node": 38,
+        "inflow": 6.821210263296962e-12
+      },
+      {
+        "node": 39,
+        "inflow": 0.0
+      },
+      {
+        "node": 24,
+        "inflow": 0.0
+      },
+      {
+        "node": 25,
+        "inflow": 0.0
+      },
+      {
+        "node": 26,
+        "inflow": -2.7284841053187847e-12
+      },
+      {
+        "node": 27,
+        "inflow": 6.821210263296962e-12
+      },
+      {
+        "node": 28,
+        "inflow": 0.0
+      },
+      {
+        "node": 29,
+        "inflow": 1.3642420526593924e-12
+      },
+      {
+        "node": 30,
+        "inflow": 1.3642420526593924e-12
+      },
+      {
+        "node": 31,
+        "inflow": 0.0
+      },
+      {
+        "node": 16,
+        "inflow": 0.0
+      },
+      {
+        "node": 17,
+        "inflow": 0.0
+      },
+      {
+        "node": 18,
+        "inflow": -2.7284841053187847e-12
+      },
+      {
+        "node": 19,
+        "inflow": 6.821210263296962e-12
+      },
+      {
+        "node": 20,
+        "inflow": 1.3642420526593924e-12
+      },
+      {
+        "node": 21,
+        "inflow": 1.3642420526593924e-12
+      },
+      {
+        "node": 22,
+        "inflow": 0.0
+      },
+      {
+        "node": 23,
+        "inflow": 0.0
+      },
+      {
+        "node": 8,
+        "inflow": 0.0
+      },
+      {
+        "node": 9,
+        "inflow": 0.0
+      },
+      {
+        "node": 10,
+        "inflow": -4.092726157978177e-12
+      },
+      {
+        "node": 11,
+        "inflow": 6.821210263296962e-12
+      },
+      {
+        "node": 12,
+        "inflow": 0.0
+      },
+      {
+        "node": 13,
+        "inflow": 0.0
+      },
+      {
+        "node": 14,
+        "inflow": 1.3642420526593924e-12
+      },
+      {
+        "node": 15,
+        "inflow": 0.0
+      },
+      {
+        "node": 0,
+        "inflow": 0.0
+      },
+      {
+        "node": 1,
+        "inflow": 0.0
+      },
+      {
+        "node": 2,
+        "inflow": 0.0
+      },
+      {
+        "node": 3,
+        "inflow": 0.0
+      },
+      {
+        "node": 4,
+        "inflow": 0.0
+      },
+      {
+        "node": 5,
+        "inflow": 0.0
+      },
+      {
+        "node": 6,
+        "inflow": 0.0
+      },
+      {
+        "node": 7,
+        "inflow": 0.0
+      },
+      {
+        "node": 120,
+        "inflow": 0.0
+      },
+      {
+        "node": 121,
+        "inflow": 2.5579538487363604e-14
+      },
+      {
+        "node": 122,
+        "inflow": 0.0
+      },
+      {
+        "node": 123,
+        "inflow": 2.5579538487363604e-14
+      },
+      {
+        "node": 124,
+        "inflow": 2.5579538487363604e-14
+      },
+      {
+        "node": 125,
+        "inflow": 0.0
+      },
+      {
+        "node": 126,
+        "inflow": 0.0
+      },
+      {
+        "node": 127,
+        "inflow": 0.0
+      },
+      {
+        "node": 112,
+        "inflow": 4.263256414560601e-14
+      },
+      {
+        "node": 119,
+        "inflow": 0.0
+      },
+      {
+        "node": 104,
+        "inflow": 0.0
+      },
+      {
+        "node": 111,
+        "inflow": -8.526512829121202e-14
+      },
+      {
+        "node": 96,
+        "inflow": 0.0
+      },
+      {
+        "node": 103,
+        "inflow": 2.1316282072803006e-13
+      },
+      {
+        "node": 88,
+        "inflow": 0.0
+      },
+      {
+        "node": 95,
+        "inflow": 4.263256414560601e-14
+      },
+      {
+        "node": 80,
+        "inflow": 0.0
+      },
+      {
+        "node": 87,
+        "inflow": 0.0
+      },
+      {
+        "node": 72,
+        "inflow": 0.0
+      },
+      {
+        "node": 79,
+        "inflow": 4.263256414560601e-14
+      },
+      {
+        "node": 64,
+        "inflow": 0.0
+      },
+      {
+        "node": 65,
+        "inflow": 0.0
+      },
+      {
+        "node": 66,
+        "inflow": -7.673861546209081e-14
+      },
+      {
+        "node": 67,
+        "inflow": 1.2789769243681803e-13
+      },
+      {
+        "node": 68,
+        "inflow": 0.0
+      },
+      {
+        "node": 69,
+        "inflow": 0.0
+      },
+      {
+        "node": 70,
+        "inflow": 2.5579538487363604e-14
+      },
+      {
+        "node": 71,
+        "inflow": 0.0
+      },
+      {
+        "node": 184,
+        "inflow": 0.0
+      },
+      {
+        "node": 185,
+        "inflow": 0.0
+      },
+      {
+        "node": 186,
+        "inflow": 0.0
+      },
+      {
+        "node": 187,
+        "inflow": 0.0
+      },
+      {
+        "node": 188,
+        "inflow": 0.0
+      },
+      {
+        "node": 189,
+        "inflow": 0.0
+      },
+      {
+        "node": 190,
+        "inflow": 0.0
+      },
+      {
+        "node": 191,
+        "inflow": 0.0
+      },
+      {
+        "node": 176,
+        "inflow": 0.0
+      },
+      {
+        "node": 177,
+        "inflow": 9.74458609042423e-13
+      },
+      {
+        "node": 178,
+        "inflow": 0.0
+      },
+      {
+        "node": 179,
+        "inflow": 9.74458609042423e-13
+      },
+      {
+        "node": 180,
+        "inflow": 9.74458609042423e-13
+      },
+      {
+        "node": 181,
+        "inflow": 0.0
+      },
+      {
+        "node": 182,
+        "inflow": 0.0
+      },
+      {
+        "node": 183,
+        "inflow": 0.0
+      },
+      {
+        "node": 168,
+        "inflow": 0.0
+      },
+      {
+        "node": 169,
+        "inflow": 0.0
+      },
+      {
+        "node": 170,
+        "inflow": -2.9233758271272695e-12
+      },
+      {
+        "node": 171,
+        "inflow": -2.9233758271272695e-12
+      },
+      {
+        "node": 172,
+        "inflow": -1.948917218084846e-12
+      },
+      {
+        "node": 173,
+        "inflow": -1.948917218084846e-12
+      },
+      {
+        "node": 174,
+        "inflow": -1.948917218084846e-12
+      },
+      {
+        "node": 175,
+        "inflow": 0.0
+      },
+      {
+        "node": 160,
+        "inflow": 0.0
+      },
+      {
+        "node": 161,
+        "inflow": 0.0
+      },
+      {
+        "node": 162,
+        "inflow": -2.9233758271272695e-12
+      },
+      {
+        "node": 163,
+        "inflow": 3.897834436169692e-12
+      },
+      {
+        "node": 164,
+        "inflow": 4.872293045212115e-12
+      },
+      {
+        "node": 165,
+        "inflow": 4.872293045212115e-12
+      },
+      {
+        "node": 166,
+        "inflow": 4.872293045212115e-12
+      },
+      {
+        "node": 167,
+        "inflow": 0.0
+      },
+      {
+        "node": 152,
+        "inflow": 0.0
+      },
+      {
+        "node": 153,
+        "inflow": 0.0
+      },
+      {
+        "node": 154,
+        "inflow": -1.948917218084846e-12
+      },
+      {
+        "node": 155,
+        "inflow": 4.872293045212115e-12
+      },
+      {
+        "node": 156,
+        "inflow": 0.0
+      },
+      {
+        "node": 157,
+        "inflow": 9.74458609042423e-13
+      },
+      {
+        "node": 158,
+        "inflow": 9.74458609042423e-13
+      },
+      {
+        "node": 159,
+        "inflow": 0.0
+      },
+      {
+        "node": 144,
+        "inflow": 0.0
+      },
+      {
+        "node": 145,
+        "inflow": 0.0
+      },
+      {
+        "node": 146,
+        "inflow": -1.948917218084846e-12
+      },
+      {
+        "node": 147,
+        "inflow": 4.872293045212115e-12
+      },
+      {
+        "node": 148,
+        "inflow": 9.74458609042423e-13
+      },
+      {
+        "node": 149,
+        "inflow": 9.74458609042423e-13
+      },
+      {
+        "node": 150,
+        "inflow": 0.0
+      },
+      {
+        "node": 151,
+        "inflow": 0.0
+      },
+      {
+        "node": 136,
+        "inflow": 0.0
+      },
+      {
+        "node": 137,
+        "inflow": 0.0
+      },
+      {
+        "node": 138,
+        "inflow": -2.9233758271272695e-12
+      },
+      {
+        "node": 139,
+        "inflow": 4.872293045212115e-12
+      },
+      {
+        "node": 140,
+        "inflow": 0.0
+      },
+      {
+        "node": 141,
+        "inflow": 0.0
+      },
+      {
+        "node": 142,
+        "inflow": 9.74458609042423e-13
+      },
+      {
+        "node": 143,
+        "inflow": 0.0
+      },
+      {
+        "node": 128,
+        "inflow": 0.0
+      },
+      {
+        "node": 129,
+        "inflow": 0.0
+      },
+      {
+        "node": 130,
+        "inflow": 0.0
+      },
+      {
+        "node": 131,
+        "inflow": 0.0
+      },
+      {
+        "node": 132,
+        "inflow": 0.0
+      },
+      {
+        "node": 133,
+        "inflow": 0.0
+      },
+      {
+        "node": 134,
+        "inflow": 0.0
+      },
+      {
+        "node": 135,
+        "inflow": 0.0
+      }
+    ],
+    "DRN": []
+  },
+  "head_min": 99.99999999999993,
+  "head_max": 100.00000000000004,
+  "formulation_equivalence": false,
+  "nonlinear_cross_residual": "not established; saved FLOW-JA-FACE is native final reported flux, not a fixed-head nonlinear reevaluation",
+  "returncode": 0,
+  "seconds": 0.07575544900464593,
+  "input_hash": "a124601d9e71415c91214b2af03dc019c002b8978a15f59b3bcb7ac6c4ddf8a1",
+  "executable": "/bin/modflow/mf6",
+  "executable_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+  "mf6_version": "mf6: 6.6.2 05/12/2025"
+}

@@ -1,0 +1,16 @@
+{
+  "archive": "archives/scalar_roots__root_2_cpu.tar.xz",
+  "archive_sha256": "cbe195fb8462646e391035aae50a835f7e6c36043471d1c3ac8eea382b2bad78",
+  "original_directory": "scalar_roots/root_2_cpu",
+  "files": {
+    "scalar_roots/root_2_cpu/complete.json": "0a851d9e3329c74095f36ba117367020e498d7a61968f469ac59190b1e3824f7",
+    "scalar_roots/root_2_cpu/head.npz": "9a8cc6ca81d80044e908f36ad55d488574364c0d41cc3d0cf9764e6902a8d86d",
+    "scalar_roots/root_2_cpu/history.json.gz": "dfe122f807e084e1554603ba93a9200e5dbd87c3baea65ab9d3b7feed00b8f34",
+    "scalar_roots/root_2_cpu/request.json": "83b640ab182b71245748b234f6a2527beac76a1476af2b6d3d24425a499c2c57",
+    "scalar_roots/root_2_cpu/summary.json": "e604fd8205467f575485464ee0389a790ad0afa0b8e746f4710a8e02c0e76e6d"
+  },
+  "verified_members": 5,
+  "encoding": "tar.xz",
+  "superseded_archive": "archives/scalar_roots__root_2_cpu.tar.gz",
+  "superseded_sha256": "44cd49d68167d32723fc7df5e858bc04f3979025ed6cfb0f4d6e0fb5514f7deb"
+}

@@ -1,0 +1,20 @@
+{
+  "geometry": "uniform physical K; affine physical h; analytic source is zero",
+  "exact_head_Darcy_residual_rms": 1.82931039405781e-12,
+  "true_midface_area_flux_error_max": 0.0011715728753145527,
+  "vertical_metric_flux_error_max": 2.4491519923230953e-12,
+  "physical_affine_balance_rms": 3.3352384136270046e-14,
+  "interpretation": "Darcy horizontal half-cell harmonic thickness is not the arithmetic midpoint physical face thickness. Existing affine tests assert the harmonic formula, not exact physical shared-face area.",
+  "cpu": {
+    "head_rms_error": 1.160311428702309e-14
+  },
+  "gpu": {
+    "head_rms_error": 1.160311428702309e-14
+  },
+  "mf6": {
+    "native": true,
+    "conservation": true,
+    "head_rms_error": 3.4005506054928897e-12,
+    "interpretation": "MF6 vertical connection normal is Cartesian vertical; does not claim geological-interface-normal flux identity"
+  }
+}

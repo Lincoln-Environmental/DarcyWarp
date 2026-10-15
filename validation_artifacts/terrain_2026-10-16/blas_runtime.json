@@ -1,0 +1,12 @@
+[
+  {
+    "user_api": "blas",
+    "internal_api": "openblas",
+    "num_threads": 1,
+    "prefix": "libopenblas",
+    "filepath": "/home/patrickdurney/miniconda3/envs/darcywarp/lib/libopenblasp-r0.3.33.so",
+    "version": "0.3.33",
+    "threading_layer": "pthreads",
+    "architecture": "Haswell"
+  }
+]

@@ -1,0 +1,21 @@
+{
+  "archive": "archives/physics_controls__control_wet_contactFalse_floor0.01_slope0.tar.xz",
+  "archive_sha256": "43323614c901895e56d13b296e8256a6ef78373807e5922bc1ac189580059834",
+  "original_directory": "physics_controls/control_wet_contactFalse_floor0.01_slope0",
+  "files": {
+    "physics_controls/control_wet_contactFalse_floor0.01_slope0/case/inputs.npz": "6c73dbb22faa651ae62fc2bbf091259d84fe809aab637de40bf124d6a55e872a",
+    "physics_controls/control_wet_contactFalse_floor0.01_slope0/case/manifest.json": "a3089fa4dc5162d4b93a84d5aacf63d7f64d594fa138400e0a431f7d9f584eb7",
+    "physics_controls/control_wet_contactFalse_floor0.01_slope0/cpu/head.npz": "f554bfb19f10e6af522be4e703d7099063103c3fb399f549003531937010c3bf",
+    "physics_controls/control_wet_contactFalse_floor0.01_slope0/cpu/history.json.gz": "90e42da15201efcb841e43297b79388c3fbadb884ec4d965a9cbb759ad0f91eb",
+    "physics_controls/control_wet_contactFalse_floor0.01_slope0/cpu/request.json": "8611fbfd369d38e6c341ade0eb7024803bd181bcb3765293f55cff652c87ddca",
+    "physics_controls/control_wet_contactFalse_floor0.01_slope0/cpu/summary.json": "221f482598c5267509e64ae4e624421e1033a58aa5afe38eb6e237d239c8f84f",
+    "physics_controls/control_wet_contactFalse_floor0.01_slope0/gpu/head.npz": "f554bfb19f10e6af522be4e703d7099063103c3fb399f549003531937010c3bf",
+    "physics_controls/control_wet_contactFalse_floor0.01_slope0/gpu/history.json.gz": "3a2e2b8b980b1c9bff03636ebfad4aa047dc8a306d39bb568f11631555d97eb5",
+    "physics_controls/control_wet_contactFalse_floor0.01_slope0/gpu/request.json": "3749c569d73b8b3dacc60e2047e24a14489f49ddd0613552874d4c95a1170f98",
+    "physics_controls/control_wet_contactFalse_floor0.01_slope0/gpu/summary.json": "c4ebe2e09a96394dda6c27152adbe33c8248427694d843396fc0916ab65981fa"
+  },
+  "verified_members": 10,
+  "encoding": "tar.xz",
+  "superseded_archive": "archives/physics_controls__control_wet_contactFalse_floor0.01_slope0.tar.gz",
+  "superseded_sha256": "1dd6ad2f5ad0cbad9c6d8c52e0fd25c3f66f0919b25a32139f094f5d05fbcb20"
+}

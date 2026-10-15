@@ -1,0 +1,184 @@
+{
+  "terrain_32_k0.0001": {
+    "tpfa": {
+      "flux_difference_max": {
+        "qx": 8.551515051635761e-10,
+        "qy": 3.479734556055547e-10,
+        "qz": 1.7763568394002505e-15
+      },
+      "physical_rms": 3.769521806003305e-11,
+      "physical_max": 7.549703640030714e-10,
+      "relative_L1_source_scale": 3.0623729792531626e-11,
+      "fully_recomputed": true,
+      "method": "source-derived MF66.6.2 TPFA upstream/sQuadratic saturation plus exact independently evaluated terrain outlets"
+    },
+    "precision": {
+      "newton_perturb_0": {
+        "mantissa_bits": 63,
+        "physical_rms": 5.378895696136138e-13,
+        "physical_max": 3.049656393302319e-12,
+        "residual_l1": 1.1557780883345375e-09
+      },
+      "picard_perturb_0": {
+        "mantissa_bits": 63,
+        "physical_rms": 5.547516623485704e-13,
+        "physical_max": 2.9569723948054405e-12,
+        "residual_l1": 1.188006131209297e-09
+      },
+      "cpu_cold": {
+        "mantissa_bits": 63,
+        "physical_rms": 7.84254295592776e-13,
+        "physical_max": 2.5423952765106506e-11,
+        "residual_l1": 1.2397190835059562e-09
+      }
+    }
+  },
+  "terrain_64_k0.0001": {
+    "tpfa": {
+      "flux_difference_max": {
+        "qx": 1.6409273939643754e-10,
+        "qy": 4.3218761902608094e-11,
+        "qz": 8.881784197001252e-16
+      },
+      "physical_rms": 1.5106298973617995e-10,
+      "physical_max": 1.341713645741649e-08,
+      "relative_L1_source_scale": 4.341628461951202e-11,
+      "fully_recomputed": true,
+      "method": "source-derived MF66.6.2 TPFA upstream/sQuadratic saturation plus exact independently evaluated terrain outlets"
+    },
+    "precision": {
+      "newton_perturb_0": {
+        "mantissa_bits": 63,
+        "physical_rms": 5.975179344990641e-13,
+        "physical_max": 3.5922547488714818e-12,
+        "residual_l1": 5.2293893414209145e-09
+      },
+      "picard_perturb_0": {
+        "mantissa_bits": 63,
+        "physical_rms": 5.958945678865893e-13,
+        "physical_max": 3.5922547488714818e-12,
+        "residual_l1": 5.21655256053958e-09
+      },
+      "cpu_cold": {
+        "mantissa_bits": 63,
+        "physical_rms": 2.587915109988467e-12,
+        "physical_max": 2.5859665933125955e-10,
+        "residual_l1": 5.957108349992562e-09
+      }
+    }
+  },
+  "terrain_64_k0.1": {
+    "tpfa": {
+      "flux_difference_max": {
+        "qx": 4.772005013364833e-10,
+        "qy": 1.3335049731111326e-10,
+        "qz": 8.881784197001252e-16
+      },
+      "physical_rms": 1.5330246123355865e-10,
+      "physical_max": 1.2832534201923096e-08,
+      "relative_L1_source_scale": 9.280809566943257e-11,
+      "fully_recomputed": true,
+      "method": "source-derived MF66.6.2 TPFA upstream/sQuadratic saturation plus exact independently evaluated terrain outlets"
+    },
+    "precision": {
+      "newton_perturb_0": {
+        "mantissa_bits": 63,
+        "physical_rms": 8.574481958775703e-12,
+        "physical_max": 8.072046923024087e-10,
+        "residual_l1": 7.0219219498956486e-09
+      },
+      "picard_perturb_0": {
+        "mantissa_bits": 63,
+        "physical_rms": 5.381923741627413e-13,
+        "physical_max": 3.3444434016909746e-12,
+        "residual_l1": 4.799584792320829e-09
+      }
+    }
+  },
+  "terrain_64_k0.01": {
+    "tpfa": {
+      "flux_difference_max": {
+        "qx": 2.8985880362597527e-10,
+        "qy": 8.078337998540519e-11,
+        "qz": 1.3322676295501878e-15
+      },
+      "physical_rms": 1.5367086613579963e-10,
+      "physical_max": 1.2670765048294896e-08,
+      "relative_L1_source_scale": 8.569027108068312e-11,
+      "fully_recomputed": true,
+      "method": "source-derived MF66.6.2 TPFA upstream/sQuadratic saturation plus exact independently evaluated terrain outlets"
+    },
+    "precision": {
+      "newton_perturb_0": {
+        "mantissa_bits": 63,
+        "physical_rms": 6.001492602805629e-13,
+        "physical_max": 3.6596839924837865e-12,
+        "residual_l1": 5.202384221127371e-09
+      },
+      "picard_perturb_0": {
+        "mantissa_bits": 63,
+        "physical_rms": 6.020408590876412e-13,
+        "physical_max": 3.963121660271324e-12,
+        "residual_l1": 5.238622453403561e-09
+      }
+    }
+  },
+  "terrain_64_k0.001": {
+    "tpfa": {
+      "flux_difference_max": {
+        "qx": 1.3928058706369484e-10,
+        "qy": 3.97335497837048e-11,
+        "qz": 8.881784197001252e-16
+      },
+      "physical_rms": 1.5103247460971805e-10,
+      "physical_max": 1.3431253720330716e-08,
+      "relative_L1_source_scale": 4.071597857082371e-11,
+      "fully_recomputed": true,
+      "method": "source-derived MF66.6.2 TPFA upstream/sQuadratic saturation plus exact independently evaluated terrain outlets"
+    },
+    "precision": {
+      "newton_perturb_0": {
+        "mantissa_bits": 63,
+        "physical_rms": 5.866937936265765e-13,
+        "physical_max": 3.561353360652386e-12,
+        "residual_l1": 5.09962168289881e-09
+      },
+      "picard_perturb_0": {
+        "mantissa_bits": 63,
+        "physical_rms": 5.961462131190908e-13,
+        "physical_max": 3.670255288926172e-12,
+        "residual_l1": 5.155436260210101e-09
+      }
+    }
+  },
+  "terrain_16_k0.0001": {
+    "tpfa": {
+      "flux_difference_max": {
+        "qx": 1.1297416335764865e-09,
+        "qy": 7.374789667835557e-11,
+        "qz": 2.220446049250313e-16
+      },
+      "physical_rms": 1.694890625397711e-10,
+      "physical_max": 4.0788607214015116e-09,
+      "relative_L1_source_scale": 7.85015445213467e-11,
+      "fully_recomputed": true,
+      "method": "source-derived MF66.6.2 TPFA upstream/sQuadratic saturation plus exact independently evaluated terrain outlets"
+    },
+    "precision": {}
+  },
+  "terrain_96_k0.0001": {
+    "tpfa": {
+      "flux_difference_max": {
+        "qx": 1.9777246507146629e-10,
+        "qy": 3.512568014230055e-11,
+        "qz": 8.881784197001252e-16
+      },
+      "physical_rms": 9.427168423419854e-11,
+      "physical_max": 1.0577480780149529e-08,
+      "relative_L1_source_scale": 6.299745850980222e-11,
+      "fully_recomputed": true,
+      "method": "source-derived MF66.6.2 TPFA upstream/sQuadratic saturation plus exact independently evaluated terrain outlets"
+    },
+    "precision": {}
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "input_hash": "f1120937ac989035466e0b2ed40009d1a5ee081d81e4285ea498aa0c02e073e2",
+  "converged": false,
+  "stop_reason": "coupled_or_native_failure",
+  "history": [
+    {
+      "outer": 0,
+      "native_failure": {
+        "native_success": false,
+        "independent_conservation": false,
+        "extraction": "missing_output",
+        "returncode": 2,
+        "run_hash": "ca23c671c91e4aa0e8fa09ee3f560ce54e6585d08871df1911a8296180463299",
+        "seconds": 0.09597849800047697,
+        "input_hash": "f1120937ac989035466e0b2ed40009d1a5ee081d81e4285ea498aa0c02e073e2",
+        "executable": "/bin/modflow/mf6",
+        "executable_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+        "mf6_version": "mf6: 6.6.2 05/12/2025"
+      }
+    }
+  ],
+  "contact_tolerance_m3_day": 1e-08,
+  "relaxation": 0.5,
+  "xt3d": true,
+  "initial_guess": "canonical_cold",
+  "formulation_equivalence": false,
+  "contact_law": "independently recomputed exact DarcyWarp natural contacts; MF6 interior law retained"
+}

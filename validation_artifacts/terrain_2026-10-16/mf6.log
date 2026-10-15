@@ -1,0 +1,29 @@
+Traceback (most recent call last):
+  File "/tmp/darcy-terrain-validation/working_tests/validate_terrain_mf6_runs.py", line 18, in <module>
+    run_mf6(case=case,directory=path,executable=executable,xt3d=xt3d,convertible=convertible,outer_cap=outer_cap)
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/darcy-terrain-validation/DARCY_WARP_PACKAGE/validation/terrain_mf6.py", line 165, in run_mf6
+    sim=build_mf6(case=case,directory=directory,executable=executable,xt3d=xt3d,
+        convertible=convertible,initial=initial,drains=drains,outer_cap=outer_cap)
+  File "/tmp/darcy-terrain-validation/DARCY_WARP_PACKAGE/validation/terrain_mf6.py", line 38, in build_mf6
+    flopy.mf6.ModflowGwfnpf(gwf,save_flows=True,save_saturation=True,save_specific_discharge=True,
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        icelltype=int(convertible),k=a['kx'][reverse],k22=a['ky'][reverse],k33=a['kz'][reverse],
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        angle1=0.,angle2=0.,angle3=0.,xt3doptions=True if xt3d else None,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        perched=False,thickstrt=False,variablecv=False)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/flopy/mf6/modflow/mfgwfnpf.py", line 611, in __init__
+    super().__init__(
+    ~~~~~~~~~~~~~~~~^
+        parent=model,
+        ^^^^^^^^^^^^^
+    ...<4 lines>...
+        **kwargs,
+        ^^^^^^^^^
+    )
+    ^
+  File "/home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/flopy/mf6/mfpackage.py", line 1894, in __init__
+    raise FlopyException(excpt_str)
+flopy.mf6.mfbase.FlopyException: Extraneous kwargs "variablecv" provided to MFPackage. ()

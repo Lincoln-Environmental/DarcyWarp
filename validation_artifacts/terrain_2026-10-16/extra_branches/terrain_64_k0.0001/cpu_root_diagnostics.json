@@ -1,0 +1,49 @@
+{
+  "budget": {
+    "cell_residual_max": 2.585963665424629e-10,
+    "cell_residual_rms": 2.5878780935532607e-12,
+    "head_residual_rms": 1.9282883593079935e-14,
+    "source_total": 1966.0799999999997,
+    "boundary_inflow": 0.0,
+    "boundary_outflow": -1966.0799999999997,
+    "boundary_net": -1966.0799999999997,
+    "storage_uptake": 0.0,
+    "imbalance": 3.0702048927891766e-13,
+    "domain_imbalance": 3.0702048927891766e-13,
+    "relative_imbalance": 7.80793480628758e-17,
+    "relative_cell_imbalance": 1.5146729970716168e-12,
+    "throughput": 3932.1599999999994,
+    "physical_diagonal_scaling": "seven-point principal part",
+    "coastal_subface_outflows": [
+      0.0002607475898076786,
+      0.0007802077590581494,
+      0.0007296582480694745
+    ]
+  },
+  "scaled_condition_1_estimate": 37982.610917586055,
+  "minimum_abs_U_pivot": 0.0077875254646505715,
+  "correction_max": 2.116864668093384e-11,
+  "correction_l2": 7.974337640345923e-11,
+  "positive_offdiagonal_count": 56025,
+  "offdiagonal_count": 191154,
+  "near_zero_eigenvalues": [
+    {
+      "real": 0.0006971293236926205,
+      "imag": -6.458630896150419e-05
+    },
+    {
+      "real": 0.0006971293236926205,
+      "imag": 6.458630896150419e-05
+    },
+    {
+      "real": 0.0006064124429774752,
+      "imag": 0.0
+    },
+    {
+      "real": 0.0005118828647984062,
+      "imag": 0.0
+    }
+  ],
+  "free_unknowns": 16192,
+  "nnz": 207346
+}

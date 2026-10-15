@@ -1,0 +1,95 @@
+[
+  {
+    "case": "terrain_32_k0.0001",
+    "clusters": 2,
+    "entries": [
+      "gpu_before/picard: success/balance",
+      "gpu_before/newton: success/balance",
+      "gpu_after/picard: success/balance",
+      "gpu_after/newton: success/balance",
+      "cpu_final/newton: success/balance",
+      "cpu_final/picard: success/balance",
+      "mf6_coupled: success/balance",
+      "mf6_xt3d_coupled: FAIL/FAIL balance"
+    ]
+  },
+  {
+    "case": "terrain_64_k0.0001",
+    "clusters": 3,
+    "entries": [
+      "gpu_before/picard: FAIL/FAIL balance",
+      "gpu_before/picard_reference: success/balance",
+      "gpu_before/newton: success/balance",
+      "gpu_after/picard: FAIL/FAIL balance",
+      "gpu_after/newton: success/balance",
+      "cpu_final/newton: success/balance",
+      "cpu_final/picard: success/balance",
+      "mf6_coupled: success/balance",
+      "mf6_xt3d_coupled: success/balance"
+    ]
+  },
+  {
+    "case": "terrain_64_k0.1",
+    "clusters": 4,
+    "entries": [
+      "gpu_before/picard: success/balance",
+      "gpu_before/newton: success/balance",
+      "gpu_after/picard: success/balance",
+      "gpu_after/newton: success/balance",
+      "cpu_final/newton: success/balance",
+      "cpu_final/picard: success/balance",
+      "mf6_coupled: success/balance",
+      "mf6_xt3d_coupled: success/balance"
+    ]
+  },
+  {
+    "case": "terrain_64_k0.01",
+    "clusters": 2,
+    "entries": [
+      "gpu_before/picard: FAIL/FAIL balance",
+      "gpu_before/picard_reference: success/balance",
+      "gpu_before/newton: success/balance",
+      "gpu_after/picard: FAIL/FAIL balance",
+      "gpu_after/newton: success/balance",
+      "cpu_final/newton: success/balance",
+      "mf6_coupled: success/balance",
+      "mf6_xt3d_coupled: success/balance"
+    ]
+  },
+  {
+    "case": "terrain_64_k0.001",
+    "clusters": 3,
+    "entries": [
+      "gpu_before/picard: FAIL/FAIL balance",
+      "gpu_before/picard_reference: success/balance",
+      "gpu_before/newton: success/balance",
+      "gpu_after/picard: FAIL/FAIL balance",
+      "gpu_after/newton: success/balance",
+      "cpu_final/newton: success/balance",
+      "mf6_coupled: success/balance",
+      "mf6_xt3d_coupled: success/balance"
+    ]
+  },
+  {
+    "case": "terrain_16_k0.0001",
+    "clusters": 1,
+    "entries": [
+      "gpu_before/picard: success/balance",
+      "gpu_before/newton: success/balance",
+      "cpu_final/newton: success/balance",
+      "mf6_coupled: success/balance",
+      "mf6_xt3d_coupled: success/balance"
+    ]
+  },
+  {
+    "case": "terrain_96_k0.0001",
+    "clusters": 1,
+    "entries": [
+      "gpu_before/picard: success/balance",
+      "gpu_before/newton: success/balance",
+      "cpu_final/newton: FAIL/FAIL balance",
+      "mf6_coupled: success/balance",
+      "mf6_xt3d_coupled: success/balance"
+    ]
+  }
+]

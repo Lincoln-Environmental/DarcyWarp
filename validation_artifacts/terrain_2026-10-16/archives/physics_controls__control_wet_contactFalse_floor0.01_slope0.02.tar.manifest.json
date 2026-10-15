@@ -1,0 +1,21 @@
+{
+  "archive": "archives/physics_controls__control_wet_contactFalse_floor0.01_slope0.02.tar.xz",
+  "archive_sha256": "56454d148978224b6e1611fa9d341e90f334952015eadc5e0ee4cc3fdf27bce8",
+  "original_directory": "physics_controls/control_wet_contactFalse_floor0.01_slope0.02",
+  "files": {
+    "physics_controls/control_wet_contactFalse_floor0.01_slope0.02/case/inputs.npz": "06bc32a2ed9a38e37ade6085f053e3ad000e82e766729de7de12060fc524414e",
+    "physics_controls/control_wet_contactFalse_floor0.01_slope0.02/case/manifest.json": "e4c9c15559aeb94b77974e1623dcfe8d8a26a834eb72c5944d2b7fe76f53caa0",
+    "physics_controls/control_wet_contactFalse_floor0.01_slope0.02/cpu/head.npz": "880acbf724f98ab67c8dc47efbbffc873dd61cdb0eb8b5d1fdbe39be4b2a376a",
+    "physics_controls/control_wet_contactFalse_floor0.01_slope0.02/cpu/history.json.gz": "277ff5d4fb9c309c940bff60c3835cdc7694e0542bee27bc290ecd4288252fda",
+    "physics_controls/control_wet_contactFalse_floor0.01_slope0.02/cpu/request.json": "f9dc256572aac470aa2c35b189c325858e08c3f9d0d0c4604582a3ac79df39c8",
+    "physics_controls/control_wet_contactFalse_floor0.01_slope0.02/cpu/summary.json": "225ebcc280740d58a324be9875c7c05677410a33db615d18ffc943d280351491",
+    "physics_controls/control_wet_contactFalse_floor0.01_slope0.02/gpu/head.npz": "0f1cbcb0cde071faedfb52655f30368831360ccff8a9c3f01b99ebc0fa722e66",
+    "physics_controls/control_wet_contactFalse_floor0.01_slope0.02/gpu/history.json.gz": "2cb6603d49a722a87f9465e3a3d24857a7d47d1d5e9047d31754cc8cb09c158e",
+    "physics_controls/control_wet_contactFalse_floor0.01_slope0.02/gpu/request.json": "c190c94515eb2245c4a36136454c11b9ce35aa70c4cda683ab177f1c760f6b42",
+    "physics_controls/control_wet_contactFalse_floor0.01_slope0.02/gpu/summary.json": "fdc5f925fc696f27564db15276861eab8a1f754701c4d9cf10fb462874e3355a"
+  },
+  "verified_members": 10,
+  "encoding": "tar.xz",
+  "superseded_archive": "archives/physics_controls__control_wet_contactFalse_floor0.01_slope0.02.tar.gz",
+  "superseded_sha256": "2d2da0bc8cbf0d902d05b8a16f768672afe3026016e24a1c2cc60bc4e66653ed"
+}

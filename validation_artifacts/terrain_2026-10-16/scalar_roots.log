@@ -1,0 +1,25 @@
+flat_scalar_three_roots newton True converged 1 0.0
+✅ CUDA driver reports 1 device(s).
+cuda_device_found = True
+Warp 1.17.0 initialized:
+   CUDA Toolkit 12.9, Driver 13.2
+   Devices:
+     "cpu"      : "x86_64"
+     "cuda:0"   : "NVIDIA GeForce RTX 4070 Ti SUPER" (16 GiB, sm_89, mempool enabled)
+   Kernel cache:
+     /home/patrickdurney/.cache/warp/1.17.0
+Module _create_tiled_dot_kernels__locals__block_dot_kernel_7cdd1072 cb8e22e load on device 'cuda:0' took 0.37 ms  (cached)
+Module _create_tiled_dot_kernels__locals__block_sum_kernel_85ad7d89 bba3435 load on device 'cuda:0' took 0.30 ms  (cached)
+Module make_gmres_solve_least_squares_kernel_tiled__locals__gmres_solve_least_squares_tiled_535e4c66 cb8c4a4 load on device 'cuda:0' took 0.30 ms  (cached)
+Module warp.optim.linear 7055af3 load on device 'cuda:0' took 1.26 ms  (cached)
+Module warp.optim.linear 52ebbe0 load on device 'cuda:0' took 1.07 ms  (cached)
+Module DARCY_WARP_PACKAGE.solvers.terrain_device_kernels 02fec7a load on device 'cuda:0' took 2.22 ms  (cached)
+Module DARCY_WARP_PACKAGE.solvers.terrain_kernels_3d 9ad49ac load on device 'cuda:0' took 0.59 ms  (cached)
+Module DARCY_WARP_PACKAGE.solvers.terrain_newton_kernels 5fc7430 load on device 'cuda:0' took 1.58 ms  (cached)
+Module DARCY_WARP_PACKAGE.solvers.face_kernels_3d_f64 5cc2919 load on device 'cuda:0' took 1.43 ms  (cached)
+flat_scalar_three_roots newton True 1
+flat_scalar_three_roots newton True converged 2 7.782219313412497e-12
+flat_scalar_three_roots newton True 2
+flat_scalar_three_roots newton True converged 2 4.767297667740422e-13
+flat_scalar_three_roots newton True 2
+flat_scalar_three_roots MF6 False True True

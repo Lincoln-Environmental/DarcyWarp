@@ -1,0 +1,91 @@
+.......F                                                                 [100%]
+=================================== FAILURES ===================================
+______________ test_real_picard_fallback_refines_remaining_budget ______________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x73b9ff13f230>
+
+    def test_real_picard_fallback_refines_remaining_budget(monkeypatch):
+        grid=TerrainGrid3D(surface_elevation=np.zeros((3,6)),zeta_faces=np.array([0.,1.,3.]),dx=1.,dy=1.)
+        fixed=np.zeros(grid.shape,dtype=int)
+        fixed[:,:,-1]=1
+        h=np.full(grid.shape,-.4)
+        calls=[]
+        original=DeviceTerrainNewton.refine_inner
+    
+        def record_refinement(self,*,outcome,initial_rms,target_rms):
+            calls.append(dict(used=outcome['cycles'],allocation=self.krylov_budget))
+            return original(self,outcome=outcome,initial_rms=initial_rms,target_rms=target_rms)
+    
+        monkeypatch.setattr(DeviceTerrainNewton,'candidate_improves',refuse_candidate)
+        monkeypatch.setattr(DeviceTerrainNewton,'refine_inner',record_refinement)
+        with build_solver(grid=grid,kx=1.,ky=.6,kz=.15,fixed=fixed,values=h,source=np.full(grid.shape,.01),initial=h) as solver:
+>           head,info=solver.solve(unconfined=True,terrain_nonlinear_method='newton',max_cycles=200,
+                krylov_restart=8,unconfined_max_picard_iter=3)
+
+tests/test_terrain_validation_defects.py:68: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+DARCY_WARP_PACKAGE/warped_darcy_3d.py:312: in solve
+    return self._session.solve(device=self.device,**kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/terrain_fast_3d.py:430: in solve
+    return self._solve_device(head=head,previous=previous,device=device,
+DARCY_WARP_PACKAGE/solvers/terrain_fast_3d.py:676: in _solve_device
+    result = driver.run(max_outer=outer_limit)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/terrain_newton_3d.py:181: in run
+    update = self.search(current=current, newton=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/terrain_newton_3d.py:129: in search
+    update = self.backtrack(current=current, initial_relaxation=initial)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <DARCY_WARP_PACKAGE.solvers.terrain_newton_3d.DeviceTerrainNewton object at 0x73b9f84f1590>
+current = {'head': 0.004751109385941364, 'flow': 0.009999999999999998, 'relative': 1.0, 'finite': True}
+allow_growth = False, initial_relaxation = 1.0
+
+    def backtrack(self, *, current, allow_growth=False, initial_relaxation=None):
+        s = self.state
+        relaxation = self.unconfined_relax if self.outer_limit_val > 1 else 1.0
+        if initial_relaxation is not None:
+            relaxation = initial_relaxation
+        wp.copy(src=s.head, dest=s.starting)
+        proposed_max = clipped_max = 0.0
+        trials = []
+        for attempt in range(12):
+            wp.copy(src=s.starting, dest=s.candidate)
+            wp.launch(terrain_relaxed_update_kernel, dim=s.n,
+                inputs=[s.candidate, s.delta, wp.float64(relaxation),
+                        wp.float64(self.controls.max_head_change_per_outer),
+                        s.fixed, s.bc_values, s.active], device=self.device)
+            self.evaluate(head_buffer=s.candidate, rel_buffer=s.candidate_rel)
+            self.physical_residual(head=s.candidate_rel)
+            combined = self.dual_check(head_buffer=s.head_rel, candidate_buffer=s.candidate_rel)
+            trial = self.residual_metrics(combined=combined)
+            proposed_max = max(proposed_max, float(combined[7]))
+            clipped_max = max(clipped_max, float(combined[1])/relaxation)
+            trials.append(dict(relaxation=relaxation, head_residual_rms=trial["head"],
+                physical_residual_rms=trial["flow"], finite=trial["finite"]))
+>           improves = self.candidate_improves(current=current, candidate=trial)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           TypeError: refuse_candidate() takes 0 positional arguments but 1 positional argument (and 2 keyword-only arguments) were given
+
+DARCY_WARP_PACKAGE/solvers/terrain_device_3d.py:519: TypeError
+----------------------------- Captured stdout call -----------------------------
+Module make_gmres_solve_least_squares_kernel_tiled__locals__gmres_solve_least_squares_tiled_be257604 564fb56 load on device 'cuda:0' took 0.36 ms  (cached)
+Module warp.optim.linear 396e3da load on device 'cuda:0' took 1.07 ms  (cached)
+Module DARCY_WARP_PACKAGE.solvers.terrain_newton_kernels 5fc7430 load on device 'cuda:0' took 1.48 ms  (cached)
+Module DARCY_WARP_PACKAGE.kernels_3d 9a855ae load on device 'cuda:0' took 3.06 ms  (cached)
+=============================== warnings summary ===============================
+tests/test_terrain_validation_defects.py::test_device_steady_discharge_component_requires_compatible_datum[source0-1.0]
+  /home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/warp/_src/apic/types.py:49: DeprecationWarning: Due to '_pack_', the 'APICLaunchParamRecord' Structure will use memory layout compatible with MSVC (Windows). If this is intended, set _layout_ to 'ms'. The implicit default is deprecated and slated to become an error in Python 3.19.
+    class APICLaunchParamRecord(ctypes.Structure):
+
+tests/test_terrain_validation_defects.py::test_device_steady_discharge_component_requires_compatible_datum[source0-1.0]
+  /home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/warp/_src/apic/types.py:69: DeprecationWarning: Due to '_pack_', the 'APICLaunchPtrLocation' Structure will use memory layout compatible with MSVC (Windows). If this is intended, set _layout_ to 'ms'. The implicit default is deprecated and slated to become an error in Python 3.19.
+    class APICLaunchPtrLocation(ctypes.Structure):
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_terrain_validation_defects.py::test_real_picard_fallback_refines_remaining_budget
+1 failed, 7 passed, 2 warnings in 0.87s

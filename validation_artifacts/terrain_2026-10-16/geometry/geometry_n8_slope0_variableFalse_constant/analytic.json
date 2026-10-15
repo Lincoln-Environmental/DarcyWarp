@@ -1,0 +1,30 @@
+{
+  "qx_max": 0.0,
+  "qy_max": 0.0,
+  "qz_error_max": 0.0,
+  "physical_target_downward_m3_day": 0.0,
+  "mf6_tpfa": {
+    "head_rms_error": 3.5919713752963153e-14,
+    "lateral_qx_max": 3.410605131648481e-13,
+    "lateral_qy_max": 1.7905676941154522e-13,
+    "vertical_qz_max_error": 6.821210263296962e-12,
+    "layer_transfer_total": [
+      2.7284841053187847e-11,
+      -1.9489172180848458e-11
+    ],
+    "target_transfer_total": 0.0,
+    "interpretation": "MF6 confined, DarcyWarp h=z has uniform f=.5; vertical physical target unaffected by horizontal effective K"
+  },
+  "mf6_xt3d": {
+    "head_rms_error": 3.8263897345803626e-14,
+    "lateral_qx_max": 3.410605131648481e-13,
+    "lateral_qy_max": 2.3021584638627245e-13,
+    "vertical_qz_max_error": 8.185452315956354e-12,
+    "layer_transfer_total": [
+      2.319211489520967e-11,
+      -1.656579635372119e-11
+    ],
+    "target_transfer_total": 0.0,
+    "interpretation": "MF6 confined, DarcyWarp h=z has uniform f=.5; vertical physical target unaffected by horizontal effective K"
+  }
+}

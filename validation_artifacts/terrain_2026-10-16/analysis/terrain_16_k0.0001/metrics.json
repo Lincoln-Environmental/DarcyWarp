@@ -1,0 +1,4944 @@
+{
+  "gpu_before/newton": {
+    "independent_accepted": true,
+    "budget": {
+      "cell_residual_max": 1.570311292109494e-08,
+      "cell_residual_rms": 1.5688961062798055e-09,
+      "head_residual_rms": 9.022307270862689e-11,
+      "source_total": 122.87999999999997,
+      "boundary_inflow": 0.0,
+      "boundary_outflow": -122.87999976119289,
+      "boundary_net": -122.87999976119289,
+      "storage_uptake": 0.0,
+      "imbalance": 2.3880708436935127e-07,
+      "domain_imbalance": 2.3880708436935127e-07,
+      "relative_imbalance": 9.717085148169034e-10,
+      "relative_cell_imbalance": 2.5739498940783e-09,
+      "throughput": 245.75999976119286,
+      "physical_diagonal_scaling": "seven-point principal part",
+      "coastal_subface_outflows": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "finite_physical_state": true
+    },
+    "residual_l1": 6.325739253540054e-07,
+    "layers": [
+      {
+        "layer": 0,
+        "head_min": 2.5396173991240376,
+        "head_max": 129.7190648819557,
+        "dry_cells": 256,
+        "floor_cells": 256,
+        "thin_cells": 0,
+        "residual_l1": 3.0349363294712717e-07,
+        "residual_squared": 1.6252946905064236e-15,
+        "saturated_volume": 0.0
+      },
+      {
+        "layer": 1,
+        "head_min": 7.421977958968646,
+        "head_max": 129.71419975434623,
+        "dry_cells": 236,
+        "floor_cells": 236,
+        "thin_cells": 1,
+        "residual_l1": 2.354442842356086e-07,
+        "residual_squared": 6.757926053027129e-16,
+        "saturated_volume": 16395.630945684217
+      },
+      {
+        "layer": 2,
+        "head_min": 6.393603763986072,
+        "head_max": 129.68821927804836,
+        "dry_cells": 44,
+        "floor_cells": 44,
+        "thin_cells": 11,
+        "residual_l1": 9.343639130226901e-08,
+        "residual_squared": 1.0127271029415726e-16,
+        "saturated_volume": 195340.21684472007
+      },
+      {
+        "layer": 3,
+        "head_min": 4.702433945273488,
+        "head_max": 111.92085240436042,
+        "dry_cells": 0,
+        "floor_cells": 0,
+        "thin_cells": 0,
+        "residual_l1": 1.9961686900063936e-10,
+        "residual_squared": 5.46381441865476e-22,
+        "saturated_volume": 2932346.677810015
+      }
+    ],
+    "leakage": [
+      {
+        "net": 122.87999986964269,
+        "downward": 122.87999986964269,
+        "upward": 0.0,
+        "gross": 122.87999986964269
+      },
+      {
+        "net": -905.0152099086338,
+        "downward": 102.58839276415361,
+        "upward": 1007.6036026727875,
+        "gross": 1110.1919954369414
+      },
+      {
+        "net": -0.021286385266682036,
+        "downward": 0.27382504669944335,
+        "upward": 0.2951114319661254,
+        "gross": 0.5689364786655686
+      }
+    ],
+    "coastal_free_to_fixed_inflow": 0.0,
+    "coastal_free_to_fixed_outflow": 122.87999976119289,
+    "contacts": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "gate_states": [
+      false,
+      false,
+      false
+    ],
+    "worst_cells": [
+      {
+        "cell": [
+          0,
+          2,
+          0
+        ],
+        "residual": 1.570311292109494e-08,
+        "head_minus_bottom": -2.7735203133472117,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          3,
+          0
+        ],
+        "residual": 1.287027812102437e-08,
+        "head_minus_bottom": -2.888116364677517,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          7,
+          0
+        ],
+        "residual": -1.2005621885524675e-08,
+        "head_minus_bottom": -3.01675615740375,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          8,
+          0
+        ],
+        "residual": -1.1982679903876914e-08,
+        "head_minus_bottom": -2.885077356360748,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          11,
+          0
+        ],
+        "residual": 1.0554906115789464e-08,
+        "head_minus_bottom": -2.8548221657963553,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          12,
+          0
+        ],
+        "residual": 9.887147156550924e-09,
+        "head_minus_bottom": -2.9083483972241297,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          4,
+          0
+        ],
+        "residual": 9.399223344086494e-09,
+        "head_minus_bottom": -3.050515602124863,
+        "floor": true
+      },
+      {
+        "cell": [
+          1,
+          5,
+          3
+        ],
+        "residual": 9.03481267577888e-09,
+        "head_minus_bottom": -7.255321332520527,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          9,
+          0
+        ],
+        "residual": -7.925834377697782e-09,
+        "head_minus_bottom": -2.8207263105444205,
+        "floor": true
+      },
+      {
+        "cell": [
+          1,
+          5,
+          2
+        ],
+        "residual": 7.497555465363348e-09,
+        "head_minus_bottom": -7.328297749854599,
+        "floor": true
+      }
+    ],
+    "water_table_class_counts": {
+      "water_table": 256
+    },
+    "interpretation": "DarcyWarp equations evaluated offline; not native MF6 residual for MF6 heads",
+    "native": {
+      "method": "newton",
+      "input_hash": "31a6f5c0c0486ec7404cc6d2d7fdd7a71604ee5f2d7a4042b2f11ab9de071e08",
+      "source_revision": "377ada20a92ad5f5a40af1ed9844cd8be31beba4",
+      "outer_cap": 2000,
+      "cold_start": true,
+      "seconds": 1.4911424029996851,
+      "info": {
+        "implementation": "fast",
+        "geometry": "terrain",
+        "solver_type": "terrain_device_newton_3d",
+        "fast_operator": "fp64_conservative_transformed_faces_device",
+        "converged": true,
+        "final_physical_acceptance": true,
+        "budget": {
+          "cell_residual_max": 1.570311292109494e-08,
+          "cell_residual_rms": 1.5688961062798055e-09,
+          "head_residual_rms": 9.022307270862689e-11,
+          "source_total": 122.87999999999997,
+          "boundary_inflow": 0.0,
+          "boundary_outflow": -122.87999976119289,
+          "boundary_net": -122.87999976119289,
+          "storage_uptake": 0.0,
+          "imbalance": 2.3880708436935127e-07,
+          "domain_imbalance": 2.3880708436935127e-07,
+          "relative_imbalance": 9.717085148169034e-10,
+          "relative_cell_imbalance": 2.5739498940783e-09,
+          "throughput": 245.75999976119286,
+          "physical_diagonal_scaling": "seven-point principal part",
+          "coastal_subface_outflows": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "krylov_iterations": 5760,
+        "n_outer_iterations": 183,
+        "seconds": 1.4853656519990182,
+        "host_scalar_reads": 2333,
+        "host_outer_reductions": 1672,
+        "gmres_norm_readbacks": 660,
+        "rejected_updates": 0,
+        "n_zero_capacity_storage_seeds": 0,
+        "n_discharge_component_seeds": 0,
+        "n_discharge_subfaces": 3,
+        "workspace_reused": false,
+        "operator_refreshes": 1717,
+        "geometry_revision": 0,
+        "n_isolated_cells_excluded": 0,
+        "transient": false,
+        "dt": null,
+        "unconfined_storage_mode": "secant_sy",
+        "min_saturated_thickness": 0.01,
+        "final_head_residual_rms": 9.022307270862689e-11,
+        "dry_cell_approximation": {
+          "horizontal_floor_excess_flow": 225.7419342574389,
+          "vertical_floor_excess_flow": 561.0242023895158,
+          "vertical_dry_interface_flow": 220.86808830977031,
+          "n_dry_cells": 536,
+          "horizontal_floor_to_recharge": 1.837092563944002,
+          "horizontal_floor_to_abstraction": null,
+          "horizontal_floor_to_budget_throughput": 0.9185462828645602,
+          "vertical_floor_to_recharge": 4.565626647050098,
+          "vertical_floor_to_abstraction": null,
+          "vertical_floor_to_budget_throughput": 2.2828133257432777,
+          "vertical_dry_to_budget_throughput": 0.8987145529149975,
+          "interpretation": "same-head floor sensitivity; vertical means terrain-layer-normal flux, includes metric projections; physical Kz remains saturation-independent, not unsaturated flow"
+        },
+        "device_picard": true,
+        "device_stop_reason": "converged",
+        "n_free_cells": 976,
+        "terrain_nonlinear_method": "newton",
+        "jacobian_vector_products": 1256,
+        "fallback_count": 176,
+        "candidate_evaluations": 1489,
+        "nonlinear_residual_evaluations": 1717,
+        "newton_attempts": 13,
+        "newton_accepted_steps": 7,
+        "nonlinear_backtracks": 1306,
+        "r_rms_end": 1.5688961062798055e-09,
+        "h_rms_end": 9.022307270862689e-11,
+        "dh_rms_lastcheck": 8.359015172905413e-06,
+        "dh_max_lastcheck": 7.232455384098557e-05,
+        "proposed_dh_max_lastcheck": 7.232455384411409e-05,
+        "gmres_restart_blocks": 240,
+        "multigrid_cycles": 6000,
+        "multigrid_hierarchy": "conservative approximate principal part; not exact Galerkin"
+      }
+    }
+  },
+  "gpu_before/picard": {
+    "independent_accepted": true,
+    "budget": {
+      "cell_residual_max": 5.9233683458170816e-08,
+      "cell_residual_rms": 6.683991701718325e-09,
+      "head_residual_rms": 4.962010387449085e-10,
+      "source_total": 122.87999999999997,
+      "boundary_inflow": 0.0,
+      "boundary_outflow": -122.87999994248507,
+      "boundary_net": -122.87999994248507,
+      "storage_uptake": 0.0,
+      "imbalance": 5.7514904462691474e-08,
+      "domain_imbalance": 5.7514904462691474e-08,
+      "relative_imbalance": 2.3402874542704927e-10,
+      "relative_cell_imbalance": 9.774199660743793e-09,
+      "throughput": 245.75999994248502,
+      "physical_diagonal_scaling": "seven-point principal part",
+      "coastal_subface_outflows": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "finite_physical_state": true
+    },
+    "residual_l1": 2.4021073080622316e-06,
+    "layers": [
+      {
+        "layer": 0,
+        "head_min": 2.539617399861182,
+        "head_max": 129.71906488331885,
+        "dry_cells": 256,
+        "floor_cells": 256,
+        "thin_cells": 0,
+        "residual_l1": 6.991621298579886e-08,
+        "residual_squared": 1.6240220480524416e-15,
+        "saturated_volume": 0.0
+      },
+      {
+        "layer": 1,
+        "head_min": 7.421977962347294,
+        "head_max": 129.71419975570953,
+        "dry_cells": 236,
+        "floor_cells": 236,
+        "thin_cells": 1,
+        "residual_l1": 1.1060957140207606e-06,
+        "residual_squared": 2.0790919376667508e-14,
+        "saturated_volume": 16395.63094553621
+      },
+      {
+        "layer": 2,
+        "head_min": 6.393603766474363,
+        "head_max": 129.68821927940087,
+        "dry_cells": 44,
+        "floor_cells": 44,
+        "thin_cells": 11,
+        "residual_l1": 1.2259778982677834e-06,
+        "residual_squared": 2.1188585576413792e-14,
+        "saturated_volume": 195340.21707975768
+      },
+      {
+        "layer": 3,
+        "head_min": 4.702433946074174,
+        "head_max": 111.9208524053987,
+        "dry_cells": 0,
+        "floor_cells": 0,
+        "thin_cells": 0,
+        "residual_l1": 1.174827878887676e-10,
+        "residual_squared": 1.858583338734641e-22,
+        "saturated_volume": 2932346.67829445
+      }
+    ],
+    "leakage": [
+      {
+        "net": 122.88000000257396,
+        "downward": 122.88000000257396,
+        "upward": 0.0,
+        "gross": 122.88000000257396
+      },
+      {
+        "net": -905.0152104898114,
+        "downward": 102.58839260535905,
+        "upward": 1007.6036030951705,
+        "gross": 1110.1919957005293
+      },
+      {
+        "net": -0.021286385340792406,
+        "downward": 0.27382504681459674,
+        "upward": 0.29511143215538915,
+        "gross": 0.5689364789699859
+      }
+    ],
+    "coastal_free_to_fixed_inflow": 0.0,
+    "coastal_free_to_fixed_outflow": 122.87999994248507,
+    "contacts": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "gate_states": [
+      false,
+      false,
+      false
+    ],
+    "worst_cells": [
+      {
+        "cell": [
+          1,
+          3,
+          11
+        ],
+        "residual": 5.9233683458170816e-08,
+        "head_minus_bottom": 0.08450156778866358,
+        "floor": false
+      },
+      {
+        "cell": [
+          2,
+          4,
+          12
+        ],
+        "residual": 5.064424646317178e-08,
+        "head_minus_bottom": 0.5047663398914324,
+        "floor": false
+      },
+      {
+        "cell": [
+          1,
+          3,
+          10
+        ],
+        "residual": -4.233117406604592e-08,
+        "head_minus_bottom": 0.5105247075361774,
+        "floor": false
+      },
+      {
+        "cell": [
+          2,
+          3,
+          4
+        ],
+        "residual": -3.716774649165089e-08,
+        "head_minus_bottom": 0.7990312635122052,
+        "floor": false
+      },
+      {
+        "cell": [
+          1,
+          4,
+          12
+        ],
+        "residual": -3.547308086160328e-08,
+        "head_minus_bottom": -4.189197187851917,
+        "floor": true
+      },
+      {
+        "cell": [
+          1,
+          3,
+          4
+        ],
+        "residual": 3.5299713485592576e-08,
+        "head_minus_bottom": -8.045311184855208,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          3,
+          11
+        ],
+        "residual": -3.526747793802798e-08,
+        "head_minus_bottom": -4.504913364183835,
+        "floor": true
+      },
+      {
+        "cell": [
+          2,
+          2,
+          4
+        ],
+        "residual": -3.3986977399091955e-08,
+        "head_minus_bottom": 0.7978651823373113,
+        "floor": false
+      },
+      {
+        "cell": [
+          1,
+          2,
+          4
+        ],
+        "residual": 3.2803763927446994e-08,
+        "head_minus_bottom": -7.904452641710371,
+        "floor": true
+      },
+      {
+        "cell": [
+          2,
+          5,
+          13
+        ],
+        "residual": -3.236188211852564e-08,
+        "head_minus_bottom": 0.500408336661124,
+        "floor": false
+      }
+    ],
+    "water_table_class_counts": {
+      "water_table": 256
+    },
+    "interpretation": "DarcyWarp equations evaluated offline; not native MF6 residual for MF6 heads",
+    "native": {
+      "method": "picard",
+      "input_hash": "31a6f5c0c0486ec7404cc6d2d7fdd7a71604ee5f2d7a4042b2f11ab9de071e08",
+      "source_revision": "377ada20a92ad5f5a40af1ed9844cd8be31beba4",
+      "outer_cap": 2000,
+      "cold_start": true,
+      "seconds": 8.921254815002612,
+      "info": {
+        "implementation": "fast",
+        "geometry": "terrain",
+        "solver_type": "terrain_device_picard_3d",
+        "fast_operator": "fp64_conservative_transformed_faces_device",
+        "converged": true,
+        "final_physical_acceptance": true,
+        "budget": {
+          "cell_residual_max": 5.9233683458170816e-08,
+          "cell_residual_rms": 6.683991701718325e-09,
+          "head_residual_rms": 4.962010387449085e-10,
+          "source_total": 122.87999999999997,
+          "boundary_inflow": 0.0,
+          "boundary_outflow": -122.87999994248507,
+          "boundary_net": -122.87999994248507,
+          "storage_uptake": 0.0,
+          "imbalance": 5.7514904462691474e-08,
+          "domain_imbalance": 5.7514904462691474e-08,
+          "relative_imbalance": 2.3402874542704927e-10,
+          "relative_cell_imbalance": 9.774199660743793e-09,
+          "throughput": 245.75999994248502,
+          "physical_diagonal_scaling": "seven-point principal part",
+          "coastal_subface_outflows": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "krylov_iterations": 32352,
+        "n_outer_iterations": 1313,
+        "seconds": 8.916880691998813,
+        "host_scalar_reads": 17312,
+        "host_outer_reductions": 13314,
+        "gmres_norm_readbacks": 3998,
+        "rejected_updates": 0,
+        "n_zero_capacity_storage_seeds": 0,
+        "n_discharge_component_seeds": 0,
+        "n_discharge_subfaces": 3,
+        "workspace_reused": false,
+        "operator_refreshes": 13662,
+        "geometry_revision": 0,
+        "n_isolated_cells_excluded": 0,
+        "transient": false,
+        "dt": null,
+        "unconfined_storage_mode": "secant_sy",
+        "min_saturated_thickness": 0.01,
+        "final_head_residual_rms": 4.962010387449085e-10,
+        "dry_cell_approximation": {
+          "horizontal_floor_excess_flow": 225.74193432980263,
+          "vertical_floor_excess_flow": 561.0242027135808,
+          "vertical_dry_interface_flow": 220.8680882868831,
+          "n_dry_cells": 536,
+          "horizontal_floor_to_recharge": 1.8370925645328995,
+          "horizontal_floor_to_abstraction": null,
+          "horizontal_floor_to_budget_throughput": 0.918546282481416,
+          "vertical_floor_to_recharge": 4.565626649687346,
+          "vertical_floor_to_abstraction": null,
+          "vertical_floor_to_budget_throughput": 2.2828133253779166,
+          "vertical_dry_to_budget_throughput": 0.8987145521589056,
+          "interpretation": "same-head floor sensitivity; vertical means terrain-layer-normal flux, includes metric projections; physical Kz remains saturation-independent, not unsaturated flow"
+        },
+        "device_picard": true,
+        "device_stop_reason": "converged",
+        "n_free_cells": 976,
+        "terrain_nonlinear_method": "picard",
+        "jacobian_vector_products": 0,
+        "fallback_count": 0,
+        "candidate_evaluations": 12001,
+        "nonlinear_residual_evaluations": 13662,
+        "newton_attempts": 0,
+        "newton_accepted_steps": 0,
+        "nonlinear_backtracks": 10688,
+        "r_rms_end": 6.683991701718325e-09,
+        "h_rms_end": 4.962010387449085e-10,
+        "dh_rms_lastcheck": 4.162227011245811e-10,
+        "dh_max_lastcheck": 1.8271322232976672e-09,
+        "proposed_dh_max_lastcheck": 4.176307451923044e-08,
+        "gmres_restart_blocks": 1348,
+        "multigrid_cycles": 33700,
+        "multigrid_hierarchy": "conservative approximate principal part; not exact Galerkin"
+      }
+    }
+  },
+  "cpu_hybrid/newton": {
+    "independent_accepted": true,
+    "budget": {
+      "cell_residual_max": 4.634608252729322e-10,
+      "cell_residual_rms": 1.833762824536694e-11,
+      "head_residual_rms": 1.4652365972446684e-12,
+      "source_total": 122.87999999999997,
+      "boundary_inflow": 0.0,
+      "boundary_outflow": -122.8799999999999,
+      "boundary_net": -122.8799999999999,
+      "storage_uptake": 0.0,
+      "imbalance": 9.071280375081911e-14,
+      "domain_imbalance": 9.071280375081911e-14,
+      "relative_imbalance": 3.691113433871222e-16,
+      "relative_cell_imbalance": 7.88070009683224e-12,
+      "throughput": 245.75999999999988,
+      "physical_diagonal_scaling": "seven-point principal part",
+      "coastal_subface_outflows": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "finite_physical_state": true
+    },
+    "residual_l1": 1.9367608557974906e-09,
+    "layers": [
+      {
+        "layer": 0,
+        "head_min": 2.5396173999471188,
+        "head_max": 129.71906488235575,
+        "dry_cells": 256,
+        "floor_cells": 256,
+        "thin_cells": 0,
+        "residual_l1": 1.437073238186315e-10,
+        "residual_squared": 5.887720869393151e-22,
+        "saturated_volume": 0.0
+      },
+      {
+        "layer": 1,
+        "head_min": 7.421977962643432,
+        "head_max": 129.714199754746,
+        "dry_cells": 236,
+        "floor_cells": 236,
+        "thin_cells": 1,
+        "residual_l1": 3.8178799011134856e-10,
+        "residual_squared": 1.7459699250611312e-20,
+        "saturated_volume": 16395.630943714146
+      },
+      {
+        "layer": 2,
+        "head_min": 6.393603766732244,
+        "head_max": 129.68821927842453,
+        "dry_cells": 44,
+        "floor_cells": 44,
+        "thin_cells": 11,
+        "residual_l1": 1.411237211596981e-09,
+        "residual_squared": 3.1014969161772325e-19,
+        "saturated_volume": 195340.2170300431
+      },
+      {
+        "layer": 3,
+        "head_min": 4.702433946224693,
+        "head_max": 111.92085240484725,
+        "dry_cells": 0,
+        "floor_cells": 0,
+        "thin_cells": 0,
+        "residual_l1": 2.833027052968201e-14,
+        "residual_squared": 7.803885942643444e-29,
+        "saturated_volume": 2932346.678242796
+      }
+    ],
+    "leakage": [
+      {
+        "net": 122.87999999997604,
+        "downward": 122.87999999997604,
+        "upward": 0.0,
+        "gross": 122.87999999997604
+      },
+      {
+        "net": -905.0152102661937,
+        "downward": 102.58839296311211,
+        "upward": 1007.6036032293059,
+        "gross": 1110.1919961924182
+      },
+      {
+        "net": -0.021286385310530856,
+        "downward": 0.27382504682812514,
+        "upward": 0.29511143213865604,
+        "gross": 0.5689364789667812
+      }
+    ],
+    "coastal_free_to_fixed_inflow": 0.0,
+    "coastal_free_to_fixed_outflow": 122.8799999999999,
+    "contacts": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "gate_states": [
+      false,
+      false,
+      false
+    ],
+    "worst_cells": [
+      {
+        "cell": [
+          2,
+          1,
+          13
+        ],
+        "residual": 4.634608252729322e-10,
+        "head_minus_bottom": 0.06240200022908482,
+        "floor": false
+      },
+      {
+        "cell": [
+          2,
+          1,
+          12
+        ],
+        "residual": -2.6590629698119983e-10,
+        "head_minus_bottom": 0.1821018387710609,
+        "floor": false
+      },
+      {
+        "cell": [
+          1,
+          1,
+          13
+        ],
+        "residual": -1.2487416656270511e-10,
+        "head_minus_bottom": -4.271344023966719,
+        "floor": true
+      },
+      {
+        "cell": [
+          2,
+          2,
+          13
+        ],
+        "residual": -8.874589951801681e-11,
+        "head_minus_bottom": 0.24108551486565943,
+        "floor": false
+      },
+      {
+        "cell": [
+          2,
+          14,
+          13
+        ],
+        "residual": 6.066244728764048e-11,
+        "head_minus_bottom": 0.028117578143636024,
+        "floor": false
+      },
+      {
+        "cell": [
+          2,
+          14,
+          12
+        ],
+        "residual": -4.668265773943858e-11,
+        "head_minus_bottom": 0.11105205471145041,
+        "floor": false
+      },
+      {
+        "cell": [
+          2,
+          9,
+          9
+        ],
+        "residual": 4.6109005502614764e-11,
+        "head_minus_bottom": 0.0711676613133676,
+        "floor": false
+      },
+      {
+        "cell": [
+          2,
+          6,
+          9
+        ],
+        "residual": 4.4894976625187155e-11,
+        "head_minus_bottom": 0.06919135938052534,
+        "floor": false
+      },
+      {
+        "cell": [
+          2,
+          6,
+          8
+        ],
+        "residual": -3.4007463511898095e-11,
+        "head_minus_bottom": 0.1719415361810377,
+        "floor": false
+      },
+      {
+        "cell": [
+          2,
+          9,
+          8
+        ],
+        "residual": -3.1955771362390806e-11,
+        "head_minus_bottom": 0.16786800510367073,
+        "floor": false
+      }
+    ],
+    "water_table_class_counts": {
+      "water_table": 256
+    },
+    "interpretation": "DarcyWarp equations evaluated offline; not native MF6 residual for MF6 heads",
+    "native": {
+      "converged": true,
+      "stop_reason": "converged",
+      "outers": 700,
+      "seconds": 7.230367963005847,
+      "factorizations": 705,
+      "residual_evaluations": 10442,
+      "budget": {
+        "cell_residual_max": 4.634608252729322e-10,
+        "cell_residual_rms": 1.833762824536694e-11,
+        "head_residual_rms": 1.4652365972446684e-12,
+        "source_total": 122.87999999999997,
+        "boundary_inflow": 0.0,
+        "boundary_outflow": -122.8799999999999,
+        "boundary_net": -122.8799999999999,
+        "storage_uptake": 0.0,
+        "imbalance": 9.071280375081911e-14,
+        "domain_imbalance": 9.071280375081911e-14,
+        "relative_imbalance": 3.691113433871222e-16,
+        "relative_cell_imbalance": 7.88070009683224e-12,
+        "throughput": 245.75999999999988,
+        "physical_diagonal_scaling": "seven-point principal part",
+        "coastal_subface_outflows": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "input_hash": "31a6f5c0c0486ec7404cc6d2d7fdd7a71604ee5f2d7a4042b2f11ab9de071e08",
+      "controls": {
+        "method": "newton",
+        "max_outer": 6000,
+        "head_tol": 1e-06,
+        "flow_tol": 1e-12,
+        "relative_tol": 1e-08,
+        "relaxation": 1.0,
+        "max_change": 50.0,
+        "line_search_steps": 20,
+        "recovery_growth": 1.1,
+        "fallback": true,
+        "physical_merit": true,
+        "adequate_alpha": 0.125,
+        "adequate_merit_ratio": 0.8,
+        "retry_contraction": 0.5
+      },
+      "cold_start": true,
+      "source_revision": "a1885bc011e91d7675e4990f7cc6c704536de15a"
+    }
+  },
+  "cpu_direct_newton": {
+    "independent_accepted": false,
+    "budget": {
+      "cell_residual_max": 221.26596769143956,
+      "cell_residual_rms": 29.749075472531857,
+      "head_residual_rms": 0.2464927379442237,
+      "source_total": 122.87999999999997,
+      "boundary_inflow": 0.0,
+      "boundary_outflow": -178.58105829914734,
+      "boundary_net": -178.58105829914734,
+      "storage_uptake": 0.0,
+      "imbalance": -55.70105829914701,
+      "domain_imbalance": -55.70105829914701,
+      "relative_imbalance": 0.18477032693182366,
+      "relative_cell_imbalance": 49.451025421962264,
+      "throughput": 301.46105829914734,
+      "physical_diagonal_scaling": "seven-point principal part",
+      "coastal_subface_outflows": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "finite_physical_state": true
+    },
+    "residual_l1": 14907.558457682782,
+    "layers": [
+      {
+        "layer": 0,
+        "head_min": 2.5655684847663687,
+        "head_max": 136.4797815446811,
+        "dry_cells": 256,
+        "floor_cells": 256,
+        "thin_cells": 0,
+        "residual_l1": 6496.561401920757,
+        "residual_squared": 424643.4561068417,
+        "saturated_volume": 0.0
+      },
+      {
+        "layer": 1,
+        "head_min": 8.955595482525078,
+        "head_max": 136.4563284284388,
+        "dry_cells": 150,
+        "floor_cells": 150,
+        "thin_cells": 12,
+        "residual_l1": 7229.857732843357,
+        "residual_squared": 427858.7690486993,
+        "saturated_volume": 55232.6780358402
+      },
+      {
+        "layer": 2,
+        "head_min": 7.54263222924434,
+        "head_max": 135.57687077815237,
+        "dry_cells": 0,
+        "floor_cells": 0,
+        "thin_cells": 0,
+        "residual_l1": 1181.0462276123417,
+        "residual_squared": 11265.086469021862,
+        "saturated_volume": 518233.5837529339
+      },
+      {
+        "layer": 3,
+        "head_min": 4.890697764058737,
+        "head_max": 115.00797663786055,
+        "dry_cells": 0,
+        "floor_cells": 0,
+        "thin_cells": 0,
+        "residual_l1": 0.09309530632718063,
+        "residual_squared": 5.054415069983707e-05,
+        "saturated_volume": 3098566.0462468117
+      }
+    ],
+    "leakage": [
+      {
+        "net": 79.42525479528263,
+        "downward": 3280.2157435812805,
+        "upward": 3200.7904887859977,
+        "gross": 6481.006232367277
+      },
+      {
+        "net": 18.499927849015506,
+        "downward": 1478.092543384632,
+        "upward": 1459.5926155356165,
+        "gross": 2937.685158920249
+      },
+      {
+        "net": 0.038485736557111475,
+        "downward": 0.2986563092591411,
+        "upward": 0.2601705727020296,
+        "gross": 0.5588268819611708
+      }
+    ],
+    "coastal_free_to_fixed_inflow": 0.0,
+    "coastal_free_to_fixed_outflow": 178.58105829914734,
+    "contacts": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "gate_states": [
+      false,
+      false,
+      false
+    ],
+    "worst_cells": [
+      {
+        "cell": [
+          0,
+          15,
+          10
+        ],
+        "residual": -221.26596769143956,
+        "head_minus_bottom": -3.8029107389074426,
+        "floor": true
+      },
+      {
+        "cell": [
+          1,
+          15,
+          10
+        ],
+        "residual": 196.81909476873668,
+        "head_minus_bottom": -1.3140010099654233,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          6,
+          11
+        ],
+        "residual": -183.76418501377748,
+        "head_minus_bottom": -1.6021042988613345,
+        "floor": true
+      },
+      {
+        "cell": [
+          1,
+          6,
+          11
+        ],
+        "residual": 152.75011432005257,
+        "head_minus_bottom": 1.0630138726460672,
+        "floor": false
+      },
+      {
+        "cell": [
+          0,
+          2,
+          5
+        ],
+        "residual": 139.70705705640444,
+        "head_minus_bottom": -9.951387307730421,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          12,
+          15
+        ],
+        "residual": -136.68180423303357,
+        "head_minus_bottom": -3.2031468284062043,
+        "floor": true
+      },
+      {
+        "cell": [
+          1,
+          2,
+          5
+        ],
+        "residual": -131.22544350222302,
+        "head_minus_bottom": -3.8676987644219025,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          10,
+          2
+        ],
+        "residual": 121.97642038505633,
+        "head_minus_bottom": -12.546723401298099,
+        "floor": true
+      },
+      {
+        "cell": [
+          1,
+          5,
+          2
+        ],
+        "residual": -115.5898316495521,
+        "head_minus_bottom": -4.931909388253068,
+        "floor": true
+      },
+      {
+        "cell": [
+          1,
+          2,
+          15
+        ],
+        "residual": -115.24288128400964,
+        "head_minus_bottom": 1.3661272880492277,
+        "floor": false
+      }
+    ],
+    "water_table_class_counts": {
+      "potentiometric": 3,
+      "water_table": 253
+    },
+    "interpretation": "DarcyWarp equations evaluated offline; not native MF6 residual for MF6 heads",
+    "native": {
+      "converged": false,
+      "stop_reason": "line_search_or_factorization_failed",
+      "outers": 75,
+      "seconds": 0.7418301829966367,
+      "factorizations": 75,
+      "residual_evaluations": 597,
+      "budget": {
+        "cell_residual_max": 221.26596769143956,
+        "cell_residual_rms": 29.749075472531857,
+        "head_residual_rms": 0.2464927379442237,
+        "source_total": 122.87999999999997,
+        "boundary_inflow": 0.0,
+        "boundary_outflow": -178.58105829914734,
+        "boundary_net": -178.58105829914734,
+        "storage_uptake": 0.0,
+        "imbalance": -55.70105829914701,
+        "domain_imbalance": -55.70105829914701,
+        "relative_imbalance": 0.18477032693182366,
+        "relative_cell_imbalance": 49.451025421962264,
+        "throughput": 301.46105829914734,
+        "physical_diagonal_scaling": "seven-point principal part",
+        "coastal_subface_outflows": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "input_hash": "31a6f5c0c0486ec7404cc6d2d7fdd7a71604ee5f2d7a4042b2f11ab9de071e08",
+      "controls": {
+        "method": "newton",
+        "max_outer": 500,
+        "head_tol": 1e-06,
+        "flow_tol": 1e-12,
+        "relative_tol": 1e-08,
+        "relaxation": 1.0,
+        "max_change": 50.0,
+        "line_search_steps": 20,
+        "recovery_growth": 1.0,
+        "fallback": false,
+        "physical_merit": true,
+        "adequate_alpha": 0.125,
+        "adequate_merit_ratio": 0.8
+      },
+      "cold_start": true,
+      "source_revision": "76e16dfbae272125e2206cda53770d3a375eb119"
+    }
+  },
+  "cpu_final/newton": {
+    "independent_accepted": true,
+    "budget": {
+      "cell_residual_max": 4.634608252729322e-10,
+      "cell_residual_rms": 1.833762824536694e-11,
+      "head_residual_rms": 1.4652365972446684e-12,
+      "source_total": 122.87999999999997,
+      "boundary_inflow": 0.0,
+      "boundary_outflow": -122.8799999999999,
+      "boundary_net": -122.8799999999999,
+      "storage_uptake": 0.0,
+      "imbalance": 9.071280375081911e-14,
+      "domain_imbalance": 9.071280375081911e-14,
+      "relative_imbalance": 3.691113433871222e-16,
+      "relative_cell_imbalance": 7.88070009683224e-12,
+      "throughput": 245.75999999999988,
+      "physical_diagonal_scaling": "seven-point principal part",
+      "coastal_subface_outflows": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "finite_physical_state": true
+    },
+    "residual_l1": 1.9367608557974906e-09,
+    "layers": [
+      {
+        "layer": 0,
+        "head_min": 2.5396173999471188,
+        "head_max": 129.71906488235575,
+        "dry_cells": 256,
+        "floor_cells": 256,
+        "thin_cells": 0,
+        "residual_l1": 1.437073238186315e-10,
+        "residual_squared": 5.887720869393151e-22,
+        "saturated_volume": 0.0
+      },
+      {
+        "layer": 1,
+        "head_min": 7.421977962643432,
+        "head_max": 129.714199754746,
+        "dry_cells": 236,
+        "floor_cells": 236,
+        "thin_cells": 1,
+        "residual_l1": 3.8178799011134856e-10,
+        "residual_squared": 1.7459699250611312e-20,
+        "saturated_volume": 16395.630943714146
+      },
+      {
+        "layer": 2,
+        "head_min": 6.393603766732244,
+        "head_max": 129.68821927842453,
+        "dry_cells": 44,
+        "floor_cells": 44,
+        "thin_cells": 11,
+        "residual_l1": 1.411237211596981e-09,
+        "residual_squared": 3.1014969161772325e-19,
+        "saturated_volume": 195340.2170300431
+      },
+      {
+        "layer": 3,
+        "head_min": 4.702433946224693,
+        "head_max": 111.92085240484725,
+        "dry_cells": 0,
+        "floor_cells": 0,
+        "thin_cells": 0,
+        "residual_l1": 2.833027052968201e-14,
+        "residual_squared": 7.803885942643444e-29,
+        "saturated_volume": 2932346.678242796
+      }
+    ],
+    "leakage": [
+      {
+        "net": 122.87999999997604,
+        "downward": 122.87999999997604,
+        "upward": 0.0,
+        "gross": 122.87999999997604
+      },
+      {
+        "net": -905.0152102661937,
+        "downward": 102.58839296311211,
+        "upward": 1007.6036032293059,
+        "gross": 1110.1919961924182
+      },
+      {
+        "net": -0.021286385310530856,
+        "downward": 0.27382504682812514,
+        "upward": 0.29511143213865604,
+        "gross": 0.5689364789667812
+      }
+    ],
+    "coastal_free_to_fixed_inflow": 0.0,
+    "coastal_free_to_fixed_outflow": 122.8799999999999,
+    "contacts": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "gate_states": [
+      false,
+      false,
+      false
+    ],
+    "worst_cells": [
+      {
+        "cell": [
+          2,
+          1,
+          13
+        ],
+        "residual": 4.634608252729322e-10,
+        "head_minus_bottom": 0.06240200022908482,
+        "floor": false
+      },
+      {
+        "cell": [
+          2,
+          1,
+          12
+        ],
+        "residual": -2.6590629698119983e-10,
+        "head_minus_bottom": 0.1821018387710609,
+        "floor": false
+      },
+      {
+        "cell": [
+          1,
+          1,
+          13
+        ],
+        "residual": -1.2487416656270511e-10,
+        "head_minus_bottom": -4.271344023966719,
+        "floor": true
+      },
+      {
+        "cell": [
+          2,
+          2,
+          13
+        ],
+        "residual": -8.874589951801681e-11,
+        "head_minus_bottom": 0.24108551486565943,
+        "floor": false
+      },
+      {
+        "cell": [
+          2,
+          14,
+          13
+        ],
+        "residual": 6.066244728764048e-11,
+        "head_minus_bottom": 0.028117578143636024,
+        "floor": false
+      },
+      {
+        "cell": [
+          2,
+          14,
+          12
+        ],
+        "residual": -4.668265773943858e-11,
+        "head_minus_bottom": 0.11105205471145041,
+        "floor": false
+      },
+      {
+        "cell": [
+          2,
+          9,
+          9
+        ],
+        "residual": 4.6109005502614764e-11,
+        "head_minus_bottom": 0.0711676613133676,
+        "floor": false
+      },
+      {
+        "cell": [
+          2,
+          6,
+          9
+        ],
+        "residual": 4.4894976625187155e-11,
+        "head_minus_bottom": 0.06919135938052534,
+        "floor": false
+      },
+      {
+        "cell": [
+          2,
+          6,
+          8
+        ],
+        "residual": -3.4007463511898095e-11,
+        "head_minus_bottom": 0.1719415361810377,
+        "floor": false
+      },
+      {
+        "cell": [
+          2,
+          9,
+          8
+        ],
+        "residual": -3.1955771362390806e-11,
+        "head_minus_bottom": 0.16786800510367073,
+        "floor": false
+      }
+    ],
+    "water_table_class_counts": {
+      "water_table": 256
+    },
+    "interpretation": "DarcyWarp equations evaluated offline; not native MF6 residual for MF6 heads",
+    "native": {
+      "converged": true,
+      "stop_reason": "converged",
+      "outers": 700,
+      "seconds": 7.177241321995098,
+      "factorizations": 705,
+      "discharge_component_seeds": 0,
+      "residual_evaluations": 10442,
+      "budget": {
+        "cell_residual_max": 4.634608252729322e-10,
+        "cell_residual_rms": 1.833762824536694e-11,
+        "head_residual_rms": 1.4652365972446684e-12,
+        "source_total": 122.87999999999997,
+        "boundary_inflow": 0.0,
+        "boundary_outflow": -122.8799999999999,
+        "boundary_net": -122.8799999999999,
+        "storage_uptake": 0.0,
+        "imbalance": 9.071280375081911e-14,
+        "domain_imbalance": 9.071280375081911e-14,
+        "relative_imbalance": 3.691113433871222e-16,
+        "relative_cell_imbalance": 7.88070009683224e-12,
+        "throughput": 245.75999999999988,
+        "physical_diagonal_scaling": "seven-point principal part",
+        "coastal_subface_outflows": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "run_hash": "9aacadad245cd9ec3255f36b4b1ebbcdb1aa0bf2a3676e831094dd630625fc6f",
+      "input_hash": "31a6f5c0c0486ec7404cc6d2d7fdd7a71604ee5f2d7a4042b2f11ab9de071e08",
+      "controls": {
+        "method": "newton",
+        "max_outer": 6000,
+        "head_tol": 1e-06,
+        "flow_tol": 1e-12,
+        "relative_tol": 1e-08,
+        "relaxation": 1.0,
+        "max_change": 50.0,
+        "line_search_steps": 20,
+        "recovery_growth": 1.1,
+        "fallback": true,
+        "physical_merit": true,
+        "adequate_alpha": 0.125,
+        "adequate_merit_ratio": 0.8,
+        "retry_contraction": 0.5,
+        "stagnation_window": 0,
+        "stagnation_ratio": 0.995
+      },
+      "cold_start": true,
+      "source_revision": "99b78edd57a4110ae68180c05397c2b56ae63692"
+    }
+  },
+  "branches/newton_perturb_0.0001": {
+    "independent_accepted": true,
+    "budget": {
+      "cell_residual_max": 3.823330541052883e-12,
+      "cell_residual_rms": 5.407058759555937e-13,
+      "head_residual_rms": 2.3571255737285292e-14,
+      "source_total": 122.87999999999997,
+      "boundary_inflow": 0.0,
+      "boundary_outflow": -122.88000000000001,
+      "boundary_net": -122.88000000000001,
+      "storage_uptake": 0.0,
+      "imbalance": -2.4440962898301596e-14,
+      "domain_imbalance": -2.4440962898301596e-14,
+      "relative_imbalance": 9.945053262655272e-17,
+      "relative_cell_imbalance": 1.1195230485259205e-12,
+      "throughput": 245.76,
+      "physical_diagonal_scaling": "seven-point principal part",
+      "coastal_subface_outflows": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "finite_physical_state": true
+    },
+    "residual_l1": 2.751339844057302e-10,
+    "layers": [
+      {
+        "layer": 0,
+        "head_min": 2.5396173999471428,
+        "head_max": 129.71906488235808,
+        "dry_cells": 256,
+        "floor_cells": 256,
+        "thin_cells": 0,
+        "residual_l1": 1.2405604321585884e-10,
+        "residual_squared": 1.2299250966251672e-22,
+        "saturated_volume": 0.0
+      },
+      {
+        "layer": 1,
+        "head_min": 7.421977962643564,
+        "head_max": 129.7141997547483,
+        "dry_cells": 236,
+        "floor_cells": 236,
+        "thin_cells": 1,
+        "residual_l1": 1.2794712511698947e-10,
+        "residual_squared": 1.3173886037575674e-22,
+        "saturated_volume": 16395.630943716536
+      },
+      {
+        "layer": 2,
+        "head_min": 6.393603766732342,
+        "head_max": 129.68821927842666,
+        "dry_cells": 44,
+        "floor_cells": 44,
+        "thin_cells": 11,
+        "residual_l1": 2.312525434613002e-11,
+        "residual_squared": 3.061476573000136e-23,
+        "saturated_volume": 195340.2170301113
+      },
+      {
+        "layer": 3,
+        "head_min": 4.7024339462247084,
+        "head_max": 111.92085240485149,
+        "dry_cells": 0,
+        "floor_cells": 0,
+        "thin_cells": 0,
+        "residual_l1": 5.5617267518889846e-15,
+        "residual_squared": 2.616013845148274e-31,
+        "saturated_volume": 2932346.678243161
+      }
+    ],
+    "leakage": [
+      {
+        "net": 122.87999999999913,
+        "downward": 122.87999999999913,
+        "upward": 0.0,
+        "gross": 122.87999999999913
+      },
+      {
+        "net": -905.0152102664365,
+        "downward": 102.58839296288696,
+        "upward": 1007.6036032293234,
+        "gross": 1110.1919961922106
+      },
+      {
+        "net": -0.021286385310549966,
+        "downward": 0.2738250468281699,
+        "upward": 0.29511143213871976,
+        "gross": 0.5689364789668896
+      }
+    ],
+    "coastal_free_to_fixed_inflow": 0.0,
+    "coastal_free_to_fixed_outflow": 122.88000000000001,
+    "contacts": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "gate_states": [
+      false,
+      false,
+      false
+    ],
+    "worst_cells": [
+      {
+        "cell": [
+          2,
+          9,
+          9
+        ],
+        "residual": -3.823330541052883e-12,
+        "head_minus_bottom": 0.07116766132162411,
+        "floor": false
+      },
+      {
+        "cell": [
+          2,
+          9,
+          10
+        ],
+        "residual": 2.937067256070236e-12,
+        "head_minus_bottom": 0.01310425570736129,
+        "floor": false
+      },
+      {
+        "cell": [
+          1,
+          15,
+          9
+        ],
+        "residual": 2.416788991155272e-12,
+        "head_minus_bottom": -10.413387742350096,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          15,
+          9
+        ],
+        "residual": -2.3856472353145364e-12,
+        "head_minus_bottom": -13.422546817632522,
+        "floor": true
+      },
+      {
+        "cell": [
+          1,
+          15,
+          12
+        ],
+        "residual": 2.1796453530953386e-12,
+        "head_minus_bottom": -13.329728914444829,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          15,
+          12
+        ],
+        "residual": -2.1137536165838355e-12,
+        "head_minus_bottom": -18.142646173546098,
+        "floor": true
+      },
+      {
+        "cell": [
+          1,
+          5,
+          12
+        ],
+        "residual": -2.051858682960983e-12,
+        "head_minus_bottom": -4.960101694372625,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          8,
+          10
+        ],
+        "residual": 1.9027002196025933e-12,
+        "head_minus_bottom": -13.508399818846584,
+        "floor": true
+      },
+      {
+        "cell": [
+          1,
+          8,
+          10
+        ],
+        "residual": -1.9005907958558055e-12,
+        "head_minus_bottom": -8.480686527334484,
+        "floor": true
+      },
+      {
+        "cell": [
+          1,
+          7,
+          9
+        ],
+        "residual": -1.897926260596705e-12,
+        "head_minus_bottom": -8.199677766684317,
+        "floor": true
+      }
+    ],
+    "water_table_class_counts": {
+      "water_table": 256
+    },
+    "interpretation": "DarcyWarp equations evaluated offline; not native MF6 residual for MF6 heads",
+    "native": {
+      "converged": true,
+      "stop_reason": "converged",
+      "outers": 2,
+      "seconds": 0.015251153999997769,
+      "factorizations": 2,
+      "discharge_component_seeds": 0,
+      "residual_evaluations": 6,
+      "budget": {
+        "cell_residual_max": 3.823330541052883e-12,
+        "cell_residual_rms": 5.407058759555937e-13,
+        "head_residual_rms": 2.3571255737285292e-14,
+        "source_total": 122.87999999999997,
+        "boundary_inflow": 0.0,
+        "boundary_outflow": -122.88000000000001,
+        "boundary_net": -122.88000000000001,
+        "storage_uptake": 0.0,
+        "imbalance": -2.4440962898301596e-14,
+        "domain_imbalance": -2.4440962898301596e-14,
+        "relative_imbalance": 9.945053262655272e-17,
+        "relative_cell_imbalance": 1.1195230485259205e-12,
+        "throughput": 245.76,
+        "physical_diagonal_scaling": "seven-point principal part",
+        "coastal_subface_outflows": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "run_hash": "bc760d5f08ec4687854427873de28862111d34e2908e19c6efdcca2b5f4a44ba",
+      "input_hash": "31a6f5c0c0486ec7404cc6d2d7fdd7a71604ee5f2d7a4042b2f11ab9de071e08",
+      "controls": {
+        "method": "newton",
+        "max_outer": 30,
+        "head_tol": 1e-10,
+        "flow_tol": 1e-11,
+        "relative_tol": 1e-11,
+        "relaxation": 1.0,
+        "max_change": 50.0,
+        "line_search_steps": 20,
+        "recovery_growth": 1.0,
+        "fallback": false,
+        "physical_merit": true,
+        "adequate_alpha": 0.125,
+        "adequate_merit_ratio": 0.8,
+        "retry_contraction": 0.5,
+        "stagnation_window": 0,
+        "stagnation_ratio": 0.995
+      },
+      "cold_start": false,
+      "source_revision": "a1885bc011e91d7675e4990f7cc6c704536de15a"
+    }
+  },
+  "branches/newton_perturb_0.01": {
+    "independent_accepted": true,
+    "budget": {
+      "cell_residual_max": 2.694122702706636e-12,
+      "cell_residual_rms": 5.465349647621403e-13,
+      "head_residual_rms": 4.944807289810632e-15,
+      "source_total": 122.87999999999997,
+      "boundary_inflow": 0.0,
+      "boundary_outflow": -122.87999999999982,
+      "boundary_net": -122.87999999999982,
+      "storage_uptake": 0.0,
+      "imbalance": 1.670749144231081e-13,
+      "domain_imbalance": 1.670749144231081e-13,
+      "relative_imbalance": 6.798295671513194e-16,
+      "relative_cell_imbalance": 1.1246374555195925e-12,
+      "throughput": 245.7599999999998,
+      "physical_diagonal_scaling": "seven-point principal part",
+      "coastal_subface_outflows": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "finite_physical_state": true
+    },
+    "residual_l1": 2.7639090106849483e-10,
+    "layers": [
+      {
+        "layer": 0,
+        "head_min": 2.539617399947143,
+        "head_max": 129.71906488235814,
+        "dry_cells": 256,
+        "floor_cells": 256,
+        "thin_cells": 0,
+        "residual_l1": 1.3106063456724826e-10,
+        "residual_squared": 1.4091381565777097e-22,
+        "saturated_volume": 0.0
+      },
+      {
+        "layer": 1,
+        "head_min": 7.421977962643541,
+        "head_max": 129.71419975474836,
+        "dry_cells": 236,
+        "floor_cells": 236,
+        "thin_cells": 1,
+        "residual_l1": 1.3437767565349645e-10,
+        "residual_squared": 1.497316656974391e-22,
+        "saturated_volume": 16395.630943716584
+      },
+      {
+        "layer": 2,
+        "head_min": 6.3936037667323244,
+        "head_max": 129.68821927842671,
+        "dry_cells": 44,
+        "floor_cells": 44,
+        "thin_cells": 11,
+        "residual_l1": 1.0945995008966114e-11,
+        "residual_squared": 8.861747761055031e-25,
+        "saturated_volume": 195340.2170301132
+      },
+      {
+        "layer": 3,
+        "head_min": 4.702433946224708,
+        "head_max": 111.92085240485179,
+        "dry_cells": 0,
+        "floor_cells": 0,
+        "thin_cells": 0,
+        "residual_l1": 6.595838784005659e-15,
+        "residual_squared": 3.512570428466278e-31,
+        "saturated_volume": 2932346.6782431686
+      }
+    ],
+    "leakage": [
+      {
+        "net": 122.87999999999471,
+        "downward": 122.87999999999471,
+        "upward": 0.0,
+        "gross": 122.87999999999471
+      },
+      {
+        "net": -905.0152102664374,
+        "downward": 102.58839296288603,
+        "upward": 1007.6036032293234,
+        "gross": 1110.1919961922094
+      },
+      {
+        "net": -0.02128638531055007,
+        "downward": 0.2738250468281709,
+        "upward": 0.29511143213872093,
+        "gross": 0.5689364789668918
+      }
+    ],
+    "coastal_free_to_fixed_inflow": 0.0,
+    "coastal_free_to_fixed_outflow": 122.87999999999982,
+    "contacts": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "gate_states": [
+      false,
+      false,
+      false
+    ],
+    "worst_cells": [
+      {
+        "cell": [
+          1,
+          15,
+          10
+        ],
+        "residual": 2.694122702706636e-12,
+        "head_minus_bottom": -11.917737784174776,
+        "floor": true
+      },
+      {
+        "cell": [
+          1,
+          4,
+          8
+        ],
+        "residual": -2.6623148130511254e-12,
+        "head_minus_bottom": -5.816638475600996,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          4,
+          8
+        ],
+        "residual": 2.6446622669595854e-12,
+        "head_minus_bottom": -8.723949318552343,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          15,
+          10
+        ],
+        "residual": -2.6098012639863555e-12,
+        "head_minus_bottom": -15.403482442476417,
+        "floor": true
+      },
+      {
+        "cell": [
+          1,
+          5,
+          7
+        ],
+        "residual": 2.396360887502169e-12,
+        "head_minus_bottom": -8.00875785252913,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          5,
+          7
+        ],
+        "residual": -2.342070981597999e-12,
+        "head_minus_bottom": -10.815980491238165,
+        "floor": true
+      },
+      {
+        "cell": [
+          1,
+          14,
+          8
+        ],
+        "residual": 2.2891688544746103e-12,
+        "head_minus_bottom": -8.052870191827964,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          14,
+          8
+        ],
+        "residual": -2.2797874699165277e-12,
+        "head_minus_bottom": -11.028869482899083,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          7,
+          8
+        ],
+        "residual": 2.249311847890567e-12,
+        "head_minus_bottom": -12.2758793557379,
+        "floor": true
+      },
+      {
+        "cell": [
+          1,
+          13,
+          7
+        ],
+        "residual": 2.2295498780522394e-12,
+        "head_minus_bottom": -7.995054906844786,
+        "floor": true
+      }
+    ],
+    "water_table_class_counts": {
+      "water_table": 256
+    },
+    "interpretation": "DarcyWarp equations evaluated offline; not native MF6 residual for MF6 heads",
+    "native": {
+      "converged": true,
+      "stop_reason": "converged",
+      "outers": 8,
+      "seconds": 0.06069159500475507,
+      "factorizations": 8,
+      "discharge_component_seeds": 0,
+      "residual_evaluations": 29,
+      "budget": {
+        "cell_residual_max": 2.694122702706636e-12,
+        "cell_residual_rms": 5.465349647621403e-13,
+        "head_residual_rms": 4.944807289810632e-15,
+        "source_total": 122.87999999999997,
+        "boundary_inflow": 0.0,
+        "boundary_outflow": -122.87999999999982,
+        "boundary_net": -122.87999999999982,
+        "storage_uptake": 0.0,
+        "imbalance": 1.670749144231081e-13,
+        "domain_imbalance": 1.670749144231081e-13,
+        "relative_imbalance": 6.798295671513194e-16,
+        "relative_cell_imbalance": 1.1246374555195925e-12,
+        "throughput": 245.7599999999998,
+        "physical_diagonal_scaling": "seven-point principal part",
+        "coastal_subface_outflows": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "run_hash": "52acfcf5c8c485873cf0280389530fcae51e40bcac5aa879dda1d731d32916d8",
+      "input_hash": "31a6f5c0c0486ec7404cc6d2d7fdd7a71604ee5f2d7a4042b2f11ab9de071e08",
+      "controls": {
+        "method": "newton",
+        "max_outer": 30,
+        "head_tol": 1e-10,
+        "flow_tol": 1e-11,
+        "relative_tol": 1e-11,
+        "relaxation": 1.0,
+        "max_change": 50.0,
+        "line_search_steps": 20,
+        "recovery_growth": 1.0,
+        "fallback": false,
+        "physical_merit": true,
+        "adequate_alpha": 0.125,
+        "adequate_merit_ratio": 0.8,
+        "retry_contraction": 0.5,
+        "stagnation_window": 0,
+        "stagnation_ratio": 0.995
+      },
+      "cold_start": false,
+      "source_revision": "a1885bc011e91d7675e4990f7cc6c704536de15a"
+    }
+  },
+  "branches/newton_perturb_0": {
+    "independent_accepted": true,
+    "budget": {
+      "cell_residual_max": 2.6623148130511254e-12,
+      "cell_residual_rms": 5.089397575784489e-13,
+      "head_residual_rms": 4.713084541182621e-15,
+      "source_total": 122.87999999999997,
+      "boundary_inflow": 0.0,
+      "boundary_outflow": -122.87999999999965,
+      "boundary_net": -122.87999999999965,
+      "storage_uptake": 0.0,
+      "imbalance": 3.2778256020896124e-13,
+      "domain_imbalance": 3.2778256020896124e-13,
+      "relative_imbalance": 1.333750651891934e-15,
+      "relative_cell_imbalance": 1.028847180380753e-12,
+      "throughput": 245.75999999999962,
+      "physical_diagonal_scaling": "seven-point principal part",
+      "coastal_subface_outflows": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "finite_physical_state": true
+    },
+    "residual_l1": 2.5284948305037344e-10,
+    "layers": [
+      {
+        "layer": 0,
+        "head_min": 2.539617399947143,
+        "head_max": 129.71906488235814,
+        "dry_cells": 256,
+        "floor_cells": 256,
+        "thin_cells": 0,
+        "residual_l1": 1.1991990733761781e-10,
+        "residual_squared": 1.2264205996336114e-22,
+        "saturated_volume": 0.0
+      },
+      {
+        "layer": 1,
+        "head_min": 7.421977962643542,
+        "head_max": 129.71419975474836,
+        "dry_cells": 236,
+        "floor_cells": 236,
+        "thin_cells": 1,
+        "residual_l1": 1.2261727744267148e-10,
+        "residual_squared": 1.2929408387667536e-22,
+        "saturated_volume": 16395.630943716584
+      },
+      {
+        "layer": 2,
+        "head_min": 6.3936037667323244,
+        "head_max": 129.68821927842671,
+        "dry_cells": 44,
+        "floor_cells": 44,
+        "thin_cells": 11,
+        "residual_l1": 1.0305692578612899e-11,
+        "residual_squared": 8.670604172719457e-25,
+        "saturated_volume": 195340.2170301132
+      },
+      {
+        "layer": 3,
+        "head_min": 4.7024339462247084,
+        "head_max": 111.92085240485179,
+        "dry_cells": 0,
+        "floor_cells": 0,
+        "thin_cells": 0,
+        "residual_l1": 6.605691471248121e-15,
+        "residual_squared": 3.424456931295364e-31,
+        "saturated_volume": 2932346.6782431686
+      }
+    ],
+    "leakage": [
+      {
+        "net": 122.88000000000972,
+        "downward": 122.88000000000972,
+        "upward": 0.0,
+        "gross": 122.88000000000972
+      },
+      {
+        "net": -905.0152102664365,
+        "downward": 102.58839296288687,
+        "upward": 1007.6036032293234,
+        "gross": 1110.1919961922104
+      },
+      {
+        "net": -0.021286385310550077,
+        "downward": 0.2738250468281709,
+        "upward": 0.295111432138721,
+        "gross": 0.5689364789668918
+      }
+    ],
+    "coastal_free_to_fixed_inflow": 0.0,
+    "coastal_free_to_fixed_outflow": 122.87999999999965,
+    "contacts": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "gate_states": [
+      false,
+      false,
+      false
+    ],
+    "worst_cells": [
+      {
+        "cell": [
+          1,
+          4,
+          8
+        ],
+        "residual": -2.6623148130511254e-12,
+        "head_minus_bottom": -5.816638475600996,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          4,
+          8
+        ],
+        "residual": 2.6446622669595854e-12,
+        "head_minus_bottom": -8.723949318552343,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          7,
+          13
+        ],
+        "residual": -2.5581758933412857e-12,
+        "head_minus_bottom": -13.333567928422383,
+        "floor": true
+      },
+      {
+        "cell": [
+          1,
+          7,
+          13
+        ],
+        "residual": 2.5338620091019948e-12,
+        "head_minus_bottom": -7.035157356398827,
+        "floor": true
+      },
+      {
+        "cell": [
+          1,
+          15,
+          9
+        ],
+        "residual": 2.4170665469114283e-12,
+        "head_minus_bottom": -10.413387742350025,
+        "floor": true
+      },
+      {
+        "cell": [
+          1,
+          5,
+          7
+        ],
+        "residual": 2.396360887502169e-12,
+        "head_minus_bottom": -8.00875785252913,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          15,
+          9
+        ],
+        "residual": -2.3869239917928553e-12,
+        "head_minus_bottom": -13.422546817632451,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          5,
+          7
+        ],
+        "residual": -2.342070981597999e-12,
+        "head_minus_bottom": -10.815980491238165,
+        "floor": true
+      },
+      {
+        "cell": [
+          1,
+          14,
+          8
+        ],
+        "residual": 2.2891688544746103e-12,
+        "head_minus_bottom": -8.052870191827964,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          14,
+          8
+        ],
+        "residual": -2.2797874699165277e-12,
+        "head_minus_bottom": -11.028869482899083,
+        "floor": true
+      }
+    ],
+    "water_table_class_counts": {
+      "water_table": 256
+    },
+    "interpretation": "DarcyWarp equations evaluated offline; not native MF6 residual for MF6 heads",
+    "native": {
+      "converged": true,
+      "stop_reason": "converged",
+      "outers": 1,
+      "seconds": 0.007886010003858246,
+      "factorizations": 1,
+      "discharge_component_seeds": 0,
+      "residual_evaluations": 4,
+      "budget": {
+        "cell_residual_max": 2.6623148130511254e-12,
+        "cell_residual_rms": 5.089397575784489e-13,
+        "head_residual_rms": 4.713084541182621e-15,
+        "source_total": 122.87999999999997,
+        "boundary_inflow": 0.0,
+        "boundary_outflow": -122.87999999999965,
+        "boundary_net": -122.87999999999965,
+        "storage_uptake": 0.0,
+        "imbalance": 3.2778256020896124e-13,
+        "domain_imbalance": 3.2778256020896124e-13,
+        "relative_imbalance": 1.333750651891934e-15,
+        "relative_cell_imbalance": 1.028847180380753e-12,
+        "throughput": 245.75999999999962,
+        "physical_diagonal_scaling": "seven-point principal part",
+        "coastal_subface_outflows": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "run_hash": "78bd16a000198f3e893af58d6da8c56223bd292f4f0b27581ae7fabe7589e4ad",
+      "input_hash": "31a6f5c0c0486ec7404cc6d2d7fdd7a71604ee5f2d7a4042b2f11ab9de071e08",
+      "controls": {
+        "method": "newton",
+        "max_outer": 30,
+        "head_tol": 1e-10,
+        "flow_tol": 1e-11,
+        "relative_tol": 1e-11,
+        "relaxation": 1.0,
+        "max_change": 50.0,
+        "line_search_steps": 20,
+        "recovery_growth": 1.0,
+        "fallback": false,
+        "physical_merit": true,
+        "adequate_alpha": 0.125,
+        "adequate_merit_ratio": 0.8,
+        "retry_contraction": 0.5,
+        "stagnation_window": 0,
+        "stagnation_ratio": 0.995
+      },
+      "cold_start": false,
+      "source_revision": "a1885bc011e91d7675e4990f7cc6c704536de15a"
+    }
+  },
+  "branches/picard_perturb_0.0001": {
+    "independent_accepted": true,
+    "budget": {
+      "cell_residual_max": 2.5579538487363607e-12,
+      "cell_residual_rms": 5.000672069593834e-13,
+      "head_residual_rms": 6.438419000300037e-15,
+      "source_total": 122.87999999999997,
+      "boundary_inflow": 0.0,
+      "boundary_outflow": -122.87999999999975,
+      "boundary_net": -122.87999999999975,
+      "storage_uptake": 0.0,
+      "imbalance": 2.3212513386590937e-13,
+      "domain_imbalance": 2.3212513386590937e-13,
+      "relative_imbalance": 9.445195876705307e-16,
+      "relative_cell_imbalance": 1.0265201286534898e-12,
+      "throughput": 245.7599999999997,
+      "physical_diagonal_scaling": "seven-point principal part",
+      "coastal_subface_outflows": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "finite_physical_state": true
+    },
+    "residual_l1": 2.5227758681788137e-10,
+    "layers": [
+      {
+        "layer": 0,
+        "head_min": 2.539617399947143,
+        "head_max": 129.7190648823581,
+        "dry_cells": 256,
+        "floor_cells": 256,
+        "thin_cells": 0,
+        "residual_l1": 1.1673026434344536e-10,
+        "residual_squared": 1.1586297018575306e-22,
+        "saturated_volume": 0.0
+      },
+      {
+        "layer": 1,
+        "head_min": 7.421977962643542,
+        "head_max": 129.71419975474836,
+        "dry_cells": 236,
+        "floor_cells": 236,
+        "thin_cells": 1,
+        "residual_l1": 1.216041711771254e-10,
+        "residual_squared": 1.2604577180987275e-22,
+        "saturated_volume": 16395.630943716566
+      },
+      {
+        "layer": 2,
+        "head_min": 6.393603766732325,
+        "head_max": 129.68821927842671,
+        "dry_cells": 44,
+        "floor_cells": 44,
+        "thin_cells": 11,
+        "residual_l1": 1.3936900871786223e-11,
+        "residual_squared": 2.1568561051348742e-24,
+        "saturated_volume": 195340.21703011298
+      },
+      {
+        "layer": 3,
+        "head_min": 4.702433946224708,
+        "head_max": 111.92085240485174,
+        "dry_cells": 0,
+        "floor_cells": 0,
+        "thin_cells": 0,
+        "residual_l1": 6.250425524378933e-15,
+        "residual_squared": 2.999703387472796e-31,
+        "saturated_volume": 2932346.6782431677
+      }
+    ],
+    "leakage": [
+      {
+        "net": 122.87999999999735,
+        "downward": 122.87999999999735,
+        "upward": 0.0,
+        "gross": 122.87999999999735
+      },
+      {
+        "net": -905.0152102664376,
+        "downward": 102.58839296288599,
+        "upward": 1007.6036032293237,
+        "gross": 1110.1919961922094
+      },
+      {
+        "net": -0.021286385310549966,
+        "downward": 0.2738250468281709,
+        "upward": 0.29511143213872093,
+        "gross": 0.5689364789668918
+      }
+    ],
+    "coastal_free_to_fixed_inflow": 0.0,
+    "coastal_free_to_fixed_outflow": 122.87999999999975,
+    "contacts": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "gate_states": [
+      false,
+      false,
+      false
+    ],
+    "worst_cells": [
+      {
+        "cell": [
+          0,
+          7,
+          13
+        ],
+        "residual": -2.5579538487363607e-12,
+        "head_minus_bottom": -13.333567928422468,
+        "floor": true
+      },
+      {
+        "cell": [
+          1,
+          5,
+          8
+        ],
+        "residual": -2.5477397969098092e-12,
+        "head_minus_bottom": -8.222739064404905,
+        "floor": true
+      },
+      {
+        "cell": [
+          1,
+          7,
+          13
+        ],
+        "residual": 2.535638365941395e-12,
+        "head_minus_bottom": -7.035157356398912,
+        "floor": true
+      },
+      {
+        "cell": [
+          1,
+          6,
+          10
+        ],
+        "residual": -2.5094371025602413e-12,
+        "head_minus_bottom": -7.386191219590003,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          6,
+          10
+        ],
+        "residual": 2.49966713994354e-12,
+        "head_minus_bottom": -10.968349804279796,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          5,
+          8
+        ],
+        "residual": 2.4970026046844396e-12,
+        "head_minus_bottom": -10.912171753061216,
+        "floor": true
+      },
+      {
+        "cell": [
+          1,
+          15,
+          9
+        ],
+        "residual": 2.42067477174146e-12,
+        "head_minus_bottom": -10.41338774235004,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          15,
+          9
+        ],
+        "residual": -2.3895330159007244e-12,
+        "head_minus_bottom": -13.422546817632465,
+        "floor": true
+      },
+      {
+        "cell": [
+          1,
+          8,
+          13
+        ],
+        "residual": 2.3647750424515834e-12,
+        "head_minus_bottom": -6.895879451912663,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          8,
+          13
+        ],
+        "residual": -2.311040248059726e-12,
+        "head_minus_bottom": -13.935043288827956,
+        "floor": true
+      }
+    ],
+    "water_table_class_counts": {
+      "water_table": 256
+    },
+    "interpretation": "DarcyWarp equations evaluated offline; not native MF6 residual for MF6 heads",
+    "native": {
+      "converged": true,
+      "stop_reason": "converged",
+      "outers": 2,
+      "seconds": 0.015279623003152665,
+      "factorizations": 2,
+      "discharge_component_seeds": 0,
+      "residual_evaluations": 6,
+      "budget": {
+        "cell_residual_max": 2.5579538487363607e-12,
+        "cell_residual_rms": 5.000672069593834e-13,
+        "head_residual_rms": 6.438419000300037e-15,
+        "source_total": 122.87999999999997,
+        "boundary_inflow": 0.0,
+        "boundary_outflow": -122.87999999999975,
+        "boundary_net": -122.87999999999975,
+        "storage_uptake": 0.0,
+        "imbalance": 2.3212513386590937e-13,
+        "domain_imbalance": 2.3212513386590937e-13,
+        "relative_imbalance": 9.445195876705307e-16,
+        "relative_cell_imbalance": 1.0265201286534898e-12,
+        "throughput": 245.7599999999997,
+        "physical_diagonal_scaling": "seven-point principal part",
+        "coastal_subface_outflows": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "run_hash": "0d27b6a1da3f0174956653e231e3d8a634bb29c78f658b26ca84f83fe5a02db1",
+      "input_hash": "31a6f5c0c0486ec7404cc6d2d7fdd7a71604ee5f2d7a4042b2f11ab9de071e08",
+      "controls": {
+        "method": "newton",
+        "max_outer": 30,
+        "head_tol": 1e-10,
+        "flow_tol": 1e-11,
+        "relative_tol": 1e-11,
+        "relaxation": 1.0,
+        "max_change": 50.0,
+        "line_search_steps": 20,
+        "recovery_growth": 1.0,
+        "fallback": false,
+        "physical_merit": true,
+        "adequate_alpha": 0.125,
+        "adequate_merit_ratio": 0.8,
+        "retry_contraction": 0.5,
+        "stagnation_window": 0,
+        "stagnation_ratio": 0.995
+      },
+      "cold_start": false,
+      "source_revision": "a1885bc011e91d7675e4990f7cc6c704536de15a"
+    }
+  },
+  "branches/picard_perturb_0.01": {
+    "independent_accepted": true,
+    "budget": {
+      "cell_residual_max": 2.694344747311561e-12,
+      "cell_residual_rms": 4.989706276864384e-13,
+      "head_residual_rms": 4.654016761327666e-15,
+      "source_total": 122.87999999999997,
+      "boundary_inflow": 0.0,
+      "boundary_outflow": -122.88000000000004,
+      "boundary_net": -122.88000000000004,
+      "storage_uptake": 0.0,
+      "imbalance": -3.745910374421124e-14,
+      "domain_imbalance": -3.745910374421124e-14,
+      "relative_imbalance": 1.524214833341929e-16,
+      "relative_cell_imbalance": 1.0181585610651463e-12,
+      "throughput": 245.76,
+      "physical_diagonal_scaling": "seven-point principal part",
+      "coastal_subface_outflows": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "finite_physical_state": true
+    },
+    "residual_l1": 2.5022264796737033e-10,
+    "layers": [
+      {
+        "layer": 0,
+        "head_min": 2.539617399947143,
+        "head_max": 129.71906488235814,
+        "dry_cells": 256,
+        "floor_cells": 256,
+        "thin_cells": 0,
+        "residual_l1": 1.1797787746736788e-10,
+        "residual_squared": 1.172989406818822e-22,
+        "saturated_volume": 0.0
+      },
+      {
+        "layer": 1,
+        "head_min": 7.421977962643541,
+        "head_max": 129.71419975474836,
+        "dry_cells": 236,
+        "floor_cells": 236,
+        "thin_cells": 1,
+        "residual_l1": 1.2142897798383956e-10,
+        "residual_squared": 1.2476945000999206e-22,
+        "saturated_volume": 16395.630943716584
+      },
+      {
+        "layer": 2,
+        "head_min": 6.393603766732324,
+        "head_max": 129.68821927842671,
+        "dry_cells": 44,
+        "floor_cells": 44,
+        "thin_cells": 11,
+        "residual_l1": 1.080933311066977e-11,
+        "residual_squared": 9.279757591265887e-25,
+        "saturated_volume": 195340.2170301132
+      },
+      {
+        "layer": 3,
+        "head_min": 4.7024339462247084,
+        "head_max": 111.92085240485179,
+        "dry_cells": 0,
+        "floor_cells": 0,
+        "thin_cells": 0,
+        "residual_l1": 6.459405493125514e-15,
+        "residual_squared": 3.4774635605051308e-31,
+        "saturated_volume": 2932346.6782431686
+      }
+    ],
+    "leakage": [
+      {
+        "net": 122.87999999999988,
+        "downward": 122.87999999999988,
+        "upward": 0.0,
+        "gross": 122.87999999999988
+      },
+      {
+        "net": -905.015210266437,
+        "downward": 102.58839296288684,
+        "upward": 1007.6036032293237,
+        "gross": 1110.1919961922106
+      },
+      {
+        "net": -0.021286385310550104,
+        "downward": 0.2738250468281709,
+        "upward": 0.29511143213872093,
+        "gross": 0.5689364789668918
+      }
+    ],
+    "coastal_free_to_fixed_inflow": 0.0,
+    "coastal_free_to_fixed_outflow": 122.88000000000004,
+    "contacts": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "gate_states": [
+      false,
+      false,
+      false
+    ],
+    "worst_cells": [
+      {
+        "cell": [
+          1,
+          15,
+          10
+        ],
+        "residual": 2.694344747311561e-12,
+        "head_minus_bottom": -11.917737784174776,
+        "floor": true
+      },
+      {
+        "cell": [
+          1,
+          4,
+          8
+        ],
+        "residual": -2.6623148130511254e-12,
+        "head_minus_bottom": -5.816638475600996,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          4,
+          8
+        ],
+        "residual": 2.6446622669595854e-12,
+        "head_minus_bottom": -8.723949318552343,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          15,
+          10
+        ],
+        "residual": -2.611244553918368e-12,
+        "head_minus_bottom": -15.403482442476417,
+        "floor": true
+      },
+      {
+        "cell": [
+          1,
+          5,
+          7
+        ],
+        "residual": 2.396360887502169e-12,
+        "head_minus_bottom": -8.00875785252913,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          5,
+          7
+        ],
+        "residual": -2.342070981597999e-12,
+        "head_minus_bottom": -10.815980491238165,
+        "floor": true
+      },
+      {
+        "cell": [
+          1,
+          14,
+          8
+        ],
+        "residual": 2.2891688544746103e-12,
+        "head_minus_bottom": -8.052870191827964,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          14,
+          8
+        ],
+        "residual": -2.2797874699165277e-12,
+        "head_minus_bottom": -11.028869482899083,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          7,
+          8
+        ],
+        "residual": 2.249311847890567e-12,
+        "head_minus_bottom": -12.2758793557379,
+        "floor": true
+      },
+      {
+        "cell": [
+          1,
+          13,
+          7
+        ],
+        "residual": 2.2295498780522394e-12,
+        "head_minus_bottom": -7.995054906844786,
+        "floor": true
+      }
+    ],
+    "water_table_class_counts": {
+      "water_table": 256
+    },
+    "interpretation": "DarcyWarp equations evaluated offline; not native MF6 residual for MF6 heads",
+    "native": {
+      "converged": true,
+      "stop_reason": "converged",
+      "outers": 7,
+      "seconds": 0.051525325994589366,
+      "factorizations": 7,
+      "discharge_component_seeds": 0,
+      "residual_evaluations": 21,
+      "budget": {
+        "cell_residual_max": 2.694344747311561e-12,
+        "cell_residual_rms": 4.989706276864384e-13,
+        "head_residual_rms": 4.654016761327666e-15,
+        "source_total": 122.87999999999997,
+        "boundary_inflow": 0.0,
+        "boundary_outflow": -122.88000000000004,
+        "boundary_net": -122.88000000000004,
+        "storage_uptake": 0.0,
+        "imbalance": -3.745910374421124e-14,
+        "domain_imbalance": -3.745910374421124e-14,
+        "relative_imbalance": 1.524214833341929e-16,
+        "relative_cell_imbalance": 1.0181585610651463e-12,
+        "throughput": 245.76,
+        "physical_diagonal_scaling": "seven-point principal part",
+        "coastal_subface_outflows": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "run_hash": "b17104780294e928f31d4124447767028ce506f8ad454b6e0cfd2b51acf877b5",
+      "input_hash": "31a6f5c0c0486ec7404cc6d2d7fdd7a71604ee5f2d7a4042b2f11ab9de071e08",
+      "controls": {
+        "method": "newton",
+        "max_outer": 30,
+        "head_tol": 1e-10,
+        "flow_tol": 1e-11,
+        "relative_tol": 1e-11,
+        "relaxation": 1.0,
+        "max_change": 50.0,
+        "line_search_steps": 20,
+        "recovery_growth": 1.0,
+        "fallback": false,
+        "physical_merit": true,
+        "adequate_alpha": 0.125,
+        "adequate_merit_ratio": 0.8,
+        "retry_contraction": 0.5,
+        "stagnation_window": 0,
+        "stagnation_ratio": 0.995
+      },
+      "cold_start": false,
+      "source_revision": "a1885bc011e91d7675e4990f7cc6c704536de15a"
+    }
+  },
+  "branches/picard_perturb_0": {
+    "independent_accepted": true,
+    "budget": {
+      "cell_residual_max": 2.6623148130511254e-12,
+      "cell_residual_rms": 5.491818425779194e-13,
+      "head_residual_rms": 4.962365345750377e-15,
+      "source_total": 122.87999999999997,
+      "boundary_inflow": 0.0,
+      "boundary_outflow": -122.87999999999987,
+      "boundary_net": -122.87999999999987,
+      "storage_uptake": 0.0,
+      "imbalance": 1.2823088131694999e-13,
+      "domain_imbalance": 1.2823088131694999e-13,
+      "relative_imbalance": 5.217727918170169e-16,
+      "relative_cell_imbalance": 1.1016583639718672e-12,
+      "throughput": 245.75999999999982,
+      "physical_diagonal_scaling": "seven-point principal part",
+      "coastal_subface_outflows": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "finite_physical_state": true
+    },
+    "residual_l1": 2.707435595297259e-10,
+    "layers": [
+      {
+        "layer": 0,
+        "head_min": 2.539617399947143,
+        "head_max": 129.71906488235814,
+        "dry_cells": 256,
+        "floor_cells": 256,
+        "thin_cells": 0,
+        "residual_l1": 1.2786255387808865e-10,
+        "residual_squared": 1.4165600705032695e-22,
+        "saturated_volume": 0.0
+      },
+      {
+        "layer": 1,
+        "head_min": 7.421977962643542,
+        "head_max": 129.71419975474836,
+        "dry_cells": 236,
+        "floor_cells": 236,
+        "thin_cells": 1,
+        "residual_l1": 1.3223594441669206e-10,
+        "residual_squared": 1.5176855968099773e-22,
+        "saturated_volume": 16395.630943716576
+      },
+      {
+        "layer": 2,
+        "head_min": 6.3936037667323244,
+        "head_max": 129.68821927842671,
+        "dry_cells": 44,
+        "floor_cells": 44,
+        "thin_cells": 11,
+        "residual_l1": 1.0638116770952596e-11,
+        "residual_squared": 9.377123801266e-25,
+        "saturated_volume": 195340.2170301132
+      },
+      {
+        "layer": 3,
+        "head_min": 4.702433946224708,
+        "head_max": 111.92085240485179,
+        "dry_cells": 0,
+        "floor_cells": 0,
+        "thin_cells": 0,
+        "residual_l1": 6.944463992568373e-15,
+        "residual_squared": 3.966127003837869e-31,
+        "saturated_volume": 2932346.6782431686
+      }
+    ],
+    "leakage": [
+      {
+        "net": 122.88000000000798,
+        "downward": 122.88000000000798,
+        "upward": 0.0,
+        "gross": 122.88000000000798
+      },
+      {
+        "net": -905.0152102664367,
+        "downward": 102.58839296288659,
+        "upward": 1007.6036032293234,
+        "gross": 1110.19199619221
+      },
+      {
+        "net": -0.021286385310550077,
+        "downward": 0.2738250468281709,
+        "upward": 0.29511143213872104,
+        "gross": 0.5689364789668919
+      }
+    ],
+    "coastal_free_to_fixed_inflow": 0.0,
+    "coastal_free_to_fixed_outflow": 122.87999999999987,
+    "contacts": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "gate_states": [
+      false,
+      false,
+      false
+    ],
+    "worst_cells": [
+      {
+        "cell": [
+          1,
+          4,
+          8
+        ],
+        "residual": -2.6623148130511254e-12,
+        "head_minus_bottom": -5.816638475600996,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          4,
+          8
+        ],
+        "residual": 2.6446622669595854e-12,
+        "head_minus_bottom": -8.723949318552343,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          7,
+          13
+        ],
+        "residual": -2.5581758933412857e-12,
+        "head_minus_bottom": -13.333567928422383,
+        "floor": true
+      },
+      {
+        "cell": [
+          1,
+          7,
+          13
+        ],
+        "residual": 2.5331958752872197e-12,
+        "head_minus_bottom": -7.035157356398827,
+        "floor": true
+      },
+      {
+        "cell": [
+          1,
+          15,
+          9
+        ],
+        "residual": 2.4170665469114283e-12,
+        "head_minus_bottom": -10.413387742350025,
+        "floor": true
+      },
+      {
+        "cell": [
+          1,
+          5,
+          7
+        ],
+        "residual": 2.396360887502169e-12,
+        "head_minus_bottom": -8.00875785252913,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          15,
+          9
+        ],
+        "residual": -2.3869239917928553e-12,
+        "head_minus_bottom": -13.422546817632451,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          5,
+          7
+        ],
+        "residual": -2.342070981597999e-12,
+        "head_minus_bottom": -10.815980491238165,
+        "floor": true
+      },
+      {
+        "cell": [
+          1,
+          14,
+          8
+        ],
+        "residual": 2.2891688544746103e-12,
+        "head_minus_bottom": -8.052870191827964,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          14,
+          8
+        ],
+        "residual": -2.2797874699165277e-12,
+        "head_minus_bottom": -11.028869482899083,
+        "floor": true
+      }
+    ],
+    "water_table_class_counts": {
+      "water_table": 256
+    },
+    "interpretation": "DarcyWarp equations evaluated offline; not native MF6 residual for MF6 heads",
+    "native": {
+      "converged": true,
+      "stop_reason": "converged",
+      "outers": 1,
+      "seconds": 0.008757666000747122,
+      "factorizations": 1,
+      "discharge_component_seeds": 0,
+      "residual_evaluations": 4,
+      "budget": {
+        "cell_residual_max": 2.6623148130511254e-12,
+        "cell_residual_rms": 5.491818425779194e-13,
+        "head_residual_rms": 4.962365345750377e-15,
+        "source_total": 122.87999999999997,
+        "boundary_inflow": 0.0,
+        "boundary_outflow": -122.87999999999987,
+        "boundary_net": -122.87999999999987,
+        "storage_uptake": 0.0,
+        "imbalance": 1.2823088131694999e-13,
+        "domain_imbalance": 1.2823088131694999e-13,
+        "relative_imbalance": 5.217727918170169e-16,
+        "relative_cell_imbalance": 1.1016583639718672e-12,
+        "throughput": 245.75999999999982,
+        "physical_diagonal_scaling": "seven-point principal part",
+        "coastal_subface_outflows": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "run_hash": "8ca5a61afd0b77c03d16c158df15875fe74c677982f024bfa005d8a507cd79f3",
+      "input_hash": "31a6f5c0c0486ec7404cc6d2d7fdd7a71604ee5f2d7a4042b2f11ab9de071e08",
+      "controls": {
+        "method": "newton",
+        "max_outer": 30,
+        "head_tol": 1e-10,
+        "flow_tol": 1e-11,
+        "relative_tol": 1e-11,
+        "relaxation": 1.0,
+        "max_change": 50.0,
+        "line_search_steps": 20,
+        "recovery_growth": 1.0,
+        "fallback": false,
+        "physical_merit": true,
+        "adequate_alpha": 0.125,
+        "adequate_merit_ratio": 0.8,
+        "retry_contraction": 0.5,
+        "stagnation_window": 0,
+        "stagnation_ratio": 0.995
+      },
+      "cold_start": false,
+      "source_revision": "a1885bc011e91d7675e4990f7cc6c704536de15a"
+    }
+  },
+  "mf6_native": {
+    "independent_accepted": false,
+    "budget": {
+      "cell_residual_max": 278.66513744271373,
+      "cell_residual_rms": 26.67719815605748,
+      "head_residual_rms": 0.4567734395694671,
+      "source_total": 122.87999999999997,
+      "boundary_inflow": 3206.719074828534,
+      "boundary_outflow": -208.24026081918333,
+      "boundary_net": 2998.4788140093506,
+      "storage_uptake": 0.0,
+      "imbalance": 3121.3588140093507,
+      "domain_imbalance": 3121.3588140093507,
+      "relative_imbalance": 0.8822782828372515,
+      "relative_cell_imbalance": 1.6373525523793326,
+      "throughput": 3537.8393356477172,
+      "physical_diagonal_scaling": "seven-point principal part",
+      "coastal_subface_outflows": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "finite_physical_state": true
+    },
+    "residual_l1": 5792.690266130792,
+    "layers": [
+      {
+        "layer": 0,
+        "head_min": 2.0030725176276754,
+        "head_max": 131.2471842168343,
+        "dry_cells": 256,
+        "floor_cells": 256,
+        "thin_cells": 0,
+        "residual_l1": 3804.6462014075523,
+        "residual_squared": 679838.3109442363,
+        "saturated_volume": 0.0
+      },
+      {
+        "layer": 1,
+        "head_min": 7.020285992324868,
+        "head_max": 131.24185766664107,
+        "dry_cells": 239,
+        "floor_cells": 240,
+        "thin_cells": 1,
+        "residual_l1": 758.3522559651637,
+        "residual_squared": 4590.74211082695,
+        "saturated_volume": 15651.245766934517
+      },
+      {
+        "layer": 2,
+        "head_min": 6.9456925779956915,
+        "head_max": 131.18198345098583,
+        "dry_cells": 0,
+        "floor_cells": 0,
+        "thin_cells": 5,
+        "residual_l1": 1228.3328835496357,
+        "residual_squared": 10163.687307796528,
+        "saturated_volume": 182623.22485623122
+      },
+      {
+        "layer": 3,
+        "head_min": 8.487199670644115,
+        "head_max": 113.25690114604262,
+        "dry_cells": 0,
+        "floor_cells": 0,
+        "thin_cells": 0,
+        "residual_l1": 1.3589252084405472,
+        "residual_squared": 0.011459715403206876,
+        "saturated_volume": 3260711.127230987
+      }
+    ],
+    "leakage": [
+      {
+        "net": -3681.4057429875056,
+        "downward": 8.631633792970245,
+        "upward": 3690.037376780476,
+        "gross": 3698.669010573446
+      },
+      {
+        "net": -2065.419353312833,
+        "downward": 5.8046581295140705,
+        "upward": 2071.224011442347,
+        "gross": 2077.0286695718614
+      },
+      {
+        "net": -1.0138116560946913,
+        "downward": 0.23914967295972178,
+        "upward": 1.252961329054413,
+        "gross": 1.4921110020141348
+      }
+    ],
+    "coastal_free_to_fixed_inflow": 3206.719074828534,
+    "coastal_free_to_fixed_outflow": 208.24026081918333,
+    "contacts": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "gate_states": [
+      false,
+      false,
+      false
+    ],
+    "worst_cells": [
+      {
+        "cell": [
+          0,
+          0,
+          0
+        ],
+        "residual": 278.66513744271373,
+        "head_minus_bottom": -3.6957273313609376,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          2,
+          0
+        ],
+        "residual": 267.46007827995106,
+        "head_minus_bottom": -3.6961419211643123,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          1,
+          0
+        ],
+        "residual": 264.8504393610302,
+        "head_minus_bottom": -3.695841921164312,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          3,
+          0
+        ],
+        "residual": 238.0961396741116,
+        "head_minus_bottom": -3.6965127415575623,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          11,
+          0
+        ],
+        "residual": 223.70402930746118,
+        "head_minus_bottom": -3.695841921164312,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          12,
+          0
+        ],
+        "residual": 221.07058875375404,
+        "head_minus_bottom": -3.696151751482573,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          10,
+          0
+        ],
+        "residual": 211.43045277139066,
+        "head_minus_bottom": -3.6957273313609376,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          9,
+          0
+        ],
+        "residual": 200.7946408437855,
+        "head_minus_bottom": -3.695841921164312,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          13,
+          0
+        ],
+        "residual": 192.66017275409652,
+        "head_minus_bottom": -3.696512243481468,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          8,
+          0
+        ],
+        "residual": 187.6477737967746,
+        "head_minus_bottom": -3.696151751482573,
+        "floor": true
+      }
+    ],
+    "water_table_class_counts": {
+      "water_table": 256
+    },
+    "interpretation": "DarcyWarp equations evaluated offline; not native MF6 residual for MF6 heads",
+    "native": {
+      "native_success": true,
+      "independent_conservation": true,
+      "invalid_heads": 0,
+      "cell_residual_rms": 3.2962886570665997e-10,
+      "cell_residual_max": 8.446652893833242e-09,
+      "cell_residual_l1": 2.732519094055284e-08,
+      "gross_external_throughput": 245.75999999551536,
+      "signed_imbalance": 4.484599466446067e-09,
+      "relative_cell_imbalance": 1.1118648657654407e-10,
+      "reciprocity_max": 0.0,
+      "source_allocation_max_error": 0.0,
+      "packages": {
+        "WEL": [
+          {
+            "node": 240,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 241,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 242,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 243,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 244,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 245,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 246,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 247,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 248,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 249,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 250,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 251,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 252,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 253,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 254,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 255,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 224,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 225,
+            "inflow": 0.5488532545056679
+          },
+          {
+            "node": 226,
+            "inflow": 0.6058011557951258
+          },
+          {
+            "node": 227,
+            "inflow": 0.6409968943799847
+          },
+          {
+            "node": 228,
+            "inflow": 0.6483548073156755
+          },
+          {
+            "node": 229,
+            "inflow": 0.6266026446110766
+          },
+          {
+            "node": 230,
+            "inflow": 0.5795015528100076
+          },
+          {
+            "node": 231,
+            "inflow": 0.5151957385848589
+          },
+          {
+            "node": 232,
+            "inflow": 0.444804261415141
+          },
+          {
+            "node": 233,
+            "inflow": 0.38049844718999243
+          },
+          {
+            "node": 234,
+            "inflow": 0.33339735538892346
+          },
+          {
+            "node": 235,
+            "inflow": 0.3116451926843244
+          },
+          {
+            "node": 236,
+            "inflow": 0.3190031056200151
+          },
+          {
+            "node": 237,
+            "inflow": 0.3541988442048741
+          },
+          {
+            "node": 238,
+            "inflow": 0.41114674549433194
+          },
+          {
+            "node": 239,
+            "inflow": 0.47999999999999987
+          },
+          {
+            "node": 208,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 209,
+            "inflow": 0.5914069060262177
+          },
+          {
+            "node": 210,
+            "inflow": 0.6835505459005344
+          },
+          {
+            "node": 211,
+            "inflow": 0.7404984471899924
+          },
+          {
+            "node": 212,
+            "inflow": 0.7524038004062026
+          },
+          {
+            "node": 213,
+            "inflow": 0.7172080618213434
+          },
+          {
+            "node": 214,
+            "inflow": 0.6409968943799849
+          },
+          {
+            "node": 215,
+            "inflow": 0.5369479012894578
+          },
+          {
+            "node": 216,
+            "inflow": 0.4230520987105421
+          },
+          {
+            "node": 217,
+            "inflow": 0.31900310562001516
+          },
+          {
+            "node": 218,
+            "inflow": 0.24279193817865646
+          },
+          {
+            "node": 219,
+            "inflow": 0.20759619959379744
+          },
+          {
+            "node": 220,
+            "inflow": 0.21950155281000752
+          },
+          {
+            "node": 221,
+            "inflow": 0.27644945409946553
+          },
+          {
+            "node": 222,
+            "inflow": 0.36859309397378237
+          },
+          {
+            "node": 223,
+            "inflow": 0.47999999999999987
+          },
+          {
+            "node": 192,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 193,
+            "inflow": 0.5914069060262177
+          },
+          {
+            "node": 194,
+            "inflow": 0.6835505459005344
+          },
+          {
+            "node": 195,
+            "inflow": 0.7404984471899924
+          },
+          {
+            "node": 196,
+            "inflow": 0.7524038004062026
+          },
+          {
+            "node": 197,
+            "inflow": 0.7172080618213434
+          },
+          {
+            "node": 198,
+            "inflow": 0.6409968943799849
+          },
+          {
+            "node": 199,
+            "inflow": 0.5369479012894578
+          },
+          {
+            "node": 200,
+            "inflow": 0.4230520987105421
+          },
+          {
+            "node": 201,
+            "inflow": 0.31900310562001516
+          },
+          {
+            "node": 202,
+            "inflow": 0.24279193817865646
+          },
+          {
+            "node": 203,
+            "inflow": 0.20759619959379744
+          },
+          {
+            "node": 204,
+            "inflow": 0.21950155281000752
+          },
+          {
+            "node": 205,
+            "inflow": 0.2764494540994655
+          },
+          {
+            "node": 206,
+            "inflow": 0.36859309397378226
+          },
+          {
+            "node": 207,
+            "inflow": 0.47999999999999987
+          },
+          {
+            "node": 176,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 177,
+            "inflow": 0.5488532545056679
+          },
+          {
+            "node": 178,
+            "inflow": 0.6058011557951258
+          },
+          {
+            "node": 179,
+            "inflow": 0.6409968943799849
+          },
+          {
+            "node": 180,
+            "inflow": 0.6483548073156755
+          },
+          {
+            "node": 181,
+            "inflow": 0.6266026446110766
+          },
+          {
+            "node": 182,
+            "inflow": 0.5795015528100076
+          },
+          {
+            "node": 183,
+            "inflow": 0.5151957385848589
+          },
+          {
+            "node": 184,
+            "inflow": 0.444804261415141
+          },
+          {
+            "node": 185,
+            "inflow": 0.3804984471899924
+          },
+          {
+            "node": 186,
+            "inflow": 0.33339735538892346
+          },
+          {
+            "node": 187,
+            "inflow": 0.3116451926843244
+          },
+          {
+            "node": 188,
+            "inflow": 0.3190031056200151
+          },
+          {
+            "node": 189,
+            "inflow": 0.3541988442048741
+          },
+          {
+            "node": 190,
+            "inflow": 0.41114674549433194
+          },
+          {
+            "node": 191,
+            "inflow": 0.47999999999999987
+          },
+          {
+            "node": 160,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 161,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 162,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 163,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 164,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 165,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 166,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 167,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 168,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 169,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 170,
+            "inflow": 0.47999999999999987
+          },
+          {
+            "node": 171,
+            "inflow": 0.47999999999999987
+          },
+          {
+            "node": 172,
+            "inflow": 0.47999999999999987
+          },
+          {
+            "node": 173,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 174,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 175,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 144,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 145,
+            "inflow": 0.41114674549433194
+          },
+          {
+            "node": 146,
+            "inflow": 0.3541988442048741
+          },
+          {
+            "node": 147,
+            "inflow": 0.3190031056200152
+          },
+          {
+            "node": 148,
+            "inflow": 0.3116451926843244
+          },
+          {
+            "node": 149,
+            "inflow": 0.33339735538892346
+          },
+          {
+            "node": 150,
+            "inflow": 0.38049844718999243
+          },
+          {
+            "node": 151,
+            "inflow": 0.444804261415141
+          },
+          {
+            "node": 152,
+            "inflow": 0.5151957385848589
+          },
+          {
+            "node": 153,
+            "inflow": 0.5795015528100075
+          },
+          {
+            "node": 154,
+            "inflow": 0.6266026446110766
+          },
+          {
+            "node": 155,
+            "inflow": 0.6483548073156754
+          },
+          {
+            "node": 156,
+            "inflow": 0.6409968943799847
+          },
+          {
+            "node": 157,
+            "inflow": 0.6058011557951257
+          },
+          {
+            "node": 158,
+            "inflow": 0.5488532545056679
+          },
+          {
+            "node": 159,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 128,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 129,
+            "inflow": 0.36859309397378237
+          },
+          {
+            "node": 130,
+            "inflow": 0.2764494540994655
+          },
+          {
+            "node": 131,
+            "inflow": 0.2195015528100076
+          },
+          {
+            "node": 132,
+            "inflow": 0.20759619959379744
+          },
+          {
+            "node": 133,
+            "inflow": 0.2427919381786564
+          },
+          {
+            "node": 134,
+            "inflow": 0.3190031056200151
+          },
+          {
+            "node": 135,
+            "inflow": 0.42305209871054206
+          },
+          {
+            "node": 136,
+            "inflow": 0.5369479012894578
+          },
+          {
+            "node": 137,
+            "inflow": 0.6409968943799847
+          },
+          {
+            "node": 138,
+            "inflow": 0.7172080618213434
+          },
+          {
+            "node": 139,
+            "inflow": 0.7524038004062026
+          },
+          {
+            "node": 140,
+            "inflow": 0.7404984471899924
+          },
+          {
+            "node": 141,
+            "inflow": 0.6835505459005344
+          },
+          {
+            "node": 142,
+            "inflow": 0.5914069060262177
+          },
+          {
+            "node": 143,
+            "inflow": 0.48
+          },
+          {
+            "node": 112,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 113,
+            "inflow": 0.36859309397378226
+          },
+          {
+            "node": 114,
+            "inflow": 0.2764494540994655
+          },
+          {
+            "node": 115,
+            "inflow": 0.2195015528100076
+          },
+          {
+            "node": 116,
+            "inflow": 0.20759619959379744
+          },
+          {
+            "node": 117,
+            "inflow": 0.2427919381786564
+          },
+          {
+            "node": 118,
+            "inflow": 0.3190031056200151
+          },
+          {
+            "node": 119,
+            "inflow": 0.42305209871054206
+          },
+          {
+            "node": 120,
+            "inflow": 0.5369479012894578
+          },
+          {
+            "node": 121,
+            "inflow": 0.6409968943799847
+          },
+          {
+            "node": 122,
+            "inflow": 0.7172080618213434
+          },
+          {
+            "node": 123,
+            "inflow": 0.7524038004062026
+          },
+          {
+            "node": 124,
+            "inflow": 0.7404984471899924
+          },
+          {
+            "node": 125,
+            "inflow": 0.6835505459005344
+          },
+          {
+            "node": 126,
+            "inflow": 0.5914069060262177
+          },
+          {
+            "node": 127,
+            "inflow": 0.48
+          },
+          {
+            "node": 96,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 97,
+            "inflow": 0.41114674549433194
+          },
+          {
+            "node": 98,
+            "inflow": 0.354198844204874
+          },
+          {
+            "node": 99,
+            "inflow": 0.3190031056200151
+          },
+          {
+            "node": 100,
+            "inflow": 0.3116451926843244
+          },
+          {
+            "node": 101,
+            "inflow": 0.3333973553889233
+          },
+          {
+            "node": 102,
+            "inflow": 0.3804984471899924
+          },
+          {
+            "node": 103,
+            "inflow": 0.444804261415141
+          },
+          {
+            "node": 104,
+            "inflow": 0.5151957385848589
+          },
+          {
+            "node": 105,
+            "inflow": 0.5795015528100076
+          },
+          {
+            "node": 106,
+            "inflow": 0.6266026446110766
+          },
+          {
+            "node": 107,
+            "inflow": 0.6483548073156755
+          },
+          {
+            "node": 108,
+            "inflow": 0.6409968943799849
+          },
+          {
+            "node": 109,
+            "inflow": 0.6058011557951258
+          },
+          {
+            "node": 110,
+            "inflow": 0.5488532545056679
+          },
+          {
+            "node": 111,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 80,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 81,
+            "inflow": 0.47999999999999987
+          },
+          {
+            "node": 82,
+            "inflow": 0.47999999999999987
+          },
+          {
+            "node": 83,
+            "inflow": 0.47999999999999987
+          },
+          {
+            "node": 84,
+            "inflow": 0.47999999999999987
+          },
+          {
+            "node": 85,
+            "inflow": 0.47999999999999987
+          },
+          {
+            "node": 86,
+            "inflow": 0.47999999999999987
+          },
+          {
+            "node": 87,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 88,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 89,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 90,
+            "inflow": 0.48
+          },
+          {
+            "node": 91,
+            "inflow": 0.48
+          },
+          {
+            "node": 92,
+            "inflow": 0.48
+          },
+          {
+            "node": 93,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 94,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 95,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 64,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 65,
+            "inflow": 0.5488532545056678
+          },
+          {
+            "node": 66,
+            "inflow": 0.6058011557951257
+          },
+          {
+            "node": 67,
+            "inflow": 0.6409968943799844
+          },
+          {
+            "node": 68,
+            "inflow": 0.6483548073156752
+          },
+          {
+            "node": 69,
+            "inflow": 0.6266026446110763
+          },
+          {
+            "node": 70,
+            "inflow": 0.5795015528100074
+          },
+          {
+            "node": 71,
+            "inflow": 0.5151957385848589
+          },
+          {
+            "node": 72,
+            "inflow": 0.44480426141514107
+          },
+          {
+            "node": 73,
+            "inflow": 0.38049844718999254
+          },
+          {
+            "node": 74,
+            "inflow": 0.3333973553889236
+          },
+          {
+            "node": 75,
+            "inflow": 0.31164519268432467
+          },
+          {
+            "node": 76,
+            "inflow": 0.31900310562001544
+          },
+          {
+            "node": 77,
+            "inflow": 0.3541988442048743
+          },
+          {
+            "node": 78,
+            "inflow": 0.41114674549433206
+          },
+          {
+            "node": 79,
+            "inflow": 0.47999999999999987
+          },
+          {
+            "node": 48,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 49,
+            "inflow": 0.5914069060262177
+          },
+          {
+            "node": 50,
+            "inflow": 0.6835505459005344
+          },
+          {
+            "node": 51,
+            "inflow": 0.7404984471899924
+          },
+          {
+            "node": 52,
+            "inflow": 0.7524038004062026
+          },
+          {
+            "node": 53,
+            "inflow": 0.7172080618213434
+          },
+          {
+            "node": 54,
+            "inflow": 0.6409968943799849
+          },
+          {
+            "node": 55,
+            "inflow": 0.5369479012894578
+          },
+          {
+            "node": 56,
+            "inflow": 0.4230520987105421
+          },
+          {
+            "node": 57,
+            "inflow": 0.31900310562001516
+          },
+          {
+            "node": 58,
+            "inflow": 0.24279193817865646
+          },
+          {
+            "node": 59,
+            "inflow": 0.20759619959379744
+          },
+          {
+            "node": 60,
+            "inflow": 0.21950155281000752
+          },
+          {
+            "node": 61,
+            "inflow": 0.27644945409946553
+          },
+          {
+            "node": 62,
+            "inflow": 0.36859309397378237
+          },
+          {
+            "node": 63,
+            "inflow": 0.47999999999999987
+          },
+          {
+            "node": 32,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 33,
+            "inflow": 0.5914069060262177
+          },
+          {
+            "node": 34,
+            "inflow": 0.6835505459005344
+          },
+          {
+            "node": 35,
+            "inflow": 0.7404984471899924
+          },
+          {
+            "node": 36,
+            "inflow": 0.7524038004062026
+          },
+          {
+            "node": 37,
+            "inflow": 0.7172080618213434
+          },
+          {
+            "node": 38,
+            "inflow": 0.6409968943799849
+          },
+          {
+            "node": 39,
+            "inflow": 0.5369479012894578
+          },
+          {
+            "node": 40,
+            "inflow": 0.4230520987105421
+          },
+          {
+            "node": 41,
+            "inflow": 0.31900310562001516
+          },
+          {
+            "node": 42,
+            "inflow": 0.24279193817865646
+          },
+          {
+            "node": 43,
+            "inflow": 0.20759619959379744
+          },
+          {
+            "node": 44,
+            "inflow": 0.21950155281000752
+          },
+          {
+            "node": 45,
+            "inflow": 0.2764494540994655
+          },
+          {
+            "node": 46,
+            "inflow": 0.36859309397378226
+          },
+          {
+            "node": 47,
+            "inflow": 0.47999999999999987
+          },
+          {
+            "node": 16,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 17,
+            "inflow": 0.5488532545056679
+          },
+          {
+            "node": 18,
+            "inflow": 0.605801155795126
+          },
+          {
+            "node": 19,
+            "inflow": 0.6409968943799849
+          },
+          {
+            "node": 20,
+            "inflow": 0.6483548073156755
+          },
+          {
+            "node": 21,
+            "inflow": 0.6266026446110766
+          },
+          {
+            "node": 22,
+            "inflow": 0.5795015528100076
+          },
+          {
+            "node": 23,
+            "inflow": 0.5151957385848589
+          },
+          {
+            "node": 24,
+            "inflow": 0.444804261415141
+          },
+          {
+            "node": 25,
+            "inflow": 0.3804984471899924
+          },
+          {
+            "node": 26,
+            "inflow": 0.3333973553889233
+          },
+          {
+            "node": 27,
+            "inflow": 0.3116451926843244
+          },
+          {
+            "node": 28,
+            "inflow": 0.3190031056200151
+          },
+          {
+            "node": 29,
+            "inflow": 0.3541988442048741
+          },
+          {
+            "node": 30,
+            "inflow": 0.41114674549433194
+          },
+          {
+            "node": 31,
+            "inflow": 0.47999999999999987
+          },
+          {
+            "node": 0,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 1,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 2,
+            "inflow": 0.48
+          },
+          {
+            "node": 3,
+            "inflow": 0.48
+          },
+          {
+            "node": 4,
+            "inflow": 0.48
+          },
+          {
+            "node": 5,
+            "inflow": 0.48
+          },
+          {
+            "node": 6,
+            "inflow": 0.48
+          },
+          {
+            "node": 7,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 8,
+            "inflow": 0.4799999999999999
+          },
+          {
+            "node": 9,
+            "inflow": 0.47999999999999987
+          },
+          {
+            "node": 10,
+            "inflow": 0.47999999999999987
+          },
+          {
+            "node": 11,
+            "inflow": 0.47999999999999987
+          },
+          {
+            "node": 12,
+            "inflow": 0.47999999999999987
+          },
+          {
+            "node": 13,
+            "inflow": 0.47999999999999987
+          },
+          {
+            "node": 14,
+            "inflow": 0.47999999999999987
+          },
+          {
+            "node": 15,
+            "inflow": 0.4799999999999999
+          }
+        ],
+        "CHD": [
+          {
+            "node": 496,
+            "inflow": -0.4788682705538596
+          },
+          {
+            "node": 480,
+            "inflow": -0.4784178361681653
+          },
+          {
+            "node": 464,
+            "inflow": -0.47996148454768384
+          },
+          {
+            "node": 448,
+            "inflow": -0.4810829835966503
+          },
+          {
+            "node": 432,
+            "inflow": -0.4802666418832584
+          },
+          {
+            "node": 416,
+            "inflow": -0.48086619468866143
+          },
+          {
+            "node": 400,
+            "inflow": -0.4809093893008777
+          },
+          {
+            "node": 384,
+            "inflow": -0.4810305668299283
+          },
+          {
+            "node": 368,
+            "inflow": -0.47893251956364585
+          },
+          {
+            "node": 352,
+            "inflow": -0.47865141066946737
+          },
+          {
+            "node": 336,
+            "inflow": -0.4777690722151609
+          },
+          {
+            "node": 320,
+            "inflow": -0.4784081016851038
+          },
+          {
+            "node": 304,
+            "inflow": -0.4787340260110179
+          },
+          {
+            "node": 288,
+            "inflow": -0.4811551246812187
+          },
+          {
+            "node": 272,
+            "inflow": -0.4812079713378792
+          },
+          {
+            "node": 256,
+            "inflow": -0.4804751336784796
+          },
+          {
+            "node": 752,
+            "inflow": -13.813850477127811
+          },
+          {
+            "node": 736,
+            "inflow": -6.740678379165727
+          },
+          {
+            "node": 720,
+            "inflow": -4.825213978916641
+          },
+          {
+            "node": 704,
+            "inflow": -4.498178319556089
+          },
+          {
+            "node": 688,
+            "inflow": -4.581172048223448
+          },
+          {
+            "node": 672,
+            "inflow": -5.095445722772338
+          },
+          {
+            "node": 656,
+            "inflow": -6.595728395808276
+          },
+          {
+            "node": 640,
+            "inflow": -9.052380006373557
+          },
+          {
+            "node": 624,
+            "inflow": -10.161691241923851
+          },
+          {
+            "node": 608,
+            "inflow": -8.828558513366126
+          },
+          {
+            "node": 592,
+            "inflow": -7.117104275989618
+          },
+          {
+            "node": 576,
+            "inflow": -6.099131426661383
+          },
+          {
+            "node": 560,
+            "inflow": -5.587020536736947
+          },
+          {
+            "node": 544,
+            "inflow": -5.400133746932006
+          },
+          {
+            "node": 528,
+            "inflow": -6.340085296443884
+          },
+          {
+            "node": 512,
+            "inflow": -10.110800103176874
+          },
+          {
+            "node": 1008,
+            "inflow": -0.025625950815573444
+          },
+          {
+            "node": 992,
+            "inflow": -0.02532200581748318
+          },
+          {
+            "node": 976,
+            "inflow": -0.023468404642736092
+          },
+          {
+            "node": 960,
+            "inflow": -0.02258125941833079
+          },
+          {
+            "node": 944,
+            "inflow": -0.022992309407907027
+          },
+          {
+            "node": 928,
+            "inflow": -0.02399823702379999
+          },
+          {
+            "node": 912,
+            "inflow": -0.024066063599113806
+          },
+          {
+            "node": 896,
+            "inflow": -0.023391208246955404
+          },
+          {
+            "node": 880,
+            "inflow": -0.022335459375509577
+          },
+          {
+            "node": 864,
+            "inflow": -0.02129423643446211
+          },
+          {
+            "node": 848,
+            "inflow": -0.020317262680739825
+          },
+          {
+            "node": 832,
+            "inflow": -0.019039578106223445
+          },
+          {
+            "node": 816,
+            "inflow": -0.01817348945942352
+          },
+          {
+            "node": 800,
+            "inflow": -0.018630202646928922
+          },
+          {
+            "node": 784,
+            "inflow": -0.020215026277614234
+          },
+          {
+            "node": 768,
+            "inflow": -0.021376832388062258
+          }
+        ],
+        "DRN": [
+          {
+            "node": 176,
+            "inflow": -0.0009543234784321619
+          },
+          {
+            "node": 112,
+            "inflow": -0.0011544745552281022
+          },
+          {
+            "node": 48,
+            "inflow": -0.0011544745552281022
+          }
+        ]
+      },
+      "head_min": 2.0,
+      "head_max": 131.2471842168343,
+      "formulation_equivalence": false,
+      "nonlinear_cross_residual": "not established; saved FLOW-JA-FACE is native final reported flux, not a fixed-head nonlinear reevaluation",
+      "returncode": 0,
+      "seconds": 0.3988742489964352,
+      "input_hash": "31a6f5c0c0486ec7404cc6d2d7fdd7a71604ee5f2d7a4042b2f11ab9de071e08",
+      "executable": "/bin/modflow/mf6",
+      "executable_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+      "mf6_version": "mf6: 6.6.2 05/12/2025"
+    },
+    "independent_native_balance": {
+      "cell_residual_rms": 3.376372152875784e-10,
+      "cell_residual_l1": 2.7325190730820704e-08,
+      "cell_residual_max": 8.446652988158831e-09,
+      "gross_external_throughput": 245.75999999551536,
+      "signed_imbalance": 4.484598286624039e-09,
+      "relative_cell_imbalance": 1.1118648572314183e-10,
+      "coastal_inflow": 0.0,
+      "coastal_outflow": 122.8767367229265,
+      "contacts": [
+        0.0009543234784321619,
+        0.0011544745552281022,
+        0.0011544745552281022
+      ],
+      "source_error_max": 0.0,
+      "conservation": true
+    }
+  },
+  "mf6_coupled": {
+    "independent_accepted": false,
+    "budget": {
+      "cell_residual_max": 284.3586117991337,
+      "cell_residual_rms": 27.114223934125633,
+      "head_residual_rms": 0.8945010936287868,
+      "source_total": 122.87999999999997,
+      "boundary_inflow": 3257.6605277407734,
+      "boundary_outflow": -228.2136919358719,
+      "boundary_net": 3029.4468358049016,
+      "storage_uptake": 0.0,
+      "imbalance": 3152.3268358049017,
+      "domain_imbalance": 3152.3268358049017,
+      "relative_imbalance": 0.8735221752196134,
+      "relative_cell_imbalance": 1.6110625238331127,
+      "throughput": 3608.7542196766453,
+      "physical_diagonal_scaling": "seven-point principal part",
+      "coastal_subface_outflows": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "finite_physical_state": true
+    },
+    "residual_l1": 5813.9286810456515,
+    "layers": [
+      {
+        "layer": 0,
+        "head_min": 2.003072668639063,
+        "head_max": 131.16925304105965,
+        "dry_cells": 256,
+        "floor_cells": 256,
+        "thin_cells": 0,
+        "residual_l1": 3854.845672914577,
+        "residual_squared": 702308.9761345809,
+        "saturated_volume": 0.0
+      },
+      {
+        "layer": 1,
+        "head_min": 7.206216728584883,
+        "head_max": 131.1639264908664,
+        "dry_cells": 240,
+        "floor_cells": 240,
+        "thin_cells": 0,
+        "residual_l1": 755.2625723681863,
+        "residual_squared": 4748.336291260999,
+        "saturated_volume": 15650.158580005052
+      },
+      {
+        "layer": 2,
+        "head_min": 7.131623314255701,
+        "head_max": 131.10405227521113,
+        "dry_cells": 0,
+        "floor_cells": 0,
+        "thin_cells": 8,
+        "residual_l1": 1201.1567008505217,
+        "residual_squared": 10479.432615390775,
+        "saturated_volume": 177988.84579402296
+      },
+      {
+        "layer": 3,
+        "head_min": 9.936021599335726,
+        "head_max": 105.59784985143227,
+        "dry_cells": 0,
+        "floor_cells": 0,
+        "thin_cells": 0,
+        "residual_l1": 2.6637349123666025,
+        "residual_squared": 0.04715948055306889,
+        "saturated_volume": 3168760.1970939664
+      }
+    ],
+    "leakage": [
+      {
+        "net": -3731.602296209458,
+        "downward": 8.590717719479096,
+        "upward": 3740.193013928938,
+        "gross": 3748.7837316484165
+      },
+      {
+        "net": -2021.849041669401,
+        "downward": 6.670219339402685,
+        "upward": 2028.5192610088036,
+        "gross": 2035.1894803482062
+      },
+      {
+        "net": -0.9124807736490668,
+        "downward": 0.5561651390685127,
+        "upward": 1.4686459127175795,
+        "gross": 2.0248110517860924
+      }
+    ],
+    "coastal_free_to_fixed_inflow": 3257.6605277407734,
+    "coastal_free_to_fixed_outflow": 228.2136919358719,
+    "contacts": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "gate_states": [
+      false,
+      false,
+      false
+    ],
+    "worst_cells": [
+      {
+        "cell": [
+          0,
+          0,
+          0
+        ],
+        "residual": 284.3586117991337,
+        "head_minus_bottom": -3.695727331360937,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          1,
+          0
+        ],
+        "residual": 271.14316645342564,
+        "head_minus_bottom": -3.695841921164312,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          2,
+          0
+        ],
+        "residual": 270.0669310173633,
+        "head_minus_bottom": -3.6961419211643123,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          3,
+          0
+        ],
+        "residual": 238.86582363300994,
+        "head_minus_bottom": -3.6965127415575623,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          11,
+          0
+        ],
+        "residual": 229.6690305037863,
+        "head_minus_bottom": -3.695841921164312,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          12,
+          0
+        ],
+        "residual": 223.69330119324587,
+        "head_minus_bottom": -3.6961419211643123,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          10,
+          0
+        ],
+        "residual": 219.2848034033934,
+        "head_minus_bottom": -3.695727331360937,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          9,
+          0
+        ],
+        "residual": 207.00643666746106,
+        "head_minus_bottom": -3.695841921164312,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          13,
+          0
+        ],
+        "residual": 193.93921638936487,
+        "head_minus_bottom": -3.6965127415575623,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          8,
+          0
+        ],
+        "residual": 191.07496472680276,
+        "head_minus_bottom": -3.6961419211643123,
+        "floor": true
+      }
+    ],
+    "water_table_class_counts": {
+      "water_table": 256
+    },
+    "interpretation": "DarcyWarp equations evaluated offline; not native MF6 residual for MF6 heads",
+    "native": {
+      "input_hash": "31a6f5c0c0486ec7404cc6d2d7fdd7a71604ee5f2d7a4042b2f11ab9de071e08",
+      "converged": true,
+      "stop_reason": "coupled_converged",
+      "history": [
+        {
+          "outer": 0,
+          "requested_contact_flux": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "recomputed_contact_flux": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "mismatch": 0.0
+        }
+      ],
+      "contact_tolerance_m3_day": 1e-08,
+      "relaxation": 0.5,
+      "xt3d": false,
+      "initial_guess": "canonical_cold",
+      "formulation_equivalence": false,
+      "contact_law": "independently recomputed exact DarcyWarp natural contacts; MF6 interior law retained"
+    },
+    "independent_native_balance": {
+      "cell_residual_rms": 2.153726163901781e-10,
+      "cell_residual_l1": 2.286139430392279e-08,
+      "cell_residual_max": 5.15275486168143e-09,
+      "gross_external_throughput": 245.76000000536925,
+      "signed_imbalance": -5.369289975583607e-09,
+      "relative_cell_imbalance": 9.30232515601535e-11,
+      "coastal_inflow": 0.0,
+      "coastal_outflow": 122.88000000536928,
+      "contacts": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "source_error_max": 0.0,
+      "conservation": true
+    }
+  },
+  "mf6_xt3d_coupled": {
+    "independent_accepted": false,
+    "budget": {
+      "cell_residual_max": 278.66513744008165,
+      "cell_residual_rms": 26.67714569995302,
+      "head_residual_rms": 0.4567733982563983,
+      "source_total": 122.87999999999997,
+      "boundary_inflow": 3206.7122708808224,
+      "boundary_outflow": -208.24026081873131,
+      "boundary_net": 2998.472010062091,
+      "storage_uptake": 0.0,
+      "imbalance": 3121.35201006209,
+      "domain_imbalance": 3121.35201006209,
+      "relative_imbalance": 0.8822780564354783,
+      "relative_cell_imbalance": 1.6373537781335596,
+      "throughput": 3537.832531699554,
+      "physical_diagonal_scaling": "seven-point principal part",
+      "coastal_subface_outflows": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "finite_physical_state": true
+    },
+    "residual_l1": 5792.683462182081,
+    "layers": [
+      {
+        "layer": 0,
+        "head_min": 2.0030726686390627,
+        "head_max": 131.2471842168343,
+        "dry_cells": 256,
+        "floor_cells": 256,
+        "thin_cells": 0,
+        "residual_l1": 3804.6393958232247,
+        "residual_squared": 679835.57932338,
+        "saturated_volume": 0.0
+      },
+      {
+        "layer": 1,
+        "head_min": 7.020285992325928,
+        "head_max": 131.24185766664107,
+        "dry_cells": 239,
+        "floor_cells": 240,
+        "thin_cells": 1,
+        "residual_l1": 758.3522576007977,
+        "residual_squared": 4590.742140960367,
+        "saturated_volume": 15651.245766934466
+      },
+      {
+        "layer": 2,
+        "head_min": 6.945692577996738,
+        "head_max": 131.1819834509858,
+        "dry_cells": 0,
+        "floor_cells": 0,
+        "thin_cells": 5,
+        "residual_l1": 1228.3328835496195,
+        "residual_squared": 10163.687307749431,
+        "saturated_volume": 182623.224856176
+      },
+      {
+        "layer": 3,
+        "head_min": 8.48719967064431,
+        "head_max": 113.25690114604109,
+        "dry_cells": 0,
+        "floor_cells": 0,
+        "thin_cells": 0,
+        "residual_l1": 1.3589252084394463,
+        "residual_squared": 0.011459715403184429,
+        "saturated_volume": 3260711.127230745
+      }
+    ],
+    "leakage": [
+      {
+        "net": -3681.39893740318,
+        "downward": 8.631633792980649,
+        "upward": 3690.030571196161,
+        "gross": 3698.662204989141
+      },
+      {
+        "net": -2065.4193533112507,
+        "downward": 5.804658129500719,
+        "upward": 2071.2240114407514,
+        "gross": 2077.0286695702525
+      },
+      {
+        "net": -1.0138116560936674,
+        "downward": 0.2391496729597576,
+        "upward": 1.252961329053425,
+        "gross": 1.4921110020131825
+      }
+    ],
+    "coastal_free_to_fixed_inflow": 3206.7122708808224,
+    "coastal_free_to_fixed_outflow": 208.24026081873131,
+    "contacts": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "gate_states": [
+      false,
+      false,
+      false
+    ],
+    "worst_cells": [
+      {
+        "cell": [
+          0,
+          0,
+          0
+        ],
+        "residual": 278.66513744008165,
+        "head_minus_bottom": -3.695727331360937,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          2,
+          0
+        ],
+        "residual": 267.4600782796816,
+        "head_minus_bottom": -3.6961419211643123,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          1,
+          0
+        ],
+        "residual": 264.8504393602931,
+        "head_minus_bottom": -3.695841921164312,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          3,
+          0
+        ],
+        "residual": 238.09613974824845,
+        "head_minus_bottom": -3.6965127415575623,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          11,
+          0
+        ],
+        "residual": 223.70402942545482,
+        "head_minus_bottom": -3.695841921164312,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          12,
+          0
+        ],
+        "residual": 221.067693065329,
+        "head_minus_bottom": -3.6961419211643123,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          10,
+          0
+        ],
+        "residual": 211.43045277143526,
+        "head_minus_bottom": -3.695727331360937,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          9,
+          0
+        ],
+        "residual": 200.79464096179922,
+        "head_minus_bottom": -3.695841921164312,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          13,
+          0
+        ],
+        "residual": 192.6603194071294,
+        "head_minus_bottom": -3.6965127415575623,
+        "floor": true
+      },
+      {
+        "cell": [
+          0,
+          8,
+          0
+        ],
+        "residual": 187.64537517810788,
+        "head_minus_bottom": -3.6961419211643123,
+        "floor": true
+      }
+    ],
+    "water_table_class_counts": {
+      "water_table": 256
+    },
+    "interpretation": "DarcyWarp equations evaluated offline; not native MF6 residual for MF6 heads",
+    "native": {
+      "input_hash": "31a6f5c0c0486ec7404cc6d2d7fdd7a71604ee5f2d7a4042b2f11ab9de071e08",
+      "converged": true,
+      "stop_reason": "coupled_converged",
+      "history": [
+        {
+          "outer": 0,
+          "requested_contact_flux": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "recomputed_contact_flux": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "mismatch": 0.0
+        }
+      ],
+      "contact_tolerance_m3_day": 1e-08,
+      "relaxation": 0.5,
+      "xt3d": true,
+      "initial_guess": "canonical_cold",
+      "formulation_equivalence": false,
+      "contact_law": "independently recomputed exact DarcyWarp natural contacts; MF6 interior law retained"
+    },
+    "independent_native_balance": {
+      "cell_residual_rms": 3.3435530848755103e-10,
+      "cell_residual_l1": 2.9087494641397084e-08,
+      "cell_residual_max": 8.307100507476406e-09,
+      "gross_external_throughput": 245.75999999431488,
+      "signed_imbalance": 5.685063145301227e-09,
+      "relative_cell_imbalance": 1.1835731869331852e-10,
+      "coastal_inflow": 0.0,
+      "coastal_outflow": 122.87999999431491,
+      "contacts": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "source_error_max": 0.0,
+      "conservation": true
+    }
+  }
+}

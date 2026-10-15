@@ -1,0 +1,70 @@
+................FF..........                                             [100%]
+=================================== FAILURES ===================================
+________________ test_live_mf6_layered_affine_exact_flow[False] ________________
+
+tmp_path = PosixPath('/tmp/pytest-of-patrickdurney/pytest-65/test_live_mf6_layered_affine_e0')
+xt3d = False
+
+    @pytest.mark.parametrize('xt3d',[False,True])
+    def test_live_mf6_layered_affine_exact_flow(tmp_path,xt3d):
+        executable=Path('/bin/modflow/mf6')
+        if not executable.is_file():pytest.skip('MF6 executable unavailable')
+        case=small_case(slope=0.)
+        a=case.arrays
+        a['interfaces'][:]=np.array([10.,9.,7.])[:,None,None]
+        a['fixed'][:]=0
+        a['fixed'][:,:,0]=1
+        a['fixed'][:,:,-1]=1
+        a['values'][:]=np.linspace(20.,19.,case.shape[2])[None,None,:]
+        a['source'][:]=0.
+        a['initial'][:]=20.
+        path=tmp_path/'mf6'
+        result=run_mf6(case=case,directory=path,executable=executable,xt3d=xt3d,convertible=False,drains=False)
+>       assert result['native_success'],result
+E       AssertionError: {'native_success': False, 'independent_conservation': False, 'extraction': 'missing_output', 'returncode': 2, ...}
+E       assert False
+
+tests/test_terrain_mf6_validation.py:26: AssertionError
+----------------------------- Captured stdout call -----------------------------
+small MF6 False False False
+________________ test_live_mf6_layered_affine_exact_flow[True] _________________
+
+tmp_path = PosixPath('/tmp/pytest-of-patrickdurney/pytest-65/test_live_mf6_layered_affine_e1')
+xt3d = True
+
+    @pytest.mark.parametrize('xt3d',[False,True])
+    def test_live_mf6_layered_affine_exact_flow(tmp_path,xt3d):
+        executable=Path('/bin/modflow/mf6')
+        if not executable.is_file():pytest.skip('MF6 executable unavailable')
+        case=small_case(slope=0.)
+        a=case.arrays
+        a['interfaces'][:]=np.array([10.,9.,7.])[:,None,None]
+        a['fixed'][:]=0
+        a['fixed'][:,:,0]=1
+        a['fixed'][:,:,-1]=1
+        a['values'][:]=np.linspace(20.,19.,case.shape[2])[None,None,:]
+        a['source'][:]=0.
+        a['initial'][:]=20.
+        path=tmp_path/'mf6'
+        result=run_mf6(case=case,directory=path,executable=executable,xt3d=xt3d,convertible=False,drains=False)
+>       assert result['native_success'],result
+E       AssertionError: {'native_success': False, 'independent_conservation': False, 'extraction': 'missing_output', 'returncode': 2, ...}
+E       assert False
+
+tests/test_terrain_mf6_validation.py:26: AssertionError
+----------------------------- Captured stdout call -----------------------------
+small MF6 True False False
+=============================== warnings summary ===============================
+tests/test_terrain_component_validation.py::test_device_steady_discharge_component_requires_compatible_datum[source0-1.0]
+  /home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/warp/_src/apic/types.py:49: DeprecationWarning: Due to '_pack_', the 'APICLaunchParamRecord' Structure will use memory layout compatible with MSVC (Windows). If this is intended, set _layout_ to 'ms'. The implicit default is deprecated and slated to become an error in Python 3.19.
+    class APICLaunchParamRecord(ctypes.Structure):
+
+tests/test_terrain_component_validation.py::test_device_steady_discharge_component_requires_compatible_datum[source0-1.0]
+  /home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/warp/_src/apic/types.py:69: DeprecationWarning: Due to '_pack_', the 'APICLaunchPtrLocation' Structure will use memory layout compatible with MSVC (Windows). If this is intended, set _layout_ to 'ms'. The implicit default is deprecated and slated to become an error in Python 3.19.
+    class APICLaunchPtrLocation(ctypes.Structure):
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_terrain_mf6_validation.py::test_live_mf6_layered_affine_exact_flow[False]
+FAILED tests/test_terrain_mf6_validation.py::test_live_mf6_layered_affine_exact_flow[True]
+2 failed, 26 passed, 2 warnings in 1.92s

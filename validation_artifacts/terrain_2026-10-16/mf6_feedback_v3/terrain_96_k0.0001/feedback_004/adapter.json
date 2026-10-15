@@ -1,0 +1,34 @@
+{
+  "input_hash": "e35a9c89872a39336cb6d70d90699f077824dc690ec763d34aea80be547b022c",
+  "representation": "native_DIS_TPFA",
+  "contact_mode": "prescribed_flux",
+  "contact_cell_confined_override": false,
+  "convertible": true,
+  "newton": true,
+  "xt3d": false,
+  "steady": true,
+  "storage": false,
+  "thickstrt": false,
+  "variablecv": false,
+  "perched": false,
+  "rewet": false,
+  "angle_degrees": [
+    0,
+    0,
+    0
+  ],
+  "source_package": "WEL without AUTO_FLOW_REDUCE",
+  "requested_source": 4423.679999999999,
+  "drains": [],
+  "initial_hash": "7cc865f6a843d7e13ab2381b7273fd67f5c0e2cbb791430873ba6418b4f85363",
+  "outer_cap": 4000,
+  "outer_dvclose_m": 1e-09,
+  "inner_dvclose_m": 1e-09,
+  "inner_rclose_m3_day": 1e-07,
+  "formulation_equivalent_to_terrain": false,
+  "differences": [
+    "DIS stepped horizontal/vertical interfaces, no terrain metric-defect stencil",
+    "MF6 quadratic saturation/upstream weighting rather than harmonic K*clip(h-bottom,.01,T)",
+    "native DRN fixed full natural C, no saturation or centroid-gradient correction"
+  ]
+}
