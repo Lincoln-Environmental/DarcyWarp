@@ -7,7 +7,7 @@ from DARCY_WARP_PACKAGE.solvers.terrain_newton_3d import DeviceTerrainNewton
 from test_3d_terrain_gpu import build_solver
 
 
-def refuse_candidate(*,current,candidate):
+def refuse_candidate(self,*,current,candidate):
     return False
 
 
@@ -17,6 +17,13 @@ def test_real_picard_fallback_refines_remaining_budget(monkeypatch):
     fixed[:,:,-1]=1
     h=np.full(grid.shape,-.4)
     calls=[]
+    original_init=DeviceTerrainNewton.__init__
+
+    def configure(self,**kwargs):
+        original_init(self,**kwargs)
+        self.controls.nonlinear_growth_limit=0.
+
+    monkeypatch.setattr(DeviceTerrainNewton,'__init__',configure)
     original=DeviceTerrainNewton.refine_inner
 
     def record_refinement(self,*,outcome,initial_rms,target_rms):
