@@ -1,19 +1,23 @@
 """Immutable canonical GPU baselines; direct configuration below."""
 from pathlib import Path
 import gzip
+import hashlib
 import json
 import subprocess
 import time
 import numpy as np
+from DARCY_WARP_PACKAGE.validation.records import start_record,check_cached
 from DARCY_WARP_PACKAGE.validation.terrain_case import canonical_case, TerrainCase, atomic_json
 
 
 def run_gpu(*, case, directory, method, outer_cap, initial=None):
     from DARCY_WARP_PACKAGE.warped_darcy_3d import WarpDarcySolver3D
     import warp as wp
-    if directory.exists():
-        raise FileExistsError(directory)
+    settings=dict(method=method,outer_cap=outer_cap,initial_hash=None if initial is None else hashlib.sha256(initial.tobytes()).hexdigest(),controls=case.controls)
+    if check_cached(directory=directory,case=case,kind='gpu',settings=settings):
+        return np.load(directory/'head.npz')['head'],json.loads((directory/'summary.json').read_text())
     directory.mkdir(parents=True)
+    request=start_record(directory=directory,case=case,kind='gpu',settings=settings)
     a=case.arrays
     nz,ny,nx=case.shape
     solver=WarpDarcySolver3D(nx=nx,ny=ny,nz=nz,dx=case.physical['dx'],dy=case.physical['dy'],
@@ -35,7 +39,7 @@ def run_gpu(*, case, directory, method, outer_cap, initial=None):
     history=info.pop('outer_history')
     np.savez_compressed(directory/'head.npz',head=head)
     (directory/'history.json.gz').write_bytes(gzip.compress(json.dumps(history).encode(),mtime=0))
-    result=dict(method=method,input_hash=case.digest(),source_revision=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
+    result=dict(run_hash=request['run_hash'],method=method,input_hash=case.digest(),source_revision=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
         outer_cap=outer_cap,cold_start=initial is None,seconds=seconds,info=info)
     atomic_json(path=directory/'summary.json',value=result)
     print(case.case_id,method,info['converged'],info['n_outer_iterations'],flush=True)

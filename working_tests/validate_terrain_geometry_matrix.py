@@ -63,6 +63,8 @@ def run_geometry(*,case,root,executable):
             data=np.load(path)
             free=case.arrays['fixed']==0
             analytic[label]=dict(head_rms_error=float(np.sqrt(np.mean((data['head'][free]-exact[free])**2))),
+                lateral_qx_max=float(np.max(np.abs(data['qx']))),lateral_qy_max=float(np.max(np.abs(data['qy']))),
+                vertical_qz_max_error=float(np.max(np.abs(data['qz']-target))),
                 layer_transfer_total=data['qz'].sum(axis=(1,2)).tolist(),
                 target_transfer_total=target*case.shape[1]*case.shape[2],
                 interpretation='MF6 confined, DarcyWarp h=z has uniform f=.5; vertical physical target unaffected by horizontal effective K')

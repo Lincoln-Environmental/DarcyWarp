@@ -32,6 +32,8 @@ class CPUControls:
     adequate_alpha: float = .125
     adequate_merit_ratio: float = .8
     retry_contraction: float = .5
+    stagnation_window: int = 0
+    stagnation_ratio: float = .995
 
 
 class CPUReference:
@@ -291,6 +293,13 @@ def solve_cpu(*, case, controls, initial=None):
                 break
         history.append(dict(outer=outer+1,accepted=found,direction=method,trials=trials,
             budget=budget,alpha=alpha if found else 0.,acceptance=mode if found else 'rejected'))
+        window=controls.stagnation_window
+        if window>0 and len(history)>=2*window:
+            earlier=min(row['budget']['cell_residual_rms'] for row in history[-2*window:-window])
+            recent=min(row['budget']['cell_residual_rms'] for row in history[-window:])
+            if recent>=controls.stagnation_ratio*earlier:
+                reason='nonlinear_stagnation'
+                break
         if (outer+1)%100==0:
             print(case.case_id,controls.method,'progress',outer+1,budget['cell_residual_rms'],flush=True)
         if not found:

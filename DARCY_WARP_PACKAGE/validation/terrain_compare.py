@@ -87,3 +87,34 @@ def native_flux_fields(*,case,extracted,darcy_fields):
     for key in ('qx','qy','qz'):
         result[key]=extracted[key]
     return result
+
+
+def native_saved_balance(*,case,fields,contact_fluxes):
+    """Rebuild each native internal face once; conserve free cells independently."""
+    ref=CPUReference(case=case)
+    shape=case.shape
+    divergence=np.zeros(shape)
+    for axis,name in ((2,'qx'),(1,'qy'),(0,'qz')):
+        l,u=[slice(None)]*3,[slice(None)]*3
+        l[axis],u[axis]=slice(None,-1),slice(1,None)
+        l,u=tuple(l),tuple(u)
+        divergence[l]+=fields[name];divergence[u]-=fields[name]
+    for c,q in zip(case.contacts,contact_fluxes):divergence[c.cell]+=q
+    residual=np.where(ref.free,fields['source_realised']-divergence,0.)
+    inflow=outflow=0.
+    for axis,name in ((2,'qx'),(1,'qy'),(0,'qz')):
+        l,u=[slice(None)]*3,[slice(None)]*3
+        l[axis],u[axis]=slice(None,-1),slice(1,None)
+        l,u=tuple(l),tuple(u)
+        q=fields[name]
+        exterior=np.concatenate([q[ref.free[l]&~ref.free[u]],-q[ref.free[u]&~ref.free[l]]])
+        inflow+=float(np.maximum(-exterior,0.).sum());outflow+=float(np.maximum(exterior,0.).sum())
+    throughput=float(np.abs(fields['source_realised'][ref.free]).sum())+inflow+outflow+float(np.abs(contact_fluxes).sum())
+    rms=float(np.sqrt(np.mean(residual[ref.free]**2)))
+    l1=float(np.abs(residual).sum())
+    relative=l1/max(throughput,np.finfo(float).tiny)
+    return dict(cell_residual_rms=rms,cell_residual_l1=l1,cell_residual_max=float(np.abs(residual).max()),
+        gross_external_throughput=throughput,signed_imbalance=float(residual.sum()),relative_cell_imbalance=relative,
+        coastal_inflow=inflow,coastal_outflow=outflow,contacts=np.asarray(contact_fluxes).tolist(),
+        source_error_max=float(np.max(np.abs(fields['source_realised']-np.where(ref.free,case.arrays['source'],0.)))),
+        conservation=bool(rms<=1e-12 or relative<=1e-8))

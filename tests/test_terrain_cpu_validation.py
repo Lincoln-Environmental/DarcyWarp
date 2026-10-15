@@ -148,3 +148,39 @@ def test_cpu_steady_component_datum_and_compatibility(net):
     case.arrays['source'][:]=net
     with pytest.raises(ValueError,match='datum|negative source'):
         solve_cpu(case=case,controls=CPUControls(max_outer=10))
+
+
+def test_restart_registry_refuses_stale_and_partial(tmp_path):
+    from DARCY_WARP_PACKAGE.validation.records import start_record,check_cached
+    from DARCY_WARP_PACKAGE.validation.terrain_case import atomic_json
+    case=small_case()
+    directory=tmp_path/'run'
+    assert not check_cached(directory=directory,case=case,kind='cpu',settings={})
+    directory.mkdir()
+    with pytest.raises(ValueError,match='incomplete'):
+        check_cached(directory=directory,case=case,kind='cpu',settings={})
+    start_record(directory=directory,case=case,kind='cpu',settings={})
+    atomic_json(path=directory/'summary.json',value=dict(input_hash=case.digest()))
+    np.savez_compressed(directory/'head.npz',head=case.arrays['initial'])
+    assert check_cached(directory=directory,case=case,kind='cpu',settings={})
+    with pytest.raises(ValueError,match='stale'):
+        check_cached(directory=directory,case=case,kind='cpu',settings=dict(max_outer=9))
+
+
+@pytest.mark.parametrize('branch',['closed','threshold'])
+def test_cpu_discharge_closed_active_set_one_sided(branch):
+    from dataclasses import replace
+    case=small_case(slope=0.,contact=True)
+    ref=CPUReference(case=case)
+    h=ref.grid.bottoms+.25*ref.grid.thickness
+    c=case.contacts[0]
+    hb=float(h[c.cell])+(1. if branch=='closed' else 0.)
+    case.contacts=(replace(c,head=hb),)
+    ref=CPUReference(case=case)
+    v=np.zeros(case.shape)
+    v[c.cell]=-1.
+    op,r,b=ref.evaluate(head=h)
+    assert op.fluxes(head=h)[3][0]==0.
+    jv=(ref.jacobian(operator=op,head=h)@v.ravel()).reshape(h.shape)
+    unused,rp,unused=ref.evaluate(head=h+1e-6*v)
+    np.testing.assert_allclose(jv[ref.free],(-(rp-r)/1e-6)[ref.free],rtol=2e-6,atol=1e-8)

@@ -13,10 +13,12 @@ import time
 import numpy as np
 
 from DARCY_WARP_PACKAGE.validation.terrain_case import atomic_json,mf6_cell
+from DARCY_WARP_PACKAGE.validation.records import start_record,check_cached
+import json
 
 
 def build_mf6(*, case, directory: Path, executable: Path, xt3d: bool, convertible: bool,
-               initial=None, drains=True, outer_cap=3000, head_tol=1e-9, residual_tol=1e-7, contact_mode="confined_native", contact_fluxes=None):
+               initial=None, drains=True, outer_cap=3000, head_tol=1e-9, residual_tol=1e-7, contact_mode="confined_native", contact_fluxes=None, ims_options=None):
     import flopy
     a=case.arrays
     nz,ny,nx=case.shape
@@ -25,9 +27,11 @@ def build_mf6(*, case, directory: Path, executable: Path, xt3d: bool, convertibl
     sim.simulation_data.float_precision=17
     sim.simulation_data.float_characters=25
     flopy.mf6.ModflowTdis(sim,time_units='DAYS',nper=1,perioddata=[(1.,1,1.)])
+    linear_options=dict(under_relaxation='DBD')
+    if ims_options is not None:linear_options.update(ims_options)
     flopy.mf6.ModflowIms(sim,print_option='ALL',complexity='COMPLEX',outer_maximum=outer_cap,
         outer_dvclose=head_tol,inner_maximum=2000,inner_dvclose=head_tol,rcloserecord=[residual_tol,'STRICT'],
-        linear_acceleration='BICGSTAB',relaxation_factor=.97,under_relaxation='DBD',
+        linear_acceleration='BICGSTAB',relaxation_factor=.97,**linear_options,
         csv_outer_output_filerecord='outer.csv',csv_inner_output_filerecord='inner.csv')
     gwf=flopy.mf6.ModflowGwf(sim,modelname='terrain',save_flows=True,
         newtonoptions='UNDER_RELAXATION' if convertible else None)
@@ -49,7 +53,8 @@ def build_mf6(*, case, directory: Path, executable: Path, xt3d: bool, convertibl
     for cell_array in np.argwhere(a['fixed']!=0):
         cell=tuple(int(x) for x in cell_array)
         fixed.append((mf6_cell(cell=cell,shape=case.shape),float(a['values'][cell])))
-    flopy.mf6.ModflowGwfchd(gwf,stress_period_data=fixed,save_flows=True)
+    if fixed:
+        flopy.mf6.ModflowGwfchd(gwf,stress_period_data=fixed,save_flows=True)
     wells=[]
     for cell_array in np.argwhere((a['source']!=0)&(a['fixed']==0)):
         cell=tuple(int(x) for x in cell_array)
@@ -58,16 +63,29 @@ def build_mf6(*, case, directory: Path, executable: Path, xt3d: bool, convertibl
         flopy.mf6.ModflowGwfwel(gwf,pname='SOURCE',stress_period_data=wells,save_flows=True,print_flows=True,
             auto_flow_reduce=None)
     drn=[]
+    ghb=[]
     if contact_fluxes is not None:
         feedback=[(mf6_cell(cell=c.cell,shape=case.shape),-float(q)) for c,q in zip(case.contacts,contact_fluxes)]
         flopy.mf6.ModflowGwfwel(gwf,pname='CONTACT',filename='contact.wel',stress_period_data=feedback,save_flows=True)
     if drains:
         for contact in case.contacts:
             normal=a['kx'][contact.cell] if contact.direction in ('west','east') else a['ky'][contact.cell]
+            area=contact.area
             if contact.direction in ('top','bottom'):
-                raise ValueError('native DRN adapter supports lateral contacts only')
-            c=normal*contact.area/contact.distance if contact.conductance is None else contact.conductance
-            drn.append((mf6_cell(cell=contact.cell,shape=case.shape),contact.head,c))
+                if contact.kind!='head':raise ValueError('native top/bottom DRN unsupported')
+                from DARCY_WARP_PACKAGE.physics.terrain_grid_3d import TerrainMetrics3D
+                metrics=TerrainMetrics3D(grid=case.grid())
+                k,j,i=contact.cell
+                interface=k+int(contact.direction=='bottom')
+                factor=np.sqrt(1+metrics.zx_interfaces[interface,j,i]**2+metrics.zy_interfaces[interface,j,i]**2)
+                area=contact.area/factor
+                normal=a['kz'][contact.cell]
+            c=normal*area/contact.distance if contact.conductance is None else contact.conductance
+            entry=(mf6_cell(cell=contact.cell,shape=case.shape),contact.head,c)
+            if contact.kind=='head':ghb.append(entry)
+            else:drn.append(entry)
+        if ghb:
+            flopy.mf6.ModflowGwfghb(gwf,stress_period_data=ghb,save_flows=True)
         if drn:
             flopy.mf6.ModflowGwfdrn(gwf,stress_period_data=drn,save_flows=True,print_flows=True)
     flopy.mf6.ModflowGwfoc(gwf,head_filerecord='terrain.hds',budget_filerecord='terrain.cbc',
@@ -131,7 +149,7 @@ def extract_mf6(*, case, directory: Path, native_success: bool):
     gross=0.
     source_allocation=np.zeros(n)
     available={text.decode().strip() for text in budget.get_unique_record_names()}
-    for label in ('WEL','CHD','DRN'):
+    for label in ('WEL','CHD','DRN','GHB'):
         data=budget.get_data(text=label) if label in available else []
         records=np.concatenate(data) if data else []
         entries=[]
@@ -181,10 +199,14 @@ def extract_mf6(*, case, directory: Path, native_success: bool):
     return result
 
 
-def run_mf6(*, case, directory, executable, xt3d, convertible, initial=None, drains=True, outer_cap=3000, contact_mode='confined_native', contact_fluxes=None):
+def run_mf6(*, case, directory, executable, xt3d, convertible, initial=None, drains=True, outer_cap=3000, contact_mode='confined_native', contact_fluxes=None, ims_options=None):
+    settings=dict(executable_sha256=hashlib.sha256(executable.read_bytes()).hexdigest(),xt3d=xt3d,convertible=convertible,drains=drains,outer_cap=outer_cap,contact_mode=contact_mode,ims_options=ims_options,contact_fluxes=None if contact_fluxes is None else np.asarray(contact_fluxes).tolist(),initial_hash=None if initial is None else hashlib.sha256(initial.tobytes()).hexdigest())
+    if check_cached(directory=directory,case=case,kind='mf6',settings=settings):
+        return json.loads((directory/'summary.json').read_text())
     directory.mkdir(parents=True,exist_ok=False)
+    request=start_record(directory=directory,case=case,kind='mf6',settings=settings)
     sim=build_mf6(case=case,directory=directory,executable=executable,xt3d=xt3d,
-        convertible=convertible,initial=initial,drains=drains,outer_cap=outer_cap,contact_mode=contact_mode,contact_fluxes=contact_fluxes)
+        convertible=convertible,initial=initial,drains=drains,outer_cap=outer_cap,contact_mode=contact_mode,contact_fluxes=contact_fluxes,ims_options=ims_options)
     start=time.perf_counter()
     try:
         completed=subprocess.run([str(executable)],cwd=directory,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,
@@ -196,7 +218,9 @@ def run_mf6(*, case, directory, executable, xt3d, convertible, initial=None, dra
     except subprocess.TimeoutExpired as error:
         (directory/'stdout.log').write_bytes(error.stdout or b'')
         result=dict(native_success=False,independent_conservation=False,stop_reason='wall_timeout')
-    result.update(seconds=time.perf_counter()-start,input_hash=case.digest(),
+    if (directory/'extracted.npz').exists():
+        np.savez_compressed(directory/'head.npz',head=np.load(directory/'extracted.npz')['head'])
+    result.update(run_hash=request['run_hash'],seconds=time.perf_counter()-start,input_hash=case.digest(),
         executable=str(executable),executable_sha256=hashlib.sha256(executable.read_bytes()).hexdigest(),
         mf6_version=subprocess.check_output([str(executable),'-v'],text=True).strip())
     atomic_json(path=directory/'summary.json',value=result)

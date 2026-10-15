@@ -2,20 +2,26 @@
 from dataclasses import asdict
 from pathlib import Path
 import gzip
+import hashlib
 import json
 import subprocess
 import numpy as np
 from DARCY_WARP_PACKAGE.validation.terrain_case import TerrainCase, atomic_json
+from DARCY_WARP_PACKAGE.validation.records import start_record,check_cached
 from DARCY_WARP_PACKAGE.validation.terrain_cpu import CPUReference, CPUControls, solve_cpu
 
 
 def run_cpu(*, case, directory, controls, initial=None):
+    settings=dict(controls=asdict(controls),initial_hash=None if initial is None else hashlib.sha256(initial.tobytes()).hexdigest())
+    if check_cached(directory=directory,case=case,kind='cpu',settings=settings):
+        return np.load(directory/'head.npz')['head'],json.loads((directory/'summary.json').read_text())
     directory.mkdir(parents=True,exist_ok=False)
+    request=start_record(directory=directory,case=case,kind='cpu',settings=settings)
     head,result=solve_cpu(case=case,controls=controls,initial=initial)
     history=result.pop('history')
     np.savez_compressed(directory/'head.npz',head=head)
     (directory/'history.json.gz').write_bytes(gzip.compress(json.dumps(history).encode(),mtime=0))
-    result.update(input_hash=case.digest(),controls=asdict(controls),cold_start=initial is None,
+    result.update(run_hash=request['run_hash'],input_hash=case.digest(),controls=asdict(controls),cold_start=initial is None,
         source_revision=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip())
     atomic_json(path=directory/'summary.json',value=result)
     print(case.case_id,controls.method,result['converged'],result['stop_reason'],result['outers'],result['budget']['cell_residual_rms'],flush=True)

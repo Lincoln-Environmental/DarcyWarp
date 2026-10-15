@@ -3,17 +3,19 @@ from pathlib import Path
 import json
 import numpy as np
 from DARCY_WARP_PACKAGE.validation.terrain_case import TerrainCase,atomic_json
-from DARCY_WARP_PACKAGE.validation.terrain_compare import evaluate_saved_head,compare_fields,native_flux_fields
+from DARCY_WARP_PACKAGE.validation.terrain_compare import evaluate_saved_head,compare_fields,native_flux_fields,native_saved_balance
 
 
 def collect_case(*,case,root,output):
     output.mkdir(parents=True,exist_ok=True)
     paths=[]
-    for group in ('gpu_before','gpu_after','cpu_hybrid','cpu_direct_newton','gpu_crossstarts'):
+    for group in ('gpu_before','gpu_after','cpu_hybrid','cpu_direct_newton','gpu_crossstarts','cpu_extended'):
         directory=root/group/case.case_id
         if (directory/'summary.json').exists():paths.append((group,directory))
         for path in directory.glob('*/summary.json'):
             paths.append((group+'/'+path.parent.name,path.parent))
+    for path in (root/'extra_branches'/case.case_id).glob('*/summary.json'):
+        if path.parent.name.startswith(('cpu_root','gpu_')):paths.append(('extra/'+path.parent.name,path.parent))
     for path in (root/'branches'/case.case_id).glob('*/summary.json'):
         if not path.parent.name.startswith('reduced'):paths.append(('branches/'+path.parent.name,path.parent))
     rows={};fields={}
@@ -37,18 +39,22 @@ def collect_case(*,case,root,output):
                 state=native_flux_fields(case=case,extracted=extracted,darcy_fields=state)
                 state['contacts']=np.array([-record['inflow'] for record in metadata.get('packages',{}).get('DRN',[])])
                 fields['mf6_native']=state
-    directory=root/'mf6_feedback_v3'/case.case_id
-    if (directory/'summary.json').exists():
-        metadata=json.loads((directory/'summary.json').read_text())
-        head=np.load(directory/'head.npz')['head']
-        result,state=evaluate_saved_head(case=case,head=head,output=output/'mf6_coupled_darcy_evaluation.npz')
-        result['native']=metadata
-        rows['mf6_coupled']=result
-        last=sorted(directory.glob('feedback_*/extracted.npz'))[-1]
-        extracted=np.load(last)
-        state=native_flux_fields(case=case,extracted=extracted,darcy_fields=state)
-        state['contacts']=np.load(directory/'head.npz')['contacts']
-        fields['mf6_coupled']=state
+                rows['mf6_native']['independent_native_balance']=native_saved_balance(case=case,fields=extracted,contact_fluxes=state['contacts'])
+    for group,label in [('mf6_feedback_v3','mf6_coupled'),('mf6_feedback_xt3d','mf6_xt3d_coupled'),('mf6_initial_shift','mf6_xt3d_initial_shift')]:
+        directory=root/group/case.case_id
+        if (directory/'summary.json').exists():
+            metadata=json.loads((directory/'summary.json').read_text())
+            head=np.load(directory/'head.npz')['head']
+            result,state=evaluate_saved_head(case=case,head=head,output=output/(label+'_darcy_evaluation.npz'))
+            result['native']=metadata
+            rows[label]=result
+            candidates=sorted(directory.glob('feedback_*/extracted.npz'))
+            if candidates and state is not None:
+                extracted=np.load(candidates[-1])
+                state=native_flux_fields(case=case,extracted=extracted,darcy_fields=state)
+                state['contacts']=np.load(directory/'head.npz')['contacts']
+                rows[label]['independent_native_balance']=native_saved_balance(case=case,fields=extracted,contact_fluxes=state['contacts'])
+                fields[label]=state
     comparisons={}
     reference='gpu_before/picard_reference' if 'gpu_before/picard_reference' in fields else 'gpu_before/picard'
     for label,state in fields.items():
