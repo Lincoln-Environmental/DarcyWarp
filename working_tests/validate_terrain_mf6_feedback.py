@@ -1,14 +1,20 @@
 """Custom MF6/independent-contact feedback; not native MF6 equivalence."""
 from pathlib import Path
 import json
+import hashlib
 import numpy as np
 from DARCY_WARP_PACKAGE.validation.terrain_case import TerrainCase,atomic_json
 from DARCY_WARP_PACKAGE.validation.terrain_cpu import CPUReference
+from DARCY_WARP_PACKAGE.validation.records import check_cached,start_record,finish_record
 from DARCY_WARP_PACKAGE.validation.terrain_mf6 import run_mf6
 
 
 def run_feedback(*,case,directory,executable,max_feedback,contact_tolerance,relaxation,xt3d,initial=None):
+    settings=dict(coupled=True,xt3d=xt3d,max_feedback=max_feedback,contact_tolerance=contact_tolerance,relaxation=relaxation,initial_hash=None if initial is None else hashlib.sha256(initial.tobytes()).hexdigest(),coupler_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),executable_sha256=hashlib.sha256(executable.read_bytes()).hexdigest())
+    if check_cached(directory=directory,case=case,kind='mf6',settings=settings):
+        return json.loads((directory/'summary.json').read_text())
     directory.mkdir(parents=True,exist_ok=False)
+    start_record(directory=directory,case=case,kind='mf6',settings=settings)
     ref=CPUReference(case=case)
     head=case.arrays['initial'].copy() if initial is None else initial.copy()
     head[case.arrays['fixed']!=0]=case.arrays['values'][case.arrays['fixed']!=0]
@@ -38,6 +44,7 @@ def run_feedback(*,case,directory,executable,max_feedback,contact_tolerance,rela
         contact_tolerance_m3_day=contact_tolerance,relaxation=relaxation,xt3d=xt3d,
         initial_guess='canonical_cold' if initial is None else 'verification_initial_guess',
         formulation_equivalence=False,contact_law='independently recomputed exact DarcyWarp natural contacts; MF6 interior law retained'))
+    finish_record(directory=directory)
 
 
 if __name__ == "__main__":

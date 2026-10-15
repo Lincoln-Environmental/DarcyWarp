@@ -9,7 +9,7 @@ from DARCY_WARP_PACKAGE.validation.terrain_cpu import CPUReference,CPUControls
 from validate_terrain_cpu_runs import run_cpu
 
 
-def constrained_diagnostics(*, case, head):
+def constrained_diagnostics(*, case, head, seed=721):
     ref=CPUReference(case=case)
     op,r,b=ref.evaluate(head=head)
     f=ref.free.ravel()
@@ -23,10 +23,15 @@ def constrained_diagnostics(*, case, head):
     A=(sparse.diags(1/principal)@J).tocsc()
     factor=splu(A=A)
     inverse=LinearOperator(shape=A.shape,matvec=factor.solve,rmatvec=TransposeSolve(factor=factor).solve)
-    condition=float(onenormest(A=A)*onenormest(A=inverse))
+    previous_random_state=np.random.get_state()
+    np.random.seed(seed=seed)
+    try:
+        condition=float(onenormest(A=A)*onenormest(A=inverse))
+    finally:
+        np.random.set_state(previous_random_state)
     correction=factor.solve(rhs=r.ravel()[f]/principal)
     try:
-        values=eigs(A=A,k=4,sigma=0.,return_eigenvectors=False)
+        values=eigs(A=A,k=4,sigma=0.,return_eigenvectors=False,v0=np.random.default_rng(seed=seed).normal(size=A.shape[0]))
         near=[dict(real=float(v.real),imag=float(v.imag)) for v in values]
     except Exception as error:
         near=dict(unavailable=str(error))

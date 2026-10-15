@@ -355,3 +355,14 @@ If you ran only MF6, the Warp overlay will not be drawn.
 This repository is licensed under the GNU Affero General Public License v3.0 or later (`AGPL-3.0-or-later`).
 
 See `LICENSE` for the full license text.
+
+### Independent terrain CPU/MF6 validation
+
+The [2026-10-16 independent validation](docs/TERRAIN_CPU_MF6_VALIDATION_2026-10-16.md)
+finds multiple accepted discrete solution branches, including additional CPU
+cold-start branches in the original low-K case. MF6's closest tested
+representation differs in geometry and constitutive laws; conservation and
+convergence do not establish model certification. Terrain Newton remains
+experimental and opt-in. The [methods and API](docs/TERRAIN_CPU_MF6_METHODS_2026-10-16.md)
+describe the independent NumPy/SciPy solver, canonical inputs, native/custom
+MF6 adapters, reproducible evidence and remaining unresolved comparisons.

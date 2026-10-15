@@ -6,7 +6,7 @@ import json
 import subprocess
 import time
 import numpy as np
-from DARCY_WARP_PACKAGE.validation.records import start_record,check_cached
+from DARCY_WARP_PACKAGE.validation.records import start_record,check_cached,finish_record
 from DARCY_WARP_PACKAGE.validation.terrain_case import canonical_case, TerrainCase, atomic_json
 
 
@@ -42,6 +42,7 @@ def run_gpu(*, case, directory, method, outer_cap, initial=None):
     result=dict(run_hash=request['run_hash'],method=method,input_hash=case.digest(),source_revision=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
         outer_cap=outer_cap,cold_start=initial is None,seconds=seconds,info=info)
     atomic_json(path=directory/'summary.json',value=result)
+    finish_record(directory=directory)
     print(case.case_id,method,info['converged'],info['n_outer_iterations'],flush=True)
     return head,result
 

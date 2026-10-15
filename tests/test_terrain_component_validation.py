@@ -34,3 +34,16 @@ def test_device_transient_real_storage_constrains_discharge_component(initial):
     assert np.all(np.isfinite(head))
 
 
+
+
+@pytest.mark.parametrize('initial',[1.,3.])
+def test_device_positive_source_opens_or_retains_real_discharge_constraint(initial):
+    grid=TerrainGrid3D(surface_elevation=np.zeros((1,2)),zeta_faces=np.array([0.,1.]),dx=1.,dy=1.)
+    contact=TerrainContact3D(cell=(0,0,0),direction='west',area=1.,distance=.5,elevation=-.5,
+        head=2.,kind='discharge_only',conductance=3.)
+    h=np.full(grid.shape,initial)
+    with build_solver(grid=grid,kx=1.,ky=1.,kz=1.,fixed=np.zeros(grid.shape,dtype=int),values=h,
+        source=np.full(grid.shape,.5),initial=h,contacts=(contact,)) as solver:
+        head,info=solver.solve(unconfined=True,device_picard=True,max_cycles=100,unconfined_max_picard_iter=200)
+    assert info['converged'],info
+    np.testing.assert_allclose(head.ravel(),[2+1/3,2+1/3+.5],rtol=0.,atol=2e-7)

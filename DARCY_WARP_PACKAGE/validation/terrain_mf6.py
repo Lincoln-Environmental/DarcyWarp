@@ -13,12 +13,12 @@ import time
 import numpy as np
 
 from DARCY_WARP_PACKAGE.validation.terrain_case import atomic_json,mf6_cell
-from DARCY_WARP_PACKAGE.validation.records import start_record,check_cached
+from DARCY_WARP_PACKAGE.validation.records import start_record,check_cached,finish_record
 import json
 
 
 def build_mf6(*, case, directory: Path, executable: Path, xt3d: bool, convertible: bool,
-               initial=None, drains=True, outer_cap=3000, head_tol=1e-9, residual_tol=1e-7, contact_mode="confined_native", contact_fluxes=None, ims_options=None):
+               initial=None, drains=True, outer_cap=3000, head_tol=1e-9, residual_tol=1e-7, contact_mode="confined_native", contact_fluxes=None, ims_options=None, use_connection_elevations=True):
     import flopy
     a=case.arrays
     nz,ny,nx=case.shape
@@ -47,7 +47,7 @@ def build_mf6(*, case, directory: Path, executable: Path, xt3d: bool, convertibl
             celltype[contact.cell]=0
     flopy.mf6.ModflowGwfnpf(gwf,save_flows=True,save_saturation=True,save_specific_discharge=True,
         icelltype=celltype[reverse],k=a['kx'][reverse],k22=a['ky'][reverse],k33=a['kz'][reverse],
-        angle1=0.,angle2=0.,angle3=0.,xt3doptions=True if xt3d else None,
+        angle1=0.,angle2=0. if use_connection_elevations else None,angle3=0. if use_connection_elevations else None,xt3doptions=True if xt3d else None,
         perched=False,thickstrt=False,cvoptions=None)
     fixed=[]
     for cell_array in np.argwhere(a['fixed']!=0):
@@ -93,7 +93,7 @@ def build_mf6(*, case, directory: Path, executable: Path, xt3d: bool, convertibl
     sim.write_simulation(silent=True)
     settings=dict(input_hash=case.digest(),representation='native_DIS_XT3D' if xt3d else 'native_DIS_TPFA',
         contact_mode=contact_mode,contact_cell_confined_override=bool(drains and contact_mode=='confined_native'),convertible=convertible,newton=convertible,xt3d=xt3d,steady=True,storage=False,thickstrt=False,
-        variablecv=False,perched=False,rewet=False,angle_degrees=[0,0,0],source_package='WEL without AUTO_FLOW_REDUCE',
+        variablecv=False,perched=False,rewet=False,angle_degrees=[0,0,0] if use_connection_elevations else [0,None,None],source_package='WEL without AUTO_FLOW_REDUCE',
         requested_source=float(sum(w[1] for w in wells)),drains=drn,initial_hash=hashlib.sha256(h.tobytes()).hexdigest(),
         outer_cap=outer_cap,outer_dvclose_m=head_tol,inner_dvclose_m=head_tol,inner_rclose_m3_day=residual_tol,
         formulation_equivalent_to_terrain=False,
@@ -104,12 +104,17 @@ def build_mf6(*, case, directory: Path, executable: Path, xt3d: bool, convertibl
     return sim
 
 
-def extract_mf6(*, case, directory: Path, native_success: bool):
+def extract_mf6(*, case, directory: Path, native_success: bool, output_directory=None):
     import flopy
     from flopy.mf6.utils.binarygrid_util import MfGrdFile
     paths=[directory/name for name in ('terrain.hds','terrain.cbc','terrain.dis.grb')]
     if not all(path.exists() and path.stat().st_size>0 for path in paths):
         return dict(native_success=native_success,independent_conservation=False,extraction='missing_output')
+    adapter=directory/'adapter.json'
+    if not adapter.is_file():return dict(native_success=native_success,independent_conservation=False,extraction='missing_input_manifest')
+    if json.loads(adapter.read_text())['input_hash']!=case.digest():raise ValueError('MF6 input hash mismatch')
+    destination=directory if output_directory is None else output_directory
+    destination.mkdir(parents=True,exist_ok=True)
     heads=flopy.utils.HeadFile(str(paths[0]),precision='double').get_data()
     grid=MfGrdFile(str(paths[2]),verbose=False)
     ia,ja=grid.ia,grid.ja
@@ -162,7 +167,11 @@ def extract_mf6(*, case, directory: Path, native_success: bool):
             gross+=abs(q)
             entries.append(dict(node=node,inflow=q))
         components[label]=entries
-    source_records=budget.get_data(text='WEL',paknam2='SOURCE') if 'WEL' in available else []
+    source_records=[]
+    if 'WEL' in available:
+        destinations={record['paknam2'].decode().strip() for record in budget.recordarray if record['text'].decode().strip()=='WEL'}
+        if 'SOURCE' in destinations:source_records=budget.get_data(text='WEL',paknam2='SOURCE')
+        elif 'CONTACT' not in destinations and len(destinations)==1:source_records=budget.get_data(text='WEL')
     for records in source_records:
         for record in records:
             source_allocation[int(record['node'])-1]+=float(record['q'])
@@ -185,8 +194,17 @@ def extract_mf6(*, case, directory: Path, native_success: bool):
         saturation=saturation[:,::-1,:]
     fields=dict(head=head,saturation=saturation,invalid_head=sentinel,residual=residual,qx=qx,qy=qy,qz=qz,
         source_realised=allocation,diagonal_residual=flowja[ia[:-1]].reshape(case.shape)[:,::-1,:])
-    np.savez_compressed(directory/'extracted.npz',**fields)
-    result=dict(native_success=native_success,independent_conservation=bool(native_success and not sentinel.any()
+    np.savez_compressed(destination/'extracted.npz',**fields)
+    modelgrid=grid.modelgrid
+    geometric_x,geometric_y,centres=modelgrid.xyzcellcenters
+    geometric_z=centres[:,::-1,:]
+    expected_x=(np.arange(case.shape[2])+.5)*case.physical['dx']
+    expected_y=(np.arange(case.shape[1])+.5)*case.physical['dy']
+    geometric_volumes=modelgrid.cell_thickness[:,::-1,:]*modelgrid.delr[None,None,:]*modelgrid.delc[None,::-1,None]
+    result=dict(geometric_x_centre_max_error=float(np.max(np.abs(geometric_x[::-1,:]-expected_x[None,:]))),
+        geometric_y_centre_max_error=float(np.max(np.abs(geometric_y[::-1,:]-expected_y[:,None]))),
+        geometric_centre_max_error=float(np.max(np.abs(geometric_z-case.grid().elevations))),
+        geometric_volume_max_error=float(np.max(np.abs(geometric_volumes-case.grid().volumes))),native_success=native_success,independent_conservation=bool(native_success and not sentinel.any()
         and (cell_rms<=1e-12 or relative<=1e-8) and np.max(np.abs(allocation-expected))<=1e-12),
         invalid_heads=int(sentinel.sum()),cell_residual_rms=cell_rms,cell_residual_max=float(np.max(np.abs(residual))),
         cell_residual_l1=float(np.sum(np.abs(residual))),gross_external_throughput=gross,
@@ -199,14 +217,14 @@ def extract_mf6(*, case, directory: Path, native_success: bool):
     return result
 
 
-def run_mf6(*, case, directory, executable, xt3d, convertible, initial=None, drains=True, outer_cap=3000, contact_mode='confined_native', contact_fluxes=None, ims_options=None):
-    settings=dict(executable_sha256=hashlib.sha256(executable.read_bytes()).hexdigest(),xt3d=xt3d,convertible=convertible,drains=drains,outer_cap=outer_cap,contact_mode=contact_mode,ims_options=ims_options,contact_fluxes=None if contact_fluxes is None else np.asarray(contact_fluxes).tolist(),initial_hash=None if initial is None else hashlib.sha256(initial.tobytes()).hexdigest())
+def run_mf6(*, case, directory, executable, xt3d, convertible, initial=None, drains=True, outer_cap=3000, contact_mode='confined_native', contact_fluxes=None, ims_options=None, use_connection_elevations=True):
+    settings=dict(executable_sha256=hashlib.sha256(executable.read_bytes()).hexdigest(),xt3d=xt3d,convertible=convertible,drains=drains,outer_cap=outer_cap,contact_mode=contact_mode,ims_options=ims_options,use_connection_elevations=use_connection_elevations,contact_fluxes=None if contact_fluxes is None else np.asarray(contact_fluxes).tolist(),initial_hash=None if initial is None else hashlib.sha256(initial.tobytes()).hexdigest())
     if check_cached(directory=directory,case=case,kind='mf6',settings=settings):
         return json.loads((directory/'summary.json').read_text())
     directory.mkdir(parents=True,exist_ok=False)
     request=start_record(directory=directory,case=case,kind='mf6',settings=settings)
     sim=build_mf6(case=case,directory=directory,executable=executable,xt3d=xt3d,
-        convertible=convertible,initial=initial,drains=drains,outer_cap=outer_cap,contact_mode=contact_mode,contact_fluxes=contact_fluxes,ims_options=ims_options)
+        convertible=convertible,initial=initial,drains=drains,outer_cap=outer_cap,contact_mode=contact_mode,contact_fluxes=contact_fluxes,ims_options=ims_options,use_connection_elevations=use_connection_elevations)
     start=time.perf_counter()
     try:
         completed=subprocess.run([str(executable)],cwd=directory,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,
@@ -224,5 +242,6 @@ def run_mf6(*, case, directory, executable, xt3d, convertible, initial=None, dra
         executable=str(executable),executable_sha256=hashlib.sha256(executable.read_bytes()).hexdigest(),
         mf6_version=subprocess.check_output([str(executable),'-v'],text=True).strip())
     atomic_json(path=directory/'summary.json',value=result)
+    finish_record(directory=directory)
     print(case.case_id,'MF6',xt3d,result.get('native_success'),result.get('independent_conservation'),flush=True)
     return result

@@ -151,7 +151,7 @@ def test_cpu_steady_component_datum_and_compatibility(net):
 
 
 def test_restart_registry_refuses_stale_and_partial(tmp_path):
-    from DARCY_WARP_PACKAGE.validation.records import start_record,check_cached
+    from DARCY_WARP_PACKAGE.validation.records import start_record,check_cached,finish_record
     from DARCY_WARP_PACKAGE.validation.terrain_case import atomic_json
     case=small_case()
     directory=tmp_path/'run'
@@ -162,9 +162,13 @@ def test_restart_registry_refuses_stale_and_partial(tmp_path):
     start_record(directory=directory,case=case,kind='cpu',settings={})
     atomic_json(path=directory/'summary.json',value=dict(input_hash=case.digest()))
     np.savez_compressed(directory/'head.npz',head=case.arrays['initial'])
+    finish_record(directory=directory)
     assert check_cached(directory=directory,case=case,kind='cpu',settings={})
     with pytest.raises(ValueError,match='stale'):
         check_cached(directory=directory,case=case,kind='cpu',settings=dict(max_outer=9))
+    (directory/'head.npz').write_bytes(b'corrupt')
+    with pytest.raises(ValueError,match='corrupt'):
+        check_cached(directory=directory,case=case,kind='cpu',settings={})
 
 
 @pytest.mark.parametrize('branch',['closed','threshold'])
@@ -184,3 +188,83 @@ def test_cpu_discharge_closed_active_set_one_sided(branch):
     jv=(ref.jacobian(operator=op,head=h)@v.ravel()).reshape(h.shape)
     unused,rp,unused=ref.evaluate(head=h+1e-6*v)
     np.testing.assert_allclose(jv[ref.free],(-(rp-r)/1e-6)[ref.free],rtol=2e-6,atol=1e-8)
+
+
+def test_cpu_acceptance_requires_finite_physical_state():
+    from DARCY_WARP_PACKAGE.validation.terrain_cpu import accepted
+    budget=dict(head_residual_rms=0.,cell_residual_rms=0.,relative_cell_imbalance=0.,throughput=1.,finite_physical_state=False)
+    assert not accepted(head=np.zeros((1,1,1)),budget=budget,controls=CPUControls())
+    budget['finite_physical_state']=True
+    budget['throughput']=np.inf
+    assert not accepted(head=np.zeros((1,1,1)),budget=budget,controls=CPUControls())
+
+
+def test_compact_reduced_case_retains_distinct_independent_roots():
+    directory=Path(__file__).parent/'fixtures'/'terrain_multiple_roots'
+    case=TerrainCase.load(directory=directory)
+    seeds=np.load(directory/'seeds.npz')
+    rng=np.random.default_rng(seed=1966)
+    perturbation=rng.normal(size=case.shape)*1e-4
+    perturbation[case.arrays['fixed']!=0]=0.
+    controls=CPUControls(max_outer=30,head_tol=1e-10,flow_tol=1e-12,relative_tol=1e-11,fallback=False,recovery_growth=1.)
+    roots=[]
+    for label in ('first','second'):
+        head,info=solve_cpu(case=case,controls=controls,initial=seeds[label]+perturbation)
+        assert info['converged'],info
+        assert info['outers']>0
+        assert info['budget']['relative_cell_imbalance']<=1e-11
+        roots.append(head)
+    assert np.max(np.abs(roots[0]-roots[1]))>.3
+    assert np.sum(case.arrays['fixed']==0)==196
+
+
+def test_harmonic_thickness_is_a_converging_face_area_approximation():
+    from DARCY_WARP_PACKAGE.physics.terrain_reference_3d import TerrainReferenceOperator3D
+    from DARCY_WARP_PACKAGE.physics.terrain_grid_3d import TerrainMetrics3D
+    errors=[]
+    for nx in (8,16):
+        dx=20./nx
+        x=(np.arange(nx)+.5)*dx
+        top=np.full((2,nx),10.)
+        middle=top-(2.+.2*x[None,:]/20.)
+        bottom=np.full((2,nx),5.)
+        grid=TerrainGrid3D(z_interfaces=np.stack([top,middle,bottom]),dx=dx,dy=2.)
+        op=TerrainReferenceOperator3D(metrics=TerrainMetrics3D(grid=grid),kx=1.,ky=1.,kz=1.)
+        head=np.broadcast_to(200.+.03*x[None,None,:],grid.shape)
+        qx=op.fluxes(head=head)[0]
+        left,right=grid.thickness[:,:,:-1],grid.thickness[:,:,1:]
+        harmonic=2*left*right/(left+right)
+        physical_midpoint=.5*(left+right)
+        np.testing.assert_allclose(qx,-.03*grid.dy*harmonic,rtol=1e-11,atol=1e-12)
+        middle_face=nx//2-1
+        error=abs(qx[0,0,middle_face]/grid.dy+.03*physical_midpoint[0,0,middle_face])
+        assert error>0.
+        errors.append(error)
+    assert errors[0]/errors[1]==pytest.approx(4.,rel=1e-6)
+
+
+def test_scalar_control_has_two_smooth_wet_roots_and_a_floor_root():
+    shape=(2,1,2)
+    z=np.broadcast_to(np.array([4.,0.,-4.])[:,None,None],(3,1,2)).copy()
+    fixed=np.ones(shape,dtype=int);fixed[0,0,0]=0
+    values=np.full(shape,-1.);values[0,0,1]=2.
+    source=np.zeros(shape);source[0,0,0]=.8
+    case=TerrainCase(case_id='analytic_scalar',arrays=dict(interfaces=z,active=np.ones((1,2),dtype=bool),fixed=fixed,
+        values=values,initial=values.copy(),source=source,kx=np.ones(shape),ky=np.full(shape,.6),kz=np.full(shape,4.)),
+        physical=dict(dx=1.,dy=1.,floor=.01,steady=True,storage=0),controls={},contacts=())
+    wet=np.sort(np.roots([5.,-5.8,.4]))
+    c_floor=4*.01/(.01+2.)
+    dry=(.8-1+2*c_floor)/(1+c_floor)
+    ref=CPUReference(case=case)
+    signs=[]
+    for value in (dry,*wet):
+        head=values.copy();head[0,0,0]=value
+        op,r,b=ref.evaluate(head=head)
+        assert abs(r[0,0,0])<1e-14
+        signs.append(np.sign(ref.jacobian(operator=op,head=head)[0,0]))
+        head[0,0,0]+=.001
+        solved,info=solve_cpu(case=case,controls=CPUControls(max_outer=20,fallback=False),initial=head)
+        assert info['converged'],info
+        assert solved[0,0,0]==pytest.approx(value,abs=1e-9)
+    assert np.all(wet>.01) and np.all(wet<4.)
+    assert signs==[1.,-1.,1.]

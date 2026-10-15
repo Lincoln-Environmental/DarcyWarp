@@ -65,6 +65,7 @@ class CPUReference:
         residual=np.where(self.free,a['source']-op.divergence(fluxes=fluxes),0.)
         budget=compute_terrain_budget_3d(operator=op,head=head,source=a['source'],fixed=a['fixed'],
             storage_change=np.zeros_like(head),storage_diagonal=np.zeros_like(head))
+        budget['finite_physical_state']=bool(all(np.all(np.isfinite(q)) for q in fluxes) and np.all(np.isfinite(residual)) and all(np.all(np.isfinite(c)) for face in op.coefficients for c in face))
         self.evaluations+=1
         return op,residual,budget
 
@@ -191,7 +192,8 @@ class CPUReference:
 
 
 def accepted(*, head, budget, controls):
-    return bool(np.all(np.isfinite(head)) and budget['head_residual_rms']<=controls.head_tol and
+    finite=budget.get('finite_physical_state',True) and all(np.isfinite(budget[key]) for key in ('head_residual_rms','cell_residual_rms','relative_cell_imbalance','throughput'))
+    return bool(finite and np.all(np.isfinite(head)) and budget['head_residual_rms']<=controls.head_tol and
         (budget['cell_residual_rms']<=controls.flow_tol or budget['relative_cell_imbalance']<=controls.relative_tol))
 
 

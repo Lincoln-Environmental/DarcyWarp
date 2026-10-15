@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import platform
 import sys
+import subprocess
 from DARCY_WARP_PACKAGE.validation.terrain_case import atomic_json
 
 
@@ -23,7 +24,14 @@ def implementation_identity(*,kind):
     for name in ('numpy','scipy','warp-lang','flopy'):
         try:versions[name]=importlib.metadata.version(name)
         except importlib.metadata.PackageNotFoundError:versions[name]=None
-    return dict(source_sha256=hashes,versions=versions,python=sys.version,interpreter=sys.executable,
+    hardware={}
+    if Path('/proc/cpuinfo').exists():
+        hardware['cpu_model']=next((line.split(':',1)[1].strip() for line in Path('/proc/cpuinfo').read_text().splitlines() if line.startswith('model name')),None)
+    if kind=='gpu':
+        result=subprocess.run(['nvidia-smi','--query-gpu=name,uuid,driver_version','--format=csv,noheader'],capture_output=True,text=True,check=False)
+        hardware['gpu']=result.stdout.strip()
+        hardware['gpu_query_returncode']=result.returncode
+    return dict(hardware=hardware,source_sha256=hashes,versions=versions,python=sys.version,interpreter=sys.executable,
         system=platform.platform(),precision=os.environ.get('DARCY_FLOAT'),blas_threads=os.environ.get('OPENBLAS_NUM_THREADS'))
 
 
@@ -37,8 +45,12 @@ def start_record(*,directory,case,kind,settings):
 
 def check_cached(*,directory,case,kind,settings):
     if not directory.exists():return False
-    for name in ('request.json','summary.json'):
+    for name in ('request.json','summary.json','complete.json'):
         if not (directory/name).is_file():raise ValueError(f'incomplete/unversioned immutable run: {directory}; select a fresh run directory')
+    completion=json.loads((directory/'complete.json').read_text())
+    for name,expected_hash in completion['files'].items():
+        if not (directory/name).is_file() or hashlib.sha256((directory/name).read_bytes()).hexdigest()!=expected_hash:
+            raise ValueError('corrupt or missing completed run output')
     old=json.loads((directory/'request.json').read_text())
     expected=dict(input_hash=case.digest(),kind=kind,settings=settings,implementation=implementation_identity(kind=kind))
     if any(old.get(key)!=value for key,value in expected.items()):
@@ -48,3 +60,11 @@ def check_cached(*,directory,case,kind,settings):
     if kind!='mf6' or result.get('native_success'):
         if not (directory/'head.npz').is_file():raise ValueError('missing immutable head output')
     return True
+
+
+def finish_record(*,directory):
+    names=['request.json','summary.json']
+    for name in ('head.npz','history.json.gz','extracted.npz'):
+        if (directory/name).is_file():names.append(name)
+    files={name:hashlib.sha256((directory/name).read_bytes()).hexdigest() for name in names}
+    atomic_json(path=directory/'complete.json',value=dict(files=files))

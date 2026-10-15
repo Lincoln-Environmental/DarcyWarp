@@ -8,9 +8,10 @@ from validate_terrain_gpu_baselines import run_gpu
 from validate_terrain_branches import constrained_diagnostics
 
 
-def extra_branch_checks(*,case,root,output,controls,seed,amplitude,radius):
+def extra_branch_checks(*,case,root,output,controls,seed,amplitude,radius,cpu_method="newton"):
     output.mkdir(parents=True,exist_ok=True)
-    cold=root/'cpu_hybrid'/case.case_id/'newton'/'head.npz'
+    cold=root/'cpu_final'/case.case_id/cpu_method/'head.npz'
+    if not cold.exists():cold=root/'cpu_hybrid'/case.case_id/cpu_method/'head.npz'
     if cold.exists():
         h=np.load(cold)['head']
         rng=np.random.default_rng(seed=seed)
@@ -25,6 +26,7 @@ def extra_branch_checks(*,case,root,output,controls,seed,amplitude,radius):
             if not path.exists():run_gpu(case=case,directory=path,method=method,outer_cap=2000,initial=h+perturb)
     a=np.load(root/'branches'/case.case_id/'picard_perturb_0'/'head.npz')['head']
     b=np.load(root/'branches'/case.case_id/'newton_perturb_0'/'head.npz')['head']
+    if cpu_method=='picard':b=np.load(output/'cpu_root'/'head.npz')['head']
     cell=tuple(int(i) for i in np.unravel_index(np.argmax(np.abs(a-b)),a.shape))
     unused,j,i=cell
     arrays={key:value.copy() for key,value in case.arrays.items()}

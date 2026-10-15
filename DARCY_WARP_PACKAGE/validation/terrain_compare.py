@@ -15,8 +15,12 @@ def evaluate_saved_head(*,case,head,output=None):
     sat=np.clip(head-g.bottoms,0,g.thickness)
     floor=head-g.bottoms<=np.minimum(case.physical['floor'],g.thickness)
     wt,kind,depth=water_table_profile(head=head,z_interfaces=case.arrays['interfaces'],surface=case.arrays['interfaces'][0])
-    fields=dict(head=head,residual=r,saturated_thickness=sat,floor=floor,dry=sat==0,wet=sat>0,
-        qx=qx,qy=qy,qz=qz,contacts=contacts,gates=contacts>0,water_table=wt,water_table_kind=kind,
+    water_table_layer=np.full(head.shape[1:],-1,dtype=np.int32)
+    for k in range(head.shape[0]):
+        selected=(water_table_layer<0)&(kind=='water_table')&(head[k]>g.bottoms[k])
+        water_table_layer[selected]=k
+    fields=dict(water_table_layer=water_table_layer,head=head,residual=r,saturated_thickness=sat,floor=floor,dry=sat==0,wet=sat>0,
+        qx=qx,qy=qy,qz=qz,contacts=contacts,gates=contacts>0,water_table=wt,water_table_kind=np.asarray(kind,dtype=str),
         water_table_depth=depth)
     layers=[]
     for k in range(case.shape[0]):
@@ -55,7 +59,7 @@ def compare_fields(*,case,left,right):
     difference=left['head']-right['head']
     wet_l,wet_r=left['wet'],right['wet']
     regimes=dict(wet_both=free&wet_l&wet_r,dry_both=free&~wet_l&~wet_r,
-        wet_dry_mismatch=free&(wet_l!=wet_r),thin_either=free&((left['saturated_thickness']<.1)|(right['saturated_thickness']<.1)))
+        wet_dry_mismatch=free&(wet_l!=wet_r),thin_either=free&(((left['saturated_thickness']>0)&(left['saturated_thickness']<.1))|((right['saturated_thickness']>0)&(right['saturated_thickness']<.1))))
     result=dict(head_max=float(np.max(np.abs(difference[free]))),head_rms=float(np.sqrt(np.mean(difference[free]**2))),
         floor_switches=int(np.sum((left['floor']!=right['floor'])&free)),
         saturated_thickness_max=float(np.max(np.abs(left['saturated_thickness']-right['saturated_thickness']))),
@@ -69,7 +73,7 @@ def compare_fields(*,case,left,right):
             denominator='L1 of reference flux; tiny denominator uses float64.tiny')
     wtmask=(left['water_table_kind']=='water_table')&(right['water_table_kind']=='water_table')
     dwt=left['water_table']-right['water_table']
-    result['water_table']=dict(shared_phreatic_columns=int(wtmask.sum()),
+    result['water_table']=dict(selected_layer_changes=int(np.sum(left['water_table_layer']!=right['water_table_layer'])),shared_phreatic_columns=int(wtmask.sum()),
         classification_mismatches=int(np.sum(left['water_table_kind']!=right['water_table_kind'])),
         max_abs=float(np.max(np.abs(dwt[wtmask]))) if wtmask.any() else None,
         rms=float(np.sqrt(np.mean(dwt[wtmask]**2))) if wtmask.any() else None)
@@ -86,10 +90,26 @@ def native_flux_fields(*,case,extracted,darcy_fields):
     result=darcy_fields.copy()
     for key in ('qx','qy','qz'):
         result[key]=extracted[key]
+    if 'saturation' in extracted:
+        native_sat=extracted['saturation']
+        result['native_saturation']=native_sat
+        result['head_implied_wet']=result['wet']
+        result['wet']=native_sat>0
+        result['dry']=native_sat==0
+        result['saturated_thickness']=native_sat*case.grid().thickness
+        incompatible=np.any((native_sat>0)&(~result['head_implied_wet']),axis=0)
+        result['water_table_kind']=np.asarray(result['water_table_kind'],dtype='U32').copy()
+        result['water_table_kind'][incompatible]='native_confined_control'
+        result['water_table']=result['water_table'].copy()
+        result['water_table'][incompatible]=np.nan
+        result['water_table_depth']=result['water_table_depth'].copy()
+        result['water_table_depth'][incompatible]=np.nan
+        result['water_table_layer']=result['water_table_layer'].copy()
+        result['water_table_layer'][incompatible]=-1
     return result
 
 
-def native_saved_balance(*,case,fields,contact_fluxes):
+def native_saved_balance(*,case,fields,contact_fluxes,return_fields=False):
     """Rebuild each native internal face once; conserve free cells independently."""
     ref=CPUReference(case=case)
     shape=case.shape
@@ -113,8 +133,10 @@ def native_saved_balance(*,case,fields,contact_fluxes):
     rms=float(np.sqrt(np.mean(residual[ref.free]**2)))
     l1=float(np.abs(residual).sum())
     relative=l1/max(throughput,np.finfo(float).tiny)
-    return dict(cell_residual_rms=rms,cell_residual_l1=l1,cell_residual_max=float(np.abs(residual).max()),
+    result=dict(cell_residual_rms=rms,cell_residual_l1=l1,cell_residual_max=float(np.abs(residual).max()),
         gross_external_throughput=throughput,signed_imbalance=float(residual.sum()),relative_cell_imbalance=relative,
         coastal_inflow=inflow,coastal_outflow=outflow,contacts=np.asarray(contact_fluxes).tolist(),
         source_error_max=float(np.max(np.abs(fields['source_realised']-np.where(ref.free,case.arrays['source'],0.)))),
         conservation=bool(rms<=1e-12 or relative<=1e-8))
+
+    return (result,residual) if return_fields else result

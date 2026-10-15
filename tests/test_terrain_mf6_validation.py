@@ -60,3 +60,23 @@ def test_live_mf6_exact_source_precision_and_row_mapping(tmp_path):
     assert result['source_allocation_max_error']<1e-15
     fields=np.load(tmp_path/'model'/'extracted.npz')
     np.testing.assert_array_equal(fields['source_realised'],a['source'])
+
+
+def test_live_mf6_result_rejects_wrong_canonical_hash(tmp_path):
+    executable=Path('/bin/modflow/mf6')
+    if not executable.is_file():pytest.skip('MF6 executable unavailable')
+    case=small_case(slope=0.)
+    case.arrays['values'][:]=20.;case.arrays['initial'][:]=20.
+    case.arrays['interfaces'][:]=np.array([10.,9.,7.])[:,None,None]
+    directory=tmp_path/'model'
+    result=run_mf6(case=case,directory=directory,executable=executable,xt3d=False,convertible=False,drains=False)
+    assert result['native_success'] and result['independent_conservation']
+    assert result['geometric_x_centre_max_error']<1e-13
+    assert result['geometric_y_centre_max_error']<1e-13
+    assert result['geometric_centre_max_error']<1e-13
+    assert result['geometric_volume_max_error']<1e-12
+    path=directory/'adapter.json'
+    metadata=json.loads(path.read_text());metadata['input_hash']='wrong'
+    path.write_text(json.dumps(metadata))
+    with pytest.raises(ValueError,match='input hash mismatch'):
+        extract_mf6(case=case,directory=directory,native_success=True)

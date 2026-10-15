@@ -10,6 +10,7 @@ from DARCY_WARP_PACKAGE.validation.terrain_cpu import CPUControls
 from DARCY_WARP_PACKAGE.validation.terrain_mf6 import run_mf6
 from validate_terrain_cpu_runs import run_cpu
 from validate_terrain_gpu_baselines import run_gpu
+from validate_terrain_mf6_feedback import run_feedback
 
 
 if __name__ == "__main__":
@@ -18,18 +19,28 @@ if __name__ == "__main__":
     dx=20.
     executable=Path('/bin/modflow/mf6')
     cpu_controls=CPUControls(max_outer=6000)
+    cpu_extended_controls=CPUControls(max_outer=2000,stagnation_window=100)
     gpu_cap=2000
     reference_cap=8000
     mf6_cap=3000
+    feedback_cap=30
+    feedback_tolerance=1e-8
+    feedback_relaxation=.5
     for size,k in cases:
         path=root/'cases'/f'terrain_{size}_k{k:g}'
         if not path.exists():
             case=canonical_case(size=size,basement_k=k,dx=dx)
             case.save(directory=path)
         case=TerrainCase.load(directory=path)
-        run_cpu(case=case,directory=root/'cpu'/case.case_id/'newton',controls=cpu_controls)
+        run_cpu(case=case,directory=root/'cpu'/case.case_id/'newton',
+            controls=cpu_extended_controls if size==96 else cpu_controls)
+        if (size,k) in cases[:3]:
+            run_cpu(case=case,directory=root/'cpu'/case.case_id/'picard',controls=CPUControls(method='picard',max_outer=6000,relaxation=.7))
         for method in ('picard','newton'):
             head,result=run_gpu(case=case,directory=root/'gpu'/case.case_id/method,method=method,outer_cap=gpu_cap)
             if method=='picard' and not result['info']['converged']:
                 run_gpu(case=case,directory=root/'gpu'/case.case_id/'picard_reference',method=method,outer_cap=reference_cap)
         run_mf6(case=case,directory=root/'mf6'/case.case_id,executable=executable,xt3d=True,convertible=True,outer_cap=mf6_cap)
+
+        for xt3d in (False,True):
+            run_feedback(case=case,directory=root/'coupled'/case.case_id/('xt3d' if xt3d else 'tpfa'),executable=executable,max_feedback=feedback_cap,contact_tolerance=feedback_tolerance,relaxation=feedback_relaxation,xt3d=xt3d)

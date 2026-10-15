@@ -1,5 +1,7 @@
 # Terrain-following 3D: API and scientific acceptance
 
+> 2026-10-16 clarification: general affine physical-head assertions use harmonic-thickness horizontal conductances, which differ from the arithmetic midpoint physical face area when layer thickness varies. The h=z cancellation and corrected vertical metric flux remain exact. New CPU/GPU/MF6 experiments quantify this discretisation error and the MF6 geometry differences in [the independent validation report](TERRAIN_CPU_MF6_VALIDATION_2026-10-16.md). Earlier wording must not be read as exact physical fluxes through every variable-thickness face.
+
 Branch: **dev only**. Cartesian production 2D code was not modified.
 The previous corrected Cartesian baseline is `5c2b985`.
 The reference architecture is RichardsWarp `feature/scientific-audit-fixes`,

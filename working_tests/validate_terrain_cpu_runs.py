@@ -7,7 +7,7 @@ import json
 import subprocess
 import numpy as np
 from DARCY_WARP_PACKAGE.validation.terrain_case import TerrainCase, atomic_json
-from DARCY_WARP_PACKAGE.validation.records import start_record,check_cached
+from DARCY_WARP_PACKAGE.validation.records import start_record,check_cached,finish_record
 from DARCY_WARP_PACKAGE.validation.terrain_cpu import CPUReference, CPUControls, solve_cpu
 
 
@@ -24,6 +24,7 @@ def run_cpu(*, case, directory, controls, initial=None):
     result.update(run_hash=request['run_hash'],input_hash=case.digest(),controls=asdict(controls),cold_start=initial is None,
         source_revision=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip())
     atomic_json(path=directory/'summary.json',value=result)
+    finish_record(directory=directory)
     print(case.case_id,controls.method,result['converged'],result['stop_reason'],result['outers'],result['budget']['cell_residual_rms'],flush=True)
     return head,result
 
