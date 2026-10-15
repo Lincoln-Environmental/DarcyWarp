@@ -484,7 +484,7 @@ def terrain_contact_refresh_kernel(cell: wp.array(dtype=wp.int32),
     conductance: wp.array(dtype=wp.float64), bz: wp.array(dtype=wp.float64),
     bx: wp.array(dtype=wp.float64), by: wp.array(dtype=wp.float64)):
     """Contact rows are affine in wet fraction except overridden top/bottom
-    tangential couplings, whose affine numerator divides by normal K."""
+    metric couplings (bz, bx and by), whose affine numerators divide by normal K."""
     t = wp.tid()
     f = fraction[cell[t]]
     weight = f
@@ -492,7 +492,7 @@ def terrain_contact_refresh_kernel(cell: wp.array(dtype=wp.int32),
     if normals[t, 2] != wp.float64(0.0) and normal > wp.float64(0.0):
         weight = f*normals[t, 1]/normal
     conductance[t] = dry[t, 1]+f*(wet[t, 1]-dry[t, 1])
-    bz[t] = dry[t, 2]+f*(wet[t, 2]-dry[t, 2])
+    bz[t] = dry[t, 2]+weight*(wet[t, 2]-dry[t, 2])
     bx[t] = dry[t, 3]+weight*(wet[t, 3]-dry[t, 3])
     by[t] = dry[t, 4]+weight*(wet[t, 4]-dry[t, 4])
 

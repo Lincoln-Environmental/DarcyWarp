@@ -526,7 +526,7 @@ def test_exterior_top_bottom_affine_exact_with_anisotropy(gradient,kz):
         assert flux == pytest.approx(expected,rel=1e-12,abs=1e-12),(direction,flux,expected)
 
 
-def test_exterior_top_bottom_conductance_override_stays_exact():
+def test_exterior_top_bottom_conductance_override_scales_physical_flux():
     grid,metrics = nonparallel_boundary_case()
     head = grid.elevations.copy()
     cell = (0,0,3)
@@ -535,7 +535,9 @@ def test_exterior_top_bottom_conductance_override_stays_exact():
         contact = TerrainContact3D(cell=cell,direction="top",area=1.,distance=4.5,
             elevation=elevation,head=elevation,conductance=conductance)
         operator = TerrainReferenceOperator3D(metrics=metrics,kx=1.,ky=1.,kz=1.,contacts=(contact,))
-        assert operator.fluxes(head=head)[3][0] == pytest.approx(-1.,rel=1e-12)
+        # Physical exchange scales the entire natural flux by C/Cnatural.
+        # Here the top interface is flat, Cnatural=1/4.5 and qnatural=-1.
+        assert operator.fluxes(head=head)[3][0] == pytest.approx(-4.5*conductance,rel=1e-12)
 
 
 def test_lateral_contacts_exact_on_nonparallel_interfaces():

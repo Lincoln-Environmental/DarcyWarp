@@ -22,6 +22,33 @@ conda env update -f environment.yml --prune
 The env is self-contained: `mf6` (MODFLOW 6) is on PATH via the `modflow6` package,
 and `warp` is GPU-enabled when an NVIDIA GPU + driver are present.
 
+The canonical terrain runtime is **Python 3.12 + warp-lang 1.17.0**. Terrain
+GMRES subclasses Warp's private solver API, so its Warp dependency is exact,
+not a minimum version. Warp 1.11.0 cannot run this solver. A Warp pin change
+requires the terrain regression suites on CPU/CUDA where available and a
+clean-environment physical smoke test. Other Python/Warp combinations are not
+implied to be supported by the canonical specification. Unsupported Warp
+versions produce an installation hint when terrain is built; lightweight
+package imports remain lazy and Cartesian entry points retain their behavior.
+
+For a solver-only clean installation check (without optional GIS/torch), use a
+Python 3.12 interpreter and the same Warp constraint as the canonical files:
+
+```bash
+python3.12 -m venv /tmp/darcywarp-smoke
+/tmp/darcywarp-smoke/bin/python -m pip install -c requirements-pip.txt warp-lang numpy scipy pandas pytest flopy
+export DARCY_FLOAT=float64
+export PYTHONPATH=.:working_tests
+/tmp/darcywarp-smoke/bin/python working_tests/smoke_terrain_runtime.py --device cpu
+# On a CUDA machine:
+/tmp/darcywarp-smoke/bin/python working_tests/smoke_terrain_runtime.py --device cuda:0
+```
+
+The smoke constructs and solves a terrain problem with a known linear head
+profile using both drivers, exercises the actual GMRES subclass and its private
+imports, checks independently recomputed physical budgets, and verifies
+workspace reuse (including CUDA graph capture/replay when selected).
+
 ## Documentation (Sphinx)
 
 The repo includes a Sphinx docs scaffold in `source/`.

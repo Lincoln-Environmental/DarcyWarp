@@ -41,7 +41,11 @@ class TerrainContact3D:
     the map plane internally. distance is the positive logical
     centre-to-interface distance. elevation is the
     physical contact elevation, preserved for coastal/surface diagnostics.
-    conductance overrides normal K*area/distance, retaining metric correction.
+    conductance is a physical exchange conductance overriding normal
+    K*area/distance. The complete reconstructed flux, including metric
+    corrections, scales by override/natural conductance. Zero closes the
+    contact; a flat centred contact gives q=conductance*(h_cell-head).
+    x_offset/y_offset locate the physical centroid tangentially on the face.
     """
     cell: tuple[int, int, int]
     direction: str
@@ -212,15 +216,19 @@ class TerrainReferenceOperator3D:
             zx,zy = m.zx[cell],m.zy[cell]
             if axis == 2:
                 # Lateral exterior faces are physical x/y-constant planes:
-                # the true-trace affine flux carries no slope-dependent hz
-                # metric term (w.n = -Kx*h_x there), so only the subface
-                # elevation offset couples the vertical gradient. The former
+                # the true-trace affine flux carries no normal-slope hz
+                # metric term (w.n = -Kx*h_x there). The vertical gradient
+                # reconstructs only the subface centroid offsets. The former
                 # cell-slope metric term extrapolated the head along the
                 # cell-centre surface and breaks exactness whenever the
-                # interface slope differs from it.
-                cross = (-conductance*depth_offset,0,-conductance*contact.y_offset)
+                # interface slope differs from it. A tangential logical
+                # gradient also contains the centre-surface elevation change;
+                # remove it from the physical vertical offset reconstruction.
+                cross = (-conductance*(depth_offset+zy*contact.y_offset),
+                    0,-conductance*contact.y_offset)
             elif axis == 1:
-                cross = (-conductance*depth_offset,-conductance*contact.x_offset,0)
+                cross = (-conductance*(depth_offset+zx*contact.x_offset),
+                    -conductance*contact.x_offset,0)
             else:
                 # Top/bottom exterior faces evaluate their cross-gradient
                 # metric terms on the SHARED BOUNDING INTERFACE's slopes (the
@@ -228,12 +236,14 @@ class TerrainReferenceOperator3D:
                 # cell-centre layer slopes; on nonparallel interfaces the two
                 # differ and the mismatch leaves both a spurious horizontal
                 # response and a metric defect in the vertical response of
-                # affine head fields. The hz coupling cancels the remaining
-                # centre-versus-interface defect exactly (also for overridden
-                # conductance) and vanishes for parallel interfaces.
-                azz_coupled = (self.kz[cell]
-                    + self.ex[cell]*zx_interface*zx + self.ey[cell]*zy_interface*zy)
-                cross = (sign*(projected_area*azz_coupled-conductance*contact.distance),
+                # affine head fields. Scale the WHOLE physical flux when C
+                # is overridden: bz = sign*(scale*A_coupled-C*distance).
+                # Since C*distance=scale*normal, use the equivalent metric
+                # defect to avoid cancellation on flat/parallel interfaces.
+                # Zero C then removes every coupling, including this one.
+                defect = (self.ex[cell]*zx_interface*(zx-zx_interface)
+                    + self.ey[cell]*zy_interface*(zy-zy_interface))
+                cross = (sign*scale*defect,
                     sign*self.ex[cell]*zx_interface*scale-conductance*contact.x_offset,
                     sign*self.ey[cell]*zy_interface*scale-conductance*contact.y_offset)
             records.append((np.ravel_multi_index(cell,self.shape),conductance,*cross,contact.head,contact.kind == "discharge_only"))

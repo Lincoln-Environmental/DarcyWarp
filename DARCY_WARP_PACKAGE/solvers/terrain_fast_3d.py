@@ -72,7 +72,7 @@ def pack_device_contact_refresh(*, operator, datum):
     """Endpoint constitutive rows for exact device contact refresh.
 
     All rows are affine in saturated fraction, except overridden top/bottom
-    tangential terms: their affine numerators divide by the normal K.
+    metric terms (bz, bx and by): their affine numerators divide by normal K.
     """
     endpoints = []
     for head in (operator.grid.bottoms, operator.grid.tops):

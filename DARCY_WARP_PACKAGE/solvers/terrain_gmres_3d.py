@@ -3,12 +3,34 @@
 # The adaptation retains persistent restart graphs across solves as well as
 # persistent Krylov arrays. Only scalar norms cross the device at restarts.
 import math
+
 import warp as wp
-from warp.optim.linear import GMRES
-from warp._src.optim.linear import (
-    _initialize_absolute_tolerance, _gmres_update_x_kernel,
-    _gmres_add_active_entries_kernel,
-)
+
+
+def load_terrain_gmres_api():
+    """Guard the private Warp API at terrain use, not lightweight import."""
+    version = wp.__version__
+    message = ("Terrain GMRES requires warp-lang==1.17.0 (tested canonical "
+        f"Python 3.12 runtime); found {version}. Its private GMRES API is "
+        "version-specific. Create the environment from environment.yml or run "
+        "python -m pip install warp-lang==1.17.0 in a compatible environment.")
+    if version != "1.17.0":
+        raise ImportError(message)
+    try:
+        from warp._src.optim.linear import (
+            _gmres_add_active_entries_kernel,
+            _gmres_update_x_kernel,
+            _initialize_absolute_tolerance,
+        )
+        from warp.optim.linear import GMRES
+    except ImportError as error:
+        raise ImportError(message + " Required GMRES symbols are missing; reinstall Warp.") from error
+    return (GMRES, _initialize_absolute_tolerance, _gmres_update_x_kernel,
+        _gmres_add_active_entries_kernel)
+
+
+(GMRES, _initialize_absolute_tolerance, _gmres_update_x_kernel,
+    _gmres_add_active_entries_kernel) = load_terrain_gmres_api()
 
 
 class TerrainGMRES3D(GMRES):

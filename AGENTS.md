@@ -119,7 +119,7 @@ kimi --model kimi-code/k3
 DarcyWarp is a **GPU-accelerated groundwater-flow solver** built on NVIDIA Warp (`warp-lang`). It solves structured-grid Darcy flow (5-point in 2D, 7-point in 3D) and is benchmarked against **MODFLOW 6** via FloPy, plus an optional CPU finite-difference reference.
 
 - Repo root: `/home/patrickdurney/PycharmProjects/DarcyWarp`
-- Conda env: `darcywarp` — the project's dedicated environment (Warp 1.11.0 + CUDA, MF6,
+- Conda env: `darcywarp` — the project's dedicated environment (Python 3.12 / Warp 1.17.0 + CUDA, MF6,
   flopy; created from `environment.yml` via `conda env create -f environment.yml`).
   `quick_flow_env` is a borrowed env from another repo and is **no longer used** here.
 - License: AGPL-3.0-or-later
@@ -796,7 +796,7 @@ Usually means `sat = h - bottom` (saturated thickness of the aquifer), not soil 
 
 ### Important caveats
 
-- Many tests skip if `warp` missing. In the `darcywarp` env `warp` **is** installed (1.11.0, CUDA-enabled).
+- Many tests skip if `warp` missing. The canonical specification pins Warp 1.17.0 (terrain GMRES private API); verify the actual environment before testing.
 - Truth fixtures under `tests/fixtures/unconfined_2d/` are git-untracked; clean clone must run `working_tests/regenerate_unconfined_2d_truth.py`.
 - 3000×3000 comparison fails on 16 GB GPUs (memory, not correctness).
 - `test_2d_transient_warm_start.py` has no explicit warp skip guard; collection can fail if warp missing.

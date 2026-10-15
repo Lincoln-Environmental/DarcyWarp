@@ -283,8 +283,8 @@ def test_acceptance_requires_physical_balance_and_finite_residuals():
         candidate=dict(head=1e150, flow=1e150, relative=1., finite=True))
 
 
-@pytest.fixture()
-def physical_driver():
+@pytest.fixture(params=[0., .3], ids=["centred_lateral", "offset_lateral"])
+def physical_driver(request):
     y, x = np.mgrid[:3, :4]
     top = 20.+.4*x+.2*y
     middle = top-(3.+.1*x)
@@ -294,7 +294,8 @@ def physical_driver():
         TerrainContact3D(cell=(0, 0, 1), direction="top", area=2., distance=.5,
             elevation=float(grid.elevations[0, 0, 1]+.5), head=18., conductance=.3),
         TerrainContact3D(cell=(1, 1, 0), direction="west", area=1., distance=2.5,
-            elevation=float(grid.elevations[1, 1, 0]), head=12., kind="discharge_only"))
+            elevation=float(grid.elevations[1, 1, 0]), head=12., kind="discharge_only",
+            y_offset=request.param))
     fixed = np.zeros(grid.shape, dtype=np.int32)
     fixed[:, :, -1] = 1
     initial = grid.bottoms+.6*grid.thickness

@@ -7,8 +7,9 @@
 #   conda activate darcywarp
 #
 # Python is pinned to 3.12 (stable, supported by warp-lang / flopy / torch).
-# warp-lang is pinned to 1.11.0 via pip (the validated version; conda-forge ships
-# 1.15.x). Other packages are left to resolve to a current compatible build.
+# warp-lang is pinned to 1.17.0 via pip: terrain GMRES subclasses that version's
+# private API. Changing this pin requires the terrain suites and clean smoke on
+# Python 3.12; other packages resolve to a current compatible build.
 name: darcywarp
 channels:
   - conda-forge
@@ -28,6 +29,6 @@ dependencies:
   - pyproj
   - contextily
   - pip:
-      - warp-lang==1.11.0   # NVIDIA Warp GPU solver core (validated version)
+      - warp-lang==1.17.0   # exact private GMRES API dependency; see README.md
       - torch               # Canterbury case study only; for a CPU-only build use:
                             #   pip install torch --index-url https://download.pytorch.org/whl/cpu
