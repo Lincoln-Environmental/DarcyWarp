@@ -727,7 +727,7 @@ class TerrainOperatorSession3D:
             candidate_evaluations=sum(row["backtracking_evaluations"] for row in result["history"]),
             nonlinear_residual_evaluations=driver.operator_evaluations,
             newton_attempts=sum(row.get("newton_attempted", False) for row in result["history"]),
-            newton_accepted_steps=sum(row.get("direction") == "newton" for row in result["history"]),
+            newton_accepted_steps=sum(row.get("direction") == "newton" and row["accepted"] for row in result["history"]),
             nonlinear_backtracks=sum(row["backtracks"] for row in result["history"]))
         if terrain_nonlinear_method == "newton":
             info["solver_type"] = "terrain_device_newton_3d"
