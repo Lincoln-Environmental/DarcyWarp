@@ -212,6 +212,16 @@ class DeviceTerrainNewton(DeviceTerrainPicard):
                 picard_blocks = picard['restart_blocks']
                 if picard['usable'] or picard['reached']:
                     update = self.search(current=current, newton=False)
+                    if not update['accepted'] and picard['cycles'] < self.krylov_budget:
+                        previous_trials = update['trials']
+                        wp.copy(src=s.rhs_original, dest=s.rhs)
+                        picard = self.refine_inner(outcome=picard, initial_rms=current['head'],
+                            target_rms=min(.1*picard['head_rms'], self.controls.residual_floor))
+                        if picard['usable']:
+                            update = self.search(current=current, newton=False)
+                            update['trials'] = previous_trials+update['trials']
+                        picard_work = picard['cycles']
+                        picard_blocks = picard['restart_blocks']
                     update['trials'] = newton_trials+update['trials']
                 outcome = picard
                 method = 'picard_fallback'
