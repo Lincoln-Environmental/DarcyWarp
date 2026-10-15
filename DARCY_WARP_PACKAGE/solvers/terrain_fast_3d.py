@@ -615,7 +615,7 @@ class TerrainOperatorSession3D:
         storage,change = self.storage_terms(head=head,previous=previous,transient=transient,
             unconfined=True,mode=unconfined_storage_mode,sy=sy_field,ss=ss_field,coeff=None,dt=dt)
         seeded = seed_discharge_only_components_3d(operator=operator,head=head,source=self.rhs,
-            fixed=self.bc_mask,storage=storage,potential_storage=True,topology_cache=self.topology_cache)
+            fixed=self.bc_mask,storage=storage,potential_storage=bool(transient)&((sy_field > 0)|(ss_field > 0)),topology_cache=self.topology_cache)
         if seeded:
             operator = TerrainReferenceOperator3D(metrics=self.metrics,kx=self.kx,ky=self.ky,kz=self.kz,
                 head=head,min_sat=unconfined_min_sat,contacts=self.contacts,trusted_k=True)
