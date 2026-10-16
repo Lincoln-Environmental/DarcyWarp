@@ -100,6 +100,9 @@ def run_reference_mf6(*,case,directory,executable,prescribed_state=None,head_tol
             key=(min(a,b),max(a,b));q=-float(flow[p]) if a<b else float(flow[p])
             if key in edges:reciprocity=max(reciprocity,abs(edges[key]-q))
             edges[key]=q
+    expected_edges={(int(a),int(b)) for a,b in zip(reference.left,reference.right)}
+    if set(edges)!=expected_edges:
+        raise ValueError('Native connectivity differs from canonical same-layer/no-pass-through DIS adjacency')
     flux=np.array([edges[(int(a),int(b))] for a,b in zip(reference.left,reference.right)])
     realised=np.zeros(n)
     if sources:

@@ -3,10 +3,12 @@ import numpy as np
 
 
 def layered_geometry(*, z_interfaces, shape, dx, dy):
+    if len(shape)!=3 or min(shape)<1:
+        raise ValueError('Layered geometry requires a nonempty (nz,ny,nx) cell shape')
     z = np.asarray(z_interfaces, dtype=np.float64)
     if z.shape != (shape[0]+1, shape[1], shape[2]) or not np.isfinite(z).all():
         raise ValueError('Finite z_interfaces must have shape (nz+1,ny,nx)')
-    if any(not np.isfinite(value) or value <= 0. for value in (dx, dy)):
+    if any(np.ndim(value)!=0 or not np.isfinite(value) or value <= 0. for value in (dx, dy)):
         raise ValueError('Positive finite scalar dx and dy required')
     with np.errstate(over='ignore', invalid='ignore'):
         thickness = z[:-1]-z[1:]

@@ -100,6 +100,15 @@ def test_v1_loading_hashes_and_layered_roundtrip(tmp_path):
     assert case.digest()==json.loads((original/'comparison.json').read_text())['input_hash']
     save_npf662_case(case=case,path=tmp_path/'v1.npz')
     assert load_npf662_case(path=tmp_path/'v1.npz').digest()==case.digest()
+    early=Path('validation_artifacts/sevenpoint_v1/stage1/experiments/x')
+    legacy=load_npf662_case(path=early/'inputs.npz')
+    expected=json.loads((early/'comparison.json').read_text())['input_hash']
+    assert legacy.digest()==expected
+    save_npf662_case(case=legacy,path=tmp_path/'early_v1.npz')
+    with np.load(tmp_path/'early_v1.npz') as saved:assert 'cell_type' not in saved.files
+    assert load_npf662_case(path=tmp_path/'early_v1.npz').digest()==expected
+    legacy.cell_type=1
+    assert legacy.digest()!=expected
     layered=layered_case()
     save_npf662_case(case=layered,path=tmp_path/'v2.npz')
     loaded=load_npf662_case(path=tmp_path/'v2.npz')
@@ -107,13 +116,14 @@ def test_v1_loading_hashes_and_layered_roundtrip(tmp_path):
     assert not hasattr(loaded,'dz')
 
 
-@pytest.mark.parametrize('failure', ['zero','inverted','nonfinite','shape','fixed','inactive_source','conductivity'])
+@pytest.mark.parametrize('failure', ['zero','inverted','nonfinite','shape','active_shape','fixed','inactive_source','conductivity'])
 def test_invalid_layered_inputs(failure):
     case=layered_case()
     if failure=='zero':case.z_interfaces[1]=case.z_interfaces[0]
     if failure=='inverted':case.z_interfaces[1]=case.z_interfaces[0]+1.
     if failure=='nonfinite':case.z_interfaces[0,0,0]=np.nan
     if failure=='shape':case.z_interfaces=case.z_interfaces[:-1]
+    if failure=='active_shape':case.active=case.active.ravel()
     if failure=='fixed':case.active[0,0,0]=0
     if failure=='inactive_source':case.active[0,0,1]=0
     if failure=='conductivity':case.kx[0,0,1]=0.
@@ -232,3 +242,31 @@ def test_safe_conductance_when_intermediate_transmissivity_overflows():
         coefficient=packed_faces(model=model,reference=reference)
         np.testing.assert_allclose(coefficient,1e-100,rtol=3e-13,atol=0.)
         np.testing.assert_allclose(coefficient,reference.c0,rtol=3e-13,atol=0.)
+
+
+def test_raw_float32_interfaces_are_differenced_in_fp64():
+    case=layered_case(shape=(1,1,2))
+    case.z_interfaces=np.array([[[1.,2.]],[[-1e8,-1e8]]],dtype=np.float32)
+    case.kx[:]=1.;case.ky[:]=1.;case.kz[:]=1.;case.source[:]=0.
+    np.testing.assert_array_equal(case.thicknesses,np.array([[[1e8+1.,1e8+2.]]]))
+    reference=NPF662Reference(case=case)
+    with make_gpu_model(case=case,device='cpu') as model:
+        np.testing.assert_allclose(packed_faces(model=model,reference=reference),reference.c0,rtol=3e-13,atol=0.)
+
+
+def test_internal_vertical_inactive_cell_has_no_passthrough(tmp_path):
+    case=layered_case()
+    case.active[1,1,2]=0
+    reference=NPF662Reference(case=case)
+    ids=np.arange(case.active.size).reshape(case.active.shape)
+    edges=set(zip(reference.left,reference.right))
+    assert (ids[0,1,2],ids[2,1,2]) not in edges
+    native,info,fields=run_reference_mf6(case=case,directory=tmp_path/'internal_hole',
+        executable=Path('/bin/modflow/mf6'),head_tolerance_m=1e-12)
+    assert info['native_success'] and info['independent_conservation']
+    assert info['independent']['inactive_marker_cells']==1
+    for device in ('cpu','cuda:0'):
+        with make_gpu_model(case=case,device=device) as model:
+            head,checks=model.solve(max_outer=50)
+            assert checks['converged']
+            np.testing.assert_allclose(head[reference.free],native[reference.free],rtol=0.,atol=1e-7)

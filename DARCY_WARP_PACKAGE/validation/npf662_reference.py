@@ -14,6 +14,13 @@ from DARCY_WARP_PACKAGE.validation.head_checks import inspect_heads
 from DARCY_WARP_PACKAGE.validation.npf662_metrics import final_tolerances, stable_rms, stable_sum
 
 
+def serialized_case_fields(*,case):
+    names=tuple(case.__dataclass_fields__)
+    if getattr(case,'_legacy_implicit_cell_type',False) and np.ndim(case.cell_type)==0 and case.cell_type==0:
+        return tuple(name for name in names if name!='cell_type')
+    return names
+
+
 @dataclass
 class NPF662Case:
     kx: np.ndarray
@@ -80,7 +87,7 @@ class NPF662Case:
 
     def digest(self):
         digest=hashlib.sha256()
-        for name in self.__dataclass_fields__:
+        for name in serialized_case_fields(case=self):
             value=np.ascontiguousarray(getattr(self,name))
             digest.update(name.encode());digest.update(value.dtype.str.encode());digest.update(str(value.shape).encode());digest.update(value.tobytes())
         return digest.hexdigest()
@@ -113,11 +120,11 @@ class NPF662LayeredCase:
 
     @property
     def bottoms(self):
-        return self.z_interfaces[1:]
+        return np.asarray(self.z_interfaces,dtype=np.float64)[1:]
 
     @property
     def tops(self):
-        return self.z_interfaces[:-1]
+        return np.asarray(self.z_interfaces,dtype=np.float64)[:-1]
 
     @property
     def thicknesses(self):
@@ -140,7 +147,7 @@ class NPF662LayeredCase:
 
 
 def save_npf662_case(*,case,path):
-    arrays={name:np.asarray(getattr(case,name)) for name in case.__dataclass_fields__}
+    arrays={name:np.asarray(getattr(case,name)) for name in serialized_case_fields(case=case)}
     if isinstance(case,NPF662LayeredCase):arrays['schema_version']=np.asarray(2)
     np.savez_compressed(path,**arrays)
 
@@ -150,7 +157,11 @@ def load_npf662_case(*,path):
         schema=int(saved['schema_version']) if 'schema_version' in saved else 1
         if schema not in (1,2):raise ValueError('Unsupported NPF input schema')
         cls=NPF662Case if schema==1 else NPF662LayeredCase
-        case=cls(**{name:saved[name].copy() for name in cls.__dataclass_fields__})
+        missing=set(cls.__dataclass_fields__)-set(saved.files)
+        implicit=bool(schema==1 and missing=={'cell_type'})
+        if missing and not implicit:raise ValueError(f'Missing NPF input fields: {sorted(missing)}')
+        case=cls(**{name:saved[name].copy() for name in cls.__dataclass_fields__ if name in saved})
+        if implicit:case._legacy_implicit_cell_type=True
     case.validate()
     return case
 
