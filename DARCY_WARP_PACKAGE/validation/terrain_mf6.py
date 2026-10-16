@@ -15,11 +15,33 @@ import numpy as np
 from DARCY_WARP_PACKAGE.validation.terrain_case import atomic_json,mf6_cell
 from DARCY_WARP_PACKAGE.validation.records import start_record,check_cached,finish_record
 import json
+from DARCY_WARP_PACKAGE.validation.head_checks import inspect_heads, masked_extreme
+
+
+def resolve_contact_mode(*,mode,case,drains,xt3d,contact_fluxes):
+    if mode is None:
+        if drains and case.contacts:
+            raise ValueError('Choose explicit contact_mode: original_convertible_drn, confined_contact_control, or native_head_contacts')
+        mode='none'
+    choices={'none','original_convertible_drn','confined_contact_control','native_head_contacts',
+        'custom_contact_tpfa','custom_contact_xt3d'}
+    if mode not in choices:raise ValueError(f'Unsupported/ambiguous contact_mode {mode!r}; choose {sorted(choices)}')
+    if mode.startswith('custom_contact_'):
+        if drains or contact_fluxes is None or xt3d!=(mode=='custom_contact_xt3d'):
+            raise ValueError('Custom contact identity must match XT3D, prescribed fluxes and drains=False')
+    elif contact_fluxes is not None:
+        raise ValueError('Prescribed contact fluxes require an explicit custom_contact_tpfa/xt3d identity')
+    if mode=='none' and drains and case.contacts:raise ValueError('none cannot silently discard native contacts')
+    if mode=='native_head_contacts' and any(c.kind!='head' for c in case.contacts):
+        raise ValueError('native_head_contacts supports head contacts only')
+    return mode
 
 
 def build_mf6(*, case, directory: Path, executable: Path, xt3d: bool, convertible: bool,
-               initial=None, drains=True, outer_cap=3000, head_tol=1e-9, residual_tol=1e-7, contact_mode="confined_native", contact_fluxes=None, ims_options=None, use_connection_elevations=True):
+               initial=None, drains=True, outer_cap=3000, head_tol=1e-9, residual_tol=1e-7, contact_mode=None, contact_fluxes=None, ims_options=None, use_connection_elevations=True):
     import flopy
+    case.validate()
+    contact_mode=resolve_contact_mode(mode=contact_mode,case=case,drains=drains,xt3d=xt3d,contact_fluxes=contact_fluxes)
     a=case.arrays
     nz,ny,nx=case.shape
     reverse=(slice(None),slice(None,None,-1),slice(None))
@@ -42,7 +64,7 @@ def build_mf6(*, case, directory: Path, executable: Path, xt3d: bool, convertibl
     h[a['fixed']!=0]=a['values'][a['fixed']!=0]
     flopy.mf6.ModflowGwfic(gwf,strt=h[reverse])
     celltype=np.full(case.shape,int(convertible),dtype=int)
-    if drains and contact_mode=='confined_native':
+    if drains and contact_mode=='confined_contact_control':
         for contact in case.contacts:
             celltype[contact.cell]=0
     flopy.mf6.ModflowGwfnpf(gwf,save_flows=True,save_saturation=True,save_specific_discharge=True,
@@ -92,7 +114,7 @@ def build_mf6(*, case, directory: Path, executable: Path, xt3d: bool, convertibl
         saverecord=[('HEAD','ALL'),('BUDGET','ALL')],printrecord=[('BUDGET','ALL')])
     sim.write_simulation(silent=True)
     settings=dict(input_hash=case.digest(),representation='native_DIS_XT3D' if xt3d else 'native_DIS_TPFA',
-        contact_mode=contact_mode,contact_cell_confined_override=bool(drains and contact_mode=='confined_native'),convertible=convertible,newton=convertible,xt3d=xt3d,steady=True,storage=False,thickstrt=False,
+        contact_mode=contact_mode,contact_cell_confined_override=bool(drains and contact_mode=='confined_contact_control'),convertible=convertible,newton=convertible,xt3d=xt3d,steady=True,storage=False,thickstrt=False,
         variablecv=False,perched=False,rewet=False,angle_degrees=[0,0,0] if use_connection_elevations else [0,None,None],source_package='WEL without AUTO_FLOW_REDUCE',
         requested_source=float(sum(w[1] for w in wells)),drains=drn,initial_hash=hashlib.sha256(h.tobytes()).hexdigest(),
         outer_cap=outer_cap,outer_dvclose_m=head_tol,inner_dvclose_m=head_tol,inner_rclose_m3_day=residual_tol,
@@ -121,6 +143,16 @@ def extract_mf6(*, case, directory: Path, native_success: bool, output_directory
     budget=flopy.utils.CellBudgetFile(str(paths[1]),precision='double')
     flowja=budget.get_data(text='FLOW-JA-FACE')[-1].ravel()
     n=heads.size
+    # DIS 6.6.2 writes iausr/jausr (full user grid), even when its internal
+    # solve is reduced. Empty IA rows are inactive, not diagonal entries.
+    active_mf6=np.asarray(grid.idomain).reshape(-1)>0
+    if len(ia)!=n+1 or len(ja)!=len(flowja) or np.any(ja<0) or np.any(ja>=n):
+        raise ValueError('Unsupported MF6 GRB/FLOW-JA full-user-grid mapping')
+    if not np.array_equal((np.diff(ia)>0),active_mf6):
+        raise ValueError('GRB active rows differ from IDOMAIN')
+    if not np.array_equal(active_mf6.reshape(case.shape)[:,::-1,:],case.grid().active.astype(bool)):
+        raise ValueError('GRB active domain differs from canonical inputs')
+    node_to_user=np.arange(n,dtype=np.int64)
     # FLOW-JA-FACE row n contains flow INTO n from m; diagonal is residual.
     net_internal=np.zeros(n)
     qx=np.zeros((case.shape[0],case.shape[1],case.shape[2]-1))
@@ -160,6 +192,7 @@ def extract_mf6(*, case, directory: Path, native_success: bool, output_directory
         entries=[]
         for record in records:
             node=int(record['node'])-1
+            if node<0 or node>=n or not active_mf6[node]:raise ValueError('Package node is not an active user-grid node')
             q=float(record['q'])
             package[node]+=q
             if label=='WEL':
@@ -178,22 +211,27 @@ def extract_mf6(*, case, directory: Path, native_success: bool, output_directory
     residual=(net_internal+package).reshape(case.shape)[:,::-1,:]
     fixed=case.arrays['fixed']!=0
     allocation=source_allocation.reshape(case.shape)[:,::-1,:]
-    expected=np.where(fixed,0.,case.arrays['source'])
+    active=case.grid().active.astype(bool)
+    expected=np.where(active&~fixed,case.arrays['source'],0.)
     valid=np.isfinite(heads)&(np.abs(heads)<1e20)
-    cell_rms=float(np.sqrt(np.mean(residual**2)))
+    free=active&~fixed
+    cell_rms=float(np.sqrt(np.mean(residual[free]**2))) if free.any() else 0.
     relative=float(np.sum(np.abs(residual))/max(gross,np.finfo(float).tiny))
     head=heads[:,::-1,:].copy()
     sentinel=~valid[:,::-1,:]
-    head[sentinel]=np.nan
-    # Keep sentinels explicit; never replace them by bottom or plausible heads.
+    checks=inspect_heads(head=head,active=active,fixed=fixed,values=case.arrays['values'])
     saturation=np.full(case.shape,np.nan)
     sat_records=budget.get_data(text='DATA-SAT') if 'DATA-SAT' in available else []
     if sat_records:
         for record in sat_records[-1]:
             saturation.ravel()[int(record['node'])-1]=float(record['sat'])
         saturation=saturation[:,::-1,:]
-    fields=dict(head=head,saturation=saturation,invalid_head=sentinel,residual=residual,qx=qx,qy=qy,qz=qz,
-        source_realised=allocation,diagonal_residual=flowja[ia[:-1]].reshape(case.shape)[:,::-1,:])
+    diagonal=np.zeros(n)
+    diagonal[active_mf6]=flowja[ia[:-1][active_mf6]]
+    fields=dict(head=head,raw_head=head.copy(),evaluation_head=np.where(active,head,case.grid().elevations),
+        active=active,saturation=saturation,invalid_head=sentinel,residual=residual,qx=qx,qy=qy,qz=qz,
+        node_to_user=node_to_user,reduced_to_user=np.flatnonzero(active_mf6),
+        source_realised=allocation,diagonal_residual=diagonal.reshape(case.shape)[:,::-1,:])
     np.savez_compressed(destination/'extracted.npz',**fields)
     modelgrid=grid.modelgrid
     geometric_x,geometric_y,centres=modelgrid.xyzcellcenters
@@ -201,30 +239,32 @@ def extract_mf6(*, case, directory: Path, native_success: bool, output_directory
     expected_x=(np.arange(case.shape[2])+.5)*case.physical['dx']
     expected_y=(np.arange(case.shape[1])+.5)*case.physical['dy']
     geometric_volumes=modelgrid.cell_thickness[:,::-1,:]*modelgrid.delr[None,None,:]*modelgrid.delc[None,::-1,None]
-    result=dict(geometric_x_centre_max_error=float(np.max(np.abs(geometric_x[::-1,:]-expected_x[None,:]))),
+    result=dict(**checks,binary_node_convention='DIS6.6.2 full user-grid IA/JA, CBC node and DATA-SAT node; internal reduced_to_user saved',
+        geometric_x_centre_max_error=float(np.max(np.abs(geometric_x[::-1,:]-expected_x[None,:]))),
         geometric_y_centre_max_error=float(np.max(np.abs(geometric_y[::-1,:]-expected_y[:,None]))),
         geometric_centre_max_error=float(np.max(np.abs(geometric_z-case.grid().elevations))),
-        geometric_volume_max_error=float(np.max(np.abs(geometric_volumes-case.grid().volumes))),native_success=native_success,independent_conservation=bool(native_success and not sentinel.any()
+        geometric_volume_max_error=float(np.max(np.abs(geometric_volumes-case.grid().volumes))),native_success=native_success,independent_conservation=bool(native_success and checks['input_valid'] and checks['boundary_condition_valid']
         and (cell_rms<=1e-12 or relative<=1e-8) and np.max(np.abs(allocation-expected))<=1e-12),
-        invalid_heads=int(sentinel.sum()),cell_residual_rms=cell_rms,cell_residual_max=float(np.max(np.abs(residual))),
+        invalid_heads=checks['invalid_active_heads'],cell_residual_rms=cell_rms,cell_residual_max=masked_extreme(values=np.abs(residual),mask=active),
         cell_residual_l1=float(np.sum(np.abs(residual))),gross_external_throughput=gross,
         signed_imbalance=float(residual.sum()),relative_cell_imbalance=relative,
         reciprocity_max=reciprocity,source_allocation_max_error=float(np.max(np.abs(allocation-expected))),
-        packages=components,head_min=float(head.min()) if not sentinel.any() else None,
-        head_max=float(head.max()) if not sentinel.any() else None,
+        packages=components,head_min=masked_extreme(values=head,mask=active,minimum=True) if checks['input_valid'] else None,
+        head_max=masked_extreme(values=head,mask=active) if checks['input_valid'] else None,
         formulation_equivalence=False,nonlinear_cross_residual='not established; saved FLOW-JA-FACE is native final reported flux, not a fixed-head nonlinear reevaluation')
     budget.close()
     return result
 
 
-def run_mf6(*, case, directory, executable, xt3d, convertible, initial=None, drains=True, outer_cap=3000, contact_mode='confined_native', contact_fluxes=None, ims_options=None, use_connection_elevations=True):
-    settings=dict(executable_sha256=hashlib.sha256(executable.read_bytes()).hexdigest(),xt3d=xt3d,convertible=convertible,drains=drains,outer_cap=outer_cap,contact_mode=contact_mode,ims_options=ims_options,use_connection_elevations=use_connection_elevations,contact_fluxes=None if contact_fluxes is None else np.asarray(contact_fluxes).tolist(),initial_hash=None if initial is None else hashlib.sha256(initial.tobytes()).hexdigest())
+def run_mf6(*, case, directory, executable, xt3d, convertible, initial=None, drains=True, outer_cap=3000, contact_mode=None, contact_fluxes=None, ims_options=None, use_connection_elevations=True,head_tol=1e-9,residual_tol=1e-7):
+    contact_mode=resolve_contact_mode(mode=contact_mode,case=case,drains=drains,xt3d=xt3d,contact_fluxes=contact_fluxes)
+    settings=dict(executable_sha256=hashlib.sha256(executable.read_bytes()).hexdigest(),xt3d=xt3d,convertible=convertible,drains=drains,outer_cap=outer_cap,contact_mode=contact_mode,head_tol=head_tol,residual_tol=residual_tol,ims_options=ims_options,use_connection_elevations=use_connection_elevations,contact_fluxes=None if contact_fluxes is None else np.asarray(contact_fluxes).tolist(),initial_hash=None if initial is None else hashlib.sha256(initial.tobytes()).hexdigest())
     if check_cached(directory=directory,case=case,kind='mf6',settings=settings):
         return json.loads((directory/'summary.json').read_text())
     directory.mkdir(parents=True,exist_ok=False)
     request=start_record(directory=directory,case=case,kind='mf6',settings=settings)
     sim=build_mf6(case=case,directory=directory,executable=executable,xt3d=xt3d,
-        convertible=convertible,initial=initial,drains=drains,outer_cap=outer_cap,contact_mode=contact_mode,contact_fluxes=contact_fluxes,ims_options=ims_options,use_connection_elevations=use_connection_elevations)
+        convertible=convertible,initial=initial,drains=drains,outer_cap=outer_cap,contact_mode=contact_mode,contact_fluxes=contact_fluxes,ims_options=ims_options,use_connection_elevations=use_connection_elevations,head_tol=head_tol,residual_tol=residual_tol)
     start=time.perf_counter()
     try:
         completed=subprocess.run([str(executable)],cwd=directory,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,
@@ -238,7 +278,8 @@ def run_mf6(*, case, directory, executable, xt3d, convertible, initial=None, dra
         result=dict(native_success=False,independent_conservation=False,stop_reason='wall_timeout')
     if (directory/'extracted.npz').exists():
         np.savez_compressed(directory/'head.npz',head=np.load(directory/'extracted.npz')['head'])
-    result.update(run_hash=request['run_hash'],seconds=time.perf_counter()-start,input_hash=case.digest(),
+    result.update(run_hash=request['run_hash'],experiment_contact_mode=contact_mode,
+        seconds=time.perf_counter()-start,input_hash=case.digest(),
         executable=str(executable),executable_sha256=hashlib.sha256(executable.read_bytes()).hexdigest(),
         mf6_version=subprocess.check_output([str(executable),'-v'],text=True).strip())
     atomic_json(path=directory/'summary.json',value=result)

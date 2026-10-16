@@ -17,7 +17,7 @@ if __name__ == "__main__":
     q=op.fluxes(head=head)[3]
     path=root/'mf6_n32_angle_control'
     result=run_mf6(case=case,directory=path,executable=executable,xt3d=True,convertible=True,drains=False,
-        outer_cap=4000,contact_mode='prescribed_flux',contact_fluxes=q,use_connection_elevations=False)
+        outer_cap=4000,contact_mode='custom_contact_xt3d',contact_fluxes=q,use_connection_elevations=False)
     if (path/'extracted.npz').exists():
         h=np.load(path/'extracted.npz')['head']
         op,unused,unused=ref.evaluate(head=h)

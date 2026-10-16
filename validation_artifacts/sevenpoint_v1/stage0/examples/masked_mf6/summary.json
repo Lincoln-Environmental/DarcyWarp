@@ -1,0 +1,98 @@
+{
+  "prescribed_cells_checked": 12,
+  "prescribed_head_error_max_m": 0.0,
+  "prescribed_head_tolerance_m": 1e-10,
+  "boundary_condition_valid": true,
+  "invalid_active_heads": 0,
+  "inactive_marker_cells": 2,
+  "active_cells_checked": 28,
+  "input_valid": true,
+  "binary_node_convention": "DIS6.6.2 full user-grid IA/JA, CBC node and DATA-SAT node; internal reduced_to_user saved",
+  "geometric_x_centre_max_error": 0.0,
+  "geometric_y_centre_max_error": 0.0,
+  "geometric_centre_max_error": 0.0,
+  "geometric_volume_max_error": 0.0,
+  "native_success": true,
+  "independent_conservation": true,
+  "invalid_heads": 0,
+  "cell_residual_rms": 3.956698384733614e-12,
+  "cell_residual_max": 8.86934969912545e-12,
+  "cell_residual_l1": 4.4932113585360867e-11,
+  "gross_external_throughput": 0.02469135782683457,
+  "signed_imbalance": -2.1432300378876334e-12,
+  "relative_cell_imbalance": 1.8197506147891405e-09,
+  "reciprocity_max": 0.0,
+  "source_allocation_max_error": 0.0,
+  "packages": {
+    "WEL": [
+      {
+        "node": 13,
+        "inflow": 0.01234567891234567
+      }
+    ],
+    "CHD": [
+      {
+        "node": 10,
+        "inflow": 0.0
+      },
+      {
+        "node": 14,
+        "inflow": -0.004580097467916211
+      },
+      {
+        "node": 5,
+        "inflow": -0.0005738234166479117
+      },
+      {
+        "node": 9,
+        "inflow": -0.0015326300863680586
+      },
+      {
+        "node": 0,
+        "inflow": -0.00045419411852876124
+      },
+      {
+        "node": 4,
+        "inflow": -0.0007431307442447022
+      },
+      {
+        "node": 25,
+        "inflow": 0.0
+      },
+      {
+        "node": 29,
+        "inflow": -0.001861446387766641
+      },
+      {
+        "node": 20,
+        "inflow": -0.0005230794811552641
+      },
+      {
+        "node": 24,
+        "inflow": -0.0010219021613648849
+      },
+      {
+        "node": 15,
+        "inflow": -0.0004292176121216684
+      },
+      {
+        "node": 19,
+        "inflow": -0.000626157438374797
+      }
+    ],
+    "DRN": [],
+    "GHB": []
+  },
+  "head_min": 4.0,
+  "head_max": 4.004580097467916,
+  "formulation_equivalence": false,
+  "nonlinear_cross_residual": "not established; saved FLOW-JA-FACE is native final reported flux, not a fixed-head nonlinear reevaluation",
+  "returncode": 0,
+  "run_hash": "89308ed2320d13f5c8aee6aaad8828cf3f7f2e2452e0bfab8592ea1c4e6a2336",
+  "experiment_contact_mode": "none",
+  "seconds": 0.10796317299536895,
+  "input_hash": "9df4726185954c00489ab9da196f57b74f8aa02edc131328efb6b69dcaa8c9b7",
+  "executable": "/bin/modflow/mf6",
+  "executable_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+  "mf6_version": "mf6: 6.6.2 05/12/2025"
+}

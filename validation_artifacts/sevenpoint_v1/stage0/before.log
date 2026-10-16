@@ -1,0 +1,96 @@
+FFFFF                                                                    [100%]
+=================================== FAILURES ===================================
+__________________ test_shifted_prescribed_heads_are_rejected __________________
+
+    def test_shifted_prescribed_heads_are_rejected():
+        case = flat_case()
+        shifted = case.arrays['values'] + 10.
+        result, fields = evaluate_saved_head(case=case, head=shifted)
+        assert result['budget']['cell_residual_rms'] == 0.
+>       assert not result['independent_accepted']
+E       assert not True
+
+tests/test_validation_repairs_3d.py:35: AssertionError
+____________ test_inactive_markers_are_preserved_and_excluded[nan] _____________
+
+marker = nan
+
+    @pytest.mark.parametrize('marker', [np.nan, 1e30])
+    def test_inactive_markers_are_preserved_and_excluded(marker):
+        case = flat_case(masked=True)
+        head = case.arrays['values'].copy()
+        head[:, 0, 1] = marker
+        result, fields = evaluate_saved_head(case=case, head=head)
+>       assert result['independent_accepted'], result
+E       AssertionError: {'independent_accepted': False, 'status': 'invalid_or_sentinel_head'}
+E       assert False
+
+tests/test_validation_repairs_3d.py:49: AssertionError
+___________ test_inactive_markers_are_preserved_and_excluded[1e+30] ____________
+
+marker = 1e+30
+
+    @pytest.mark.parametrize('marker', [np.nan, 1e30])
+    def test_inactive_markers_are_preserved_and_excluded(marker):
+        case = flat_case(masked=True)
+        head = case.arrays['values'].copy()
+        head[:, 0, 1] = marker
+        result, fields = evaluate_saved_head(case=case, head=head)
+        assert result['independent_accepted'], result
+>       assert result['invalid_active_heads'] == 0
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'invalid_active_heads'
+
+tests/test_validation_repairs_3d.py:50: KeyError
+________________ test_empty_free_layers_and_comparison_subsets _________________
+
+    def test_empty_free_layers_and_comparison_subsets():
+        case = flat_case()
+        case.arrays['fixed'][0] = 1
+>       result, fields = evaluate_saved_head(case=case, head=case.arrays['values'])
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_validation_repairs_3d.py:63: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+DARCY_WARP_PACKAGE/validation/terrain_compare.py:28: in evaluate_saved_head
+    layers.append(dict(layer=k,head_min=float(head[k][free].min()),head_max=float(head[k][free].max()),
+                                              ^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+a = array([], dtype=float64), axis = None, out = None, keepdims = False
+initial = <no value>, where = True
+
+    def _amin(a, axis=None, out=None, keepdims=False,
+              initial=_NoValue, where=True):
+>       return umr_minimum(a, axis, None, out, keepdims, initial, where)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       ValueError: zero-size array to reduction operation minimum which has no identity
+
+/home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/numpy/_core/_methods.py:47: ValueError
+_________________ test_live_masked_mf6_output_and_node_mapping _________________
+
+tmp_path = PosixPath('/tmp/pytest-of-patrickdurney/pytest-91/test_live_masked_mf6_output_an0')
+
+    def test_live_masked_mf6_output_and_node_mapping(tmp_path):
+        executable = Path('/bin/modflow/mf6')
+        if not executable.is_file():
+            pytest.skip('MF6 executable unavailable; live mapping unverified')
+        case = flat_case(shape=(2, 3, 5), masked=True)
+        case.arrays['source'][0, 0, 3] = .01234567891234567
+        directory = tmp_path / 'masked'
+        result = run_mf6(case=case, directory=directory, executable=executable,
+            xt3d=False, convertible=False, drains=False, contact_mode='none')
+>       assert result['native_success'] and result['independent_conservation'], result
+E       AssertionError: {'geometric_x_centre_max_error': 0.0, 'geometric_y_centre_max_error': 0.0, 'geometric_centre_max_error': 0.0, 'geometric_volume_max_error': 0.0, ...}
+E       assert (True and False)
+
+tests/test_validation_repairs_3d.py:86: AssertionError
+----------------------------- Captured stdout call -----------------------------
+flat_validation_repair MF6 False True False
+=========================== short test summary info ============================
+FAILED tests/test_validation_repairs_3d.py::test_shifted_prescribed_heads_are_rejected
+FAILED tests/test_validation_repairs_3d.py::test_inactive_markers_are_preserved_and_excluded[nan]
+FAILED tests/test_validation_repairs_3d.py::test_inactive_markers_are_preserved_and_excluded[1e+30]
+FAILED tests/test_validation_repairs_3d.py::test_empty_free_layers_and_comparison_subsets
+FAILED tests/test_validation_repairs_3d.py::test_live_masked_mf6_output_and_node_mapping
+5 failed in 0.91s

@@ -1,0 +1,3 @@
+stage0_masked MF6 False True True
+stage0_original_drn_rejection MF6 True False False
+stage0_original_drn_rejection MF6 True True True

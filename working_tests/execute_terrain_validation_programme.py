@@ -13,8 +13,16 @@ from validate_terrain_gpu_baselines import run_gpu
 from validate_terrain_mf6_feedback import run_feedback
 
 
+def run_native_contact_experiments(*,case,directory,executable,outer_cap):
+    results={}
+    for mode in ('original_convertible_drn','confined_contact_control'):
+        results[mode]=run_mf6(case=case,directory=directory/mode,executable=executable,
+            xt3d=True,convertible=True,outer_cap=outer_cap,contact_mode=mode)
+    return results
+
+
 if __name__ == "__main__":
-    root=Path('validation_artifacts/terrain_reproduction')
+    root=Path('validation_artifacts/terrain_reproduction_v2')
     cases=[(32,1e-4),(64,1e-4),(64,.1),(64,.01),(64,.001),(16,1e-4),(96,1e-4)]
     dx=20.
     executable=Path('/bin/modflow/mf6')
@@ -40,7 +48,8 @@ if __name__ == "__main__":
             head,result=run_gpu(case=case,directory=root/'gpu'/case.case_id/method,method=method,outer_cap=gpu_cap)
             if method=='picard' and not result['info']['converged']:
                 run_gpu(case=case,directory=root/'gpu'/case.case_id/'picard_reference',method=method,outer_cap=reference_cap)
-        run_mf6(case=case,directory=root/'mf6'/case.case_id,executable=executable,xt3d=True,convertible=True,outer_cap=mf6_cap)
+        run_native_contact_experiments(case=case,directory=root/'mf6'/case.case_id,
+            executable=executable,outer_cap=mf6_cap)
 
         for xt3d in (False,True):
             run_feedback(case=case,directory=root/'coupled'/case.case_id/('xt3d' if xt3d else 'tpfa'),executable=executable,max_feedback=feedback_cap,contact_tolerance=feedback_tolerance,relaxation=feedback_relaxation,xt3d=xt3d)

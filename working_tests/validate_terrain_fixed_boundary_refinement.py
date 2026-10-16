@@ -46,7 +46,8 @@ if __name__ == "__main__":
         rows[case.case_id]={}
         for xt3d in (False,True):
             label='mf6_xt3d' if xt3d else 'mf6_tpfa'
-            result=run_mf6(case=case,directory=path/label,executable=executable,xt3d=xt3d,convertible=False,drains=True)
+            result=run_mf6(case=case,directory=path/label,executable=executable,xt3d=xt3d,
+                convertible=False,drains=True,contact_mode='native_head_contacts')
             data=np.load(path/label/'extracted.npz')
             rows[case.case_id][label]=dict(native=result['native_success'],conservation=result['independent_conservation'],
                 head_rms=float(np.sqrt(np.mean((data['head']-case.arrays['values'])**2))),

@@ -1,0 +1,42 @@
+{
+  "input_hash": "d0c213a2271541741ea10590764146fa6737dc9b15e5ba65e1f26615e44a0ab1",
+  "kind": "mf6",
+  "settings": {
+    "executable_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+    "xt3d": true,
+    "convertible": true,
+    "drains": true,
+    "outer_cap": 1000,
+    "contact_mode": "original_convertible_drn",
+    "head_tol": 1e-09,
+    "residual_tol": 1e-07,
+    "ims_options": null,
+    "use_connection_elevations": true,
+    "contact_fluxes": null,
+    "initial_hash": null
+  },
+  "implementation": {
+    "hardware": {
+      "cpu_model": "Intel(R) Core(TM) Ultra 9 285K"
+    },
+    "source_sha256": {
+      "physics/terrain_reference_3d.py": "494050696fddfa06a33f6460304b786eb678ca6ff9963300ea7c8c29ebfb1acc",
+      "physics/terrain_grid_3d.py": "184ccd6cef94376a6d7af2ef23c40eb77a75cba434d8c55bfe7fc7149bc4d9c5",
+      "physics/terrain_budget_3d.py": "730c3e4f0cfc8e3e25898a12ebe87358d96af1c0ef6cb30b56027c0669b6cdb9",
+      "validation/terrain_case.py": "79409b3896ae42356ac8b75672ad483edec79fb05b49963f22161af75e6cdb6f",
+      "validation/terrain_mf6.py": "20b2cc6ec609650ab36fff88b16e5ae51a3076e6c0404262f2f16cf534ac8e62"
+    },
+    "versions": {
+      "numpy": "2.3.5",
+      "scipy": "1.16.3",
+      "warp-lang": "1.17.0",
+      "flopy": "3.9.5"
+    },
+    "python": "3.14.7 | packaged by conda-forge | (main, Aug 30 2026, 16:54:41) [GCC 15.3.0]",
+    "interpreter": "/home/patrickdurney/miniconda3/envs/darcywarp/bin/python",
+    "system": "Linux-7.0.0-38-generic-x86_64-with-glibc2.39",
+    "precision": "float64",
+    "blas_threads": "1"
+  },
+  "run_hash": "31d798a478250cea7ce6728a70ccc1773da95df3baf4de156f5bab5ffbcc3e89"
+}

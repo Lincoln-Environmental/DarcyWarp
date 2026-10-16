@@ -25,7 +25,8 @@ def run_feedback(*,case,directory,executable,max_feedback,contact_tolerance,rela
     for outer in range(max_feedback):
         path=directory/f'feedback_{outer:03d}'
         result=run_mf6(case=case,directory=path,executable=executable,xt3d=xt3d,convertible=True,
-            drains=False,initial=head,outer_cap=4000,contact_mode='prescribed_flux',contact_fluxes=q)
+            drains=False,initial=head,outer_cap=4000,
+            contact_mode='custom_contact_xt3d' if xt3d else 'custom_contact_tpfa',contact_fluxes=q)
         if not result['native_success'] or not (path/'extracted.npz').exists():
             history.append(dict(outer=outer,native_failure=result))
             break

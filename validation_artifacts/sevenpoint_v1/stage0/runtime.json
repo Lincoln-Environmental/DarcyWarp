@@ -1,0 +1,21 @@
+{
+  "python": "3.14.7 | packaged by conda-forge | (main, Aug 30 2026, 16:54:41) [GCC 15.3.0]",
+  "interpreter": "/home/patrickdurney/miniconda3/envs/darcywarp/bin/python",
+  "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.39",
+  "packages": {
+    "numpy": "2.3.5",
+    "scipy": "1.16.3",
+    "warp-lang": "1.17.0",
+    "flopy": "3.9.5",
+    "pytest": "9.1.1"
+  },
+  "precision": "float64",
+  "mf6_path": "/usr/bin/modflow/mf6",
+  "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+  "mf6_version": "mf6: 6.6.2 05/12/2025",
+  "starting_revision": "296ecd61663613eb1ccf8de7d029f079e9047f88",
+  "source_revision": "296ecd61663613eb1ccf8de7d029f079e9047f88",
+  "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER, 595.91.07, 16376 MiB",
+  "cpu": "x86_64",
+  "existing_python312": "3.12.14 / Warp1.11.0; FloPy absent; not used for GMRES; no environment modified"
+}

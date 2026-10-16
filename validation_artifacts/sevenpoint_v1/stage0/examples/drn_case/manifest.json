@@ -1,0 +1,48 @@
+{
+  "schema": 1,
+  "case_id": "stage0_original_drn_rejection",
+  "input_hash": "d0c213a2271541741ea10590764146fa6737dc9b15e5ba65e1f26615e44a0ab1",
+  "physical": {
+    "dx": 1.0,
+    "dy": 1.0,
+    "floor": 0.01,
+    "steady": true,
+    "storage": 0
+  },
+  "controls": {},
+  "contacts": [
+    {
+      "cell": [
+        0,
+        1,
+        0
+      ],
+      "direction": "west",
+      "area": 1.0,
+      "distance": 0.5,
+      "elevation": 1.5,
+      "head": 0.0,
+      "kind": "discharge_only",
+      "conductance": null,
+      "x_offset": 0.0,
+      "y_offset": 0.0
+    }
+  ],
+  "checks": {
+    "active": 18,
+    "free": 12,
+    "source_total": 0.0,
+    "source_free": 0.0,
+    "source_fixed": 0.0,
+    "volume": 18.0,
+    "minimum_thickness": 1.0
+  },
+  "coordinates": "C-order (k top-down,j south-to-north,i west-to-east); centres x=(i+.5)dx,y=(j+.5)dy",
+  "units": {
+    "head": "m",
+    "conductivity": "m/day",
+    "source": "m3/day",
+    "flux": "m3/day"
+  },
+  "source_fixed_semantics": "Original source retained; fixed cells are reservoirs, excluded from free-cell balance."
+}

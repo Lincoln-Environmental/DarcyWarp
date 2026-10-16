@@ -1,0 +1,115 @@
+{
+  "prescribed_cells_checked": 8,
+  "prescribed_head_error_max_m": 10.0,
+  "prescribed_head_tolerance_m": 1e-10,
+  "boundary_condition_valid": false,
+  "invalid_active_heads": 0,
+  "inactive_marker_cells": 0,
+  "active_cells_checked": 12,
+  "input_valid": true,
+  "independent_accepted": false,
+  "discrete_equation_converged": true,
+  "budget": {
+    "cell_residual_max": 0.0,
+    "cell_residual_rms": 0.0,
+    "head_residual_rms": 0.0,
+    "source_total": 0.0,
+    "boundary_inflow": 4.0,
+    "boundary_outflow": -4.0,
+    "boundary_net": 0.0,
+    "storage_uptake": 0.0,
+    "imbalance": 0.0,
+    "domain_imbalance": 0.0,
+    "relative_imbalance": 0.0,
+    "relative_cell_imbalance": 0.0,
+    "throughput": 8.0,
+    "physical_diagonal_scaling": "seven-point principal part",
+    "coastal_subface_outflows": [],
+    "finite_physical_state": true
+  },
+  "residual_l1": 0.0,
+  "layers": [
+    {
+      "layer": 0,
+      "free_cells": 2,
+      "head_min": 13.0,
+      "head_max": 13.0,
+      "dry_cells": 0,
+      "floor_cells": 0,
+      "thin_cells": 0,
+      "residual_l1": 0.0,
+      "residual_squared": 0.0,
+      "saturated_volume": 6.0
+    },
+    {
+      "layer": 1,
+      "free_cells": 2,
+      "head_min": 13.0,
+      "head_max": 13.0,
+      "dry_cells": 0,
+      "floor_cells": 0,
+      "thin_cells": 0,
+      "residual_l1": 0.0,
+      "residual_squared": 0.0,
+      "saturated_volume": 6.0
+    }
+  ],
+  "leakage": [
+    {
+      "net": 0.0,
+      "downward": 0.0,
+      "upward": 0.0,
+      "gross": 0.0
+    }
+  ],
+  "coastal_free_to_fixed_inflow": 4.0,
+  "coastal_free_to_fixed_outflow": 4.0,
+  "contacts": [],
+  "gate_states": [],
+  "worst_cells": [
+    {
+      "cell": [
+        1,
+        1,
+        1
+      ],
+      "residual": 0.0,
+      "head_minus_bottom": 13.0,
+      "floor": false
+    },
+    {
+      "cell": [
+        1,
+        0,
+        1
+      ],
+      "residual": 0.0,
+      "head_minus_bottom": 13.0,
+      "floor": false
+    },
+    {
+      "cell": [
+        0,
+        1,
+        1
+      ],
+      "residual": 0.0,
+      "head_minus_bottom": 12.0,
+      "floor": false
+    },
+    {
+      "cell": [
+        0,
+        0,
+        1
+      ],
+      "residual": 0.0,
+      "head_minus_bottom": 12.0,
+      "floor": false
+    }
+  ],
+  "water_table_class_counts": {
+    "potentiometric": 6
+  },
+  "interpretation": "DarcyWarp equations evaluated offline; not native MF6 residual for MF6 heads"
+}

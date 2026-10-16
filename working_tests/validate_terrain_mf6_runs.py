@@ -15,4 +15,5 @@ if __name__ == "__main__":
         case=TerrainCase.load(directory=root/'cases'/f'terrain_{size}_k{k:g}')
         path=root/'mf6'/case.case_id/'native_xt3d_precise'
         if not path.exists():
-            run_mf6(case=case,directory=path,executable=executable,xt3d=xt3d,convertible=convertible,outer_cap=outer_cap)
+            run_mf6(case=case,directory=path,executable=executable,xt3d=xt3d,convertible=convertible,
+                outer_cap=outer_cap,contact_mode='confined_contact_control')

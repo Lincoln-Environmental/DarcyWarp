@@ -1,0 +1,74 @@
+{
+  "prescribed_cells_checked": 6,
+  "prescribed_head_error_max_m": 0.0,
+  "prescribed_head_tolerance_m": 1e-10,
+  "boundary_condition_valid": true,
+  "invalid_active_heads": 0,
+  "inactive_marker_cells": 0,
+  "active_cells_checked": 18,
+  "input_valid": true,
+  "binary_node_convention": "DIS6.6.2 full user-grid IA/JA, CBC node and DATA-SAT node; internal reduced_to_user saved",
+  "geometric_x_centre_max_error": 0.0,
+  "geometric_y_centre_max_error": 0.0,
+  "geometric_centre_max_error": 0.0,
+  "geometric_volume_max_error": 0.0,
+  "native_success": true,
+  "independent_conservation": true,
+  "invalid_heads": 0,
+  "cell_residual_rms": 1.4814026458028634e-10,
+  "cell_residual_max": 2.9165603265823847e-10,
+  "cell_residual_l1": 1.4786678548261989e-09,
+  "gross_external_throughput": 7.702904657613482,
+  "signed_imbalance": 5.2081006174375943e-11,
+  "relative_cell_imbalance": 1.9196237270893608e-10,
+  "reciprocity_max": 0.0,
+  "source_allocation_max_error": 0.0,
+  "packages": {
+    "WEL": [],
+    "CHD": [
+      {
+        "node": 8,
+        "inflow": 0.6508230799041677
+      },
+      {
+        "node": 5,
+        "inflow": 0.7991460194037203
+      },
+      {
+        "node": 2,
+        "inflow": 0.6508230800379042
+      },
+      {
+        "node": 17,
+        "inflow": 0.5654250238477228
+      },
+      {
+        "node": 14,
+        "inflow": 0.6198101016918183
+      },
+      {
+        "node": 11,
+        "inflow": 0.5654250239474483
+      }
+    ],
+    "DRN": [
+      {
+        "node": 3,
+        "inflow": -3.8514523287807
+      }
+    ],
+    "GHB": []
+  },
+  "head_min": 1.92572616439035,
+  "head_max": 4.0,
+  "formulation_equivalence": false,
+  "nonlinear_cross_residual": "not established; saved FLOW-JA-FACE is native final reported flux, not a fixed-head nonlinear reevaluation",
+  "returncode": 0,
+  "run_hash": "9458fce6388741b19d27a11cb6ef68cc2beab3ee5142180f2699955d7873acf8",
+  "experiment_contact_mode": "confined_contact_control",
+  "seconds": 0.03719041201111395,
+  "input_hash": "d0c213a2271541741ea10590764146fa6737dc9b15e5ba65e1f26615e44a0ab1",
+  "executable": "/bin/modflow/mf6",
+  "executable_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+  "mf6_version": "mf6: 6.6.2 05/12/2025"
+}

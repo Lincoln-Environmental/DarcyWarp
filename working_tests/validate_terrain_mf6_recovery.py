@@ -18,5 +18,5 @@ if __name__ == "__main__":
     op,unused,unused=ref.evaluate(head=h)
     contacts=op.fluxes(head=h)[3]
     run_mf6(case=case,directory=root/'mf6_solver_recovery'/'n32_xt3d_simple',executable=executable,
-        xt3d=True,convertible=True,drains=False,contact_mode='prescribed_flux',contact_fluxes=contacts,
+        xt3d=True,convertible=True,drains=False,contact_mode='custom_contact_xt3d',contact_fluxes=contacts,
         outer_cap=outer_cap,ims_options=options)

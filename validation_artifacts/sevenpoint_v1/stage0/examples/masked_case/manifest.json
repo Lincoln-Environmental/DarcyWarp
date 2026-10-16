@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "case_id": "stage0_masked",
+  "input_hash": "9df4726185954c00489ab9da196f57b74f8aa02edc131328efb6b69dcaa8c9b7",
+  "physical": {
+    "dx": 1.0,
+    "dy": 1.0,
+    "floor": 0.01,
+    "steady": true,
+    "storage": 0
+  },
+  "controls": {},
+  "contacts": [],
+  "checks": {
+    "active": 28,
+    "free": 16,
+    "source_total": 0.01234567891234567,
+    "source_free": 0.01234567891234567,
+    "source_fixed": 0.0,
+    "volume": 30.0,
+    "minimum_thickness": 1.0
+  },
+  "coordinates": "C-order (k top-down,j south-to-north,i west-to-east); centres x=(i+.5)dx,y=(j+.5)dy",
+  "units": {
+    "head": "m",
+    "conductivity": "m/day",
+    "source": "m3/day",
+    "flux": "m3/day"
+  },
+  "source_fixed_semantics": "Original source retained; fixed cells are reservoirs, excluded from free-cell balance."
+}
