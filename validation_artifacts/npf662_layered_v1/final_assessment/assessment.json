@@ -1,0 +1,2893 @@
+{
+  "schema": 1,
+  "cases": [
+    {
+      "directory": "validation_artifacts/npf662_layered_v1/confined/experiments/independent",
+      "input_hash": "1b5584033b013130a36d0c1517997bcc91db2580a053bcdf3a7c44ff3ca8ed60",
+      "geometry": "structured_dis_layered",
+      "methods": {
+        "scipy_cpu": {
+          "independent": {
+            "prescribed_cells_checked": 24,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 60,
+            "input_valid": true,
+            "head_residual_rms": 1.424422721998345e-15,
+            "physical_rms": 5.770916585812169e-14,
+            "physical_max": 1.7919780243014216e-13,
+            "residual_l1": 1.1282783789288292e-12,
+            "relative_cell_imbalance": 8.767776121583658e-14,
+            "gross_throughput": 12.868467023825385,
+            "signed_imbalance": 2.3642299598093663e-13,
+            "boundary_inflow": 6.4312335119128115,
+            "boundary_outflow": 6.434233511912574,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 36,
+            "fixed_reservoir_required_inflow": -0.0029999999997635854,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "0a21c223a12a0038fba0af170eb0ab75f8aa4643efe880f9166b156562bb2432"
+        },
+        "warp_cpu": {
+          "independent": {
+            "prescribed_cells_checked": 24,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 60,
+            "input_valid": true,
+            "head_residual_rms": 6.043237738958162e-16,
+            "physical_rms": 3.2042978160898634e-14,
+            "physical_max": 1.259851598045536e-13,
+            "residual_l1": 5.340847461011468e-13,
+            "relative_cell_imbalance": 4.150336983514099e-14,
+            "gross_throughput": 12.868467023825524,
+            "signed_imbalance": 8.56746314517598e-14,
+            "boundary_inflow": 6.431233511912804,
+            "boundary_outflow": 6.434233511912719,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 36,
+            "fixed_reservoir_required_inflow": -0.0029999999999143936,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "79c107eb262cbad1807b8d6b94a3be4953f2fca744d0c65d3f555450525f8c32"
+        },
+        "cuda": {
+          "independent": {
+            "prescribed_cells_checked": 24,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 60,
+            "input_valid": true,
+            "head_residual_rms": 6.043237738958162e-16,
+            "physical_rms": 3.2042978160898634e-14,
+            "physical_max": 1.259851598045536e-13,
+            "residual_l1": 5.340847461011468e-13,
+            "relative_cell_imbalance": 4.150336983514099e-14,
+            "gross_throughput": 12.868467023825524,
+            "signed_imbalance": 8.56746314517598e-14,
+            "boundary_inflow": 6.431233511912804,
+            "boundary_outflow": 6.434233511912719,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 36,
+            "fixed_reservoir_required_inflow": -0.0029999999999143936,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "79c107eb262cbad1807b8d6b94a3be4953f2fca744d0c65d3f555450525f8c32"
+        },
+        "mf6": {
+          "independent": {
+            "prescribed_cells_checked": 24,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 60,
+            "input_valid": true,
+            "head_residual_rms": 1.2868576811911094e-15,
+            "physical_rms": 5.569297070461707e-14,
+            "physical_max": 2.197408921489341e-13,
+            "residual_l1": 9.686423755109197e-13,
+            "relative_cell_imbalance": 7.527255373289757e-14,
+            "gross_throughput": 12.868467023825424,
+            "signed_imbalance": 1.978153968754115e-13,
+            "boundary_inflow": 6.4312335119128115,
+            "boundary_outflow": 6.434233511912613,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 36,
+            "fixed_reservoir_required_inflow": -0.0029999999998017966,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "5d95360824bab73ec7d6d3ff057df85a0fb5fe06aaf5da9e0c9bd7f7c69e3515",
+          "native_success": true,
+          "native_conservation": true,
+          "same_head_flux_max_error": 4.440892098500626e-16,
+          "same_head_source_allocation_error": 0.0
+        }
+      },
+      "pairs": [
+        {
+          "left": "scipy_cpu",
+          "right": "warp_cpu",
+          "head_max_error_m": 5.329070518200751e-15,
+          "face_flux_max_error_m3_day": 1.5187850976872141e-13,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "scipy_cpu",
+          "right": "cuda",
+          "head_max_error_m": 5.329070518200751e-15,
+          "face_flux_max_error_m3_day": 1.5187850976872141e-13,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "scipy_cpu",
+          "right": "mf6",
+          "head_max_error_m": 7.105427357601002e-15,
+          "face_flux_max_error_m3_day": 2.902122986370159e-13,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "warp_cpu",
+          "right": "cuda",
+          "head_max_error_m": 0.0,
+          "face_flux_max_error_m3_day": 0.0,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "warp_cpu",
+          "right": "mf6",
+          "head_max_error_m": 5.329070518200751e-15,
+          "face_flux_max_error_m3_day": 1.4521717162097048e-13,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "cuda",
+          "right": "mf6",
+          "head_max_error_m": 5.329070518200751e-15,
+          "face_flux_max_error_m3_day": 1.4521717162097048e-13,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        }
+      ],
+      "physical_validation": "Not established by matching a conventional DIS discretization"
+    },
+    {
+      "directory": "validation_artifacts/npf662_layered_v1/confined/experiments/masked",
+      "input_hash": "193f4ff569a9612f90ce77834520e57c295ff205de2e70a477e44d0335b2c87b",
+      "geometry": "structured_dis_layered",
+      "methods": {
+        "scipy_cpu": {
+          "independent": {
+            "prescribed_cells_checked": 24,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 57,
+            "input_valid": true,
+            "head_residual_rms": 1.6610230405221975e-15,
+            "physical_rms": 6.46306344419308e-14,
+            "physical_max": 3.497653555672997e-13,
+            "residual_l1": 7.639886986932076e-13,
+            "relative_cell_imbalance": 1.2396095511691047e-13,
+            "gross_throughput": 6.163139820701382,
+            "signed_imbalance": -1.0565485118740892e-13,
+            "boundary_inflow": 3.078569910350638,
+            "boundary_outflow": 3.0815699103507437,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 33,
+            "fixed_reservoir_required_inflow": -0.003000000000105798,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "51288b4ba190b7a08732d1df6955270c502b96e2d1dac5f6f995eebcda08b99d"
+        },
+        "warp_cpu": {
+          "independent": {
+            "prescribed_cells_checked": 24,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 57,
+            "input_valid": true,
+            "head_residual_rms": 7.358008340096939e-11,
+            "physical_rms": 1.8480460472989375e-09,
+            "physical_max": 8.75882668477379e-09,
+            "residual_l1": 2.6824452628620073e-08,
+            "relative_cell_imbalance": 4.35240045854685e-09,
+            "gross_throughput": 6.1631398314795796,
+            "signed_imbalance": -1.354491282641048e-08,
+            "boundary_inflow": 3.0785699089673333,
+            "boundary_outflow": 3.081569922512246,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 33,
+            "fixed_reservoir_required_inflow": -0.003000013544912773,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "3a6f62d551955a0dab2bd6ea3759957a582a0face58d4e317ad0967377c5cbd3"
+        },
+        "cuda": {
+          "independent": {
+            "prescribed_cells_checked": 24,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 57,
+            "input_valid": true,
+            "head_residual_rms": 7.35798562900557e-11,
+            "physical_rms": 1.8480469271776594e-09,
+            "physical_max": 8.75882668477379e-09,
+            "residual_l1": 2.682443631072686e-08,
+            "relative_cell_imbalance": 4.35239781088779e-09,
+            "gross_throughput": 6.1631398314795325,
+            "signed_imbalance": -1.3544877744880784e-08,
+            "boundary_inflow": 3.0785699089673275,
+            "boundary_outflow": 3.0815699225122053,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 33,
+            "fixed_reservoir_required_inflow": -0.0030000135448776245,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "90cd5e16419a470eaeca59658be10b27d19da159b6deaa41a928989f9a0fc6c0"
+        },
+        "mf6": {
+          "independent": {
+            "prescribed_cells_checked": 24,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 3,
+            "active_cells_checked": 57,
+            "input_valid": true,
+            "head_residual_rms": 1.227335091221787e-15,
+            "physical_rms": 4.313441520330171e-14,
+            "physical_max": 2.3109292257572633e-13,
+            "residual_l1": 5.160574116473693e-13,
+            "relative_cell_imbalance": 8.373287425898913e-14,
+            "gross_throughput": 6.163139820701521,
+            "signed_imbalance": -2.98283533289867e-13,
+            "boundary_inflow": 3.0785699103506112,
+            "boundary_outflow": 3.08156991035091,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 33,
+            "fixed_reservoir_required_inflow": -0.003000000000298328,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "839c79c87ef4fa2553643125207aa8061697d72093cef32eabe44c536944b021",
+          "native_success": true,
+          "native_conservation": true,
+          "same_head_flux_max_error": 2.220446049250313e-16,
+          "same_head_source_allocation_error": 0.0
+        }
+      },
+      "pairs": [
+        {
+          "left": "scipy_cpu",
+          "right": "warp_cpu",
+          "head_max_error_m": 3.43439054972805e-10,
+          "face_flux_max_error_m3_day": 9.816479656921118e-09,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "scipy_cpu",
+          "right": "cuda",
+          "head_max_error_m": 3.434408313296444e-10,
+          "face_flux_max_error_m3_day": 9.816479656921118e-09,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "scipy_cpu",
+          "right": "mf6",
+          "head_max_error_m": 1.0658141036401503e-14,
+          "face_flux_max_error_m3_day": 2.3425705819590803e-13,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "warp_cpu",
+          "right": "cuda",
+          "head_max_error_m": 1.7763568394002505e-15,
+          "face_flux_max_error_m3_day": 3.090930289495475e-14,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "warp_cpu",
+          "right": "mf6",
+          "head_max_error_m": 3.434372786159656e-10,
+          "face_flux_max_error_m3_day": 9.816479656921118e-09,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "cuda",
+          "right": "mf6",
+          "head_max_error_m": 3.43439054972805e-10,
+          "face_flux_max_error_m3_day": 9.816479656921118e-09,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        }
+      ],
+      "physical_validation": "Not established by matching a conventional DIS discretization"
+    },
+    {
+      "directory": "validation_artifacts/npf662_layered_v1/confined/experiments/uniform",
+      "input_hash": "d7963ad5ccff064334d169d6b43e78d565ce5644f1349ec07a007ddcfebafe82",
+      "geometry": "structured_dis_layered",
+      "methods": {
+        "scipy_cpu": {
+          "independent": {
+            "prescribed_cells_checked": 24,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 60,
+            "input_valid": true,
+            "head_residual_rms": 1.4483639006129156e-15,
+            "physical_rms": 7.99592078072498e-14,
+            "physical_max": 3.551881011532032e-13,
+            "residual_l1": 1.1510010880597804e-12,
+            "relative_cell_imbalance": 9.854680483268713e-14,
+            "gross_throughput": 11.679740302224424,
+            "signed_imbalance": 5.387081026490131e-13,
+            "boundary_inflow": 5.836870151112481,
+            "boundary_outflow": 5.839870151111943,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 36,
+            "fixed_reservoir_required_inflow": -0.0029999999994614803,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "947b573ef9a98ddd489be39d4dd0b40ab823895caf5a83d00141fc6b515a662a"
+        },
+        "warp_cpu": {
+          "independent": {
+            "prescribed_cells_checked": 24,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 60,
+            "input_valid": true,
+            "head_residual_rms": 5.609561445883936e-16,
+            "physical_rms": 2.0537322064781677e-14,
+            "physical_max": 8.292325159864333e-14,
+            "residual_l1": 3.927469514972831e-13,
+            "relative_cell_imbalance": 3.362634282394694e-14,
+            "gross_throughput": 11.67974030222487,
+            "signed_imbalance": -1.2638842880260956e-14,
+            "boundary_inflow": 5.836870151112429,
+            "boundary_outflow": 5.83987015111244,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 36,
+            "fixed_reservoir_required_inflow": -0.0030000000000123244,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "afa6cde550dcbd173fa7b1ba3a3b718a56ce65984f8811f76a9ea74afe302c59"
+        },
+        "cuda": {
+          "independent": {
+            "prescribed_cells_checked": 24,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 60,
+            "input_valid": true,
+            "head_residual_rms": 5.609561445883936e-16,
+            "physical_rms": 2.0537322064781677e-14,
+            "physical_max": 8.292325159864333e-14,
+            "residual_l1": 3.927469514972831e-13,
+            "relative_cell_imbalance": 3.362634282394694e-14,
+            "gross_throughput": 11.67974030222487,
+            "signed_imbalance": -1.2638842880260956e-14,
+            "boundary_inflow": 5.836870151112429,
+            "boundary_outflow": 5.83987015111244,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 36,
+            "fixed_reservoir_required_inflow": -0.0030000000000123244,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "afa6cde550dcbd173fa7b1ba3a3b718a56ce65984f8811f76a9ea74afe302c59"
+        },
+        "mf6": {
+          "independent": {
+            "prescribed_cells_checked": 24,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 60,
+            "input_valid": true,
+            "head_residual_rms": 1.0005118136116545e-15,
+            "physical_rms": 3.6821845094771216e-14,
+            "physical_max": 1.3672396548258803e-13,
+            "residual_l1": 6.838682452357109e-13,
+            "relative_cell_imbalance": 5.85516653230238e-14,
+            "gross_throughput": 11.679740302224998,
+            "signed_imbalance": -2.2497059553802656e-13,
+            "boundary_inflow": 5.836870151112387,
+            "boundary_outflow": 5.839870151112612,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 36,
+            "fixed_reservoir_required_inflow": -0.0030000000002252843,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "8812fed2b7a2e89951231c9cfd5d77d083093112f003e0a6521bff6ed4caa041",
+          "native_success": true,
+          "native_conservation": true,
+          "same_head_flux_max_error": 2.220446049250313e-16,
+          "same_head_source_allocation_error": 0.0
+        }
+      },
+      "pairs": [
+        {
+          "left": "scipy_cpu",
+          "right": "warp_cpu",
+          "head_max_error_m": 8.881784197001252e-15,
+          "face_flux_max_error_m3_day": 4.121147867408581e-13,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "scipy_cpu",
+          "right": "cuda",
+          "head_max_error_m": 8.881784197001252e-15,
+          "face_flux_max_error_m3_day": 4.121147867408581e-13,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "scipy_cpu",
+          "right": "mf6",
+          "head_max_error_m": 1.2434497875801753e-14,
+          "face_flux_max_error_m3_day": 4.121147867408581e-13,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "warp_cpu",
+          "right": "cuda",
+          "head_max_error_m": 0.0,
+          "face_flux_max_error_m3_day": 0.0,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "warp_cpu",
+          "right": "mf6",
+          "head_max_error_m": 7.105427357601002e-15,
+          "face_flux_max_error_m3_day": 1.3367085216486885e-13,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "cuda",
+          "right": "mf6",
+          "head_max_error_m": 7.105427357601002e-15,
+          "face_flux_max_error_m3_day": 1.3367085216486885e-13,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        }
+      ],
+      "physical_validation": "Not established by matching a conventional DIS discretization"
+    },
+    {
+      "directory": "validation_artifacts/npf662_layered_v1/confined/experiments/x",
+      "input_hash": "d6a046e8df7334a1feb60dffe0aae4b100c0be62287f362ba0c2e29735af3a93",
+      "geometry": "structured_dis_layered",
+      "methods": {
+        "scipy_cpu": {
+          "independent": {
+            "prescribed_cells_checked": 24,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 60,
+            "input_valid": true,
+            "head_residual_rms": 1.0119273958595858e-15,
+            "physical_rms": 4.107902982883084e-14,
+            "physical_max": 1.3816725541460073e-13,
+            "residual_l1": 7.210097048484382e-13,
+            "relative_cell_imbalance": 5.804624955051346e-14,
+            "gross_throughput": 12.421296990445446,
+            "signed_imbalance": 3.88708244194666e-13,
+            "boundary_inflow": 6.207648495222918,
+            "boundary_outflow": 6.210648495222529,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 36,
+            "fixed_reservoir_required_inflow": -0.0029999999996112637,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "e834b193ab18e7fa440dc419134f27a9cca9fbf25427d00d748b968bf861db5c"
+        },
+        "warp_cpu": {
+          "independent": {
+            "prescribed_cells_checked": 24,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 60,
+            "input_valid": true,
+            "head_residual_rms": 5.808369600973642e-16,
+            "physical_rms": 3.783630712056857e-14,
+            "physical_max": 1.1781201014748888e-13,
+            "residual_l1": 6.742532151094577e-13,
+            "relative_cell_imbalance": 5.4282029938426046e-14,
+            "gross_throughput": 12.421296990445752,
+            "signed_imbalance": 1.7669866221245454e-14,
+            "boundary_inflow": 6.207648495222884,
+            "boundary_outflow": 6.210648495222867,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 36,
+            "fixed_reservoir_required_inflow": -0.0029999999999825284,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "b37449ae72f8b39268146615036dfd10f4987a520f6d25c6abd48e8826939e26"
+        },
+        "cuda": {
+          "independent": {
+            "prescribed_cells_checked": 24,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 60,
+            "input_valid": true,
+            "head_residual_rms": 5.808369600973642e-16,
+            "physical_rms": 3.783630712056857e-14,
+            "physical_max": 1.1781201014748888e-13,
+            "residual_l1": 6.742532151094577e-13,
+            "relative_cell_imbalance": 5.4282029938426046e-14,
+            "gross_throughput": 12.421296990445752,
+            "signed_imbalance": 1.7669866221245454e-14,
+            "boundary_inflow": 6.207648495222884,
+            "boundary_outflow": 6.210648495222867,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 36,
+            "fixed_reservoir_required_inflow": -0.0029999999999825284,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "b37449ae72f8b39268146615036dfd10f4987a520f6d25c6abd48e8826939e26"
+        },
+        "mf6": {
+          "independent": {
+            "prescribed_cells_checked": 24,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 60,
+            "input_valid": true,
+            "head_residual_rms": 9.81385833705864e-16,
+            "physical_rms": 6.823839531410973e-14,
+            "physical_max": 2.77678704682649e-13,
+            "residual_l1": 1.1354943678029694e-12,
+            "relative_cell_imbalance": 9.141512103578065e-14,
+            "gross_throughput": 12.421296990445676,
+            "signed_imbalance": 4.08255243847244e-14,
+            "boundary_inflow": 6.207648495222859,
+            "boundary_outflow": 6.210648495222818,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 36,
+            "fixed_reservoir_required_inflow": -0.0029999999999591694,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "6f9fb9a7c00a959632b3fc027db7ce6ea78cad015dbe266bfd460c9554b18e5b",
+          "native_success": true,
+          "native_conservation": true,
+          "same_head_flux_max_error": 4.440892098500626e-16,
+          "same_head_source_allocation_error": 0.0
+        }
+      },
+      "pairs": [
+        {
+          "left": "scipy_cpu",
+          "right": "warp_cpu",
+          "head_max_error_m": 7.105427357601002e-15,
+          "face_flux_max_error_m3_day": 2.084998840246044e-13,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "scipy_cpu",
+          "right": "cuda",
+          "head_max_error_m": 7.105427357601002e-15,
+          "face_flux_max_error_m3_day": 2.084998840246044e-13,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "scipy_cpu",
+          "right": "mf6",
+          "head_max_error_m": 8.881784197001252e-15,
+          "face_flux_max_error_m3_day": 2.084998840246044e-13,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "warp_cpu",
+          "right": "cuda",
+          "head_max_error_m": 0.0,
+          "face_flux_max_error_m3_day": 0.0,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "warp_cpu",
+          "right": "mf6",
+          "head_max_error_m": 3.552713678800501e-15,
+          "face_flux_max_error_m3_day": 1.412203687323199e-13,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "cuda",
+          "right": "mf6",
+          "head_max_error_m": 3.552713678800501e-15,
+          "face_flux_max_error_m3_day": 1.412203687323199e-13,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        }
+      ],
+      "physical_validation": "Not established by matching a conventional DIS discretization"
+    },
+    {
+      "directory": "validation_artifacts/npf662_layered_v1/confined/experiments/y",
+      "input_hash": "bf182085ec0ffb29b5803d8f7bae652a962b0ac131f0b596612637f15f3b1eca",
+      "geometry": "structured_dis_layered",
+      "methods": {
+        "scipy_cpu": {
+          "independent": {
+            "prescribed_cells_checked": 24,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 60,
+            "input_valid": true,
+            "head_residual_rms": 1.3370473194855175e-15,
+            "physical_rms": 4.9816652369890056e-14,
+            "physical_max": 1.8331863804732507e-13,
+            "residual_l1": 9.32933431571116e-13,
+            "relative_cell_imbalance": 7.692496699926682e-14,
+            "gross_throughput": 12.127836617466574,
+            "signed_imbalance": 1.5614124034522834e-13,
+            "boundary_inflow": 6.060918308733365,
+            "boundary_outflow": 6.063918308733209,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 36,
+            "fixed_reservoir_required_inflow": -0.0029999999998437644,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "7f4bd50e0a32b1c32afcc34012936e92ec1b9099eac99fceecdb20632e7e6147"
+        },
+        "warp_cpu": {
+          "independent": {
+            "prescribed_cells_checked": 24,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 60,
+            "input_valid": true,
+            "head_residual_rms": 5.44319484875748e-16,
+            "physical_rms": 2.870627575023432e-14,
+            "physical_max": 1.240257896384378e-13,
+            "residual_l1": 4.82403586478039e-13,
+            "relative_cell_imbalance": 3.9776557162988524e-14,
+            "gross_throughput": 12.127836617466436,
+            "signed_imbalance": 1.1884002354238532e-13,
+            "boundary_inflow": 6.060918308733277,
+            "boundary_outflow": 6.063918308733158,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 36,
+            "fixed_reservoir_required_inflow": -0.0029999999998812877,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "bf9c31d6648863131821f0ee4531436e81cffce6f26a16ab9a5c0940a8ae4840"
+        },
+        "cuda": {
+          "independent": {
+            "prescribed_cells_checked": 24,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 60,
+            "input_valid": true,
+            "head_residual_rms": 5.44319484875748e-16,
+            "physical_rms": 2.870627575023432e-14,
+            "physical_max": 1.240257896384378e-13,
+            "residual_l1": 4.82403586478039e-13,
+            "relative_cell_imbalance": 3.9776557162988524e-14,
+            "gross_throughput": 12.127836617466436,
+            "signed_imbalance": 1.1884002354238532e-13,
+            "boundary_inflow": 6.060918308733277,
+            "boundary_outflow": 6.063918308733158,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 36,
+            "fixed_reservoir_required_inflow": -0.0029999999998812877,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "bf9c31d6648863131821f0ee4531436e81cffce6f26a16ab9a5c0940a8ae4840"
+        },
+        "mf6": {
+          "independent": {
+            "prescribed_cells_checked": 24,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 60,
+            "input_valid": true,
+            "head_residual_rms": 1.2619624545922094e-15,
+            "physical_rms": 7.400472499700716e-14,
+            "physical_max": 3.6631461752811845e-13,
+            "residual_l1": 1.20509980846336e-12,
+            "relative_cell_imbalance": 9.936642836429143e-14,
+            "gross_throughput": 12.127836617466947,
+            "signed_imbalance": -5.528216773242889e-13,
+            "boundary_inflow": 6.060918308733196,
+            "boundary_outflow": 6.06391830873375,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 36,
+            "fixed_reservoir_required_inflow": -0.0030000000005527194,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "69ba8065e54cf0e6c99ce34abbe6110410ca6ff668915c3f42e5b963d75bdd95",
+          "native_success": true,
+          "native_conservation": true,
+          "same_head_flux_max_error": 2.220446049250313e-16,
+          "same_head_source_allocation_error": 0.0
+        }
+      },
+      "pairs": [
+        {
+          "left": "scipy_cpu",
+          "right": "warp_cpu",
+          "head_max_error_m": 1.5987211554602254e-14,
+          "face_flux_max_error_m3_day": 1.509903313490213e-13,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "scipy_cpu",
+          "right": "cuda",
+          "head_max_error_m": 1.5987211554602254e-14,
+          "face_flux_max_error_m3_day": 1.509903313490213e-13,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "scipy_cpu",
+          "right": "mf6",
+          "head_max_error_m": 3.197442310920451e-14,
+          "face_flux_max_error_m3_day": 2.4158453015843406e-13,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "warp_cpu",
+          "right": "cuda",
+          "head_max_error_m": 0.0,
+          "face_flux_max_error_m3_day": 0.0,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "warp_cpu",
+          "right": "mf6",
+          "head_max_error_m": 1.5987211554602254e-14,
+          "face_flux_max_error_m3_day": 2.0605739337042905e-13,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "cuda",
+          "right": "mf6",
+          "head_max_error_m": 1.5987211554602254e-14,
+          "face_flux_max_error_m3_day": 2.0605739337042905e-13,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        }
+      ],
+      "physical_validation": "Not established by matching a conventional DIS discretization"
+    },
+    {
+      "directory": "validation_artifacts/npf662_layered_v1/unconfined/experiments/dry_source_initial_-0.2",
+      "input_hash": "16f6b937c25934f3a3c450aa970f27ffd275b43935627f4026fabea113ad7d53",
+      "geometry": "structured_dis_layered",
+      "methods": {
+        "scipy_cpu": {
+          "independent": {
+            "prescribed_cells_checked": 1,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 2,
+            "input_valid": true,
+            "head_residual_rms": 8.380272035472115e-13,
+            "physical_rms": 9.676703882632864e-13,
+            "physical_max": 9.676703882632864e-13,
+            "residual_l1": 9.676703882632864e-13,
+            "relative_cell_imbalance": 4.838351941314092e-13,
+            "gross_throughput": 2.0000000000009677,
+            "signed_imbalance": -9.676703882632864e-13,
+            "boundary_inflow": 0.0,
+            "boundary_outflow": 1.0000000000009677,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 1,
+            "fixed_reservoir_required_inflow": -1.0000000000009677,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "1ea1b364287bc6ec8f649788f240e7e26f98add17cabe68f6e4fa24c7ca4d52d"
+        },
+        "warp_cpu": {
+          "independent": {
+            "prescribed_cells_checked": 1,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 2,
+            "input_valid": true,
+            "head_residual_rms": 8.380272035472115e-13,
+            "physical_rms": 9.676703882632864e-13,
+            "physical_max": 9.676703882632864e-13,
+            "residual_l1": 9.676703882632864e-13,
+            "relative_cell_imbalance": 4.838351941314092e-13,
+            "gross_throughput": 2.0000000000009677,
+            "signed_imbalance": -9.676703882632864e-13,
+            "boundary_inflow": 0.0,
+            "boundary_outflow": 1.0000000000009677,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 1,
+            "fixed_reservoir_required_inflow": -1.0000000000009677,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "1ea1b364287bc6ec8f649788f240e7e26f98add17cabe68f6e4fa24c7ca4d52d"
+        },
+        "cuda": {
+          "independent": {
+            "prescribed_cells_checked": 1,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 2,
+            "input_valid": true,
+            "head_residual_rms": 8.380272035472115e-13,
+            "physical_rms": 9.676703882632864e-13,
+            "physical_max": 9.676703882632864e-13,
+            "residual_l1": 9.676703882632864e-13,
+            "relative_cell_imbalance": 4.838351941314092e-13,
+            "gross_throughput": 2.0000000000009677,
+            "signed_imbalance": -9.676703882632864e-13,
+            "boundary_inflow": 0.0,
+            "boundary_outflow": 1.0000000000009677,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 1,
+            "fixed_reservoir_required_inflow": -1.0000000000009677,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "1ea1b364287bc6ec8f649788f240e7e26f98add17cabe68f6e4fa24c7ca4d52d"
+        },
+        "mf6": {
+          "independent": {
+            "prescribed_cells_checked": 1,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 2,
+            "input_valid": true,
+            "head_residual_rms": 1.7323395292620256e-11,
+            "physical_rms": 2.0003332323881295e-11,
+            "physical_max": 2.0003332323881295e-11,
+            "residual_l1": 2.0003332323881295e-11,
+            "relative_cell_imbalance": 1.0001666161840615e-11,
+            "gross_throughput": 2.000000000020003,
+            "signed_imbalance": -2.0003332323881295e-11,
+            "boundary_inflow": 0.0,
+            "boundary_outflow": 1.0000000000200033,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 1,
+            "fixed_reservoir_required_inflow": -1.0000000000200033,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "d51ec985a90a0226c05642fc66ff150fa0b0994f5da3c57879784dd0ae31125b",
+          "native_success": true,
+          "native_conservation": true,
+          "same_head_flux_max_error": 0.0,
+          "same_head_source_allocation_error": 0.0
+        }
+      },
+      "pairs": [
+        {
+          "left": "scipy_cpu",
+          "right": "warp_cpu",
+          "head_max_error_m": 0.0,
+          "face_flux_max_error_m3_day": 0.0,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "scipy_cpu",
+          "right": "cuda",
+          "head_max_error_m": 0.0,
+          "face_flux_max_error_m3_day": 0.0,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "scipy_cpu",
+          "right": "mf6",
+          "head_max_error_m": 8.24262880172455e-12,
+          "face_flux_max_error_m3_day": 1.903566193561801e-11,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "warp_cpu",
+          "right": "cuda",
+          "head_max_error_m": 0.0,
+          "face_flux_max_error_m3_day": 0.0,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "warp_cpu",
+          "right": "mf6",
+          "head_max_error_m": 8.24262880172455e-12,
+          "face_flux_max_error_m3_day": 1.903566193561801e-11,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "cuda",
+          "right": "mf6",
+          "head_max_error_m": 8.24262880172455e-12,
+          "face_flux_max_error_m3_day": 1.903566193561801e-11,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        }
+      ],
+      "physical_validation": "Not established by matching a conventional DIS discretization"
+    },
+    {
+      "directory": "validation_artifacts/npf662_layered_v1/unconfined/experiments/dry_source_initial_1.5",
+      "input_hash": "d4ab641611d3ac2ae993275cba096d056e2e83f9d82082ae5d61aec2708f0f95",
+      "geometry": "structured_dis_layered",
+      "methods": {
+        "scipy_cpu": {
+          "independent": {
+            "prescribed_cells_checked": 1,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 2,
+            "input_valid": true,
+            "head_residual_rms": 2.445861423872395e-09,
+            "physical_rms": 2.8242372884790257e-09,
+            "physical_max": 2.8242372884790257e-09,
+            "residual_l1": 2.8242372884790257e-09,
+            "relative_cell_imbalance": 1.4121186422454337e-09,
+            "gross_throughput": 2.0000000028242373,
+            "signed_imbalance": -2.8242372884790257e-09,
+            "boundary_inflow": 0.0,
+            "boundary_outflow": 1.0000000028242373,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 1,
+            "fixed_reservoir_required_inflow": -1.0000000028242373,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "7691bcc3ea9550de689b49da16fe74940e878085ac61badff4bb3a9d80cd67b0"
+        },
+        "warp_cpu": {
+          "independent": {
+            "prescribed_cells_checked": 1,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 2,
+            "input_valid": true,
+            "head_residual_rms": 2.445861423872395e-09,
+            "physical_rms": 2.8242372884790257e-09,
+            "physical_max": 2.8242372884790257e-09,
+            "residual_l1": 2.8242372884790257e-09,
+            "relative_cell_imbalance": 1.4121186422454337e-09,
+            "gross_throughput": 2.0000000028242373,
+            "signed_imbalance": -2.8242372884790257e-09,
+            "boundary_inflow": 0.0,
+            "boundary_outflow": 1.0000000028242373,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 1,
+            "fixed_reservoir_required_inflow": -1.0000000028242373,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "7691bcc3ea9550de689b49da16fe74940e878085ac61badff4bb3a9d80cd67b0"
+        },
+        "cuda": {
+          "independent": {
+            "prescribed_cells_checked": 1,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 2,
+            "input_valid": true,
+            "head_residual_rms": 2.445861423872395e-09,
+            "physical_rms": 2.8242372884790257e-09,
+            "physical_max": 2.8242372884790257e-09,
+            "residual_l1": 2.8242372884790257e-09,
+            "relative_cell_imbalance": 1.4121186422454337e-09,
+            "gross_throughput": 2.0000000028242373,
+            "signed_imbalance": -2.8242372884790257e-09,
+            "boundary_inflow": 0.0,
+            "boundary_outflow": 1.0000000028242373,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 1,
+            "fixed_reservoir_required_inflow": -1.0000000028242373,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "7691bcc3ea9550de689b49da16fe74940e878085ac61badff4bb3a9d80cd67b0"
+        },
+        "mf6": {
+          "independent": {
+            "prescribed_cells_checked": 1,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 2,
+            "input_valid": true,
+            "head_residual_rms": 0.0,
+            "physical_rms": 0.0,
+            "physical_max": 0.0,
+            "residual_l1": 0.0,
+            "relative_cell_imbalance": 0.0,
+            "gross_throughput": 2.0,
+            "signed_imbalance": 0.0,
+            "boundary_inflow": 0.0,
+            "boundary_outflow": 1.0,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 1,
+            "fixed_reservoir_required_inflow": -1.0,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "72a78cfcbc1227ae1e614355b1218bcd2c8bdc06e790927d979ac993dc8e48fb",
+          "native_success": true,
+          "native_conservation": true,
+          "same_head_flux_max_error": 0.0,
+          "same_head_source_allocation_error": 0.0
+        }
+      },
+      "pairs": [
+        {
+          "left": "scipy_cpu",
+          "right": "warp_cpu",
+          "head_max_error_m": 0.0,
+          "face_flux_max_error_m3_day": 0.0,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "scipy_cpu",
+          "right": "cuda",
+          "head_max_error_m": 0.0,
+          "face_flux_max_error_m3_day": 0.0,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "scipy_cpu",
+          "right": "mf6",
+          "head_max_error_m": 1.2229299795052384e-09,
+          "face_flux_max_error_m3_day": 2.8242372884790257e-09,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "warp_cpu",
+          "right": "cuda",
+          "head_max_error_m": 0.0,
+          "face_flux_max_error_m3_day": 0.0,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "warp_cpu",
+          "right": "mf6",
+          "head_max_error_m": 1.2229299795052384e-09,
+          "face_flux_max_error_m3_day": 2.8242372884790257e-09,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "cuda",
+          "right": "mf6",
+          "head_max_error_m": 1.2229299795052384e-09,
+          "face_flux_max_error_m3_day": 2.8242372884790257e-09,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        }
+      ],
+      "physical_validation": "Not established by matching a conventional DIS discretization"
+    },
+    {
+      "directory": "validation_artifacts/npf662_layered_v1/unconfined/experiments/heterogeneous_dry",
+      "input_hash": "2def57dbb22b7291f26c7f446a2b8125247d82923a5937f20d8222ea055d415e",
+      "geometry": "structured_dis_layered",
+      "methods": {
+        "scipy_cpu": {
+          "independent": {
+            "prescribed_cells_checked": 24,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 60,
+            "input_valid": true,
+            "head_residual_rms": 6.075066173267479e-10,
+            "physical_rms": 4.1597950411543685e-09,
+            "physical_max": 1.7680253178165017e-08,
+            "residual_l1": 3.8937858489737154e-08,
+            "relative_cell_imbalance": 3.5235949113464705e-09,
+            "gross_throughput": 11.050605835634448,
+            "signed_imbalance": -1.08409714311048e-11,
+            "boundary_inflow": 5.522302917811803,
+            "boundary_outflow": 5.5253029178226445,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 36,
+            "fixed_reservoir_required_inflow": -0.003000000010841025,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "bb01acc30a1d63a17e3e884a33b1a65d44f9d9e5f81fb185fe081e43355e854c"
+        },
+        "warp_cpu": {
+          "independent": {
+            "prescribed_cells_checked": 24,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 60,
+            "input_valid": true,
+            "head_residual_rms": 6.075070667222334e-10,
+            "physical_rms": 4.159807691108646e-09,
+            "physical_max": 1.7680257452523662e-08,
+            "residual_l1": 3.8943600554248736e-08,
+            "relative_cell_imbalance": 3.5241145267052795e-09,
+            "gross_throughput": 11.050605835633098,
+            "signed_imbalance": -9.942421181057301e-12,
+            "boundary_inflow": 5.522302917811578,
+            "boundary_outflow": 5.52530291782152,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 36,
+            "fixed_reservoir_required_inflow": -0.003000000009942269,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "336cd70154d9c792a113aeb3f5b4b4e881efd984d77a9ef8da5722540c82240a"
+        },
+        "cuda": {
+          "independent": {
+            "prescribed_cells_checked": 24,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 60,
+            "input_valid": true,
+            "head_residual_rms": 6.075070667222334e-10,
+            "physical_rms": 4.159807691108646e-09,
+            "physical_max": 1.7680257452523662e-08,
+            "residual_l1": 3.8943600554248736e-08,
+            "relative_cell_imbalance": 3.5241145267052795e-09,
+            "gross_throughput": 11.050605835633098,
+            "signed_imbalance": -9.942421181057301e-12,
+            "boundary_inflow": 5.522302917811578,
+            "boundary_outflow": 5.52530291782152,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 36,
+            "fixed_reservoir_required_inflow": -0.003000000009942269,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "336cd70154d9c792a113aeb3f5b4b4e881efd984d77a9ef8da5722540c82240a"
+        },
+        "mf6": {
+          "independent": {
+            "prescribed_cells_checked": 24,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 60,
+            "input_valid": true,
+            "head_residual_rms": 5.827634981680789e-12,
+            "physical_rms": 1.5890318090015105e-11,
+            "physical_max": 6.21317025606416e-11,
+            "residual_l1": 2.453781542375872e-10,
+            "relative_cell_imbalance": 2.2204950373083332e-11,
+            "gross_throughput": 11.050605838553581,
+            "signed_imbalance": 7.71126324144826e-12,
+            "boundary_inflow": 5.522302919280647,
+            "boundary_outflow": 5.525302919272935,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 36,
+            "fixed_reservoir_required_inflow": -0.002999999992288479,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "9ee565c03278743725bdbf37321d3250687870eb7b352671aab09785a6359e97",
+          "native_success": true,
+          "native_conservation": true,
+          "same_head_flux_max_error": 6.661338147750939e-16,
+          "same_head_source_allocation_error": 0.0
+        }
+      },
+      "pairs": [
+        {
+          "left": "scipy_cpu",
+          "right": "warp_cpu",
+          "head_max_error_m": 5.3290705182007514e-14,
+          "face_flux_max_error_m3_day": 1.5236700789955648e-12,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "scipy_cpu",
+          "right": "cuda",
+          "head_max_error_m": 5.3290705182007514e-14,
+          "face_flux_max_error_m3_day": 1.5236700789955648e-12,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "scipy_cpu",
+          "right": "mf6",
+          "head_max_error_m": 2.836625156987793e-09,
+          "face_flux_max_error_m3_day": 1.5585980117638343e-08,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "warp_cpu",
+          "right": "cuda",
+          "head_max_error_m": 0.0,
+          "face_flux_max_error_m3_day": 0.0,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "warp_cpu",
+          "right": "mf6",
+          "head_max_error_m": 2.8366216042741144e-09,
+          "face_flux_max_error_m3_day": 1.5585995549738385e-08,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "cuda",
+          "right": "mf6",
+          "head_max_error_m": 2.8366216042741144e-09,
+          "face_flux_max_error_m3_day": 1.5585995549738385e-08,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        }
+      ],
+      "physical_validation": "Not established by matching a conventional DIS discretization"
+    },
+    {
+      "directory": "validation_artifacts/npf662_layered_v1/unconfined/experiments/heterogeneous_mixed",
+      "input_hash": "e1772da23c6db66055847f2cf6f7110859c47fecbba8e6cd2bca69002a20bb4d",
+      "geometry": "structured_dis_layered",
+      "methods": {
+        "scipy_cpu": {
+          "independent": {
+            "prescribed_cells_checked": 24,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 60,
+            "input_valid": true,
+            "head_residual_rms": 2.7730306072033756e-15,
+            "physical_rms": 2.903229101366506e-14,
+            "physical_max": 9.105910470097456e-14,
+            "residual_l1": 5.949120861735435e-13,
+            "relative_cell_imbalance": 5.383524621773452e-14,
+            "gross_throughput": 11.050605838551293,
+            "signed_imbalance": -1.5401417120808336e-14,
+            "boundary_inflow": 5.522302919275639,
+            "boundary_outflow": 5.525302919275655,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 36,
+            "fixed_reservoir_required_inflow": -0.0030000000000153025,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "98e86ef1ff689dab8a4577ac9a9159ce8abb0092d96bfecbc1950ff188ab6f62"
+        },
+        "warp_cpu": {
+          "independent": {
+            "prescribed_cells_checked": 24,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 60,
+            "input_valid": true,
+            "head_residual_rms": 2.722049550712265e-15,
+            "physical_rms": 2.4555603986765663e-14,
+            "physical_max": 7.526184536699176e-14,
+            "residual_l1": 5.256206711198863e-13,
+            "relative_cell_imbalance": 4.7564873709113676e-14,
+            "gross_throughput": 11.05060583855129,
+            "signed_imbalance": -1.8954130799608834e-14,
+            "boundary_inflow": 5.522302919275636,
+            "boundary_outflow": 5.525302919275655,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 36,
+            "fixed_reservoir_required_inflow": -0.0030000000000187815,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "07a7661f195ce56cc72587ee4f9ff59630732c4fe4517829c1017feb5fde4804"
+        },
+        "cuda": {
+          "independent": {
+            "prescribed_cells_checked": 24,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 60,
+            "input_valid": true,
+            "head_residual_rms": 2.722049550712265e-15,
+            "physical_rms": 2.4555603986765663e-14,
+            "physical_max": 7.526184536699176e-14,
+            "residual_l1": 5.256206711198863e-13,
+            "relative_cell_imbalance": 4.7564873709113676e-14,
+            "gross_throughput": 11.05060583855129,
+            "signed_imbalance": -1.8954130799608834e-14,
+            "boundary_inflow": 5.522302919275636,
+            "boundary_outflow": 5.525302919275655,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 36,
+            "fixed_reservoir_required_inflow": -0.0030000000000187815,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "07a7661f195ce56cc72587ee4f9ff59630732c4fe4517829c1017feb5fde4804"
+        },
+        "mf6": {
+          "independent": {
+            "prescribed_cells_checked": 24,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 60,
+            "input_valid": true,
+            "head_residual_rms": 2.44009587403994e-12,
+            "physical_rms": 8.148231374666048e-12,
+            "physical_max": 2.2771146079847426e-11,
+            "residual_l1": 1.8574896368207455e-10,
+            "relative_cell_imbalance": 1.680893938269255e-11,
+            "gross_throughput": 11.050605838541625,
+            "signed_imbalance": 1.5269562849383464e-11,
+            "boundary_inflow": 5.522302919278447,
+            "boundary_outflow": 5.5253029192631775,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 36,
+            "fixed_reservoir_required_inflow": -0.0029999999847304835,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "d155618b25e44d1f11058189f8709b189e571c937f014bf0db8acdf16d9ebd74",
+          "native_success": true,
+          "native_conservation": true,
+          "same_head_flux_max_error": 6.661338147750939e-16,
+          "same_head_source_allocation_error": 0.0
+        }
+      },
+      "pairs": [
+        {
+          "left": "scipy_cpu",
+          "right": "warp_cpu",
+          "head_max_error_m": 1.7763568394002505e-15,
+          "face_flux_max_error_m3_day": 7.216449660063518e-14,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "scipy_cpu",
+          "right": "cuda",
+          "head_max_error_m": 1.7763568394002505e-15,
+          "face_flux_max_error_m3_day": 7.216449660063518e-14,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "scipy_cpu",
+          "right": "mf6",
+          "head_max_error_m": 7.107203714440402e-12,
+          "face_flux_max_error_m3_day": 1.7236906346695946e-11,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "warp_cpu",
+          "right": "cuda",
+          "head_max_error_m": 0.0,
+          "face_flux_max_error_m3_day": 0.0,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "warp_cpu",
+          "right": "mf6",
+          "head_max_error_m": 7.107203714440402e-12,
+          "face_flux_max_error_m3_day": 1.7236906346695946e-11,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "cuda",
+          "right": "mf6",
+          "head_max_error_m": 7.107203714440402e-12,
+          "face_flux_max_error_m3_day": 1.7236906346695946e-11,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        }
+      ],
+      "physical_validation": "Not established by matching a conventional DIS discretization"
+    },
+    {
+      "directory": "validation_artifacts/npf662_layered_v1/unconfined/experiments/heterogeneous_wet",
+      "input_hash": "1e4f8dcbdce7657ac63b420932e65793761a8a2c2db9c6f2be5a88a09cdefc81",
+      "geometry": "structured_dis_layered",
+      "methods": {
+        "scipy_cpu": {
+          "independent": {
+            "prescribed_cells_checked": 24,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 60,
+            "input_valid": true,
+            "head_residual_rms": 3.261548137366207e-11,
+            "physical_rms": 8.000483185111848e-11,
+            "physical_max": 3.673576859375416e-10,
+            "residual_l1": 7.629662269537704e-10,
+            "relative_cell_imbalance": 6.904293195392922e-11,
+            "gross_throughput": 11.050605838449624,
+            "signed_imbalance": -6.077530514438156e-14,
+            "boundary_inflow": 5.522302919224781,
+            "boundary_outflow": 5.525302919224842,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 36,
+            "fixed_reservoir_required_inflow": -0.003000000000060837,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "596729ab8d57d3ae4916a4f61450e1b9db409566523d5e4190429df7ddf8805f"
+        },
+        "warp_cpu": {
+          "independent": {
+            "prescribed_cells_checked": 24,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 60,
+            "input_valid": true,
+            "head_residual_rms": 3.261561274212556e-11,
+            "physical_rms": 8.000698040275969e-11,
+            "physical_max": 3.673589765718077e-10,
+            "residual_l1": 7.629459137484425e-10,
+            "relative_cell_imbalance": 6.904109375558802e-11,
+            "gross_throughput": 11.050605838449531,
+            "signed_imbalance": 1.7869597945459942e-13,
+            "boundary_inflow": 5.522302919224854,
+            "boundary_outflow": 5.525302919224675,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 36,
+            "fixed_reservoir_required_inflow": -0.0029999999998210018,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "0febc6a3ea4a64a8ef15b2a53e016c1d7977ae2b4372c6d2acb0ab5bf60f63a1"
+        },
+        "cuda": {
+          "independent": {
+            "prescribed_cells_checked": 24,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 60,
+            "input_valid": true,
+            "head_residual_rms": 3.261561274212556e-11,
+            "physical_rms": 8.000698040275969e-11,
+            "physical_max": 3.673589765718077e-10,
+            "residual_l1": 7.629459137484425e-10,
+            "relative_cell_imbalance": 6.904109375558802e-11,
+            "gross_throughput": 11.050605838449531,
+            "signed_imbalance": 1.7869597945459942e-13,
+            "boundary_inflow": 5.522302919224854,
+            "boundary_outflow": 5.525302919224675,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 36,
+            "fixed_reservoir_required_inflow": -0.0029999999998210018,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "0febc6a3ea4a64a8ef15b2a53e016c1d7977ae2b4372c6d2acb0ab5bf60f63a1"
+        },
+        "mf6": {
+          "independent": {
+            "prescribed_cells_checked": 24,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 60,
+            "input_valid": true,
+            "head_residual_rms": 4.606464303097268e-12,
+            "physical_rms": 2.3513224731495928e-11,
+            "physical_max": 1.1264814081535235e-10,
+            "residual_l1": 3.334453144642705e-10,
+            "relative_cell_imbalance": 3.017439218588569e-11,
+            "gross_throughput": 11.050605838557445,
+            "signed_imbalance": 6.35295404336541e-11,
+            "boundary_inflow": 5.522302919310487,
+            "boundary_outflow": 5.5253029192469585,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 36,
+            "fixed_reservoir_required_inflow": -0.002999999936470532,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "f360a0a7dfb51b457b94fd71630afb834827b7455d9ca7fd93207f03b693c29c",
+          "native_success": true,
+          "native_conservation": true,
+          "same_head_flux_max_error": 6.661338147750939e-16,
+          "same_head_source_allocation_error": 0.0
+        }
+      },
+      "pairs": [
+        {
+          "left": "scipy_cpu",
+          "right": "warp_cpu",
+          "head_max_error_m": 2.1316282072803006e-14,
+          "face_flux_max_error_m3_day": 1.078026556911027e-13,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "scipy_cpu",
+          "right": "cuda",
+          "head_max_error_m": 2.1316282072803006e-14,
+          "face_flux_max_error_m3_day": 1.078026556911027e-13,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "scipy_cpu",
+          "right": "mf6",
+          "head_max_error_m": 1.7758772230536124e-10,
+          "face_flux_max_error_m3_day": 2.1382820514226353e-10,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "warp_cpu",
+          "right": "cuda",
+          "head_max_error_m": 0.0,
+          "face_flux_max_error_m3_day": 0.0,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "warp_cpu",
+          "right": "mf6",
+          "head_max_error_m": 1.7757884052116424e-10,
+          "face_flux_max_error_m3_day": 2.1383075865522017e-10,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "cuda",
+          "right": "mf6",
+          "head_max_error_m": 1.7757884052116424e-10,
+          "face_flux_max_error_m3_day": 2.1383075865522017e-10,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        }
+      ],
+      "physical_validation": "Not established by matching a conventional DIS discretization"
+    },
+    {
+      "directory": "validation_artifacts/npf662_layered_v1/unconfined/experiments/masked_mixed",
+      "input_hash": "ae9c2edb7c9a06ef1cb97370c7d21a678fdba510c663a09c83c11124b2a9e0f9",
+      "geometry": "structured_dis_layered",
+      "methods": {
+        "scipy_cpu": {
+          "independent": {
+            "prescribed_cells_checked": 24,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 57,
+            "input_valid": true,
+            "head_residual_rms": 3.360858127921411e-15,
+            "physical_rms": 3.6638403421409104e-14,
+            "physical_max": 1.5246137685664962e-13,
+            "residual_l1": 4.882757067593835e-13,
+            "relative_cell_imbalance": 8.683313204050254e-14,
+            "gross_throughput": 5.623149773425559,
+            "signed_imbalance": -2.788443304382882e-14,
+            "boundary_inflow": 2.8085748867127656,
+            "boundary_outflow": 2.8115748867127937,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 33,
+            "fixed_reservoir_required_inflow": -0.0030000000000279616,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "532e7eb511a34feac0782863b19ae551757a541a7d6d49ede2f11548a1b48335"
+        },
+        "warp_cpu": {
+          "independent": {
+            "prescribed_cells_checked": 24,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 57,
+            "input_valid": true,
+            "head_residual_rms": 3.360858127921411e-15,
+            "physical_rms": 3.6638403421409104e-14,
+            "physical_max": 1.5246137685664962e-13,
+            "residual_l1": 4.882757067593835e-13,
+            "relative_cell_imbalance": 8.683313204050254e-14,
+            "gross_throughput": 5.623149773425559,
+            "signed_imbalance": -2.788443304382882e-14,
+            "boundary_inflow": 2.8085748867127656,
+            "boundary_outflow": 2.8115748867127937,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 33,
+            "fixed_reservoir_required_inflow": -0.0030000000000279616,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "3c0db82e507078b51e73bde979862fb0cd91a8a5454482cfabe74eb1f7fa827a"
+        },
+        "cuda": {
+          "independent": {
+            "prescribed_cells_checked": 24,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 57,
+            "input_valid": true,
+            "head_residual_rms": 3.360858127921411e-15,
+            "physical_rms": 3.6638403421409104e-14,
+            "physical_max": 1.5246137685664962e-13,
+            "residual_l1": 4.882757067593835e-13,
+            "relative_cell_imbalance": 8.683313204050254e-14,
+            "gross_throughput": 5.623149773425559,
+            "signed_imbalance": -2.788443304382882e-14,
+            "boundary_inflow": 2.8085748867127656,
+            "boundary_outflow": 2.8115748867127937,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 33,
+            "fixed_reservoir_required_inflow": -0.0030000000000279616,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "3c0db82e507078b51e73bde979862fb0cd91a8a5454482cfabe74eb1f7fa827a"
+        },
+        "mf6": {
+          "independent": {
+            "prescribed_cells_checked": 24,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 3,
+            "active_cells_checked": 57,
+            "input_valid": true,
+            "head_residual_rms": 7.875616919566485e-12,
+            "physical_rms": 1.989484284469165e-11,
+            "physical_max": 6.630192575518556e-11,
+            "residual_l1": 3.710412745550496e-10,
+            "relative_cell_imbalance": 6.598459751325086e-11,
+            "gross_throughput": 5.623149773407923,
+            "signed_imbalance": 3.594693241530147e-11,
+            "boundary_inflow": 2.8085748867219347,
+            "boundary_outflow": 2.811574886685988,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 33,
+            "fixed_reservoir_required_inflow": -0.0029999999640531647,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "5e6502c05a9951b55633a4a5176e72689978eff928bfafd26550497513f99b40",
+          "native_success": true,
+          "native_conservation": true,
+          "same_head_flux_max_error": 2.220446049250313e-16,
+          "same_head_source_allocation_error": 0.0
+        }
+      },
+      "pairs": [
+        {
+          "left": "scipy_cpu",
+          "right": "warp_cpu",
+          "head_max_error_m": 0.0,
+          "face_flux_max_error_m3_day": 0.0,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "scipy_cpu",
+          "right": "cuda",
+          "head_max_error_m": 0.0,
+          "face_flux_max_error_m3_day": 0.0,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "scipy_cpu",
+          "right": "mf6",
+          "head_max_error_m": 2.5433877226532786e-11,
+          "face_flux_max_error_m3_day": 4.9727055806414455e-11,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "warp_cpu",
+          "right": "cuda",
+          "head_max_error_m": 0.0,
+          "face_flux_max_error_m3_day": 0.0,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "warp_cpu",
+          "right": "mf6",
+          "head_max_error_m": 2.5433877226532786e-11,
+          "face_flux_max_error_m3_day": 4.9727055806414455e-11,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "cuda",
+          "right": "mf6",
+          "head_max_error_m": 2.5433877226532786e-11,
+          "face_flux_max_error_m3_day": 4.9727055806414455e-11,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        }
+      ],
+      "physical_validation": "Not established by matching a conventional DIS discretization"
+    },
+    {
+      "directory": "validation_artifacts/npf662_layered_v1/geology/varying_geology",
+      "input_hash": "bb8d04de777e0d8adba06255c454f1c149f9ebb43f2a69561498a3216bdda7fb",
+      "geometry": "structured_dis_layered",
+      "methods": {
+        "scipy_cpu": {
+          "independent": {
+            "prescribed_cells_checked": 18,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 192,
+            "input_valid": true,
+            "head_residual_rms": 0.2559051857190488,
+            "physical_rms": 0.520290069628705,
+            "physical_max": 3.5066891199222066,
+            "residual_l1": 34.45680487280289,
+            "relative_cell_imbalance": 0.6011876797182437,
+            "gross_throughput": 57.31455589534308,
+            "signed_imbalance": -11.234555895343084,
+            "boundary_inflow": 0.0,
+            "boundary_outflow": 34.27455589534308,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 174,
+            "fixed_reservoir_required_inflow": -34.27455589534308,
+            "ungrounded_current_components": 2,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": false
+          },
+          "returned_field_sha256": "dca7b41934af9aecff39a08a2dfc24f4072214c5922d78449fb72cc584a490c6"
+        },
+        "warp_cpu": {
+          "independent": {
+            "prescribed_cells_checked": 18,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 192,
+            "input_valid": true,
+            "head_residual_rms": 1.971956690049444e-10,
+            "physical_rms": 2.70131755714104e-09,
+            "physical_max": 1.4080183241560462e-08,
+            "residual_l1": 2.3525811909674846e-07,
+            "relative_cell_imbalance": 5.1054279250620265e-09,
+            "gross_throughput": 46.0800000606982,
+            "signed_imbalance": -6.069820279730465e-08,
+            "boundary_inflow": 0.0,
+            "boundary_outflow": 23.0400000606982,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 174,
+            "fixed_reservoir_required_inflow": -23.0400000606982,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "b724b2518aa5d815ee9dedfcc4cef2c89b00b429a10bfa5a9ef0a91c3a6eb2bb"
+        },
+        "cuda": {
+          "independent": {
+            "prescribed_cells_checked": 18,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 192,
+            "input_valid": true,
+            "head_residual_rms": 1.9685416863594553e-10,
+            "physical_rms": 2.6996288938335863e-09,
+            "physical_max": 1.4091225242207628e-08,
+            "residual_l1": 2.3504922708195153e-07,
+            "relative_cell_imbalance": 5.100894678234298e-09,
+            "gross_throughput": 46.080000060560955,
+            "signed_imbalance": -6.056096546469546e-08,
+            "boundary_inflow": 0.0,
+            "boundary_outflow": 23.04000006056096,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 174,
+            "fixed_reservoir_required_inflow": -23.04000006056096,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "844610e7606deec022330546934c9ade5b6a1a67a6e7b47de51d3f5c14987487"
+        },
+        "mf6": {
+          "independent": {
+            "prescribed_cells_checked": 18,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 192,
+            "input_valid": true,
+            "head_residual_rms": 9.394839126074547e-13,
+            "physical_rms": 1.0519173040004713e-11,
+            "physical_max": 8.211437085847706e-11,
+            "residual_l1": 4.752368498728288e-10,
+            "relative_cell_imbalance": 1.0313299693419999e-11,
+            "gross_throughput": 46.080000000003416,
+            "signed_imbalance": -3.423261674129213e-12,
+            "boundary_inflow": 0.0,
+            "boundary_outflow": 23.04000000000342,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 174,
+            "fixed_reservoir_required_inflow": -23.04000000000342,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "a6c1ce87c463faa3625f48a3b0fe1d8fca2532c8baf471e154f6a34f8f707a11",
+          "native_success": true,
+          "native_conservation": true,
+          "same_head_flux_max_error": 2.942091015256665e-14,
+          "same_head_source_allocation_error": 0.0
+        }
+      },
+      "pairs": [
+        {
+          "left": "scipy_cpu",
+          "right": "warp_cpu",
+          "head_max_error_m": 29.581661354261442,
+          "face_flux_max_error_m3_day": 3.8653853719856537,
+          "both_accepted": false,
+          "same_root_head_gate": false,
+          "interpretation": "Failed iterate is not a different accepted root"
+        },
+        {
+          "left": "scipy_cpu",
+          "right": "cuda",
+          "head_max_error_m": 29.581661354260447,
+          "face_flux_max_error_m3_day": 3.8653853719796074,
+          "both_accepted": false,
+          "same_root_head_gate": false,
+          "interpretation": "Failed iterate is not a different accepted root"
+        },
+        {
+          "left": "scipy_cpu",
+          "right": "mf6",
+          "head_max_error_m": 29.581661353361426,
+          "face_flux_max_error_m3_day": 3.8653853721398903,
+          "both_accepted": false,
+          "same_root_head_gate": false,
+          "interpretation": "Failed iterate is not a different accepted root"
+        },
+        {
+          "left": "warp_cpu",
+          "right": "cuda",
+          "head_max_error_m": 1.687432416019874e-10,
+          "face_flux_max_error_m3_day": 5.6782578639058556e-11,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "warp_cpu",
+          "right": "mf6",
+          "head_max_error_m": 1.0925405291573043e-07,
+          "face_flux_max_error_m3_day": 3.3667505672241305e-08,
+          "both_accepted": true,
+          "same_root_head_gate": false,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "cuda",
+          "right": "mf6",
+          "head_max_error_m": 1.0910235204164564e-07,
+          "face_flux_max_error_m3_day": 3.3610723093602246e-08,
+          "both_accepted": true,
+          "same_root_head_gate": false,
+          "interpretation": "Accepted near-root comparison"
+        }
+      ],
+      "physical_validation": "Not established by matching a conventional DIS discretization"
+    },
+    {
+      "directory": "validation_artifacts/npf662_layered_v1/geology_4x4/varying_geology",
+      "input_hash": "2c1c1a941cb6fefc321650464940a617cdc0f32b03897a868cb18a442909d9fb",
+      "geometry": "structured_dis_layered",
+      "methods": {
+        "scipy_cpu": {
+          "independent": {
+            "prescribed_cells_checked": 12,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 64,
+            "input_valid": true,
+            "head_residual_rms": 4.5562754826574885e-10,
+            "physical_rms": 3.261662531852966e-10,
+            "physical_max": 2.347357919152415e-09,
+            "residual_l1": 2.5461099895096595e-09,
+            "relative_cell_imbalance": 1.657623690853701e-10,
+            "gross_throughput": 15.360000002161978,
+            "signed_imbalance": -2.1619800394390154e-09,
+            "boundary_inflow": 0.0,
+            "boundary_outflow": 7.680000002161979,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 52,
+            "fixed_reservoir_required_inflow": -7.680000002161979,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "3996daba1164f4cae163df3f9a9fe32bf70b5ed80b27374e46ec5a785662c033"
+        },
+        "warp_cpu": {
+          "independent": {
+            "prescribed_cells_checked": 12,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 64,
+            "input_valid": true,
+            "head_residual_rms": 3.898895451931434e-11,
+            "physical_rms": 6.976198203812682e-11,
+            "physical_max": 4.1114239790474016e-10,
+            "residual_l1": 1.3085434402704266e-09,
+            "relative_cell_imbalance": 8.519163022312356e-11,
+            "gross_throughput": 15.360000000507664,
+            "signed_imbalance": -5.076688514016325e-10,
+            "boundary_inflow": 0.0,
+            "boundary_outflow": 7.680000000507667,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 52,
+            "fixed_reservoir_required_inflow": -7.680000000507667,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "14971f2a538317c729120d732c4d984d05aae796da3ee6fe2e34dc299dbbc6c2"
+        },
+        "cuda": {
+          "independent": {
+            "prescribed_cells_checked": 12,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 64,
+            "input_valid": true,
+            "head_residual_rms": 3.890320783506031e-11,
+            "physical_rms": 3.921332042340181e-11,
+            "physical_max": 2.0047014048785172e-10,
+            "residual_l1": 9.183619975594582e-10,
+            "relative_cell_imbalance": 5.978919254817372e-11,
+            "gross_throughput": 15.36000000032631,
+            "signed_imbalance": -3.2631325419529844e-10,
+            "boundary_inflow": 0.0,
+            "boundary_outflow": 7.680000000326312,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 52,
+            "fixed_reservoir_required_inflow": -7.680000000326312,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "9056190f05cb6cf72ca5828666ec919b003c32204d0afb9b644b1e3b5ad43285"
+        },
+        "mf6": {
+          "independent": {
+            "prescribed_cells_checked": 12,
+            "prescribed_head_error_max_m": 0.0,
+            "prescribed_head_tolerance_m": 1e-10,
+            "boundary_condition_valid": true,
+            "invalid_active_heads": 0,
+            "inactive_marker_cells": 0,
+            "active_cells_checked": 64,
+            "input_valid": true,
+            "head_residual_rms": 2.67307234109284e-12,
+            "physical_rms": 3.4575386865566023e-11,
+            "physical_max": 1.1128797883230845e-10,
+            "residual_l1": 7.189151496334034e-10,
+            "relative_cell_imbalance": 4.680437172092431e-11,
+            "gross_throughput": 15.360000000000127,
+            "signed_imbalance": -1.3089529460330823e-13,
+            "boundary_inflow": 0.0,
+            "boundary_outflow": 7.680000000000129,
+            "fixed_cell_source_total": 0.0,
+            "free_cells": 52,
+            "fixed_reservoir_required_inflow": -7.680000000000129,
+            "ungrounded_current_components": 0,
+            "physical_metrics_valid": true,
+            "final_acceptance_thresholds": {
+              "physical_rms_m3_day": 1e-12,
+              "relative_cell_imbalance": 1e-08,
+              "head_equivalent_rms_m": 1e-06,
+              "prescribed_head_error_m": 1e-10
+            },
+            "independent_accepted": true
+          },
+          "returned_field_sha256": "63578d620708b69656348d6d0ed88ce48c781c3bbc7f73c7e7759828f35aead9",
+          "native_success": true,
+          "native_conservation": true,
+          "same_head_flux_max_error": 6.217248937900877e-15,
+          "same_head_source_allocation_error": 0.0
+        }
+      },
+      "pairs": [
+        {
+          "left": "scipy_cpu",
+          "right": "warp_cpu",
+          "head_max_error_m": 2.4914168506029455e-09,
+          "face_flux_max_error_m3_day": 2.0037251857729643e-09,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "scipy_cpu",
+          "right": "cuda",
+          "head_max_error_m": 2.346652649976022e-09,
+          "face_flux_max_error_m3_day": 1.8832024828441263e-09,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "scipy_cpu",
+          "right": "mf6",
+          "head_max_error_m": 2.5384778723491763e-09,
+          "face_flux_max_error_m3_day": 2.0413970513999402e-09,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "warp_cpu",
+          "right": "cuda",
+          "head_max_error_m": 8.219700475819991e-10,
+          "face_flux_max_error_m3_day": 2.4906660067713915e-10,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "warp_cpu",
+          "right": "mf6",
+          "head_max_error_m": 1.3688037370229722e-09,
+          "face_flux_max_error_m3_day": 4.3022096996025994e-10,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        },
+        {
+          "left": "cuda",
+          "right": "mf6",
+          "head_max_error_m": 5.66032554161211e-10,
+          "face_flux_max_error_m3_day": 1.8277929170196217e-10,
+          "both_accepted": true,
+          "same_root_head_gate": true,
+          "interpretation": "Accepted near-root comparison"
+        }
+      ],
+      "physical_validation": "Not established by matching a conventional DIS discretization"
+    }
+  ],
+  "returned_fields": 52,
+  "accepted_fields": 51,
+  "original_v1_changed_classifications": 0,
+  "derivatives": {
+    "finite_differences": [
+      {
+        "step_m": 0.001,
+        "relative_l2": 4.923590880256043e-13
+      },
+      {
+        "step_m": 0.0001,
+        "relative_l2": 4.656480166666501e-12
+      },
+      {
+        "step_m": 1e-05,
+        "relative_l2": 3.2178273400681866e-11
+      },
+      {
+        "step_m": 1e-06,
+        "relative_l2": 5.613913421732094e-10
+      },
+      {
+        "step_m": 1e-07,
+        "relative_l2": 4.127158806510135e-09
+      },
+      {
+        "step_m": 1e-08,
+        "relative_l2": 3.477697168934942e-08
+      }
+    ],
+    "devices": {
+      "cpu": {
+        "metrics": {
+          "physical_rms": 53.8084157226399,
+          "head_residual_rms": 1.5193636559439827,
+          "relative_cell_imbalance": 1.3929169763810025,
+          "gross_throughput": 502.1500837062509,
+          "residual_l1": 699.4533762855783,
+          "signed_imbalance": 499.21825918850556,
+          "boundary_inflow": 500.6811714473782,
+          "boundary_outflow": 1.4659122588727087,
+          "scaled_l2": 7.564114932972901,
+          "finite": true
+        },
+        "flux_max_error": 0.0,
+        "residual_max_error": 1.1102230246251565e-16,
+        "jv_max_error": 1.4210854715202004e-14
+      },
+      "cuda:0": {
+        "metrics": {
+          "physical_rms": 53.8084157226399,
+          "head_residual_rms": 1.5193636559439827,
+          "relative_cell_imbalance": 1.3929169763810025,
+          "gross_throughput": 502.1500837062509,
+          "residual_l1": 699.4533762855783,
+          "signed_imbalance": 499.21825918850556,
+          "boundary_inflow": 500.6811714473782,
+          "boundary_outflow": 1.4659122588727087,
+          "scaled_l2": 7.564114932972901,
+          "finite": true
+        },
+        "flux_max_error": 0.0,
+        "residual_max_error": 1.1102230246251565e-16,
+        "jv_max_error": 2.842170943040401e-14
+      }
+    },
+    "max_jacobian_columns": 7,
+    "diagnostic_only": true,
+    "all_fields_downloaded_once": true
+  },
+  "larger_geology_diagnostic": {
+    "original_cold_cpu_accepted": false,
+    "original_stop_reason": "outer_budget",
+    "cold_final_attempts": [
+      {
+        "outer": 198,
+        "accepted": true,
+        "attempts": [
+          {
+            "direction": "newton",
+            "alpha": 1.0789092566947542e-21,
+            "accepted": false,
+            "linear_residual_max": 0.9914420508438441,
+            "physical_rms": 0.5219928222556284
+          },
+          {
+            "direction": "full_saturated_safeguard",
+            "alpha": 1.0,
+            "accepted": true,
+            "linear_residual_max": 2.886579864025407e-15,
+            "physical_rms": 0.5202900696287072
+          }
+        ]
+      },
+      {
+        "outer": 199,
+        "accepted": true,
+        "attempts": [
+          {
+            "direction": "newton",
+            "alpha": 1.4141479409349483e-16,
+            "accepted": true,
+            "linear_residual_max": 0.9436778798069245,
+            "physical_rms": 0.5202900696287062
+          }
+        ]
+      },
+      {
+        "outer": 200,
+        "accepted": true,
+        "attempts": [
+          {
+            "direction": "newton",
+            "alpha": 1.4141479409349483e-16,
+            "accepted": true,
+            "linear_residual_max": 0.9436778798069245,
+            "physical_rms": 0.520290069628705
+          }
+        ]
+      }
+    ],
+    "verification_restart": {
+      "accepted": true,
+      "outers": 2,
+      "checks": {
+        "prescribed_cells_checked": 18,
+        "prescribed_head_error_max_m": 0.0,
+        "prescribed_head_tolerance_m": 1e-10,
+        "boundary_condition_valid": true,
+        "invalid_active_heads": 0,
+        "inactive_marker_cells": 0,
+        "active_cells_checked": 192,
+        "input_valid": true,
+        "head_residual_rms": 2.0400869081105398e-14,
+        "physical_rms": 2.748665672814603e-13,
+        "physical_max": 1.0141887329950805e-12,
+        "residual_l1": 2.664446441258406e-11,
+        "relative_cell_imbalance": 5.782218839536472e-13,
+        "gross_throughput": 46.07999999999999,
+        "signed_imbalance": -2.331468351712823e-15,
+        "boundary_inflow": 0.0,
+        "boundary_outflow": 23.04,
+        "fixed_cell_source_total": 0.0,
+        "free_cells": 174,
+        "fixed_reservoir_required_inflow": -23.04,
+        "ungrounded_current_components": 0,
+        "physical_metrics_valid": true,
+        "final_acceptance_thresholds": {
+          "physical_rms_m3_day": 1e-12,
+          "relative_cell_imbalance": 1e-08,
+          "head_equivalent_rms_m": 1e-06,
+          "prescribed_head_error_m": 1e-10
+        },
+        "independent_accepted": true,
+        "stop_reason": "converged",
+        "history": [
+          {
+            "outer": 1,
+            "accepted": true,
+            "attempts": [
+              {
+                "direction": "newton",
+                "alpha": 1.0,
+                "accepted": true,
+                "linear_residual_max": 5.551115123125783e-17,
+                "physical_rms": 1.5246449781234976e-07
+              }
+            ]
+          },
+          {
+            "outer": 2,
+            "accepted": true,
+            "attempts": [
+              {
+                "direction": "newton",
+                "alpha": 1.0,
+                "accepted": true,
+                "linear_residual_max": 6.564505341220828e-21,
+                "physical_rms": 2.748665672814603e-13
+              }
+            ]
+          }
+        ],
+        "outers": 2
+      },
+      "input_hash": "88d21759bfc5a69fabfc4e22577fa88d69b79673494a6bf05537700c0ddac6a7",
+      "seed": 1129,
+      "perturbation_m": 0.001
+    },
+    "polishing": {
+      "checks": {
+        "prescribed_cells_checked": 18,
+        "prescribed_head_error_max_m": 0.0,
+        "prescribed_head_tolerance_m": 1e-10,
+        "boundary_condition_valid": true,
+        "invalid_active_heads": 0,
+        "inactive_marker_cells": 0,
+        "active_cells_checked": 192,
+        "input_valid": true,
+        "head_residual_rms": 6.819199007707952e-15,
+        "physical_rms": 3.9074358993494044e-13,
+        "physical_max": 2.1878054923263335e-12,
+        "residual_l1": 3.2498115309920195e-11,
+        "relative_cell_imbalance": 7.052542384965323e-13,
+        "gross_throughput": 46.079999999999984,
+        "signed_imbalance": 9.214851104388645e-15,
+        "boundary_inflow": 0.0,
+        "boundary_outflow": 23.03999999999999,
+        "fixed_cell_source_total": 0.0,
+        "free_cells": 174,
+        "fixed_reservoir_required_inflow": -23.03999999999999,
+        "ungrounded_current_components": 0,
+        "physical_metrics_valid": true,
+        "final_acceptance_thresholds": {
+          "physical_rms_m3_day": 1e-14,
+          "relative_cell_imbalance": 1e-12,
+          "head_equivalent_rms_m": 1e-06,
+          "prescribed_head_error_m": 1e-10
+        },
+        "independent_accepted": true
+      },
+      "history": [
+        {
+          "iteration": 1,
+          "linear_residual_rms": 3.386000750763975e-22,
+          "accepted": true,
+          "alpha": 1.0
+        }
+      ],
+      "head_max_change_m": 1.0910218151138906e-07,
+      "head_max_difference_from_native_m": 8.711253940418828e-12
+    },
+    "interpretation": "Verification-only restart/polishing; original cold failure and original head-parity failure are not relabelled"
+  },
+  "head_comparison_tolerance_m": 1e-07,
+  "original_outputs_unchanged": true
+}

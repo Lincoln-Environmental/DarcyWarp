@@ -1,0 +1,158 @@
+{
+  "native_success": true,
+  "returncode": 0,
+  "stop_reason": "native_converged",
+  "seconds": 0.899627047998365,
+  "input_hash": "1e4f8dcbdce7657ac63b420932e65793761a8a2c2db9c6f2be5a88a09cdefc81",
+  "mf6_version": "mf6: 6.6.2 05/12/2025",
+  "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+  "contract": "NPF662_LAYERED_DIS_V2_Newton",
+  "geometry": "structured_dis_layered",
+  "supplied_state_verification": false,
+  "settings": {
+    "xt3d": false,
+    "icelltype": [
+      [
+        [
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      ],
+      [
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      [
+        [
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      ]
+    ],
+    "newton": true,
+    "linear_acceleration": "BICGSTAB",
+    "variablecv": false,
+    "perched": false,
+    "thickstrt": false,
+    "rewet": false,
+    "steady": true,
+    "outer_dvclose_m": 8.355982572538778e-14,
+    "inner_dvclose_m": 8.355982572538778e-14,
+    "inner_rclose_m3_day": 1e-14,
+    "scaling_method": "DIAGONAL",
+    "preconditioner_levels": 100,
+    "preconditioner_drop_tolerance": 0.0,
+    "relaxation_factor": 0.97
+  },
+  "independent": {
+    "prescribed_cells_checked": 24,
+    "prescribed_head_error_max_m": 0.0,
+    "prescribed_head_tolerance_m": 1e-10,
+    "boundary_condition_valid": true,
+    "invalid_active_heads": 0,
+    "inactive_marker_cells": 0,
+    "active_cells_checked": 60,
+    "input_valid": true,
+    "head_residual_rms": 4.606464303097268e-12,
+    "physical_rms": 2.3513224731495928e-11,
+    "physical_max": 1.1264814081535235e-10,
+    "residual_l1": 3.334453144642705e-10,
+    "relative_cell_imbalance": 3.017439218588569e-11,
+    "gross_throughput": 11.050605838557445,
+    "signed_imbalance": 6.35295404336541e-11,
+    "boundary_inflow": 5.522302919310487,
+    "boundary_outflow": 5.5253029192469585,
+    "fixed_cell_source_total": 0.0,
+    "free_cells": 36,
+    "fixed_reservoir_required_inflow": -0.002999999936470532,
+    "ungrounded_current_components": 0,
+    "physical_metrics_valid": true,
+    "final_acceptance_thresholds": {
+      "physical_rms_m3_day": 1e-12,
+      "relative_cell_imbalance": 1e-08,
+      "head_equivalent_rms_m": 1e-06,
+      "prescribed_head_error_m": 1e-10
+    },
+    "independent_accepted": true
+  },
+  "source_allocation_max_error": 0.0,
+  "reciprocity_max": 0.0,
+  "saturation_max_error": 0.0,
+  "native_flux_residual_rms": 2.351324080231734e-11,
+  "native_flux_residual_relative": 3.017442037359672e-11,
+  "independent_conservation": true
+}

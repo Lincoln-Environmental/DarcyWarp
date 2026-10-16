@@ -1,0 +1,316 @@
+{
+  "native_success": true,
+  "returncode": 0,
+  "stop_reason": "native_converged",
+  "seconds": 0.05401125599746592,
+  "input_hash": "bb8d04de777e0d8adba06255c454f1c149f9ebb43f2a69561498a3216bdda7fb",
+  "mf6_version": "mf6: 6.6.2 05/12/2025",
+  "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+  "contract": "NPF662_LAYERED_DIS_V2_Newton",
+  "geometry": "structured_dis_layered",
+  "supplied_state_verification": true,
+  "settings": {
+    "xt3d": false,
+    "icelltype": [
+      [
+        [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      ],
+      [
+        [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      ],
+      [
+        [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      ],
+      [
+        [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      ]
+    ],
+    "newton": true,
+    "linear_acceleration": "BICGSTAB",
+    "variablecv": false,
+    "perched": false,
+    "thickstrt": false,
+    "rewet": false,
+    "steady": true,
+    "outer_dvclose_m": 9.592326932761353e-13,
+    "inner_dvclose_m": 9.592326932761353e-13,
+    "inner_rclose_m3_day": 1e-14,
+    "scaling_method": "DIAGONAL",
+    "preconditioner_levels": 100,
+    "preconditioner_drop_tolerance": 0.0,
+    "relaxation_factor": 0.97
+  },
+  "independent": {
+    "prescribed_cells_checked": 18,
+    "prescribed_head_error_max_m": 0.0,
+    "prescribed_head_tolerance_m": 1e-10,
+    "boundary_condition_valid": true,
+    "invalid_active_heads": 0,
+    "inactive_marker_cells": 0,
+    "active_cells_checked": 192,
+    "input_valid": true,
+    "head_residual_rms": 5.043551090689226,
+    "physical_rms": 372.5468253012214,
+    "physical_max": 1523.7008041355773,
+    "residual_l1": 44452.54684505398,
+    "relative_cell_imbalance": 7.230683520267735,
+    "gross_throughput": 6147.765521814459,
+    "signed_imbalance": -6020.628070845364,
+    "boundary_inflow": 40.52872548454761,
+    "boundary_outflow": 6084.196796329912,
+    "fixed_cell_source_total": 0.0,
+    "free_cells": 174,
+    "fixed_reservoir_required_inflow": -6043.668070845364,
+    "ungrounded_current_components": 0,
+    "physical_metrics_valid": true,
+    "final_acceptance_thresholds": {
+      "physical_rms_m3_day": 1e-12,
+      "relative_cell_imbalance": 1e-08,
+      "head_equivalent_rms_m": 1e-06,
+      "prescribed_head_error_m": 1e-10
+    },
+    "independent_accepted": false
+  },
+  "source_allocation_max_error": 0.0,
+  "reciprocity_max": 0.0,
+  "saturation_max_error": 0.0,
+  "native_flux_residual_rms": 372.54682530122136,
+  "native_flux_residual_relative": 7.230683520267735,
+  "independent_conservation": false
+}

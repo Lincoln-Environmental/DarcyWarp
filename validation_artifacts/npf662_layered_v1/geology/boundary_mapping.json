@@ -1,0 +1,44 @@
+{
+  "identity": "synthetic_varying_geology_DIS_CHD_WEL_no_contacts",
+  "same_as_historical_terrain": false,
+  "preserved": "Exact existing builder interfaces,K,coastal CHD,WEL source and cold initial head",
+  "changed": "Conventional DIS/NPF law instead of transformed terrain; all three west terrain discharge contacts omitted and those exterior faces no-flow; no terrain floor",
+  "omitted_contacts": [
+    {
+      "cell": [
+        0,
+        1,
+        0
+      ],
+      "head": 2.0,
+      "area": 1.4999999999999991,
+      "distance": 10.0,
+      "elevation": -10.427260514029252,
+      "kind": "discharge_only"
+    },
+    {
+      "cell": [
+        0,
+        3,
+        0
+      ],
+      "head": 2.0,
+      "area": 1.4999999999999991,
+      "distance": 10.0,
+      "elevation": -6.2618009434624415,
+      "kind": "discharge_only"
+    },
+    {
+      "cell": [
+        0,
+        4,
+        0
+      ],
+      "head": 2.0,
+      "area": 1.4999999999999991,
+      "distance": 10.0,
+      "elevation": -10.427260514029252,
+      "kind": "discharge_only"
+    }
+  ]
+}

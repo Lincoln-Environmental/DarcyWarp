@@ -1,0 +1,67 @@
+{
+  "finite_differences": [
+    {
+      "step_m": 0.001,
+      "relative_l2": 4.923590880256043e-13
+    },
+    {
+      "step_m": 0.0001,
+      "relative_l2": 4.656480166666501e-12
+    },
+    {
+      "step_m": 1e-05,
+      "relative_l2": 3.2178273400681866e-11
+    },
+    {
+      "step_m": 1e-06,
+      "relative_l2": 5.613913421732094e-10
+    },
+    {
+      "step_m": 1e-07,
+      "relative_l2": 4.127158806510135e-09
+    },
+    {
+      "step_m": 1e-08,
+      "relative_l2": 3.477697168934942e-08
+    }
+  ],
+  "devices": {
+    "cpu": {
+      "metrics": {
+        "physical_rms": 53.8084157226399,
+        "head_residual_rms": 1.5193636559439827,
+        "relative_cell_imbalance": 1.3929169763810025,
+        "gross_throughput": 502.1500837062509,
+        "residual_l1": 699.4533762855783,
+        "signed_imbalance": 499.21825918850556,
+        "boundary_inflow": 500.6811714473782,
+        "boundary_outflow": 1.4659122588727087,
+        "scaled_l2": 7.564114932972901,
+        "finite": true
+      },
+      "flux_max_error": 0.0,
+      "residual_max_error": 1.1102230246251565e-16,
+      "jv_max_error": 1.4210854715202004e-14
+    },
+    "cuda:0": {
+      "metrics": {
+        "physical_rms": 53.8084157226399,
+        "head_residual_rms": 1.5193636559439827,
+        "relative_cell_imbalance": 1.3929169763810025,
+        "gross_throughput": 502.1500837062509,
+        "residual_l1": 699.4533762855783,
+        "signed_imbalance": 499.21825918850556,
+        "boundary_inflow": 500.6811714473782,
+        "boundary_outflow": 1.4659122588727087,
+        "scaled_l2": 7.564114932972901,
+        "finite": true
+      },
+      "flux_max_error": 0.0,
+      "residual_max_error": 1.1102230246251565e-16,
+      "jv_max_error": 2.842170943040401e-14
+    }
+  },
+  "max_jacobian_columns": 7,
+  "diagnostic_only": true,
+  "all_fields_downloaded_once": true
+}

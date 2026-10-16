@@ -1,0 +1,768 @@
+FFFFFFFFFF........FFF                                                    [100%]
+=================================== FAILURES ===================================
+________ test_owning_thickness_derivatives_and_actual_support[full-cpu] ________
+
+device = 'cpu', regime = 'full'
+
+    @pytest.mark.parametrize('device',['cpu','cuda:0'])
+    @pytest.mark.parametrize('regime',['full','smooth','lower_buffer','upper_buffer','dry'])
+    def test_owning_thickness_derivatives_and_actual_support(device,regime):
+        case=layered_case(masked=True)
+        rng=np.random.default_rng(seed=188)
+        indices=np.indices(case.active.shape)
+        case.cell_type=((indices[0]+indices[1]+indices[2])%3!=0).astype(int)
+        fraction={'full':1.2,'smooth':.45,'lower_buffer':.4e-6,'upper_buffer':1.-.4e-6,'dry':-.2}[regime]
+        jitter=.03 if regime=='smooth' else .03e-6 if 'buffer' in regime else .001
+        head=case.bottoms+(fraction+jitter*rng.random(size=case.active.shape))*case.thicknesses
+        head[case.fixed!=0]=case.values[case.fixed!=0]
+        case.initial=head.copy()
+>       reference=NPF662Reference(case=case)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_npf662_layered_unconfined.py:38: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+DARCY_WARP_PACKAGE/validation/npf662_reference.py:160: in __init__
+    case.validate()
+DARCY_WARP_PACKAGE/validation/npf662_reference.py:108: in validate
+    NPF662Case.validate(self)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = NPF662LayeredCase(kx=array([[[3.39831189e+00, 1.55456861e-01, 1.98171431e+01, 2.10323394e+00,
+         2.36726636e+00]..., 1, 0, 1, 1]],
+
+       [[1, 0, 1, 1, 0],
+        [0, 1, 1, 0, 1],
+        [1, 1, 0, 1, 1],
+        [1, 0, 1, 1, 0]]]))
+
+    def validate(self):
+        shape=self.active.shape
+        if len(shape)!=3 or min(shape)<1:raise ValueError('Expected nonempty (nz,ny,nx)')
+        for name in ('kx','ky','kz','fixed','values','source','initial'):
+            value=np.asarray(getattr(self,name))
+            if value.shape!=shape or not np.all(np.isfinite(value)):raise ValueError(f'Invalid {name}')
+        spacing=(self.dx,self.dy) if self.geometry=='structured_dis_layered' else (self.dx,self.dy,self.dz)
+        if any(np.ndim(x)!=0 or not np.isfinite(x) or x<=0 for x in spacing):raise ValueError('Positive finite spacing required')
+        if self.geometry!='structured_dis_layered' and (np.ndim(self.top)!=0 or not np.isfinite(self.top)):
+            raise ValueError('Finite flat scalar top required; variable elevations are unsupported')
+        for mask in (self.active,self.fixed):
+            if not np.all((mask==0)|(mask==1)):raise ValueError('Binary masks required')
+        active=self.active.astype(bool)
+        if not active.any():raise ValueError('At least one active cell required')
+        if np.any(self.fixed.astype(bool)&~active):raise ValueError('Fixed cells must be active')
+        if np.any(self.source[~active]!=0):raise ValueError('Inactive source would be lost')
+        for k in (self.kx,self.ky,self.kz):
+            if np.any(k[active]<=0):raise ValueError('Positive physical Cartesian K required')
+        types=np.asarray(self.cell_type)
+        if types.ndim!=0 and types.shape!=shape:raise ValueError('cell_type must be scalar or full-grid 0/1 array')
+        if np.any((types!=0)&(types!=1)):raise ValueError('Only ICELLTYPE 0/1 supported')
+        if np.any(active&(self.fixed!=0)&(self.cell_types!=0)&(self.values<self.bottoms)):
+>           raise ValueError('Convertible CHD head below cell bottom is invalid for MF6 6.6.2; prescribed heads are not repaired')
+E           ValueError: Convertible CHD head below cell bottom is invalid for MF6 6.6.2; prescribed heads are not repaired
+
+DARCY_WARP_PACKAGE/validation/npf662_reference.py:55: ValueError
+______ test_owning_thickness_derivatives_and_actual_support[full-cuda:0] _______
+
+device = 'cuda:0', regime = 'full'
+
+    @pytest.mark.parametrize('device',['cpu','cuda:0'])
+    @pytest.mark.parametrize('regime',['full','smooth','lower_buffer','upper_buffer','dry'])
+    def test_owning_thickness_derivatives_and_actual_support(device,regime):
+        case=layered_case(masked=True)
+        rng=np.random.default_rng(seed=188)
+        indices=np.indices(case.active.shape)
+        case.cell_type=((indices[0]+indices[1]+indices[2])%3!=0).astype(int)
+        fraction={'full':1.2,'smooth':.45,'lower_buffer':.4e-6,'upper_buffer':1.-.4e-6,'dry':-.2}[regime]
+        jitter=.03 if regime=='smooth' else .03e-6 if 'buffer' in regime else .001
+        head=case.bottoms+(fraction+jitter*rng.random(size=case.active.shape))*case.thicknesses
+        head[case.fixed!=0]=case.values[case.fixed!=0]
+        case.initial=head.copy()
+>       reference=NPF662Reference(case=case)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_npf662_layered_unconfined.py:38: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+DARCY_WARP_PACKAGE/validation/npf662_reference.py:160: in __init__
+    case.validate()
+DARCY_WARP_PACKAGE/validation/npf662_reference.py:108: in validate
+    NPF662Case.validate(self)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = NPF662LayeredCase(kx=array([[[3.39831189e+00, 1.55456861e-01, 1.98171431e+01, 2.10323394e+00,
+         2.36726636e+00]..., 1, 0, 1, 1]],
+
+       [[1, 0, 1, 1, 0],
+        [0, 1, 1, 0, 1],
+        [1, 1, 0, 1, 1],
+        [1, 0, 1, 1, 0]]]))
+
+    def validate(self):
+        shape=self.active.shape
+        if len(shape)!=3 or min(shape)<1:raise ValueError('Expected nonempty (nz,ny,nx)')
+        for name in ('kx','ky','kz','fixed','values','source','initial'):
+            value=np.asarray(getattr(self,name))
+            if value.shape!=shape or not np.all(np.isfinite(value)):raise ValueError(f'Invalid {name}')
+        spacing=(self.dx,self.dy) if self.geometry=='structured_dis_layered' else (self.dx,self.dy,self.dz)
+        if any(np.ndim(x)!=0 or not np.isfinite(x) or x<=0 for x in spacing):raise ValueError('Positive finite spacing required')
+        if self.geometry!='structured_dis_layered' and (np.ndim(self.top)!=0 or not np.isfinite(self.top)):
+            raise ValueError('Finite flat scalar top required; variable elevations are unsupported')
+        for mask in (self.active,self.fixed):
+            if not np.all((mask==0)|(mask==1)):raise ValueError('Binary masks required')
+        active=self.active.astype(bool)
+        if not active.any():raise ValueError('At least one active cell required')
+        if np.any(self.fixed.astype(bool)&~active):raise ValueError('Fixed cells must be active')
+        if np.any(self.source[~active]!=0):raise ValueError('Inactive source would be lost')
+        for k in (self.kx,self.ky,self.kz):
+            if np.any(k[active]<=0):raise ValueError('Positive physical Cartesian K required')
+        types=np.asarray(self.cell_type)
+        if types.ndim!=0 and types.shape!=shape:raise ValueError('cell_type must be scalar or full-grid 0/1 array')
+        if np.any((types!=0)&(types!=1)):raise ValueError('Only ICELLTYPE 0/1 supported')
+        if np.any(active&(self.fixed!=0)&(self.cell_types!=0)&(self.values<self.bottoms)):
+>           raise ValueError('Convertible CHD head below cell bottom is invalid for MF6 6.6.2; prescribed heads are not repaired')
+E           ValueError: Convertible CHD head below cell bottom is invalid for MF6 6.6.2; prescribed heads are not repaired
+
+DARCY_WARP_PACKAGE/validation/npf662_reference.py:55: ValueError
+_______ test_owning_thickness_derivatives_and_actual_support[smooth-cpu] _______
+
+device = 'cpu', regime = 'smooth'
+
+    @pytest.mark.parametrize('device',['cpu','cuda:0'])
+    @pytest.mark.parametrize('regime',['full','smooth','lower_buffer','upper_buffer','dry'])
+    def test_owning_thickness_derivatives_and_actual_support(device,regime):
+        case=layered_case(masked=True)
+        rng=np.random.default_rng(seed=188)
+        indices=np.indices(case.active.shape)
+        case.cell_type=((indices[0]+indices[1]+indices[2])%3!=0).astype(int)
+        fraction={'full':1.2,'smooth':.45,'lower_buffer':.4e-6,'upper_buffer':1.-.4e-6,'dry':-.2}[regime]
+        jitter=.03 if regime=='smooth' else .03e-6 if 'buffer' in regime else .001
+        head=case.bottoms+(fraction+jitter*rng.random(size=case.active.shape))*case.thicknesses
+        head[case.fixed!=0]=case.values[case.fixed!=0]
+        case.initial=head.copy()
+>       reference=NPF662Reference(case=case)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_npf662_layered_unconfined.py:38: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+DARCY_WARP_PACKAGE/validation/npf662_reference.py:160: in __init__
+    case.validate()
+DARCY_WARP_PACKAGE/validation/npf662_reference.py:108: in validate
+    NPF662Case.validate(self)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = NPF662LayeredCase(kx=array([[[3.39831189e+00, 1.55456861e-01, 1.98171431e+01, 2.10323394e+00,
+         2.36726636e+00]..., 1, 0, 1, 1]],
+
+       [[1, 0, 1, 1, 0],
+        [0, 1, 1, 0, 1],
+        [1, 1, 0, 1, 1],
+        [1, 0, 1, 1, 0]]]))
+
+    def validate(self):
+        shape=self.active.shape
+        if len(shape)!=3 or min(shape)<1:raise ValueError('Expected nonempty (nz,ny,nx)')
+        for name in ('kx','ky','kz','fixed','values','source','initial'):
+            value=np.asarray(getattr(self,name))
+            if value.shape!=shape or not np.all(np.isfinite(value)):raise ValueError(f'Invalid {name}')
+        spacing=(self.dx,self.dy) if self.geometry=='structured_dis_layered' else (self.dx,self.dy,self.dz)
+        if any(np.ndim(x)!=0 or not np.isfinite(x) or x<=0 for x in spacing):raise ValueError('Positive finite spacing required')
+        if self.geometry!='structured_dis_layered' and (np.ndim(self.top)!=0 or not np.isfinite(self.top)):
+            raise ValueError('Finite flat scalar top required; variable elevations are unsupported')
+        for mask in (self.active,self.fixed):
+            if not np.all((mask==0)|(mask==1)):raise ValueError('Binary masks required')
+        active=self.active.astype(bool)
+        if not active.any():raise ValueError('At least one active cell required')
+        if np.any(self.fixed.astype(bool)&~active):raise ValueError('Fixed cells must be active')
+        if np.any(self.source[~active]!=0):raise ValueError('Inactive source would be lost')
+        for k in (self.kx,self.ky,self.kz):
+            if np.any(k[active]<=0):raise ValueError('Positive physical Cartesian K required')
+        types=np.asarray(self.cell_type)
+        if types.ndim!=0 and types.shape!=shape:raise ValueError('cell_type must be scalar or full-grid 0/1 array')
+        if np.any((types!=0)&(types!=1)):raise ValueError('Only ICELLTYPE 0/1 supported')
+        if np.any(active&(self.fixed!=0)&(self.cell_types!=0)&(self.values<self.bottoms)):
+>           raise ValueError('Convertible CHD head below cell bottom is invalid for MF6 6.6.2; prescribed heads are not repaired')
+E           ValueError: Convertible CHD head below cell bottom is invalid for MF6 6.6.2; prescribed heads are not repaired
+
+DARCY_WARP_PACKAGE/validation/npf662_reference.py:55: ValueError
+_____ test_owning_thickness_derivatives_and_actual_support[smooth-cuda:0] ______
+
+device = 'cuda:0', regime = 'smooth'
+
+    @pytest.mark.parametrize('device',['cpu','cuda:0'])
+    @pytest.mark.parametrize('regime',['full','smooth','lower_buffer','upper_buffer','dry'])
+    def test_owning_thickness_derivatives_and_actual_support(device,regime):
+        case=layered_case(masked=True)
+        rng=np.random.default_rng(seed=188)
+        indices=np.indices(case.active.shape)
+        case.cell_type=((indices[0]+indices[1]+indices[2])%3!=0).astype(int)
+        fraction={'full':1.2,'smooth':.45,'lower_buffer':.4e-6,'upper_buffer':1.-.4e-6,'dry':-.2}[regime]
+        jitter=.03 if regime=='smooth' else .03e-6 if 'buffer' in regime else .001
+        head=case.bottoms+(fraction+jitter*rng.random(size=case.active.shape))*case.thicknesses
+        head[case.fixed!=0]=case.values[case.fixed!=0]
+        case.initial=head.copy()
+>       reference=NPF662Reference(case=case)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_npf662_layered_unconfined.py:38: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+DARCY_WARP_PACKAGE/validation/npf662_reference.py:160: in __init__
+    case.validate()
+DARCY_WARP_PACKAGE/validation/npf662_reference.py:108: in validate
+    NPF662Case.validate(self)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = NPF662LayeredCase(kx=array([[[3.39831189e+00, 1.55456861e-01, 1.98171431e+01, 2.10323394e+00,
+         2.36726636e+00]..., 1, 0, 1, 1]],
+
+       [[1, 0, 1, 1, 0],
+        [0, 1, 1, 0, 1],
+        [1, 1, 0, 1, 1],
+        [1, 0, 1, 1, 0]]]))
+
+    def validate(self):
+        shape=self.active.shape
+        if len(shape)!=3 or min(shape)<1:raise ValueError('Expected nonempty (nz,ny,nx)')
+        for name in ('kx','ky','kz','fixed','values','source','initial'):
+            value=np.asarray(getattr(self,name))
+            if value.shape!=shape or not np.all(np.isfinite(value)):raise ValueError(f'Invalid {name}')
+        spacing=(self.dx,self.dy) if self.geometry=='structured_dis_layered' else (self.dx,self.dy,self.dz)
+        if any(np.ndim(x)!=0 or not np.isfinite(x) or x<=0 for x in spacing):raise ValueError('Positive finite spacing required')
+        if self.geometry!='structured_dis_layered' and (np.ndim(self.top)!=0 or not np.isfinite(self.top)):
+            raise ValueError('Finite flat scalar top required; variable elevations are unsupported')
+        for mask in (self.active,self.fixed):
+            if not np.all((mask==0)|(mask==1)):raise ValueError('Binary masks required')
+        active=self.active.astype(bool)
+        if not active.any():raise ValueError('At least one active cell required')
+        if np.any(self.fixed.astype(bool)&~active):raise ValueError('Fixed cells must be active')
+        if np.any(self.source[~active]!=0):raise ValueError('Inactive source would be lost')
+        for k in (self.kx,self.ky,self.kz):
+            if np.any(k[active]<=0):raise ValueError('Positive physical Cartesian K required')
+        types=np.asarray(self.cell_type)
+        if types.ndim!=0 and types.shape!=shape:raise ValueError('cell_type must be scalar or full-grid 0/1 array')
+        if np.any((types!=0)&(types!=1)):raise ValueError('Only ICELLTYPE 0/1 supported')
+        if np.any(active&(self.fixed!=0)&(self.cell_types!=0)&(self.values<self.bottoms)):
+>           raise ValueError('Convertible CHD head below cell bottom is invalid for MF6 6.6.2; prescribed heads are not repaired')
+E           ValueError: Convertible CHD head below cell bottom is invalid for MF6 6.6.2; prescribed heads are not repaired
+
+DARCY_WARP_PACKAGE/validation/npf662_reference.py:55: ValueError
+____ test_owning_thickness_derivatives_and_actual_support[lower_buffer-cpu] ____
+
+device = 'cpu', regime = 'lower_buffer'
+
+    @pytest.mark.parametrize('device',['cpu','cuda:0'])
+    @pytest.mark.parametrize('regime',['full','smooth','lower_buffer','upper_buffer','dry'])
+    def test_owning_thickness_derivatives_and_actual_support(device,regime):
+        case=layered_case(masked=True)
+        rng=np.random.default_rng(seed=188)
+        indices=np.indices(case.active.shape)
+        case.cell_type=((indices[0]+indices[1]+indices[2])%3!=0).astype(int)
+        fraction={'full':1.2,'smooth':.45,'lower_buffer':.4e-6,'upper_buffer':1.-.4e-6,'dry':-.2}[regime]
+        jitter=.03 if regime=='smooth' else .03e-6 if 'buffer' in regime else .001
+        head=case.bottoms+(fraction+jitter*rng.random(size=case.active.shape))*case.thicknesses
+        head[case.fixed!=0]=case.values[case.fixed!=0]
+        case.initial=head.copy()
+>       reference=NPF662Reference(case=case)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_npf662_layered_unconfined.py:38: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+DARCY_WARP_PACKAGE/validation/npf662_reference.py:160: in __init__
+    case.validate()
+DARCY_WARP_PACKAGE/validation/npf662_reference.py:108: in validate
+    NPF662Case.validate(self)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = NPF662LayeredCase(kx=array([[[3.39831189e+00, 1.55456861e-01, 1.98171431e+01, 2.10323394e+00,
+         2.36726636e+00]..., 1, 0, 1, 1]],
+
+       [[1, 0, 1, 1, 0],
+        [0, 1, 1, 0, 1],
+        [1, 1, 0, 1, 1],
+        [1, 0, 1, 1, 0]]]))
+
+    def validate(self):
+        shape=self.active.shape
+        if len(shape)!=3 or min(shape)<1:raise ValueError('Expected nonempty (nz,ny,nx)')
+        for name in ('kx','ky','kz','fixed','values','source','initial'):
+            value=np.asarray(getattr(self,name))
+            if value.shape!=shape or not np.all(np.isfinite(value)):raise ValueError(f'Invalid {name}')
+        spacing=(self.dx,self.dy) if self.geometry=='structured_dis_layered' else (self.dx,self.dy,self.dz)
+        if any(np.ndim(x)!=0 or not np.isfinite(x) or x<=0 for x in spacing):raise ValueError('Positive finite spacing required')
+        if self.geometry!='structured_dis_layered' and (np.ndim(self.top)!=0 or not np.isfinite(self.top)):
+            raise ValueError('Finite flat scalar top required; variable elevations are unsupported')
+        for mask in (self.active,self.fixed):
+            if not np.all((mask==0)|(mask==1)):raise ValueError('Binary masks required')
+        active=self.active.astype(bool)
+        if not active.any():raise ValueError('At least one active cell required')
+        if np.any(self.fixed.astype(bool)&~active):raise ValueError('Fixed cells must be active')
+        if np.any(self.source[~active]!=0):raise ValueError('Inactive source would be lost')
+        for k in (self.kx,self.ky,self.kz):
+            if np.any(k[active]<=0):raise ValueError('Positive physical Cartesian K required')
+        types=np.asarray(self.cell_type)
+        if types.ndim!=0 and types.shape!=shape:raise ValueError('cell_type must be scalar or full-grid 0/1 array')
+        if np.any((types!=0)&(types!=1)):raise ValueError('Only ICELLTYPE 0/1 supported')
+        if np.any(active&(self.fixed!=0)&(self.cell_types!=0)&(self.values<self.bottoms)):
+>           raise ValueError('Convertible CHD head below cell bottom is invalid for MF6 6.6.2; prescribed heads are not repaired')
+E           ValueError: Convertible CHD head below cell bottom is invalid for MF6 6.6.2; prescribed heads are not repaired
+
+DARCY_WARP_PACKAGE/validation/npf662_reference.py:55: ValueError
+__ test_owning_thickness_derivatives_and_actual_support[lower_buffer-cuda:0] ___
+
+device = 'cuda:0', regime = 'lower_buffer'
+
+    @pytest.mark.parametrize('device',['cpu','cuda:0'])
+    @pytest.mark.parametrize('regime',['full','smooth','lower_buffer','upper_buffer','dry'])
+    def test_owning_thickness_derivatives_and_actual_support(device,regime):
+        case=layered_case(masked=True)
+        rng=np.random.default_rng(seed=188)
+        indices=np.indices(case.active.shape)
+        case.cell_type=((indices[0]+indices[1]+indices[2])%3!=0).astype(int)
+        fraction={'full':1.2,'smooth':.45,'lower_buffer':.4e-6,'upper_buffer':1.-.4e-6,'dry':-.2}[regime]
+        jitter=.03 if regime=='smooth' else .03e-6 if 'buffer' in regime else .001
+        head=case.bottoms+(fraction+jitter*rng.random(size=case.active.shape))*case.thicknesses
+        head[case.fixed!=0]=case.values[case.fixed!=0]
+        case.initial=head.copy()
+>       reference=NPF662Reference(case=case)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_npf662_layered_unconfined.py:38: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+DARCY_WARP_PACKAGE/validation/npf662_reference.py:160: in __init__
+    case.validate()
+DARCY_WARP_PACKAGE/validation/npf662_reference.py:108: in validate
+    NPF662Case.validate(self)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = NPF662LayeredCase(kx=array([[[3.39831189e+00, 1.55456861e-01, 1.98171431e+01, 2.10323394e+00,
+         2.36726636e+00]..., 1, 0, 1, 1]],
+
+       [[1, 0, 1, 1, 0],
+        [0, 1, 1, 0, 1],
+        [1, 1, 0, 1, 1],
+        [1, 0, 1, 1, 0]]]))
+
+    def validate(self):
+        shape=self.active.shape
+        if len(shape)!=3 or min(shape)<1:raise ValueError('Expected nonempty (nz,ny,nx)')
+        for name in ('kx','ky','kz','fixed','values','source','initial'):
+            value=np.asarray(getattr(self,name))
+            if value.shape!=shape or not np.all(np.isfinite(value)):raise ValueError(f'Invalid {name}')
+        spacing=(self.dx,self.dy) if self.geometry=='structured_dis_layered' else (self.dx,self.dy,self.dz)
+        if any(np.ndim(x)!=0 or not np.isfinite(x) or x<=0 for x in spacing):raise ValueError('Positive finite spacing required')
+        if self.geometry!='structured_dis_layered' and (np.ndim(self.top)!=0 or not np.isfinite(self.top)):
+            raise ValueError('Finite flat scalar top required; variable elevations are unsupported')
+        for mask in (self.active,self.fixed):
+            if not np.all((mask==0)|(mask==1)):raise ValueError('Binary masks required')
+        active=self.active.astype(bool)
+        if not active.any():raise ValueError('At least one active cell required')
+        if np.any(self.fixed.astype(bool)&~active):raise ValueError('Fixed cells must be active')
+        if np.any(self.source[~active]!=0):raise ValueError('Inactive source would be lost')
+        for k in (self.kx,self.ky,self.kz):
+            if np.any(k[active]<=0):raise ValueError('Positive physical Cartesian K required')
+        types=np.asarray(self.cell_type)
+        if types.ndim!=0 and types.shape!=shape:raise ValueError('cell_type must be scalar or full-grid 0/1 array')
+        if np.any((types!=0)&(types!=1)):raise ValueError('Only ICELLTYPE 0/1 supported')
+        if np.any(active&(self.fixed!=0)&(self.cell_types!=0)&(self.values<self.bottoms)):
+>           raise ValueError('Convertible CHD head below cell bottom is invalid for MF6 6.6.2; prescribed heads are not repaired')
+E           ValueError: Convertible CHD head below cell bottom is invalid for MF6 6.6.2; prescribed heads are not repaired
+
+DARCY_WARP_PACKAGE/validation/npf662_reference.py:55: ValueError
+____ test_owning_thickness_derivatives_and_actual_support[upper_buffer-cpu] ____
+
+device = 'cpu', regime = 'upper_buffer'
+
+    @pytest.mark.parametrize('device',['cpu','cuda:0'])
+    @pytest.mark.parametrize('regime',['full','smooth','lower_buffer','upper_buffer','dry'])
+    def test_owning_thickness_derivatives_and_actual_support(device,regime):
+        case=layered_case(masked=True)
+        rng=np.random.default_rng(seed=188)
+        indices=np.indices(case.active.shape)
+        case.cell_type=((indices[0]+indices[1]+indices[2])%3!=0).astype(int)
+        fraction={'full':1.2,'smooth':.45,'lower_buffer':.4e-6,'upper_buffer':1.-.4e-6,'dry':-.2}[regime]
+        jitter=.03 if regime=='smooth' else .03e-6 if 'buffer' in regime else .001
+        head=case.bottoms+(fraction+jitter*rng.random(size=case.active.shape))*case.thicknesses
+        head[case.fixed!=0]=case.values[case.fixed!=0]
+        case.initial=head.copy()
+>       reference=NPF662Reference(case=case)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_npf662_layered_unconfined.py:38: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+DARCY_WARP_PACKAGE/validation/npf662_reference.py:160: in __init__
+    case.validate()
+DARCY_WARP_PACKAGE/validation/npf662_reference.py:108: in validate
+    NPF662Case.validate(self)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = NPF662LayeredCase(kx=array([[[3.39831189e+00, 1.55456861e-01, 1.98171431e+01, 2.10323394e+00,
+         2.36726636e+00]..., 1, 0, 1, 1]],
+
+       [[1, 0, 1, 1, 0],
+        [0, 1, 1, 0, 1],
+        [1, 1, 0, 1, 1],
+        [1, 0, 1, 1, 0]]]))
+
+    def validate(self):
+        shape=self.active.shape
+        if len(shape)!=3 or min(shape)<1:raise ValueError('Expected nonempty (nz,ny,nx)')
+        for name in ('kx','ky','kz','fixed','values','source','initial'):
+            value=np.asarray(getattr(self,name))
+            if value.shape!=shape or not np.all(np.isfinite(value)):raise ValueError(f'Invalid {name}')
+        spacing=(self.dx,self.dy) if self.geometry=='structured_dis_layered' else (self.dx,self.dy,self.dz)
+        if any(np.ndim(x)!=0 or not np.isfinite(x) or x<=0 for x in spacing):raise ValueError('Positive finite spacing required')
+        if self.geometry!='structured_dis_layered' and (np.ndim(self.top)!=0 or not np.isfinite(self.top)):
+            raise ValueError('Finite flat scalar top required; variable elevations are unsupported')
+        for mask in (self.active,self.fixed):
+            if not np.all((mask==0)|(mask==1)):raise ValueError('Binary masks required')
+        active=self.active.astype(bool)
+        if not active.any():raise ValueError('At least one active cell required')
+        if np.any(self.fixed.astype(bool)&~active):raise ValueError('Fixed cells must be active')
+        if np.any(self.source[~active]!=0):raise ValueError('Inactive source would be lost')
+        for k in (self.kx,self.ky,self.kz):
+            if np.any(k[active]<=0):raise ValueError('Positive physical Cartesian K required')
+        types=np.asarray(self.cell_type)
+        if types.ndim!=0 and types.shape!=shape:raise ValueError('cell_type must be scalar or full-grid 0/1 array')
+        if np.any((types!=0)&(types!=1)):raise ValueError('Only ICELLTYPE 0/1 supported')
+        if np.any(active&(self.fixed!=0)&(self.cell_types!=0)&(self.values<self.bottoms)):
+>           raise ValueError('Convertible CHD head below cell bottom is invalid for MF6 6.6.2; prescribed heads are not repaired')
+E           ValueError: Convertible CHD head below cell bottom is invalid for MF6 6.6.2; prescribed heads are not repaired
+
+DARCY_WARP_PACKAGE/validation/npf662_reference.py:55: ValueError
+__ test_owning_thickness_derivatives_and_actual_support[upper_buffer-cuda:0] ___
+
+device = 'cuda:0', regime = 'upper_buffer'
+
+    @pytest.mark.parametrize('device',['cpu','cuda:0'])
+    @pytest.mark.parametrize('regime',['full','smooth','lower_buffer','upper_buffer','dry'])
+    def test_owning_thickness_derivatives_and_actual_support(device,regime):
+        case=layered_case(masked=True)
+        rng=np.random.default_rng(seed=188)
+        indices=np.indices(case.active.shape)
+        case.cell_type=((indices[0]+indices[1]+indices[2])%3!=0).astype(int)
+        fraction={'full':1.2,'smooth':.45,'lower_buffer':.4e-6,'upper_buffer':1.-.4e-6,'dry':-.2}[regime]
+        jitter=.03 if regime=='smooth' else .03e-6 if 'buffer' in regime else .001
+        head=case.bottoms+(fraction+jitter*rng.random(size=case.active.shape))*case.thicknesses
+        head[case.fixed!=0]=case.values[case.fixed!=0]
+        case.initial=head.copy()
+>       reference=NPF662Reference(case=case)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_npf662_layered_unconfined.py:38: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+DARCY_WARP_PACKAGE/validation/npf662_reference.py:160: in __init__
+    case.validate()
+DARCY_WARP_PACKAGE/validation/npf662_reference.py:108: in validate
+    NPF662Case.validate(self)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = NPF662LayeredCase(kx=array([[[3.39831189e+00, 1.55456861e-01, 1.98171431e+01, 2.10323394e+00,
+         2.36726636e+00]..., 1, 0, 1, 1]],
+
+       [[1, 0, 1, 1, 0],
+        [0, 1, 1, 0, 1],
+        [1, 1, 0, 1, 1],
+        [1, 0, 1, 1, 0]]]))
+
+    def validate(self):
+        shape=self.active.shape
+        if len(shape)!=3 or min(shape)<1:raise ValueError('Expected nonempty (nz,ny,nx)')
+        for name in ('kx','ky','kz','fixed','values','source','initial'):
+            value=np.asarray(getattr(self,name))
+            if value.shape!=shape or not np.all(np.isfinite(value)):raise ValueError(f'Invalid {name}')
+        spacing=(self.dx,self.dy) if self.geometry=='structured_dis_layered' else (self.dx,self.dy,self.dz)
+        if any(np.ndim(x)!=0 or not np.isfinite(x) or x<=0 for x in spacing):raise ValueError('Positive finite spacing required')
+        if self.geometry!='structured_dis_layered' and (np.ndim(self.top)!=0 or not np.isfinite(self.top)):
+            raise ValueError('Finite flat scalar top required; variable elevations are unsupported')
+        for mask in (self.active,self.fixed):
+            if not np.all((mask==0)|(mask==1)):raise ValueError('Binary masks required')
+        active=self.active.astype(bool)
+        if not active.any():raise ValueError('At least one active cell required')
+        if np.any(self.fixed.astype(bool)&~active):raise ValueError('Fixed cells must be active')
+        if np.any(self.source[~active]!=0):raise ValueError('Inactive source would be lost')
+        for k in (self.kx,self.ky,self.kz):
+            if np.any(k[active]<=0):raise ValueError('Positive physical Cartesian K required')
+        types=np.asarray(self.cell_type)
+        if types.ndim!=0 and types.shape!=shape:raise ValueError('cell_type must be scalar or full-grid 0/1 array')
+        if np.any((types!=0)&(types!=1)):raise ValueError('Only ICELLTYPE 0/1 supported')
+        if np.any(active&(self.fixed!=0)&(self.cell_types!=0)&(self.values<self.bottoms)):
+>           raise ValueError('Convertible CHD head below cell bottom is invalid for MF6 6.6.2; prescribed heads are not repaired')
+E           ValueError: Convertible CHD head below cell bottom is invalid for MF6 6.6.2; prescribed heads are not repaired
+
+DARCY_WARP_PACKAGE/validation/npf662_reference.py:55: ValueError
+________ test_owning_thickness_derivatives_and_actual_support[dry-cpu] _________
+
+device = 'cpu', regime = 'dry'
+
+    @pytest.mark.parametrize('device',['cpu','cuda:0'])
+    @pytest.mark.parametrize('regime',['full','smooth','lower_buffer','upper_buffer','dry'])
+    def test_owning_thickness_derivatives_and_actual_support(device,regime):
+        case=layered_case(masked=True)
+        rng=np.random.default_rng(seed=188)
+        indices=np.indices(case.active.shape)
+        case.cell_type=((indices[0]+indices[1]+indices[2])%3!=0).astype(int)
+        fraction={'full':1.2,'smooth':.45,'lower_buffer':.4e-6,'upper_buffer':1.-.4e-6,'dry':-.2}[regime]
+        jitter=.03 if regime=='smooth' else .03e-6 if 'buffer' in regime else .001
+        head=case.bottoms+(fraction+jitter*rng.random(size=case.active.shape))*case.thicknesses
+        head[case.fixed!=0]=case.values[case.fixed!=0]
+        case.initial=head.copy()
+>       reference=NPF662Reference(case=case)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_npf662_layered_unconfined.py:38: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+DARCY_WARP_PACKAGE/validation/npf662_reference.py:160: in __init__
+    case.validate()
+DARCY_WARP_PACKAGE/validation/npf662_reference.py:108: in validate
+    NPF662Case.validate(self)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = NPF662LayeredCase(kx=array([[[3.39831189e+00, 1.55456861e-01, 1.98171431e+01, 2.10323394e+00,
+         2.36726636e+00]..., 1, 0, 1, 1]],
+
+       [[1, 0, 1, 1, 0],
+        [0, 1, 1, 0, 1],
+        [1, 1, 0, 1, 1],
+        [1, 0, 1, 1, 0]]]))
+
+    def validate(self):
+        shape=self.active.shape
+        if len(shape)!=3 or min(shape)<1:raise ValueError('Expected nonempty (nz,ny,nx)')
+        for name in ('kx','ky','kz','fixed','values','source','initial'):
+            value=np.asarray(getattr(self,name))
+            if value.shape!=shape or not np.all(np.isfinite(value)):raise ValueError(f'Invalid {name}')
+        spacing=(self.dx,self.dy) if self.geometry=='structured_dis_layered' else (self.dx,self.dy,self.dz)
+        if any(np.ndim(x)!=0 or not np.isfinite(x) or x<=0 for x in spacing):raise ValueError('Positive finite spacing required')
+        if self.geometry!='structured_dis_layered' and (np.ndim(self.top)!=0 or not np.isfinite(self.top)):
+            raise ValueError('Finite flat scalar top required; variable elevations are unsupported')
+        for mask in (self.active,self.fixed):
+            if not np.all((mask==0)|(mask==1)):raise ValueError('Binary masks required')
+        active=self.active.astype(bool)
+        if not active.any():raise ValueError('At least one active cell required')
+        if np.any(self.fixed.astype(bool)&~active):raise ValueError('Fixed cells must be active')
+        if np.any(self.source[~active]!=0):raise ValueError('Inactive source would be lost')
+        for k in (self.kx,self.ky,self.kz):
+            if np.any(k[active]<=0):raise ValueError('Positive physical Cartesian K required')
+        types=np.asarray(self.cell_type)
+        if types.ndim!=0 and types.shape!=shape:raise ValueError('cell_type must be scalar or full-grid 0/1 array')
+        if np.any((types!=0)&(types!=1)):raise ValueError('Only ICELLTYPE 0/1 supported')
+        if np.any(active&(self.fixed!=0)&(self.cell_types!=0)&(self.values<self.bottoms)):
+>           raise ValueError('Convertible CHD head below cell bottom is invalid for MF6 6.6.2; prescribed heads are not repaired')
+E           ValueError: Convertible CHD head below cell bottom is invalid for MF6 6.6.2; prescribed heads are not repaired
+
+DARCY_WARP_PACKAGE/validation/npf662_reference.py:55: ValueError
+_______ test_owning_thickness_derivatives_and_actual_support[dry-cuda:0] _______
+
+device = 'cuda:0', regime = 'dry'
+
+    @pytest.mark.parametrize('device',['cpu','cuda:0'])
+    @pytest.mark.parametrize('regime',['full','smooth','lower_buffer','upper_buffer','dry'])
+    def test_owning_thickness_derivatives_and_actual_support(device,regime):
+        case=layered_case(masked=True)
+        rng=np.random.default_rng(seed=188)
+        indices=np.indices(case.active.shape)
+        case.cell_type=((indices[0]+indices[1]+indices[2])%3!=0).astype(int)
+        fraction={'full':1.2,'smooth':.45,'lower_buffer':.4e-6,'upper_buffer':1.-.4e-6,'dry':-.2}[regime]
+        jitter=.03 if regime=='smooth' else .03e-6 if 'buffer' in regime else .001
+        head=case.bottoms+(fraction+jitter*rng.random(size=case.active.shape))*case.thicknesses
+        head[case.fixed!=0]=case.values[case.fixed!=0]
+        case.initial=head.copy()
+>       reference=NPF662Reference(case=case)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_npf662_layered_unconfined.py:38: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+DARCY_WARP_PACKAGE/validation/npf662_reference.py:160: in __init__
+    case.validate()
+DARCY_WARP_PACKAGE/validation/npf662_reference.py:108: in validate
+    NPF662Case.validate(self)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = NPF662LayeredCase(kx=array([[[3.39831189e+00, 1.55456861e-01, 1.98171431e+01, 2.10323394e+00,
+         2.36726636e+00]..., 1, 0, 1, 1]],
+
+       [[1, 0, 1, 1, 0],
+        [0, 1, 1, 0, 1],
+        [1, 1, 0, 1, 1],
+        [1, 0, 1, 1, 0]]]))
+
+    def validate(self):
+        shape=self.active.shape
+        if len(shape)!=3 or min(shape)<1:raise ValueError('Expected nonempty (nz,ny,nx)')
+        for name in ('kx','ky','kz','fixed','values','source','initial'):
+            value=np.asarray(getattr(self,name))
+            if value.shape!=shape or not np.all(np.isfinite(value)):raise ValueError(f'Invalid {name}')
+        spacing=(self.dx,self.dy) if self.geometry=='structured_dis_layered' else (self.dx,self.dy,self.dz)
+        if any(np.ndim(x)!=0 or not np.isfinite(x) or x<=0 for x in spacing):raise ValueError('Positive finite spacing required')
+        if self.geometry!='structured_dis_layered' and (np.ndim(self.top)!=0 or not np.isfinite(self.top)):
+            raise ValueError('Finite flat scalar top required; variable elevations are unsupported')
+        for mask in (self.active,self.fixed):
+            if not np.all((mask==0)|(mask==1)):raise ValueError('Binary masks required')
+        active=self.active.astype(bool)
+        if not active.any():raise ValueError('At least one active cell required')
+        if np.any(self.fixed.astype(bool)&~active):raise ValueError('Fixed cells must be active')
+        if np.any(self.source[~active]!=0):raise ValueError('Inactive source would be lost')
+        for k in (self.kx,self.ky,self.kz):
+            if np.any(k[active]<=0):raise ValueError('Positive physical Cartesian K required')
+        types=np.asarray(self.cell_type)
+        if types.ndim!=0 and types.shape!=shape:raise ValueError('cell_type must be scalar or full-grid 0/1 array')
+        if np.any((types!=0)&(types!=1)):raise ValueError('Only ICELLTYPE 0/1 supported')
+        if np.any(active&(self.fixed!=0)&(self.cell_types!=0)&(self.values<self.bottoms)):
+>           raise ValueError('Convertible CHD head below cell bottom is invalid for MF6 6.6.2; prescribed heads are not repaired')
+E           ValueError: Convertible CHD head below cell bottom is invalid for MF6 6.6.2; prescribed heads are not repaired
+
+DARCY_WARP_PACKAGE/validation/npf662_reference.py:55: ValueError
+_ test_layered_unconfined_numerical_reuse_geometry_rebuild_and_cold_reset[cpu] _
+
+device = 'cpu'
+
+    @pytest.mark.parametrize('device',['cpu','cuda:0'])
+    def test_layered_unconfined_numerical_reuse_geometry_rebuild_and_cold_reset(device):
+        case=layered_case(masked=True);case.cell_type=1
+        with make_gpu_model(case=case,device=device) as model:
+>           first,fi=model.solve(unconfined=True,max_outer=100)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_npf662_layered_unconfined.py:138: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+DARCY_WARP_PACKAGE/warped_darcy_3d.py:357: in solve
+    return solve_npf662(model=self,**kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/npf662_3d.py:32: in solve_npf662
+    reference=NPF662Reference(case=case)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/validation/npf662_reference.py:160: in __init__
+    case.validate()
+DARCY_WARP_PACKAGE/validation/npf662_reference.py:108: in validate
+    NPF662Case.validate(self)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = NPF662LayeredCase(kx=array([[[3.39831189e+00, 1.55456861e-01, 1.98171431e+01, 2.10323394e+00,
+         2.36726636e+00]...5.53,  5.49],
+        [ 5.5 ,  5.46,  5.42,  5.38,  5.34],
+        [ 5.35,  5.31,  5.27,  5.23,  5.19]]]), cell_type=1)
+
+    def validate(self):
+        shape=self.active.shape
+        if len(shape)!=3 or min(shape)<1:raise ValueError('Expected nonempty (nz,ny,nx)')
+        for name in ('kx','ky','kz','fixed','values','source','initial'):
+            value=np.asarray(getattr(self,name))
+            if value.shape!=shape or not np.all(np.isfinite(value)):raise ValueError(f'Invalid {name}')
+        spacing=(self.dx,self.dy) if self.geometry=='structured_dis_layered' else (self.dx,self.dy,self.dz)
+        if any(np.ndim(x)!=0 or not np.isfinite(x) or x<=0 for x in spacing):raise ValueError('Positive finite spacing required')
+        if self.geometry!='structured_dis_layered' and (np.ndim(self.top)!=0 or not np.isfinite(self.top)):
+            raise ValueError('Finite flat scalar top required; variable elevations are unsupported')
+        for mask in (self.active,self.fixed):
+            if not np.all((mask==0)|(mask==1)):raise ValueError('Binary masks required')
+        active=self.active.astype(bool)
+        if not active.any():raise ValueError('At least one active cell required')
+        if np.any(self.fixed.astype(bool)&~active):raise ValueError('Fixed cells must be active')
+        if np.any(self.source[~active]!=0):raise ValueError('Inactive source would be lost')
+        for k in (self.kx,self.ky,self.kz):
+            if np.any(k[active]<=0):raise ValueError('Positive physical Cartesian K required')
+        types=np.asarray(self.cell_type)
+        if types.ndim!=0 and types.shape!=shape:raise ValueError('cell_type must be scalar or full-grid 0/1 array')
+        if np.any((types!=0)&(types!=1)):raise ValueError('Only ICELLTYPE 0/1 supported')
+        if np.any(active&(self.fixed!=0)&(self.cell_types!=0)&(self.values<self.bottoms)):
+>           raise ValueError('Convertible CHD head below cell bottom is invalid for MF6 6.6.2; prescribed heads are not repaired')
+E           ValueError: Convertible CHD head below cell bottom is invalid for MF6 6.6.2; prescribed heads are not repaired
+
+DARCY_WARP_PACKAGE/validation/npf662_reference.py:55: ValueError
+_ test_layered_unconfined_numerical_reuse_geometry_rebuild_and_cold_reset[cuda:0] _
+
+device = 'cuda:0'
+
+    @pytest.mark.parametrize('device',['cpu','cuda:0'])
+    def test_layered_unconfined_numerical_reuse_geometry_rebuild_and_cold_reset(device):
+        case=layered_case(masked=True);case.cell_type=1
+        with make_gpu_model(case=case,device=device) as model:
+>           first,fi=model.solve(unconfined=True,max_outer=100)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_npf662_layered_unconfined.py:138: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+DARCY_WARP_PACKAGE/warped_darcy_3d.py:357: in solve
+    return solve_npf662(model=self,**kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/npf662_3d.py:32: in solve_npf662
+    reference=NPF662Reference(case=case)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/validation/npf662_reference.py:160: in __init__
+    case.validate()
+DARCY_WARP_PACKAGE/validation/npf662_reference.py:108: in validate
+    NPF662Case.validate(self)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = NPF662LayeredCase(kx=array([[[3.39831189e+00, 1.55456861e-01, 1.98171431e+01, 2.10323394e+00,
+         2.36726636e+00]...5.53,  5.49],
+        [ 5.5 ,  5.46,  5.42,  5.38,  5.34],
+        [ 5.35,  5.31,  5.27,  5.23,  5.19]]]), cell_type=1)
+
+    def validate(self):
+        shape=self.active.shape
+        if len(shape)!=3 or min(shape)<1:raise ValueError('Expected nonempty (nz,ny,nx)')
+        for name in ('kx','ky','kz','fixed','values','source','initial'):
+            value=np.asarray(getattr(self,name))
+            if value.shape!=shape or not np.all(np.isfinite(value)):raise ValueError(f'Invalid {name}')
+        spacing=(self.dx,self.dy) if self.geometry=='structured_dis_layered' else (self.dx,self.dy,self.dz)
+        if any(np.ndim(x)!=0 or not np.isfinite(x) or x<=0 for x in spacing):raise ValueError('Positive finite spacing required')
+        if self.geometry!='structured_dis_layered' and (np.ndim(self.top)!=0 or not np.isfinite(self.top)):
+            raise ValueError('Finite flat scalar top required; variable elevations are unsupported')
+        for mask in (self.active,self.fixed):
+            if not np.all((mask==0)|(mask==1)):raise ValueError('Binary masks required')
+        active=self.active.astype(bool)
+        if not active.any():raise ValueError('At least one active cell required')
+        if np.any(self.fixed.astype(bool)&~active):raise ValueError('Fixed cells must be active')
+        if np.any(self.source[~active]!=0):raise ValueError('Inactive source would be lost')
+        for k in (self.kx,self.ky,self.kz):
+            if np.any(k[active]<=0):raise ValueError('Positive physical Cartesian K required')
+        types=np.asarray(self.cell_type)
+        if types.ndim!=0 and types.shape!=shape:raise ValueError('cell_type must be scalar or full-grid 0/1 array')
+        if np.any((types!=0)&(types!=1)):raise ValueError('Only ICELLTYPE 0/1 supported')
+        if np.any(active&(self.fixed!=0)&(self.cell_types!=0)&(self.values<self.bottoms)):
+>           raise ValueError('Convertible CHD head below cell bottom is invalid for MF6 6.6.2; prescribed heads are not repaired')
+E           ValueError: Convertible CHD head below cell bottom is invalid for MF6 6.6.2; prescribed heads are not repaired
+
+DARCY_WARP_PACKAGE/validation/npf662_reference.py:55: ValueError
+___ test_invalid_convertible_chd_and_invalid_supplied_state_are_not_repaired ___
+
+tmp_path = PosixPath('/tmp/pytest-of-patrickdurney/pytest-124/test_invalid_convertible_chd_a0')
+
+    def test_invalid_convertible_chd_and_invalid_supplied_state_are_not_repaired(tmp_path):
+        case=layered_case();case.cell_type=1
+        case.values[0,0,0]=case.bottoms[0,0,0]-.1
+        values=case.values.copy()
+        with make_gpu_model(case=case,device='cpu') as model:
+            with pytest.raises(ValueError,match='below cell bottom'):model.solve(unconfined=True)
+        np.testing.assert_array_equal(case.values,values)
+        case=layered_case();case.cell_type=1
+>       with pytest.raises(ValueError,match='below a convertible bottom'):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: Regex pattern did not match.
+E         Expected regex: 'below a convertible bottom'
+E         Actual message: 'Convertible CHD head below cell bottom is invalid for MF6 6.6.2; prescribed heads are not repaired'
+
+tests/test_npf662_layered_unconfined.py:167: AssertionError
+=============================== warnings summary ===============================
+tests/test_npf662_layered_unconfined.py::test_owning_thickness_thresholds_on_device[cpu]
+  /home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/warp/_src/apic/types.py:49: DeprecationWarning: Due to '_pack_', the 'APICLaunchParamRecord' Structure will use memory layout compatible with MSVC (Windows). If this is intended, set _layout_ to 'ms'. The implicit default is deprecated and slated to become an error in Python 3.19.
+    class APICLaunchParamRecord(ctypes.Structure):
+
+tests/test_npf662_layered_unconfined.py::test_owning_thickness_thresholds_on_device[cpu]
+  /home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/warp/_src/apic/types.py:69: DeprecationWarning: Due to '_pack_', the 'APICLaunchPtrLocation' Structure will use memory layout compatible with MSVC (Windows). If this is intended, set _layout_ to 'ms'. The implicit default is deprecated and slated to become an error in Python 3.19.
+    class APICLaunchPtrLocation(ctypes.Structure):
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_npf662_layered_unconfined.py::test_owning_thickness_derivatives_and_actual_support[full-cpu]
+FAILED tests/test_npf662_layered_unconfined.py::test_owning_thickness_derivatives_and_actual_support[full-cuda:0]
+FAILED tests/test_npf662_layered_unconfined.py::test_owning_thickness_derivatives_and_actual_support[smooth-cpu]
+FAILED tests/test_npf662_layered_unconfined.py::test_owning_thickness_derivatives_and_actual_support[smooth-cuda:0]
+FAILED tests/test_npf662_layered_unconfined.py::test_owning_thickness_derivatives_and_actual_support[lower_buffer-cpu]
+FAILED tests/test_npf662_layered_unconfined.py::test_owning_thickness_derivatives_and_actual_support[lower_buffer-cuda:0]
+FAILED tests/test_npf662_layered_unconfined.py::test_owning_thickness_derivatives_and_actual_support[upper_buffer-cpu]
+FAILED tests/test_npf662_layered_unconfined.py::test_owning_thickness_derivatives_and_actual_support[upper_buffer-cuda:0]
+FAILED tests/test_npf662_layered_unconfined.py::test_owning_thickness_derivatives_and_actual_support[dry-cpu]
+FAILED tests/test_npf662_layered_unconfined.py::test_owning_thickness_derivatives_and_actual_support[dry-cuda:0]
+FAILED tests/test_npf662_layered_unconfined.py::test_layered_unconfined_numerical_reuse_geometry_rebuild_and_cold_reset[cpu]
+FAILED tests/test_npf662_layered_unconfined.py::test_layered_unconfined_numerical_reuse_geometry_rebuild_and_cold_reset[cuda:0]
+FAILED tests/test_npf662_layered_unconfined.py::test_invalid_convertible_chd_and_invalid_supplied_state_are_not_repaired
+13 failed, 8 passed, 2 warnings in 3.09s

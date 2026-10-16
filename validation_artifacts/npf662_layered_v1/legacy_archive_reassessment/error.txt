@@ -1,0 +1,4 @@
+Initial broader-archive runner stopped before writing a summary:
+NameError: name 'json' is not defined. Did you forget to import 'json'?
+The missing import was restored; the corrected immutable result is in legacy_archive_reassessment_v2/.
+No archived head was advanced or modified.

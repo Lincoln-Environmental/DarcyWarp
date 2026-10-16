@@ -1,0 +1,19 @@
+[
+  {
+    "archive": "archives/geology_4x4.tar.xz",
+    "archive_sha256": "d7759cb5d343df792e4d96ecff6271a497307ec01c38e95bea6323eab523850d",
+    "files": {
+      "geology_4x4/varying_geology/mf6/inner.csv": "ee30b76dc53b7423947e94d7d9ab9450ac75570dd952db5488859f7d294e829d",
+      "geology_4x4/varying_geology/mf6/mfsim.lst": "266642a07e1af87823d5c9f5d988d46950ee91ae8671e8da33b60b0324b94ed8",
+      "geology_4x4/varying_geology/mf6/npf662.lst": "d01cb24aaac01d9ef8c525a0d8332b37ddb6812425dc1c792de7d6d76de05350",
+      "geology_4x4/varying_geology/mf6/outer.csv": "fad9afe85647697e2b3a88fe1a0d8cba239bde5c7d846645a977a54e6034ab89",
+      "geology_4x4/varying_geology/mf6/stdout.log": "2096198690ad23ee2e1040c6de57d869a79dc329048283c5fdf66ba8be0e168f",
+      "geology_4x4/varying_geology/mf6_supplied/inner.csv": "59f2766106befe1c4cdad89887fa3107b4833994ee071368a3519a854bd18a42",
+      "geology_4x4/varying_geology/mf6_supplied/mfsim.lst": "b4013317469207016b1f22bfbc3f129a4719772d05c19e8c6c6a7c25a82639aa",
+      "geology_4x4/varying_geology/mf6_supplied/npf662.lst": "ee7448c24888fe1634c5301494e52ff95f37c4d1ed24dbdbf84a63ca45300503",
+      "geology_4x4/varying_geology/mf6_supplied/outer.csv": "a4f15cfd87516da2fe79bea74b2b2d4d74d1dae830e09bb8494a970d3f3814f8",
+      "geology_4x4/varying_geology/mf6_supplied/stdout.log": "7213396a19662bd76548aa7eada84b231cb563455bd0776d824a5d480f4d6395"
+    },
+    "original_directory": "geology_4x4"
+  }
+]

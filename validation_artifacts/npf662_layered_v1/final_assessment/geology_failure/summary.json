@@ -1,0 +1,164 @@
+{
+  "original_cold_cpu_accepted": false,
+  "original_stop_reason": "outer_budget",
+  "cold_final_attempts": [
+    {
+      "outer": 198,
+      "accepted": true,
+      "attempts": [
+        {
+          "direction": "newton",
+          "alpha": 1.0789092566947542e-21,
+          "accepted": false,
+          "linear_residual_max": 0.9914420508438441,
+          "physical_rms": 0.5219928222556284
+        },
+        {
+          "direction": "full_saturated_safeguard",
+          "alpha": 1.0,
+          "accepted": true,
+          "linear_residual_max": 2.886579864025407e-15,
+          "physical_rms": 0.5202900696287072
+        }
+      ]
+    },
+    {
+      "outer": 199,
+      "accepted": true,
+      "attempts": [
+        {
+          "direction": "newton",
+          "alpha": 1.4141479409349483e-16,
+          "accepted": true,
+          "linear_residual_max": 0.9436778798069245,
+          "physical_rms": 0.5202900696287062
+        }
+      ]
+    },
+    {
+      "outer": 200,
+      "accepted": true,
+      "attempts": [
+        {
+          "direction": "newton",
+          "alpha": 1.4141479409349483e-16,
+          "accepted": true,
+          "linear_residual_max": 0.9436778798069245,
+          "physical_rms": 0.520290069628705
+        }
+      ]
+    }
+  ],
+  "verification_restart": {
+    "accepted": true,
+    "outers": 2,
+    "checks": {
+      "prescribed_cells_checked": 18,
+      "prescribed_head_error_max_m": 0.0,
+      "prescribed_head_tolerance_m": 1e-10,
+      "boundary_condition_valid": true,
+      "invalid_active_heads": 0,
+      "inactive_marker_cells": 0,
+      "active_cells_checked": 192,
+      "input_valid": true,
+      "head_residual_rms": 2.0400869081105398e-14,
+      "physical_rms": 2.748665672814603e-13,
+      "physical_max": 1.0141887329950805e-12,
+      "residual_l1": 2.664446441258406e-11,
+      "relative_cell_imbalance": 5.782218839536472e-13,
+      "gross_throughput": 46.07999999999999,
+      "signed_imbalance": -2.331468351712823e-15,
+      "boundary_inflow": 0.0,
+      "boundary_outflow": 23.04,
+      "fixed_cell_source_total": 0.0,
+      "free_cells": 174,
+      "fixed_reservoir_required_inflow": -23.04,
+      "ungrounded_current_components": 0,
+      "physical_metrics_valid": true,
+      "final_acceptance_thresholds": {
+        "physical_rms_m3_day": 1e-12,
+        "relative_cell_imbalance": 1e-08,
+        "head_equivalent_rms_m": 1e-06,
+        "prescribed_head_error_m": 1e-10
+      },
+      "independent_accepted": true,
+      "stop_reason": "converged",
+      "history": [
+        {
+          "outer": 1,
+          "accepted": true,
+          "attempts": [
+            {
+              "direction": "newton",
+              "alpha": 1.0,
+              "accepted": true,
+              "linear_residual_max": 5.551115123125783e-17,
+              "physical_rms": 1.5246449781234976e-07
+            }
+          ]
+        },
+        {
+          "outer": 2,
+          "accepted": true,
+          "attempts": [
+            {
+              "direction": "newton",
+              "alpha": 1.0,
+              "accepted": true,
+              "linear_residual_max": 6.564505341220828e-21,
+              "physical_rms": 2.748665672814603e-13
+            }
+          ]
+        }
+      ],
+      "outers": 2
+    },
+    "input_hash": "88d21759bfc5a69fabfc4e22577fa88d69b79673494a6bf05537700c0ddac6a7",
+    "seed": 1129,
+    "perturbation_m": 0.001
+  },
+  "polishing": {
+    "checks": {
+      "prescribed_cells_checked": 18,
+      "prescribed_head_error_max_m": 0.0,
+      "prescribed_head_tolerance_m": 1e-10,
+      "boundary_condition_valid": true,
+      "invalid_active_heads": 0,
+      "inactive_marker_cells": 0,
+      "active_cells_checked": 192,
+      "input_valid": true,
+      "head_residual_rms": 6.819199007707952e-15,
+      "physical_rms": 3.9074358993494044e-13,
+      "physical_max": 2.1878054923263335e-12,
+      "residual_l1": 3.2498115309920195e-11,
+      "relative_cell_imbalance": 7.052542384965323e-13,
+      "gross_throughput": 46.079999999999984,
+      "signed_imbalance": 9.214851104388645e-15,
+      "boundary_inflow": 0.0,
+      "boundary_outflow": 23.03999999999999,
+      "fixed_cell_source_total": 0.0,
+      "free_cells": 174,
+      "fixed_reservoir_required_inflow": -23.03999999999999,
+      "ungrounded_current_components": 0,
+      "physical_metrics_valid": true,
+      "final_acceptance_thresholds": {
+        "physical_rms_m3_day": 1e-14,
+        "relative_cell_imbalance": 1e-12,
+        "head_equivalent_rms_m": 1e-06,
+        "prescribed_head_error_m": 1e-10
+      },
+      "independent_accepted": true
+    },
+    "history": [
+      {
+        "iteration": 1,
+        "linear_residual_rms": 3.386000750763975e-22,
+        "accepted": true,
+        "alpha": 1.0
+      }
+    ],
+    "head_max_change_m": 1.0910218151138906e-07,
+    "head_max_difference_from_native_m": 8.711253940418828e-12
+  },
+  "interpretation": "Verification-only restart/polishing; original cold failure and original head-parity failure are not relabelled"
+}

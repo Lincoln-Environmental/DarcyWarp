@@ -1,0 +1,88 @@
+{
+  "prescribed_cells_checked": 1,
+  "prescribed_head_error_max_m": 0.0,
+  "prescribed_head_tolerance_m": 1e-10,
+  "boundary_condition_valid": true,
+  "invalid_active_heads": 0,
+  "inactive_marker_cells": 0,
+  "active_cells_checked": 2,
+  "input_valid": true,
+  "head_residual_rms": 2.445861423872395e-09,
+  "physical_rms": 2.8242372884790257e-09,
+  "physical_max": 2.8242372884790257e-09,
+  "residual_l1": 2.8242372884790257e-09,
+  "relative_cell_imbalance": 1.4121186422454337e-09,
+  "gross_throughput": 2.0000000028242373,
+  "signed_imbalance": -2.8242372884790257e-09,
+  "boundary_inflow": 0.0,
+  "boundary_outflow": 1.0000000028242373,
+  "fixed_cell_source_total": 0.0,
+  "free_cells": 1,
+  "fixed_reservoir_required_inflow": -1.0000000028242373,
+  "ungrounded_current_components": 0,
+  "physical_metrics_valid": true,
+  "final_acceptance_thresholds": {
+    "physical_rms_m3_day": 1e-12,
+    "relative_cell_imbalance": 1e-08,
+    "head_equivalent_rms_m": 1e-06,
+    "prescribed_head_error_m": 1e-10
+  },
+  "independent_accepted": true,
+  "stop_reason": "converged",
+  "history": [
+    {
+      "outer": 1,
+      "accepted": true,
+      "attempts": [
+        {
+          "direction": "newton",
+          "alpha": 1.0,
+          "accepted": true,
+          "linear_residual_max": 0.0,
+          "physical_rms": 0.3333335555557504
+        }
+      ]
+    },
+    {
+      "outer": 2,
+      "accepted": true,
+      "attempts": [
+        {
+          "direction": "newton",
+          "alpha": 1.0,
+          "accepted": true,
+          "linear_residual_max": 5.551115123125783e-17,
+          "physical_rms": 0.020833357638910144
+        }
+      ]
+    },
+    {
+      "outer": 3,
+      "accepted": true,
+      "attempts": [
+        {
+          "direction": "newton",
+          "alpha": 1.0,
+          "accepted": true,
+          "linear_residual_max": 0.0,
+          "physical_rms": 0.00010629276249241038
+        }
+      ]
+    },
+    {
+      "outer": 4,
+      "accepted": true,
+      "attempts": [
+        {
+          "direction": "newton",
+          "alpha": 1.0,
+          "accepted": true,
+          "linear_residual_max": 0.0,
+          "physical_rms": 2.8242372884790257e-09
+        }
+      ]
+    }
+  ],
+  "outers": 4,
+  "seconds": 0.003397866996238008
+}
