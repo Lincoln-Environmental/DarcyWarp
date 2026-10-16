@@ -1,0 +1,17 @@
+{
+  "identity": "legacy_catchment_flat_geometry_CHD_WEL",
+  "same_as_original_terrain": false,
+  "changed": "All interfaces replaced by flat contiguous uniform-dz planes; WEL source ownership follows contract reservoir convention",
+  "preserved": "Original builder K in all axes, masks, original volumetric source, coastal prescribed heads and cold initial field",
+  "top": 19.0,
+  "dz": 20.0,
+  "shape": [
+    4,
+    24,
+    32
+  ],
+  "original_top_min": -60.0,
+  "original_top_max": 300.0,
+  "native_head_tolerance_m": 2.1316282072803006e-12,
+  "iteration_tolerance_policy": "32 machine eps times maximum active initial/prescribed head magnitude; independent gates unchanged"
+}

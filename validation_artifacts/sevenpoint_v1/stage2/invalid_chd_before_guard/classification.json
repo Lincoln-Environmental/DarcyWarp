@@ -1,0 +1,74 @@
+{
+  "cpu_accepted": true,
+  "cpu": {
+    "prescribed_cells_checked": 3,
+    "prescribed_head_error_max_m": 0.0,
+    "prescribed_head_tolerance_m": 1e-10,
+    "boundary_condition_valid": true,
+    "invalid_active_heads": 0,
+    "inactive_marker_cells": 0,
+    "active_cells_checked": 4,
+    "input_valid": true,
+    "head_residual_rms": 0.0,
+    "physical_rms": 0.0,
+    "physical_max": 0.0,
+    "residual_l1": 0.0,
+    "relative_cell_imbalance": 0.0,
+    "gross_throughput": 1.6,
+    "signed_imbalance": 0.0,
+    "boundary_inflow": 0.0,
+    "boundary_outflow": 0.8,
+    "fixed_cell_source_total": 0.0,
+    "free_cells": 1,
+    "fixed_reservoir_required_inflow": -0.8,
+    "ungrounded_current_components": 0,
+    "independent_accepted": true,
+    "stop_reason": "converged",
+    "history": [],
+    "outers": 0
+  },
+  "native": {
+    "native_success": false,
+    "returncode": 2,
+    "stop_reason": "native_failure_or_missing_output",
+    "seconds": 0.04748940000717994,
+    "input_hash": "7490c99ddf40716d29d642a56d371f52a0c5d91861c5ef4fad92189ebdebcc82",
+    "mf6_version": "mf6: 6.6.2 05/12/2025",
+    "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+    "contract": "NPF662_CARTESIAN_V1_Newton",
+    "supplied_state_verification": false,
+    "settings": {
+      "xt3d": false,
+      "icelltype": [
+        [
+          [
+            1,
+            1
+          ]
+        ],
+        [
+          [
+            1,
+            1
+          ]
+        ]
+      ],
+      "newton": true,
+      "linear_acceleration": "BICGSTAB",
+      "variablecv": false,
+      "perched": false,
+      "thickstrt": false,
+      "rewet": false,
+      "steady": true,
+      "outer_dvclose_m": 1e-14,
+      "inner_dvclose_m": 1e-14,
+      "inner_rclose_m3_day": 1e-14,
+      "scaling_method": "DIAGONAL",
+      "preconditioner_levels": 100,
+      "preconditioner_drop_tolerance": 0.0,
+      "relaxation_factor": 0.97
+    },
+    "independent_conservation": false
+  },
+  "classification": "Invalid convertible CHD model definition, not a failed same-equation numerical comparison; source chd_ck forbids boundary head below bottom."
+}

@@ -1,0 +1,26 @@
+/home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/warp/_src/apic/types.py:49: DeprecationWarning: Due to '_pack_', the 'APICLaunchParamRecord' Structure will use memory layout compatible with MSVC (Windows). If this is intended, set _layout_ to 'ms'. The implicit default is deprecated and slated to become an error in Python 3.19.
+  class APICLaunchParamRecord(ctypes.Structure):
+/home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/warp/_src/apic/types.py:69: DeprecationWarning: Due to '_pack_', the 'APICLaunchPtrLocation' Structure will use memory layout compatible with MSVC (Windows). If this is intended, set _layout_ to 'ms'. The implicit default is deprecated and slated to become an error in Python 3.19.
+  class APICLaunchPtrLocation(ctypes.Structure):
+running on host: patrickdurney-Z890-UD-WIFI6E
+True
+✅ CUDA driver reports 1 device(s).
+cuda_device_found = True
+Warp 1.17.0 initialized:
+   CUDA Toolkit 12.9, Driver 13.2
+   Devices:
+     "cpu"      : "x86_64"
+     "cuda:0"   : "NVIDIA GeForce RTX 4070 Ti SUPER" (16 GiB, sm_89, mempool enabled)
+   Kernel cache:
+     /home/patrickdurney/.cache/warp/1.17.0
+Module DARCY_WARP_PACKAGE.solvers.npf662_kernels 769f286 load on device 'cpu' took 0.83 ms  (cached)
+Module _create_tiled_dot_kernels__locals__block_dot_kernel_7cdd1072 9b7db13 load on device 'cpu' took 0.11 ms  (cached)
+Module _create_tiled_dot_kernels__locals__block_sum_kernel_85ad7d89 ea9c79e load on device 'cpu' took 0.08 ms  (cached)
+Module warp.optim.linear 41096ca load on device 'cpu' took 0.12 ms  (cached)
+Module DARCY_WARP_PACKAGE.solvers.npf662_kernels ebadaac load on device 'cuda:0' took 1.18 ms  (cached)
+Module _create_tiled_dot_kernels__locals__block_dot_kernel_7cdd1072 cb8e22e load on device 'cuda:0' took 0.28 ms  (cached)
+Module _create_tiled_dot_kernels__locals__block_sum_kernel_85ad7d89 bba3435 load on device 'cuda:0' took 0.24 ms  (cached)
+Module make_gmres_solve_least_squares_kernel_tiled__locals__gmres_solve_least_squares_tiled_535e4c66 cb8c4a4 load on device 'cuda:0' took 0.30 ms  (cached)
+Module warp.optim.linear 7055af3 load on device 'cuda:0' took 1.20 ms  (cached)
+Module warp.optim.linear 52ebbe0 load on device 'cuda:0' took 1.05 ms  (cached)
+flat_catchment True 5 {'cpu': 6, 'cuda:0': 6}

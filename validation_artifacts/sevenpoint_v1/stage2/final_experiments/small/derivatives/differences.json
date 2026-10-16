@@ -1,0 +1,25 @@
+{
+  "steps": [
+    {
+      "epsilon": 0.001,
+      "relative_l2": 8.602718057661786e-05
+    },
+    {
+      "epsilon": 0.0001,
+      "relative_l2": 1.014577140183488e-12
+    },
+    {
+      "epsilon": 1e-05,
+      "relative_l2": 1.5630622521277253e-11
+    },
+    {
+      "epsilon": 1e-06,
+      "relative_l2": 1.229803721645803e-10
+    },
+    {
+      "epsilon": 1e-07,
+      "relative_l2": 1.0376696111071046e-09
+    }
+  ],
+  "max_columns": 7
+}

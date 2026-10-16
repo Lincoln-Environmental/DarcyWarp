@@ -1,0 +1,2451 @@
+{
+  "cpu": {
+    "converged": false,
+    "stop_reason": "ungrounded_saturation_components",
+    "outer_iterations": 3,
+    "krylov_iterations": 54,
+    "jacobian_vector_products": 60,
+    "nonlinear_residual_evaluations": 69,
+    "candidate_evaluations": 63,
+    "nonlinear_backtracks": 57,
+    "fallback_count": 0,
+    "outer_history": [
+      {
+        "outer": 1,
+        "accepted": true,
+        "krylov": 18,
+        "attempts": [
+          {
+            "direction": "newton",
+            "krylov": 18,
+            "remaining": 6,
+            "achieved_scaled_l2": 0.25,
+            "requested_scaled_l2": 0.0025,
+            "target_reached": false,
+            "stopping": "budget_or_breakdown",
+            "search": {
+              "accepted": true,
+              "alpha": 1.0,
+              "mode": "bounded_recovery",
+              "metrics": {
+                "physical_rms": 1.0,
+                "head_residual_rms": null,
+                "relative_cell_imbalance": 1.0,
+                "gross_throughput": 1.0,
+                "residual_l1": 1.0,
+                "signed_imbalance": 1.0,
+                "boundary_inflow": 0.0,
+                "boundary_outflow": 0.0,
+                "scaled_l2": 0.25,
+                "finite": true
+              },
+              "trials": [
+                {
+                  "alpha": 1.0,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.5,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.25,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.125,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.0625,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.03125,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.015625,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.0078125,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.00390625,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.001953125,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.0009765625,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.00048828125,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.000244140625,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.0001220703125,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 6.103515625e-05,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 3.0517578125e-05,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 1.52587890625e-05,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 7.62939453125e-06,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 3.814697265625e-06,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 1.9073486328125e-06,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                }
+              ],
+              "raw_max": 0.0
+            }
+          }
+        ],
+        "metrics": {
+          "physical_rms": 1.0,
+          "head_residual_rms": null,
+          "relative_cell_imbalance": 1.0,
+          "gross_throughput": 1.0,
+          "residual_l1": 1.0,
+          "signed_imbalance": 1.0,
+          "boundary_inflow": 0.0,
+          "boundary_outflow": 0.0,
+          "scaled_l2": 0.25,
+          "finite": true
+        }
+      },
+      {
+        "outer": 2,
+        "accepted": true,
+        "krylov": 18,
+        "attempts": [
+          {
+            "direction": "newton",
+            "krylov": 18,
+            "remaining": 6,
+            "achieved_scaled_l2": 0.25,
+            "requested_scaled_l2": 0.0025,
+            "target_reached": false,
+            "stopping": "budget_or_breakdown",
+            "search": {
+              "accepted": true,
+              "alpha": 1.0,
+              "mode": "bounded_recovery",
+              "metrics": {
+                "physical_rms": 1.0,
+                "head_residual_rms": null,
+                "relative_cell_imbalance": 1.0,
+                "gross_throughput": 1.0,
+                "residual_l1": 1.0,
+                "signed_imbalance": 1.0,
+                "boundary_inflow": 0.0,
+                "boundary_outflow": 0.0,
+                "scaled_l2": 0.25,
+                "finite": true
+              },
+              "trials": [
+                {
+                  "alpha": 1.0,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.5,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.25,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.125,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.0625,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.03125,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.015625,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.0078125,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.00390625,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.001953125,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.0009765625,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.00048828125,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.000244140625,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.0001220703125,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 6.103515625e-05,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 3.0517578125e-05,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 1.52587890625e-05,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 7.62939453125e-06,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 3.814697265625e-06,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 1.9073486328125e-06,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                }
+              ],
+              "raw_max": 0.0
+            }
+          }
+        ],
+        "metrics": {
+          "physical_rms": 1.0,
+          "head_residual_rms": null,
+          "relative_cell_imbalance": 1.0,
+          "gross_throughput": 1.0,
+          "residual_l1": 1.0,
+          "signed_imbalance": 1.0,
+          "boundary_inflow": 0.0,
+          "boundary_outflow": 0.0,
+          "scaled_l2": 0.25,
+          "finite": true
+        }
+      },
+      {
+        "outer": 3,
+        "accepted": true,
+        "krylov": 18,
+        "attempts": [
+          {
+            "direction": "newton",
+            "krylov": 18,
+            "remaining": 6,
+            "achieved_scaled_l2": 0.25,
+            "requested_scaled_l2": 0.0025,
+            "target_reached": false,
+            "stopping": "budget_or_breakdown",
+            "search": {
+              "accepted": true,
+              "alpha": 1.0,
+              "mode": "bounded_recovery",
+              "metrics": {
+                "physical_rms": 1.0,
+                "head_residual_rms": null,
+                "relative_cell_imbalance": 1.0,
+                "gross_throughput": 1.0,
+                "residual_l1": 1.0,
+                "signed_imbalance": 1.0,
+                "boundary_inflow": 0.0,
+                "boundary_outflow": 0.0,
+                "scaled_l2": 0.25,
+                "finite": true
+              },
+              "trials": [
+                {
+                  "alpha": 1.0,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.5,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.25,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.125,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.0625,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.03125,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.015625,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.0078125,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.00390625,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.001953125,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.0009765625,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.00048828125,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.000244140625,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.0001220703125,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 6.103515625e-05,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 3.0517578125e-05,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 1.52587890625e-05,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 7.62939453125e-06,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 3.814697265625e-06,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 1.9073486328125e-06,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                }
+              ],
+              "raw_max": 0.0
+            }
+          }
+        ],
+        "metrics": {
+          "physical_rms": 1.0,
+          "head_residual_rms": null,
+          "relative_cell_imbalance": 1.0,
+          "gross_throughput": 1.0,
+          "residual_l1": 1.0,
+          "signed_imbalance": 1.0,
+          "boundary_inflow": 0.0,
+          "boundary_outflow": 0.0,
+          "scaled_l2": 0.25,
+          "finite": true
+        }
+      }
+    ],
+    "independent_acceptance": {
+      "prescribed_cells_checked": 1,
+      "prescribed_head_error_max_m": 0.0,
+      "prescribed_head_tolerance_m": 1e-10,
+      "boundary_condition_valid": true,
+      "invalid_active_heads": 0,
+      "inactive_marker_cells": 0,
+      "active_cells_checked": 2,
+      "input_valid": true,
+      "head_residual_rms": null,
+      "physical_rms": 1.0,
+      "physical_max": 1.0,
+      "residual_l1": 1.0,
+      "relative_cell_imbalance": 1.0,
+      "gross_throughput": 1.0,
+      "signed_imbalance": 1.0,
+      "boundary_inflow": 0.0,
+      "boundary_outflow": 0.0,
+      "fixed_cell_source_total": 0.0,
+      "free_cells": 1,
+      "ungrounded_current_components": 1,
+      "independent_accepted": false
+    },
+    "device_final_metrics": {
+      "physical_rms": 1.0,
+      "head_residual_rms": null,
+      "relative_cell_imbalance": 1.0,
+      "gross_throughput": 1.0,
+      "residual_l1": 1.0,
+      "signed_imbalance": 1.0,
+      "boundary_inflow": 0.0,
+      "boundary_outflow": 0.0,
+      "scaled_l2": 0.25,
+      "finite": true
+    },
+    "workspace_reused": false,
+    "seconds": 0.14128115499624982,
+    "controls": {
+      "inner_forcing": 0.01,
+      "newton_budget_fraction": 0.75,
+      "line_search_steps": 20,
+      "max_head_change_m": 50.0,
+      "recovery_growth": 1.1
+    },
+    "linear_budget_units": "Krylov iterations shared across Newton and Picard per outer",
+    "max_krylov_per_outer": 24,
+    "max_outer": 3,
+    "krylov_restart": 24,
+    "scaling": "fixed full-saturated principal diagonal; S*J and S*R",
+    "preconditioner": "fixed diagonal within each GMRES solve",
+    "formulation": "mf6_6_6_2_npf",
+    "geometry": "orthogonal_cartesian_uniform_dz",
+    "reference_contract": "NPF662_CARTESIAN_V1_Newton",
+    "reference_version": "6.6.2",
+    "effective_options": {
+      "xt3d": false,
+      "newton": true,
+      "cell_type": [
+        [
+          [
+            1,
+            1
+          ]
+        ]
+      ],
+      "saturation_epsilon": 1e-06,
+      "conductance_floor_m": 0.0,
+      "variablecv": false,
+      "perched": false,
+      "thickstrt": false,
+      "rewet": false,
+      "storage": false,
+      "packages": [
+        "CHD",
+        "WEL_SOURCE"
+      ]
+    }
+  },
+  "cuda:0": {
+    "converged": false,
+    "stop_reason": "ungrounded_saturation_components",
+    "outer_iterations": 3,
+    "krylov_iterations": 54,
+    "jacobian_vector_products": 60,
+    "nonlinear_residual_evaluations": 69,
+    "candidate_evaluations": 63,
+    "nonlinear_backtracks": 57,
+    "fallback_count": 0,
+    "outer_history": [
+      {
+        "outer": 1,
+        "accepted": true,
+        "krylov": 18,
+        "attempts": [
+          {
+            "direction": "newton",
+            "krylov": 18,
+            "remaining": 6,
+            "achieved_scaled_l2": 0.25,
+            "requested_scaled_l2": 0.0025,
+            "target_reached": false,
+            "stopping": "budget_or_breakdown",
+            "search": {
+              "accepted": true,
+              "alpha": 1.0,
+              "mode": "bounded_recovery",
+              "metrics": {
+                "physical_rms": 1.0,
+                "head_residual_rms": null,
+                "relative_cell_imbalance": 1.0,
+                "gross_throughput": 1.0,
+                "residual_l1": 1.0,
+                "signed_imbalance": 1.0,
+                "boundary_inflow": 0.0,
+                "boundary_outflow": 0.0,
+                "scaled_l2": 0.25,
+                "finite": true
+              },
+              "trials": [
+                {
+                  "alpha": 1.0,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.5,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.25,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.125,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.0625,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.03125,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.015625,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.0078125,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.00390625,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.001953125,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.0009765625,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.00048828125,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.000244140625,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.0001220703125,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 6.103515625e-05,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 3.0517578125e-05,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 1.52587890625e-05,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 7.62939453125e-06,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 3.814697265625e-06,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 1.9073486328125e-06,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                }
+              ],
+              "raw_max": 0.0
+            }
+          }
+        ],
+        "metrics": {
+          "physical_rms": 1.0,
+          "head_residual_rms": null,
+          "relative_cell_imbalance": 1.0,
+          "gross_throughput": 1.0,
+          "residual_l1": 1.0,
+          "signed_imbalance": 1.0,
+          "boundary_inflow": 0.0,
+          "boundary_outflow": 0.0,
+          "scaled_l2": 0.25,
+          "finite": true
+        }
+      },
+      {
+        "outer": 2,
+        "accepted": true,
+        "krylov": 18,
+        "attempts": [
+          {
+            "direction": "newton",
+            "krylov": 18,
+            "remaining": 6,
+            "achieved_scaled_l2": 0.25,
+            "requested_scaled_l2": 0.0025,
+            "target_reached": false,
+            "stopping": "budget_or_breakdown",
+            "search": {
+              "accepted": true,
+              "alpha": 1.0,
+              "mode": "bounded_recovery",
+              "metrics": {
+                "physical_rms": 1.0,
+                "head_residual_rms": null,
+                "relative_cell_imbalance": 1.0,
+                "gross_throughput": 1.0,
+                "residual_l1": 1.0,
+                "signed_imbalance": 1.0,
+                "boundary_inflow": 0.0,
+                "boundary_outflow": 0.0,
+                "scaled_l2": 0.25,
+                "finite": true
+              },
+              "trials": [
+                {
+                  "alpha": 1.0,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.5,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.25,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.125,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.0625,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.03125,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.015625,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.0078125,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.00390625,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.001953125,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.0009765625,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.00048828125,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.000244140625,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.0001220703125,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 6.103515625e-05,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 3.0517578125e-05,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 1.52587890625e-05,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 7.62939453125e-06,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 3.814697265625e-06,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 1.9073486328125e-06,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                }
+              ],
+              "raw_max": 0.0
+            }
+          }
+        ],
+        "metrics": {
+          "physical_rms": 1.0,
+          "head_residual_rms": null,
+          "relative_cell_imbalance": 1.0,
+          "gross_throughput": 1.0,
+          "residual_l1": 1.0,
+          "signed_imbalance": 1.0,
+          "boundary_inflow": 0.0,
+          "boundary_outflow": 0.0,
+          "scaled_l2": 0.25,
+          "finite": true
+        }
+      },
+      {
+        "outer": 3,
+        "accepted": true,
+        "krylov": 18,
+        "attempts": [
+          {
+            "direction": "newton",
+            "krylov": 18,
+            "remaining": 6,
+            "achieved_scaled_l2": 0.25,
+            "requested_scaled_l2": 0.0025,
+            "target_reached": false,
+            "stopping": "budget_or_breakdown",
+            "search": {
+              "accepted": true,
+              "alpha": 1.0,
+              "mode": "bounded_recovery",
+              "metrics": {
+                "physical_rms": 1.0,
+                "head_residual_rms": null,
+                "relative_cell_imbalance": 1.0,
+                "gross_throughput": 1.0,
+                "residual_l1": 1.0,
+                "signed_imbalance": 1.0,
+                "boundary_inflow": 0.0,
+                "boundary_outflow": 0.0,
+                "scaled_l2": 0.25,
+                "finite": true
+              },
+              "trials": [
+                {
+                  "alpha": 1.0,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.5,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.25,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.125,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.0625,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.03125,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.015625,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.0078125,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.00390625,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.001953125,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.0009765625,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.00048828125,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.000244140625,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 0.0001220703125,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 6.103515625e-05,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 3.0517578125e-05,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 1.52587890625e-05,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 7.62939453125e-06,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 3.814697265625e-06,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                },
+                {
+                  "alpha": 1.9073486328125e-06,
+                  "merit": 1.0,
+                  "metrics": {
+                    "physical_rms": 1.0,
+                    "head_residual_rms": null,
+                    "relative_cell_imbalance": 1.0,
+                    "gross_throughput": 1.0,
+                    "residual_l1": 1.0,
+                    "signed_imbalance": 1.0,
+                    "boundary_inflow": 0.0,
+                    "boundary_outflow": 0.0,
+                    "scaled_l2": 0.25,
+                    "finite": true
+                  }
+                }
+              ],
+              "raw_max": 0.0
+            }
+          }
+        ],
+        "metrics": {
+          "physical_rms": 1.0,
+          "head_residual_rms": null,
+          "relative_cell_imbalance": 1.0,
+          "gross_throughput": 1.0,
+          "residual_l1": 1.0,
+          "signed_imbalance": 1.0,
+          "boundary_inflow": 0.0,
+          "boundary_outflow": 0.0,
+          "scaled_l2": 0.25,
+          "finite": true
+        }
+      }
+    ],
+    "independent_acceptance": {
+      "prescribed_cells_checked": 1,
+      "prescribed_head_error_max_m": 0.0,
+      "prescribed_head_tolerance_m": 1e-10,
+      "boundary_condition_valid": true,
+      "invalid_active_heads": 0,
+      "inactive_marker_cells": 0,
+      "active_cells_checked": 2,
+      "input_valid": true,
+      "head_residual_rms": null,
+      "physical_rms": 1.0,
+      "physical_max": 1.0,
+      "residual_l1": 1.0,
+      "relative_cell_imbalance": 1.0,
+      "gross_throughput": 1.0,
+      "signed_imbalance": 1.0,
+      "boundary_inflow": 0.0,
+      "boundary_outflow": 0.0,
+      "fixed_cell_source_total": 0.0,
+      "free_cells": 1,
+      "ungrounded_current_components": 1,
+      "independent_accepted": false
+    },
+    "device_final_metrics": {
+      "physical_rms": 1.0,
+      "head_residual_rms": null,
+      "relative_cell_imbalance": 1.0,
+      "gross_throughput": 1.0,
+      "residual_l1": 1.0,
+      "signed_imbalance": 1.0,
+      "boundary_inflow": 0.0,
+      "boundary_outflow": 0.0,
+      "scaled_l2": 0.25,
+      "finite": true
+    },
+    "workspace_reused": false,
+    "seconds": 0.013500329994712956,
+    "controls": {
+      "inner_forcing": 0.01,
+      "newton_budget_fraction": 0.75,
+      "line_search_steps": 20,
+      "max_head_change_m": 50.0,
+      "recovery_growth": 1.1
+    },
+    "linear_budget_units": "Krylov iterations shared across Newton and Picard per outer",
+    "max_krylov_per_outer": 24,
+    "max_outer": 3,
+    "krylov_restart": 24,
+    "scaling": "fixed full-saturated principal diagonal; S*J and S*R",
+    "preconditioner": "fixed diagonal within each GMRES solve",
+    "formulation": "mf6_6_6_2_npf",
+    "geometry": "orthogonal_cartesian_uniform_dz",
+    "reference_contract": "NPF662_CARTESIAN_V1_Newton",
+    "reference_version": "6.6.2",
+    "effective_options": {
+      "xt3d": false,
+      "newton": true,
+      "cell_type": [
+        [
+          [
+            1,
+            1
+          ]
+        ]
+      ],
+      "saturation_epsilon": 1e-06,
+      "conductance_floor_m": 0.0,
+      "variablecv": false,
+      "perched": false,
+      "thickstrt": false,
+      "rewet": false,
+      "storage": false,
+      "packages": [
+        "CHD",
+        "WEL_SOURCE"
+      ]
+    }
+  },
+  "mf6": {
+    "native_success": true,
+    "input_hash": "6c622179da646983d87d5f8886dccdc03a233fd16d2313811de59a7e8e3e2314",
+    "mf6_version": "mf6: 6.6.2 05/12/2025",
+    "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+    "contract": "NPF662_CARTESIAN_V1_Newton",
+    "supplied_state_verification": false,
+    "settings": {
+      "xt3d": false,
+      "icelltype": [
+        [
+          [
+            1,
+            1
+          ]
+        ]
+      ],
+      "newton": true,
+      "linear_acceleration": "BICGSTAB",
+      "variablecv": false,
+      "perched": false,
+      "thickstrt": false,
+      "rewet": false,
+      "steady": true,
+      "outer_dvclose_m": 1e-14,
+      "inner_dvclose_m": 1e-14,
+      "inner_rclose_m3_day": 1e-14,
+      "scaling_method": "DIAGONAL",
+      "preconditioner_levels": 100,
+      "preconditioner_drop_tolerance": 0.0,
+      "relaxation_factor": 0.97
+    },
+    "independent": {
+      "prescribed_cells_checked": 1,
+      "prescribed_head_error_max_m": 0.0,
+      "prescribed_head_tolerance_m": 1e-10,
+      "boundary_condition_valid": true,
+      "invalid_active_heads": 0,
+      "inactive_marker_cells": 0,
+      "active_cells_checked": 2,
+      "input_valid": true,
+      "head_residual_rms": 2.8135063912585475e-11,
+      "physical_rms": 2.8135049845445792e-11,
+      "physical_max": 2.8135049845445792e-11,
+      "residual_l1": 2.8135049845445792e-11,
+      "relative_cell_imbalance": 1.4067524922525003e-11,
+      "gross_throughput": 2.000000000028135,
+      "signed_imbalance": -2.8135049845445792e-11,
+      "boundary_inflow": 0.0,
+      "boundary_outflow": 1.000000000028135,
+      "fixed_cell_source_total": 0.0,
+      "free_cells": 1,
+      "ungrounded_current_components": 0,
+      "independent_accepted": true
+    },
+    "source_allocation_max_error": 0.0,
+    "reciprocity_max": 0.0,
+    "native_flux_residual_rms": 2.8135049845445792e-11,
+    "native_flux_residual_relative": 1.4067524922525003e-11,
+    "independent_conservation": true
+  }
+}

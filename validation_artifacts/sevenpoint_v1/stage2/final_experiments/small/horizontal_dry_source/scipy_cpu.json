@@ -1,0 +1,111 @@
+{
+  "prescribed_cells_checked": 1,
+  "prescribed_head_error_max_m": 0.0,
+  "prescribed_head_tolerance_m": 1e-10,
+  "boundary_condition_valid": true,
+  "invalid_active_heads": 0,
+  "inactive_marker_cells": 0,
+  "active_cells_checked": 2,
+  "input_valid": true,
+  "head_residual_rms": 2.4202874038268164e-14,
+  "physical_rms": 2.4202861936828413e-14,
+  "physical_max": 2.4202861936828413e-14,
+  "residual_l1": 2.4202861936828413e-14,
+  "relative_cell_imbalance": 1.2101430968414061e-14,
+  "gross_throughput": 2.000000000000024,
+  "signed_imbalance": -2.4202861936828413e-14,
+  "boundary_inflow": 0.0,
+  "boundary_outflow": 1.0000000000000242,
+  "fixed_cell_source_total": 0.0,
+  "free_cells": 1,
+  "fixed_reservoir_required_inflow": -1.0000000000000242,
+  "ungrounded_current_components": 0,
+  "independent_accepted": true,
+  "stop_reason": "converged",
+  "history": [
+    {
+      "outer": 1,
+      "accepted": true,
+      "attempts": [
+        {
+          "direction": "newton",
+          "factorization_failure": "Matrix is exactly singular"
+        },
+        {
+          "direction": "full_saturated_safeguard",
+          "alpha": 1.0,
+          "accepted": true,
+          "linear_residual_max": 0.0,
+          "physical_rms": 0.9975000975000975
+        }
+      ]
+    },
+    {
+      "outer": 2,
+      "accepted": true,
+      "attempts": [
+        {
+          "direction": "newton",
+          "alpha": 0.125,
+          "accepted": true,
+          "linear_residual_max": 1.1102230246251565e-16,
+          "physical_rms": 0.6819456192472255
+        }
+      ]
+    },
+    {
+      "outer": 3,
+      "accepted": true,
+      "attempts": [
+        {
+          "direction": "newton",
+          "alpha": 1.0,
+          "accepted": true,
+          "linear_residual_max": 0.0,
+          "physical_rms": 0.0691237906696327
+        }
+      ]
+    },
+    {
+      "outer": 4,
+      "accepted": true,
+      "attempts": [
+        {
+          "direction": "newton",
+          "alpha": 1.0,
+          "accepted": true,
+          "linear_residual_max": 0.0,
+          "physical_rms": 0.001117293076403847
+        }
+      ]
+    },
+    {
+      "outer": 5,
+      "accepted": true,
+      "attempts": [
+        {
+          "direction": "newton",
+          "alpha": 1.0,
+          "accepted": true,
+          "linear_residual_max": 0.0,
+          "physical_rms": 3.117376523587012e-07
+        }
+      ]
+    },
+    {
+      "outer": 6,
+      "accepted": true,
+      "attempts": [
+        {
+          "direction": "newton",
+          "alpha": 1.0,
+          "accepted": true,
+          "linear_residual_max": 0.0,
+          "physical_rms": 2.4202861936828413e-14
+        }
+      ]
+    }
+  ],
+  "outers": 6,
+  "seconds": 0.005085572003736161
+}

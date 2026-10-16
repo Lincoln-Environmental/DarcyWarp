@@ -1,0 +1,84 @@
+..FF.....................                                                [100%]
+=================================== FAILURES ===================================
+__________ test_analytic_jv_and_actual_seven_point_support[thin-cpu] ___________
+
+device = 'cpu', regime = 'thin'
+
+    @pytest.mark.parametrize('device',['cpu','cuda:0'])
+    @pytest.mark.parametrize('regime',['full','thin','dry','smooth'])
+    def test_analytic_jv_and_actual_seven_point_support(device,regime):
+        if device.startswith('cuda') and not wp.is_cuda_available():pytest.skip('Local CUDA unavailable')
+        case=unconfined_case(heterogeneous=True)
+        rng=np.random.default_rng(seed=17)
+        offsets={'full':3.,'thin':.0005,'dry':-.2,'smooth':.7}
+        head=case.bottoms+offsets[regime]+(.05*rng.random(size=case.active.shape) if regime=='smooth' else 0.)
+        head[case.fixed!=0]=case.values[case.fixed!=0]
+        case.initial=head.copy()
+        reference=NPF662Reference(case=case)
+        v=rng.normal(size=case.active.shape);v[~reference.free]=0.
+        J=reference.jacobian(head=head)
+        expected=(J@v.ravel()).reshape(case.active.shape)
+        row,column=J.nonzero()
+        coordinates=np.stack(np.unravel_index(np.arange(case.active.size),case.active.shape),axis=1)
+        assert np.all(np.sum(np.abs(coordinates[row]-coordinates[column]),axis=1)<=1)
+        assert np.max(np.diff(J.indptr))<=7
+        errors=[]
+        for epsilon in (1e-3,1e-4,1e-5,1e-6):
+            unused,plus=reference.evaluate(head=head+epsilon*v)
+            unused,minus=reference.evaluate(head=head-epsilon*v)
+            fd=-(plus['residual']-minus['residual'])/(2*epsilon)
+            errors.append(float(np.linalg.norm((fd-expected)[reference.free])/np.linalg.norm(expected[reference.free])))
+>       assert min(errors)<2e-7,errors
+E       AssertionError: [0.0014130254344130332, 0.00014126333001970965, 1.4126334459803398e-05, 1.4126337294092475e-06]
+E       assert 1.4126337294092475e-06 < 2e-07
+E        +  where 1.4126337294092475e-06 = min([0.0014130254344130332, 0.00014126333001970965, 1.4126334459803398e-05, 1.4126337294092475e-06])
+
+tests/test_npf662_newton.py:61: AssertionError
+_________ test_analytic_jv_and_actual_seven_point_support[thin-cuda:0] _________
+
+device = 'cuda:0', regime = 'thin'
+
+    @pytest.mark.parametrize('device',['cpu','cuda:0'])
+    @pytest.mark.parametrize('regime',['full','thin','dry','smooth'])
+    def test_analytic_jv_and_actual_seven_point_support(device,regime):
+        if device.startswith('cuda') and not wp.is_cuda_available():pytest.skip('Local CUDA unavailable')
+        case=unconfined_case(heterogeneous=True)
+        rng=np.random.default_rng(seed=17)
+        offsets={'full':3.,'thin':.0005,'dry':-.2,'smooth':.7}
+        head=case.bottoms+offsets[regime]+(.05*rng.random(size=case.active.shape) if regime=='smooth' else 0.)
+        head[case.fixed!=0]=case.values[case.fixed!=0]
+        case.initial=head.copy()
+        reference=NPF662Reference(case=case)
+        v=rng.normal(size=case.active.shape);v[~reference.free]=0.
+        J=reference.jacobian(head=head)
+        expected=(J@v.ravel()).reshape(case.active.shape)
+        row,column=J.nonzero()
+        coordinates=np.stack(np.unravel_index(np.arange(case.active.size),case.active.shape),axis=1)
+        assert np.all(np.sum(np.abs(coordinates[row]-coordinates[column]),axis=1)<=1)
+        assert np.max(np.diff(J.indptr))<=7
+        errors=[]
+        for epsilon in (1e-3,1e-4,1e-5,1e-6):
+            unused,plus=reference.evaluate(head=head+epsilon*v)
+            unused,minus=reference.evaluate(head=head-epsilon*v)
+            fd=-(plus['residual']-minus['residual'])/(2*epsilon)
+            errors.append(float(np.linalg.norm((fd-expected)[reference.free])/np.linalg.norm(expected[reference.free])))
+>       assert min(errors)<2e-7,errors
+E       AssertionError: [0.0014130254344130332, 0.00014126333001970965, 1.4126334459803398e-05, 1.4126337294092475e-06]
+E       assert 1.4126337294092475e-06 < 2e-07
+E        +  where 1.4126337294092475e-06 = min([0.0014130254344130332, 0.00014126333001970965, 1.4126334459803398e-05, 1.4126337294092475e-06])
+
+tests/test_npf662_newton.py:61: AssertionError
+=============================== warnings summary ===============================
+tests/test_npf662_newton.py::test_analytic_jv_and_actual_seven_point_support[full-cpu]
+  /home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/warp/_src/apic/types.py:49: DeprecationWarning: Due to '_pack_', the 'APICLaunchParamRecord' Structure will use memory layout compatible with MSVC (Windows). If this is intended, set _layout_ to 'ms'. The implicit default is deprecated and slated to become an error in Python 3.19.
+    class APICLaunchParamRecord(ctypes.Structure):
+
+tests/test_npf662_newton.py::test_analytic_jv_and_actual_seven_point_support[full-cpu]
+  /home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/warp/_src/apic/types.py:69: DeprecationWarning: Due to '_pack_', the 'APICLaunchPtrLocation' Structure will use memory layout compatible with MSVC (Windows). If this is intended, set _layout_ to 'ms'. The implicit default is deprecated and slated to become an error in Python 3.19.
+    class APICLaunchPtrLocation(ctypes.Structure):
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_npf662_newton.py::test_analytic_jv_and_actual_seven_point_support[thin-cpu]
+FAILED tests/test_npf662_newton.py::test_analytic_jv_and_actual_seven_point_support[thin-cuda:0]
+2 failed, 23 passed, 2 warnings in 5.94s

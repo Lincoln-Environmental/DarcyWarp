@@ -1,0 +1,20 @@
+✅ CUDA driver reports 1 device(s).
+cuda_device_found = True
+Warp 1.17.0 initialized:
+   CUDA Toolkit 12.9, Driver 13.2
+   Devices:
+     "cpu"      : "x86_64"
+     "cuda:0"   : "NVIDIA GeForce RTX 4070 Ti SUPER" (16 GiB, sm_89, mempool enabled)
+   Kernel cache:
+     /home/patrickdurney/.cache/warp/1.17.0
+Module DARCY_WARP_PACKAGE.solvers.npf662_kernels 769f286 load on device 'cpu' took 1274.30 ms  (compiled)
+Module _create_tiled_dot_kernels__locals__block_dot_kernel_7cdd1072 9b7db13 load on device 'cpu' took 0.11 ms  (cached)
+Module _create_tiled_dot_kernels__locals__block_sum_kernel_85ad7d89 ea9c79e load on device 'cpu' took 0.10 ms  (cached)
+Module warp.optim.linear 41096ca load on device 'cpu' took 0.12 ms  (cached)
+Module DARCY_WARP_PACKAGE.solvers.npf662_kernels ebadaac load on device 'cuda:0' took 1002.33 ms  (compiled)
+Module _create_tiled_dot_kernels__locals__block_dot_kernel_7cdd1072 cb8e22e load on device 'cuda:0' took 0.36 ms  (cached)
+Module _create_tiled_dot_kernels__locals__block_sum_kernel_85ad7d89 bba3435 load on device 'cuda:0' took 0.28 ms  (cached)
+Module make_gmres_solve_least_squares_kernel_tiled__locals__gmres_solve_least_squares_tiled_535e4c66 cb8c4a4 load on device 'cuda:0' took 0.36 ms  (cached)
+Module warp.optim.linear 7055af3 load on device 'cuda:0' took 0.91 ms  (cached)
+Module warp.optim.linear 52ebbe0 load on device 'cuda:0' took 0.92 ms  (cached)
+{'scipy_cpu': True, 'warp_cpu': True, 'warp_cuda:0': True, 'mf6': True}

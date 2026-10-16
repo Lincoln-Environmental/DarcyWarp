@@ -1,0 +1,52 @@
+✅ CUDA driver reports 1 device(s).
+cuda_device_found = True
+Warp 1.17.0 initialized:
+   CUDA Toolkit 12.9, Driver 13.2
+   Devices:
+     "cpu"      : "x86_64"
+     "cuda:0"   : "NVIDIA GeForce RTX 4070 Ti SUPER" (16 GiB, sm_89, mempool enabled)
+   Kernel cache:
+     /home/patrickdurney/.cache/warp/1.17.0
+Module DARCY_WARP_PACKAGE.solvers.npf662_kernels 769f286 load on device 'cpu' took 0.82 ms  (cached)
+Module _create_tiled_dot_kernels__locals__block_dot_kernel_7cdd1072 9b7db13 load on device 'cpu' took 0.10 ms  (cached)
+Module _create_tiled_dot_kernels__locals__block_sum_kernel_85ad7d89 ea9c79e load on device 'cpu' took 0.09 ms  (cached)
+Module warp.optim.linear 41096ca load on device 'cpu' took 0.12 ms  (cached)
+Module DARCY_WARP_PACKAGE.solvers.npf662_kernels ebadaac load on device 'cuda:0' took 1.24 ms  (cached)
+Module _create_tiled_dot_kernels__locals__block_dot_kernel_7cdd1072 cb8e22e load on device 'cuda:0' took 0.29 ms  (cached)
+Module _create_tiled_dot_kernels__locals__block_sum_kernel_85ad7d89 bba3435 load on device 'cuda:0' took 0.24 ms  (cached)
+Module make_gmres_solve_least_squares_kernel_tiled__locals__gmres_solve_least_squares_tiled_535e4c66 cb8c4a4 load on device 'cuda:0' took 0.30 ms  (cached)
+Module warp.optim.linear 7055af3 load on device 'cuda:0' took 1.24 ms  (cached)
+Module warp.optim.linear 52ebbe0 load on device 'cuda:0' took 1.03 ms  (cached)
+scalar_upstream True 1 {'cpu': 1, 'cuda:0': 1}
+horizontal_dry_source True 6 {'cpu': 6, 'cuda:0': 6}
+vertical_partial True 1 {'cpu': 1, 'cuda:0': 1}
+heterogeneous_wet True 3 {'cpu': 5, 'cuda:0': 5}
+heterogeneous_dry True 5 {'cpu': 6, 'cuda:0': 6}
+heterogeneous_mixed True 4 {'cpu': 6, 'cuda:0': 6}
+masked_mixed True 4 {'cpu': 6, 'cuda:0': 6}
+running on host: patrickdurney-Z890-UD-WIFI6E
+True
+Traceback (most recent call last):
+  File "/tmp/darcy-sevenpoint/working_tests/validate_npf662_unconfined.py", line 164, in <module>
+    run_existing_catchment_remap(root=root/'catchment',shape=catchment_shape,dx=catchment_dx,dz=catchment_dz,
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        seed=seed,devices=devices,executable=executable,max_outer=max_outer,krylov_budget=krylov_budget)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/darcy-sevenpoint/working_tests/validate_npf662_unconfined.py", line 146, in run_existing_catchment_remap
+    row=run_case(case=case,case_id='flat_catchment',root=root,devices=devices,executable=executable,
+        max_outer=max_outer,krylov_budget=krylov_budget,seed=seed,supplied_check=False)
+  File "/tmp/darcy-sevenpoint/working_tests/validate_npf662_unconfined.py", line 63, in run_case
+    native,mi,mf=run_reference_mf6(case=case,directory=directory/'mf6',executable=executable)
+                 ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/darcy-sevenpoint/DARCY_WARP_PACKAGE/validation/npf662_mf6.py", line 69, in run_reference_mf6
+    raw=flopy.utils.HeadFile(str(directory/'npf662.hds'),precision='double').get_data()[reverse].copy()
+        ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/flopy/utils/binaryfile/__init__.py", line 510, in __init__
+    super().__init__(filename, precision, verbose, **kwargs)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/flopy/utils/binaryfile/__init__.py", line 314, in __init__
+    super().__init__(filename, precision, verbose, **kwargs)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/flopy/utils/datafile.py", line 182, in __init__
+    raise ValueError(f"datafile error: file is empty: {filename}")
+ValueError: datafile error: file is empty: validation_artifacts/sevenpoint_v1/stage2/experiments/catchment/flat_catchment/mf6/npf662.hds

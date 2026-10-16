@@ -1,0 +1,68 @@
+{
+  "prescribed_cells_checked": 24,
+  "prescribed_head_error_max_m": 0.0,
+  "prescribed_head_tolerance_m": 1e-10,
+  "boundary_condition_valid": true,
+  "invalid_active_heads": 0,
+  "inactive_marker_cells": 0,
+  "active_cells_checked": 84,
+  "input_valid": true,
+  "head_residual_rms": 1.8196944804699592e-10,
+  "physical_rms": 1.791785838652255e-10,
+  "physical_max": 9.792136407282825e-10,
+  "residual_l1": 3.3558392486679543e-09,
+  "relative_cell_imbalance": 2.9950251006821215e-09,
+  "gross_throughput": 1.1204711599591124,
+  "signed_imbalance": -3.972682170376538e-10,
+  "boundary_inflow": 0.5562355797809221,
+  "boundary_outflow": 0.5602355801781904,
+  "fixed_cell_source_total": 0.0,
+  "free_cells": 60,
+  "fixed_reservoir_required_inflow": -0.004000000397268222,
+  "ungrounded_current_components": 0,
+  "independent_accepted": true,
+  "stop_reason": "converged",
+  "history": [
+    {
+      "outer": 1,
+      "accepted": true,
+      "attempts": [
+        {
+          "direction": "newton",
+          "alpha": 1.0,
+          "accepted": true,
+          "linear_residual_max": 8.20732370954147e-14,
+          "physical_rms": 0.007271265213693375
+        }
+      ]
+    },
+    {
+      "outer": 2,
+      "accepted": true,
+      "attempts": [
+        {
+          "direction": "newton",
+          "alpha": 1.0,
+          "accepted": true,
+          "linear_residual_max": 7.524363077049401e-17,
+          "physical_rms": 1.7557821345521027e-05
+        }
+      ]
+    },
+    {
+      "outer": 3,
+      "accepted": true,
+      "attempts": [
+        {
+          "direction": "newton",
+          "alpha": 1.0,
+          "accepted": true,
+          "linear_residual_max": 9.317362419797304e-20,
+          "physical_rms": 1.791785838652255e-10
+        }
+      ]
+    }
+  ],
+  "outers": 3,
+  "seconds": 0.0031554669985780492
+}

@@ -1,0 +1,42 @@
+{
+  "prescribed_cells_checked": 2,
+  "prescribed_head_error_max_m": 0.0,
+  "prescribed_head_tolerance_m": 1e-10,
+  "boundary_condition_valid": true,
+  "invalid_active_heads": 0,
+  "inactive_marker_cells": 0,
+  "active_cells_checked": 3,
+  "input_valid": true,
+  "head_residual_rms": 0.0,
+  "physical_rms": 0.0,
+  "physical_max": 0.0,
+  "residual_l1": 0.0,
+  "relative_cell_imbalance": 0.0,
+  "gross_throughput": 0.375,
+  "signed_imbalance": 0.0,
+  "boundary_inflow": 0.1875,
+  "boundary_outflow": 0.1875,
+  "fixed_cell_source_total": 0.0,
+  "free_cells": 1,
+  "fixed_reservoir_required_inflow": 0.0,
+  "ungrounded_current_components": 0,
+  "independent_accepted": true,
+  "stop_reason": "converged",
+  "history": [
+    {
+      "outer": 1,
+      "accepted": true,
+      "attempts": [
+        {
+          "direction": "newton",
+          "alpha": 1.0,
+          "accepted": true,
+          "linear_residual_max": 0.0,
+          "physical_rms": 0.0
+        }
+      ]
+    }
+  ],
+  "outers": 1,
+  "seconds": 0.0012616320018423721
+}

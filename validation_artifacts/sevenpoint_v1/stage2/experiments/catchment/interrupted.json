@@ -1,0 +1,7 @@
+{
+  "status": "interrupted_by_agent_after_ULP_stagnation",
+  "native_validation": "not_passed",
+  "head_change_m": 2.842170943040401e-14,
+  "requested_head_change_m": 1e-14,
+  "reason": "Native change test below head roundoff; full iteration evidence retained. CPU/GPU returned fields saved; their original in-memory histories were lost after the interrupted native output reader raised on empty files. New runner persists method summaries before starting the next solver."
+}

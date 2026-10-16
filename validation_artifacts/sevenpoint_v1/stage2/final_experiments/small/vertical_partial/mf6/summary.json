@@ -1,0 +1,75 @@
+{
+  "native_success": true,
+  "returncode": 0,
+  "stop_reason": "native_converged",
+  "seconds": 0.05475495300197508,
+  "input_hash": "9778b9e0fcf6cb23f44005d4381bdc0359e84698fb7ff73d5016a276eb9716cf",
+  "mf6_version": "mf6: 6.6.2 05/12/2025",
+  "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+  "contract": "NPF662_CARTESIAN_V1_Newton",
+  "supplied_state_verification": false,
+  "settings": {
+    "xt3d": false,
+    "icelltype": [
+      [
+        [
+          1
+        ]
+      ],
+      [
+        [
+          1
+        ]
+      ],
+      [
+        [
+          1
+        ]
+      ]
+    ],
+    "newton": true,
+    "linear_acceleration": "BICGSTAB",
+    "variablecv": false,
+    "perched": false,
+    "thickstrt": false,
+    "rewet": false,
+    "steady": true,
+    "outer_dvclose_m": 1e-14,
+    "inner_dvclose_m": 1e-14,
+    "inner_rclose_m3_day": 1e-14,
+    "scaling_method": "DIAGONAL",
+    "preconditioner_levels": 100,
+    "preconditioner_drop_tolerance": 0.0,
+    "relaxation_factor": 0.97
+  },
+  "independent": {
+    "prescribed_cells_checked": 2,
+    "prescribed_head_error_max_m": 0.0,
+    "prescribed_head_tolerance_m": 1e-10,
+    "boundary_condition_valid": true,
+    "invalid_active_heads": 0,
+    "inactive_marker_cells": 0,
+    "active_cells_checked": 3,
+    "input_valid": true,
+    "head_residual_rms": 3.74626255942682e-12,
+    "physical_rms": 2.809696919570115e-13,
+    "physical_max": 2.809696919570115e-13,
+    "residual_l1": 2.809696919570115e-13,
+    "relative_cell_imbalance": 7.49252511885364e-13,
+    "gross_throughput": 0.375,
+    "signed_imbalance": 2.809696919570115e-13,
+    "boundary_inflow": 0.18750000000014047,
+    "boundary_outflow": 0.1874999999998595,
+    "fixed_cell_source_total": 0.0,
+    "free_cells": 1,
+    "fixed_reservoir_required_inflow": 2.809696919570115e-13,
+    "ungrounded_current_components": 0,
+    "independent_accepted": true
+  },
+  "source_allocation_max_error": 0.0,
+  "reciprocity_max": 0.0,
+  "saturation_max_error": 0.0,
+  "native_flux_residual_rms": 2.809696919570115e-13,
+  "native_flux_residual_relative": 7.49252511885364e-13,
+  "independent_conservation": true
+}

@@ -1,0 +1,81 @@
+{
+  "prescribed_cells_checked": 24,
+  "prescribed_head_error_max_m": 0.0,
+  "prescribed_head_tolerance_m": 1e-10,
+  "boundary_condition_valid": true,
+  "invalid_active_heads": 0,
+  "inactive_marker_cells": 0,
+  "active_cells_checked": 84,
+  "input_valid": true,
+  "head_residual_rms": 8.096966196799286e-13,
+  "physical_rms": 3.3780764474311854e-12,
+  "physical_max": 2.0842449402654062e-11,
+  "residual_l1": 5.0672341624487466e-11,
+  "relative_cell_imbalance": 4.522413734371048e-11,
+  "gross_throughput": 1.1204711598890165,
+  "signed_imbalance": -7.099576050613237e-12,
+  "boundary_inflow": 0.5562355799409584,
+  "boundary_outflow": 0.560235579948058,
+  "fixed_cell_source_total": 0.0,
+  "free_cells": 60,
+  "fixed_reservoir_required_inflow": -0.0040000000070995745,
+  "ungrounded_current_components": 0,
+  "independent_accepted": true,
+  "stop_reason": "converged",
+  "history": [
+    {
+      "outer": 1,
+      "accepted": true,
+      "attempts": [
+        {
+          "direction": "newton",
+          "alpha": 1.0,
+          "accepted": true,
+          "linear_residual_max": 3.410605131648481e-13,
+          "physical_rms": 0.403119905109329
+        }
+      ]
+    },
+    {
+      "outer": 2,
+      "accepted": true,
+      "attempts": [
+        {
+          "direction": "newton",
+          "alpha": 1.0,
+          "accepted": true,
+          "linear_residual_max": 4.440892098500626e-16,
+          "physical_rms": 0.0059084981979391285
+        }
+      ]
+    },
+    {
+      "outer": 3,
+      "accepted": true,
+      "attempts": [
+        {
+          "direction": "newton",
+          "alpha": 1.0,
+          "accepted": true,
+          "linear_residual_max": 3.469446951953614e-18,
+          "physical_rms": 2.7907481344779355e-06
+        }
+      ]
+    },
+    {
+      "outer": 4,
+      "accepted": true,
+      "attempts": [
+        {
+          "direction": "newton",
+          "alpha": 1.0,
+          "accepted": true,
+          "linear_residual_max": 5.082197683525802e-21,
+          "physical_rms": 3.3780764474311854e-12
+        }
+      ]
+    }
+  ],
+  "outers": 4,
+  "seconds": 0.003947347009670921
+}

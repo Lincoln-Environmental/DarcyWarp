@@ -1,0 +1,4 @@
+/home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/numpy/__config__.py:155: UserWarning: Install `pyyaml` for better output
+  warnings.warn("Install `pyyaml` for better output", stacklevel=1)
+Independently accepted returned heads: 64
+Historical files unchanged: 2432

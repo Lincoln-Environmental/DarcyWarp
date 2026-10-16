@@ -1,0 +1,42 @@
+{
+  "prescribed_cells_checked": 3,
+  "prescribed_head_error_max_m": 0.0,
+  "prescribed_head_tolerance_m": 1e-10,
+  "boundary_condition_valid": true,
+  "invalid_active_heads": 0,
+  "inactive_marker_cells": 0,
+  "active_cells_checked": 4,
+  "input_valid": true,
+  "head_residual_rms": 7.401486830834377e-17,
+  "physical_rms": 2.220446049250313e-16,
+  "physical_max": 2.220446049250313e-16,
+  "residual_l1": 2.220446049250313e-16,
+  "relative_cell_imbalance": 4.89804275569922e-17,
+  "gross_throughput": 4.533333333333333,
+  "signed_imbalance": -2.220446049250313e-16,
+  "boundary_inflow": 1.4666666666666663,
+  "boundary_outflow": 2.2666666666666666,
+  "fixed_cell_source_total": 0.0,
+  "free_cells": 1,
+  "fixed_reservoir_required_inflow": -0.7999999999999998,
+  "ungrounded_current_components": 0,
+  "independent_accepted": true,
+  "stop_reason": "converged",
+  "history": [
+    {
+      "outer": 1,
+      "accepted": true,
+      "attempts": [
+        {
+          "direction": "newton",
+          "alpha": 1.0,
+          "accepted": true,
+          "linear_residual_max": 0.0,
+          "physical_rms": 2.220446049250313e-16
+        }
+      ]
+    }
+  ],
+  "outers": 1,
+  "seconds": 0.0013148019934305921
+}
