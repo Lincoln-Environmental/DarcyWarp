@@ -2554,6 +2554,7 @@ def solve_multigrid_kcycle_7point_3d(
     diag_preconditioner_backend: str = "auto",
     device: str = "cuda:0",
     return_info: bool = True,
+    benchmark_observer=None,
 ):
     """
     3D multilevel K-cycle prototype for a fixed 7-point operator.
@@ -3020,6 +3021,8 @@ def solve_multigrid_kcycle_7point_3d(
         prev["coarsen_y"] = int(coarsen_y)
         prev["coarsen_x"] = int(coarsen_x)
 
+    if benchmark_observer is not None:
+        benchmark_observer(event="host_hierarchy", levels=levels_host)
     levels: list[dict] = []
     diag_mode = _resolve_diag_backend(diag_preconditioner_backend, device)
     for lid, lh in enumerate(levels_host):
@@ -3390,6 +3393,8 @@ def solve_multigrid_kcycle_7point_3d(
 
         smooth_level(level, point_post_omegas if smooth_mode != "vertical_line" else post_omegas, line_sweeps_post_i)
 
+    if benchmark_observer is not None:
+        benchmark_observer(event="device_hierarchy", levels=levels)
     rTr0 = compute_residual_norm(lvl0, lvl0["x_wp"], lvl0["r_wp"], lvl0["rTr_buf"])
     r_rms0 = float(np.sqrt(max(rTr0, 0.0) / float(n_free0)))
     tol_abs = float(max(abs_tol_min, rel_tol * r_rms0))
@@ -3399,11 +3404,17 @@ def solve_multigrid_kcycle_7point_3d(
     dh_rms_lastcheck = float("nan")
     dh_max_lastcheck = float("nan")
 
+    if benchmark_observer is not None:
+        benchmark_observer(event="initial_residual", residual_rms=r_rms0)
     for cyc in range(max_cycles_i):
         if converged:
             break
         n_cycles_used = cyc + 1
+        if benchmark_observer is not None:
+            benchmark_observer(event="cycle_start", cycle=n_cycles_used)
         kcycle(0)
+        if benchmark_observer is not None:
+            benchmark_observer(event="cycle_end", cycle=n_cycles_used)
 
         should_check = ((cyc % check_every) == (check_every - 1)) or (cyc == (max_cycles_i - 1))
         if not should_check:
@@ -3411,6 +3422,8 @@ def solve_multigrid_kcycle_7point_3d(
 
         rTr_now = compute_residual_norm(lvl0, lvl0["x_wp"], lvl0["r_wp"], lvl0["rTr_buf"])
         r_rms_now = float(np.sqrt(max(rTr_now, 0.0) / float(n_free0)))
+        if benchmark_observer is not None:
+            benchmark_observer(event="residual", cycle=n_cycles_used, residual_rms=r_rms_now)
 
         wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[lvl0["dot_buf"]], device=device)
         wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[lvl0["dh_max_buf"]], device=device)

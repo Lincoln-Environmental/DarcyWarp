@@ -10,11 +10,15 @@ from DARCY_WARP_PACKAGE.validation.npf662_metrics import stable_rms,stable_sum
 from DARCY_WARP_PACKAGE.validation.head_checks import finite_diagnostics
 
 
-def run_reference_mf6(*,case,directory,executable,prescribed_state=None,head_tolerance_m=1e-14):
+def run_reference_mf6(*,case,directory,executable,prescribed_state=None,head_tolerance_m=1e-14,
+                      native_solver_options=None,timeout_seconds=600,source_package='wel'):
     import flopy
     from flopy.mf6.utils.binarygrid_util import MfGrdFile
     if not executable.is_file():raise FileNotFoundError(f'Pinned local MF6 unavailable: {executable}; live parity unverified')
     reference=NPF662Reference(case=case)
+    if source_package not in ('wel','rch'):raise ValueError('source_package must be wel or rch')
+    if source_package=='rch' and (np.any(case.source[1:]!=0.) or np.any(case.source<0.) or np.any(case.source[case.fixed!=0]!=0.)):
+        raise ValueError('Explicit fixed-top RCH mapping requires nonnegative source only in free top cells')
     if prescribed_state is not None:
         supplied=np.asarray(prescribed_state)
         if supplied.shape!=case.active.shape or not np.isfinite(supplied[case.active!=0]).all():
@@ -37,13 +41,16 @@ def run_reference_mf6(*,case,directory,executable,prescribed_state=None,head_tol
     sim=flopy.mf6.MFSimulation(sim_name='npf662',sim_ws=str(directory),exe_name=str(executable),verbosity_level=0)
     sim.simulation_data.float_precision=17;sim.simulation_data.float_characters=25
     flopy.mf6.ModflowTdis(sim,time_units='DAYS',nper=1,perioddata=[(1.,1,1.)])
-    flopy.mf6.ModflowIms(sim,complexity='COMPLEX',print_option='ALL',outer_maximum=2000,
+    ims_options=dict(complexity='COMPLEX',print_option='ALL',outer_maximum=2000,
         outer_dvclose=head_tolerance_m,inner_maximum=2000,inner_dvclose=head_tolerance_m,rcloserecord=[1e-14,'STRICT'],
         linear_acceleration='BICGSTAB' if newton else 'CG',under_relaxation='DBD',relaxation_factor=.97,
         preconditioner_drop_tolerance=0.,
         scaling_method='DIAGONAL',
         preconditioner_levels=100,
         csv_outer_output_filerecord='outer.csv',csv_inner_output_filerecord='inner.csv')
+    if native_solver_options is not None:
+        ims_options.update(native_solver_options)
+    flopy.mf6.ModflowIms(sim,**ims_options)
     gwf=flopy.mf6.ModflowGwf(sim,modelname='npf662',save_flows=True,newtonoptions='UNDER_RELAXATION' if newton else None)
     flopy.mf6.ModflowGwfdis(gwf,length_units='METERS',nlay=nz,nrow=ny,ncol=nx,
         delr=case.dx,delc=case.dy,top=case.tops[0,::-1,:],
@@ -59,13 +66,19 @@ def run_reference_mf6(*,case,directory,executable,prescribed_state=None,head_tol
         if fixed[k,j,i]:bc.append((cell,float(values[k,j,i])))
         elif case.source[k,j,i]!=0:sources.append((cell,float(case.source[k,j,i])))
     if bc:flopy.mf6.ModflowGwfchd(gwf,stress_period_data=bc,save_flows=True)
-    if sources:flopy.mf6.ModflowGwfwel(gwf,pname='SOURCE',stress_period_data=sources,auto_flow_reduce=None,save_flows=True)
+    if sources:
+        if source_package=='wel':
+            flopy.mf6.ModflowGwfwel(gwf,pname='SOURCE',stress_period_data=sources,auto_flow_reduce=None,save_flows=True)
+        else:
+            recharge=case.source[0]/case.dx/case.dy
+            flopy.mf6.ModflowGwfrcha(gwf,pname='RECHARGE',readasarrays=True,fixed_cell=True,
+                irch=np.zeros((ny,nx),dtype=int),recharge=recharge[::-1,:],save_flows=True)
     flopy.mf6.ModflowGwfoc(gwf,head_filerecord='npf662.hds',budget_filerecord='npf662.cbc',
         saverecord=[('HEAD','ALL'),('BUDGET','ALL')],printrecord=[('BUDGET','ALL')])
     sim.write_simulation(silent=True)
     start=perf_counter()
     try:
-        run=subprocess.run([str(executable)],cwd=directory,capture_output=True,text=True,check=False,timeout=600)
+        run=subprocess.run([str(executable)],cwd=directory,capture_output=True,text=True,check=False,timeout=timeout_seconds)
         (directory/'stdout.log').write_text(run.stdout+run.stderr)
         native=run.returncode==0 and 'Normal termination of simulation' in run.stdout
         returncode=run.returncode;reason='native_converged' if native else 'native_failure_or_interrupted'
@@ -74,10 +87,14 @@ def run_reference_mf6(*,case,directory,executable,prescribed_state=None,head_tol
         native=False;returncode=None;reason='wall_timeout'
     result=dict(native_success=native,returncode=returncode,stop_reason=reason,seconds=perf_counter()-start,
         input_hash=case.digest(),mf6_version=version,mf6_sha256=checksum,
+        native_solver_options=ims_options,timeout_seconds=timeout_seconds,source_package=source_package,
         contract=case.contract+('_Newton' if newton else '_confined'),geometry=case.geometry,supplied_state_verification=prescribed_state is not None,
-        settings=dict(xt3d=False,icelltype=case.cell_types.tolist(),newton=newton,linear_acceleration='BICGSTAB' if newton else 'CG',variablecv=False,perched=False,thickstrt=False,rewet=False,
-            steady=True,outer_dvclose_m=head_tolerance_m,inner_dvclose_m=head_tolerance_m,inner_rclose_m3_day=1e-14,
-            scaling_method='DIAGONAL',preconditioner_levels=100,preconditioner_drop_tolerance=0.,relaxation_factor=.97))
+        settings=dict(xt3d=False,icelltype=case.cell_types.tolist(),newton=newton,linear_acceleration=ims_options['linear_acceleration'],variablecv=False,perched=False,thickstrt=False,rewet=False,
+            steady=True,outer_dvclose_m=ims_options['outer_dvclose'],inner_dvclose_m=ims_options['inner_dvclose'],
+            inner_rclose_m3_day=ims_options['rcloserecord'][0],scaling_method=ims_options['scaling_method'],
+            preconditioner_levels=ims_options['preconditioner_levels'],
+            preconditioner_drop_tolerance=ims_options['preconditioner_drop_tolerance'],
+            relaxation_factor=ims_options['relaxation_factor']))
     paths=[directory/name for name in ('npf662.hds','npf662.cbc','npf662.dis.grb')]
     if not native or not all(path.is_file() and path.stat().st_size>0 for path in paths):
         result.update(independent_conservation=False,stop_reason='native_failure_or_missing_output')
@@ -106,7 +123,9 @@ def run_reference_mf6(*,case,directory,executable,prescribed_state=None,head_tol
     flux=np.array([edges[(int(a),int(b))] for a,b in zip(reference.left,reference.right)])
     realised=np.zeros(n)
     if sources:
-        for record in budget.get_data(text='WEL',paknam2='SOURCE')[-1]:
+        source_text='WEL' if source_package=='wel' else 'RCHA'
+        package_name='SOURCE' if source_package=='wel' else 'RECHARGE'
+        for record in budget.get_data(text=source_text,paknam2=package_name)[-1]:
             realised[mapping[int(record['node'])-1]]+=float(record['q'])
     expected=np.where(case.active.astype(bool)&~fixed,case.source,0.)
     source_error=float(np.max(np.abs(realised.reshape(case.active.shape)-expected)))

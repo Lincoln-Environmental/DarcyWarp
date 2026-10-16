@@ -161,6 +161,10 @@ def load_npf662_case(*,path):
         implicit=bool(schema==1 and missing=={'cell_type'})
         if missing and not implicit:raise ValueError(f'Missing NPF input fields: {sorted(missing)}')
         case=cls(**{name:saved[name].copy() for name in cls.__dataclass_fields__ if name in saved})
+        # NPZ scalars are zero-dimensional arrays; FloPy DIS expects actual
+        # scalar spacing, not an array that it tries to index as delr/delc.
+        for name in ('dx','dy','dz','top'):
+            if hasattr(case,name):setattr(case,name,float(getattr(case,name)))
         if implicit:case._legacy_implicit_cell_type=True
     case.validate()
     return case
