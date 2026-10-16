@@ -27,6 +27,7 @@ class NPF662Case:
     dy: float
     dz: float
     top: float = 0.
+    cell_type: np.ndarray | int = 0
 
     def validate(self):
         shape=self.active.shape
@@ -35,7 +36,7 @@ class NPF662Case:
             value=np.asarray(getattr(self,name))
             if value.shape!=shape or not np.all(np.isfinite(value)):raise ValueError(f'Invalid {name}')
         if any(not np.isfinite(x) or x<=0 for x in (self.dx,self.dy,self.dz)):raise ValueError('Positive finite spacing required')
-        if not np.isfinite(self.top):raise ValueError('Finite top required')
+        if np.ndim(self.top)!=0 or not np.isfinite(self.top):raise ValueError('Finite flat scalar top required; variable elevations are unsupported')
         for mask in (self.active,self.fixed):
             if not np.all((mask==0)|(mask==1)):raise ValueError('Binary masks required')
         active=self.active.astype(bool)
@@ -44,6 +45,19 @@ class NPF662Case:
         if np.any(self.source[~active]!=0):raise ValueError('Inactive source would be lost')
         for k in (self.kx,self.ky,self.kz):
             if np.any(k[active]<=0):raise ValueError('Positive physical Cartesian K required')
+        types=np.asarray(self.cell_type)
+        if types.ndim!=0 and types.shape!=shape:raise ValueError('cell_type must be scalar or full-grid 0/1 array')
+        if np.any((types!=0)&(types!=1)):raise ValueError('Only ICELLTYPE 0/1 supported')
+        if np.any(active&(self.fixed!=0)&(self.cell_types!=0)&(self.values<self.bottoms)):
+            raise ValueError('Convertible CHD head below cell bottom is invalid for MF6 6.6.2; prescribed heads are not repaired')
+
+    @property
+    def cell_types(self):
+        return np.broadcast_to(self.cell_type,self.active.shape)
+
+    @property
+    def bottoms(self):
+        return np.broadcast_to((self.top-self.dz*np.arange(1,self.active.shape[0]+1))[:,None,None],self.active.shape)
 
     def digest(self):
         digest=hashlib.sha256()
@@ -77,6 +91,27 @@ class NPF662Reference:
         self.incidence=sparse.coo_matrix((np.concatenate([np.ones(m),-np.ones(m)]),
             (np.concatenate([self.left,self.right]),np.tile(np.arange(m),2))),shape=(n,m)).tocsr()
         self.matrix=(self.incidence@sparse.diags(self.c0)@self.incidence.T).tocsr()
+        indices=np.arange(m)
+        self.select_left=sparse.csr_matrix((np.ones(m),(indices,self.left)),shape=(m,n))
+        self.select_right=sparse.csr_matrix((np.ones(m),(indices,self.right)),shape=(m,n))
+
+    def face_terms(self,*,head):
+        c=self.case
+        h=np.where(c.active,head,0.).ravel()
+        saturation,derivative=quadratic_saturation_derivative(head=head,bottom=c.bottoms,thickness=c.dz,cell_type=c.cell_types)
+        choose_left=(h[self.left]>h[self.right])|((h[self.left]==h[self.right])&(self.axes==1))
+        donor=np.where(choose_left,self.left,self.right)
+        horizontal=self.axes!=0
+        variable=horizontal&((c.cell_types.ravel()[self.left]!=0)|(c.cell_types.ravel()[self.right]!=0))
+        conductance=self.c0*np.where(variable,saturation.ravel()[donor],1.)
+        extra=np.where(variable,self.c0*derivative.ravel()[donor]*(h[self.left]-h[self.right]),0.)
+        dl=conductance+np.where(choose_left,extra,0.)
+        dr=-conductance+np.where(~choose_left,extra,0.)
+        return conductance,dl,dr,saturation
+
+    def jacobian(self,*,head):
+        unused,dl,dr,unused_saturation=self.face_terms(head=head)
+        return (self.incidence@(self.select_left.multiply(dl[:,None])+self.select_right.multiply(dr[:,None]))).tocsr()
 
     def check_components(self):
         n=self.case.active.size
@@ -91,10 +126,11 @@ class NPF662Reference:
         c=self.case
         checks=inspect_heads(head=head,active=c.active,fixed=c.fixed,values=c.values)
         h=np.where(c.active,head,0.).ravel()
-        flux=self.c0*(h[self.left]-h[self.right])
+        conductance,dl,dr,saturation=self.face_terms(head=head)
+        flux=conductance*(h[self.left]-h[self.right])
         divergence=(self.incidence@flux).reshape(self.shape)
         residual=np.where(self.free,c.source-divergence,0.)
-        diagonal=self.matrix.diagonal().reshape(self.shape)
+        diagonal=np.asarray(abs(self.incidence)@conductance).reshape(self.shape)
         scaled=np.divide(residual,diagonal,out=np.zeros_like(residual),where=diagonal>0)
         scaled[(diagonal<=0)&(residual!=0)]=np.inf
         boundary=self.free.ravel()[self.left]&c.fixed.ravel()[self.right].astype(bool)
@@ -105,16 +141,28 @@ class NPF662Reference:
         rms=float(np.sqrt(np.mean(residual[self.free]**2))) if self.free.any() else 0.
         hrms=float(np.sqrt(np.mean(scaled[self.free]**2))) if self.free.any() else 0.
         l1=float(np.abs(residual).sum());relative=l1/max(throughput,np.finfo(float).tiny)
+        edges=conductance>0.
+        graph=sparse.coo_matrix((np.ones(int(edges.sum())),(self.left[edges],self.right[edges])),shape=self.matrix.shape).tocsr()
+        unused,labels=connected_components(csgraph=graph,directed=False)
+        active_labels=set(labels[c.active.ravel()!=0])
+        grounded_labels=set(labels[(c.active.ravel()!=0)&(c.fixed.ravel()!=0)])
+        ungrounded=len(active_labels-grounded_labels)
         result=dict(**checks,head_residual_rms=hrms,physical_rms=rms,
             physical_max=float(np.abs(residual).max()),residual_l1=l1,relative_cell_imbalance=relative,
             gross_throughput=throughput,signed_imbalance=float(residual.sum()),boundary_inflow=inflow,boundary_outflow=outflow,
-            fixed_cell_source_total=float(c.source[c.fixed!=0].sum()),free_cells=int(self.free.sum()))
+            fixed_cell_source_total=float(c.source[c.fixed!=0].sum()),free_cells=int(self.free.sum()),
+            fixed_reservoir_required_inflow=float(np.sum((divergence-c.source)[c.fixed!=0])),
+            ungrounded_current_components=ungrounded)
         result['independent_accepted']=bool(checks['input_valid'] and checks['boundary_condition_valid'] and
-            np.all(np.isfinite(flux)) and hrms<=1e-6 and (rms<=1e-12 or relative<=1e-8))
-        return result,dict(flux=flux,residual=residual,principal_diagonal=diagonal)
+            np.all(np.isfinite(flux)) and ungrounded==0 and hrms<=1e-6 and (rms<=1e-12 or relative<=1e-8))
+        return result,dict(flux=flux,residual=residual,fixed_reservoir_required_inflow=np.where(c.fixed,divergence-c.source,0.),
+            principal_diagonal=diagonal,saturation=saturation,
+            conductance=conductance,dflux_left=dl,dflux_right=dr)
 
-    def solve(self):
+    def solve(self,*,max_outer=200):
         self.check_components()
+        if np.any(self.case.cell_types[self.case.active!=0]):
+            return self.solve_newton(max_outer=max_outer)
         c=self.case;f=self.free.ravel();fixed=c.fixed.ravel()!=0
         head=np.where(c.fixed,c.values,c.initial).astype(float).ravel().copy()
         linear_max=backward=None
@@ -132,3 +180,53 @@ class NPF662Reference:
         result,fields=self.evaluate(head=head)
         result.update(linear_residual_max=linear_max,linear_backward_error=backward)
         return head,result,fields
+
+    def solve_newton(self,*,max_outer):
+        c=self.case;f=self.free.ravel()
+        head=np.where(c.fixed,c.values,c.initial).astype(float).copy()
+        history=[];reason='outer_budget'
+        for outer in range(max_outer):
+            checks,fields=self.evaluate(head=head)
+            if checks['independent_accepted']:
+                reason='converged';break
+            rhs=fields['residual'].ravel()[f]
+            old=checks['physical_rms']
+            found=False;trials=[]
+            for mode in ('newton','full_saturated_safeguard'):
+                A=(self.jacobian(head=head) if mode=='newton' else self.matrix)[f][:,f].tocsc()
+                try:
+                    with warnings.catch_warnings():
+                        warnings.simplefilter('error')
+                        correction=spsolve(A=A,b=rhs)
+                except (RuntimeError,Warning) as error:
+                    trials.append(dict(direction=mode,factorization_failure=str(error)));continue
+                if not np.all(np.isfinite(correction)):
+                    trials.append(dict(direction=mode,nonfinite_correction=True));continue
+                delta=np.zeros_like(head);delta.ravel()[f]=correction
+                alpha=min(1.,50./max(float(np.max(np.abs(correction))),np.finfo(float).tiny))
+                for attempt in range(30):
+                    trial=head+alpha*delta
+                    check,trial_fields=self.evaluate(head=trial)
+                    if check['input_valid'] and (check['physical_rms']<old or check['independent_accepted']):
+                        head=trial;found=True;break
+                    alpha*=.5
+                linear=float(np.max(np.abs(A@correction-rhs)))
+                trials.append(dict(direction=mode,alpha=alpha,accepted=found,linear_residual_max=linear,
+                    physical_rms=check['physical_rms']))
+                if found:break
+            history.append(dict(outer=outer+1,accepted=found,attempts=trials))
+            if not found:
+                reason='line_search_failed';break
+        checks,fields=self.evaluate(head=head)
+        checks.update(stop_reason='converged' if checks['independent_accepted'] else reason,history=history,outers=len(history))
+        return head,checks,fields
+
+
+def quadratic_saturation_derivative(*,head,bottom,thickness,cell_type):
+    t=np.clip((np.asarray(head)-bottom)/thickness,0.,1.)
+    eps=1e-6
+    a=1./(1.-eps)
+    saturation=np.where(t<eps,a*.5*t*t/eps,np.where(t<1.-eps,a*t+.5*(1.-a),
+        np.where(t<1.,1.-a*.5*(1.-t)**2/eps,1.)))
+    derivative=np.where(t<eps,a*t/eps,np.where(t<1.-eps,a,np.where(t<1.,a*(1.-t)/eps,0.)))/thickness
+    return np.where(cell_type!=0,saturation,1.),np.where(cell_type!=0,derivative,0.)

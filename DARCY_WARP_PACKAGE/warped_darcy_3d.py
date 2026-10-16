@@ -78,6 +78,8 @@ class WarpDarcySolver3D:
         if formulation not in {'legacy','mf6_6_6_2_npf','experimental_transformed_terrain'}:
             raise ValueError('Unknown 3D formulation; choose legacy, mf6_6_6_2_npf, or experimental_transformed_terrain')
         self.formulation=formulation
+        if formulation=='mf6_6_6_2_npf' and np.dtype(NP_FLOAT)!=np.dtype(np.float64):
+            raise ValueError('mf6_6_6_2_npf requires DARCY_FLOAT=float64 before imports')
         self._tx_p: np.ndarray | None = None
         self._tx_m: np.ndarray | None = None
         self._ty_p: np.ndarray | None = None
@@ -182,6 +184,8 @@ class WarpDarcySolver3D:
         supported; unconfined solves validate supplied or inferred elevations.
         """
         shape = self.shape
+        if self.formulation=='experimental_transformed_terrain':
+            raise ValueError('experimental_transformed_terrain requires build_from_terrain')
         self.geometry = "cartesian"
         for name, arr in (
             ("tx_p", tx_p),

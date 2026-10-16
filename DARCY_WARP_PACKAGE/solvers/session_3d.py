@@ -48,6 +48,7 @@ class ThreeDOperatorSession:
         self.rhs = np.asarray(rhs).copy()
         self.initial_head = None if initial_head is None else np.asarray(initial_head).copy()
         self._fast_workspace_holder: dict[str, Any] = {}
+        self._npf662_workspace_holder: dict[str, Any] = {}
         self._validate()
         self.faces = validate_reciprocal_faces(faces=self.faces, active=self.active, canonicalize=True)
 
@@ -236,3 +237,6 @@ class ThreeDOperatorSession:
         self.rhs = np.empty((0, 0, 0))
         self.initial_head = None
         self._fast_workspace_holder.clear()
+        workspace=self._npf662_workspace_holder.get('workspace')
+        if workspace is not None:workspace.close()
+        self._npf662_workspace_holder.clear()

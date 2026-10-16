@@ -131,6 +131,18 @@ def reject_warp(name,globals=None,locals=None,fromlist=(),level=0):
     return original(name,globals,locals,fromlist,level)
 builtins.__import__=reject_warp
 from DARCY_WARP_PACKAGE.validation.npf662_reference import NPF662Case,NPF662Reference
+import numpy as np
+shape=(2,1,2)
+one=np.ones(shape)
+fixed=np.ones(shape,dtype=int);fixed[0,0,0]=0
+values=np.full(shape,-1.);values[0,0,1]=2.
+source=np.zeros(shape);source[0,0,0]=.8
+initial=values.copy();initial[0,0,0]=-.2
+case=NPF662Case(kx=one,ky=.6*one,kz=4.*one,active=one.astype(int),fixed=fixed,
+    values=values,source=source,initial=initial,dx=1.,dy=1.,dz=4.,top=4.,cell_type=1)
+head,checks,fields=NPF662Reference(case=case).solve(max_outer=30)
+assert checks['independent_accepted']
+assert abs(head[0,0,0]-3.8/3.)<1e-10
 """
     subprocess.run([sys.executable,'-c',code],check=True)
 
