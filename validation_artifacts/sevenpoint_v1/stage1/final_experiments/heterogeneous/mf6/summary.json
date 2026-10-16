@@ -1,0 +1,201 @@
+{
+  "native_success": true,
+  "returncode": 0,
+  "stop_reason": "native_converged",
+  "seconds": 0.08743122300074901,
+  "input_hash": "f2d2147d49e144a37a80e2bb7552b0fc1a92b7a652e3263ebb3a4cfd176c1c1c",
+  "mf6_version": "mf6: 6.6.2 05/12/2025",
+  "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+  "contract": "NPF662_CARTESIAN_V1_confined",
+  "supplied_state_verification": false,
+  "settings": {
+    "xt3d": false,
+    "icelltype": [
+      [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ]
+    ],
+    "newton": false,
+    "linear_acceleration": "CG",
+    "variablecv": false,
+    "perched": false,
+    "thickstrt": false,
+    "rewet": false,
+    "steady": true,
+    "outer_dvclose_m": 1e-14,
+    "inner_dvclose_m": 1e-14,
+    "inner_rclose_m3_day": 1e-14,
+    "scaling_method": "DIAGONAL",
+    "preconditioner_levels": 100,
+    "preconditioner_drop_tolerance": 0.0,
+    "relaxation_factor": 0.97
+  },
+  "independent": {
+    "prescribed_cells_checked": 30,
+    "prescribed_head_error_max_m": 0.0,
+    "prescribed_head_tolerance_m": 1e-10,
+    "boundary_condition_valid": true,
+    "invalid_active_heads": 0,
+    "inactive_marker_cells": 0,
+    "active_cells_checked": 105,
+    "input_valid": true,
+    "head_residual_rms": 1.7004512722365015e-15,
+    "physical_rms": 4.05859749165464e-13,
+    "physical_max": 2.4129008253243045e-12,
+    "residual_l1": 1.197347662471981e-11,
+    "relative_cell_imbalance": 8.198239615630909e-13,
+    "gross_throughput": 14.604936164455314,
+    "signed_imbalance": 3.0924837945075514e-12,
+    "boundary_inflow": 7.2901224033168575,
+    "boundary_outflow": 7.3024680822261105,
+    "fixed_cell_source_total": 0.0,
+    "free_cells": 75,
+    "fixed_reservoir_required_inflow": -0.012345678909253754,
+    "ungrounded_current_components": 0,
+    "independent_accepted": true
+  },
+  "source_allocation_max_error": 0.0,
+  "reciprocity_max": 0.0,
+  "saturation_max_error": 0.0,
+  "native_flux_residual_rms": 4.0584412570963264e-13,
+  "native_flux_residual_relative": 8.197330757195266e-13,
+  "independent_conservation": true
+}

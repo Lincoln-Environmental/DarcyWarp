@@ -56,13 +56,13 @@ def run_confined_matrix(*,root,variants,shape,spacing,end_heads,contrast,source,
         reference=NPF662Reference(case=case)
         np.savez_compressed(directory/'inputs.npz',**{n:np.asarray(getattr(case,n)) for n in case.__dataclass_fields__})
         head,checks,fields=reference.solve()
-        np.savez_compressed(directory/'cpu.npz',head=head,**fields)
+        np.savez_compressed(directory/'scipy_cpu.npz',head=head,**fields)
         result=dict(case=variant,input_hash=case.digest(),cpu=checks,devices={})
         for device in devices:
             with make_gpu_model(case=case,device=device) as model:
                 solved,info=model.solve(max_cycles=2000)
             independent,physical=reference.evaluate(head=solved)
-            np.savez_compressed(directory/(device.replace(':','_')+'.npz'),head=solved,**physical)
+            np.savez_compressed(directory/('warp_'+device.replace(':','_')+'.npz'),head=solved,**physical)
             error=float(np.max(np.abs((solved-head)[reference.free]))) if reference.free.any() else 0.
             result['devices'][device]=dict(info=info,independent=independent,head_max_difference_m=error)
             if not independent['independent_accepted'] or error>1e-7:raise AssertionError(result)
@@ -92,7 +92,7 @@ def run_confined_matrix(*,root,variants,shape,spacing,end_heads,contrast,source,
 
 
 if __name__ == "__main__":
-    root=Path('validation_artifacts/sevenpoint_v1/stage1/experiments')
+    root=Path('validation_artifacts/sevenpoint_v1/stage1/final_experiments')
     variants=['constant','x','y','z','layered','heterogeneous','masked','disconnected']
     shape=(3,5,7)
     spacing=(2.,3.,4.)
