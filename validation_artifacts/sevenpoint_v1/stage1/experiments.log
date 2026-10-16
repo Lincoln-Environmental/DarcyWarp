@@ -1,0 +1,21 @@
+✅ CUDA driver reports 1 device(s).
+cuda_device_found = True
+Warp 1.17.0 initialized:
+   CUDA Toolkit 12.9, Driver 13.2
+   Devices:
+     "cpu"      : "x86_64"
+     "cuda:0"   : "NVIDIA GeForce RTX 4070 Ti SUPER" (16 GiB, sm_89, mempool enabled)
+   Kernel cache:
+     /home/patrickdurney/.cache/warp/1.17.0
+Module DARCY_WARP_PACKAGE.solvers.face_kernels_3d_f64 e2acfa1 load on device 'cpu' took 0.86 ms  (cached)
+Module DARCY_WARP_PACKAGE.solvers.face_kernels_3d_f64 5cc2919 load on device 'cuda:0' took 1.44 ms  (cached)
+constant CPU/CUDA/MF6 passed
+Module DARCY_WARP_PACKAGE.kernels_3d c272a89 load on device 'cpu' took 0.23 ms  (cached)
+Module DARCY_WARP_PACKAGE.kernels_3d 9a855ae load on device 'cuda:0' took 3.06 ms  (cached)
+x CPU/CUDA/MF6 passed
+y CPU/CUDA/MF6 passed
+z CPU/CUDA/MF6 passed
+layered CPU/CUDA/MF6 passed
+heterogeneous CPU/CUDA/MF6 passed
+masked CPU/CUDA/MF6 passed
+disconnected CPU/CUDA/MF6 passed

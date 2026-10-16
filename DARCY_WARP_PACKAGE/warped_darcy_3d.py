@@ -49,6 +49,7 @@ class WarpDarcySolver3D:
         solver: str = "kcycle",
         diag_preconditioner_backend: str = "auto",
         implementation: str = "classic",
+        formulation: str = "legacy",
     ):
         if nx <= 0 or ny <= 0 or nz <= 0:
             raise ValueError("nx, ny, nz must be positive")
@@ -74,6 +75,9 @@ class WarpDarcySolver3D:
         if implementation_mode not in {"classic", "fast"}:
             raise ValueError("implementation must be 'classic' or 'fast'.")
         self.implementation = implementation_mode
+        if formulation not in {'legacy','mf6_6_6_2_npf','experimental_transformed_terrain'}:
+            raise ValueError('Unknown 3D formulation; choose legacy, mf6_6_6_2_npf, or experimental_transformed_terrain')
+        self.formulation=formulation
         self._tx_p: np.ndarray | None = None
         self._tx_m: np.ndarray | None = None
         self._ty_p: np.ndarray | None = None
@@ -125,6 +129,8 @@ class WarpDarcySolver3D:
         initial_head
             Optional initial guess, shape (nz, ny, nx).
         """
+        if self.formulation=='experimental_transformed_terrain':
+            raise ValueError('experimental_transformed_terrain requires build_from_terrain')
         tx_p, tx_m, ty_p, ty_m, tz_p, tz_m = build_7point_face_conductance_from_k(
             kx_field=kx_field,
             ky_field=ky_field,
@@ -247,6 +253,8 @@ class WarpDarcySolver3D:
         Contacts are TerrainContact3D records, preserving each physical
         subface; fixed cells must not also own exchange contacts.
         """
+        if self.formulation=='mf6_6_6_2_npf':
+            raise ValueError('mf6_6_6_2_npf supports Cartesian geometry only; terrain remains experimental')
         if self.implementation != "fast" or self.solver != "kcycle":
             raise ValueError("terrain requires implementation='fast' and solver='kcycle' (principal-part multigrid GMRES)")
         from DARCY_WARP_PACKAGE.physics.terrain_grid_3d import TerrainGrid3D
@@ -308,8 +316,14 @@ class WarpDarcySolver3D:
         if self._rhs is None:
             raise RuntimeError("Solver has not been built. Call build_from_K_fields or build_from_face_conductance first.")
 
+        if self.formulation=='mf6_6_6_2_npf':
+            from DARCY_WARP_PACKAGE.solvers.npf662_3d import solve_npf662
+            return solve_npf662(model=self,**kwargs)
+
         if self.geometry == "terrain":
-            return self._session.solve(device=self.device,**kwargs)
+            result=self._session.solve(device=self.device,**kwargs)
+            if isinstance(result,tuple):result[1].setdefault('formulation','experimental_transformed_terrain')
+            return result
 
         if self._session is not None:
             solve_kwargs = dict(kwargs)
@@ -324,13 +338,15 @@ class WarpDarcySolver3D:
                     if name not in solve_kwargs and field is not None:
                         solve_kwargs[name] = field
             solve_kwargs.setdefault("return_info", True)
-            return self._session.solve(
+            result=self._session.solve(
                 solver=self.solver,
                 device=self.device,
                 implementation=self.implementation,
                 diag_preconditioner_backend=self.diag_preconditioner_backend,
                 **solve_kwargs,
             )
+            if isinstance(result,tuple):result[1].setdefault('formulation','legacy_cartesian')
+            return result
 
         common = {
             "tx_p": self._tx_p,
@@ -397,6 +413,8 @@ class WarpDarcySolver3D:
         tz_m: np.ndarray,
     ) -> None:
         """Refresh six face arrays in place and retain the session identity."""
+        if self.formulation=='mf6_6_6_2_npf':
+            raise ValueError('Pinned NPF requires physical K; rebuild_from_K_fields instead of overriding conductances')
         if self._session is None:
             raise RuntimeError("Solver has not been built.")
         if self.geometry == "terrain":

@@ -1,0 +1,2 @@
+total_inner_iterations,totim,kper,kstp,nouter,ninner,solution_inner_dvmax,solution_inner_dvmax_model,solution_inner_dvmax_node,solution_inner_rmax,solution_inner_rmax_model,solution_inner_rmax_node,solution_inner_alpha,solution_inner_omega
+1,1.000000000000000,1,1,1,1,.5953902466774443E-25,1,4,-.6217248937831667E-14,1,46,0.8419931E-11,0.6947244E-11

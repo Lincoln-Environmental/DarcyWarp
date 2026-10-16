@@ -1,0 +1,94 @@
+............FFF....F                                                     [100%]
+=================================== FAILURES ===================================
+_________________ test_ungrounded_components_are_rejected[0.0] _________________
+
+net_source = 0.0
+
+    @pytest.mark.parametrize('net_source',[0.,1.,-1.])
+    def test_ungrounded_components_are_rejected(net_source):
+        case=confined_case(masked=True)
+        case.active[:,2,:]=0;case.fixed[:,:2,:]=0;case.source[:]=0.;case.source[0,0,0]=net_source
+>       with pytest.raises(ValueError,match='Ungrounded'):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: Regex pattern did not match.
+E         Expected regex: 'Ungrounded'
+E         Actual message: 'Fixed cells must be active'
+
+tests/test_npf662_confined.py:106: AssertionError
+_________________ test_ungrounded_components_are_rejected[1.0] _________________
+
+net_source = 1.0
+
+    @pytest.mark.parametrize('net_source',[0.,1.,-1.])
+    def test_ungrounded_components_are_rejected(net_source):
+        case=confined_case(masked=True)
+        case.active[:,2,:]=0;case.fixed[:,:2,:]=0;case.source[:]=0.;case.source[0,0,0]=net_source
+>       with pytest.raises(ValueError,match='Ungrounded'):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: Regex pattern did not match.
+E         Expected regex: 'Ungrounded'
+E         Actual message: 'Fixed cells must be active'
+
+tests/test_npf662_confined.py:106: AssertionError
+________________ test_ungrounded_components_are_rejected[-1.0] _________________
+
+net_source = -1.0
+
+    @pytest.mark.parametrize('net_source',[0.,1.,-1.])
+    def test_ungrounded_components_are_rejected(net_source):
+        case=confined_case(masked=True)
+        case.active[:,2,:]=0;case.fixed[:,:2,:]=0;case.source[:]=0.;case.source[0,0,0]=net_source
+>       with pytest.raises(ValueError,match='Ungrounded'):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: Regex pattern did not match.
+E         Expected regex: 'Ungrounded'
+E         Actual message: 'Fixed cells must be active'
+
+tests/test_npf662_confined.py:106: AssertionError
+_____________ test_live_mf6_complete_and_supplied_head[True-True] ______________
+
+tmp_path = PosixPath('/tmp/pytest-of-patrickdurney/pytest-97/test_live_mf6_complete_and_sup1')
+heterogeneous = True, masked = True
+
+    @pytest.mark.parametrize('heterogeneous,masked',[(False,False),(True,True)])
+    def test_live_mf6_complete_and_supplied_head(tmp_path,heterogeneous,masked):
+        executable=Path('/bin/modflow/mf6')
+        if not executable.is_file():pytest.skip('Pinned local MF6 unavailable')
+        case=confined_case(heterogeneous=heterogeneous,masked=masked)
+        case.source[:,:,0]=.123  # Explicit fixed-reservoir forcing remains in the manifest.
+        reference=NPF662Reference(case=case)
+        cpu,ci,cf=reference.solve()
+        head,info,fields=run_reference_mf6(case=case,directory=tmp_path/'root',executable=executable)
+        assert info['native_success'] and info['independent_conservation'],info
+        np.testing.assert_allclose(head[reference.free],cpu[reference.free],rtol=0.,atol=1e-7)
+>       np.testing.assert_allclose(fields['flux_native'],cf['flux'],rtol=3e-12,atol=2e-11)
+E       AssertionError: 
+E       Not equal to tolerance rtol=3e-12, atol=2e-11
+E       
+E       Mismatched elements: 1 / 230 (0.435%)
+E       Max absolute difference among violations: 3.83719723e-11
+E       Max relative difference among violations: 1.23169326e-11
+E        ACTUAL: array([-2.836241e-02, -1.839409e-02, -1.408890e-02, -1.085575e-02,
+E              -4.877718e-03, -2.733258e-03, -1.815400e-02, -3.320616e-02,
+E              -4.483562e-02, -1.426172e-01, -2.367160e-01, -1.570211e-02,...
+E        DESIRED: array([-2.836241e-02, -1.839409e-02, -1.408890e-02, -1.085575e-02,
+E              -4.877718e-03, -2.733258e-03, -1.815400e-02, -3.320616e-02,
+E              -4.483562e-02, -1.426172e-01, -2.367160e-01, -1.570211e-02,...
+
+tests/test_npf662_confined.py:156: AssertionError
+=============================== warnings summary ===============================
+tests/test_npf662_confined.py::test_arbitrary_head_operator_and_independent_complete_solve[cpu]
+  /home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/warp/_src/apic/types.py:49: DeprecationWarning: Due to '_pack_', the 'APICLaunchParamRecord' Structure will use memory layout compatible with MSVC (Windows). If this is intended, set _layout_ to 'ms'. The implicit default is deprecated and slated to become an error in Python 3.19.
+    class APICLaunchParamRecord(ctypes.Structure):
+
+tests/test_npf662_confined.py::test_arbitrary_head_operator_and_independent_complete_solve[cpu]
+  /home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/warp/_src/apic/types.py:69: DeprecationWarning: Due to '_pack_', the 'APICLaunchPtrLocation' Structure will use memory layout compatible with MSVC (Windows). If this is intended, set _layout_ to 'ms'. The implicit default is deprecated and slated to become an error in Python 3.19.
+    class APICLaunchPtrLocation(ctypes.Structure):
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_npf662_confined.py::test_ungrounded_components_are_rejected[0.0]
+FAILED tests/test_npf662_confined.py::test_ungrounded_components_are_rejected[1.0]
+FAILED tests/test_npf662_confined.py::test_ungrounded_components_are_rejected[-1.0]
+FAILED tests/test_npf662_confined.py::test_live_mf6_complete_and_supplied_head[True-True]
+4 failed, 16 passed, 2 warnings in 2.38s
