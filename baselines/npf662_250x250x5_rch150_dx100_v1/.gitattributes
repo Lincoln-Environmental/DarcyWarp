@@ -1,0 +1,3 @@
+* -text
+source_snapshot/** -whitespace
+benchmark/summary.csv whitespace=cr-at-eol

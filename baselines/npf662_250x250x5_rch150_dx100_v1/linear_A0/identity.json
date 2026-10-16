@@ -1,0 +1,10 @@
+{
+  "case_sha256": "4490ca3afcfc5ebdea00498e04f1ab992524a4c0f16f979a431eee8e781e3484",
+  "inputs_sha256": "0afd6356595165dfea6589b56ad1c056fe927e83182a3cafa58674e718101cfb",
+  "shape": [
+    5,
+    250,
+    250
+  ],
+  "convertible_layers": []
+}

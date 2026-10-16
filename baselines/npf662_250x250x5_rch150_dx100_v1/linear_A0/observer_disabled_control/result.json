@@ -1,0 +1,185 @@
+{
+  "kind": "standalone_kcycle_linear_A0",
+  "accepted": false,
+  "requested_levels": 5,
+  "options": {
+    "max_cycles": 100,
+    "nu_pre": 2,
+    "nu_post": 2,
+    "nu_coarse": 10,
+    "smoother": "chebyshev",
+    "omega": 0.8,
+    "line_omega": 0.8,
+    "line_sweeps_pre": 1,
+    "line_sweeps_post": 1,
+    "line_sweeps_coarse": 1,
+    "cheby_lambda_min": 0.05,
+    "cheby_lambda_max": 1.95,
+    "rel_tol": 0.0,
+    "abs_tol_min": 1e-10,
+    "dh_rms_tol": null,
+    "dh_max_tol": null,
+    "check_every_no": 1,
+    "diag_preconditioner_backend": "device",
+    "return_info": true,
+    "min_coarse_n": 2
+  },
+  "info": {
+    "solver_type": "kcycle_7point_3d",
+    "n_levels": 5,
+    "coarsening_mode": "horizontal",
+    "level_shapes": [
+      [
+        5,
+        250,
+        250
+      ],
+      [
+        5,
+        125,
+        125
+      ],
+      [
+        5,
+        63,
+        63
+      ],
+      [
+        5,
+        32,
+        32
+      ],
+      [
+        5,
+        16,
+        16
+      ]
+    ],
+    "coarsening_factors": [
+      [
+        2,
+        2
+      ],
+      [
+        2,
+        2
+      ],
+      [
+        2,
+        2
+      ],
+      [
+        2,
+        2
+      ]
+    ],
+    "max_cycles": 100,
+    "n_cycles_used": 100,
+    "nu_pre": 2,
+    "nu_post": 2,
+    "nu_coarse": 10,
+    "smoother": "chebyshev",
+    "omega": 0.8,
+    "cheby_lambda_min": 0.05,
+    "cheby_lambda_max": 1.95,
+    "cheby_pre_omegas": [
+      3.046471876313841,
+      0.5981750485153163
+    ],
+    "cheby_post_omegas": [
+      3.046471876313841,
+      0.5981750485153163
+    ],
+    "rel_tol": 0.0,
+    "abs_tol_min": 1e-10,
+    "tol_abs": 1e-10,
+    "r_rms0": 16.661527371243814,
+    "r_rms_start": 16.661527371243814,
+    "r_rms_end": 0.016768635045713253,
+    "h_rms_end": 8.758333073446465e-06,
+    "dh_rms_lastcheck": 4.858973471623654e-08,
+    "dh_max_lastcheck": 1.6494855974436007e-06,
+    "converged": false,
+    "transient": false,
+    "transient_formulation": "steady",
+    "dt": null,
+    "unconfined": false,
+    "line_omega": 0.8,
+    "line_sweeps_pre": 1,
+    "line_sweeps_post": 1,
+    "line_sweeps_coarse": 1,
+    "check_every_no": 1,
+    "vertical_line_max_nz": 64,
+    "diag_preconditioner_backend": "device",
+    "n_isolated_cells_excluded": 0,
+    "budget": {
+      "cell_residual_max": 0.11044587925356808,
+      "cell_residual_rms": 0.016768635045713232,
+      "source_total": 7980.954028302804,
+      "boundary_inflow": 0.0,
+      "boundary_outflow": -7980.953741782527,
+      "boundary_net": -7980.953741782527,
+      "storage_uptake": 0.0,
+      "domain_imbalance": 0.00028652005633311717,
+      "relative_imbalance": 7.953952142061783e-11,
+      "relative_cell_imbalance": 0.0009744529016574795,
+      "throughput": 3602235.1054635197,
+      "n_free_cells": 311250.0
+    },
+    "final_budget_acceptance": true
+  },
+  "independent_checks": {
+    "prescribed_cells_checked": 1250,
+    "prescribed_head_error_max_m": 0.0,
+    "prescribed_head_tolerance_m": 1e-10,
+    "boundary_condition_valid": true,
+    "invalid_active_heads": 0,
+    "inactive_marker_cells": 0,
+    "active_cells_checked": 312500,
+    "input_valid": true,
+    "head_residual_rms": 8.758333073446463e-06,
+    "physical_rms": 0.01676863504571322,
+    "physical_max": 0.11044587925356808,
+    "residual_l1": 3510.208450971361,
+    "relative_cell_imbalance": 0.0009744529016574787,
+    "gross_throughput": 3602235.10546352,
+    "signed_imbalance": 0.00028652005763445197,
+    "boundary_inflow": 0.0,
+    "boundary_outflow": 7980.953741782526,
+    "fixed_cell_source_total": 0.0,
+    "free_cells": 311250,
+    "fixed_reservoir_required_inflow": -7980.953741782526,
+    "ungrounded_current_components": 0,
+    "physical_metrics_valid": true,
+    "final_acceptance_thresholds": {
+      "physical_rms_m3_day": 1e-12,
+      "relative_cell_imbalance": 1e-08,
+      "head_equivalent_rms_m": 1e-06,
+      "prescribed_head_error_m": 1e-10
+    },
+    "evaluator": "matrix-free physical incidence; connectivity graph only",
+    "independent_accepted": false
+  },
+  "wall_seconds": 1.4764605759992264,
+  "hierarchy_host_seconds": null,
+  "hierarchy_device_upload_and_init_seconds": null,
+  "hierarchy_host_array_bytes": null,
+  "hierarchy_device_array_bytes": null,
+  "individual_cycle_seconds": [],
+  "cycles_total_seconds": null,
+  "history": [],
+  "memory": {
+    "device_sampled_peak_mib": 360.0,
+    "device_first_sample_mib": 296.0,
+    "sample_interval_ms": 100,
+    "sample_count": 15,
+    "pool_current_before_bytes": 0,
+    "pool_high_before_bytes": 219248348,
+    "pool_current_after_bytes": 0,
+    "pool_process_cumulative_high_bytes": 219248348
+  },
+  "observer_enabled": false,
+  "exact_head_rmse_m": 4.7675352251837e-06,
+  "exact_head_max_abs_m": 2.762964197877693e-05,
+  "residual_reduction_per_cycle": []
+}

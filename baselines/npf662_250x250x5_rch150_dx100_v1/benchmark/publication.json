@@ -1,0 +1,16 @@
+{
+  "completed_utc": "2026-10-16T20:21:24.055604+00:00",
+  "source_sha256": {
+    "working_tests/publish_npf662_baseline.py": "63f46c7a364384ae5a4c73a461b7ad63d6d92e6c647eb15ccb739bac7455acf7",
+    "working_tests/analyze_npf662_baseline.py": "d11d4f92284fe0dbaaf89e4734b8d49fc19ad6def8efe323b14b25c5fe8f169f",
+    "working_tests/benchmark_npf662_baseline.py": "cd619cd48249c9da543f37f9f5c2be44a6d099735a500ee6f9947179393fc4ad",
+    "working_tests/measure_npf662_cold_process.py": "17f06be916a4dc14e46447fad766b050d78bf0d25749be627f809fc9cdfbfe94",
+    "docs/NPF662_250_BASELINE.rst": "1b36ccc31348db35b2f5ecf53906b0cbc83839fa5564b7af065362aae6ffa72a"
+  },
+  "measurements": "benchmark_artifacts/npf662_250x250x5_rch150_dx100_v1/analysis_003",
+  "primary_measurements": "benchmark_artifacts/npf662_250x250x5_rch150_dx100_v1/run_001",
+  "actual_solver_source_snapshots": "See primary and analysis source_snapshot directories; publication snapshots are rendering/current reproduction code.",
+  "all_native_and_Newton_repeats_accepted": true,
+  "failed_linear_configurations": 6,
+  "successful_linear_configurations": 2
+}
