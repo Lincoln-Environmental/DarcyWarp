@@ -1,3 +1,4 @@
 # Preserve checksummed evidence byte-for-byte, including native CSV and log whitespace.
 validation_artifacts/terrain_2026-10-16/** -text -whitespace
 validation_artifacts/sevenpoint_v1/** -text -whitespace
+validation_artifacts/npf662_layered_v1/** -text -whitespace

@@ -114,7 +114,9 @@ class NPF662Workspace:
 
 
 def device_accepted(*,metrics):
-    return metrics['finite'] and metrics['head_residual_rms']<=1e-6 and (
+    valid=all(np.isfinite(metrics[name]) and metrics[name]>=0. for name in
+        ('head_residual_rms','physical_rms','relative_cell_imbalance','gross_throughput'))
+    return metrics['finite'] and valid and metrics['head_residual_rms']<=1e-6 and (
         metrics['physical_rms']<=1e-12 or metrics['relative_cell_imbalance']<=1e-8)
 
 
@@ -203,7 +205,8 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
     seconds=perf_counter()-start
     head=workspace.head.numpy().reshape(case.active.shape)
     checks,unused=reference.evaluate(head=head)
-    converged=bool(checks['independent_accepted'])
+    converged=bool(checks['independent_accepted'] and device_accepted(metrics=current))
+    if not device_accepted(metrics=current) and checks['independent_accepted']:reason='device_acceptance_failed'
     if not converged and reason=='converged':reason='independent_acceptance_failed'
     if checks['ungrounded_current_components']>0:reason='ungrounded_saturation_components'
     result=dict(converged=converged,stop_reason='converged' if converged else reason,outer_iterations=len(history),

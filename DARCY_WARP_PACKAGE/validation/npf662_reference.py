@@ -11,6 +11,7 @@ from scipy import sparse
 from scipy.sparse.csgraph import connected_components
 from scipy.sparse.linalg import spsolve
 from DARCY_WARP_PACKAGE.validation.head_checks import inspect_heads
+from DARCY_WARP_PACKAGE.validation.npf662_metrics import final_tolerances, stable_rms, stable_sum
 
 
 @dataclass
@@ -122,13 +123,22 @@ class NPF662Reference:
             if not np.any(self.case.fixed.ravel()[mask]):
                 raise ValueError(f'Ungrounded active component; net source={self.case.source.ravel()[mask].sum():.17g}')
 
-    def evaluate(self,*,head):
+    def evaluate(self,*,head,physical_tolerance=1e-12,relative_tolerance=1e-8,
+                 head_tolerance_m=1e-6,boundary_tolerance_m=1e-10):
         c=self.case
-        checks=inspect_heads(head=head,active=c.active,fixed=c.fixed,values=c.values)
+        thresholds=final_tolerances(physical_tolerance=physical_tolerance,relative_tolerance=relative_tolerance,
+            head_tolerance_m=head_tolerance_m,boundary_tolerance_m=boundary_tolerance_m)
+        checks=inspect_heads(head=head,active=c.active,fixed=c.fixed,values=c.values,
+            boundary_tolerance_m=boundary_tolerance_m)
         h=np.where(c.active,head,0.).ravel()
         conductance,dl,dr,saturation=self.face_terms(head=head)
         flux=conductance*(h[self.left]-h[self.right])
         divergence=(self.incidence@flux).reshape(self.shape)
+        # Recover a representable signed sum if sparse accumulation overflowed
+        # before cancellation. Do not repair unrepresentable positive diagonals.
+        for index in np.flatnonzero(~np.isfinite(divergence.ravel())):
+            row=self.incidence.getrow(int(index))
+            divergence.ravel()[index]=stable_sum(values=row.data*flux[row.indices])
         residual=np.where(self.free,c.source-divergence,0.)
         diagonal=np.asarray(abs(self.incidence)@conductance).reshape(self.shape)
         scaled=np.divide(residual,diagonal,out=np.zeros_like(residual),where=diagonal>0)
@@ -136,11 +146,14 @@ class NPF662Reference:
         boundary=self.free.ravel()[self.left]&c.fixed.ravel()[self.right].astype(bool)
         reverse=self.free.ravel()[self.right]&c.fixed.ravel()[self.left].astype(bool)
         exchange=np.concatenate([flux[boundary],-flux[reverse]])
-        inflow=float(np.maximum(-exchange,0.).sum());outflow=float(np.maximum(exchange,0.).sum())
-        throughput=float(np.abs(c.source[self.free]).sum())+inflow+outflow
-        rms=float(np.sqrt(np.mean(residual[self.free]**2))) if self.free.any() else 0.
-        hrms=float(np.sqrt(np.mean(scaled[self.free]**2))) if self.free.any() else 0.
-        l1=float(np.abs(residual).sum());relative=l1/max(throughput,np.finfo(float).tiny)
+        inflow=stable_sum(values=np.maximum(-exchange,0.));outflow=stable_sum(values=np.maximum(exchange,0.))
+        throughput=stable_sum(values=np.concatenate([np.abs(c.source[self.free]),np.abs(exchange)]))
+        rms=stable_rms(values=residual[self.free]);hrms=stable_rms(values=scaled[self.free])
+        l1=stable_sum(values=np.abs(residual[self.free]));relative=l1/max(throughput,np.finfo(float).tiny)
+        active=c.active!=0
+        metrics_valid=all(np.all(np.isfinite(value)) for value in
+            (flux,conductance,dl,dr,saturation[active],diagonal[active],divergence[active],residual[self.free],scaled[self.free]))
+        metrics_valid=bool(metrics_valid and np.all(np.isfinite([inflow,outflow,throughput,rms,hrms,l1,relative])))
         edges=conductance>0.
         graph=sparse.coo_matrix((np.ones(int(edges.sum())),(self.left[edges],self.right[edges])),shape=self.matrix.shape).tocsr()
         unused,labels=connected_components(csgraph=graph,directed=False)
@@ -149,12 +162,16 @@ class NPF662Reference:
         ungrounded=len(active_labels-grounded_labels)
         result=dict(**checks,head_residual_rms=hrms,physical_rms=rms,
             physical_max=float(np.abs(residual).max()),residual_l1=l1,relative_cell_imbalance=relative,
-            gross_throughput=throughput,signed_imbalance=float(residual.sum()),boundary_inflow=inflow,boundary_outflow=outflow,
-            fixed_cell_source_total=float(c.source[c.fixed!=0].sum()),free_cells=int(self.free.sum()),
-            fixed_reservoir_required_inflow=float(np.sum((divergence-c.source)[c.fixed!=0])),
-            ungrounded_current_components=ungrounded)
+            gross_throughput=throughput,signed_imbalance=stable_sum(values=residual[self.free]),boundary_inflow=inflow,boundary_outflow=outflow,
+            fixed_cell_source_total=stable_sum(values=c.source[c.fixed!=0]),free_cells=int(self.free.sum()),
+            fixed_reservoir_required_inflow=stable_sum(values=(divergence-c.source)[c.fixed!=0]),
+            ungrounded_current_components=ungrounded,physical_metrics_valid=metrics_valid,
+            final_acceptance_thresholds=thresholds)
+        result['physical_metrics_valid']=bool(metrics_valid and np.all(np.isfinite([
+            result['signed_imbalance'],result['fixed_cell_source_total'],result['fixed_reservoir_required_inflow']])))
         result['independent_accepted']=bool(checks['input_valid'] and checks['boundary_condition_valid'] and
-            np.all(np.isfinite(flux)) and ungrounded==0 and hrms<=1e-6 and (rms<=1e-12 or relative<=1e-8))
+            result['physical_metrics_valid'] and ungrounded==0 and hrms<=head_tolerance_m and
+            (rms<=physical_tolerance or relative<=relative_tolerance))
         return result,dict(flux=flux,residual=residual,fixed_reservoir_required_inflow=np.where(c.fixed,divergence-c.source,0.),
             principal_diagonal=diagonal,saturation=saturation,
             conductance=conductance,dflux_left=dl,dflux_right=dr)

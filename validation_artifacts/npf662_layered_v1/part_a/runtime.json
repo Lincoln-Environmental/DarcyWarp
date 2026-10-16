@@ -1,0 +1,27 @@
+{
+  "python": "3.14.7 | packaged by conda-forge | (main, Aug 30 2026, 16:54:41) [GCC 15.3.0]",
+  "interpreter": "/home/patrickdurney/miniconda3/envs/darcywarp/bin/python",
+  "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.39",
+  "packages": {
+    "numpy": "2.3.5",
+    "scipy": "1.16.3",
+    "warp-lang": "1.17.0",
+    "flopy": "3.9.5",
+    "pytest": "9.1.1"
+  },
+  "precision": "float64",
+  "mf6_path": "/bin/modflow/mf6",
+  "mf6_resolved_path": "/usr/bin/modflow/mf6",
+  "mf6_version": "mf6: 6.6.2 05/12/2025",
+  "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+  "gpu": "Fri Oct 16 18:46:06 2026       \n+-----------------------------------------------------------------------------------------+\n| NVIDIA-SMI 595.91.07              Driver Version: 595.91.07      CUDA Version: 13.2     |\n+-----------------------------------------+------------------------+----------------------+\n| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |\n| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |\n|                                         |                        |               MIG M. |\n|=========================================+========================+======================|\n|   0  NVIDIA GeForce RTX 4070 ...    Off |   00000000:02:00.0 Off |                  N/A |\n| 30%   46C    P2             77W /  285W |     730MiB /  16376MiB |     99%      Default |\n|                                         |                        |                  N/A |\n+-----------------------------------------+------------------------+----------------------+\n\n+-----------------------------------------------------------------------------------------+\n| Processes:                                                                              |\n|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |\n|        ID   ID                                                               Usage      |\n|=========================================================================================|\n|    0   N/A  N/A            2070      G   /usr/lib/xorg/Xorg                       53MiB |\n|    0   N/A  N/A         1327284      C   ...da3/envs/darcywarp/bin/python        650MiB |\n+-----------------------------------------------------------------------------------------+\n",
+  "source_revision": "8352de9c423471619c5914ce1d028120935b7f30",
+  "source_sha256": {
+    "DARCY_WARP_PACKAGE/validation/npf662_reference.py": "8727d2a1d551f947d5c9c54c063f57eb89447489ff2068525c64d64abab34dff",
+    "DARCY_WARP_PACKAGE/validation/npf662_metrics.py": "249f879bb6629880e678cb18eebd6ae0f17bd3837b1c5edf14d833ffe22ff383",
+    "DARCY_WARP_PACKAGE/validation/npf662_mf6.py": "85754beb49f0bf548c0cf209c69d7ee458b4ff82fc1fca22604467643b65f46a",
+    "DARCY_WARP_PACKAGE/solvers/npf662_3d.py": "4cfbd5c6fbc00d411d10feb1c61fe05531f6decc8897cfb6990e2b36a44eff1c",
+    "DARCY_WARP_PACKAGE/solvers/npf662_kernels.py": "3c317d292f574bed52bef26efcf8bc84b4677f4f62213f7779b8a6b011cd9f7b",
+    "DARCY_WARP_PACKAGE/solvers/npf662_newton.py": "cc063372f780893189420f51a304984509c6bd57de3f9881207435d3febe08a3"
+  }
+}

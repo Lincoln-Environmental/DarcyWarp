@@ -1,6 +1,7 @@
 """Opt-in pinned Cartesian NPF contract, retaining the legacy session backend."""
 import numpy as np
 from DARCY_WARP_PACKAGE.validation.npf662_reference import NPF662Case,NPF662Reference
+from DARCY_WARP_PACKAGE.validation.npf662_metrics import final_tolerances
 
 
 def case_from_model(*,model,top,cell_type=0):
@@ -16,6 +17,9 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
     abs_tol_min=1e-12,final_budget_relative_tol=1e-8,max_levels=6,min_coarse_n=2,
     return_info=True,max_outer=2000,krylov_restart=24,npf_newton_controls=None,**unsupported):
     if unsupported:raise ValueError(f'Unsupported mf6_6_6_2_npf controls: {sorted(unsupported)}')
+    thresholds=final_tolerances(physical_tolerance=abs_tol_min,relative_tolerance=final_budget_relative_tol)
+    if np.ndim(rel_tol)!=0 or not np.isfinite(rel_tol) or rel_tol<0.:
+        raise ValueError('Krylov relative tolerance must be a finite nonnegative scalar')
     if unconfined and top_elevation is None:raise ValueError('Matched unconfined mode requires explicit flat top_elevation')
     types=int(unconfined) if npf_cell_type is None else npf_cell_type
     case=case_from_model(model=model,top=0. if top_elevation is None else top_elevation,cell_type=types)
@@ -27,7 +31,7 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
             raise ValueError('Matched Newton requires implementation=fast and solver=kcycle; legacy backends remain separate')
         if not np.any(case.cell_types[case.active!=0]):raise ValueError('unconfined=True requires convertible active cells')
         if rel_tol!=1e-12 or abs_tol_min!=1e-12 or final_budget_relative_tol!=1e-8 or max_levels!=6 or min_coarse_n!=2:
-            raise ValueError('Confined-only tolerance/MG controls are unsupported in the matched Newton path; use npf_newton_controls')
+            raise ValueError('Matched unconfined final acceptance is fixed by V1; npf_newton_controls controls iteration only. Confined tolerance/MG overrides are unsupported')
         from DARCY_WARP_PACKAGE.solvers.npf662_newton import solve_newton_device,NPF662NewtonControls
         controls=NPF662NewtonControls() if npf_newton_controls is None else npf_newton_controls
         if not isinstance(controls,NPF662NewtonControls):raise ValueError('npf_newton_controls must be NPF662NewtonControls')
@@ -37,6 +41,7 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
             device=model.device,precision='float64',
             implementation='device_newton_gmres',session_backend='npf662_newton',
             reference_contract='NPF662_CARTESIAN_V1_Newton',reference_version='6.6.2',
+            final_acceptance_thresholds=thresholds,
             effective_options=dict(xt3d=False,newton=True,cell_type=case.cell_types.tolist(),saturation_epsilon=1e-6,
                 conductance_floor_m=0.,variablecv=False,perched=False,thickstrt=False,rewet=False,storage=False,packages=['CHD','WEL_SOURCE']))
         return (head,info) if return_info else head
@@ -44,13 +49,14 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
         unconfined=False,max_cycles=max_cycles,rel_tol=rel_tol,abs_tol_min=abs_tol_min,
         final_budget_relative_tol=final_budget_relative_tol,max_levels=max_levels,min_coarse_n=min_coarse_n,
         dh_rms_tol=None,return_info=True)
-    checks,unused=reference.evaluate(head=head)
+    checks,unused=reference.evaluate(head=head,physical_tolerance=abs_tol_min,relative_tolerance=final_budget_relative_tol)
     info['backend_converged']=bool(info['converged'])
     info['dt']=None  # No timestep exists in this explicitly steady contract.
     info.update(formulation='mf6_6_6_2_npf',geometry='orthogonal_cartesian_uniform_dz',
         device=model.device,precision='float64',
         reference_contract='NPF662_CARTESIAN_V1_confined',reference_version='6.6.2',
         independent_acceptance=checks,converged=bool(checks['independent_accepted']),
+        final_acceptance_thresholds=thresholds,
         effective_options=dict(xt3d=False,newton=False,icelltype=0,variablecv=False,perched=False,thickstrt=False,
             rewet=False,storage=False,packages=['CHD','WEL_SOURCE']),
         stop_reason='converged' if checks['independent_accepted'] else 'independent_acceptance_failed')

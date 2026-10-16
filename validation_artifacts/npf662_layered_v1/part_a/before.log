@@ -1,0 +1,449 @@
+FFFFFFFFFFFFFFFFFFFFFFFFFFFF.                                            [100%]
+=================================== FAILURES ===================================
+_________ test_confined_wrapper_honours_requested_physical_thresholds __________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x750e5b38cfc0>
+
+    def test_confined_wrapper_honours_requested_physical_thresholds(monkeypatch):
+        case = line_case()
+        monkeypatch.setattr(ThreeDOperatorSession, 'solve', synthetic_backend)
+        with make_gpu_model(case=case, device='cpu') as model:
+            head, info = model.solve(abs_tol_min=1e-14, final_budget_relative_tol=1e-12)
+        assert info['backend_converged']
+>       assert not info['converged']
+E       assert not True
+
+tests/test_npf662_acceptance.py:31: AssertionError
+----------------------------- Captured stdout call -----------------------------
+✅ CUDA driver reports 1 device(s).
+cuda_device_found = True
+_______________ test_reference_thresholds_and_unchanged_defaults _______________
+
+    def test_reference_thresholds_and_unchanged_defaults():
+        case = line_case()
+        head = case.values.copy(); head[0, 0, 1] += 1e-9
+        reference = NPF662Reference(case=case)
+        defaults, unused = reference.evaluate(head=head)
+>       strict, unused = reference.evaluate(head=head, physical_tolerance=1e-14, relative_tolerance=1e-12)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: NPF662Reference.evaluate() got an unexpected keyword argument 'physical_tolerance'
+
+tests/test_npf662_acceptance.py:41: TypeError
+_ test_finite_faces_cannot_hide_overflowed_aggregates[1e+308-endpoints0-0.001] _
+
+conductivity = 1e+308, endpoints = (0.0, 2.0), offset = 0.001
+
+    @pytest.mark.parametrize('conductivity,endpoints,offset', [
+        (1e308, (0., 2.), .001), (1e307, (-10., 10.), 1e-7)])
+    def test_finite_faces_cannot_hide_overflowed_aggregates(conductivity, endpoints, offset):
+        case = line_case(conductivity=conductivity, endpoints=endpoints)
+        head = case.values.copy(); head[0, 0, 1] += offset
+        with np.errstate(over='ignore', invalid='ignore'):
+            checks, fields = NPF662Reference(case=case).evaluate(head=head)
+        assert np.isfinite(fields['flux']).all()
+>       assert not checks['independent_accepted']
+E       assert not True
+
+tests/test_npf662_acceptance.py:56: AssertionError
+_ test_finite_faces_cannot_hide_overflowed_aggregates[1e+307-endpoints1-1e-07] _
+
+conductivity = 1e+307, endpoints = (-10.0, 10.0), offset = 1e-07
+
+    @pytest.mark.parametrize('conductivity,endpoints,offset', [
+        (1e308, (0., 2.), .001), (1e307, (-10., 10.), 1e-7)])
+    def test_finite_faces_cannot_hide_overflowed_aggregates(conductivity, endpoints, offset):
+        case = line_case(conductivity=conductivity, endpoints=endpoints)
+        head = case.values.copy(); head[0, 0, 1] += offset
+        with np.errstate(over='ignore', invalid='ignore'):
+            checks, fields = NPF662Reference(case=case).evaluate(head=head)
+        assert np.isfinite(fields['flux']).all()
+>       assert not checks['independent_accepted']
+E       assert not True
+
+tests/test_npf662_acceptance.py:56: AssertionError
+___________ test_stable_large_representable_rms_and_tiny_throughput ____________
+
+    def test_stable_large_representable_rms_and_tiny_throughput():
+        for conductivity in (1e200, 1e-300):
+            case = line_case(conductivity=conductivity)
+            head = case.values.copy(); head[0, 0, 1] += .001
+            checks, unused = NPF662Reference(case=case).evaluate(head=head)
+>           assert checks['physical_metrics_valid']
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           KeyError: 'physical_metrics_valid'
+
+tests/test_npf662_acceptance.py:65: KeyError
+______ test_invalid_evaluator_thresholds_rejected[physical_tolerance-nan] ______
+
+name = 'physical_tolerance', value = nan
+
+    @pytest.mark.parametrize('value', [np.nan, np.inf, -1.])
+    @pytest.mark.parametrize('name', ['physical_tolerance', 'relative_tolerance', 'head_tolerance_m', 'boundary_tolerance_m'])
+    def test_invalid_evaluator_thresholds_rejected(name, value):
+        case = line_case()
+        with pytest.raises(ValueError, match='tolerance'):
+>           NPF662Reference(case=case).evaluate(head=case.values, **{name: value})
+E           TypeError: NPF662Reference.evaluate() got an unexpected keyword argument 'physical_tolerance'
+
+tests/test_npf662_acceptance.py:75: TypeError
+______ test_invalid_evaluator_thresholds_rejected[physical_tolerance-inf] ______
+
+name = 'physical_tolerance', value = inf
+
+    @pytest.mark.parametrize('value', [np.nan, np.inf, -1.])
+    @pytest.mark.parametrize('name', ['physical_tolerance', 'relative_tolerance', 'head_tolerance_m', 'boundary_tolerance_m'])
+    def test_invalid_evaluator_thresholds_rejected(name, value):
+        case = line_case()
+        with pytest.raises(ValueError, match='tolerance'):
+>           NPF662Reference(case=case).evaluate(head=case.values, **{name: value})
+E           TypeError: NPF662Reference.evaluate() got an unexpected keyword argument 'physical_tolerance'
+
+tests/test_npf662_acceptance.py:75: TypeError
+_____ test_invalid_evaluator_thresholds_rejected[physical_tolerance--1.0] ______
+
+name = 'physical_tolerance', value = -1.0
+
+    @pytest.mark.parametrize('value', [np.nan, np.inf, -1.])
+    @pytest.mark.parametrize('name', ['physical_tolerance', 'relative_tolerance', 'head_tolerance_m', 'boundary_tolerance_m'])
+    def test_invalid_evaluator_thresholds_rejected(name, value):
+        case = line_case()
+        with pytest.raises(ValueError, match='tolerance'):
+>           NPF662Reference(case=case).evaluate(head=case.values, **{name: value})
+E           TypeError: NPF662Reference.evaluate() got an unexpected keyword argument 'physical_tolerance'
+
+tests/test_npf662_acceptance.py:75: TypeError
+______ test_invalid_evaluator_thresholds_rejected[relative_tolerance-nan] ______
+
+name = 'relative_tolerance', value = nan
+
+    @pytest.mark.parametrize('value', [np.nan, np.inf, -1.])
+    @pytest.mark.parametrize('name', ['physical_tolerance', 'relative_tolerance', 'head_tolerance_m', 'boundary_tolerance_m'])
+    def test_invalid_evaluator_thresholds_rejected(name, value):
+        case = line_case()
+        with pytest.raises(ValueError, match='tolerance'):
+>           NPF662Reference(case=case).evaluate(head=case.values, **{name: value})
+E           TypeError: NPF662Reference.evaluate() got an unexpected keyword argument 'relative_tolerance'
+
+tests/test_npf662_acceptance.py:75: TypeError
+______ test_invalid_evaluator_thresholds_rejected[relative_tolerance-inf] ______
+
+name = 'relative_tolerance', value = inf
+
+    @pytest.mark.parametrize('value', [np.nan, np.inf, -1.])
+    @pytest.mark.parametrize('name', ['physical_tolerance', 'relative_tolerance', 'head_tolerance_m', 'boundary_tolerance_m'])
+    def test_invalid_evaluator_thresholds_rejected(name, value):
+        case = line_case()
+        with pytest.raises(ValueError, match='tolerance'):
+>           NPF662Reference(case=case).evaluate(head=case.values, **{name: value})
+E           TypeError: NPF662Reference.evaluate() got an unexpected keyword argument 'relative_tolerance'
+
+tests/test_npf662_acceptance.py:75: TypeError
+_____ test_invalid_evaluator_thresholds_rejected[relative_tolerance--1.0] ______
+
+name = 'relative_tolerance', value = -1.0
+
+    @pytest.mark.parametrize('value', [np.nan, np.inf, -1.])
+    @pytest.mark.parametrize('name', ['physical_tolerance', 'relative_tolerance', 'head_tolerance_m', 'boundary_tolerance_m'])
+    def test_invalid_evaluator_thresholds_rejected(name, value):
+        case = line_case()
+        with pytest.raises(ValueError, match='tolerance'):
+>           NPF662Reference(case=case).evaluate(head=case.values, **{name: value})
+E           TypeError: NPF662Reference.evaluate() got an unexpected keyword argument 'relative_tolerance'
+
+tests/test_npf662_acceptance.py:75: TypeError
+_______ test_invalid_evaluator_thresholds_rejected[head_tolerance_m-nan] _______
+
+name = 'head_tolerance_m', value = nan
+
+    @pytest.mark.parametrize('value', [np.nan, np.inf, -1.])
+    @pytest.mark.parametrize('name', ['physical_tolerance', 'relative_tolerance', 'head_tolerance_m', 'boundary_tolerance_m'])
+    def test_invalid_evaluator_thresholds_rejected(name, value):
+        case = line_case()
+        with pytest.raises(ValueError, match='tolerance'):
+>           NPF662Reference(case=case).evaluate(head=case.values, **{name: value})
+E           TypeError: NPF662Reference.evaluate() got an unexpected keyword argument 'head_tolerance_m'
+
+tests/test_npf662_acceptance.py:75: TypeError
+_______ test_invalid_evaluator_thresholds_rejected[head_tolerance_m-inf] _______
+
+name = 'head_tolerance_m', value = inf
+
+    @pytest.mark.parametrize('value', [np.nan, np.inf, -1.])
+    @pytest.mark.parametrize('name', ['physical_tolerance', 'relative_tolerance', 'head_tolerance_m', 'boundary_tolerance_m'])
+    def test_invalid_evaluator_thresholds_rejected(name, value):
+        case = line_case()
+        with pytest.raises(ValueError, match='tolerance'):
+>           NPF662Reference(case=case).evaluate(head=case.values, **{name: value})
+E           TypeError: NPF662Reference.evaluate() got an unexpected keyword argument 'head_tolerance_m'
+
+tests/test_npf662_acceptance.py:75: TypeError
+______ test_invalid_evaluator_thresholds_rejected[head_tolerance_m--1.0] _______
+
+name = 'head_tolerance_m', value = -1.0
+
+    @pytest.mark.parametrize('value', [np.nan, np.inf, -1.])
+    @pytest.mark.parametrize('name', ['physical_tolerance', 'relative_tolerance', 'head_tolerance_m', 'boundary_tolerance_m'])
+    def test_invalid_evaluator_thresholds_rejected(name, value):
+        case = line_case()
+        with pytest.raises(ValueError, match='tolerance'):
+>           NPF662Reference(case=case).evaluate(head=case.values, **{name: value})
+E           TypeError: NPF662Reference.evaluate() got an unexpected keyword argument 'head_tolerance_m'
+
+tests/test_npf662_acceptance.py:75: TypeError
+_____ test_invalid_evaluator_thresholds_rejected[boundary_tolerance_m-nan] _____
+
+name = 'boundary_tolerance_m', value = nan
+
+    @pytest.mark.parametrize('value', [np.nan, np.inf, -1.])
+    @pytest.mark.parametrize('name', ['physical_tolerance', 'relative_tolerance', 'head_tolerance_m', 'boundary_tolerance_m'])
+    def test_invalid_evaluator_thresholds_rejected(name, value):
+        case = line_case()
+        with pytest.raises(ValueError, match='tolerance'):
+>           NPF662Reference(case=case).evaluate(head=case.values, **{name: value})
+E           TypeError: NPF662Reference.evaluate() got an unexpected keyword argument 'boundary_tolerance_m'
+
+tests/test_npf662_acceptance.py:75: TypeError
+_____ test_invalid_evaluator_thresholds_rejected[boundary_tolerance_m-inf] _____
+
+name = 'boundary_tolerance_m', value = inf
+
+    @pytest.mark.parametrize('value', [np.nan, np.inf, -1.])
+    @pytest.mark.parametrize('name', ['physical_tolerance', 'relative_tolerance', 'head_tolerance_m', 'boundary_tolerance_m'])
+    def test_invalid_evaluator_thresholds_rejected(name, value):
+        case = line_case()
+        with pytest.raises(ValueError, match='tolerance'):
+>           NPF662Reference(case=case).evaluate(head=case.values, **{name: value})
+E           TypeError: NPF662Reference.evaluate() got an unexpected keyword argument 'boundary_tolerance_m'
+
+tests/test_npf662_acceptance.py:75: TypeError
+____ test_invalid_evaluator_thresholds_rejected[boundary_tolerance_m--1.0] _____
+
+name = 'boundary_tolerance_m', value = -1.0
+
+    @pytest.mark.parametrize('value', [np.nan, np.inf, -1.])
+    @pytest.mark.parametrize('name', ['physical_tolerance', 'relative_tolerance', 'head_tolerance_m', 'boundary_tolerance_m'])
+    def test_invalid_evaluator_thresholds_rejected(name, value):
+        case = line_case()
+        with pytest.raises(ValueError, match='tolerance'):
+>           NPF662Reference(case=case).evaluate(head=case.values, **{name: value})
+E           TypeError: NPF662Reference.evaluate() got an unexpected keyword argument 'boundary_tolerance_m'
+
+tests/test_npf662_acceptance.py:75: TypeError
+___________ test_invalid_public_thresholds_rejected[abs_tol_min-nan] ___________
+
+name = 'abs_tol_min', value = nan
+
+    @pytest.mark.parametrize('value', [np.nan, np.inf, -1.])
+    @pytest.mark.parametrize('name', ['abs_tol_min', 'final_budget_relative_tol', 'rel_tol'])
+    def test_invalid_public_thresholds_rejected(name, value):
+        case = line_case()
+        with make_gpu_model(case=case, device='cpu') as model:
+>           with pytest.raises(ValueError, match='tolerance'):
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           Failed: DID NOT RAISE ValueError
+
+tests/test_npf662_acceptance.py:83: Failed
+----------------------------- Captured stdout call -----------------------------
+Warp 1.17.0 initialized:
+   CUDA Toolkit 12.9, Driver 13.2
+   Devices:
+     "cpu"      : "x86_64"
+     "cuda:0"   : "NVIDIA GeForce RTX 4070 Ti SUPER" (16 GiB, sm_89, mempool enabled)
+   Kernel cache:
+     /home/patrickdurney/.cache/warp/1.17.0
+Module DARCY_WARP_PACKAGE.solvers.face_kernels_3d_f64 e2acfa1 load on device 'cpu' took 0.82 ms  (cached)
+Module DARCY_WARP_PACKAGE.kernels_3d c272a89 load on device 'cpu' took 0.15 ms  (cached)
+___________ test_invalid_public_thresholds_rejected[abs_tol_min-inf] ___________
+
+name = 'abs_tol_min', value = inf
+
+    @pytest.mark.parametrize('value', [np.nan, np.inf, -1.])
+    @pytest.mark.parametrize('name', ['abs_tol_min', 'final_budget_relative_tol', 'rel_tol'])
+    def test_invalid_public_thresholds_rejected(name, value):
+        case = line_case()
+        with make_gpu_model(case=case, device='cpu') as model:
+>           with pytest.raises(ValueError, match='tolerance'):
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           Failed: DID NOT RAISE ValueError
+
+tests/test_npf662_acceptance.py:83: Failed
+__________ test_invalid_public_thresholds_rejected[abs_tol_min--1.0] ___________
+
+name = 'abs_tol_min', value = -1.0
+
+    @pytest.mark.parametrize('value', [np.nan, np.inf, -1.])
+    @pytest.mark.parametrize('name', ['abs_tol_min', 'final_budget_relative_tol', 'rel_tol'])
+    def test_invalid_public_thresholds_rejected(name, value):
+        case = line_case()
+        with make_gpu_model(case=case, device='cpu') as model:
+>           with pytest.raises(ValueError, match='tolerance'):
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           Failed: DID NOT RAISE ValueError
+
+tests/test_npf662_acceptance.py:83: Failed
+____ test_invalid_public_thresholds_rejected[final_budget_relative_tol-nan] ____
+
+name = 'final_budget_relative_tol', value = nan
+
+    @pytest.mark.parametrize('value', [np.nan, np.inf, -1.])
+    @pytest.mark.parametrize('name', ['abs_tol_min', 'final_budget_relative_tol', 'rel_tol'])
+    def test_invalid_public_thresholds_rejected(name, value):
+        case = line_case()
+        with make_gpu_model(case=case, device='cpu') as model:
+>           with pytest.raises(ValueError, match='tolerance'):
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           AssertionError: Regex pattern did not match.
+E             Expected regex: 'tolerance'
+E             Actual message: 'final_budget_relative_tol must be nonnegative finite.'
+
+tests/test_npf662_acceptance.py:83: AssertionError
+____ test_invalid_public_thresholds_rejected[final_budget_relative_tol-inf] ____
+
+name = 'final_budget_relative_tol', value = inf
+
+    @pytest.mark.parametrize('value', [np.nan, np.inf, -1.])
+    @pytest.mark.parametrize('name', ['abs_tol_min', 'final_budget_relative_tol', 'rel_tol'])
+    def test_invalid_public_thresholds_rejected(name, value):
+        case = line_case()
+        with make_gpu_model(case=case, device='cpu') as model:
+>           with pytest.raises(ValueError, match='tolerance'):
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           AssertionError: Regex pattern did not match.
+E             Expected regex: 'tolerance'
+E             Actual message: 'final_budget_relative_tol must be nonnegative finite.'
+
+tests/test_npf662_acceptance.py:83: AssertionError
+___ test_invalid_public_thresholds_rejected[final_budget_relative_tol--1.0] ____
+
+name = 'final_budget_relative_tol', value = -1.0
+
+    @pytest.mark.parametrize('value', [np.nan, np.inf, -1.])
+    @pytest.mark.parametrize('name', ['abs_tol_min', 'final_budget_relative_tol', 'rel_tol'])
+    def test_invalid_public_thresholds_rejected(name, value):
+        case = line_case()
+        with make_gpu_model(case=case, device='cpu') as model:
+>           with pytest.raises(ValueError, match='tolerance'):
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           AssertionError: Regex pattern did not match.
+E             Expected regex: 'tolerance'
+E             Actual message: 'final_budget_relative_tol must be nonnegative finite.'
+
+tests/test_npf662_acceptance.py:83: AssertionError
+_____________ test_invalid_public_thresholds_rejected[rel_tol-nan] _____________
+
+name = 'rel_tol', value = nan
+
+    @pytest.mark.parametrize('value', [np.nan, np.inf, -1.])
+    @pytest.mark.parametrize('name', ['abs_tol_min', 'final_budget_relative_tol', 'rel_tol'])
+    def test_invalid_public_thresholds_rejected(name, value):
+        case = line_case()
+        with make_gpu_model(case=case, device='cpu') as model:
+>           with pytest.raises(ValueError, match='tolerance'):
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           Failed: DID NOT RAISE ValueError
+
+tests/test_npf662_acceptance.py:83: Failed
+_____________ test_invalid_public_thresholds_rejected[rel_tol-inf] _____________
+
+name = 'rel_tol', value = inf
+
+    @pytest.mark.parametrize('value', [np.nan, np.inf, -1.])
+    @pytest.mark.parametrize('name', ['abs_tol_min', 'final_budget_relative_tol', 'rel_tol'])
+    def test_invalid_public_thresholds_rejected(name, value):
+        case = line_case()
+        with make_gpu_model(case=case, device='cpu') as model:
+>           with pytest.raises(ValueError, match='tolerance'):
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           Failed: DID NOT RAISE ValueError
+
+tests/test_npf662_acceptance.py:83: Failed
+____________ test_invalid_public_thresholds_rejected[rel_tol--1.0] _____________
+
+name = 'rel_tol', value = -1.0
+
+    @pytest.mark.parametrize('value', [np.nan, np.inf, -1.])
+    @pytest.mark.parametrize('name', ['abs_tol_min', 'final_budget_relative_tol', 'rel_tol'])
+    def test_invalid_public_thresholds_rejected(name, value):
+        case = line_case()
+        with make_gpu_model(case=case, device='cpu') as model:
+>           with pytest.raises(ValueError, match='tolerance'):
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           Failed: DID NOT RAISE ValueError
+
+tests/test_npf662_acceptance.py:83: Failed
+____________ test_real_strict_public_solve_and_default_policy[cpu] _____________
+
+device = 'cpu'
+
+    @pytest.mark.parametrize('device', ['cpu', 'cuda:0'])
+    def test_real_strict_public_solve_and_default_policy(device):
+        case = line_case()
+        with make_gpu_model(case=case, device=device) as model:
+            head, info = model.solve(abs_tol_min=1e-14, final_budget_relative_tol=1e-12)
+            assert info['converged'], info
+>           checks, unused = NPF662Reference(case=case).evaluate(head=head,
+                physical_tolerance=1e-14, relative_tolerance=1e-12)
+E           TypeError: NPF662Reference.evaluate() got an unexpected keyword argument 'physical_tolerance'
+
+tests/test_npf662_acceptance.py:93: TypeError
+___________ test_real_strict_public_solve_and_default_policy[cuda:0] ___________
+
+device = 'cuda:0'
+
+    @pytest.mark.parametrize('device', ['cpu', 'cuda:0'])
+    def test_real_strict_public_solve_and_default_policy(device):
+        case = line_case()
+        with make_gpu_model(case=case, device=device) as model:
+            head, info = model.solve(abs_tol_min=1e-14, final_budget_relative_tol=1e-12)
+            assert info['converged'], info
+>           checks, unused = NPF662Reference(case=case).evaluate(head=head,
+                physical_tolerance=1e-14, relative_tolerance=1e-12)
+E           TypeError: NPF662Reference.evaluate() got an unexpected keyword argument 'physical_tolerance'
+
+tests/test_npf662_acceptance.py:93: TypeError
+----------------------------- Captured stdout call -----------------------------
+Module DARCY_WARP_PACKAGE.solvers.face_kernels_3d_f64 5cc2919 load on device 'cuda:0' took 3.44 ms  (cached)
+=============================== warnings summary ===============================
+tests/test_npf662_acceptance.py::test_stable_large_representable_rms_and_tiny_throughput
+  /tmp/darcy-npf-layers/DARCY_WARP_PACKAGE/validation/npf662_reference.py:141: RuntimeWarning: overflow encountered in square
+    rms=float(np.sqrt(np.mean(residual[self.free]**2))) if self.free.any() else 0.
+
+tests/test_npf662_acceptance.py::test_invalid_public_thresholds_rejected[abs_tol_min-nan]
+  /home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/warp/_src/apic/types.py:49: DeprecationWarning: Due to '_pack_', the 'APICLaunchParamRecord' Structure will use memory layout compatible with MSVC (Windows). If this is intended, set _layout_ to 'ms'. The implicit default is deprecated and slated to become an error in Python 3.19.
+    class APICLaunchParamRecord(ctypes.Structure):
+
+tests/test_npf662_acceptance.py::test_invalid_public_thresholds_rejected[abs_tol_min-nan]
+  /home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/warp/_src/apic/types.py:69: DeprecationWarning: Due to '_pack_', the 'APICLaunchPtrLocation' Structure will use memory layout compatible with MSVC (Windows). If this is intended, set _layout_ to 'ms'. The implicit default is deprecated and slated to become an error in Python 3.19.
+    class APICLaunchPtrLocation(ctypes.Structure):
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_npf662_acceptance.py::test_confined_wrapper_honours_requested_physical_thresholds
+FAILED tests/test_npf662_acceptance.py::test_reference_thresholds_and_unchanged_defaults
+FAILED tests/test_npf662_acceptance.py::test_finite_faces_cannot_hide_overflowed_aggregates[1e+308-endpoints0-0.001]
+FAILED tests/test_npf662_acceptance.py::test_finite_faces_cannot_hide_overflowed_aggregates[1e+307-endpoints1-1e-07]
+FAILED tests/test_npf662_acceptance.py::test_stable_large_representable_rms_and_tiny_throughput
+FAILED tests/test_npf662_acceptance.py::test_invalid_evaluator_thresholds_rejected[physical_tolerance-nan]
+FAILED tests/test_npf662_acceptance.py::test_invalid_evaluator_thresholds_rejected[physical_tolerance-inf]
+FAILED tests/test_npf662_acceptance.py::test_invalid_evaluator_thresholds_rejected[physical_tolerance--1.0]
+FAILED tests/test_npf662_acceptance.py::test_invalid_evaluator_thresholds_rejected[relative_tolerance-nan]
+FAILED tests/test_npf662_acceptance.py::test_invalid_evaluator_thresholds_rejected[relative_tolerance-inf]
+FAILED tests/test_npf662_acceptance.py::test_invalid_evaluator_thresholds_rejected[relative_tolerance--1.0]
+FAILED tests/test_npf662_acceptance.py::test_invalid_evaluator_thresholds_rejected[head_tolerance_m-nan]
+FAILED tests/test_npf662_acceptance.py::test_invalid_evaluator_thresholds_rejected[head_tolerance_m-inf]
+FAILED tests/test_npf662_acceptance.py::test_invalid_evaluator_thresholds_rejected[head_tolerance_m--1.0]
+FAILED tests/test_npf662_acceptance.py::test_invalid_evaluator_thresholds_rejected[boundary_tolerance_m-nan]
+FAILED tests/test_npf662_acceptance.py::test_invalid_evaluator_thresholds_rejected[boundary_tolerance_m-inf]
+FAILED tests/test_npf662_acceptance.py::test_invalid_evaluator_thresholds_rejected[boundary_tolerance_m--1.0]
+FAILED tests/test_npf662_acceptance.py::test_invalid_public_thresholds_rejected[abs_tol_min-nan]
+FAILED tests/test_npf662_acceptance.py::test_invalid_public_thresholds_rejected[abs_tol_min-inf]
+FAILED tests/test_npf662_acceptance.py::test_invalid_public_thresholds_rejected[abs_tol_min--1.0]
+FAILED tests/test_npf662_acceptance.py::test_invalid_public_thresholds_rejected[final_budget_relative_tol-nan]
+FAILED tests/test_npf662_acceptance.py::test_invalid_public_thresholds_rejected[final_budget_relative_tol-inf]
+FAILED tests/test_npf662_acceptance.py::test_invalid_public_thresholds_rejected[final_budget_relative_tol--1.0]
+FAILED tests/test_npf662_acceptance.py::test_invalid_public_thresholds_rejected[rel_tol-nan]
+FAILED tests/test_npf662_acceptance.py::test_invalid_public_thresholds_rejected[rel_tol-inf]
+FAILED tests/test_npf662_acceptance.py::test_invalid_public_thresholds_rejected[rel_tol--1.0]
+FAILED tests/test_npf662_acceptance.py::test_real_strict_public_solve_and_default_policy[cpu]
+FAILED tests/test_npf662_acceptance.py::test_real_strict_public_solve_and_default_policy[cuda:0]
+28 failed, 1 passed, 3 warnings in 2.77s
