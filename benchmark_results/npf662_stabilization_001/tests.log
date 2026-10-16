@@ -1,0 +1,83 @@
+No-MF6 policy: excluded 50 native-invoking test cases.
+Native excluded: tests/test_3d_physics_validation.py::test_steady_unconfined_vs_mf6[classic]
+Native excluded: tests/test_3d_physics_validation.py::test_steady_unconfined_vs_mf6[fast]
+Native excluded: tests/test_3d_physics_validation.py::test_identical_transient_histories_vs_mf6[confined-classic]
+Native excluded: tests/test_3d_physics_validation.py::test_identical_transient_histories_vs_mf6[confined-fast]
+Native excluded: tests/test_3d_physics_validation.py::test_identical_transient_histories_vs_mf6[confined-terrain]
+Native excluded: tests/test_3d_physics_validation.py::test_identical_transient_histories_vs_mf6[drain_recharge-classic]
+Native excluded: tests/test_3d_physics_validation.py::test_identical_transient_histories_vs_mf6[drain_recharge-fast]
+Native excluded: tests/test_3d_physics_validation.py::test_identical_transient_histories_vs_mf6[drain_recharge-terrain]
+Native excluded: tests/test_3d_physics_validation.py::test_identical_transient_histories_vs_mf6[layered_basement-classic]
+Native excluded: tests/test_3d_physics_validation.py::test_identical_transient_histories_vs_mf6[layered_basement-fast]
+Native excluded: tests/test_3d_physics_validation.py::test_identical_transient_histories_vs_mf6[layered_basement-terrain]
+Native excluded: tests/test_3d_physics_validation.py::test_convertible_elastic_storage_analytical_and_mf6[15.0-20.0-classic]
+Native excluded: tests/test_3d_physics_validation.py::test_convertible_elastic_storage_analytical_and_mf6[15.0-20.0-fast]
+Native excluded: tests/test_3d_physics_validation.py::test_convertible_elastic_storage_analytical_and_mf6[19.5-20.0-classic]
+Native excluded: tests/test_3d_physics_validation.py::test_convertible_elastic_storage_analytical_and_mf6[19.5-20.0-fast]
+Native excluded: tests/test_3d_physics_validation.py::test_convertible_elastic_storage_analytical_and_mf6[21.0--20.0-classic]
+Native excluded: tests/test_3d_physics_validation.py::test_convertible_elastic_storage_analytical_and_mf6[21.0--20.0-fast]
+Native excluded: tests/test_3d_physics_validation.py::test_mf6_layer_interface_different_sy_and_rewetting[classic]
+Native excluded: tests/test_3d_physics_validation.py::test_mf6_layer_interface_different_sy_and_rewetting[fast]
+Native excluded: tests/test_3d_physics_validation.py::test_mf6_layer_interface_different_sy_and_rewetting[terrain]
+Native excluded: tests/test_npf662_benchmark.py::test_native_rch_package_preserves_explicit_top_allocation
+Native excluded: tests/test_npf662_confined.py::test_live_mf6_complete_and_supplied_head[False-False]
+Native excluded: tests/test_npf662_confined.py::test_live_mf6_complete_and_supplied_head[True-True]
+Native excluded: tests/test_npf662_layered_unconfined.py::test_equal_head_different_convertible_saturation_selected_tie[1-cpu]
+Native excluded: tests/test_npf662_layered_unconfined.py::test_equal_head_different_convertible_saturation_selected_tie[1-cuda:0]
+Native excluded: tests/test_npf662_layered_unconfined.py::test_equal_head_different_convertible_saturation_selected_tie[2-cpu]
+Native excluded: tests/test_npf662_layered_unconfined.py::test_equal_head_different_convertible_saturation_selected_tie[2-cuda:0]
+Native excluded: tests/test_npf662_layered_unconfined.py::test_invalid_convertible_chd_and_invalid_supplied_state_are_not_repaired
+Native excluded: tests/test_npf662_layered_unconfined.py::test_fully_prescribed_layered_domain_native_empty_free_subset
+Native excluded: tests/test_npf662_layers.py::test_live_layered_confined_native[x]
+Native excluded: tests/test_npf662_layers.py::test_live_layered_confined_native[y]
+Native excluded: tests/test_npf662_layers.py::test_live_layered_confined_native[independent]
+Native excluded: tests/test_npf662_layers.py::test_internal_vertical_inactive_cell_has_no_passthrough
+Native excluded: tests/test_npf662_newton.py::test_cold_cpu_gpu_and_native_mf6_solutions[wet-cpu]
+Native excluded: tests/test_npf662_newton.py::test_cold_cpu_gpu_and_native_mf6_solutions[wet-cuda:0]
+Native excluded: tests/test_npf662_newton.py::test_cold_cpu_gpu_and_native_mf6_solutions[dry-cpu]
+Native excluded: tests/test_npf662_newton.py::test_cold_cpu_gpu_and_native_mf6_solutions[dry-cuda:0]
+Native excluded: tests/test_npf662_newton.py::test_cold_cpu_gpu_and_native_mf6_solutions[mixed-cpu]
+Native excluded: tests/test_npf662_newton.py::test_cold_cpu_gpu_and_native_mf6_solutions[mixed-cuda:0]
+Native excluded: tests/test_npf662_newton.py::test_scalar_reference_root_and_preserved_old_control[cpu]
+Native excluded: tests/test_npf662_newton.py::test_scalar_reference_root_and_preserved_old_control[cuda:0]
+Native excluded: tests/test_npf662_newton.py::test_same_state_native_fluxes_and_old_tpfa_subset
+Native excluded: tests/test_npf662_newton.py::test_live_native_smoothing_buffers_have_no_terrain_floor[2e-06]
+Native excluded: tests/test_npf662_newton.py::test_live_native_smoothing_buffers_have_no_terrain_floor[3.999998]
+Native excluded: tests/test_npf662_newton.py::test_native_boundary_admissibility_is_enforced_without_repair
+Native excluded: tests/test_terrain_mf6_validation.py::test_live_mf6_layered_affine_exact_flow[False]
+Native excluded: tests/test_terrain_mf6_validation.py::test_live_mf6_layered_affine_exact_flow[True]
+Native excluded: tests/test_terrain_mf6_validation.py::test_live_mf6_exact_source_precision_and_row_mapping
+Native excluded: tests/test_terrain_mf6_validation.py::test_live_mf6_result_rejects_wrong_canonical_hash
+Native excluded: tests/test_validation_repairs_3d.py::test_live_masked_mf6_output_and_node_mapping
+........................................................................ [  4%]
+........................................................................ [  9%]
+........................................................................ [ 14%]
+........................................................................ [ 19%]
+........................................................................ [ 24%]
+........................................................................ [ 29%]
+........................................................................ [ 34%]
+........................................................................ [ 39%]
+........................................................................ [ 44%]
+........................................................................ [ 49%]
+........................................................................ [ 54%]
+........................................................................ [ 59%]
+........................................................................ [ 64%]
+........................................................................ [ 69%]
+........................................................................ [ 74%]
+........................................................................ [ 79%]
+........................................................................ [ 84%]
+........................................................................ [ 89%]
+........................................................................ [ 94%]
+........................................................................ [ 99%]
+....                                                                     [100%]
+=============================== warnings summary ===============================
+tests/test_3d_dry_approximation.py::test_live_dry_floor_budget_can_conserve_while_artificial_flow_is_large[0.01]
+  /home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/warp/_src/apic/types.py:49: DeprecationWarning: Due to '_pack_', the 'APICLaunchParamRecord' Structure will use memory layout compatible with MSVC (Windows). If this is intended, set _layout_ to 'ms'. The implicit default is deprecated and slated to become an error in Python 3.19.
+    class APICLaunchParamRecord(ctypes.Structure):
+
+tests/test_3d_dry_approximation.py::test_live_dry_floor_budget_can_conserve_while_artificial_flow_is_large[0.01]
+  /home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/warp/_src/apic/types.py:69: DeprecationWarning: Due to '_pack_', the 'APICLaunchPtrLocation' Structure will use memory layout compatible with MSVC (Windows). If this is intended, set _layout_ to 'ms'. The implicit default is deprecated and slated to become an error in Python 3.19.
+    class APICLaunchPtrLocation(ctypes.Structure):
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+1444 passed, 50 deselected, 2 warnings in 79.27s (0:01:19)

@@ -10,6 +10,24 @@ import warp as wp
 from .face_kernels_3d_f64 import dot_partials_3d_f64_kernel, combine_partials_3d_f64_kernel, BLOCK_SIZE_3D
 
 
+class DiagonalFGMRESPreconditioner:
+    """The existing frozen diagonal action, without another operator copy."""
+    def __init__(self, *, workspace):
+        self.owner = workspace
+        self.applications = 0
+        self.device_seconds = 0.
+
+    def apply(self, *, vector, out, diagonal, free):
+        self.owner.precondition(x=vector, y=out, z=out, alpha=1., beta=0.)
+        self.applications += 1
+
+    def collect_timing(self):
+        pass
+
+    def close(self):
+        self.owner = None
+
+
 @wp.kernel
 def masked_copy(src: wp.array(dtype=wp.float64), free: wp.array(dtype=wp.int32),
                 dst: wp.array(dtype=wp.float64), scale: wp.float64):

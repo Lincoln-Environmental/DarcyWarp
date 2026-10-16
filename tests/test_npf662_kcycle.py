@@ -1,5 +1,7 @@
 """Flexible K-cycle scaling, nonlinear physics, safeguards and owned resources."""
 from dataclasses import replace
+import gc
+import weakref
 
 import numpy as np
 import pytest
@@ -188,3 +190,82 @@ def test_flexible_basis_reconstruction_and_short_restart(device):
         used, error, target = gmres.solve(preconditioner=variable, max_iterations=5, absolute_tolerance=1e-30)
         assert used == 5 and gmres.last_info['blocks'] == 2 and not gmres.last_info['converged']
         mg.close(); gmres.close(); ws.close()
+
+
+def test_lazy_selection_switching_and_shared_operator_buffers(device):
+    case = layered_case(masked=True, shape=(5, 5, 7))
+    with make_gpu_model(case=case, device=device) as model:
+        options = dict(krylov_restart=12, max_cycles=200, max_outer=80)
+        head, first = model.solve(npf_preconditioner='kcycle', **options)
+        assert first['converged']
+        ws = model._session._npf662_workspace_holder['workspace']
+        assert ws.krylov is None and ws.flexible is not None
+        mg, flexible = ws.multigrid, ws.flexible
+        pointers = {name: getattr(ws, name).ptr for name in ('c0', 'c', 'dl', 'dr', 'scale', 'rhs')}
+        head, diagnostic = model.solve(npf_preconditioner='diagonal', npf_krylov_method='fgmres', **options)
+        assert diagnostic['converged'] and diagnostic['krylov_method'] == 'FGMRES'
+        assert diagnostic['preconditioner_applications'] == diagnostic['krylov_iterations']
+        assert diagnostic['preconditioner_cycles'] == 0 and 'multigrid' not in diagnostic
+        assert ws.flexible is flexible and ws.multigrid is mg and ws.krylov is None
+        head, diagonal = model.solve(**options)
+        assert diagonal['converged'] and diagonal['krylov_method'] == 'GMRES'
+        assert flexible.closed and ws.flexible is None and ws.krylov is not None
+        legacy = weakref.ref(ws.krylov)
+        head, final = model.solve(npf_preconditioner='kcycle', **options)
+        gc.collect()
+        assert legacy() is None and ws.krylov is None
+        assert final['converged'] and final['multigrid']['hierarchy_reused']
+        assert ws.multigrid is mg and ws.flexible is not flexible
+        assert pointers == {name: getattr(ws, name).ptr for name in pointers}
+        assert final['krylov_iterations'] == first['krylov_iterations']
+        with pytest.raises(ValueError, match='flexible'):
+            model.solve(npf_preconditioner='kcycle', npf_krylov_method='gmres')
+
+
+@pytest.mark.parametrize('initial', ['wet', 'dry', 'mixed'])
+def test_diagonal_fgmres_matches_kcycle_on_identical_nonlinear_problem(device, initial):
+    case = unconfined_case(initial=initial, heterogeneous=True)
+    expected, checks, unused = NPF662Reference(case=case).solve(max_outer=200)
+    assert checks['independent_accepted']
+    with make_gpu_model(case=case, device=device) as model:
+        for preconditioner in ('diagonal', 'kcycle'):
+            head, info = model.solve(unconfined=True, top_elevation=case.top, npf_cell_type=case.cell_types,
+                npf_krylov_method='fgmres', npf_preconditioner=preconditioner,
+                krylov_restart=12, max_cycles=200, max_outer=200)
+            assert info['converged'] and info['krylov_method'] == 'FGMRES', info
+            np.testing.assert_allclose(actual=head, desired=expected, rtol=0., atol=1e-7)
+            assert info['preconditioner_applications'] == info['krylov_iterations']
+            assert model._session._npf662_workspace_holder['workspace'].krylov is None
+
+
+def test_diagonal_fgmres_linear_reference_and_value_updates(device):
+    from DARCY_WARP_PACKAGE.solvers.npf662_fgmres import DiagonalFGMRESPreconditioner
+    case = layered_case(masked=True, shape=(3, 5, 7))
+    reference = NPF662Reference(case=case)
+    with make_gpu_model(case=case, device=device) as model:
+        ws = NPF662Workspace(model=model, case=case, restart=12, krylov_budget=200)
+        assert ws.krylov is None and ws.flexible is None
+        ws.select_krylov(method='fgmres', krylov_budget=200)
+        preconditioner = DiagonalFGMRESPreconditioner(workspace=ws)
+        exact = np.random.default_rng(seed=222).normal(size=case.active.size)
+        exact[~reference.free.ravel()] = 0.
+        rhs = (reference.jacobian(head=case.initial) @ exact)/ws.scale.numpy()
+        ws.rhs.assign(rhs)
+        used, error, target = ws.flexible.solve(preconditioner=preconditioner,
+                                               max_iterations=200, absolute_tolerance=1e-11)
+        assert error <= target and used == preconditioner.applications
+        np.testing.assert_allclose(actual=ws.delta.numpy(), desired=exact, rtol=0., atol=2e-8)
+        preconditioner.close(); ws.close()
+        options = dict(npf_preconditioner='diagonal', npf_krylov_method='fgmres',
+                       krylov_restart=12, max_cycles=200, max_outer=80)
+        head, info = model.solve(**options)
+        owned = model._session._npf662_workspace_holder['workspace']
+        basis_pointer = owned.flexible.V[0].ptr
+        case.values += .1; case.source *= 2.
+        model.update_boundary_values(bc_values=case.values)
+        model.update_rhs(rhs=case.source)
+        head, info = model.solve(**options)
+        assert info['converged'] and info['krylov_workspace_reused']
+        assert owned.flexible.V[0].ptr == basis_pointer and owned.krylov is None
+        expected, checks, unused = NPF662Reference(case=case).solve()
+        np.testing.assert_allclose(actual=head[case.active != 0], desired=expected[case.active != 0], rtol=0., atol=1e-7)

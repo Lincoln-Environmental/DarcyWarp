@@ -1,0 +1,92 @@
+{
+  "scope": "Existing 192-cell layered geological parity case; not the 250x250x5 performance case.",
+  "inputs": "validation_artifacts/npf662_layered_v1/geology/varying_geology/inputs.npz",
+  "before": {
+    "path": "validation_artifacts/npf662_layered_v1/final_assessment/geology_failure/verification_polished.npz",
+    "npz_key": "original_cuda",
+    "shape": [
+      4,
+      6,
+      8
+    ],
+    "dtype": "float64",
+    "array_sha256": "afad9e6ec51ae22bed24ede524b2f0f09ef41145f8500e07e5c861ea64076d7a",
+    "max_head_discrepancy_m": 1.0910235204164564e-07,
+    "rms_head_discrepancy_m": 2.9643072671762388e-08,
+    "reference_head_scale_m": 78.9724618714878,
+    "float64_epsilon": 2.220446049250313e-16,
+    "epsilon_times_head_scale_m": 1.7535409096211606e-14,
+    "spacing_at_reference_head_scale_m": 1.4210854715202004e-14,
+    "physical_rms_m3_day": 2.6996288938335863e-09,
+    "head_residual_rms_m": 1.9685416863594553e-10,
+    "relative_cell_imbalance": 5.100894678234298e-09,
+    "production_acceptance": true
+  },
+  "after": {
+    "path": "validation_artifacts/npf662_layered_v1/final_assessment/geology_failure/verification_polished.npz",
+    "npz_key": "head",
+    "shape": [
+      4,
+      6,
+      8
+    ],
+    "dtype": "float64",
+    "array_sha256": "58f509c31d9f1099ae5e7a8fc06747841f7f4a4bb98bfb38df3f2b06b9162b4f",
+    "max_head_discrepancy_m": 8.711253940418828e-12,
+    "rms_head_discrepancy_m": 3.052725145338007e-12,
+    "reference_head_scale_m": 78.9724618714878,
+    "float64_epsilon": 2.220446049250313e-16,
+    "epsilon_times_head_scale_m": 1.7535409096211606e-14,
+    "spacing_at_reference_head_scale_m": 1.4210854715202004e-14,
+    "physical_rms_m3_day": 3.9074358993494044e-13,
+    "head_residual_rms_m": 6.819199007707952e-15,
+    "relative_cell_imbalance": 7.052542384965323e-13,
+    "production_acceptance": true
+  },
+  "original_polishing_history": [
+    {
+      "iteration": 1,
+      "linear_residual_rms": 3.386000750763975e-22,
+      "accepted": true,
+      "alpha": 1.0
+    }
+  ],
+  "original_verification_checks": {
+    "prescribed_cells_checked": 18,
+    "prescribed_head_error_max_m": 0.0,
+    "prescribed_head_tolerance_m": 1e-10,
+    "boundary_condition_valid": true,
+    "invalid_active_heads": 0,
+    "inactive_marker_cells": 0,
+    "active_cells_checked": 192,
+    "input_valid": true,
+    "head_residual_rms": 6.819199007707952e-15,
+    "physical_rms": 3.9074358993494044e-13,
+    "physical_max": 2.1878054923263335e-12,
+    "residual_l1": 3.2498115309920195e-11,
+    "relative_cell_imbalance": 7.052542384965323e-13,
+    "gross_throughput": 46.079999999999984,
+    "signed_imbalance": 9.214851104388645e-15,
+    "boundary_inflow": 0.0,
+    "boundary_outflow": 23.03999999999999,
+    "fixed_cell_source_total": 0.0,
+    "free_cells": 174,
+    "fixed_reservoir_required_inflow": -23.03999999999999,
+    "ungrounded_current_components": 0,
+    "physical_metrics_valid": true,
+    "final_acceptance_thresholds": {
+      "physical_rms_m3_day": 1e-14,
+      "relative_cell_imbalance": 1e-12,
+      "head_equivalent_rms_m": 1e-06,
+      "prescribed_head_error_m": 1e-10
+    },
+    "independent_accepted": true
+  },
+  "source_sha256": {
+    "validation_artifacts/npf662_layered_v1/geology/varying_geology/inputs.npz": "d86f4c8ba1870c7fba46d20c9df92153ada4d6141b108eea289f85f95867ec09",
+    "validation_artifacts/npf662_layered_v1/geology/varying_geology/mf6/result.npz": "a6c1ce87c463faa3625f48a3b0fe1d8fca2532c8baf471e154f6a34f8f707a11",
+    "validation_artifacts/npf662_layered_v1/final_assessment/geology_failure/verification_polished.npz": "2ec1e0960beb206ded56b8ac0457b2005b3131eb2a5a55a79eee176a97d9938e",
+    "validation_artifacts/npf662_layered_v1/final_assessment/geology_failure/summary.json": "685783b9296f1cd629c2a5140d66e61b43fc5ed7430c458e2f8accc16de5fc67"
+  },
+  "note": "Saved arrays only: no native solve, numerical solve, repeated polishing, or changed production tolerances."
+}

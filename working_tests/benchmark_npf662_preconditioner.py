@@ -41,15 +41,17 @@ def measure(*, baseline, variant, label, device, options, controls, phase, repea
     model.update_initial_head(initial_head=case.initial)
     wp.synchronize_device(device=device)
     built = perf_counter()
-    kwargs = dict(npf_preconditioner=label, unconfined=bool(np.any(case.cell_types)),
+    kwargs = dict(npf_preconditioner='diagonal' if label == 'diagonal_fgmres' else label,
+                  unconfined=bool(np.any(case.cell_types)),
                   npf_cell_type=case.cell_types, **options)
+    if label == 'diagonal_fgmres':kwargs['npf_krylov_method'] = 'fgmres'
     if label == 'kcycle':kwargs['npf_kcycle_controls'] = controls
     try:
         head, info = model.solve(**kwargs)
         wp.synchronize_device(device=device)
         stopped = perf_counter()
-        peak = memory.stop()
     finally:
+        peak = memory.stop()
         if resident is None:model.close()
     info.get('effective_options', {}).pop('cell_type', None)
     reference = NPF662MatrixFreeReference(case=case)
@@ -82,11 +84,13 @@ def save_results(*, output, results):
             repeat=row['repeat'], accepted=row['accepted'], end_to_end_seconds=row['end_to_end_seconds'],
             solve_only_seconds=row['solve_only_seconds'], public_solve_seconds=row['public_solve_seconds'],
             construction_seconds=row['construction_seconds'], hierarchy_seconds=mg.get('construction_seconds', 0.),
-            mg_device_seconds=mg.get('device_apply_seconds', 0.), sync_seconds=mg.get('synchronization_seconds', 0.),
+            mg_device_seconds=mg.get('device_apply_seconds', 0.), sync_seconds=row['info'].get('krylov_synchronization_seconds'),
             mg_enqueue_seconds=mg.get('preconditioner_enqueue_seconds', 0.),
             newton=row['info']['outer_iterations'], krylov=row['info']['krylov_iterations'],
-            restarts=row['info'].get('krylov_restarts'), applications=mg.get('applications'), cycles=mg.get('cycles'),
+            restarts=row['info'].get('krylov_restarts'), applications=row['info'].get('preconditioner_applications'),
+            cycles=row['info'].get('preconditioner_cycles'),
             hierarchy_reused=mg.get('hierarchy_reused'), peak_mib=row['memory']['device_sampled_peak_mib'],
+            pool_live_delta_bytes=row['memory']['pool_current_after_bytes']-row['memory']['pool_current_before_bytes'],
             head_rmse_m=row['comparison']['head_rmse_m'], flux_relative_l2=row['comparison']['flux_relative_l2']))
     if rows:
         with (output / 'summary.csv').open(mode='w', newline='') as stream:
@@ -121,6 +125,8 @@ def save_results(*, output, results):
                     lines.append(f'  {key}: {value:.6f}s ({100*value/medians[label]:.2f}% of end-to-end; overlapping categories).')
         if 'diagonal' in medians and 'kcycle' in medians:
             lines.append(f"{variant} end-to-end speedup: {medians['diagonal']/medians['kcycle']:.3f}x.")
+        if 'diagonal_fgmres' in medians and 'kcycle' in medians:
+            lines.append(f"{variant} K-cycle versus diagonal FGMRES speedup: {medians['diagonal_fgmres']/medians['kcycle']:.3f}x.")
     (output / 'REPORT.rst').write_text(data='\n'.join(lines) + '\n')
 
 
@@ -162,9 +168,9 @@ def benchmark(*, baseline, output, variants, labels, device, options, controls, 
 
 if __name__ == "__main__":
     baseline = Path('baselines/npf662_250x250x5_rch150_dx100_v1')
-    output = Path('benchmark_results/npf662_kcycle_002')
+    output = Path('benchmark_results/npf662_stabilization_001')
     variants = ('confined', 'unconfined')
-    labels = ('kcycle', 'diagonal')
+    labels = ('kcycle', 'diagonal', 'diagonal_fgmres')
     device = 'cuda:0'
     options = dict(max_outer=80, max_cycles=4000, krylov_restart=48, return_info=True)
     controls = NPF662KCycleControls(levels=5, pre_sweeps=2, post_sweeps=2, coarse_sweeps=20, cycles=1, omega=.8)

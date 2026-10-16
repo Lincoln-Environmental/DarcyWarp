@@ -1,0 +1,3 @@
+2025363, .venv/bin/python, 308 MiB
+2032849, .venv/bin/python, 308 MiB
+2039866, /home/patrickdurney/miniconda3/envs/darcywarp/bin/python, 570 MiB
