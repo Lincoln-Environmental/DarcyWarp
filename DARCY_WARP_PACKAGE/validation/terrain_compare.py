@@ -34,6 +34,8 @@ def evaluate_saved_head(*,case,head,output=None,boundary_tolerance_m=1e-10):
     kind=np.asarray(kind,dtype='U32')
     kind[~g.active_columns]='inactive'
     wt=np.where(g.active_columns,wt,np.nan)
+    depth=np.where(g.active_columns,depth,np.nan)
+    water_table_layer[~g.active_columns]=-1
     fields=dict(water_table_layer=water_table_layer,head=raw_head,evaluation_head=head,active=active,
         residual=r,saturated_thickness=np.where(active,sat,np.nan),floor=floor&active,dry=(sat==0)&active,wet=(sat>0)&active,
         qx=qx,qy=qy,qz=qz,contacts=contacts,gates=contacts>0,water_table=wt,water_table_kind=np.asarray(kind,dtype=str),
@@ -49,6 +51,8 @@ def evaluate_saved_head(*,case,head,output=None,boundary_tolerance_m=1e-10):
     leakage=[dict(net=float(q.sum()),downward=float(np.maximum(q,0).sum()),upward=float(np.maximum(-q,0).sum()),
         gross=float(np.abs(q).sum())) for q in qz]
     free=ref.free
+    budget['free_cells']=int(free.sum())
+    if not free.any():budget['cell_residual_max']=None
     coastal_in=coastal_out=0.
     for axis,q in zip((2,1,0),(qx,qy,qz)):
         l,u=[slice(None)]*3,[slice(None)]*3
@@ -75,12 +79,12 @@ def evaluate_saved_head(*,case,head,output=None,boundary_tolerance_m=1e-10):
 
 
 def compare_fields(*,case,left,right):
-    free=case.grid().active.astype(bool)&(case.arrays['fixed']==0)
-    difference=left['head']-right['head']
+    active=case.grid().active.astype(bool)
+    free=active&(case.arrays['fixed']==0)
+    difference=np.subtract(left['head'],right['head'],out=np.zeros_like(left['head']),where=active)
     wet_l,wet_r=left['wet'],right['wet']
     regimes=dict(wet_both=free&wet_l&wet_r,dry_both=free&~wet_l&~wet_r,
         wet_dry_mismatch=free&(wet_l!=wet_r),thin_either=free&(((left['saturated_thickness']>0)&(left['saturated_thickness']<.1))|((right['saturated_thickness']>0)&(right['saturated_thickness']<.1))))
-    active=case.grid().active.astype(bool)
     result=dict(free_cells=int(free.sum()),head_max=masked_extreme(values=np.abs(difference),mask=free),head_rms=masked_rms(values=difference,mask=free),
         floor_switches=int(np.sum((left['floor']!=right['floor'])&free)),
         saturated_thickness_max=masked_extreme(values=np.abs(left['saturated_thickness']-right['saturated_thickness']),mask=active),
@@ -88,9 +92,9 @@ def compare_fields(*,case,left,right):
             maximum=float(np.max(np.abs(difference[mask]))) if mask.any() else None) for key,mask in regimes.items()})
     for name in ('qx','qy','qz','contacts'):
         diff=left[name]-right[name]
-        result[name]=dict(max_abs=float(np.max(np.abs(diff))) if diff.size else 0.,
+        result[name]=dict(count=int(diff.size),max_abs=float(np.max(np.abs(diff))) if diff.size else None,
             l1=float(np.sum(np.abs(diff))),net_difference=float(np.sum(diff)),
-            relative_l1=float(np.sum(np.abs(diff))/max(np.sum(np.abs(right[name])),np.finfo(float).tiny)),
+            relative_l1=float(np.sum(np.abs(diff))/max(np.sum(np.abs(right[name])),np.finfo(float).tiny)) if diff.size else None,
             denominator='L1 of reference flux; tiny denominator uses float64.tiny')
     columns=np.any(active,axis=0)
     wtmask=columns&(left['water_table_kind']=='water_table')&(right['water_table_kind']=='water_table')

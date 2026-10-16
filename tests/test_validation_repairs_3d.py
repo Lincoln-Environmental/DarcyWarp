@@ -53,6 +53,8 @@ def test_inactive_markers_are_preserved_and_excluded(marker):
     assert result['inactive_marker_cells'] == 2
     np.testing.assert_array_equal(fields['head'], head)
     assert np.all(np.isfinite(fields['evaluation_head']))
+    assert np.all(fields['water_table_layer'][0,1]==-1)
+    assert np.all(np.isnan(fields['saturated_thickness'][:,0,1]))
     head[0, 1, 1] = marker
     invalid, fields = evaluate_saved_head(case=case, head=head)
     assert not invalid['independent_accepted']
@@ -74,6 +76,8 @@ def test_empty_free_layers_and_comparison_subsets():
     comparison = compare_fields(case=case, left=fields, right=fields)
     assert comparison['free_cells'] == 0
     assert comparison['head_max'] is None and comparison['head_rms'] is None
+    assert comparison['contacts']['count']==0 and comparison['contacts']['max_abs'] is None
+    assert result['budget']['cell_residual_max'] is None
 
 
 def test_prescribed_head_check_uses_absolute_tolerance_at_large_datum():

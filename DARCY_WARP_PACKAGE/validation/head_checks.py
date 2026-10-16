@@ -30,3 +30,11 @@ def masked_extreme(*, values, mask, minimum=False):
 def masked_rms(*, values, mask):
     selected = np.asarray(values)[mask]
     return float(np.sqrt(np.mean(selected ** 2))) if selected.size else None
+
+
+def finite_diagnostics(*,value):
+    """Unavailable/nonfinite diagnostic scalars are null; never edit raw fields."""
+    if isinstance(value,dict):return {key:finite_diagnostics(value=item) for key,item in value.items()}
+    if isinstance(value,list):return [finite_diagnostics(value=item) for item in value]
+    if isinstance(value,(float,np.floating)) and not np.isfinite(value):return None
+    return value

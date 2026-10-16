@@ -15,6 +15,7 @@ from DARCY_WARP_PACKAGE.validation.terrain_compare import evaluate_saved_head
 
 
 def reassess_candidates(*,original,output,boundary_tolerance_m):
+    if (output/'reassessment_v2.json').exists():raise FileExistsError('Immutable reassessment exists; choose a fresh output directory')
     cases={}
     unavailable=[]
     for manifest in sorted(original.rglob('manifest.json')):
