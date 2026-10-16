@@ -1,5 +1,4 @@
 """Local DIS geometry matrix using the existing four-method evidence runner."""
-from dataclasses import replace
 from pathlib import Path
 import hashlib
 import numpy as np
@@ -22,6 +21,9 @@ def make_layered_control(*, variation, shape, seed, unconfined=False, initial='m
     interfaces=np.concatenate([surface[None],surface[None]-np.cumsum(thickness,axis=0)],axis=0)
     types=np.zeros(shape,dtype=int)
     if unconfined:
+        # Separate valid unconfined control: the earlier confined boundary
+        # need not lie above every convertible bottom. Never repair at solve.
+        base.values=base.values+1.
         types[:]=1;types[1]=0
         if initial=='wet':head=interfaces[:-1]+1.
         elif initial=='dry':head=interfaces[1:]-.2
@@ -94,13 +96,19 @@ def run_geology_case(*,root,shape,dx,devices,executable,max_outer,krylov_budget,
 
 
 if __name__ == "__main__":
-    root=Path('validation_artifacts/npf662_layered_v1/confined/experiments')
-    phase='confined'
+    root=Path('validation_artifacts/npf662_layered_v1/unconfined/experiments')
+    phase='unconfined'
     shape=(3,4,5)
     seed=2231
     devices=['cpu','cuda:0']
     executable=Path('/bin/modflow/mf6')
     max_outer=200
     krylov_budget=2000
+    geology_output=Path('validation_artifacts/npf662_layered_v1/geology_4x4')
+    geology_shape=(4,4)
+    geology_dx=20.
     gate=run_layered_matrix(root=root,phase=phase,shape=shape,seed=seed,devices=devices,
         executable=executable,max_outer=max_outer,krylov_budget=krylov_budget)
+    geology=run_geology_case(root=geology_output,shape=geology_shape,dx=geology_dx,devices=devices,
+        executable=executable,max_outer=max_outer,krylov_budget=krylov_budget,seed=seed)
+    if not geology['passed']:raise AssertionError('Geology comparison incomplete; inspect its separate gate')

@@ -27,7 +27,6 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
     layered=model.geometry=='structured_dis_layered'
     if layered and top_elevation is not None:raise ValueError('Layered interfaces are authoritative; top_elevation override is unsupported')
     if unconfined and top_elevation is None and not layered:raise ValueError('Matched unconfined mode requires explicit flat top_elevation')
-    if layered and unconfined:raise ValueError('Layered unconfined activation follows the confined geometry gate')
     types=int(unconfined) if npf_cell_type is None else npf_cell_type
     case=case_from_model(model=model,top=0. if top_elevation is None else top_elevation,cell_type=types)
     reference=NPF662Reference(case=case)

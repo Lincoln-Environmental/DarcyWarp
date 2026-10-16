@@ -66,6 +66,17 @@ def test_stable_large_representable_rms_and_tiny_throughput():
         assert checks['physical_metrics_valid']
         assert np.isfinite(checks['physical_rms']) and checks['physical_rms'] > 0.
         np.testing.assert_allclose(checks['physical_rms'], .002*conductivity, rtol=1e-12, atol=0.)
+        exact,unused=NPF662Reference(case=case).evaluate(head=case.values)
+        assert exact['physical_metrics_valid'] and exact['independent_accepted']
+
+
+def test_subnormal_throughput_uses_the_declared_tiny_denominator():
+    case=line_case(endpoints=(0.,2e-310))
+    head=case.values.copy();head[0,0,1]+=1e-313
+    checks,unused=NPF662Reference(case=case).evaluate(head=head)
+    assert 0.<checks['gross_throughput']<np.finfo(float).tiny
+    assert checks['physical_metrics_valid'] and checks['independent_accepted']
+    assert checks['relative_cell_imbalance']==checks['residual_l1']/np.finfo(float).tiny
 
 
 @pytest.mark.parametrize('value', [np.nan, np.inf, -1.])

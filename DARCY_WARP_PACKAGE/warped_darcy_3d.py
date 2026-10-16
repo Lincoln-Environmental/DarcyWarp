@@ -34,7 +34,9 @@ class WarpDarcySolver3D:
     Cartesian layers are flat, contiguous and uniformly dz thick.
     ``build_from_terrain`` selects the separate conservative transformed
     operator with common depth interfaces following a DEM (fast only).
-    Neither geometry mode implements unsaturated-flow physics.
+    ``build_from_layers`` selects conventional variable-elevation DIS/NPF
+    connections in the explicit pinned formulation, without terrain metrics.
+    None of these modes implements unsaturated-flow physics.
     """
 
     def __init__(
