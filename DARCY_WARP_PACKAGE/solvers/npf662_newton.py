@@ -50,6 +50,7 @@ class NPF662Workspace:
         self.mode=wp.ones(shape=1,dtype=wp.int32,device=self.device)
         self.jv_counter=wp.zeros(shape=1,dtype=wp.int64,device=self.device)
         self.residual_evaluations=0;self.candidate_evaluations=0
+        self.multigrid=None;self.flexible=None
         self.load(model=model,case=case)
         self.evaluate(trial=False,linearize=True)
         operator=LinearOperator(shape=(self.n,self.n),dtype=wp.float64,device=wp.get_device(ident=self.device),matvec=self.matvec)
@@ -108,6 +109,9 @@ class NPF662Workspace:
     def close(self):
         """Break the bound-matvec/Krylov cycle and release owned device buffers."""
         if self.closed:return
+        if self.flexible is not None:self.flexible.close()
+        if self.multigrid is not None:self.multigrid.close()
+        self.flexible=None;self.multigrid=None
         self.closed=True;self.krylov=None
         for name in ('head','trial','source','bottom','thickness','scale','rhs','trial_rhs','residual','trial_residual','delta',
             'c0','q','c','trial_q','trial_c','dl','dr','free','fixed','types','left','right','metrics','maximum','mode','jv_counter'):
@@ -153,7 +157,8 @@ def search_direction(*,workspace,current,controls,physical_tolerance=1e-12,relat
 
 
 def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,controls,
-                        physical_tolerance=1e-12,relative_tolerance=1e-8):
+                        physical_tolerance=1e-12,relative_tolerance=1e-8,
+                        npf_preconditioner='diagonal',npf_kcycle_controls=None):
     controls.validate()
     if max_outer<0 or krylov_budget<0 or restart<2:raise ValueError('Nonnegative budgets and restart>=2 required')
     holder=model._session._npf662_workspace_holder
@@ -164,6 +169,23 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
         workspace=NPF662Workspace(model=model,case=case,restart=restart,krylov_budget=krylov_budget)
         holder['workspace']=workspace
     else:workspace.load(model=model,case=case)
+    mg_reused=False;mg_seconds=0.;linear_history=[]
+    if npf_preconditioner=='kcycle':
+        from .npf662_kcycle import NPF662KCycleControls,NPF662KCycleWorkspace
+        from .npf662_fgmres import RestartedFGMRES3D
+        mg_controls=NPF662KCycleControls() if npf_kcycle_controls is None else npf_kcycle_controls
+        if not isinstance(mg_controls,NPF662KCycleControls):raise ValueError('npf_kcycle_controls must be NPF662KCycleControls')
+        mg_controls.validate()
+        mg_reused=workspace.multigrid is not None and workspace.multigrid.compatible(
+            faces=model._session.faces,active=case.active,fixed=case.fixed,device=model.device,controls=mg_controls)
+        if not mg_reused:
+            if workspace.multigrid is not None:workspace.multigrid.close()
+            workspace.multigrid=NPF662KCycleWorkspace(faces=model._session.faces,active=case.active,
+                fixed=case.fixed,device=model.device,controls=mg_controls)
+            mg_seconds=workspace.multigrid.construction_seconds
+        if workspace.flexible is None:workspace.flexible=RestartedFGMRES3D(workspace=workspace,restart=restart)
+        mg_start=(workspace.multigrid.applications,workspace.multigrid.cycles,workspace.multigrid.graph_replays)
+    elif npf_preconditioner!='diagonal':raise ValueError('npf_preconditioner must be diagonal or kcycle')
     if wp.get_device(ident=model.device).is_cuda:wp.synchronize_device(device=model.device)
     start=perf_counter();total=0;fallbacks=0;saturated=0;backtracks=0;history=[];reason='outer_budget'
     current=workspace.evaluate(trial=False,linearize=True)
@@ -184,9 +206,14 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
             if mode==2:saturated+=1
             allowance=min(remaining,max(1,int(controls.newton_budget_fraction*krylov_budget))) if mode==1 else max(1,remaining//2) if mode==0 else remaining
             workspace.mode.fill_(mode);workspace.delta.zero_()
-            workspace.krylov._maxiter=allowance
-            workspace.krylov._atol=max(controls.inner_forcing*current['scaled_l2'],np.finfo(float).tiny)
-            used,error,target=workspace.krylov()
+            if npf_preconditioner=='diagonal':
+                workspace.krylov._maxiter=allowance
+                workspace.krylov._atol=max(controls.inner_forcing*current['scaled_l2'],np.finfo(float).tiny)
+                used,error,target=workspace.krylov()
+            else:
+                used,error,target=workspace.flexible.solve(preconditioner=workspace.multigrid,max_iterations=allowance,
+                    absolute_tolerance=max(controls.inner_forcing*current['scaled_l2'],np.finfo(float).tiny))
+                linear_history.append(dict(outer=outer+1,direction=direction,**workspace.flexible.last_info))
             total+=int(used);remaining-=int(used)
             search=search_direction(workspace=workspace,current=current,controls=controls,
                 physical_tolerance=physical_tolerance,relative_tolerance=relative_tolerance)
@@ -222,4 +249,23 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
         linear_budget_units='Krylov iterations shared across Newton and Picard per outer',
         max_krylov_per_outer=krylov_budget,max_outer=max_outer,krylov_restart=restart,
         scaling='fixed full-saturated principal diagonal; S*J and S*R',preconditioner='fixed diagonal within each GMRES solve')
+    result['krylov_method']='GMRES' if npf_preconditioner=='diagonal' else 'FGMRES'
+    result['npf_preconditioner']=npf_preconditioner
+    if npf_preconditioner=='kcycle':
+        mg=workspace.multigrid
+        result.update(preconditioner='full-saturated A0 K-cycle; physical RHS D0*v; homogeneous corrections',
+            linear_history=linear_history,krylov_restarts=sum(row['restarts'] for row in linear_history),
+            multigrid=dict(controls=asdict(mg.controls),smoother='vertical_line',
+                dimensions=[list(level['dim']) for level in mg.levels],actual_levels=len(mg.levels),
+                coarsening_factors=[[level['coarsen_y'],level['coarsen_x']] for level in mg.levels[:-1]],
+                construction_seconds=mg_seconds,hierarchy_reused=mg_reused,
+                allocated_device_bytes=mg.allocated_bytes(),
+                applications=mg.applications-mg_start[0],cycles=mg.cycles-mg_start[1],
+                graph_captures=int(not mg_reused)*mg.graph_captures,graph_replays=mg.graph_replays-mg_start[2],
+                graph_capture_failed=mg.graph_failed,graph_error=mg.graph_error,
+                inner_scalar_readbacks=0,
+                scalar_readbacks=sum(row['scalar_readbacks'] for row in linear_history),
+                synchronization_seconds=sum(row['synchronization_seconds'] for row in linear_history),
+                device_apply_seconds=sum(row['multigrid_device_seconds'] for row in linear_history),
+                preconditioner_enqueue_seconds=sum(row['preconditioner_enqueue_seconds'] for row in linear_history)))
     return head,finite_diagnostics(value=result)

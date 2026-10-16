@@ -19,8 +19,12 @@ def case_from_model(*,model,top,cell_type=0):
 
 def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,max_cycles=2000,rel_tol=1e-12,
     abs_tol_min=1e-12,final_budget_relative_tol=1e-8,max_levels=6,min_coarse_n=2,
-    return_info=True,max_outer=2000,krylov_restart=24,npf_newton_controls=None,**unsupported):
+    return_info=True,max_outer=2000,krylov_restart=24,npf_newton_controls=None,
+    npf_preconditioner='diagonal',npf_kcycle_controls=None,**unsupported):
     if unsupported:raise ValueError(f'Unsupported mf6_6_6_2_npf controls: {sorted(unsupported)}')
+    if npf_preconditioner not in ('diagonal','kcycle'):raise ValueError('npf_preconditioner must be diagonal or kcycle')
+    if npf_preconditioner=='diagonal' and npf_kcycle_controls is not None:
+        raise ValueError('npf_kcycle_controls requires npf_preconditioner=kcycle')
     thresholds=final_tolerances(physical_tolerance=abs_tol_min,relative_tolerance=final_budget_relative_tol)
     if np.ndim(rel_tol)!=0 or not np.isfinite(rel_tol) or rel_tol<0.:
         raise ValueError('Krylov relative tolerance must be a finite nonnegative scalar')
@@ -32,7 +36,7 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
     reference=NPF662Reference(case=case)
     reference.check_components()
     if not unconfined and np.any(case.cell_types):raise ValueError('Convertible cell types require unconfined=True')
-    if unconfined or layered:
+    if unconfined or layered or npf_preconditioner=='kcycle':
         if model.implementation!='fast' or model.solver!='kcycle':
             raise ValueError('Matched Newton requires implementation=fast and solver=kcycle; legacy backends remain separate')
         if unconfined and not np.any(case.cell_types[case.active!=0]):raise ValueError('unconfined=True requires convertible active cells')
@@ -45,10 +49,11 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
         if not isinstance(controls,NPF662NewtonControls):raise ValueError('npf_newton_controls must be NPF662NewtonControls')
         head,info=solve_newton_device(model=model,case=case,reference=reference,max_outer=max_outer,
             krylov_budget=max_cycles,restart=krylov_restart,controls=controls,
-            physical_tolerance=abs_tol_min,relative_tolerance=final_budget_relative_tol)
+            physical_tolerance=abs_tol_min,relative_tolerance=final_budget_relative_tol,
+            npf_preconditioner=npf_preconditioner,npf_kcycle_controls=npf_kcycle_controls)
         info.update(formulation='mf6_6_6_2_npf',geometry=case.geometry,
             device=model.device,precision='float64',
-            implementation='device_newton_gmres',session_backend='npf662_newton',
+            implementation='device_newton_fgmres' if npf_preconditioner=='kcycle' else 'device_newton_gmres',session_backend='npf662_newton',
             reference_contract=case.contract+('_Newton' if unconfined else '_confined'),reference_version='6.6.2',
             final_acceptance_thresholds=thresholds,
             effective_options=dict(xt3d=False,newton=unconfined,cell_type=case.cell_types.tolist(),saturation_epsilon=1e-6,
