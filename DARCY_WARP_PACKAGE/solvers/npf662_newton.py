@@ -30,7 +30,7 @@ class NPF662Workspace:
         self.device=model.device;self.shape=case.active.shape;self.n=case.active.size;self.closed=False
         self.restart=restart;self.active_snapshot=case.active.copy();self.fixed_snapshot=case.fixed.copy()
         self.free_count=int(np.sum((case.active!=0)&(case.fixed==0)))
-        for name in ('head','trial','source','bottom','scale','rhs','trial_rhs','residual','trial_residual','delta'):
+        for name in ('head','trial','source','bottom','thickness','scale','rhs','trial_rhs','residual','trial_residual','delta'):
             setattr(self,name,wp.zeros(shape=self.n,dtype=wp.float64,device=self.device))
         for name in ('c0','q','c','trial_q','trial_c','dl','dr'):
             setattr(self,name,wp.zeros(shape=(self.n,3),dtype=wp.float64,device=self.device))
@@ -65,7 +65,8 @@ class NPF662Workspace:
         self.source.assign(case.source.ravel())
         self.free.assign(((case.active!=0)&(case.fixed==0)).astype(np.int32).ravel())
         self.fixed.assign(case.fixed.astype(np.int32).ravel());self.types.assign(case.cell_types.astype(np.int32).ravel())
-        self.bottom.assign(np.asarray(case.bottoms).ravel());self.dz=float(case.dz)
+        self.bottom.assign(np.asarray(case.bottoms).ravel())
+        self.thickness.assign(np.asarray(case.thicknesses).ravel())
         self.head.assign(np.where(case.active,np.where(case.fixed,case.values,case.initial),0.).ravel())
         # Production C0 comes from the Cartesian session, not the CPU oracle.
         faces=model._session.faces
@@ -79,7 +80,7 @@ class NPF662Workspace:
         q=self.trial_q if trial else self.q;c=self.trial_c if trial else self.c
         r=self.trial_residual if trial else self.residual;rhs=self.trial_rhs if trial else self.rhs
         wp.launch(kernel=kernels.physical_faces,dim=(self.n,3),inputs=[head,self.bottom,self.types,self.right,
-            self.c0,q,c,self.dl,self.dr,self.dz,int(linearize)],device=self.device)
+            self.c0,q,c,self.dl,self.dr,self.thickness,int(linearize)],device=self.device)
         self.metrics.zero_()
         wp.launch(kernel=kernels.physical_rows,dim=self.n,inputs=[head,self.source,self.free,self.fixed,self.left,
             self.right,q,c,self.scale,r,rhs,self.metrics],device=self.device)
@@ -108,16 +109,16 @@ class NPF662Workspace:
         """Break the bound-matvec/Krylov cycle and release owned device buffers."""
         if self.closed:return
         self.closed=True;self.krylov=None
-        for name in ('head','trial','source','bottom','scale','rhs','trial_rhs','residual','trial_residual','delta',
+        for name in ('head','trial','source','bottom','thickness','scale','rhs','trial_rhs','residual','trial_residual','delta',
             'c0','q','c','trial_q','trial_c','dl','dr','free','fixed','types','left','right','metrics','maximum','mode','jv_counter'):
             setattr(self,name,None)
 
 
-def device_accepted(*,metrics):
+def device_accepted(*,metrics,physical_tolerance=1e-12,relative_tolerance=1e-8):
     valid=all(np.isfinite(metrics[name]) and metrics[name]>=0. for name in
         ('head_residual_rms','physical_rms','relative_cell_imbalance','gross_throughput'))
     return metrics['finite'] and valid and metrics['head_residual_rms']<=1e-6 and (
-        metrics['physical_rms']<=1e-12 or metrics['relative_cell_imbalance']<=1e-8)
+        metrics['physical_rms']<=physical_tolerance or metrics['relative_cell_imbalance']<=relative_tolerance)
 
 
 def residual_merit(*,candidate,current):
@@ -127,7 +128,7 @@ def residual_merit(*,candidate,current):
     return max(flow,head)**2
 
 
-def search_direction(*,workspace,current,controls):
+def search_direction(*,workspace,current,controls,physical_tolerance=1e-12,relative_tolerance=1e-8):
     workspace.maximum.zero_()
     wp.launch(kernel=kernels.correction_max,dim=workspace.n,inputs=[workspace.delta,workspace.maximum],device=workspace.device)
     maximum=float(workspace.maximum.numpy()[0])
@@ -142,7 +143,7 @@ def search_direction(*,workspace,current,controls):
         value=residual_merit(candidate=trial,current=current)
         rows.append(dict(alpha=alpha,merit=value if np.isfinite(value) else None,metrics=trial))
         if value<best_value:best=(alpha,trial);best_value=value
-        if device_accepted(metrics=trial) or value<old:
+        if device_accepted(metrics=trial,physical_tolerance=physical_tolerance,relative_tolerance=relative_tolerance) or value<old:
             return dict(accepted=True,alpha=alpha,mode='dual_descent',metrics=trial,trials=rows,raw_max=maximum)
     if best is not None and best_value<=controls.recovery_growth**2*old:
         alpha,unused=best
@@ -151,7 +152,8 @@ def search_direction(*,workspace,current,controls):
     return dict(accepted=False,alpha=0.,mode='rejected',metrics=current,trials=rows,raw_max=maximum)
 
 
-def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,controls):
+def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,controls,
+                        physical_tolerance=1e-12,relative_tolerance=1e-8):
     controls.validate()
     if max_outer<0 or krylov_budget<0 or restart<2:raise ValueError('Nonnegative budgets and restart>=2 required')
     holder=model._session._npf662_workspace_holder
@@ -166,7 +168,7 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
     start=perf_counter();total=0;fallbacks=0;saturated=0;backtracks=0;history=[];reason='outer_budget'
     current=workspace.evaluate(trial=False,linearize=True)
     for outer in range(max_outer):
-        if device_accepted(metrics=current):reason='converged';break
+        if device_accepted(metrics=current,physical_tolerance=physical_tolerance,relative_tolerance=relative_tolerance):reason='converged';break
         remaining=krylov_budget;accepted=False;attempts=[]
         for mode in (1,0,2):
             if remaining<=0:reason='krylov_budget';break
@@ -186,7 +188,8 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
             workspace.krylov._atol=max(controls.inner_forcing*current['scaled_l2'],np.finfo(float).tiny)
             used,error,target=workspace.krylov()
             total+=int(used);remaining-=int(used)
-            search=search_direction(workspace=workspace,current=current,controls=controls)
+            search=search_direction(workspace=workspace,current=current,controls=controls,
+                physical_tolerance=physical_tolerance,relative_tolerance=relative_tolerance)
             backtracks+=max(len(search['trials'])-1,0)
             attempts.append(dict(direction=direction,krylov=int(used),remaining=remaining,
                 achieved_scaled_l2=float(error),requested_scaled_l2=float(target),target_reached=bool(error<=target),
@@ -204,9 +207,10 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
     if wp.get_device(ident=model.device).is_cuda:wp.synchronize_device(device=model.device)
     seconds=perf_counter()-start
     head=workspace.head.numpy().reshape(case.active.shape)
-    checks,unused=reference.evaluate(head=head)
-    converged=bool(checks['independent_accepted'] and device_accepted(metrics=current))
-    if not device_accepted(metrics=current) and checks['independent_accepted']:reason='device_acceptance_failed'
+    checks,unused=reference.evaluate(head=head,physical_tolerance=physical_tolerance,relative_tolerance=relative_tolerance)
+    device_passed=device_accepted(metrics=current,physical_tolerance=physical_tolerance,relative_tolerance=relative_tolerance)
+    converged=bool(checks['independent_accepted'] and device_passed)
+    if not device_passed and checks['independent_accepted']:reason='device_acceptance_failed'
     if not converged and reason=='converged':reason='independent_acceptance_failed'
     if checks['ungrounded_current_components']>0:reason='ungrounded_saturation_components'
     result=dict(converged=converged,stop_reason='converged' if converged else reason,outer_iterations=len(history),

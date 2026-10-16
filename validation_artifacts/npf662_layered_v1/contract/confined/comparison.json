@@ -1,0 +1,26 @@
+{
+  "native_success": true,
+  "supplied_state_only": true,
+  "head_not_advanced": true,
+  "convertible": false,
+  "comparisons": [
+    {
+      "axis": 2,
+      "faces": 18,
+      "flux_max_error": 2.842170943040401e-14
+    },
+    {
+      "axis": 1,
+      "faces": 12,
+      "flux_max_error": 1.7763568394002505e-15
+    },
+    {
+      "axis": 0,
+      "faces": 16,
+      "flux_max_error": 0.0
+    }
+  ],
+  "mf6_version": "mf6: 6.6.2 05/12/2025",
+  "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+  "equations": "Conventional same-k harmonic full thickness; no overlap clipping, slope distance, rotation or XT3D"
+}

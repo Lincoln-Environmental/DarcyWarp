@@ -26,7 +26,7 @@ def saturation_pair(head:wp.float64,bottom:wp.float64,dz:wp.float64,cell_type:in
 def physical_faces(head:wp.array(dtype=wp.float64),bottom:wp.array(dtype=wp.float64),
     types:wp.array(dtype=wp.int32),right:wp.array2d(dtype=wp.int32),c0:wp.array2d(dtype=wp.float64),
     flux:wp.array2d(dtype=wp.float64),conductance:wp.array2d(dtype=wp.float64),
-    dl:wp.array2d(dtype=wp.float64),dr:wp.array2d(dtype=wp.float64),dz:wp.float64,linearize:int):
+    dl:wp.array2d(dtype=wp.float64),dr:wp.array2d(dtype=wp.float64),thickness:wp.array(dtype=wp.float64),linearize:int):
     i,axis=wp.tid()
     j=right[i,axis]
     C=c0[i,axis]
@@ -37,7 +37,7 @@ def physical_faces(head:wp.array(dtype=wp.float64),bottom:wp.array(dtype=wp.floa
         variable=axis!=2 and (types[i]!=0 or types[j]!=0)
         extra=wp.float64(0.)
         if variable:
-            pair=saturation_pair(head[donor],bottom[donor],dz,types[donor])
+            pair=saturation_pair(head[donor],bottom[donor],thickness[donor],types[donor])
             extra=C*pair[1]*(head[i]-head[j])
             C=C*pair[0]
         q=C*(head[i]-head[j])

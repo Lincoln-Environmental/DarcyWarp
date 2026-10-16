@@ -5,7 +5,8 @@ import subprocess
 from time import perf_counter
 import numpy as np
 from DARCY_WARP_PACKAGE.validation.terrain_case import atomic_json
-from DARCY_WARP_PACKAGE.validation.npf662_reference import NPF662Reference
+from DARCY_WARP_PACKAGE.validation.npf662_reference import NPF662Reference,save_npf662_case
+from DARCY_WARP_PACKAGE.validation.npf662_metrics import stable_rms,stable_sum
 from DARCY_WARP_PACKAGE.validation.head_checks import finite_diagnostics
 
 
@@ -14,6 +15,12 @@ def run_reference_mf6(*,case,directory,executable,prescribed_state=None,head_tol
     from flopy.mf6.utils.binarygrid_util import MfGrdFile
     if not executable.is_file():raise FileNotFoundError(f'Pinned local MF6 unavailable: {executable}; live parity unverified')
     reference=NPF662Reference(case=case)
+    if prescribed_state is not None:
+        supplied=np.asarray(prescribed_state)
+        if supplied.shape!=case.active.shape or not np.isfinite(supplied[case.active!=0]).all():
+            raise ValueError('Supplied native head must be finite on the active canonical grid')
+        if np.any((case.active!=0)&(case.cell_types!=0)&(supplied<case.bottoms)):
+            raise ValueError('Supplied all-CHD state is below a convertible bottom; do not retype cells to force native evaluation')
     if not np.isfinite(head_tolerance_m) or head_tolerance_m<=0.:raise ValueError('Positive finite native head-change tolerance required')
     newton=bool(np.any(case.cell_types[case.active!=0]))
     version=subprocess.check_output([str(executable),'-v'],text=True).strip()
@@ -25,9 +32,8 @@ def run_reference_mf6(*,case,directory,executable,prescribed_state=None,head_tol
     reverse=(slice(None),slice(None,None,-1),slice(None))
     values=case.values if prescribed_state is None else np.asarray(prescribed_state)
     fixed=case.fixed.astype(bool) if prescribed_state is None else case.active.astype(bool)
-    arrays={name:np.asarray(getattr(case,name)) for name in case.__dataclass_fields__}
-    if prescribed_state is not None:arrays['supplied_verification_head']=prescribed_state
-    np.savez_compressed(directory/'canonical_inputs.npz',**arrays)
+    save_npf662_case(case=case,path=directory/'canonical_inputs.npz')
+    if prescribed_state is not None:np.savez_compressed(directory/'supplied_verification_head.npz',head=prescribed_state)
     sim=flopy.mf6.MFSimulation(sim_name='npf662',sim_ws=str(directory),exe_name=str(executable),verbosity_level=0)
     sim.simulation_data.float_precision=17;sim.simulation_data.float_characters=25
     flopy.mf6.ModflowTdis(sim,time_units='DAYS',nper=1,perioddata=[(1.,1,1.)])
@@ -40,8 +46,8 @@ def run_reference_mf6(*,case,directory,executable,prescribed_state=None,head_tol
         csv_outer_output_filerecord='outer.csv',csv_inner_output_filerecord='inner.csv')
     gwf=flopy.mf6.ModflowGwf(sim,modelname='npf662',save_flows=True,newtonoptions='UNDER_RELAXATION' if newton else None)
     flopy.mf6.ModflowGwfdis(gwf,length_units='METERS',nlay=nz,nrow=ny,ncol=nx,
-        delr=case.dx,delc=case.dy,top=case.top,
-        botm=np.broadcast_to((case.top-case.dz*np.arange(1,nz+1))[:,None,None],case.active.shape),
+        delr=case.dx,delc=case.dy,top=case.tops[0,::-1,:],
+        botm=case.bottoms[reverse],
         idomain=case.active[reverse].astype(int))
     flopy.mf6.ModflowGwfic(gwf,strt=(case.initial if prescribed_state is None else values)[reverse])
     flopy.mf6.ModflowGwfnpf(gwf,icelltype=case.cell_types[reverse],k=case.kx[reverse],k22=case.ky[reverse],k33=case.kz[reverse],
@@ -68,7 +74,7 @@ def run_reference_mf6(*,case,directory,executable,prescribed_state=None,head_tol
         native=False;returncode=None;reason='wall_timeout'
     result=dict(native_success=native,returncode=returncode,stop_reason=reason,seconds=perf_counter()-start,
         input_hash=case.digest(),mf6_version=version,mf6_sha256=checksum,
-        contract='NPF662_CARTESIAN_V1_Newton' if newton else 'NPF662_CARTESIAN_V1_confined',supplied_state_verification=prescribed_state is not None,
+        contract=case.contract+('_Newton' if newton else '_confined'),geometry=case.geometry,supplied_state_verification=prescribed_state is not None,
         settings=dict(xt3d=False,icelltype=case.cell_types.tolist(),newton=newton,linear_acceleration='BICGSTAB' if newton else 'CG',variablecv=False,perched=False,thickstrt=False,rewet=False,
             steady=True,outer_dvclose_m=head_tolerance_m,inner_dvclose_m=head_tolerance_m,inner_rclose_m3_day=1e-14,
             scaling_method='DIAGONAL',preconditioner_levels=100,preconditioner_drop_tolerance=0.,relaxation_factor=.97))
@@ -107,16 +113,17 @@ def run_reference_mf6(*,case,directory,executable,prescribed_state=None,head_tol
     native_sat=native_sat.reshape(case.active.shape)
     saturation_error=float(np.max(np.abs((native_sat-fields['saturation'])[case.active!=0])))
     physical=np.where(reference.free,case.source-(reference.incidence@flux).reshape(case.active.shape),0.)
-    native_l1=float(np.abs(physical).sum())
+    native_l1=stable_sum(values=np.abs(physical[reference.free]))
     native_relative=native_l1/max(checks['gross_throughput'],np.finfo(float).tiny)
-    native_rms=float(np.sqrt(np.mean(physical[reference.free]**2))) if reference.free.any() else 0.
+    native_rms=stable_rms(values=physical[reference.free])
     if prescribed_state is not None:
         if not np.array_equal(raw[case.active!=0],values[case.active!=0]):raise ValueError('Supplied-head verification advanced a head')
         checks['independent_accepted']=False  # A constitutive check is not a root solve.
     result.update(independent=checks,source_allocation_max_error=source_error,reciprocity_max=reciprocity,saturation_max_error=saturation_error,
         native_flux_residual_rms=native_rms,native_flux_residual_relative=native_relative,
         independent_conservation=bool(native and source_error<=1e-14 and checks['input_valid'] and
-            checks['boundary_condition_valid'] and (native_rms<=1e-12 or native_relative<=1e-8)))
+            checks['boundary_condition_valid'] and checks['physical_metrics_valid'] and
+            np.all(np.isfinite([native_rms,native_relative])) and (native_rms<=1e-12 or native_relative<=1e-8)))
     fields.update(raw_head=raw,native_saturation=native_sat,active=case.active,flux_native=flux,
         native_residual=physical,source_realised=realised.reshape(case.active.shape),node_to_user=mapping)
     np.savez_compressed(directory/'result.npz',**fields,head=raw)

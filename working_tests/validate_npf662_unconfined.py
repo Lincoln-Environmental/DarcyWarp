@@ -4,7 +4,7 @@ import hashlib
 import subprocess
 from time import perf_counter
 import numpy as np
-from DARCY_WARP_PACKAGE.validation.npf662_reference import NPF662Case,NPF662Reference
+from DARCY_WARP_PACKAGE.validation.npf662_reference import NPF662Case,NPF662Reference,save_npf662_case
 from DARCY_WARP_PACKAGE.validation.npf662_mf6 import run_reference_mf6
 from DARCY_WARP_PACKAGE.validation.terrain_case import atomic_json
 from DARCY_WARP_PACKAGE.validation.head_checks import finite_diagnostics
@@ -45,7 +45,7 @@ def make_scalar_case(*,initial):
 
 def run_case(*,case,case_id,root,devices,executable,max_outer,krylov_budget,seed,supplied_check=True,native_head_tolerance_m=1e-14):
     directory=root/case_id;directory.mkdir(parents=True,exist_ok=False)
-    np.savez_compressed(directory/'inputs.npz',**{n:np.asarray(getattr(case,n)) for n in case.__dataclass_fields__})
+    save_npf662_case(case=case,path=directory/'inputs.npz')
     ref=NPF662Reference(case=case)
     start=perf_counter()
     cpu,ci,cf=ref.solve(max_outer=max_outer)
@@ -56,7 +56,8 @@ def run_case(*,case,case_id,root,devices,executable,max_outer,krylov_budget,seed
     passed=ci['independent_accepted']
     for device in devices:
         with make_gpu_model(case=case,device=device) as model:
-            head,info=model.solve(unconfined=True,top_elevation=case.top,npf_cell_type=case.cell_types,
+            head,info=model.solve(unconfined=bool(np.any(case.cell_types)),
+                top_elevation=None if case.geometry=='structured_dis_layered' else case.top,npf_cell_type=case.cell_types,
                 max_outer=max_outer,max_cycles=krylov_budget)
         independent,fields=ref.evaluate(head=head)
         atomic_json(path=directory/('warp_'+device.replace(':','_')+'.json'),value=finite_diagnostics(value=info))
@@ -77,18 +78,22 @@ def run_case(*,case,case_id,root,devices,executable,max_outer,krylov_budget,seed
             mi['independent']['independent_accepted'] and error<=1e-7 and parity and mi['saturation_max_error']<=1e-12)
     else:passed=False
     if supplied_check:
-        head=case.bottoms+.35*case.dz+.02*np.random.default_rng(seed=seed).random(size=case.active.shape)
+        head=case.bottoms+.35*case.thicknesses+.02*np.random.default_rng(seed=seed).random(size=case.active.shape)
         head[case.fixed!=0]=case.values[case.fixed!=0]
         native,si,sf=run_reference_mf6(case=case,directory=directory/'mf6_supplied',executable=executable,prescribed_state=head,head_tolerance_m=native_head_tolerance_m)
         unused,at=ref.evaluate(head=head)
         row['supplied_native_success']=si['native_success']
-        row['supplied_flux_max_difference']=float(np.max(np.abs(sf['flux_native']-at['flux'])))
-        row['supplied_residual_max_difference']=float(np.max(np.abs(sf['native_residual']-at['residual'])))
-        passed=bool(passed and si['native_success'] and np.allclose(sf['flux_native'],at['flux'],rtol=3e-12,atol=2e-11)
-            and np.allclose(sf['native_residual'],at['residual'],rtol=3e-12,atol=2e-11) and si['saturation_max_error']<=1e-12)
+        if sf is None:
+            passed=False
+            row['supplied_failure']=si['stop_reason']
+        else:
+            row['supplied_flux_max_difference']=float(np.max(np.abs(sf['flux_native']-at['flux'])))
+            row['supplied_residual_max_difference']=float(np.max(np.abs(sf['native_residual']-at['residual'])))
+            passed=bool(passed and si['native_success'] and np.allclose(sf['flux_native'],at['flux'],rtol=3e-12,atol=2e-11)
+                and np.allclose(sf['native_residual'],at['residual'],rtol=3e-12,atol=2e-11) and si['saturation_max_error']<=1e-12)
     row['passed']=passed
     atomic_json(path=directory/'comparison.json',value=finite_diagnostics(value=row))
-    print(case_id,passed,ci.get('outers'),{d:r['info']['outer_iterations'] for d,r in row['devices'].items()},flush=True)
+    print(case_id,passed,ci.get('outers'),{d:r['info'].get('outer_iterations') for d,r in row['devices'].items()},flush=True)
     return row
 
 
@@ -165,6 +170,7 @@ def source_snapshot():
     paths=list(Path('DARCY_WARP_PACKAGE/solvers').glob('npf662*.py'))
     paths+=list(Path('DARCY_WARP_PACKAGE/validation').glob('npf662*.py'))
     paths+=[Path('DARCY_WARP_PACKAGE/warped_darcy_3d.py'),Path('DARCY_WARP_PACKAGE/solvers/session_3d.py'),
+        Path('DARCY_WARP_PACKAGE/physics/npf662_layers.py'),
         Path('working_tests/validate_npf662_unconfined.py')]
     return {str(path):hashlib.sha256(path.read_bytes()).hexdigest() for path in paths}
 

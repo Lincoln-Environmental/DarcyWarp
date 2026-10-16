@@ -30,6 +30,7 @@ class ThreeDOperatorSession:
         dx: float,
         dy: float,
         dz: float,
+        z_interfaces: np.ndarray | None = None,
     ) -> None:
         self._closed = False
         self.revision = 0
@@ -37,7 +38,9 @@ class ThreeDOperatorSession:
         self.topology_revision = 0
         self.dx = float(dx)
         self.dy = float(dy)
-        self.dz = float(dz)
+        self.z_interfaces = None if z_interfaces is None else np.asarray(z_interfaces,dtype=float).copy()
+        self.layer_geometry = None
+        self.dz = float(dz) if z_interfaces is None else None
         values = tuple(np.asarray(face) for face in faces)
         if len(values) != 6:
             raise ValueError("faces must contain exactly six conductance arrays.")
@@ -85,8 +88,12 @@ class ThreeDOperatorSession:
             raise ValueError("bc_mask may only select active cells.")
         if self.initial_head is not None and not np.all(np.isfinite(self.initial_head)):
             raise ValueError("initial_head must contain finite values.")
-        if any(not np.isfinite(float(value)) or float(value) <= 0.0 for value in (self.dx, self.dy, self.dz)):
+        spacing=(self.dx,self.dy,self.dz) if self.z_interfaces is None else (self.dx,self.dy)
+        if any(not np.isfinite(float(value)) or float(value) <= 0.0 for value in spacing):
             raise ValueError("dx, dy, and dz must be positive finite values.")
+        if self.z_interfaces is not None:
+            from DARCY_WARP_PACKAGE.physics.npf662_layers import layered_geometry
+            self.layer_geometry=layered_geometry(z_interfaces=self.z_interfaces,shape=shape,dx=self.dx,dy=self.dy)
 
     def update_rhs(self, rhs: np.ndarray) -> None:
         self._ensure_open()
@@ -150,6 +157,8 @@ class ThreeDOperatorSession:
     def solve(self, *, solver: str, device: str, implementation: str = "classic", **kwargs: Any):
         """Solve using the current operator state and selected 3D backend."""
         self._ensure_open()
+        if self.z_interfaces is not None:
+            raise ValueError('Layered NPF uses its diagonal-preconditioned GMRES path, not the legacy session backend')
         from DARCY_WARP_PACKAGE.solvers_3d import (
             solve_chebyshev_7point_3d,
             solve_multigrid_kcycle_7point_3d,
@@ -236,6 +245,8 @@ class ThreeDOperatorSession:
         self.bc_values = np.empty((0, 0, 0))
         self.rhs = np.empty((0, 0, 0))
         self.initial_head = None
+        self.z_interfaces = None
+        self.layer_geometry = None
         self._fast_workspace_holder.clear()
         workspace=self._npf662_workspace_holder.get('workspace')
         if workspace is not None:workspace.close()

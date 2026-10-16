@@ -36,8 +36,10 @@ class NPF662Case:
         for name in ('kx','ky','kz','fixed','values','source','initial'):
             value=np.asarray(getattr(self,name))
             if value.shape!=shape or not np.all(np.isfinite(value)):raise ValueError(f'Invalid {name}')
-        if any(not np.isfinite(x) or x<=0 for x in (self.dx,self.dy,self.dz)):raise ValueError('Positive finite spacing required')
-        if np.ndim(self.top)!=0 or not np.isfinite(self.top):raise ValueError('Finite flat scalar top required; variable elevations are unsupported')
+        spacing=(self.dx,self.dy) if self.geometry=='structured_dis_layered' else (self.dx,self.dy,self.dz)
+        if any(np.ndim(x)!=0 or not np.isfinite(x) or x<=0 for x in spacing):raise ValueError('Positive finite spacing required')
+        if self.geometry!='structured_dis_layered' and (np.ndim(self.top)!=0 or not np.isfinite(self.top)):
+            raise ValueError('Finite flat scalar top required; variable elevations are unsupported')
         for mask in (self.active,self.fixed):
             if not np.all((mask==0)|(mask==1)):raise ValueError('Binary masks required')
         active=self.active.astype(bool)
@@ -60,12 +62,97 @@ class NPF662Case:
     def bottoms(self):
         return np.broadcast_to((self.top-self.dz*np.arange(1,self.active.shape[0]+1))[:,None,None],self.active.shape)
 
+    @property
+    def tops(self):
+        return np.broadcast_to((self.top-self.dz*np.arange(self.active.shape[0]))[:,None,None],self.active.shape)
+
+    @property
+    def thicknesses(self):
+        return np.full(self.active.shape,self.dz,dtype=float)
+
+    @property
+    def geometry(self):
+        return 'orthogonal_cartesian_uniform_dz'
+
+    @property
+    def contract(self):
+        return 'NPF662_CARTESIAN_V1'
+
     def digest(self):
         digest=hashlib.sha256()
         for name in self.__dataclass_fields__:
             value=np.ascontiguousarray(getattr(self,name))
             digest.update(name.encode());digest.update(value.dtype.str.encode());digest.update(str(value.shape).encode());digest.update(value.tobytes())
         return digest.hexdigest()
+
+
+@dataclass
+class NPF662LayeredCase:
+    """Separate schema2: no meaningless scalar dz/top in the canonical inputs."""
+    kx: np.ndarray
+    ky: np.ndarray
+    kz: np.ndarray
+    active: np.ndarray
+    fixed: np.ndarray
+    values: np.ndarray
+    source: np.ndarray
+    initial: np.ndarray
+    dx: float
+    dy: float
+    z_interfaces: np.ndarray
+    cell_type: np.ndarray | int = 0
+
+    def validate(self):
+        from DARCY_WARP_PACKAGE.physics.npf662_layers import layered_geometry
+        layered_geometry(z_interfaces=self.z_interfaces,shape=self.active.shape,dx=self.dx,dy=self.dy)
+        NPF662Case.validate(self)
+
+    @property
+    def cell_types(self):
+        return np.broadcast_to(self.cell_type,self.active.shape)
+
+    @property
+    def bottoms(self):
+        return self.z_interfaces[1:]
+
+    @property
+    def tops(self):
+        return self.z_interfaces[:-1]
+
+    @property
+    def thicknesses(self):
+        return self.tops-self.bottoms
+
+    @property
+    def geometry(self):
+        return 'structured_dis_layered'
+
+    @property
+    def contract(self):
+        return 'NPF662_LAYERED_DIS_V2'
+
+    def digest(self):
+        digest=hashlib.sha256(b'NPF662_LAYERED_DIS_V2')
+        for name in self.__dataclass_fields__:
+            value=np.ascontiguousarray(getattr(self,name))
+            digest.update(name.encode());digest.update(value.dtype.str.encode());digest.update(str(value.shape).encode());digest.update(value.tobytes())
+        return digest.hexdigest()
+
+
+def save_npf662_case(*,case,path):
+    arrays={name:np.asarray(getattr(case,name)) for name in case.__dataclass_fields__}
+    if isinstance(case,NPF662LayeredCase):arrays['schema_version']=np.asarray(2)
+    np.savez_compressed(path,**arrays)
+
+
+def load_npf662_case(*,path):
+    with np.load(path,allow_pickle=False) as saved:
+        schema=int(saved['schema_version']) if 'schema_version' in saved else 1
+        if schema not in (1,2):raise ValueError('Unsupported NPF input schema')
+        cls=NPF662Case if schema==1 else NPF662LayeredCase
+        case=cls(**{name:saved[name].copy() for name in cls.__dataclass_fields__})
+    case.validate()
+    return case
 
 
 class NPF662Reference:
@@ -76,14 +163,23 @@ class NPF662Reference:
         self.free=case.active.astype(bool)&~case.fixed.astype(bool)
         ids=np.arange(case.active.size).reshape(self.shape)
         left=[];right=[];conductances=[];axes=[]
-        for axis,k,d,area in ((2,case.kx,case.dx,case.dy*case.dz),
-            (1,case.ky,case.dy,case.dx*case.dz),(0,case.kz,case.dz,case.dx*case.dy)):
+        for axis,k,d,width in ((2,case.kx,case.dx,case.dy),
+            (1,case.ky,case.dy,case.dx),(0,case.kz,1.,case.dx*case.dy)):
             l,u=[slice(None)]*3,[slice(None)]*3
             l[axis],u[axis]=slice(None,-1),slice(1,None)
             l,u=tuple(l),tuple(u)
             mask=case.active[l].astype(bool)&case.active[u].astype(bool)
             a,b=ids[l][mask],ids[u][mask]
-            C=area/(.5*d/k[l][mask]+.5*d/k[u][mask])
+            if case.geometry=='structured_dis_layered':
+                if axis==0:width=np.longdouble(case.dx)*case.dy
+                kl,kr=np.asarray(k[l][mask],dtype=np.longdouble),np.asarray(k[u][mask],dtype=np.longdouble)
+                tl,tr=np.asarray(case.thicknesses[l][mask],dtype=np.longdouble),np.asarray(case.thicknesses[u][mask],dtype=np.longdouble)
+                resistance=(.5*d/kl/tl+.5*d/kr/tr) if axis else (.5*tl/kl+.5*tr/kr)
+                with np.errstate(over='ignore',under='ignore'):C=np.asarray(np.longdouble(width)/resistance,dtype=float)
+            else:
+                distance=case.dz if axis==0 else d
+                area=width if axis==0 else width*case.dz
+                C=area/(.5*distance/k[l][mask]+.5*distance/k[u][mask])
             if np.any(~np.isfinite(C)) or np.any(C<=0):raise ValueError('Unrepresentable physical conductance')
             left.append(a);right.append(b);conductances.append(C);axes.append(np.full(C.size,axis))
         self.left=np.concatenate(left);self.right=np.concatenate(right)
@@ -99,7 +195,7 @@ class NPF662Reference:
     def face_terms(self,*,head):
         c=self.case
         h=np.where(c.active,head,0.).ravel()
-        saturation,derivative=quadratic_saturation_derivative(head=head,bottom=c.bottoms,thickness=c.dz,cell_type=c.cell_types)
+        saturation,derivative=quadratic_saturation_derivative(head=head,bottom=c.bottoms,thickness=c.thicknesses,cell_type=c.cell_types)
         choose_left=(h[self.left]>h[self.right])|((h[self.left]==h[self.right])&(self.axes==1))
         donor=np.where(choose_left,self.left,self.right)
         horizontal=self.axes!=0

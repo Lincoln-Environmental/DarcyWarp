@@ -281,6 +281,38 @@ class WarpDarcySolver3D:
         self._kx_field = self._ky_field = self._kz_field = None
         return self
 
+    def build_from_layers(self, *, z_interfaces, kx_field, ky_field, kz_field,
+                          active, bc_mask, bc_values, rhs, initial_head=None):
+        """Build conventional layered DIS/NPF connections (not terrain metrics).
+
+        Interfaces (nz+1,ny,nx) are authoritative. Constructor dz is unused;
+        solve-time top/geometry overrides are rejected. Recalling this builder
+        closes the previous session and all geometry-dependent workspaces.
+        """
+        if self.formulation!='mf6_6_6_2_npf':
+            raise ValueError('build_from_layers requires formulation=mf6_6_6_2_npf; legacy/terrain remain separate')
+        from DARCY_WARP_PACKAGE.physics.npf662_layers import build_layered_dis_faces
+        from DARCY_WARP_PACKAGE.validation.npf662_reference import NPF662LayeredCase
+        initial=np.zeros(self.shape) if initial_head is None else np.asarray(initial_head,dtype=NP_FLOAT)
+        case=NPF662LayeredCase(kx=np.asarray(kx_field,dtype=NP_FLOAT),ky=np.asarray(ky_field,dtype=NP_FLOAT),
+            kz=np.asarray(kz_field,dtype=NP_FLOAT),active=np.asarray(active),fixed=np.asarray(bc_mask),
+            values=np.asarray(bc_values,dtype=NP_FLOAT),source=np.asarray(rhs,dtype=NP_FLOAT),initial=initial,
+            dx=self.dx,dy=self.dy,z_interfaces=np.asarray(z_interfaces,dtype=NP_FLOAT))
+        if case.active.shape!=self.shape:raise ValueError(f'Layered cell shape must be {self.shape}')
+        case.validate()
+        faces,unused=build_layered_dis_faces(z_interfaces=case.z_interfaces,kx=case.kx,ky=case.ky,kz=case.kz,
+            active=case.active,dx=self.dx,dy=self.dy)
+        session=ThreeDOperatorSession(faces=faces,active=case.active,bc_mask=case.fixed,bc_values=case.values,
+            rhs=case.source,initial_head=case.initial,dx=self.dx,dy=self.dy,dz=self.dz,z_interfaces=case.z_interfaces)
+        if self._session is not None:self._session.close()
+        self._session=session
+        self.geometry='structured_dis_layered'
+        self._kx_field,self._ky_field,self._kz_field=case.kx.copy(),case.ky.copy(),case.kz.copy()
+        self._tx_p,self._tx_m,self._ty_p,self._ty_m,self._tz_p,self._tz_m=session.faces
+        self._active,self._bc_mask,self._bc_values=session.active,session.bc_mask,session.bc_values
+        self._rhs,self._initial_head=session.rhs,session.initial_head
+        return self
+
     def update_terrain_K_fields(self, *, kx_field, ky_field, kz_field):
         """Refresh owned physical K fields; the next solve refreshes buffers."""
         if self.geometry != "terrain" or self._session is None:
@@ -418,7 +450,7 @@ class WarpDarcySolver3D:
     ) -> None:
         """Refresh six face arrays in place and retain the session identity."""
         if self.formulation=='mf6_6_6_2_npf':
-            raise ValueError('Pinned NPF requires physical K; rebuild_from_K_fields instead of overriding conductances')
+            raise ValueError('Pinned NPF requires physical K/geometry; rebuild with build_from_K_fields or build_from_layers instead of overriding conductances')
         if self._session is None:
             raise RuntimeError("Solver has not been built.")
         if self.geometry == "terrain":

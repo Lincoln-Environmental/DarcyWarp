@@ -1,0 +1,48 @@
+........F............................................................... [ 66%]
+.....................................                                    [100%]
+=================================== FAILURES ===================================
+____________________ test_exact_vertical_series_resistance _____________________
+
+    def test_exact_vertical_series_resistance():
+>       case=layered_case(variation='vertical',shape=(4,1,1))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_npf662_layers.py:79: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+variation = 'vertical', masked = False, shape = (4, 1, 1), seed = 121
+
+    def layered_case(*, variation='independent', masked=False, shape=(3, 4, 5), seed=121):
+        k,j,i = np.indices(shape)
+        thickness = 1.+.4*k+.08*i+.1*j
+        surface = 10.+.2*i[0]+.15*j[0]
+        if variation == 'x':
+            thickness = np.broadcast_to(1.+.15*i, shape).copy(); surface[:] = 10.
+        elif variation == 'y':
+            thickness = np.broadcast_to(1.+.15*j, shape).copy(); surface[:] = 10.
+        elif variation == 'vertical':
+            thickness = np.broadcast_to((1.+2.*np.arange(shape[0]))[:,None,None],shape).copy(); surface[:] = 10.
+        interfaces = np.concatenate([surface[None], surface[None]-np.cumsum(thickness,axis=0)],axis=0)
+        conductivity = 10.**np.random.default_rng(seed=seed).uniform(low=-2.,high=2.,size=shape)
+        active = np.ones(shape,dtype=int)
+        if masked:active[:,shape[1]//2,shape[2]//2] = 0
+        fixed = np.zeros(shape,dtype=int); fixed[:,:,0]=1; fixed[:,:,-1]=1
+        values = np.broadcast_to(np.linspace(9.,9.5,shape[2]),shape).copy()
+>       source = np.zeros(shape); source[0,0,1]=.003
+                                  ^^^^^^^^^^^^^
+E       IndexError: index 1 is out of bounds for axis 2 with size 1
+
+tests/test_npf662_layers.py:34: IndexError
+=============================== warnings summary ===============================
+tests/test_npf662_layers.py::test_layered_faces_jacobian_and_complete_confined_solve[cpu-x]
+  /home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/warp/_src/apic/types.py:49: DeprecationWarning: Due to '_pack_', the 'APICLaunchParamRecord' Structure will use memory layout compatible with MSVC (Windows). If this is intended, set _layout_ to 'ms'. The implicit default is deprecated and slated to become an error in Python 3.19.
+    class APICLaunchParamRecord(ctypes.Structure):
+
+tests/test_npf662_layers.py::test_layered_faces_jacobian_and_complete_confined_solve[cpu-x]
+  /home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/warp/_src/apic/types.py:69: DeprecationWarning: Due to '_pack_', the 'APICLaunchPtrLocation' Structure will use memory layout compatible with MSVC (Windows). If this is intended, set _layout_ to 'ms'. The implicit default is deprecated and slated to become an error in Python 3.19.
+    class APICLaunchPtrLocation(ctypes.Structure):
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_npf662_layers.py::test_exact_vertical_series_resistance - I...
+1 failed, 108 passed, 2 warnings in 12.14s

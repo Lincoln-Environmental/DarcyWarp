@@ -39,10 +39,12 @@ def make_case(*,shape,spacing,variant,end_heads,contrast,source,seed,layer_kz):
 def make_gpu_model(*,case,device):
     from DARCY_WARP_PACKAGE.warped_darcy_3d import WarpDarcySolver3D
     nz,ny,nx=case.active.shape
-    model=WarpDarcySolver3D(nx=nx,ny=ny,nz=nz,dx=case.dx,dy=case.dy,dz=case.dz,
+    model=WarpDarcySolver3D(nx=nx,ny=ny,nz=nz,dx=case.dx,dy=case.dy,dz=getattr(case,'dz',1.),
         device=device,implementation='fast',formulation='mf6_6_6_2_npf')
-    model.build_from_K_fields(kx_field=case.kx,ky_field=case.ky,kz_field=case.kz,active=case.active,
-        bc_mask=case.fixed,bc_values=case.values,rhs=case.source,initial_head=case.initial)
+    builder=model.build_from_layers if case.geometry=='structured_dis_layered' else model.build_from_K_fields
+    geometry=dict(z_interfaces=case.z_interfaces) if case.geometry=='structured_dis_layered' else {}
+    builder(kx_field=case.kx,ky_field=case.ky,kz_field=case.kz,active=case.active,
+        bc_mask=case.fixed,bc_values=case.values,rhs=case.source,initial_head=case.initial,**geometry)
     return model
 
 
