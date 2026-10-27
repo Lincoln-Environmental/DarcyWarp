@@ -56,6 +56,30 @@ else:
 _NL_TINY = wp.float64(1.0e-12)
 
 
+@wp.func
+def riv_outflow(head: wp.float64, stage: wp.float64, bottom: wp.float64,
+                conductance: wp.float64) -> wp.float64:
+    """Authoritative MODFLOW RIV relation: positive aquifer outflow."""
+    return conductance * (wp.max(head, bottom) - stage)
+
+
+@wp.kernel
+def accepted_riv_flux_kernel(
+    head: wp.array(dtype=WP_FLOAT, ndim=2),
+    stage: wp.array(dtype=WP_FLOAT, ndim=2),
+    bottom: wp.array(dtype=WP_FLOAT, ndim=2),
+    conductance: wp.array(dtype=WP_FLOAT, ndim=2),
+    mask: wp.array(dtype=wp.int32, ndim=2),
+    output: wp.array(dtype=WP_FLOAT, ndim=2),
+):
+    j, i = wp.tid()
+    q = wp.float64(0.0)
+    if mask[j, i] != 0:
+        q = riv_outflow(wp.float64(head[j, i]), wp.float64(stage[j, i]),
+                        wp.float64(bottom[j, i]), wp.float64(conductance[j, i]))
+    output[j, i] = WP_FLOAT(q)
+
+
 @wp.kernel
 def nl_flow_transmissivity_kernel(
     head: wp.array(dtype=WP_FLOAT, ndim=2),
@@ -364,9 +388,10 @@ def nl_residual_kernel(
 
     sum_T = T_e + T_w + T_n + T_s + C_gh + C_drn + C_riv
 
-    # flow_A(h) (mirrors apply_A_kernel; isolated cell -> identity-like).
+    # Retain the legacy steady pin only without transient storage. An
+    # isolated transient cell has zero physical flow, not a head-dependent sink.
     flow_Ah = wp.float64(0.0)
-    if sum_T < _NL_TINY:
+    if sum_T < _NL_TINY and has_storage == 0:
         flow_Ah = hC
     else:
         flow_Ah = sum_T * hC
@@ -753,7 +778,7 @@ def nl_jacobian_vector_kernel(
                 flow_sum = flow_sum + cr
                 result = result + cr * v_c
 
-    if flow_sum < _NL_TINY:
+    if flow_sum < _NL_TINY and has_storage == 0:
         result = v_c
 
     # Exact convertible storage derivative.  Sy follows clipped physical

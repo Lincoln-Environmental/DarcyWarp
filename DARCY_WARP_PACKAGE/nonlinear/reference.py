@@ -144,8 +144,7 @@ def flow_operator_applied(head: np.ndarray, ctx: Any) -> np.ndarray:
     C_gated = _gated_boundary_diagonal(h, ctx)
     Ah += (C_gh + C_gated) * h
 
-    # Mirror the device isolated-cell branch: if a free cell has no conductance
-    # it degenerates to an identity row.
+    # The steady identity pin must not add fictitious transient exchange.
     sum_T = (
         np.pad(C_ew, ((0, 0), (0, 1)), constant_values=0.0)
         + np.pad(C_ew, ((0, 0), (1, 0)), constant_values=0.0)
@@ -155,7 +154,8 @@ def flow_operator_applied(head: np.ndarray, ctx: Any) -> np.ndarray:
         + C_gated
     )
     isolated = (sum_T < _TINY) & (active != 0)
-    Ah[isolated] = h[isolated]
+    if not ctx.storage.transient:
+        Ah[isolated] = h[isolated]
     return Ah
 
 

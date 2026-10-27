@@ -928,6 +928,9 @@ class UnconfinedPicardKCycleBackend:
     name = "unconfined_picard_kcycle"
 
     def solve(self, context: SolverContext, **kwargs: Any):
+        if kwargs.get("transient", False) and kwargs.get("use_device_transient_fast_path", False):
+            from DARCY_WARP_PACKAGE.solvers.transient_interval import solve_picard_transient_interval
+            return solve_picard_transient_interval(model=context.model, **kwargs)
         kwargs["unconfined"] = True
         from DARCY_WARP_PACKAGE.solvers.multigrid_kcycle import (
             solve_multigrid_kcycle_backend,

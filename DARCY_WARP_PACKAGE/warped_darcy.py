@@ -27,6 +27,7 @@ from DARCY_WARP_PACKAGE.physics.operator_data import (
 from DARCY_WARP_PACKAGE.physics.budgets_2d import (
     compute_mass_balance_budget as _physics_compute_mass_balance_budget,
 )
+from DARCY_WARP_PACKAGE.physics.drn_2d import drn_discharge_2d
 from DARCY_WARP_PACKAGE.physics.storage_2d import (
     exact_unconfined_storage_terms as _physics_exact_unconfined_storage_terms,
     secant_specific_storage_coeff as _physics_secant_specific_storage_coeff,
@@ -6495,6 +6496,101 @@ class WarpDarcySolver:
         if self._fine_level is not None:
             self._fine_level.M_inv_wp = self.M_inv_wp
 
+    def update_riv_boundary_2d(self, *, mask, stage, bottom, conductance) -> None:
+        """Set dynamic RIV fields for the 2D semismooth-Newton backend.
+
+        Allocated host fields are updated in place. The nonlinear operator
+        obtains fresh device boundary fields for each solve. This does not
+        make the legacy linear backend support RIV.
+        """
+        shape = (self.ny, self.nx)
+        enabled = np.asarray(mask)
+        if enabled.shape != shape or not np.all(np.isin(enabled, (0, 1))):
+            raise ValueError("RIV mask must be a matching boolean/0-1 grid")
+        arrays = []
+        for name, value in (("stage", stage), ("rbot", bottom), ("cond", conductance)):
+            field = np.asarray(value, dtype=NP_FLOAT)
+            if field.ndim == 0:
+                field = np.full(shape, field.item(), dtype=NP_FLOAT)
+            if field.shape != shape or not np.all(np.isfinite(field)):
+                raise ValueError(f"RIV {name} must be a finite scalar or matching grid")
+            arrays.append((name, field))
+        if np.any(arrays[2][1] < 0.0):
+            raise ValueError("RIV conductance must be non-negative")
+        if np.any((enabled != 0) & ((self.active_host == 0) | (self.bc_mask_host != 0))):
+            raise ValueError("RIV cannot overlap inactive or prescribed-head cells")
+        self.use_riv = True
+        for name, field in [("mask", enabled.astype(np.int32))] + arrays:
+            key = f"riv_{name}_host"
+            current = getattr(self, key, None)
+            if current is None:
+                setattr(self, key, field.copy())
+            else:
+                current[...] = field
+
+    def accepted_riv_discharge_2d(self, *, head, info) -> np.ndarray:
+        """Signed RIV rates from a proven accepted semismooth-Newton state."""
+        if not isinstance(info, dict) or not info.get("converged", False):
+            raise RuntimeError("accepted RIV discharge requires a converged nonlinear solve")
+        if info.get("solver_backend", info.get("solver_type")) != "unconfined_semismooth_newton_kcycle":
+            raise RuntimeError("accepted RIV discharge requires the semismooth-Newton backend")
+        shape = (self.ny, self.nx)
+        for name, value in (("head", head),
+                            ("transmissivity_array", info.get("transmissivity_array")),
+                            ("saturated_thickness_array", info.get("saturated_thickness_array")),
+                            ("riv_discharge_rate_array", info.get("riv_discharge_rate_array"))):
+            if value is None:
+                raise RuntimeError(f"accepted nonlinear state lacks {name}")
+            field = np.asarray(value)
+            if field.shape != shape or not np.all(np.isfinite(field)):
+                raise ValueError(f"accepted {name} must be a finite matching grid")
+        from DARCY_WARP_PACKAGE.physics.riv_2d import riv_discharge_2d
+        derived = riv_discharge_2d(head=head, stage=self.riv_stage_host,
+            bottom=self.riv_rbot_host, conductance=self.riv_cond_host,
+            mask=self.riv_mask_host, device=self.device_str)
+        if not np.allclose(derived, info["riv_discharge_rate_array"], rtol=1e-12, atol=1e-12):
+            raise RuntimeError("accepted RIV flux does not match the supplied nonlinear head")
+        return derived.copy()
+
+    def accepted_drn_discharge_2d(self, *, head, info) -> np.ndarray:
+        """Return non-negative DRN outflow from the accepted Newton solution.
+
+        ``head`` and ``info`` must be returned by the same converged
+        semismooth-Newton solve. Stored model head and transmissivity fields
+        are deliberately not read here because they may be stale.
+        """
+        if not self.use_drn or self.drn_mask_host is None:
+            raise RuntimeError("DRN fields have not been built")
+        if not isinstance(info, dict) or not info.get("converged", False):
+            raise RuntimeError("accepted DRN discharge requires a converged nonlinear solve")
+        if info.get("solver_backend", info.get("solver_type")) != "unconfined_semismooth_newton_kcycle":
+            raise RuntimeError("accepted DRN discharge requires the semismooth-Newton backend")
+        expected = (self.ny, self.nx)
+        accepted_head = np.asarray(head, dtype=np.float64)
+        for name, value in (("head", accepted_head),
+                            ("transmissivity_array", info.get("transmissivity_array")),
+                            ("saturated_thickness_array", info.get("saturated_thickness_array"))):
+            if value is None:
+                raise RuntimeError(f"accepted nonlinear state lacks {name}")
+            field = np.asarray(value, dtype=np.float64)
+            if field.shape != expected or not np.all(np.isfinite(field)):
+                raise ValueError(f"accepted {name} must be a finite field of shape {expected}")
+        accepted_flux = info.get("drn_discharge_rate_array")
+        if accepted_flux is None:
+            raise RuntimeError("accepted nonlinear state lacks drn_discharge_rate_array")
+        accepted_flux = np.asarray(accepted_flux, dtype=np.float64)
+        if accepted_flux.shape != expected or not np.all(np.isfinite(accepted_flux)):
+            raise ValueError(f"accepted drn_discharge_rate_array must be a finite field of shape {expected}")
+        derived_flux = drn_discharge_2d(
+            head=accepted_head,
+            elevation=self.drn_elev_host,
+            conductance=self.drn_cond_host,
+            mask=self.drn_mask_host,
+        )
+        if not np.allclose(accepted_flux, derived_flux, rtol=1.0e-12, atol=1.0e-12):
+            raise RuntimeError("accepted DRN flux does not match the supplied nonlinear head")
+        return accepted_flux.copy()
+
     def update_T_in_place(self, T_truth) -> None:
         """
         Update transmissivity in place and refresh diagonal preconditioners.
@@ -7649,6 +7745,11 @@ class WarpDarcySolver:
         reuse the memory for later allocations. Warp distinguishes pool "used" memory from
         "reserved" memory. :contentReference[oaicite:2]{index=2}
         """
+        session = getattr(self, "_production_transient_session", None)
+        if session is not None:
+            session.invalidate()
+            self._production_transient_session = None
+
         # 1) Break graph references first, because graphs can keep arrays alive.
         self._invalidate_kcycle_graph()
         # Drop the fast backend's face-conductance cache (holds strong refs to

@@ -1,20 +1,22 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-"""Production multi-period unconfined Picard/K-cycle driver boundary."""
+"""Shared persistent transient-unconfined Picard/K-cycle period engine."""
 
 from __future__ import annotations
 
 from typing import Any
+
+import numpy as np
+import time
 
 from .context import SolverContext
 from .registry import select_backend
 from .capabilities import CAPABILITIES
 from .transient_experimental import solve_transient_unconfined_experimental
 
-def solve_transient_unconfined_backend(
+def _persistent_period_engine(
         *,
         model: Any,
         initial_head: np.ndarray,
-        recharge_rates: np.ndarray,
         k_field: np.ndarray,
         zbot_field: np.ndarray,
         ztop_field: np.ndarray,
@@ -35,18 +37,18 @@ def solve_transient_unconfined_backend(
         min_saturated_thickness: float = 0.1,
         save_diagnostics: bool = False,
         return_info: bool = True,
+        reuse_model: bool = False,
 ):
     from DARCY_WARP_PACKAGE import warped_darcy as kernel_module
     globals().update(kernel_module.__dict__)
     self = model
     """
-    Step a 2D unconfined transient solve through multiple stress periods.
+    Retain numerical workspace while advancing explicit period requests.
 
     This is solver infrastructure only: callers remain responsible for MF6
     artifact loading, comparisons, reporting, mass balance, and persistence.
 
     :param initial_head: Initial/previous head for period 1.
-    :param recharge_rates: One recharge value per stress period.
     :param k_field: Hydraulic conductivity field.
     :param zbot_field: Cell bottom field.
     :param ztop_field: Cell top field.
@@ -90,9 +92,6 @@ def solve_transient_unconfined_backend(
         if arr.shape != h0.shape:
             raise ValueError(f"{name} shape {arr.shape} expected {h0.shape}")
 
-    rates = np.asarray(recharge_rates, dtype=NP_FLOAT).reshape(-1)
-    if rates.size < 1:
-        raise ValueError("recharge_rates must contain at least one period.")
     dt_f = float(dt)
     if not np.isfinite(dt_f) or dt_f <= 0.0:
         raise ValueError("dt must be finite and > 0.")
@@ -167,20 +166,21 @@ def solve_transient_unconfined_backend(
                 raise ValueError(f"{_name} is required when the model has use_ghb=True.")
             if np.asarray(_arr).shape != h0.shape:
                 raise ValueError(f"{_name} shape {np.asarray(_arr).shape} expected {h0.shape}")
-    self.build_from_fields(
-        T_field=initial_T,
-        R_field=recharge_field,
-        active=active_i,
-        bc_mask=bc_i,
-        bc_values=bc_v,
-        gh_mask=gh_mask,
-        gh_head=gh_head,
-        gh_width=gh_width,
-        gh_alpha=gh_alpha,
-        aq_thickness=aq_thickness,
-    )
+    if not reuse_model:
+        self.build_from_fields(
+            T_field=initial_T,
+            R_field=recharge_field,
+            active=active_i,
+            bc_mask=bc_i,
+            bc_values=bc_v,
+            gh_mask=gh_mask,
+            gh_head=gh_head,
+            gh_width=gh_width,
+            gh_alpha=gh_alpha,
+            aq_thickness=aq_thickness,
+        )
 
-    n_periods = int(rates.size)
+    n_periods = 1
     heads_per_period = np.zeros((n_periods, self.ny, self.nx), dtype=np.float64)
     if save_diagnostics_b:
         heads_old_per_period = np.zeros_like(heads_per_period)
@@ -234,6 +234,42 @@ def solve_transient_unconfined_backend(
     head_prev = np.asarray(h0, dtype=np.float64).copy()
     total_t0 = time.perf_counter()
     last_info: dict = {}
+
+    def _period_result():
+        info_all = {
+            "heads_per_period": heads_per_period,
+            "heads_final": heads_per_period[-1],
+            "period_infos": period_infos,
+            "last_info": last_info,
+            "period_times": period_times,
+            "total_time": float(time.perf_counter() - total_t0),
+            "n_periods": n_periods,
+            "storage_reference": storage_reference,
+            "dt": dt_f,
+            "solve_controls": controls,
+            "save_diagnostics": bool(save_diagnostics_b),
+            "transient_replay_counters": counters,
+        }
+        if save_diagnostics_b:
+            info_all.update(
+                {
+                    "heads_old_per_period": heads_old_per_period,
+                    "storage_reference_heads_per_period": storage_reference_heads,
+                    "storage_coeffs_per_period": storage_coeffs,
+                    "sy_storage_coeffs_per_period": sy_coeffs,
+                    "ss_storage_coeffs_per_period": ss_coeffs,
+                    "storage_terms_per_period": storage_terms,
+                    "sy_storage_terms_per_period": sy_terms,
+                    "ss_storage_terms_per_period": ss_terms,
+                    "sy_crossing_volume_terms_per_period": sy_crossing_terms,
+                }
+            )
+        self._transient_replay_counters = dict(counters)
+        info_all = {name: (value.copy() if isinstance(value, np.ndarray) else value)
+                    for name, value in info_all.items()}
+        info_all["period_infos"] = list(period_infos)
+        info_all["transient_replay_counters"] = dict(counters)
+        return heads_per_period[0].copy(), info_all
 
     use_device_fast_path = bool(fast_path_controls.get("use_device_transient_fast_path", False))
     use_incremental_picard = bool(fast_path_controls.get("use_incremental_picard", False))
@@ -303,6 +339,7 @@ def solve_transient_unconfined_backend(
         n_free = int(np.count_nonzero((active_i != 0) & (bc_i == 0)))
 
         h_prev_wp = wp.array(head_prev, dtype=WP_FLOAT, device=device)
+        h_prev_stage = wp.zeros(head_prev.shape, dtype=WP_FLOAT, device="cpu")
         h_iter_wp = wp.array(head_prev, dtype=WP_FLOAT, device=device)
         h_substep_start_wp = wp.array(head_prev, dtype=WP_FLOAT, device=device)
         h_snapshot_wp = wp.array(head_prev, dtype=WP_FLOAT, device=device)
@@ -349,7 +386,7 @@ def solve_transient_unconfined_backend(
         if not hasattr(self, "storage_diag_host") or self.storage_diag_host is None:
             self.storage_diag_host = np.zeros_like(self.T_field_host)
 
-        if self.mg_levels is None:
+        if self.mg_levels is None or reuse_model:
             self.build_hierarchy(
                 max_levels=int(controls.get("max_levels", 5)),
                 min_coarse_n=4,
@@ -547,10 +584,10 @@ def solve_transient_unconfined_backend(
             return float(time.perf_counter() - t_start)
 
         # --- Phase B (UNCONFINED_FAST_PLAN.md): CUDA-graph capture ---------
-        # Graph caches are per-solve-call locals: every pointer baked into a
+        # Graph caches live for the persistent session: every pointer baked into a
         # captured graph (h_iter/h_prev/storage/rhs buffers, T_wp, R_wp,
         # mg-level arrays, face-level arrays) is allocated once above and
-        # lives for the whole period loop, and the caches die with the call.
+        # lives for the session; invalidation releases the caches.
         # Recharge changes per period via an in-place device update of
         # self.R_wp (update_uniform_recharge_in_place), so captured graphs
         # pick the new values up automatically.
@@ -894,8 +931,29 @@ def solve_transient_unconfined_backend(
                 "production_acceptance_passed": bool(strict or practical),
             }
 
-        for period_index in range(n_periods):
-            self.update_uniform_recharge_in_place(float(rates[period_index]))
+        request = yield {
+            "hierarchy": self.mg_levels,
+            "buffers": {name: value for name, value in locals().items()
+                        if isinstance(value, wp.array)},
+            "face_levels": face_levels,
+            "kcycle_graphs": face_kcycle_graphs,
+            "refresh_graphs": face_refresh_graphs,
+        }
+        while True:
+            period_index = 0
+            head_prev = request["head_prev"]
+            dt_f = dt_f_val = float(request["dt"])
+            accepted_substep_callback = request.get("accepted_substep_callback")
+            period_infos.clear()
+            h_prev_stage.numpy()[:, :] = head_prev
+            wp.copy(h_prev_wp, h_prev_stage)
+            wp.copy(h_iter_wp, h_prev_wp)
+            counters["host_to_device_full_grid_copies"] += 1
+            if np.isscalar(request["recharge"]):
+                self.update_uniform_recharge_in_place(float(request["recharge"]))
+            else:
+                self.update_R_in_place(request["recharge"])
+                counters["host_to_device_full_grid_copies"] += 1
             counters["R_device_updates"] += 1
             wp.launch(
                 kernel=copy_field_kernel,
@@ -1830,6 +1888,11 @@ def solve_transient_unconfined_backend(
                             if strict_picard_convergence_passed else "refreshed_practical_acceptance"
                         )
                         outer_summary["outer_iteration_of_acceptance"] = int(outer_iter + 1)
+                        if accepted_substep_callback is not None:
+                            accepted_substep_callback(head=np.asarray(h_iter_wp.numpy(), dtype=np.float64),
+                                                      duration_days=float(actual_dt_f))
+                            counters["device_to_host_full_grid_copies"] += 1
+                            counters["head_downloads"] += 1
                         if not adaptive_dt_enabled_b:
                             break
                         adaptive_dt_substep_dts.append(float(actual_dt_f))
@@ -2336,10 +2399,20 @@ def solve_transient_unconfined_backend(
             period_infos.append(info_period)
             last_info = info_period
             head_prev = head_arr
+            request = yield _period_result()
 
     else:
-        for period_index in range(n_periods):
-            self.update_uniform_recharge_in_place(float(rates[period_index]))
+        request = yield {"hierarchy": None, "buffers": {}, "face_levels": None,
+                         "kcycle_graphs": {}, "refresh_graphs": {}}
+        while True:
+            period_index = 0
+            head_prev = request["head_prev"]
+            dt_f = float(request["dt"])
+            period_infos.clear()
+            if np.isscalar(request["recharge"]):
+                self.update_uniform_recharge_in_place(float(request["recharge"]))
+            else:
+                self.update_R_in_place(request["recharge"])
             counters["R_device_updates"] += 1
             if save_diagnostics_b:
                 period_head_old = np.asarray(head_prev, dtype=np.float64).copy()
@@ -2416,37 +2489,186 @@ def solve_transient_unconfined_backend(
             period_infos.append(info_out)
             last_info = info_out
             head_prev = head_arr
+            request = yield _period_result()
 
-    info_all = {
-        "heads_per_period": heads_per_period,
-        "heads_final": heads_per_period[-1],
-        "period_infos": period_infos,
-        "last_info": last_info,
-        "period_times": period_times,
-        "total_time": float(time.perf_counter() - total_t0),
-        "n_periods": n_periods,
-        "storage_reference": storage_reference,
-        "dt": dt_f,
-        "solve_controls": controls,
-        "save_diagnostics": bool(save_diagnostics_b),
-        "transient_replay_counters": counters,
-    }
-    if save_diagnostics_b:
-        info_all.update(
-            {
-                "heads_old_per_period": heads_old_per_period,
-                "storage_reference_heads_per_period": storage_reference_heads,
-                "storage_coeffs_per_period": storage_coeffs,
-                "sy_storage_coeffs_per_period": sy_coeffs,
-                "ss_storage_coeffs_per_period": ss_coeffs,
-                "storage_terms_per_period": storage_terms,
-                "sy_storage_terms_per_period": sy_terms,
-                "ss_storage_terms_per_period": ss_terms,
-                "sy_crossing_volume_terms_per_period": sy_crossing_terms,
-            }
-        )
-    self._transient_replay_counters = dict(counters)
-    return (heads_per_period, info_all) if return_info else heads_per_period
+
+
+class TransientUnconfinedSession:
+    """Persistent workspace for the validated production period engine.
+
+    A suspended engine frame retains the existing numerical closures and
+    pointer-stable arrays/graphs. No previous accepted head is implicit:
+    every advance seeds all head work from the caller's explicit head_prev.
+    Grid/material/control changes require invalidate() and a new session.
+    """
+
+    def __init__(self, *, model, k_field, zbot_field, ztop_field, sy, ss,
+                 active=None, bc_mask=None, bc_values=None, gh_mask=None,
+                 gh_head=None, gh_width=None, gh_alpha=1.0, aq_thickness=None,
+                 storage_mode='mf6_convertible_secant_sy', storage_reference='current_picard',
+                 solve_controls=None, min_saturated_thickness=0.1,
+                 save_diagnostics=False, reuse_model=False):
+        from DARCY_WARP_PACKAGE.solvers.transient_config import default_solve_controls
+        self.model = model
+        self.shape = (model.ny, model.nx)
+        self.solve_controls = default_solve_controls() if solve_controls is None else dict(solve_controls)
+        self._parameters = dict(model=model, k_field=np.array(k_field, dtype=np.float64, copy=True),
+            zbot_field=np.array(zbot_field, dtype=np.float64, copy=True),
+            ztop_field=np.array(ztop_field, dtype=np.float64, copy=True), sy=float(sy), ss=float(ss),
+            active=None if active is None else np.array(active, dtype=np.int32, copy=True),
+            bc_mask=None if bc_mask is None else np.array(bc_mask, dtype=np.int32, copy=True),
+            bc_values=None if bc_values is None else np.array(bc_values, dtype=np.float64, copy=True),
+            gh_mask=None if gh_mask is None else np.array(gh_mask, dtype=np.int32, copy=True),
+            gh_head=None if gh_head is None else np.array(gh_head, dtype=np.float64, copy=True),
+            gh_width=None if gh_width is None else np.array(gh_width, dtype=np.float64, copy=True),
+            gh_alpha=gh_alpha, aq_thickness=aq_thickness, storage_mode=storage_mode,
+            storage_reference=storage_reference, solve_controls=self.solve_controls,
+            min_saturated_thickness=min_saturated_thickness, save_diagnostics=save_diagnostics,
+            reuse_model=bool(reuse_model))
+        self._engine = None
+        self.workspace = {}
+        self._model_workspace = {}
+        self._last_counters = {}
+        self.setup_count = 0
+        self.period_count = 0
+
+    def invalidate(self):
+        """Discard derived work after incompatible static/boundary changes.
+
+        Hydrological state is not restored here; the next caller supplies it.
+        Ordinary trial rejection needs no invalidation because every period
+        resets its iterate and adaptive control from explicit accepted inputs.
+        """
+        if self._engine is not None:
+            self._engine.close()
+        self._engine = None
+        self.workspace = {}
+        self._model_workspace = {}
+        self._last_counters = {}
+
+    def _start(self, *, head_prev, dt):
+        self._engine = _persistent_period_engine(initial_head=head_prev,
+            dt=dt, return_info=True, **self._parameters)
+        self.workspace = next(self._engine)
+        names = ('T_wp', 'R_wp', 'active_wp', 'bc_mask_wp', 'bc_values_wp',
+                 'gh_head_wp', 'gh_mask_wp', 'ghb_factor_wp', 'mg_levels',
+                 'storage_diag_wp', '_storage_active')
+        self._model_workspace = {name: getattr(self.model, name) for name in names
+                                 if hasattr(self.model, name)}
+        self.setup_count += 1
+
+    def _advance(self, *, head_prev, recharge, dt, accepted_substep_callback=None):
+        previous = np.asarray(head_prev, dtype=np.float64)
+        if previous.shape != self.shape or not np.all(np.isfinite(previous)):
+            raise ValueError(f'head_prev must be finite with shape {self.shape}')
+        duration = float(dt)
+        if not np.isfinite(duration) or duration <= 0.0:
+            raise ValueError('dt must be finite and positive')
+        if self.model.use_drn or self.model.use_riv:
+            raise NotImplementedError('gated DRN/RIV boundaries require semismooth Newton')
+        if self._engine is None:
+            self._start(head_prev=previous, dt=duration)
+        # Transaction restoration can replace model numerical mirrors. Rebind
+        # the owned workspace; all derived values refresh from explicit input.
+        for name, value in self._model_workspace.items():
+            setattr(self.model, name, value)
+        before = dict(self._last_counters)
+        graphs_before = sum(value is not False for value in self.workspace['kcycle_graphs'].values())
+        refresh_before = sum(value is not False for value in self.workspace['refresh_graphs'].values())
+        try:
+            head, result = self._engine.send(dict(head_prev=previous, recharge=recharge,
+                dt=duration, accepted_substep_callback=accepted_substep_callback))
+        except Exception:
+            self.invalidate()
+            raise
+        self.period_count += 1
+        self._last_counters = dict(result['transient_replay_counters'])
+        info = dict(result['last_info'])
+        info.update(solver_backend='unconfined_picard_kcycle',
+            hierarchy_depth=len(self.model.mg_levels or []),
+            transient_session_setup_count=self.setup_count,
+            transient_session_period_count=self.period_count,
+            transient_kcycle_graphs_reused=graphs_before,
+            transient_refresh_graphs_reused=refresh_before,
+            transient_kcycle_graphs_built=int(info.get('transient_face_kcycle_graph_count', 0))-graphs_before,
+            transient_refresh_graphs_built=int(info.get('transient_face_refresh_graph_count', 0))-refresh_before,
+            transient_workspace_reused=self.period_count > 1 and self.setup_count == 1,
+            transient_replay_counters={name: value-before.get(name, 0)
+                                      for name, value in self._last_counters.items()})
+        result['last_info'] = info
+        result['period_infos'] = [info]
+        return head, info, result
+
+    def advance(self, *, head_prev, recharge_rate_m_per_day, dt,
+                accepted_substep_callback=None):
+        """Advance one period from explicit accepted head and spatial forcing.
+
+        Recharge is zero on inactive/prescribed-head cells. Static boundary
+        masks/values are those supplied at construction; recreate the session
+        explicitly when those physical boundary fields change.
+        """
+        recharge = np.asarray(recharge_rate_m_per_day, dtype=np.float64)
+        if recharge.shape != self.shape or not np.all(np.isfinite(recharge)):
+            raise ValueError(f'recharge_rate_m_per_day must be finite with shape {self.shape}')
+        active = self._parameters['active']
+        bc = self._parameters['bc_mask']
+        forbidden = np.zeros(self.shape, dtype=bool)
+        if active is not None:
+            forbidden |= active == 0
+        if bc is not None:
+            forbidden |= bc != 0
+        if np.any(recharge[forbidden] != 0.0):
+            raise ValueError('recharge must be zero on inactive and prescribed-head cells')
+        started = time.perf_counter()
+        head, info, result = self._advance(head_prev=head_prev, recharge=recharge, dt=dt,
+            accepted_substep_callback=accepted_substep_callback)
+        info['runtime_seconds'] = time.perf_counter()-started
+        return head, info
+
+
+def solve_transient_unconfined_backend(*, model, initial_head, recharge_rates,
+        k_field, zbot_field, ztop_field, sy, ss, dt, active=None, bc_mask=None,
+        bc_values=None, gh_mask=None, gh_head=None, gh_width=None, gh_alpha=1.0,
+        aq_thickness=None, storage_mode='mf6_convertible_secant_sy',
+        storage_reference='current_picard', solve_controls=None,
+        min_saturated_thickness=0.1, save_diagnostics=False, return_info=True):
+    """Replay uniform stress periods through the shared persistent engine."""
+    rates = np.asarray(recharge_rates, dtype=np.float64).reshape(-1)
+    if rates.size == 0 or not np.all(np.isfinite(rates)):
+        raise ValueError('recharge_rates must contain finite stress-period rates')
+    session = TransientUnconfinedSession(model=model, k_field=k_field,
+        zbot_field=zbot_field, ztop_field=ztop_field, sy=sy, ss=ss, active=active,
+        bc_mask=bc_mask, bc_values=bc_values, gh_mask=gh_mask, gh_head=gh_head,
+        gh_width=gh_width, gh_alpha=gh_alpha, aq_thickness=aq_thickness,
+        storage_mode=storage_mode, storage_reference=storage_reference,
+        solve_controls={} if solve_controls is None else solve_controls,
+        min_saturated_thickness=min_saturated_thickness,
+        save_diagnostics=save_diagnostics)
+    previous = np.asarray(initial_head, dtype=np.float64)
+    heads, periods, results = [], [], []
+    started = time.perf_counter()
+    try:
+        for rate in rates:
+            head, info, result = session._advance(head_prev=previous, recharge=float(rate), dt=dt)
+            heads.append(head)
+            periods.append(info)
+            results.append(result)
+            previous = head
+        combined = dict(results[-1])
+        combined.update(heads_per_period=np.stack(heads), heads_final=heads[-1],
+            period_infos=periods, last_info=periods[-1],
+            period_times=np.array([result['period_times'][0] for result in results]),
+            total_time=time.perf_counter()-started, n_periods=len(heads),
+            transient_replay_counters=dict(session._last_counters))
+        if combined['save_diagnostics']:
+            for name in combined:
+                if name.endswith('_per_period') and name != 'heads_per_period':
+                    combined[name] = np.concatenate([result[name] for result in results], axis=0)
+        return (combined['heads_per_period'], combined) if return_info else combined['heads_per_period']
+    finally:
+        session.invalidate()
+
+
 
 def solve_transient_unconfined(
     context: SolverContext,
@@ -2454,12 +2676,7 @@ def solve_transient_unconfined(
     solver: str | None = "unconfined_picard_kcycle",
     **kwargs: Any,
 ):
-    """Run the model-owned transient driver through its compatibility bridge.
-
-    The bridge is deliberately narrow: all period, adaptive-dt, and diagnostic
-    behaviour remains byte-for-byte in the existing implementation until the
-    single-step Picard and K-cycle bodies have been extracted.
-    """
+    """Dispatch the production replay through its shared persistent engine."""
     if context.formulation != "unconfined":
         raise ValueError("transient unconfined backend requires formulation='unconfined'.")
     backend = select_backend(
@@ -2477,7 +2694,7 @@ def solve_transient_unconfined(
             f"production driver; choose one of: {capable}."
         )
     if backend.name == "unconfined_picard_kcycle":
-        # Production default: the Picard period driver, byte-for-byte unchanged.
+        # Production replay and single-period callers share the same engine.
         result = solve_transient_unconfined_backend(model=context.model, **kwargs)
     else:
         # Explicitly selected nonlinear backends run through the alternate
