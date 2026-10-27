@@ -61,12 +61,22 @@ class NonlinearFlowFields:
 
 @dataclass(frozen=True, slots=True)
 class NonlinearBoundaryFields:
-    """Borrowed active / Dirichlet / GHB operator data.
+    """Borrowed active / Dirichlet / GHB / DRN / RIV operator data.
 
     ``ghb_factor`` is the conductance factor produced by
     ``physics.operator_data.compute_ghb_factor_from_raw_fields`` (the same value
     the production operator consumes).  ``ghb_external_head`` is the prescribed
     external stage for each GHB cell.
+
+    DRN and RIV follow MODFLOW 6 semantics with a *fixed* per-cell conductance
+    ``[L^2/T]`` (``drn_cond`` / ``riv_cond``), unlike the transmissivity-scaled
+    GHB factor:
+
+    * DRN (elevation ``drn_elev``), outflow only: ``h > elev`` contributes
+      ``C*(h - elev)``; ``h <= elev`` contributes nothing.
+    * RIV (stage ``riv_stage``, riverbed bottom ``riv_rbot``): ``h > rbot``
+      contributes ``C*(h - stage)``; ``h <= rbot`` contributes the constant
+      ``C*(rbot - stage)``.
     """
 
     active: Any                # (ny, nx) int, !=0 active
@@ -75,6 +85,13 @@ class NonlinearBoundaryFields:
     ghb_mask: Any              # (ny, nx) int, !=0 GHB
     ghb_external_head: Any     # (ny, nx) external stage [L]
     ghb_factor: Any            # (ny, nx) conductance factor
+    drn_mask: Any              # (ny, nx) int, !=0 DRN
+    drn_elev: Any              # (ny, nx) drain elevation [L]
+    drn_cond: Any              # (ny, nx) fixed drain conductance [L^2/T]
+    riv_mask: Any              # (ny, nx) int, !=0 RIV
+    riv_stage: Any             # (ny, nx) river stage [L]
+    riv_rbot: Any              # (ny, nx) riverbed bottom elevation [L]
+    riv_cond: Any              # (ny, nx) fixed riverbed conductance [L^2/T]
 
 
 @dataclass(frozen=True, slots=True)
@@ -180,6 +197,13 @@ def from_arrays(
     ghb_mask: Any | None = None,
     ghb_external_head: Any | None = None,
     ghb_factor: Any | None = None,
+    drn_mask: Any | None = None,
+    drn_elev: Any | None = None,
+    drn_cond: Any | None = None,
+    riv_mask: Any | None = None,
+    riv_stage: Any | None = None,
+    riv_rbot: Any | None = None,
+    riv_cond: Any | None = None,
     sy: float = 0.0,
     ss: float = 0.0,
     head_prev: Any | None = None,
@@ -227,9 +251,18 @@ def from_arrays(
     R_arr = _as2d(R_field, name="R_field", shape=shape)
 
     zeros = np.zeros(shape, dtype=NP_FLOAT)
+    zeros_i = np.zeros(shape, dtype=np.int32)
     ghb_mask_arr = _as_int2d(ghb_mask if ghb_mask is not None else zeros, name="ghb_mask", shape=shape)
     ghb_head_arr = _as2d(ghb_external_head if ghb_external_head is not None else zeros, name="ghb_external_head", shape=shape)
     ghb_factor_arr = _as2d(ghb_factor if ghb_factor is not None else zeros, name="ghb_factor", shape=shape)
+
+    drn_mask_arr = _as_int2d(drn_mask if drn_mask is not None else zeros_i, name="drn_mask", shape=shape)
+    drn_elev_arr = _as2d(drn_elev if drn_elev is not None else zeros, name="drn_elev", shape=shape)
+    drn_cond_arr = _as2d(drn_cond if drn_cond is not None else zeros, name="drn_cond", shape=shape)
+    riv_mask_arr = _as_int2d(riv_mask if riv_mask is not None else zeros_i, name="riv_mask", shape=shape)
+    riv_stage_arr = _as2d(riv_stage if riv_stage is not None else zeros, name="riv_stage", shape=shape)
+    riv_rbot_arr = _as2d(riv_rbot if riv_rbot is not None else zeros, name="riv_rbot", shape=shape)
+    riv_cond_arr = _as2d(riv_cond if riv_cond is not None else zeros, name="riv_cond", shape=shape)
 
     sy_f = float(sy)
     ss_f = float(ss)
@@ -266,6 +299,13 @@ def from_arrays(
             ghb_mask=ghb_mask_arr,
             ghb_external_head=ghb_head_arr,
             ghb_factor=ghb_factor_arr,
+            drn_mask=drn_mask_arr,
+            drn_elev=drn_elev_arr,
+            drn_cond=drn_cond_arr,
+            riv_mask=riv_mask_arr,
+            riv_stage=riv_stage_arr,
+            riv_rbot=riv_rbot_arr,
+            riv_cond=riv_cond_arr,
         ),
         sources=NonlinearSourceField(R_field=R_arr),
         storage=NonlinearStorageFields(
@@ -315,6 +355,20 @@ def from_unconfined_solve_inputs(
     ghb_external_head = np.asarray(getattr(model, "gh_head_host"), dtype=NP_FLOAT)
     ghb_factor = np.asarray(getattr(model, "ghb_factor_host"), dtype=NP_FLOAT)
 
+    def _optional_model_field(name: str, dtype: Any) -> Any | None:
+        value = getattr(model, name, None)
+        if value is None:
+            return None
+        return np.asarray(value, dtype=dtype)
+
+    drn_mask = _optional_model_field("drn_mask_host", np.int32)
+    drn_elev = _optional_model_field("drn_elev_host", NP_FLOAT)
+    drn_cond = _optional_model_field("drn_cond_host", NP_FLOAT)
+    riv_mask = _optional_model_field("riv_mask_host", np.int32)
+    riv_stage = _optional_model_field("riv_stage_host", NP_FLOAT)
+    riv_rbot = _optional_model_field("riv_rbot_host", NP_FLOAT)
+    riv_cond = _optional_model_field("riv_cond_host", NP_FLOAT)
+
     min_sat_eff = 0.1 if min_sat is None else float(min_sat)
 
     sy_eff = 0.0 if sy is None else float(sy)
@@ -334,6 +388,13 @@ def from_unconfined_solve_inputs(
         ghb_mask=ghb_mask,
         ghb_external_head=ghb_external_head,
         ghb_factor=ghb_factor,
+        drn_mask=drn_mask,
+        drn_elev=drn_elev,
+        drn_cond=drn_cond,
+        riv_mask=riv_mask,
+        riv_stage=riv_stage,
+        riv_rbot=riv_rbot,
+        riv_cond=riv_cond,
         sy=sy_eff,
         ss=ss_eff,
         head_prev=head_prev,

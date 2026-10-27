@@ -14,6 +14,11 @@ operator so the two agree bit-for-bit when transmissivity is head-independent:
 * face conductance  ``T_face = 2 T_c T_nb / (T_c + T_nb + tiny)``  (harmonic mean,
   ``tiny = 1e-12``)  -- mirrors ``apply_A_kernel`` / ``compute_residual_kernel``
 * GHB diagonal       ``C_gh = T_c * ghb_factor``                     -- mirrors ``apply_A_kernel``
+* DRN (MODFLOW semantics, fixed conductance ``C``): outflow only, contributes
+  ``C*(h - elev)`` while ``h > elev`` and nothing otherwise
+* RIV (MODFLOW semantics, fixed conductance ``C``): ``h > rbot`` contributes
+  ``C*(h - stage)``; ``h <= rbot`` contributes the constant ``C*(rbot - stage)``
+  (no diagonal)
 * flow saturated thickness uses the positive ``min_sat`` ellipticity floor
   ``flow_sat = clip(head - bottom, min_sat, max(top - bottom, min_sat))``
 * physical (storage) saturation uses the zero-to-full-thickness clipping of
@@ -49,6 +54,30 @@ else:
 
 # Small regularization mirroring the production harmonic-mean denominator.
 _NL_TINY = wp.float64(1.0e-12)
+
+
+@wp.func
+def riv_outflow(head: wp.float64, stage: wp.float64, bottom: wp.float64,
+                conductance: wp.float64) -> wp.float64:
+    """Authoritative MODFLOW RIV relation: positive aquifer outflow."""
+    return conductance * (wp.max(head, bottom) - stage)
+
+
+@wp.kernel
+def accepted_riv_flux_kernel(
+    head: wp.array(dtype=WP_FLOAT, ndim=2),
+    stage: wp.array(dtype=WP_FLOAT, ndim=2),
+    bottom: wp.array(dtype=WP_FLOAT, ndim=2),
+    conductance: wp.array(dtype=WP_FLOAT, ndim=2),
+    mask: wp.array(dtype=wp.int32, ndim=2),
+    output: wp.array(dtype=WP_FLOAT, ndim=2),
+):
+    j, i = wp.tid()
+    q = wp.float64(0.0)
+    if mask[j, i] != 0:
+        q = riv_outflow(wp.float64(head[j, i]), wp.float64(stage[j, i]),
+                        wp.float64(bottom[j, i]), wp.float64(conductance[j, i]))
+    output[j, i] = WP_FLOAT(q)
 
 
 @wp.kernel
@@ -196,6 +225,13 @@ def nl_residual_kernel(
     gh_mask: wp.array(dtype=wp.int32, ndim=2),
     gh_head: wp.array(dtype=WP_FLOAT, ndim=2),
     ghb_factor: wp.array(dtype=WP_FLOAT, ndim=2),
+    drn_mask: wp.array(dtype=wp.int32, ndim=2),
+    drn_elev: wp.array(dtype=WP_FLOAT, ndim=2),
+    drn_cond: wp.array(dtype=WP_FLOAT, ndim=2),
+    riv_mask: wp.array(dtype=wp.int32, ndim=2),
+    riv_stage: wp.array(dtype=WP_FLOAT, ndim=2),
+    riv_rbot: wp.array(dtype=WP_FLOAT, ndim=2),
+    riv_cond: wp.array(dtype=WP_FLOAT, ndim=2),
     R_field: wp.array(dtype=WP_FLOAT, ndim=2),
     head_prev: wp.array(dtype=WP_FLOAT, ndim=2),
     sy: wp.float64,
@@ -216,11 +252,13 @@ def nl_residual_kernel(
         F = flow_A(h) + storage_exact(h) - sources(h)
 
     where ``flow_A(h)`` is the head-dependent 5-point flow operator applied to
-    ``h`` plus the GHB diagonal (NO storage diagonal), ``storage_exact(h)`` is
-    the exact convertible storage flux, and
-    ``sources(h) = R_field * area + C_gh(h) * gh_head``.  This is the negative of
-    the production ``compute_residual_kernel`` residual ``r = b - A h``; the sign
-    is documented and norm-invariant.
+    ``h`` plus the GHB diagonal and the gated-on DRN/RIV diagonals (NO storage
+    diagonal), ``storage_exact(h)`` is the exact convertible storage flux, and
+    ``sources(h) = R_field * area + C_gh(h) * gh_head`` plus the DRN/RIV source
+    terms (``C*(elev)`` for an active drain, ``C*stage`` for a coupled river
+    cell and the constant ``C*(stage - rbot)`` for a decoupled one).  This is
+    the negative of the production ``compute_residual_kernel`` residual
+    ``r = b - A h``; the sign is documented and norm-invariant.
 
     Inactive and Dirichlet rows write ``F = 0`` so they are excluded from
     free-cell norms, matching the convention that those rows are identity rows.
@@ -321,11 +359,39 @@ def nl_residual_kernel(
         if ghbf > wp.float64(0.0) and not wp.isnan(ghbf):
             C_gh = T_c * ghbf
 
-    sum_T = T_e + T_w + T_n + T_s + C_gh
+    # DRN (MODFLOW fixed-conductance drain; outflow only while head > elevation).
+    C_drn = wp.float64(0.0)
+    drn_source = wp.float64(0.0)
+    if drn_mask[j, i] != 0:
+        cd = wp.float64(drn_cond[j, i])
+        if cd > wp.float64(0.0) and not wp.isnan(cd):
+            z_d = wp.float64(drn_elev[j, i])
+            if hC > z_d:
+                C_drn = cd
+                drn_source = cd * z_d
 
-    # flow_A(h) (mirrors apply_A_kernel; isolated cell -> identity-like).
+    # RIV (MODFLOW fixed-conductance river; gated on the riverbed bottom).
+    # Coupled (h > rbot): diagonal C with source C*stage.  Decoupled
+    # (h <= rbot): constant source C*(stage - rbot), no diagonal.
+    C_riv = wp.float64(0.0)
+    riv_source = wp.float64(0.0)
+    if riv_mask[j, i] != 0:
+        cr = wp.float64(riv_cond[j, i])
+        if cr > wp.float64(0.0) and not wp.isnan(cr):
+            h_r = wp.float64(riv_stage[j, i])
+            rbot = wp.float64(riv_rbot[j, i])
+            if hC > rbot:
+                C_riv = cr
+                riv_source = cr * h_r
+            else:
+                riv_source = cr * (h_r - rbot)
+
+    sum_T = T_e + T_w + T_n + T_s + C_gh + C_drn + C_riv
+
+    # Retain the legacy steady pin only without transient storage. An
+    # isolated transient cell has zero physical flow, not a head-dependent sink.
     flow_Ah = wp.float64(0.0)
-    if sum_T < _NL_TINY:
+    if sum_T < _NL_TINY and has_storage == 0:
         flow_Ah = hC
     else:
         flow_Ah = sum_T * hC
@@ -375,11 +441,12 @@ def nl_residual_kernel(
         ss_term = (phi_new - phi_old) * wp.float64(area) * wp.float64(inv_dt)
         storage_flux = sy_term + ss_term
 
-    # Sources: signed recharge/well field + GHB external-head inflow.
+    # Sources: signed recharge/well field + GHB external-head inflow + gated
+    # DRN/RIV boundary inflows.
     recharge = wp.float64(R_field[j, i]) * wp.float64(area)
     ghb_source = C_gh * wp.float64(gh_head[j, i])
 
-    F = flow_Ah + storage_flux - recharge - ghb_source
+    F = flow_Ah + storage_flux - recharge - ghb_source - drn_source - riv_source
     F_out[j, i] = WP_FLOAT(F)
     wp.atomic_add(rTr_buf, 0, F * F)
     wp.atomic_max(Fmax_buf, 0, wp.abs(F))
@@ -519,6 +586,13 @@ def nl_jacobian_vector_kernel(
     gh_mask: wp.array(dtype=wp.int32, ndim=2),
     gh_head: wp.array(dtype=WP_FLOAT, ndim=2),
     ghb_factor: wp.array(dtype=WP_FLOAT, ndim=2),
+    drn_mask: wp.array(dtype=wp.int32, ndim=2),
+    drn_elev: wp.array(dtype=WP_FLOAT, ndim=2),
+    drn_cond: wp.array(dtype=WP_FLOAT, ndim=2),
+    riv_mask: wp.array(dtype=wp.int32, ndim=2),
+    riv_stage: wp.array(dtype=WP_FLOAT, ndim=2),
+    riv_rbot: wp.array(dtype=WP_FLOAT, ndim=2),
+    riv_cond: wp.array(dtype=WP_FLOAT, ndim=2),
     sy: wp.float64,
     ss: wp.float64,
     area: wp.float64,
@@ -685,7 +759,26 @@ def nl_jacobian_vector_kernel(
             flow_sum = flow_sum + C
             result = result + C * v_c + dC * (h_c - wp.float64(gh_head[j, i]))
 
-    if flow_sum < _NL_TINY:
+    # DRN: semismooth derivative of the outflow-only term C*max(h - elev, 0).
+    # Derivative is C strictly above the elevation and 0 at/below it (matching
+    # the clipping-derivative convention used for the saturation thresholds).
+    if drn_mask[j, i] != 0:
+        cd = wp.float64(drn_cond[j, i])
+        if cd > wp.float64(0.0) and not wp.isnan(cd):
+            if h_c > wp.float64(drn_elev[j, i]):
+                flow_sum = flow_sum + cd
+                result = result + cd * v_c
+
+    # RIV: the coupled branch (h > rbot) carries the diagonal derivative C;
+    # the decoupled branch is a constant source with zero derivative.
+    if riv_mask[j, i] != 0:
+        cr = wp.float64(riv_cond[j, i])
+        if cr > wp.float64(0.0) and not wp.isnan(cr):
+            if h_c > wp.float64(riv_rbot[j, i]):
+                flow_sum = flow_sum + cr
+                result = result + cr * v_c
+
+    if flow_sum < _NL_TINY and has_storage == 0:
         result = v_c
 
     # Exact convertible storage derivative.  Sy follows clipped physical
