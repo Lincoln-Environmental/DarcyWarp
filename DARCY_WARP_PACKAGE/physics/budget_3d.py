@@ -41,6 +41,9 @@ def is_3d_budget_conserved(*, budget, absolute_tolerance, relative_tolerance=1e-
                   "head_residual_rms")
     valid = budget.get("physical_metrics_valid", True) and all(
         np.isfinite(budget[name]) for name in quantities if name in budget)
+    valid = valid and all(budget[name] >= 0. for name in
+        ("cell_residual_rms", "cell_residual_max", "relative_cell_imbalance", "throughput",
+         "relative_imbalance", "head_residual_rms") if name in budget)
     return bool(valid and (budget["cell_residual_rms"] <= absolute_tolerance
                 or budget["relative_cell_imbalance"] <= relative_tolerance))
 

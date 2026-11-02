@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """FP64 face-array K-cycle for steady and transient 3D flow.
 
 This backend keeps six face conductances explicit, uses block-partial
@@ -411,6 +411,8 @@ def _run_kcycles(
             "implementation": "fast",
             "converged": True,
             "n_cycles_used": 0,
+            "n_levels": len(levels),
+            "level_shapes": [(level["nz"], level["ny"], level["nx"]) for level in levels],
             "max_cycles": int(max_cycles),
             "r_rms0": 0.0, "r_rms_end": 0.0, "h_rms_end": 0.0,
             "tol_abs": float(abs_tol_min),

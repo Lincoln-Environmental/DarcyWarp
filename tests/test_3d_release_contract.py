@@ -256,3 +256,10 @@ def test_terrain_counts_actual_preconditioner_calls(monkeypatch):
     assert info['preconditioner_applications'] == len(calls)
     assert info['multigrid_cycles'] == len(calls)
     assert info['multigrid_cycles'] > info['gmres_restart_blocks']
+
+
+def test_independent_terrain_gate_honours_invalid_physical_aggregates():
+    from DARCY_WARP_PACKAGE.validation.terrain_cpu import accepted, CPUControls
+    budget = dict(head_residual_rms=0., cell_residual_rms=0., relative_cell_imbalance=0.,
+                  throughput=1., physical_metrics_valid=False)
+    assert not accepted(head=np.zeros((1, 1, 1)), budget=budget, controls=CPUControls())

@@ -192,9 +192,11 @@ class CPUReference:
 
 
 def accepted(*, head, budget, controls):
+    from DARCY_WARP_PACKAGE.physics.budget_3d import is_3d_budget_conserved
     finite=budget.get('finite_physical_state',True) and all(np.isfinite(budget[key]) for key in ('head_residual_rms','cell_residual_rms','relative_cell_imbalance','throughput'))
     return bool(finite and np.all(np.isfinite(head)) and budget['head_residual_rms']<=controls.head_tol and
-        (budget['cell_residual_rms']<=controls.flow_tol or budget['relative_cell_imbalance']<=controls.relative_tol))
+        is_3d_budget_conserved(budget=budget, absolute_tolerance=controls.flow_tol,
+                               relative_tolerance=controls.relative_tol))
 
 
 def merit(*, budget, head_scale, flow_scale):
