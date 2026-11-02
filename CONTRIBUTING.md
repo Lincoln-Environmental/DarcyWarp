@@ -34,7 +34,7 @@ Preserve attribution and licence notices.
 
 ## Check what changed
 
-The existing CI workflow runs Python 3.11 with NumPy, SciPy, pytest and
+The CI workflow runs Python 3.11 with NumPy, SciPy, pandas, pytest and
 Warp 1.10.0, checks imports and syntax, then runs these CPU smoke tests:
 
 ```bash
