@@ -283,3 +283,12 @@ def test_independent_face_model_rejects_implicit_physical_mode_change():
             model.solve(unconfined=True, kx_field=data['kx_field'], ky_field=data['ky_field'], kz_field=data['kz_field'])
         unused, info = model.solve()
         assert info['converged']
+
+
+def test_explicit_diagonal_selects_gmres_and_default_valued_conflicts_raise():
+    with model_from(data=inputs(), formulation='mf6_6_6_2_npf') as model:
+        unused, info = model.solve(npf_preconditioner='diagonal')
+        assert info['krylov_method'] == 'GMRES' and info['npf_preconditioner'] == 'diagonal'
+        for controls in (dict(max_levels=6), dict(min_coarse_n=2), dict(rel_tol=1e-12)):
+            with pytest.raises(ValueError, match='npf_'):
+                model.solve(npf_preconditioner='kcycle', npf_kcycle_controls=NPF662KCycleControls(levels=2), **controls)

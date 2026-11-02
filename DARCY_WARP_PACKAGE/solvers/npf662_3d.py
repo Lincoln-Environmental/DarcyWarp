@@ -43,11 +43,23 @@ def independent_reference(*, model, case):
     return reference, reused
 
 
-def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,max_cycles=2000,rel_tol=1e-12,
-    abs_tol_min=1e-12,final_budget_relative_tol=1e-8,max_levels=6,min_coarse_n=2,
-    return_info=True,max_outer=2000,krylov_restart=24,npf_newton_controls=None,
-    npf_preconditioner='diagonal',npf_kcycle_controls=None,npf_krylov_method=None,**unsupported):
+def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,max_cycles=2000,rel_tol=None,
+    abs_tol_min=1e-12,final_budget_relative_tol=1e-8,max_levels=None,min_coarse_n=None,
+    return_info=True,max_outer=None,krylov_restart=None,npf_newton_controls=None,
+    npf_preconditioner=None,npf_kcycle_controls=None,npf_krylov_method=None,**unsupported):
     started = perf_counter()
+    # Omission retains historical backend defaults. Explicit selections must
+    # either reach their backend or be rejected, even when equal to a former
+    # signature default (e.g. max_levels=6 with a two-level NPF hierarchy).
+    legacy_overrides = any(value is not None for value in (rel_tol, max_levels, min_coarse_n))
+    iteration_overrides = max_outer is not None or krylov_restart is not None
+    preconditioner_selected = npf_preconditioner is not None
+    rel_tol = 1e-12 if rel_tol is None else rel_tol
+    max_levels = 6 if max_levels is None else max_levels
+    min_coarse_n = 2 if min_coarse_n is None else min_coarse_n
+    max_outer = 2000 if max_outer is None else max_outer
+    krylov_restart = 24 if krylov_restart is None else krylov_restart
+    npf_preconditioner = 'diagonal' if npf_preconditioner is None else npf_preconditioner
     if unsupported:raise ValueError(f'Unsupported mf6_6_6_2_npf controls: {sorted(unsupported)}')
     if npf_preconditioner not in ('diagonal','kcycle'):raise ValueError('npf_preconditioner must be diagonal or kcycle')
     if npf_preconditioner=='diagonal' and npf_kcycle_controls is not None:
@@ -71,13 +83,13 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
     reference_seconds = perf_counter()-started
     reference.check_components()
     if not unconfined and np.any(case.cell_types):raise ValueError('Convertible cell types require unconfined=True')
-    if unconfined or layered or npf_preconditioner=='kcycle' or npf_krylov_method is not None or npf_newton_controls is not None:
+    if unconfined or layered or preconditioner_selected or npf_krylov_method is not None or npf_newton_controls is not None:
         if model.implementation!='fast' or model.solver!='kcycle':
             raise ValueError('Matched Newton requires implementation=fast and solver=kcycle; legacy backends remain separate')
         if unconfined and not np.any(case.cell_types[case.active!=0]):raise ValueError('unconfined=True requires convertible active cells')
         if unconfined and (rel_tol!=1e-12 or abs_tol_min!=1e-12 or final_budget_relative_tol!=1e-8 or max_levels!=6 or min_coarse_n!=2):
             raise ValueError('Matched unconfined final acceptance is fixed by V1; npf_newton_controls controls iteration only. Confined tolerance/MG overrides are unsupported')
-        if rel_tol!=1e-12 or max_levels!=6 or min_coarse_n!=2:
+        if legacy_overrides:
             raise ValueError('NPF Newton/GMRES uses npf_newton_controls.inner_forcing and npf_kcycle_controls.levels/min_coarse_n; rel_tol/max_levels/min_coarse_n overrides are unsupported')
         from DARCY_WARP_PACKAGE.solvers.npf662_newton import solve_newton_device,NPF662NewtonControls
         controls=NPF662NewtonControls() if npf_newton_controls is None else npf_newton_controls
@@ -100,7 +112,7 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
         info.update(reference_reused=reference_reused, reference_setup_seconds=reference_seconds,
                     public_total_seconds=perf_counter()-started)
         return (head,info) if return_info else head
-    if max_outer != 2000 or krylov_restart != 24:
+    if iteration_overrides:
         raise ValueError('max_outer/krylov_restart require npf_krylov_method=gmres or fgmres; uniform confined default uses the historical direct K-cycle backend')
     head,info=model._session.solve(solver=model.solver,device=model.device,implementation=model.implementation,
         unconfined=False,max_cycles=max_cycles,rel_tol=rel_tol,abs_tol_min=abs_tol_min,
