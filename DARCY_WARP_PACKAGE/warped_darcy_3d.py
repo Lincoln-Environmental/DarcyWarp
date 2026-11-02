@@ -10,6 +10,7 @@ separate from the 2D solver so the 2D stencil and API remain untouched.
 from __future__ import annotations
 
 from typing import Any
+from time import perf_counter
 
 import numpy as np
 
@@ -387,6 +388,19 @@ class WarpDarcySolver3D:
         self._active = grid.active
 
     def solve(self, **kwargs: Any) -> tuple[np.ndarray, dict[str, Any]]:
+        """Solve and time the public call, including independent acceptance.
+
+        Backend/event/synchronisation subintervals can overlap; this wall time
+        is measured directly and is never assembled by adding those fields.
+        """
+        started = perf_counter()
+        result = self._solve(**kwargs)
+        if isinstance(result, tuple):
+            result[1]['public_total_seconds'] = perf_counter()-started
+            result[1]['public_timing_scope'] = 'dispatch, setup, iterations, readback and independent final acceptance'
+        return result
+
+    def _solve(self, **kwargs: Any) -> tuple[np.ndarray, dict[str, Any]]:
         """
         Solve the assembled 3D system.
 
@@ -409,6 +423,8 @@ class WarpDarcySolver3D:
         if self._session is not None:
             solve_kwargs = dict(kwargs)
             if bool(solve_kwargs.get("unconfined", False)):
+                if self._kx_field is None:
+                    raise ValueError("independent face conductances support confined flow; use build_from_K_fields for physical unconfined rebuilding")
                 # Unconfined solves rebuild the operator from the stored K
                 # fields each Picard iteration; supply them by default.
                 for name, field in (

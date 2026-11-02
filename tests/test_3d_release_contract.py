@@ -263,3 +263,23 @@ def test_independent_terrain_gate_honours_invalid_physical_aggregates():
     budget = dict(head_residual_rms=0., cell_residual_rms=0., relative_cell_imbalance=0.,
                   throughput=1., physical_metrics_valid=False)
     assert not accepted(head=np.zeros((1, 1, 1)), budget=budget, controls=CPUControls())
+
+
+def test_public_timing_includes_independent_acceptance():
+    with model_from(data=inputs(), formulation='mf6_6_6_2_npf') as model:
+        unused, info = model.solve(npf_krylov_method='gmres')
+    assert info['public_total_seconds'] >= info['seconds'] >= 0.
+    assert info['setup_seconds'] >= 0. and info['reference_setup_seconds'] >= 0.
+    assert 'independent final acceptance' in info['public_timing_scope']
+
+
+def test_independent_face_model_rejects_implicit_physical_mode_change():
+    data = inputs()
+    with model_from(data=data) as model:
+        faces = tuple(value.copy() for value in model._session.faces)
+        fields = {name: data[name] for name in ('active', 'bc_mask', 'bc_values', 'rhs', 'initial_head')}
+        model.build_from_face_conductance(**dict(zip(('tx_p','tx_m','ty_p','ty_m','tz_p','tz_m'), faces)), **fields)
+        with pytest.raises(ValueError, match='build_from_K_fields'):
+            model.solve(unconfined=True, kx_field=data['kx_field'], ky_field=data['ky_field'], kz_field=data['kz_field'])
+        unused, info = model.solve()
+        assert info['converged']

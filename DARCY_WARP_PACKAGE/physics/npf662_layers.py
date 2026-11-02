@@ -1,5 +1,6 @@
 """Conventional DIS geometry and production faces; no terrain metrics/oracle."""
 import numpy as np
+from DARCY_WARP_PACKAGE.physics.inputs_3d import binary_mask
 
 
 def layered_geometry(*, z_interfaces, shape, dx, dy):
@@ -29,7 +30,8 @@ def build_layered_dis_faces(*, z_interfaces, kx, ky, kz, active, dx, dy):
     intermediate K*T products cannot overflow a representable FP64 face.
     These production arrays are independent of the SciPy reference assembly.
     """
-    shape = np.asarray(active).shape
+    active = binary_mask(value=active, name='active')
+    shape = active.shape
     geometry = layered_geometry(z_interfaces=z_interfaces, shape=shape, dx=dx, dy=dy)
     thickness = geometry['thickness'].astype(np.longdouble)
     faces = [np.zeros(shape, dtype=float) for unused in range(6)]

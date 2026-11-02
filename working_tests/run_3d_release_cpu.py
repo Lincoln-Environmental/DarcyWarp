@@ -30,9 +30,10 @@ if __name__ == "__main__":
     timeout_seconds = 180
     groups = dict(
         contract=['tests/test_3d_release_contract.py', 'tests/test_3d_session.py',
-                  'tests/test_npf662_acceptance.py', 'tests/test_terrain_runtime.py'],
-        npf=['tests/test_npf662_confined.py', 'tests/test_npf662_layers.py',
-             'tests/test_npf662_newton.py', 'tests/test_npf662_kcycle.py'],
+                  'tests/test_npf662_acceptance.py', 'tests/test_terrain_runtime.py',
+                  'tests/test_3d_operator_analytical.py', 'tests/test_fast_3d_kcycle.py'],
+        npf=['tests/test_npf662_reference_controller.py', 'tests/test_npf662_acceptance.py',
+             'tests/test_npf662_kcycle.py', 'tests/test_3d_release_contract.py'],
         terrain=['tests/test_3d_terrain_reference.py', 'tests/test_terrain_contact_stencils.py',
                  'tests/test_terrain_component_validation.py', 'tests/test_terrain_newton_accounting.py'],
         **{'2d': ['tests/test_2d_transient.py', 'tests/test_nonlinear_operator_2d.py',

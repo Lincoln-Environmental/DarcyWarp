@@ -40,7 +40,7 @@ if __name__ == "__main__":
     polished_path = Path('validation_artifacts/npf662_layered_v1/final_assessment/geology_failure/verification_polished.npz')
     output = Path('release_evidence/geology')
     cpu_outer_limit = 200
-    devices = ('cpu', 'cuda:0')
+    devices = ('cpu',)
     device_options = dict(max_outer=2000, max_cycles=2000, krylov_restart=24)
     result = reproduce(input_path=input_path, native_path=native_path, polished_path=polished_path,
         output=output, cpu_outer_limit=cpu_outer_limit, devices=devices, device_options=device_options)
