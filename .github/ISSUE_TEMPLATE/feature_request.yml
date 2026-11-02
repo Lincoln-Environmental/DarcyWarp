@@ -1,0 +1,23 @@
+name: Feature request
+description: Suggest a capability, usability or documentation improvement.
+title: "[Feature] "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What modelling or workflow problem would this solve?
+      description: Describe a concrete use case and any current workaround.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behaviour
+      description: Describe the input, action and useful output. A small example is helpful.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Relevant context
+      description: Include the model scale, formulation, device or numerical evidence if it affects the proposal.

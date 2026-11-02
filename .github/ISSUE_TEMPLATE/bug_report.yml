@@ -1,0 +1,36 @@
+name: Bug report
+description: Report a reproducible software or numerical problem.
+title: "[Bug] "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe the observed behaviour and what you expected.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Smallest reproducible case
+      description: Include a short script or public input files, run command, units, initial and boundary conditions, and forcing.
+      render: python
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Version and execution environment
+      description: Include the commit or version, OS, Python and Warp versions, CPU/GPU device, formulation, backend and precision.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Diagnostics or comparison
+      description: Include the traceback or solver convergence information. For numerical issues, include head errors, water balance and the analytical or model reference if available.
+  - type: textarea
+    id: scope
+    attributes:
+      label: When does it occur?
+      description: Note whether it depends on grid size, device, precision, backend or a recent change.
