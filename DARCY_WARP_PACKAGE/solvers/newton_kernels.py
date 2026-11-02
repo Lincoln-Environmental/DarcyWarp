@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Small allocation-free vector kernels for 2D Newton--FGMRES."""
 
 from __future__ import annotations

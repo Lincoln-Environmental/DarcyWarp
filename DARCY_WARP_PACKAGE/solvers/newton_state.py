@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Cached fine-grid operator state for the production semismooth-Newton backend.
 
 ``NewtonOperatorWorkspace2D`` is the Newton analogue of the FAS

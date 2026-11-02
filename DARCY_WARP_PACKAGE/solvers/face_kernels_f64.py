@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Fast steady-confined K-cycle implementation (production, FP64 only).
 
 This is the production adoption of the kernel-level improvements validated in

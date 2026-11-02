@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Fast face-array operator for the 2D transient unconfined device fast path.
 
 Phase A of ``UNCONFINED_FAST_PLAN.md``: port the steady-confined fast-path

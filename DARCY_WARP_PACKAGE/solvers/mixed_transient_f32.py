@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Production FP32 inner correction K-cycle for the 2D transient unconfined
 device fast path (originating in Phase C of ``UNCONFINED_FAST_PLAN.md``,
 Option 1: FP32 inner linear solve per Picard outer iteration).

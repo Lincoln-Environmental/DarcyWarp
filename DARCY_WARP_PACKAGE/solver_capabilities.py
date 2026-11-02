@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Import-light 2D solver capability metadata shared by factory and registry."""
 
 from __future__ import annotations

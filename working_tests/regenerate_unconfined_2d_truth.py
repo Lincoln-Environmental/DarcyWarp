@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """
 Build compressed 2D-unconfined truth fixtures from an already-completed
 MF6-vs-Warp grid benchmark.

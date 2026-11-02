@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Authoritative 2D unconfined nonlinear operator.
 
 ``NonlinearOperator2D`` evaluates the true nonlinear groundwater equation

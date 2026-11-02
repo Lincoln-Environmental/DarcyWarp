@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Typed, zero-copy descriptions of a structured 2D Darcy operator."""
 
 from __future__ import annotations

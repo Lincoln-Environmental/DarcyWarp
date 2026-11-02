@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """2D solver selection, aliases, and formulation validation."""
 
 from __future__ import annotations

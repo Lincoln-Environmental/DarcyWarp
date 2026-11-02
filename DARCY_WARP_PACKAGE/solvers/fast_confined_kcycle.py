@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Fast steady-confined K-cycle backend (production, FP64 only).
 
 Opt-in via ``implementation="fast"`` on ``solve_multigrid_kcycle`` /

@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Physical rediscretization rules for the experimental 2D FAS hierarchy."""
 
 from __future__ import annotations

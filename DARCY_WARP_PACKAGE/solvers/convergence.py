@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Stable convergence-controller import points for 2D nonlinear backends."""
 
 from __future__ import annotations

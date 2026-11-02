@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Stable, dependency-explicit interfaces for 2D solver backends.
 
 The model owns field arrays, Warp allocations, the multigrid hierarchy, and

@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Authoritative 2D unconfined nonlinear operator kernels (Warp / device).
 
 These kernels evaluate the *true* nonlinear groundwater equation directly from

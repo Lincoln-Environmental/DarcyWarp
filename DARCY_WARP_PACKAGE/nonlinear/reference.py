@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Host NumPy / SciPy reference for the 2D nonlinear operator.
 
 This module is *test infrastructure*: it provides independent ground-truth

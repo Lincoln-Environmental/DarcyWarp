@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Read-only borrowing context for the 2D nonlinear operator.
 
 ``NonlinearOperatorContext2D`` exposes borrowed, non-owning access to every

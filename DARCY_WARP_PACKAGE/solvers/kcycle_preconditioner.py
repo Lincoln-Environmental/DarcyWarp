@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Fixed-work use of the shared geometric K-cycle as a Newton preconditioner."""
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """
 Self-contained, compressed truth fixtures for the 2D unconfined Warp-vs-MF6
 benchmark.

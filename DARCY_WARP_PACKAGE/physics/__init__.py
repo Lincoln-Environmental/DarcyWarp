@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Shared 2D groundwater operator, storage, and budget definitions."""
 
 from .operator_data import (

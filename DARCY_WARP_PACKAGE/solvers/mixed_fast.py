@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Production mixed-precision fast K-cycle correction driver.
 
 This is the production mixed-precision path used by the confined steady

@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Production fast correction kernels for the mixed-precision solver.
 
 Originated in Phase 3 of ``MIXED_PRECISION_CAMPAIGN.md`` and now support the

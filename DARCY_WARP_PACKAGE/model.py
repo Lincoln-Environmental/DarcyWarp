@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Public 2D Darcy model facade.
 
 The compatibility implementation remains in :mod:`warped_darcy` during the

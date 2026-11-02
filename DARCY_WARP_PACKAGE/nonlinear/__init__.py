@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Authoritative 2D unconfined nonlinear operator (stage 1).
 
 Neutral, backend-independent infrastructure that evaluates the true nonlinear

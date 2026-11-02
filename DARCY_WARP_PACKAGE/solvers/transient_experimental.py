@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Alternate multi-period transient driver for nonlinear backends.
 
 Drives backends that expose the single-timestep transient contract

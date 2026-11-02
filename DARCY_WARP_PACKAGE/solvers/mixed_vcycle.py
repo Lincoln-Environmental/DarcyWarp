@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """EXPERIMENTAL fixed V-cycle correction for mixed-precision defect correction.
 
 Status: **experimental, opt-in, non-production** (campaign Phase 2; see

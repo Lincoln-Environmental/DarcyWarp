@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Typed borrowing context passed from the model to 2D solver backends."""
 
 from __future__ import annotations

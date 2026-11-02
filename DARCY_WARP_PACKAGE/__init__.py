@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """
 DarcyWarp — GPU-accelerated Darcy flow solvers and benchmarks.
 

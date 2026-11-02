@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Thin production harness for the 2D transient unconfined MF6 replay.
 
 Case setup (grid, periods, storage, recharge, warm start, T field) is owned by

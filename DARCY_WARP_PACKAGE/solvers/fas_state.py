@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Persistent nonlinear level state for the experimental 2D FAS backend."""
 
 from __future__ import annotations
