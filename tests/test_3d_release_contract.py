@@ -370,3 +370,16 @@ def test_underflowed_physical_connection_rebuild_preserves_original(formulation)
             model.build_from_K_fields(**bad)
         assert model._session is original
         np.testing.assert_array_equal(actual=model._kx_field, desired=data['kx_field'])
+
+
+def test_layered_inactive_conductivity_markers_remain_supported():
+    data = inputs()
+    data['active'][0, 1, 2] = 0
+    for name in ('kx_field', 'ky_field', 'kz_field'):
+        data[name][0, 1, 2] = -99.
+    with model_from(data=data, formulation='mf6_6_6_2_npf', geometry='layered') as model:
+        unused, first = model.solve()
+        assert first['converged']
+        model.update_K_fields(kx_field=1.1*data['kx_field'], ky_field=data['ky_field'], kz_field=data['kz_field'])
+        unused, second = model.solve()
+        assert second['converged']

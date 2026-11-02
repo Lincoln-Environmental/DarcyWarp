@@ -337,7 +337,10 @@ class WarpDarcySolver3D:
             active=case.active,dx=self.dx,dy=self.dy)
         session=ThreeDOperatorSession(faces=faces,active=case.active,bc_mask=case.fixed,bc_values=case.values,
             rhs=case.source,initial_head=case.initial,dx=self.dx,dy=self.dy,dz=self.dz,z_interfaces=case.z_interfaces)
-        fields = self._validated_K_fields(kx_field=case.kx, ky_field=case.ky, kz_field=case.kz)
+        # The layered contract already enforces positive active K; finite
+        # inactive conductivity markers remain compatible with that schema.
+        fields = self._validated_K_fields(kx_field=case.kx, ky_field=case.ky, kz_field=case.kz,
+                                           require_nonnegative=False)
         previous = self._session
         self._session=session
         self.geometry='structured_dis_layered'
@@ -349,11 +352,13 @@ class WarpDarcySolver3D:
             previous.close()
         return self
 
-    def _validated_K_fields(self, *, kx_field, ky_field, kz_field):
+    def _validated_K_fields(self, *, kx_field, ky_field, kz_field, require_nonnegative=True):
         fields = tuple(floating_field(value=value, name=name, dtype=NP_FLOAT) for name, value in
                        (("kx", kx_field), ("ky", ky_field), ("kz", kz_field)))
-        if any(value.shape != self.shape or np.any(value < 0.) for value in fields):
-            raise ValueError("conductivity fields must be nonnegative and match the model shape")
+        if any(value.shape != self.shape for value in fields):
+            raise ValueError("conductivity fields must match the model shape")
+        if require_nonnegative and any(np.any(value < 0.) for value in fields):
+            raise ValueError("conductivity fields must be nonnegative")
         for value in fields:
             value.setflags(write=False)
         return fields
@@ -366,7 +371,8 @@ class WarpDarcySolver3D:
         """
         if self._session is None or self._kx_field is None or self.geometry == "terrain":
             raise ValueError("update_K_fields requires build_from_K_fields or build_from_layers")
-        fields = self._validated_K_fields(kx_field=kx_field, ky_field=ky_field, kz_field=kz_field)
+        fields = self._validated_K_fields(kx_field=kx_field, ky_field=ky_field, kz_field=kz_field,
+                                           require_nonnegative=self.geometry != 'structured_dis_layered')
         if self.formulation == 'mf6_6_6_2_npf' and any(np.any(value[self._active != 0] <= 0.) for value in fields):
             raise ValueError("NPF requires positive physical conductivity in all active cells")
         if self.geometry == "structured_dis_layered":
