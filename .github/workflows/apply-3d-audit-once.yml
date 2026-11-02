@@ -1,0 +1,45 @@
+name: Apply verified NPF snapshot repair once
+
+on:
+  push:
+    branches: [fix/3d-audit-20261102]
+    paths:
+      - '.audit-transfer/npf-snapshot.b64'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.repository == 'Lincoln-Environmental/DarcyWarp' && github.ref == 'refs/heads/fix/3d-audit-20261102'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Apply the checksum-verified regression repair
+        run: |
+          python - <<'PY'
+          import base64
+          import gzip
+          import hashlib
+          import subprocess
+          from pathlib import Path
+
+          parent = subprocess.check_output(['git', 'rev-parse', 'HEAD^'], text=True).strip()
+          if parent != '13531dc527dddc65798dc2e53b0b131fbda2db05':
+              raise RuntimeError('Audit base changed; refusing to apply.')
+          encoded = Path('.audit-transfer/npf-snapshot.b64').read_text()
+          patch = gzip.decompress(base64.b64decode(encoded, validate=True))
+          if len(patch) != 6236 or hashlib.sha256(patch).hexdigest() != 'f08e53a3633ee87546720ade5176cec71d3150b974acec3486ec447bd74183f8':
+              raise RuntimeError('Patch checksum mismatch.')
+          subprocess.run(['git', 'apply', '--check', '-'], input=patch, check=True)
+          subprocess.run(['git', 'apply', '--index', '-'], input=patch, check=True)
+          subprocess.run(['git', 'rm', '--', '.audit-transfer/npf-snapshot.b64'], check=True)
+          subprocess.run(['git', 'diff', '--cached', '--check'], check=True)
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Preserve returned NPF Newton head snapshots across workspace reuse'
+          git push origin HEAD:refs/heads/fix/3d-audit-20261102
