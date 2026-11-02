@@ -59,10 +59,10 @@ Build docs with `make`:
 make docs
 ```
 
-Or use the Linux helper script (cleans first, then builds HTML docs):
+Or build directly with Sphinx (install Sphinx separately if needed):
 
 ```bash
-bash scripts/generate_docs.sh
+python -m sphinx -b html source build/html
 ```
 
 Generated HTML docs are written to `build/html/index.html`.
@@ -89,15 +89,32 @@ solution, while some controls reach different near-roots of the existing
 floor law. See the [discrete Jacobian derivation](docs/TERRAIN_NEWTON_DERIVATION_2026-10-16.md)
 and [validation and limitations](docs/TERRAIN_NEWTON_VALIDATION_2026-10-16.md).
 
-## 3D river-loss case study
+## Synthetic 3D verification example
 
-`DARCY_WARP_PACKAGE.case_studies.river_loss_cross_section` is an example
-builder for a saturated, steady x-z structural-sensitivity experiment.  It
-assembles reusable `Model3DInputs` with shape `(nz, 1, nx)` and solves through
-the generic seven-point 3D backend; river geometry and outlet policies remain
-local to the case study.  The compatibility runner is
-`working_tests/run_river_loss_cross_section.py` (or
-`python -m DARCY_WARP_PACKAGE.river_loss_cross_section`).
+```bash
+DARCY_FLOAT=float64 python -m examples.layered_confined_3d
+```
+
+This runnable CPU example solves vertical confined flow through a 9 x 4 x 5
+Cartesian grid with heterogeneous conductivity and checks hydraulic heads and
+face fluxes against an independently calculated series-resistance solution.
+Fixed heads are at the upper/lower **cell centres**; lateral faces are no-flow.
+Units are metres and days. Results and input arrays are written to
+`outputs/layered_confined_3d/`. This is synthetic verification, not a field model.
+
+See [the current 3D audit](docs/3D_AUDIT_2026-11-02.md) for fixes, test evidence,
+formulation boundaries and remaining work. The conventional layered NPF path
+is steady-only; legacy Cartesian/terrain transient storage must not be inferred
+to be available in the pinned NPF formulation.
+
+The historical river-loss runner references `DARCY_WARP_PACKAGE.case_studies`
+modules that are absent from this checkout. It is **not a runnable packaged
+example** until those original case builders are restored. Its original
+configuration/results have not been reconstructed or substituted in this audit.
+
+DarcyWarp was developed by Patrick Durney and Jaco Fourie at Lincoln Agritech
+Ltd, which owns the software. Project licensing is `AGPL-3.0-or-later`;
+upstream files retain their separate notices.
 
 What this does
 

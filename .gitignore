@@ -41,3 +41,6 @@ Thumbs.db
 #   python working_tests/regenerate_unconfined_2d_truth.py
 # The test auto-discovers whatever fixtures are present, so a fresh checkout
 # runs the small committed grids and skips these until regenerated.
+
+# Reproducible example output (regenerate, do not commit).
+outputs/

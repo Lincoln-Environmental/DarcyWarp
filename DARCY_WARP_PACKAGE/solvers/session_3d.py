@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Reusable operator/session state for structured 3D solves.
 
 The session owns validated host-side operator data and stable update/version
@@ -13,6 +13,7 @@ from typing import Any
 import numpy as np
 
 from DARCY_WARP_PACKAGE.physics.faces_3d import validate_reciprocal_faces
+from DARCY_WARP_PACKAGE.physics.inputs_3d import binary_mask, floating_field
 
 
 class ThreeDOperatorSession:
@@ -44,12 +45,14 @@ class ThreeDOperatorSession:
         values = tuple(np.asarray(face) for face in faces)
         if len(values) != 6:
             raise ValueError("faces must contain exactly six conductance arrays.")
-        self.faces = tuple(face.copy() for face in values)
-        self.active = np.asarray(active, dtype=np.int32).copy()
-        self.bc_mask = np.asarray(bc_mask, dtype=np.int32).copy()
-        self.bc_values = np.asarray(bc_values).copy()
-        self.rhs = np.asarray(rhs).copy()
-        self.initial_head = None if initial_head is None else np.asarray(initial_head).copy()
+        shape = np.asarray(active).shape
+        self.faces = tuple(floating_field(face, name="faces", shape=shape) for face in values)
+        self.active = binary_mask(active, name="active", shape=shape)
+        self.bc_mask = binary_mask(bc_mask, name="bc_mask", shape=shape)
+        self.bc_values = floating_field(bc_values, name="bc_values", shape=shape)
+        self.rhs = floating_field(rhs, name="rhs", shape=shape)
+        self.initial_head = None if initial_head is None else floating_field(
+            initial_head, name="initial_head", shape=shape)
         self._fast_workspace_holder: dict[str, Any] = {}
         self._npf662_workspace_holder: dict[str, Any] = {}
         self._validate()
@@ -97,7 +100,7 @@ class ThreeDOperatorSession:
 
     def update_rhs(self, rhs: np.ndarray) -> None:
         self._ensure_open()
-        value = np.asarray(rhs)
+        value = floating_field(rhs, name="rhs", shape=self.shape, dtype=self.rhs.dtype)
         if value.shape != self.shape:
             raise ValueError(f"rhs shape {value.shape} does not match {self.shape}.")
         if not np.all(np.isfinite(value)):
@@ -110,7 +113,7 @@ class ThreeDOperatorSession:
         if initial_head is None:
             self.initial_head = None
         else:
-            value = np.asarray(initial_head)
+            value = floating_field(initial_head, name="initial_head", shape=self.shape)
             if value.shape != self.shape:
                 raise ValueError(f"initial_head shape {value.shape} does not match {self.shape}.")
             if not np.all(np.isfinite(value)):
@@ -122,7 +125,7 @@ class ThreeDOperatorSession:
         """Update Dirichlet values without changing the boundary topology."""
 
         self._ensure_open()
-        value = np.asarray(bc_values)
+        value = floating_field(bc_values, name="bc_values", shape=self.shape, dtype=self.bc_values.dtype)
         if value.shape != self.shape:
             raise ValueError(f"bc_values shape {value.shape} does not match {self.shape}.")
         if not np.all(np.isfinite(value)):
@@ -143,7 +146,11 @@ class ThreeDOperatorSession:
             raise ValueError("faces must contain finite values.")
         if any(np.any(value < 0.0) for value in values):
             raise ValueError("face conductances must be non-negative.")
-        values = validate_reciprocal_faces(faces=values, active=self.active, canonicalize=True)
+        converted = tuple(floating_field(value, name="faces", shape=self.shape, dtype=old.dtype)
+                          for value, old in zip(values, self.faces))
+        if any(np.any((raw > 0.0) & (stored == 0.0)) for raw, stored in zip(values, converted)):
+            raise ValueError("positive face conductances must remain representable in the stored dtype.")
+        values = validate_reciprocal_faces(faces=converted, active=self.active, canonicalize=True)
         topology_changed = any(not np.array_equal(old > 0.0, value > 0.0)
                                for old, value in zip(self.faces, values))
         for old, value in zip(self.faces, values):

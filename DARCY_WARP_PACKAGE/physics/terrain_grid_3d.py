@@ -57,6 +57,8 @@ class TerrainGrid3D:
 
     def __post_init__(self):
         if self.z_interfaces is not None:
+            if self.surface_elevation is not None or self.zeta_faces is not None:
+                raise ValueError("provide either z_interfaces or surface_elevation with zeta_faces; do not combine them")
             interfaces = np.array(self.z_interfaces, dtype=np.float64, copy=True)
             zeta = None if self.zeta_faces is None else np.array(self.zeta_faces, dtype=np.float64, copy=True)
             surface = None
@@ -70,8 +72,8 @@ class TerrainGrid3D:
             interfaces = surface[None] - zeta[:, None, None]
         else:
             raise ValueError("provide either z_interfaces (nz+1,ny,nx) or surface_elevation with zeta_faces")
-        if interfaces.ndim != 3 or interfaces.shape[0] < 2 or not np.all(np.isfinite(interfaces)):
-            raise ValueError("z_interfaces must be finite with shape (nz+1,ny,nx) and at least one layer")
+        if interfaces.ndim != 3 or interfaces.shape[0] < 2 or min(interfaces.shape[1:]) < 1 or not np.all(np.isfinite(interfaces)):
+            raise ValueError("z_interfaces must be finite and nonempty with shape (nz+1,ny,nx) and at least one layer")
         if np.any(np.diff(interfaces, axis=0) >= 0):
             raise ValueError("z_interfaces must decrease strictly on every column: crossing, touching or inverted geological surfaces and zero or negative layer thickness are unsupported")
         if not all(np.isfinite(v) and v > 0 for v in (self.dx, self.dy)):

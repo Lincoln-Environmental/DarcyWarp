@@ -23,17 +23,16 @@ structured `(nz, ny, nx)` conductivity, activity, boundary, source, and
 initial-head fields. It can build a `WarpDarcySolver3D` through the existing
 public API without adding case-specific concepts to the solver.
 
-`case_studies/river_loss_cross_section.py` is an example case-study builder. It assembles a
-river/channel and far-field outlet configuration into `Model3DInputs`, then
-uses `physics.budget_3d.boundary_interface_flux` for named boundary-flow
-diagnostics. The experiment runner is kept under `working_tests`:
+The standalone, synthetic 3D example is `examples/layered_confined_3d.py`:
 
 ```bash
-python working_tests/run_river_loss_cross_section.py --device cpu
+DARCY_FLOAT=float64 python -m examples.layered_confined_3d
 ```
 
-The historical `python -m DARCY_WARP_PACKAGE.river_loss_cross_section` command
-remains available as a compatibility entry point.
+It verifies a heterogeneous confined column stack against series resistance,
+including cell-centre boundary placement and water balance. The historical
+river-loss compatibility modules refer to missing `case_studies` sources and
+are not currently runnable from this checkout.
 
 3D execution notes
 -------------------
@@ -43,9 +42,11 @@ initial-head, and face-conductance updates. Classic K-cycle/Chebyshev remains
 the default. Thin-grid hierarchy construction is axis-aware: a length-one
 horizontal axis is never coarsened. The opt-in
 `WarpDarcySolver3D(..., implementation="fast")` backend is FP64,
-steady-confined, and uses six face arrays, block-partial reductions,
-device-side K-cycle alpha updates, and CUDA-graph replay when available.
-Unconfined and transient solves continue to use the classic implementation.
+available for steady/backward-Euler confined and quasi-3D unconfined flow.
+It uses six face arrays, block-partial reductions, device-side K-cycle alpha
+updates and CUDA-graph replay where available. The separate pinned
+`mf6_6_6_2_npf` formulation supports Cartesian or conventional layered steady
+problems only; it does not implement storage or the terrain contact law.
 
 Known state:
 

@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """
 Standalone 3D Darcy solver wrapper.
 
@@ -14,6 +14,7 @@ from typing import Any
 import numpy as np
 
 from DARCY_WARP_PACKAGE.config import NP_FLOAT
+from DARCY_WARP_PACKAGE.physics.inputs_3d import binary_mask, positive_grid_size
 from DARCY_WARP_PACKAGE.solvers_3d import (
     solve_chebyshev_7point_3d,
     solve_multigrid_kcycle_7point_3d,
@@ -53,8 +54,9 @@ class WarpDarcySolver3D:
         implementation: str = "classic",
         formulation: str = "legacy",
     ):
-        if nx <= 0 or ny <= 0 or nz <= 0:
-            raise ValueError("nx, ny, nz must be positive")
+        nx = positive_grid_size(nx, name="nx")
+        ny = positive_grid_size(ny, name="ny")
+        nz = positive_grid_size(nz, name="nz")
         if not np.isfinite(float(dx)) or float(dx) <= 0.0:
             raise ValueError("dx must be finite and > 0")
         self.nx = int(nx)
@@ -135,6 +137,8 @@ class WarpDarcySolver3D:
         """
         if self.formulation=='experimental_transformed_terrain':
             raise ValueError('experimental_transformed_terrain requires build_from_terrain')
+        active = binary_mask(active, name="active", shape=self.shape)
+        bc_mask = binary_mask(bc_mask, name="bc_mask", shape=self.shape)
         tx_p, tx_m, ty_p, ty_m, tz_p, tz_m = build_7point_face_conductance_from_k(
             kx_field=kx_field,
             ky_field=ky_field,
@@ -188,7 +192,6 @@ class WarpDarcySolver3D:
         shape = self.shape
         if self.formulation=='experimental_transformed_terrain':
             raise ValueError('experimental_transformed_terrain requires build_from_terrain')
-        self.geometry = "cartesian"
         for name, arr in (
             ("tx_p", tx_p),
             ("tx_m", tx_m),
@@ -209,17 +212,13 @@ class WarpDarcySolver3D:
         validated_faces = validate_reciprocal_faces(
             faces=(tx_p, tx_m, ty_p, ty_m, tz_p, tz_m), active=active, canonicalize=True)
         input_faces = tuple(np.asarray(value, dtype=NP_FLOAT) for value in validated_faces)
-        input_active = np.asarray(active, dtype=np.int32)
-        input_bc_mask = np.asarray(bc_mask, dtype=np.int32)
+        input_active = binary_mask(active, name="active", shape=shape)
+        input_bc_mask = binary_mask(bc_mask, name="bc_mask", shape=shape)
         input_bc_values = np.asarray(bc_values, dtype=NP_FLOAT)
         input_rhs = np.asarray(rhs, dtype=NP_FLOAT)
         input_initial = None if initial_head is None else np.asarray(initial_head, dtype=NP_FLOAT)
-        self._kx_field = None
-        self._ky_field = None
-        self._kz_field = None
-        if self._session is not None:
-            self._session.close()
-        self._session = ThreeDOperatorSession(
+        # Validate the replacement completely before releasing a usable model.
+        session = ThreeDOperatorSession(
             faces=input_faces,
             active=input_active,
             bc_mask=input_bc_mask,
@@ -230,6 +229,11 @@ class WarpDarcySolver3D:
             dy=self.dy,
             dz=self.dz,
         )
+        if self._session is not None:
+            self._session.close()
+        self._session = session
+        self.geometry = "cartesian"
+        self._kx_field = self._ky_field = self._kz_field = None
         # The session is the single owner of operator state.  Keep the
         # compatibility attributes as references, so classic, fast and the
         # unconfined fallback cannot observe divergent host arrays.
@@ -269,10 +273,11 @@ class WarpDarcySolver3D:
                              z_interfaces=z_interfaces,dx=self.dx,dy=self.dy,active_columns=active_columns)
         if grid.shape != self.shape:
             raise ValueError(f"terrain grid shape {grid.shape} expected {self.shape}")
+        session = TerrainOperatorSession3D(grid=grid,kx=kx_field,ky=ky_field,kz=kz_field,
+            bc_mask=bc_mask,bc_values=bc_values,rhs=rhs,initial_head=initial_head,contacts=contacts)
         if self._session is not None:
             self._session.close()
-        self._session = TerrainOperatorSession3D(grid=grid,kx=kx_field,ky=ky_field,kz=kz_field,
-            bc_mask=bc_mask,bc_values=bc_values,rhs=rhs,initial_head=initial_head,contacts=contacts)
+        self._session = session
         self.geometry = "terrain"
         self._rhs = self._session.rhs
         self._active = grid.active
@@ -375,6 +380,13 @@ class WarpDarcySolver3D:
                 ):
                     if name not in solve_kwargs and field is not None:
                         solve_kwargs[name] = field
+                missing = [name for name in ("kx_field", "ky_field", "kz_field")
+                           if solve_kwargs.get(name) is None]
+                if missing:
+                    raise ValueError(
+                        "Unconfined solves require cell-centred K fields: " + ", ".join(missing)
+                        + ". Rebuild from conductivity or supply these fields explicitly."
+                    )
             solve_kwargs.setdefault("return_info", True)
             result=self._session.solve(
                 solver=self.solver,
@@ -459,6 +471,9 @@ class WarpDarcySolver3D:
             raise ValueError("terrain face conductances include metric cross terms; rebuild physical K fields instead")
         self._session.update_face_conductance((tx_p, tx_m, ty_p, ty_m, tz_p, tz_m))
         self._tx_p, self._tx_m, self._ty_p, self._ty_m, self._tz_p, self._tz_m = self._session.faces
+        # Arbitrary new faces do not identify new cell-centred conductivity.
+        # Unconfined callers must rebuild from K or supply explicit K fields.
+        self._kx_field = self._ky_field = self._kz_field = None
 
     def close(self) -> None:
         """Release stored host arrays."""

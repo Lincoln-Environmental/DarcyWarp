@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Boundary flux diagnostics for structured 3D finite-volume fields."""
 
 from __future__ import annotations
@@ -24,15 +24,44 @@ def prepare_3d_budget_source(*, source, head_prev, extra_storage_diag):
     return result
 
 
-def is_3d_budget_conserved(*, budget, absolute_tolerance, relative_tolerance=1e-3):
-    """Dimensional RMS or throughput-normalized L1 cell conservation gate.
+def stable_rms(values: np.ndarray) -> float:
+    """Compute a representable RMS without squaring dimensional magnitudes."""
+    selected = np.asarray(values, dtype=np.float64)
+    if not np.all(np.isfinite(selected)):
+        return float("inf")
+    scale = float(np.max(np.abs(selected))) if selected.size else 0.0
+    if scale == 0.0:
+        return 0.0
+    return scale * float(np.sqrt(np.mean((selected / scale) ** 2)))
 
-    L1 errors prevent opposing cell errors from cancelling in a domain sum.
-    The absolute criterion uses the requested linear volumetric tolerance,
-    so a near-zero-throughput case is not judged solely by an undefined ratio.
+
+def is_3d_budget_conserved(*, budget, absolute_tolerance, relative_tolerance=1e-3):
+    """Finite dimensional RMS OR normalized L1, never overflow-based success.
+
+    Both diagnostics and available budget aggregates must remain finite even
+    when only one tolerance branch is needed. In particular, an overflowing
+    throughput cannot turn a finite residual into an accepted zero ratio.
     """
-    if not np.isfinite(relative_tolerance) or relative_tolerance < 0.0:
-        raise ValueError("final_budget_relative_tol must be nonnegative finite.")
+    for name, value in (("absolute_tolerance", absolute_tolerance),
+                        ("final_budget_relative_tol", relative_tolerance)):
+        if np.ndim(value) != 0 or not np.isfinite(value) or value < 0.0:
+            raise ValueError(f"{name} must be a finite nonnegative scalar.")
+    if not budget.get("finite_physical_budget", True):
+        return False
+    required = ("cell_residual_rms", "relative_cell_imbalance")
+    if any(name not in budget for name in required):
+        return False
+    nonnegative = required + ("cell_residual_max", "relative_imbalance", "throughput", "head_residual_rms")
+    scalars = nonnegative + ("source_total", "boundary_inflow", "boundary_outflow",
+                             "boundary_net", "storage_uptake", "domain_imbalance", "imbalance")
+    for name in scalars:
+        if name not in budget:
+            continue
+        value = budget[name]
+        if value is None or np.ndim(value) != 0 or not np.isfinite(value):
+            return False
+        if name in nonnegative and value < 0.0:
+            return False
     return bool(budget["cell_residual_rms"] <= absolute_tolerance
                 or budget["relative_cell_imbalance"] <= relative_tolerance)
 
@@ -116,10 +145,12 @@ def compute_3d_flow_budget(
     s = (
         np.zeros(shape, dtype=np.float64)
         if storage_diag is None
-        else np.maximum(np.asarray(storage_diag, dtype=np.float64), 0.0)
+        else np.asarray(storage_diag, dtype=np.float64)
     )
     if s.shape != shape:
         raise ValueError("storage_diag shape must match head.")
+    if np.any(~np.isfinite(s[act])) or np.any(s[act] < 0.0):
+        raise ValueError("storage_diag must be finite and nonnegative on active cells.")
     if head_prev is None:
         hp = np.zeros(shape, dtype=np.float64)
     else:
@@ -167,7 +198,7 @@ def compute_3d_flow_budget(
     )
     if n_free > 0:
         cell_residual_max = float(np.max(np.abs(residual[free])))
-        cell_residual_rms = float(np.sqrt(np.mean(residual[free] ** 2)))
+        cell_residual_rms = stable_rms(residual[free])
     else:
         cell_residual_max = 0.0
         cell_residual_rms = 0.0
@@ -184,6 +215,9 @@ def compute_3d_flow_budget(
         "relative_cell_imbalance": float(np.sum(np.abs(residual[free]))) / throughput,
         "throughput": throughput,
         "n_free_cells": float(n_free),
+        "finite_physical_budget": bool(np.all(np.isfinite(h[act]))
+            and np.all(np.isfinite(residual[free]))
+            and np.all(np.isfinite((diag_c + s)[free]))),
     }
     if return_field:
         result["cell_residual_field"] = residual
