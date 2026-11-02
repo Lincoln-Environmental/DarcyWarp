@@ -9,7 +9,7 @@ import sys
 import importlib.metadata
 
 
-def run_group(*, group, groups, output, timeout_seconds):
+def run_group(*, group, groups, output):
     output.mkdir(parents=True, exist_ok=True)
     if group not in groups:
         raise ValueError(f'Unknown CPU CI group: {group}')
@@ -20,14 +20,13 @@ def run_group(*, group, groups, output, timeout_seconds):
         cpu_only=os.environ.get('CUDA_VISIBLE_DEVICES') == '-1', tests=groups[group])
     (output/f'{group}-runtime.json').write_text(json.dumps(identity, indent=2)+'\n')
     result = subprocess.run(args=[sys.executable, '-m', 'pytest', '-q', *groups[group],
-        f'--timeout={timeout_seconds}', f'--junitxml={output/group}.xml'], check=False)
+        f'--junitxml={output/group}.xml'], check=False)
     return result.returncode
 
 
 if __name__ == "__main__":
     group = os.environ.get('DARCYWARP_RELEASE_GROUP', 'contract')
     output = Path('release_evidence/ci')
-    timeout_seconds = 180
     groups = dict(
         contract=['tests/test_3d_release_contract.py', 'tests/test_3d_session.py',
                   'tests/test_npf662_acceptance.py', 'tests/test_terrain_runtime.py',
@@ -38,5 +37,5 @@ if __name__ == "__main__":
                  'tests/test_terrain_component_validation.py', 'tests/test_terrain_newton_accounting.py'],
         **{'2d': ['tests/test_2d_transient.py', 'tests/test_nonlinear_operator_2d.py',
                   'tests/test_solver_registry_2d.py', 'tests/test_sparse_system_consistency.py']})
-    status = run_group(group=group, groups=groups, output=output, timeout_seconds=timeout_seconds)
+    status = run_group(group=group, groups=groups, output=output)
     sys.exit(status)

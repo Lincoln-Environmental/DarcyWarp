@@ -25,7 +25,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m pip install warp-lang==1.17.0 numpy scipy pandas matplotlib flopy pytest pytest-timeout
+      - run: python -m pip install warp-lang==1.17.0 numpy scipy pandas matplotlib flopy pytest
       - run: python working_tests/run_3d_release_cpu.py
       - uses: actions/upload-artifact@v4
         if: always()

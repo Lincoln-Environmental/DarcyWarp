@@ -60,6 +60,8 @@ modules for fast, NPF and terrain paths. Warp CPU is supported. CUDA paths
 exist, but the final CUDA release campaign is deferred because the user
 requested CPU-only work during device contention. Classic legacy precision
 follows `DARCY_FLOAT`; the fast and matched paths require FP64.
+CPU validation has no added wall-clock cutoffs. Solver iteration budgets and
+physical convergence tolerances remain explicit numerical controls.
 
 Legacy defaults retain classic K-cycle (`solver='kcycle'`); Chebyshev and
 `implementation='fast'` are explicit alternatives. Uniform confined NPF retains

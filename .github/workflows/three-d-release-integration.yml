@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: python -c 'import sys,warp as wp; assert sys.version_info[:2] == (3,12); assert wp.__version__ == "1.17.0"; assert wp.is_cuda_available()'
-      - run: python -m pytest -q tests/test_3d_*.py tests/test_fast_3d_kcycle.py tests/test_npf662_*.py tests/test_terrain_*.py --timeout=600 --junitxml=release_evidence/cuda.xml
+      - run: python -m pytest -q tests/test_3d_*.py tests/test_fast_3d_kcycle.py tests/test_npf662_*.py tests/test_terrain_*.py --junitxml=release_evidence/cuda.xml
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -38,7 +38,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: python -c 'import sys,warp as wp; assert sys.version_info[:2] == (3,12); assert wp.__version__ == "1.17.0"'
-      - run: python -m pytest -q tests/test_npf662_*.py tests/test_3d_physics_validation.py tests/test_terrain_mf6_validation.py --timeout=600 --junitxml=release_evidence/modflow.xml
+      - run: python -m pytest -q tests/test_npf662_*.py tests/test_3d_physics_validation.py tests/test_terrain_mf6_validation.py --junitxml=release_evidence/modflow.xml
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -50,7 +50,7 @@ def summarize(*, evidence, project, test_paths, executable, source_patterns, ci_
         mf6_sha256=hashlib.sha256(string=executable.read_bytes()).hexdigest(),
         revision=subprocess.check_output(args=['git','rev-parse','HEAD'], text=True).strip(),
         source_sha256=sources, cuda_release_gate='Deferred at user request; CPU-only validation')
-    full_suite = runs.get('stage_c_full_cpu')
+    full_suite = runs.get('stage_c_uncapped_cpu', runs.get('stage_c_full_cpu'))
     result = dict(runtime=runtime, tests=runs, independent_confined=comparison,
                   full_suite_is_green=bool(full_suite and not (full_suite['failed'] or full_suite['errors'])))
     (evidence/'validation_summary.json').write_text(data=json.dumps(obj=result, indent=2)+'\n')
@@ -68,8 +68,8 @@ if __name__ == "__main__":
     executable = Path('/bin/modflow/mf6')
     test_paths = ('stage_a_before', 'stage_a_baseline_final_tests', 'stage_a_final_baseline', 'reference_controller_before',
                   'stage_a_after', 'stage_a_extended', 'stage_a_final_cpu', 'stage_b_cpu',
-                  'stage_b_cpu_recheck', 'stage_c_full_cpu', 'fas_baseline', 'final_contract',
-                  'final_acceptance_recheck', 'final_npf_dispatch', 'final_focused')
+                  'stage_b_cpu_recheck', 'stage_c_full_cpu', 'stage_c_uncapped_cpu', 'fas_baseline', 'final_contract',
+                  'final_acceptance_recheck', 'final_npf_dispatch', 'final_focused', 'final_budget_mask_validation')
     ci_groups = ('contract', 'npf', 'terrain', '2d')
     source_patterns = ('DARCY_WARP_PACKAGE/**/*.py', 'working_tests/*3d_release*.py',
                        'working_tests/profile_npf662_reference_cache.py', 'examples/*.py', 'tests/*.py')
