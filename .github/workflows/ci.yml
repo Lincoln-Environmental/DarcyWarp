@@ -21,7 +21,7 @@ jobs:
           python -c "import sys; sys.modules['warp'] = None; import DARCY_WARP_PACKAGE; import DARCY_WARP_PACKAGE.factory; assert callable(DARCY_WARP_PACKAGE.create_solver)"
 
       - name: Install dependencies
-        run: python -m pip install numpy scipy pytest warp-lang==1.10.0
+        run: python -m pip install numpy scipy pandas pytest warp-lang==1.10.0
 
       - name: Byte-compile package (syntax check)
         run: python -m compileall -q DARCY_WARP_PACKAGE tests working_tests

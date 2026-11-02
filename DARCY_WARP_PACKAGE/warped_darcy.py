@@ -88,7 +88,7 @@ try:
         print(f"❌ cuInit failed (res={res}).")
 
 except OSError as e:
-    print(f"❌ Could not load CUDA driver library ({lib_path}): {e}, WARP must have CUDA!!!")
+    print(f"CUDA driver unavailable ({lib_path}): {e}. CPU solvers remain available with device='cpu'.")
 
 print(f"cuda_device_found = {cuda_device_found}")
 

@@ -1,56 +1,63 @@
-Documentation Build
-===================
+Build the documentation
+=======================
 
-Sphinx docs in this repository are built from the ``source/`` directory using
-the root ``Makefile``.
-
-Make targets
-------------
-
-Common targets:
-
-* ``make help``: list Sphinx make-mode targets
-* ``make docs``: build HTML documentation (alias for ``make html``)
-* ``make docs-clean``: remove generated build output (alias for ``make clean``)
-
-Linux helper script
--------------------
-
-For a reproducible Linux workflow, use:
+The documentation uses Sphinx and the sources in ``source/``. Sphinx is
+included in ``environment.yml``. A documentation-only environment can instead
+install it with:
 
 .. code-block:: bash
 
-   bash scripts/generate_docs.sh
+   python -m pip install sphinx
 
-What the script does:
+Build HTML
+----------
 
-* verifies ``make`` and ``python3`` are installed
-* verifies Sphinx is importable in the current Python environment
-* runs ``make docs-clean`` (unless ``--no-clean`` is passed)
-* runs the selected target (default: ``docs``)
-
-Examples:
+From the repository root:
 
 .. code-block:: bash
 
-   bash scripts/generate_docs.sh
-   bash scripts/generate_docs.sh --no-clean
-   bash scripts/generate_docs.sh latexpdf
+   python -m sphinx -b html source build/html
 
-Output location
----------------
+Open ``build/html/index.html`` in a browser. This direct command works without
+Make and uses the active Python environment.
 
-HTML output is written to:
+The root Makefile provides equivalent convenience targets:
 
-.. code-block:: text
+.. code-block:: bash
 
-   build/html/index.html
+   make docs
+   make docs-clean docs
+
+``make docs`` aliases the HTML build, and ``make docs-clean`` removes generated
+Sphinx output. Use ``make help`` to list other targets, or
+``make docs PYTHON=python`` to choose the Python executable.
+
+Check a documentation change
+----------------------------
+
+Build with warnings treated as errors:
+
+.. code-block:: bash
+
+   python -m sphinx -b html -n -W --keep-going source build/html
+
+Review the rendered page as well as the build log, especially tables, code
+blocks, images and navigation. Sphinx checks internal references during the
+build; external URLs need a separate check when they change.
+
+Generated files in ``build/`` are local outputs. Commit the documentation
+sources and intentional source assets, rather than a generated HTML tree.
 
 Troubleshooting
 ---------------
 
-If you see ``Sphinx is not installed``, update the conda environment:
+If Python cannot import Sphinx, install it into the environment used for the
+build. For the project conda environment:
 
 .. code-block:: bash
 
+   conda activate darcywarp
    conda env update -f environment.yml
+
+If a Make invocation selects the wrong Python interpreter, use the direct
+``python -m sphinx`` command above.
