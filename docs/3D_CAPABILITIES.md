@@ -108,7 +108,8 @@ CUDA_VISIBLE_DEVICES=-1 DARCY_FLOAT=float64 PYTHONPATH=. python examples/verify_
 This runs an actual 5 × 3 × 4 layered public NPF model. A separate series
 resistance calculation supplies exact heads and vertical flux. It asserts
 physical convergence and saves inputs, numerical heads/fluxes and diagnostics
-under `release_evidence/example/`. No site data, GPU or MODFLOW is required.
+under `example_results/3d_series_flow/`. The completed audit run is retained in
+`release_evidence/example/`. No site data, GPU or MODFLOW is required.
 
 The [readiness assessment](3D_RELEASE_READINESS.md) distinguishes fresh execution
 from archived evidence. Detailed formulation contracts remain in the

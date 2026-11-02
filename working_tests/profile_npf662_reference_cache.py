@@ -39,13 +39,14 @@ def measure_reference_cache(*, input_path, output, repeats, device):
             uncached_median_seconds=statistics.median(data=uncached),
             cached_median_seconds=statistics.median(data=cached), mathematical_matrix_identity=True,
             physical_acceptance='Not timed or bypassed; every public solve still evaluates its final physical state')
+    output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(result, indent=2)+'\n')
     return result
 
 
 if __name__ == "__main__":
     input_path = Path('baselines/npf662_250x250x5_rch150_dx100_v1/unconfined/inputs.npz')
-    output = Path('release_evidence/reference_cache_profile.json')
+    output = Path('validation_runs/3d_release/reference_cache_profile.json')
     repeats = 3
     device = 'cpu'
     result = measure_reference_cache(input_path=input_path, output=output, repeats=repeats, device=device)

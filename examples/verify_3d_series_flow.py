@@ -48,7 +48,7 @@ if __name__ == "__main__":
     spacing = (2., 3.)
     boundary_heads = (32., 25.)
     device = 'cpu'
-    output = Path('release_evidence/example')
+    output = Path('example_results/3d_series_flow')
     head_tolerance = 1e-7
     flux_tolerance = 1e-8
     result = verify_series_flow(interfaces=interfaces, conductivities=conductivities,

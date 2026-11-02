@@ -28,7 +28,7 @@ def verify_roots(*, fixture_directory, output, controls, seed, perturbation_scal
 
 
 if __name__ == "__main__":
-    root = Path('release_evidence/independent_confined_verified')
+    root = Path('validation_runs/3d_release/confined')
     variants = ('x', 'y', 'z', 'constant', 'layered', 'heterogeneous', 'masked', 'disconnected')
     shape = (3, 4, 5)
     spacing = (2., 3., 4.)
@@ -40,7 +40,7 @@ if __name__ == "__main__":
     devices = ('cpu',)
     executable = Path('/bin/modflow/mf6')
     fixture_directory = Path('tests/fixtures/terrain_multiple_roots')
-    terrain_output = Path('release_evidence/terrain_roots_verified')
+    terrain_output = Path('validation_runs/3d_release/terrain_roots')
     controls = CPUControls(max_outer=30, head_tol=1e-10, flow_tol=1e-12, relative_tol=1e-11,
                            fallback=False, recovery_growth=1.)
     perturbation_scale = 1e-4

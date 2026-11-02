@@ -38,7 +38,7 @@ if __name__ == "__main__":
     input_path = Path('validation_artifacts/npf662_layered_v1/geology/varying_geology/inputs.npz')
     native_path = input_path.parent/'mf6/result.npz'
     polished_path = Path('validation_artifacts/npf662_layered_v1/final_assessment/geology_failure/verification_polished.npz')
-    output = Path('release_evidence/geology')
+    output = Path('validation_runs/3d_release/geology')
     cpu_outer_limit = 200
     devices = ('cpu',)
     device_options = dict(max_outer=2000, max_cycles=2000, krylov_restart=24)
