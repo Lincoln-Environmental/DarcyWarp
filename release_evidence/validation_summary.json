@@ -1,0 +1,877 @@
+{
+  "runtime": {
+    "python": "3.12.14",
+    "packages": {
+      "warp-lang": "1.17.0",
+      "numpy": "2.5.2",
+      "scipy": "1.18.1",
+      "pytest": "9.1.1",
+      "flopy": "3.12.0",
+      "pandas": "3.1.0"
+    },
+    "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.39",
+    "mf6_version": "mf6: 6.6.2 05/12/2025",
+    "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+    "revision": "3738b6321ae4f2c8615292897f3b2345ffdb327f",
+    "source_sha256": {
+      "DARCY_WARP_PACKAGE/ascii_grid.py": "37e5043624a5e56389203bb53970d899ecd12e25b459636e00804530ffb4524a",
+      "DARCY_WARP_PACKAGE/export_fd_truth_npz.py": "bbb302c72879db79aec3d629dff943b819d91e0f4c77675fea8daa96eca7d450",
+      "DARCY_WARP_PACKAGE/solver_capabilities.py": "2198821c3cb5023042276727ce7e354b8c7c4b702acecd589989d69ed7131e7e",
+      "DARCY_WARP_PACKAGE/__init__.py": "0932dc2063221f856619aa54c4984d63ad62e57f2904166c24f2bd62e24d1b18",
+      "DARCY_WARP_PACKAGE/tables_mass_balance.py": "f86e1a7c72ccbbbe709f8af589fd6fa4d0ed517922da57f0649f0f0f0556f3c9",
+      "DARCY_WARP_PACKAGE/model_builder.py": "c53330492c6e053c2515dc33a4ab2626f47f9c951baccabc484409cbba4860a0",
+      "DARCY_WARP_PACKAGE/domain_quality.py": "0acbfc5be660d0c6b1beff82ff57f54f4f1c172b45abc6cc9a9cbc90b8c62f0e",
+      "DARCY_WARP_PACKAGE/project_base.py": "12834f78a77308009da3726c6efbef8ebb386173ef75e5f167874d57b2c9217a",
+      "DARCY_WARP_PACKAGE/model_benchmarking_T_change.py": "e58145613dbb2f89e5b1c2a8e7a18d72bff87bd00cfbdf92de0b65b58d7c07ff",
+      "DARCY_WARP_PACKAGE/process_mass_balance.py": "8526e5aa730aac7462e9f9d1fdb3e5ea1b744d0ce607b9867dbb41cff9c56353",
+      "DARCY_WARP_PACKAGE/k_cycle_multigrid.py": "cb3185f3e1342cdefebee68e93c8b7e255e3fb1ec1d7ce999de2b1b8cb753dcf",
+      "DARCY_WARP_PACKAGE/sparse_operator.py": "b1f065d4b58bcda010cc65efc140415049a63f694a931408a3e07da8e1c82f87",
+      "DARCY_WARP_PACKAGE/tables_plots_validation.py": "85074e929a3b60dfcec68fbc815037c39f6f3097dd5d77a5a441376a342af4a7",
+      "DARCY_WARP_PACKAGE/benchmark_plots.py": "600601d5668ccb75db0118d84fc06e3bd5694b7c517305425ee00aa51775e767",
+      "DARCY_WARP_PACKAGE/warp_profile.py": "be7329d7c93def66c92e60d80e9541d284ecfbf581721d4f0123d2c3c83cd9c5",
+      "DARCY_WARP_PACKAGE/model_convergence_and_sanity_tests.py": "c81bc27da7fa48a956ac4f56e9e19e71ef2891ef358aff9938fcffd066b5ed0a",
+      "DARCY_WARP_PACKAGE/kernels_3d.py": "7db32135b9716fd9f5e2d7e3da499036c78950f489cfaeca97719d4f70925a62",
+      "DARCY_WARP_PACKAGE/model.py": "c8359f00cb880f0aa1968fb564e73626ec967b9eb79e5ce64ed4942d84114d7d",
+      "DARCY_WARP_PACKAGE/export_mf6_truth_npz.py": "447df5a384db9d1ff6739c9d090ae0a2b84ed9441bcb1d6e4bad625402340d97",
+      "DARCY_WARP_PACKAGE/run_benchmarks_and_plots.py": "0657d2a7cacfceaa8f8537eaa5dc5696ed3e427f3630e4a3e893d66f5cd3042c",
+      "DARCY_WARP_PACKAGE/factory.py": "5e7581a247f50bdc69b5f4fe168a5846e1b1d9f964980ca12e57e5949f1cfed4",
+      "DARCY_WARP_PACKAGE/solvers_3d.py": "1f47d57595bb3a926660fcbdd1fcfa3e5bb6e8f226ac9630c95f1b6ca7737699",
+      "DARCY_WARP_PACKAGE/river_loss_cross_section.py": "51cbda446148978c38f96a4e15a4da034dd861539b54e6c9bf9dbf3f8b2f79d0",
+      "DARCY_WARP_PACKAGE/modflow_truth.py": "55810ffb381d01d33328742d5a6e526a95eaca22bb41e97a9d26c6eaac97739d",
+      "DARCY_WARP_PACKAGE/downcast_truth_npz.py": "1c0c9efa6e6041903c845e76927ab063cf7a0c3da124d18fe1f081e97c79e70b",
+      "DARCY_WARP_PACKAGE/generate_second_machine_ensemble_tables.py": "8d25143294c27520fda403d05dbc563eab087e3032c521d01dbba02ed92c82b8",
+      "DARCY_WARP_PACKAGE/bench_and_plot.py": "e78920980ced3def8d97b08ea63844de896fe32fddd1d1c4654fd265c394556f",
+      "DARCY_WARP_PACKAGE/graphical_abstract.py": "a1ca62e6b881b99c0be3793628409784209e6505b8d9fed2e5d6909ba358b9c1",
+      "DARCY_WARP_PACKAGE/unconfined_truth_io.py": "102df9ae4b7faead6a079644423c84a7eab21291e534fc77da5b2be01b0757b6",
+      "DARCY_WARP_PACKAGE/warped_darcy_3d.py": "01dc2e5f24ea7b6138faa9885b44aa03a332e01b797a5e3699e6dd3267deac39",
+      "DARCY_WARP_PACKAGE/config.py": "90203605187889a13d36f9908f87599ebbf545a6d3ac82cd892b70ce898d3c19",
+      "DARCY_WARP_PACKAGE/model_benchmarking_recharge_change.py": "91f24ebb4f8386bc705ebf26001ac947f9b1bdfbce58230c98243112ac51b88c",
+      "DARCY_WARP_PACKAGE/model_3d_inputs.py": "6d2b5c5af0ff835004a7a7b52baccfeb8f3ab33c98ed720eab09e652575a2e09",
+      "DARCY_WARP_PACKAGE/QUICKFLOW_mass_balance_check.py": "8ecab045de59563568a333d2ff0dd593046729a27a47450e2d5eec1ba0fe5cee",
+      "DARCY_WARP_PACKAGE/CPU_FD.py": "60b8037ec70e13bcdfc072d9fb029e57122bea6f0260735273bbe6b9c6be869d",
+      "DARCY_WARP_PACKAGE/sanity_case_config.py": "3ec67b7d2f007c40ce34f482d20a44a7a688505a11ffc199d7e3dd90bdd00068",
+      "DARCY_WARP_PACKAGE/warped_darcy.py": "e20d4d86bc1e3df73a68a43148025b8e7ddc7014ccc17682aa740615611aebdc",
+      "DARCY_WARP_PACKAGE/validation/terrain_case.py": "79409b3896ae42356ac8b75672ad483edec79fb05b49963f22161af75e6cdb6f",
+      "DARCY_WARP_PACKAGE/validation/__init__.py": "574acd97adf4505f72f013bcb2ba6dac682f8934a2d788983acaa9d573c2d2dc",
+      "DARCY_WARP_PACKAGE/validation/npf662_matrix_free.py": "94d44a4ac2abe4f33e4f1c4df66a8de6d9c097c203fc8b75c926152e8829bdb8",
+      "DARCY_WARP_PACKAGE/validation/terrain_cpu.py": "87d86398ca8b9d78537f877fbbbca97ff00f4b9d8b2ec55b2a9bfaf11999e71a",
+      "DARCY_WARP_PACKAGE/validation/mf6_tpfa_reference.py": "cadcfbb79c6702b49b03abd6857491f1421c21372c52f38cc2d1894f753218c4",
+      "DARCY_WARP_PACKAGE/validation/records.py": "47fa4390fb7542332fb9c398e67c580b604d5e8b555a95306690a8eb5c8ac27e",
+      "DARCY_WARP_PACKAGE/validation/evidence_storage.py": "b2f282fdc5c1325313b9d4889e663287ca4201da3e7fbeae771440a40e6bead7",
+      "DARCY_WARP_PACKAGE/validation/npf662_reference.py": "ba31a9ff907585d9b83761f4be8fad154c4ee790c26da5a92f5fc0a17f8b6b40",
+      "DARCY_WARP_PACKAGE/validation/npf662_metrics.py": "249f879bb6629880e678cb18eebd6ae0f17bd3837b1c5edf14d833ffe22ff383",
+      "DARCY_WARP_PACKAGE/validation/terrain_compare.py": "529c1900759c104bd58f7c4411ca09386d0e38363047c17ef690cfc332d73f36",
+      "DARCY_WARP_PACKAGE/validation/head_checks.py": "a66a9ba2d40d3959f6d8f6bf93af5d18780273d4d6dfb0c2ca0f633b0f42db31",
+      "DARCY_WARP_PACKAGE/validation/npf662_mf6.py": "d91374ad69a1ccce8961e2f69b43250d4c1bfcd2b62bad6e48a7314bbe7345c9",
+      "DARCY_WARP_PACKAGE/validation/terrain_mf6.py": "20b2cc6ec609650ab36fff88b16e5ae51a3076e6c0404262f2f16cf534ac8e62",
+      "DARCY_WARP_PACKAGE/nonlinear/context.py": "20fe5ad504c36c23513b2c0b458e6d1c754ba175a23758c4366cc26420b70d2f",
+      "DARCY_WARP_PACKAGE/nonlinear/__init__.py": "b3634cedfaa95206e5a34b4e71309530f0953e48fd8a4db700936d9aa2cc1c7e",
+      "DARCY_WARP_PACKAGE/nonlinear/operator.py": "72ecd3c3bd139e6c6c7cd9586eb71a3dbee814a65bacae31043f8e1883d4cee2",
+      "DARCY_WARP_PACKAGE/nonlinear/kernels.py": "4a848d9cafcc6b8ea4a20b24d8824e12a062ae15f3d86181cb44b5ae52c735ea",
+      "DARCY_WARP_PACKAGE/nonlinear/reference.py": "886374fb62e54cde8b3de64aca679ca596458aad1ff4302c37098154f30cb4e3",
+      "DARCY_WARP_PACKAGE/canterbury_case_study/plot_canterbury_heads.py": "6d022223a39d6dd476f7c5bc756012e49853ce9458806a3142107350b57dd28a",
+      "DARCY_WARP_PACKAGE/canterbury_case_study/plot_canterbury_transmissivity.py": "ee8107b371b1c1fe7a1d51a0473aa0286c32b72006e910cee1852bd927eb6f59",
+      "DARCY_WARP_PACKAGE/canterbury_case_study/compute_canterbury_rmse.py": "f7583c1840b895b4466cc7120605257f3bcfdcf7ecc8b2bd91cb60e77a3c99a7",
+      "DARCY_WARP_PACKAGE/canterbury_case_study/Canterbury_case_study.py": "7029ecbda896cf83875c65d1f1a5d261d8a4bb68ec52b57aa37ea163773bc2eb",
+      "DARCY_WARP_PACKAGE/canterbury_case_study/canterbury_data_prep.py": "c51ff14cd727b7a650051beab3f10433b9b9179d86bceab20094eaafc1a86416",
+      "DARCY_WARP_PACKAGE/solvers/context.py": "31c0dd8617866ce0526d7e75143453cb2a4e1ab524d4caadbd8dddef6fe476d2",
+      "DARCY_WARP_PACKAGE/solvers/fas_hierarchy.py": "72ed279bb7db60abe6f5f55e0274ba29542c31018b0f39892b2d163b76ef84dc",
+      "DARCY_WARP_PACKAGE/solvers/terrain_fast_3d.py": "3334f09d2750654643cec698a4364e34a6be9295f97a07c7d95dc6ec6bc55d71",
+      "DARCY_WARP_PACKAGE/solvers/fas_state.py": "47f43fc74c044e5f777e924be3dfb407a547339ebf9c5dd509919e07546eb31f",
+      "DARCY_WARP_PACKAGE/solvers/terrain_device_kernels.py": "7291a37e3a4f23dff2646d6b74c8466dd7b6e58516b37606339d46d3687b3d0f",
+      "DARCY_WARP_PACKAGE/solvers/mixed_transient_f32.py": "ee4deb96768389d9eb40d9b3eac210cd493f38fe6cf07e6f2b7c9af2004b3bdd",
+      "DARCY_WARP_PACKAGE/solvers/surface_contact_2d.py": "e2bb2f14f3a42daf486f11e4a536b3e8092221f377954b70e8bdd4aeb9f48f75",
+      "DARCY_WARP_PACKAGE/solvers/__init__.py": "6bee52304466417a3a6fbda3ecac6ef47ec0abbc593c22158cf3ed998acf11c7",
+      "DARCY_WARP_PACKAGE/solvers/npf662_kcycle.py": "2bee6e5fe76925a06e1411a0004d10dc783a2f798e0c9f155b678d7156a3881a",
+      "DARCY_WARP_PACKAGE/solvers/fast_confined_kcycle.py": "f16f44efe6e96bb08dfd4e0b6c1941d86c1054de7f405fec31379d4c77aae438",
+      "DARCY_WARP_PACKAGE/solvers/newton_kernels.py": "d1a91f8bf8c8a4b382cc0310475639a749ca5a8c40476e55cd6e8a0d97eae1e2",
+      "DARCY_WARP_PACKAGE/solvers/semismooth_newton.py": "7db4bd6a89a887533d0e1919180347aab4d4ece777c173b23f76b19d2384214f",
+      "DARCY_WARP_PACKAGE/solvers/multigrid_kcycle.py": "1e4e82b990a11262cac8c4bd5a196533aab9d1dc13fc2170f25a02347e53fc50",
+      "DARCY_WARP_PACKAGE/solvers/fas_kernels.py": "5381ac5b41cd4c6488315e36483adac7f6d394c07d3c8534ca93612334198883",
+      "DARCY_WARP_PACKAGE/solvers/convergence.py": "be479060a96e599f0342bc04504e91fd979ac33b7ca331cf961af030cffa1680",
+      "DARCY_WARP_PACKAGE/solvers/work_counters_3d.py": "199988b42ac9b15f2924d3c2b595670a0a10f88dc39010ade10621e54de9cd99",
+      "DARCY_WARP_PACKAGE/solvers/regression.py": "e8c41483da43f084a17003328c0e7ab039dd07a72b8f77d37f2067b796399c79",
+      "DARCY_WARP_PACKAGE/solvers/hierarchy.py": "742a65224c8a2f45d3bd3c1999479dacd2b2a4f58f0530ce924d4c543ee60627",
+      "DARCY_WARP_PACKAGE/solvers/base.py": "ec2aaaefc8e5c786531aefdf41b11995f4264ebb06183bcf1c500d477e48959c",
+      "DARCY_WARP_PACKAGE/solvers/session_3d.py": "b4e35c15abbaac08850fed5d300dce7447b77f45222fdc9f4aececa048a8f858",
+      "DARCY_WARP_PACKAGE/solvers/registry.py": "6d93e68e133a7f708748822b050678ba064ff95890bb6edb602eeb9dfd304e1d",
+      "DARCY_WARP_PACKAGE/solvers/terrain_kernels_3d.py": "bb4fd908773b99b3e8d4ce4e46fa7555fda4aa63b3d65ef3df35082bd26980ee",
+      "DARCY_WARP_PACKAGE/solvers/npf662_3d.py": "7029c50a46c221c93dd3721a31456d4bf7514da3ed6b2b09e34bffbd65e1d36e",
+      "DARCY_WARP_PACKAGE/solvers/terrain_newton_kernels.py": "4587f8d9adbcf0dd63009b794338004786d2089b2c06cf98a62114024192e27f",
+      "DARCY_WARP_PACKAGE/solvers/terrain_newton_3d.py": "8d91ae7710ea7f25cbe0ace85730573fff508cf25f8cf33faf3595110c4f25ab",
+      "DARCY_WARP_PACKAGE/solvers/fast_3d.py": "db8cfbbfd297570702e6e9218d12081dde6a7a8314d05a7ebda36ea758ca3e7f",
+      "DARCY_WARP_PACKAGE/solvers/mixed_fast_kernels.py": "d0bf304dfb0dc8521052d2966e578301c5ed6768e1a9ddeb1980c38bf6310d23",
+      "DARCY_WARP_PACKAGE/solvers/terrain_gmres_3d.py": "13b08a7acee45dceb1491a623294b408d1d522d2c73a0a620a660999e20eb9ee",
+      "DARCY_WARP_PACKAGE/solvers/npf662_fgmres.py": "766c90280c5caaad7df9c1c7f864ed28a9297680ad53cf29261f1f29941a1822",
+      "DARCY_WARP_PACKAGE/solvers/mixed_fast.py": "56045b20f1b367c99b8019127099625e3090294e4bd56c39eda45deefce4013a",
+      "DARCY_WARP_PACKAGE/solvers/pcg.py": "a1f83d0d97e41b914e9b7fee5744126aeb377b87109bbb4078bc038c5b7294bc",
+      "DARCY_WARP_PACKAGE/solvers/picard_unconfined.py": "3548dc4a2f48b0d76f772cbc7c1660c4ac35947ab6051effb531849cad74ee24",
+      "DARCY_WARP_PACKAGE/solvers/resources.py": "452046b5a28044fbf02dd51aaff5dbe03cc28c0461a28d16d809534ca4896a8b",
+      "DARCY_WARP_PACKAGE/solvers/npf662_kernels.py": "b4e90d56c772004041a2ff80f6baf437dc90b37144c9db00f8311394d93a48e8",
+      "DARCY_WARP_PACKAGE/solvers/kcycle_preconditioner.py": "afa9152f45749e76ce14e2cd1ca4ceaf8c9d849e9817ef97afd2c141eb1d82fa",
+      "DARCY_WARP_PACKAGE/solvers/capabilities.py": "b188c7697099cba0d18e00fee2dbd78008fffcc38e79afad25f82ac68cecbbc9",
+      "DARCY_WARP_PACKAGE/solvers/face_transient_f64.py": "2d796d555373f98fbd1122d2de622c1fe29b95726fa76fb8a5ebb05ddfa283cd",
+      "DARCY_WARP_PACKAGE/solvers/transient_config.py": "1dc773b72421e27e7b77f2605a406c977a38fa6323237af4c90319796c005d36",
+      "DARCY_WARP_PACKAGE/solvers/fgmres.py": "c068363c06bc5619efbe5d4753b32543f081babd0a039962af4f9191d74ced31",
+      "DARCY_WARP_PACKAGE/solvers/terrain_device_3d.py": "c314ab359b805a1f694880ebdf6f281fb18517a2f46a5df43924a1926facec44",
+      "DARCY_WARP_PACKAGE/solvers/fas.py": "21271fd09e55496fdb1fc40aea90de74a189148526606098fc774339dee516d2",
+      "DARCY_WARP_PACKAGE/solvers/mixed_vcycle.py": "e3cbdd9a1d0651077fd160eaf521f7aaf22f22b0719b8cf6b9a4276350553343",
+      "DARCY_WARP_PACKAGE/solvers/face_kernels_f64.py": "ddc41b9b3325bc7e5fa656901385633244fe18f670e72bc5b752615ad5398150",
+      "DARCY_WARP_PACKAGE/solvers/transient_experimental.py": "147a38a11e28e961664ee44abff399351cc12cba56942a5eb15b5bc121de282b",
+      "DARCY_WARP_PACKAGE/solvers/face_kernels_3d_f64.py": "921a7ba4fe67731c2cdf8dd0ab40a55f5eac6a290563bbd2bb7ab9001eee37fa",
+      "DARCY_WARP_PACKAGE/solvers/newton_state.py": "e1e257fc1ceef963f7a4580542824bddfa2dbdfb631d72930801c48fb6e880fe",
+      "DARCY_WARP_PACKAGE/solvers/transient_interval.py": "061ef3d947d48ab0e979cf6ac77862ec4b23a2aa567fbabef2b5ce1909463940",
+      "DARCY_WARP_PACKAGE/solvers/mixed_precision.py": "f9c5ecd9876df2c578a1791fc9d55ffebcb7ece70227976889bd83aedef8c00d",
+      "DARCY_WARP_PACKAGE/solvers/npf662_newton.py": "0f8379eba197f793f678edaf480ca0f418382e3037fac3b502b93f585ea93e5e",
+      "DARCY_WARP_PACKAGE/solvers/transient_unconfined.py": "5648bd45348f00726e03325614c14daf9fa09c6ce9b8f2576365507f6bd99585",
+      "DARCY_WARP_PACKAGE/physics/storage_3d.py": "60afecefb5501daa76742a22c2ae86c3fa982f93f960aadb3fba757384297044",
+      "DARCY_WARP_PACKAGE/physics/__init__.py": "ec9d9c7ee8b2eb33f8b666f2fa44994f5e4ef46aed92e0dbc983ec0392764999",
+      "DARCY_WARP_PACKAGE/physics/budget_3d.py": "12c9ece438804580b76c67cdcc3fbae3bd58394b0606094445b07424f0881e56",
+      "DARCY_WARP_PACKAGE/physics/terrain_budget_3d.py": "5bee2db9f05e4a7c969f68e7f4e693adef25669f1a67a5b788d58decefadf015",
+      "DARCY_WARP_PACKAGE/physics/budgets_2d.py": "17241f2f3f072e7a129e655e2513148ab8dc08b0368ef58dad3d5b1ebb33bf8c",
+      "DARCY_WARP_PACKAGE/physics/components_3d.py": "e1adcf5b80c00cbbffcfd9b8571b6e706d0b03fc0933f34e93615fa6604176b7",
+      "DARCY_WARP_PACKAGE/physics/inputs_3d.py": "15767277fd9e8259eb1b9dc8918a1e987303de7715c96ff3fa515d9f1d4a6c30",
+      "DARCY_WARP_PACKAGE/physics/riv_2d.py": "d09880c1d5d9edd929af938f5b3b4912cd8a279a4830bd2a3f4bc347a7c9af83",
+      "DARCY_WARP_PACKAGE/physics/faces_3d.py": "dd445e012af232550cbc881c6d2af98f5955849169a62707dc1b86c45b4f813f",
+      "DARCY_WARP_PACKAGE/physics/drn_2d.py": "d261f9d5f5964b1b035a6c83eef10743018ed0075a9821c2c9cbfb1b60a8e383",
+      "DARCY_WARP_PACKAGE/physics/terrain_reference_3d.py": "494050696fddfa06a33f6460304b786eb678ca6ff9963300ea7c8c29ebfb1acc",
+      "DARCY_WARP_PACKAGE/physics/storage_contract_3d.py": "2d51c74137f06dbeef57eb5efa2c36dc9fc94f9d57d46b4855a57670bc0a6941",
+      "DARCY_WARP_PACKAGE/physics/npf662_layers.py": "bc6a4d81d8342f58e4e5e3312b08929475946a3a58f08f7436b75150f01103c3",
+      "DARCY_WARP_PACKAGE/physics/dry_cell_3d.py": "27cf6b4091096135278c4aebb08aa1830d9b3d9b2f57b6ed4d44af569ca50dbd",
+      "DARCY_WARP_PACKAGE/physics/operator_data.py": "571639602d379922e9c77b9763cd123122ce50d038b36d12198ca514fe3ed18c",
+      "DARCY_WARP_PACKAGE/physics/terrain_grid_3d.py": "a83fa13d2ef53b3ddcd0e2c684d508853ad42b91b7e55ec5f1f19b4db80e8534",
+      "DARCY_WARP_PACKAGE/physics/terrain_shanz_diagnostics.py": "b2190176d708f1bed5a29d049291b0ef8fe527927a6a4c6ab74904d3378e6efa",
+      "DARCY_WARP_PACKAGE/physics/storage_2d.py": "80a9c70900b52a25abaf91eb5b3c8107eb3d0bd27515d4c1c3065615bee93d68",
+      "working_tests/reproduce_3d_release_geology.py": "7dc8717da6527947f5d7422575ed9cb0a112c07c817763962903e0242428e709",
+      "working_tests/run_3d_release_cpu.py": "238c111c4d9acc0c7feccf72490cfbf8e11b64bc5628f22a91bf1cbc08dcf139",
+      "working_tests/verify_3d_release_cpu.py": "913fe6899fe6ebc82955edd8f7fef978304cc1c3257d9793b6a99da7042f25b5",
+      "working_tests/summarize_3d_release_evidence.py": "a6e13947f721dc2ede930f93d3e16464f3e579d3bb066ee5299c203b2df83131",
+      "working_tests/profile_npf662_reference_cache.py": "e840c20e7736923dcb4a6a17a8b554cd7c99171a8ac3cba7e5a8406cc015b9bc",
+      "examples/verify_3d_series_flow.py": "e033534f9896516aee4207a22603bf5928267a415346b9a9a3ece40e6790dbc3",
+      "tests/test_terrain_newton_refinement.py": "c5b1b6fe0d2aaaf3c2de562e10628bcbcc468194a08e8425a70e5cd5332dbffa",
+      "tests/test_unconfined_runner_validation.py": "8e5b20abd36eaa16f3d13245d06c3bf65216c41b22d9d141c289c8294f6922e3",
+      "tests/test_terrain_contact_exchange.py": "bbe72fb479f8bfb7b915b290cfba32d5d280b82157481c07254c39e86055908d",
+      "tests/test_3d_face_kernels.py": "9a0e6222b30054cc4f297c54b6e94818ce216e52503140f89a384d64ac90adfe",
+      "tests/test_terrain_component_validation.py": "e1f1126bae06ead4d1294a59707dc3ac168d63fbf5c310d455ca80303d626e41",
+      "tests/test_surface_contact_2d.py": "a8f821f4a198196995587ffdbed3bee070b393b2104e63c28516c4cdf6c1c824",
+      "tests/test_3d_terrain_gmres.py": "8e594c07eddc58cd8ac5d77879af9e09d2da4ddea292f8a597c6cc2a9e1e9958",
+      "tests/test_terrain_contact_stencils.py": "a2bf80bef95cc2f82a27b6e574a84058b47046e529f9fe85c0b1470a1d31998d",
+      "tests/test_terrain_evidence_storage.py": "d18684f7bcc5d3c229652872b26d33ceb6b483069c5f960a58ccb22515873e3e",
+      "tests/test_2d_transient_warm_start.py": "b8e7ca42540e7b0aa41e4129601bdf896e11c723abfedcf7ed6e8a2a04c92530",
+      "tests/test_model_convergence_mf6_cache.py": "2a8dc05a72e658cb3cf454354bc0ec46758a156f44bf6f1f7645e36052aca9e8",
+      "tests/test_nonlinear_operator_2d.py": "d722d2bbd1184405e0310fb84a2fc5486150d90e2f17a709d93b7336ad4cbaf3",
+      "tests/test_varied_T.py": "f43f40968cf5a2d6b489edd904224c9113be3aed2c7e10379e90c92e599cb4bb",
+      "tests/test_terrain_device_picard.py": "5da84a8c644f17717eb5fc8d34a9794dc4d5b841a05876e1afbf2442e0c7edad",
+      "tests/test_terrain_runtime.py": "0ba5de584d1bdc3433d42b59b167d8c49d909d3a8b1b4a4dea2e7894c5111267",
+      "tests/test_unconfined_solvers_500x500.py": "0d7bbf63f6861b34f85f3b4f582b813c8e3ff275278f6d4fbcc22dbbdaef23a6",
+      "tests/test_3d_scientific_audit.py": "e8138ecec92d7cde12fba39f5b55ca200c0812410a34c276b09446b992bc411a",
+      "tests/test_semismooth_newton_2d.py": "bc22829fcd0bfd285ef0f0a04820b0d8435a64d37773e63d609ed5968957b6a9",
+      "tests/test_npf662_newton.py": "a28233f500ca53f3c1b730dae1ec7f115cebf35efea49d56fc283aa6b752414d",
+      "tests/test_mixed_precision.py": "5fc57288ba5ef0fa35091280b73cfcba880b95e4cf79e70924d37f32177c484b",
+      "tests/test_fast_3d_kcycle.py": "46dcef0f66d9c7831e2d21c8fd2c1845d82e341c77840e5e83234c338005c5d2",
+      "tests/test_terrain_newton.py": "8fd905f01a126dc1a78d28172a8923eb9b8732d5dba26c7399301c6923e1d931",
+      "tests/test_fas_transient_multistep.py": "3b5e271421bb1cdb3dc8e4659192dc07cbb74ba2f0c46a57bed8619ff0f5c0c9",
+      "tests/test_3d_operator_analytical.py": "7082f4d6359b4c18af94ef5eb135e0d20fadf0d3562f763c1ed0cacbcd52ccd7",
+      "tests/test_terrain_shanz_diagnostics.py": "15f3f65e07e59bf3c0aae70f339847ecea364997c85b291ff05c553a8f61b224",
+      "tests/test_scientific_audit_regressions.py": "73cb39f48202076558b79bf66fef53ec285b0ded12d7bf52bf1a49378c94f25d",
+      "tests/test_3d_solver.py": "c9ab1754f3b68db60c1d59d2d5036e0457d10566d08318c5913ee5289ba32246",
+      "tests/test_3d_physics_validation.py": "deb28e7d424a0f565abed97231253d5dce289634c11e921ee37e9c2f3b224e69",
+      "tests/test_transient_session.py": "a5675beeeed906002abf7e05cef7717cb579c43ccc4656721e3ccd4284b74004",
+      "tests/test_3d_release_contract.py": "a42c334c8093ef1bfaffdb807976d3dc32f9023447224ed86f3a6ee57841f323",
+      "tests/conftest.py": "068d279126e46035d26b668c8638a4f794e9b36f04db4c211cc4309487fd3ce8",
+      "tests/test_fast_confined_kcycle.py": "25e0bf12dfe77b1b894bb2ed0f941dba5014dd5993a577c13a04e6bfeccf23fb",
+      "tests/test_3d_session.py": "af37c0b64e1119bab716a7aa9172e34387b8387569486bcae781f171d9e64f1c",
+      "tests/test_terrain_newton_accounting.py": "721dadd89977cd27fd844220ce16254b18b269d23917012c34b236138e861e7e",
+      "tests/test_3d_terrain_gpu.py": "1c00ec54e5e6de22ac0e0b37b2fd8ad35ea3221e8e773d9b172d17ff8c7d675c",
+      "tests/test_validation_repairs_3d.py": "a9cc398bc8b246548c64fa64c2fb901322f3179057b130dbc0d931bc471ace31",
+      "tests/test_transient_matrix.py": "37cd6e830c03139b399e448e98f28243871435bd1bdd82886a0834e6c094f064",
+      "tests/test_3d_terminal_and_storage_contract.py": "148ad76ead754ddbf1f1bb6ef47ef39e3fe4a08dd65eebcb040a978703db521a",
+      "tests/test_npf662_layers.py": "9255ae8080f47a778222a4a3545134a181cf9db4baddf1adf3ce1535e019a283",
+      "tests/test_npf662_confined.py": "515a15b963f89dfc60552cefa5991f46bc77a1bab396dddfca4d164faeff69f0",
+      "tests/test_npf662_acceptance.py": "a6c16e592baa17d8cafe6581b5d0015491c42a14032a1a0a8195e4a0c8ec554a",
+      "tests/test_adaptive_inner_controller.py": "af6d6290b33cc587b7d5cdd455e3e171d06f3c6f2b2a3a827f16b1c23a7b252a",
+      "tests/test_sanity_case_config.py": "11d1ca30bf1d351b5563640455dde8d8b2df28f32d04ceff1502e93006aed4be",
+      "tests/test_npf662_reference_controller.py": "7c266e16b83287454c6d63357483a8a7053f96806227cbc44e928740f2c2b5b9",
+      "tests/test_npf662_benchmark.py": "0c9da7eb38a5b6b46dc6034e6861759f858ec2195c9fe2229f3a2879499dbc55",
+      "tests/test_sparse_system_consistency.py": "2726c8bbf6535f7b7e94b52c30466593ff4b6b47838ced16fa34c8ff36b691da",
+      "tests/test_terrain_cpu_validation.py": "554f760e0cd5fd5cfaa044f8fbfe726894d88b3ff420b18cf3f74c6dd552063e",
+      "tests/test_terrain_lateral_contacts.py": "f9c304d060abe4235a39edcaa538b5605b227686b549ecf526024bd95ea1e51d",
+      "tests/test_3d_hierarchy_scientific_audit.py": "b0d11b7a6729e451269c2996caaf1acecfb434ab1c648272dee2bc3752d7ef53",
+      "tests/test_3d_transient_runner.py": "8c081b442ab7b239ec0e0ba36e86849f3009bb5a2d7fce1eb7cd518a9c29af7c",
+      "tests/test_dynamic_riv_flux_2d.py": "cfbaf07316dbc13913a762da4bdca48b277bf45befd9bca7115accef54e71690",
+      "tests/test_2d_unconfined.py": "55829d901af9c983be5b907b90ff8d7cbb000e93c077fdbbfc3a0d8d65faf722",
+      "tests/test_mixed_precision_fast.py": "e294dae05c2915e464667f05dc06dc64faed786ebc2f7462170422e4396998cd",
+      "tests/test_npf662_layered_unconfined.py": "70ba2dd1a1ef70f2594d5c42c79fcd226f784107ff8173ccf363834406c02179",
+      "tests/test_3d_hierarchy_axes.py": "3a0d8fc2b8a3841056796eefee4226230b03b65fbe6ff7120d449bf3b4ec8ab8",
+      "tests/test_npf662_kcycle.py": "232f7e181788a6a4bf8f8f81f1575797f18adc61c74cffb2e8d0df78e1908af5",
+      "tests/test_3d_terrain_reference.py": "dd55614b0830c9b79d4d4c21fa8531ef65cba6a897e5fecf0becad95346d7d3c",
+      "tests/test_terrain_mf6_validation.py": "1600d4cbcd1c8b65e69c82664e6e9a8f897d28305e8373a2dae8b3758cca8a73",
+      "tests/test_transient_artifacts.py": "27063cf9b09d3643164e375c2b944ede979cbf6036039c6a4811c25405e7c4dd",
+      "tests/test_2d_transient.py": "ac9a98d4cf6dc806c5a9798989d694198ec6afad01395dbe9d799cd94397e331",
+      "tests/test_fas_2d.py": "3026768f786b32f2fdc1dd7298cdeaf64c7482d741e8ee0a626781aceff4ffa0",
+      "tests/test_transient_public_config.py": "45ae3022c738c3af2ec7775b5e9aed840c7419f896b0ae204e864a55fcd932b6",
+      "tests/test_solver_registry_2d.py": "da4206d90edc222dc2229cdcf6d7e5cd36c892dac5665728aee4582696c0a65a",
+      "tests/test_comparison_results.py": "d742e117f76e9a2646d5b89d083c36011d344645f6d3dabc29b0f5098501a05b",
+      "tests/test_3d_dry_approximation.py": "9a8a68f3471f66f90ed6e700383096d8b87cc67eca52c24b21642247e5edfe45",
+      "tests/test_shanz_drn_flux_2d.py": "fb0d280c766f82b3e0319053e59c6cd87b009c1030ff7831cb3b082f8337f2f4"
+    },
+    "cuda_release_gate": "Deferred at user request; CPU-only validation"
+  },
+  "tests": {
+    "stage_a_before": {
+      "tests": 49,
+      "passed": 28,
+      "failed": 21,
+      "errors": 0,
+      "skipped": 0,
+      "warnings": 9,
+      "unsuccessful": [
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_masks_validated_before_conversion[0.9-active-cartesian]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_masks_validated_before_conversion[0.9-bc_mask-cartesian]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_masks_validated_before_conversion[0.9-bc_mask-terrain]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_masks_validated_before_conversion[1.9-active-cartesian]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_masks_validated_before_conversion[1.9-bc_mask-cartesian]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_masks_validated_before_conversion[1.9-bc_mask-terrain]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_masks_validated_before_conversion[-0.1-active-cartesian]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_masks_validated_before_conversion[-0.1-bc_mask-cartesian]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_masks_validated_before_conversion[-0.1-bc_mask-terrain]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_failed_rebuild_preserves_usable_model[shape-terrain]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_failed_rebuild_preserves_usable_model[nonfinite-cartesian]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_failed_rebuild_preserves_usable_model[mask-cartesian]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_physical_model_rejects_raw_face_update"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_uniform_npf_newton_dispatch_rejects_legacy_overrides[option0]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_uniform_npf_newton_dispatch_rejects_legacy_overrides[option1]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_uniform_npf_newton_dispatch_rejects_legacy_overrides[option2]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_explicit_gmres_is_honoured_and_unused_controls_rejected"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_cartesian_budget_stable_residual_rms[1e-200]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_cartesian_budget_stable_residual_rms[1e+200]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_terrain_overflow_cannot_pass_physical_acceptance"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_returned_heads_remain_owned_across_cpu_workspace_reuse"
+        }
+      ]
+    },
+    "stage_a_baseline_final_tests": {
+      "tests": 61,
+      "passed": 32,
+      "failed": 29,
+      "errors": 0,
+      "skipped": 0,
+      "warnings": 9,
+      "unsuccessful": [
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_masks_validated_before_conversion[0.9-active-cartesian]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_masks_validated_before_conversion[0.9-bc_mask-cartesian]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_masks_validated_before_conversion[0.9-bc_mask-terrain]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_masks_validated_before_conversion[1.9-active-cartesian]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_masks_validated_before_conversion[1.9-bc_mask-cartesian]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_masks_validated_before_conversion[1.9-bc_mask-terrain]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_masks_validated_before_conversion[-0.1-active-cartesian]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_masks_validated_before_conversion[-0.1-bc_mask-cartesian]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_masks_validated_before_conversion[-0.1-bc_mask-terrain]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_failed_rebuild_preserves_usable_model[nonfinite-cartesian]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_failed_rebuild_preserves_usable_model[mask-cartesian]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_physical_model_rejects_raw_face_update"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_uniform_npf_newton_dispatch_rejects_legacy_overrides[option0]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_uniform_npf_newton_dispatch_rejects_legacy_overrides[option1]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_uniform_npf_newton_dispatch_rejects_legacy_overrides[option2]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_explicit_gmres_is_honoured_and_unused_controls_rejected"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_cartesian_budget_stable_residual_rms[1e-200]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_cartesian_budget_stable_residual_rms[1e+200]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_terrain_overflow_cannot_pass_physical_acceptance"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_returned_heads_remain_owned_across_cpu_workspace_reuse"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_updated_physical_model_matches_fresh_and_repeated[legacy-False]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_updated_physical_model_matches_fresh_and_repeated[legacy-True]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_updated_physical_model_matches_fresh_and_repeated[mf6_6_6_2_npf-False]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_updated_physical_model_matches_fresh_and_repeated[mf6_6_6_2_npf-True]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_replacement_constructor_failure_rolls_back[cartesian]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_invalid_contact_rebuild_leaves_model_usable"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_hierarchy_controls_and_contradictions"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_reference_linear_controller_rejects_finite_bad_solutions"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_reference_scaled_linear_system"
+        }
+      ]
+    },
+    "stage_a_final_baseline": {
+      "tests": 71,
+      "passed": 32,
+      "failed": 39,
+      "errors": 0,
+      "skipped": 0,
+      "warnings": 9,
+      "unsuccessful": [
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_masks_validated_before_conversion[0.9-active-cartesian]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_masks_validated_before_conversion[0.9-bc_mask-cartesian]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_masks_validated_before_conversion[0.9-bc_mask-terrain]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_masks_validated_before_conversion[1.9-active-cartesian]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_masks_validated_before_conversion[1.9-bc_mask-cartesian]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_masks_validated_before_conversion[1.9-bc_mask-terrain]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_masks_validated_before_conversion[-0.1-active-cartesian]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_masks_validated_before_conversion[-0.1-bc_mask-cartesian]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_masks_validated_before_conversion[-0.1-bc_mask-terrain]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_failed_rebuild_preserves_usable_model[nonfinite-cartesian]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_failed_rebuild_preserves_usable_model[mask-cartesian]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_physical_model_rejects_raw_face_update"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_uniform_npf_newton_dispatch_rejects_legacy_overrides[option0]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_uniform_npf_newton_dispatch_rejects_legacy_overrides[option1]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_uniform_npf_newton_dispatch_rejects_legacy_overrides[option2]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_explicit_gmres_is_honoured_and_unused_controls_rejected"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_cartesian_budget_stable_residual_rms[1e-200]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_cartesian_budget_stable_residual_rms[1e+200]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_terrain_overflow_cannot_pass_physical_acceptance"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_returned_heads_remain_owned_across_cpu_workspace_reuse"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_updated_physical_model_matches_fresh_and_repeated[legacy-False]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_updated_physical_model_matches_fresh_and_repeated[legacy-True]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_updated_physical_model_matches_fresh_and_repeated[mf6_6_6_2_npf-False]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_updated_physical_model_matches_fresh_and_repeated[mf6_6_6_2_npf-True]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_replacement_constructor_failure_rolls_back[cartesian]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_invalid_contact_rebuild_leaves_model_usable"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_hierarchy_controls_and_contradictions"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_terrain_counts_actual_preconditioner_calls"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_independent_terrain_gate_honours_invalid_physical_aggregates"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_public_timing_includes_independent_acceptance"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_independent_face_model_rejects_implicit_physical_mode_change"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_explicit_diagonal_selects_gmres_and_default_valued_conflicts_raise"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_low_level_layer_builder_rejects_nonbinary_active_mask[0.9]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_low_level_layer_builder_rejects_nonbinary_active_mask[1.9]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_low_level_layer_builder_rejects_nonbinary_active_mask[nan]"
+        },
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_low_level_layer_builder_rejects_nonbinary_active_mask[inf]"
+        },
+        {
+          "module": "tests.test_npf662_reference_controller",
+          "test": "test_reference_linear_controller_rejects_finite_bad_solutions"
+        },
+        {
+          "module": "tests.test_npf662_reference_controller",
+          "test": "test_reference_scaled_linear_system"
+        },
+        {
+          "module": "tests.test_npf662_reference_controller",
+          "test": "test_reference_never_line_searches_inadequate_finite_direction"
+        }
+      ]
+    },
+    "reference_controller_before": {
+      "tests": 1,
+      "passed": 0,
+      "failed": 1,
+      "errors": 0,
+      "skipped": 0,
+      "warnings": 0,
+      "unsuccessful": [
+        {
+          "module": "tests.test_npf662_reference_controller",
+          "test": "test_reference_never_line_searches_inadequate_finite_direction"
+        }
+      ]
+    },
+    "stage_a_after": {
+      "tests": 89,
+      "passed": 89,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "warnings": 0,
+      "unsuccessful": []
+    },
+    "stage_a_extended": {
+      "tests": 70,
+      "passed": 70,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "warnings": 0,
+      "unsuccessful": []
+    },
+    "stage_a_final_cpu": {
+      "tests": 122,
+      "passed": 99,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 23,
+      "warnings": 0,
+      "unsuccessful": []
+    },
+    "stage_b_cpu": {
+      "tests": 1555,
+      "passed": 1129,
+      "failed": 1,
+      "errors": 0,
+      "skipped": 425,
+      "warnings": 0,
+      "unsuccessful": [
+        {
+          "module": "tests.test_npf662_layers",
+          "test": "test_internal_vertical_inactive_cell_has_no_passthrough"
+        }
+      ]
+    },
+    "stage_b_cpu_recheck": {
+      "tests": 64,
+      "passed": 63,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 1,
+      "warnings": 0,
+      "unsuccessful": []
+    },
+    "stage_b_final_cpu": {
+      "tests": 1583,
+      "passed": 1157,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 426,
+      "warnings": 0,
+      "unsuccessful": []
+    },
+    "stage_c_full_cpu": {
+      "tests": 1853,
+      "passed": 1382,
+      "failed": 3,
+      "errors": 3,
+      "skipped": 465,
+      "warnings": 135,
+      "unsuccessful": [
+        {
+          "module": "tests.test_2d_unconfined",
+          "test": "test_unconfined_warp_matches_mf6_truth_all_grids[2000x2000]"
+        },
+        {
+          "module": "tests.test_2d_unconfined",
+          "test": "test_unconfined_warp_matches_mf6_truth_all_grids[3000x3000]"
+        },
+        {
+          "module": "tests.test_fas_transient_multistep",
+          "test": "test_18_fas_vs_picard_complete_transient_histories"
+        },
+        {
+          "module": "tests.test_unconfined_solvers_500x500",
+          "test": "test_picard_production_replay_500x500"
+        },
+        {
+          "module": "tests.test_unconfined_solvers_500x500",
+          "test": "test_alternate_nonlinear_backend_500x500[unconfined_semismooth_newton_kcycle]"
+        },
+        {
+          "module": "tests.test_unconfined_solvers_500x500",
+          "test": "test_alternate_nonlinear_backend_500x500[unconfined_fas]"
+        }
+      ]
+    },
+    "stage_c_uncapped_cpu": {
+      "tests": 1862,
+      "passed": 1395,
+      "failed": 2,
+      "errors": 0,
+      "skipped": 465,
+      "warnings": 188,
+      "unsuccessful": [
+        {
+          "module": "tests.test_fas_transient_multistep",
+          "test": "test_18_fas_vs_picard_complete_transient_histories"
+        },
+        {
+          "module": "tests.test_validation_repairs_3d",
+          "test": "test_empty_free_layers_and_comparison_subsets"
+        }
+      ]
+    },
+    "fas_baseline": {
+      "tests": 1,
+      "passed": 0,
+      "failed": 1,
+      "errors": 0,
+      "skipped": 0,
+      "warnings": 4,
+      "unsuccessful": [
+        {
+          "module": "tests.test_fas_transient_multistep",
+          "test": "test_18_fas_vs_picard_complete_transient_histories"
+        }
+      ]
+    },
+    "final_contract": {
+      "tests": 112,
+      "passed": 104,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 8,
+      "warnings": 0,
+      "unsuccessful": []
+    },
+    "final_acceptance_recheck": {
+      "tests": 93,
+      "passed": 93,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "warnings": 0,
+      "unsuccessful": []
+    },
+    "final_npf_dispatch": {
+      "tests": 246,
+      "passed": 196,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 50,
+      "warnings": 0,
+      "unsuccessful": []
+    },
+    "final_focused": {
+      "tests": 100,
+      "passed": 100,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "warnings": 0,
+      "unsuccessful": []
+    },
+    "final_budget_mask_validation": {
+      "tests": 111,
+      "passed": 111,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "warnings": 0,
+      "unsuccessful": []
+    },
+    "final_npf_builders": {
+      "tests": 279,
+      "passed": 229,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 50,
+      "warnings": 0,
+      "unsuccessful": []
+    },
+    "final_empty_domain_recheck": {
+      "tests": 126,
+      "passed": 126,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "warnings": 0,
+      "unsuccessful": []
+    },
+    "final_control_types": {
+      "tests": 278,
+      "passed": 228,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 50,
+      "warnings": 0,
+      "unsuccessful": []
+    },
+    "public_terrain_overflow_before": {
+      "tests": 1,
+      "passed": 0,
+      "failed": 1,
+      "errors": 0,
+      "skipped": 0,
+      "warnings": 0,
+      "unsuccessful": [
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_public_terrain_rejects_overflow_with_small_final_head_residual"
+        }
+      ]
+    },
+    "ci_contract": {
+      "tests": 149,
+      "passed": 145,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 4,
+      "warnings": 0,
+      "unsuccessful": []
+    },
+    "ci_npf": {
+      "tests": 152,
+      "passed": 137,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 15,
+      "warnings": 0,
+      "unsuccessful": []
+    },
+    "ci_terrain": {
+      "tests": 389,
+      "passed": 295,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 94,
+      "warnings": 0,
+      "unsuccessful": []
+    },
+    "ci_2d": {
+      "tests": 45,
+      "passed": 39,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 6,
+      "warnings": 0,
+      "unsuccessful": []
+    }
+  },
+  "independent_confined": {
+    "cases": 8,
+    "maximum_warp_scipy_head_error_m": 4.231281991451397e-12,
+    "maximum_mf6_scipy_head_error_m": 4.462208380573429e-12,
+    "maximum_supplied_head_flux_error_m3_day": 2.842170943040401e-14,
+    "maximum_warp_relative_cell_imbalance": 4.19537171884228e-10
+  },
+  "full_suite_is_green": false
+}

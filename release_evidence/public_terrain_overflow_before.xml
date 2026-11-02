@@ -1,0 +1,3 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="1" time="0.484" timestamp="2026-11-03T09:46:40.744273+13:00" hostname="patrickdurney-Z890-UD-WIFI6E"><testcase classname="tests.test_3d_release_contract" name="test_public_terrain_rejects_overflow_with_small_final_head_residual" time="0.073"><failure message="assert not True">tests/test_3d_release_contract.py:418: in test_public_terrain_rejects_overflow_with_small_final_head_residual
+    assert not info['converged']
+E   assert not True</failure></testcase></testsuite></testsuites>

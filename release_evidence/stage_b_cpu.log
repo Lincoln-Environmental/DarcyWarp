@@ -1,0 +1,71 @@
+Warp CUDA error 100: no CUDA-capable device is detected (in function init_cuda_driver, /builds/omniverse/warp/warp/native/cuda_util.cpp:333)
+Warp 1.17.0 initialized:
+   CUDA Toolkit 12.9, CUDA driver not available (NVRTC compilation available)
+   Devices:
+     "cpu"      : "x86_64"
+   Kernel cache:
+     /home/patrickdurney/.cache/warp/1.17.0
+........................................................................ [  4%]
+........................................................................ [  9%]
+........................................................................ [ 13%]
+........................................................................ [ 18%]
+s.....s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s......................... [ 23%]
+.............................s.ss....................................... [ 27%]
+.......................................................s..s..........s.s [ 32%]
+.s.s.s......s...s...sss.s.s.s.s.s...sss.s.s.s.s.s.s.s.s.s.s.s..s......ss [ 37%]
+ss...........s....s.s.....F.s.s.s.s.......s.s.s.s..s.......s............ [ 41%]
+.....................................sssssssssssssssssssssssssssssssssss [ 46%]
+sssss................................................................sss [ 50%]
+sssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss........sss [ 55%]
+sssss................................................................... [ 60%]
+........................................................................ [ 64%]
+.....................................sssssssssssssssssssssssssssssssssss [ 69%]
+sssssssssssssssssssssssssssss................ssssssss................sss [ 74%]
+sssssssssssss...............ss....ssss..........................s.....ss [ 78%]
+sss..................................................................... [ 83%]
+.......................................................sssssssssssssssss [ 87%]
+ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss [ 92%]
+sssssss..ss.............ssssssss....ssss..ss..ss........ssssssss..ss.... [ 97%]
+..ssssss..ss.....sssss........s.s..........                              [100%]
+=================================== FAILURES ===================================
+___________ test_internal_vertical_inactive_cell_has_no_passthrough ____________
+../../../miniconda3/envs/darcywarp312/lib/python3.12/site-packages/warp/_src/types.py:3849: in _init_new
+    device = warp._src.context.runtime.get_device(device)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../miniconda3/envs/darcywarp312/lib/python3.12/site-packages/warp/_src/context.py:8482: in get_device
+    raise ValueError(f"Invalid device identifier: {ident}")
+E   ValueError: Invalid device identifier: cuda:0
+
+During handling of the above exception, another exception occurred:
+tests/test_npf662_layers.py:270: in test_internal_vertical_inactive_cell_has_no_passthrough
+    head,checks=model.solve(max_outer=50)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/warped_darcy_3d.py:398: in solve
+    return solve_npf662(model=self,**kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/npf662_3d.py:85: in solve_npf662
+    head,info=solve_newton_device(model=model,case=case,reference=reference,max_outer=max_outer,
+DARCY_WARP_PACKAGE/solvers/npf662_newton.py:193: in solve_newton_device
+    workspace=NPF662Workspace(model=model,case=case,restart=restart,krylov_budget=krylov_budget)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/npf662_newton.py:35: in __init__
+    setattr(self,name,wp.zeros(shape=self.n,dtype=wp.float64,device=self.device))
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../miniconda3/envs/darcywarp312/lib/python3.12/site-packages/warp/_src/context.py:9605: in zeros
+    arr = empty(
+../../../miniconda3/envs/darcywarp312/lib/python3.12/site-packages/warp/_src/context.py:9869: in empty
+    arr = warp.array(
+../../../miniconda3/envs/darcywarp312/lib/python3.12/site-packages/warp/_src/types.py:3418: in __init__
+    self._init_new(dtype, shape, strides, device, pinned)
+../../../miniconda3/envs/darcywarp312/lib/python3.12/site-packages/warp/_src/types.py:3853: in _init_new
+    device = warp._src.context.get_device(device)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../miniconda3/envs/darcywarp312/lib/python3.12/site-packages/warp/_src/context.py:8745: in get_device
+    return runtime.get_device(ident)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../miniconda3/envs/darcywarp312/lib/python3.12/site-packages/warp/_src/context.py:8482: in get_device
+    raise ValueError(f"Invalid device identifier: {ident}")
+E   ValueError: Invalid device identifier: cuda:0
+=========================== short test summary info ============================
+FAILED tests/test_npf662_layers.py::test_internal_vertical_inactive_cell_has_no_passthrough
+1 failed, 1129 passed, 425 skipped in 307.10s (0:05:07)

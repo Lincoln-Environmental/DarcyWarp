@@ -1,0 +1,20 @@
+Warp CUDA error 100: no CUDA-capable device is detected (in function init_cuda_driver, /builds/omniverse/warp/warp/native/cuda_util.cpp:333)
+❌ cuInit failed (res=100).
+cuda_device_found = False
+Warp 1.17.0 initialized:
+   CUDA Toolkit 12.9, CUDA driver not available (NVRTC compilation available)
+   Devices:
+     "cpu"      : "x86_64"
+   Kernel cache:
+     /home/patrickdurney/.cache/warp/1.17.0
+Module DARCY_WARP_PACKAGE.solvers.face_kernels_3d_f64 e2acfa1 load on device 'cpu' took 0.63 ms  (cached)
+Module DARCY_WARP_PACKAGE.kernels_3d c272a89 load on device 'cpu' took 0.15 ms  (cached)
+x SciPy/cpu/MF6 passed
+y SciPy/cpu/MF6 passed
+z SciPy/cpu/MF6 passed
+constant SciPy/cpu/MF6 passed
+layered SciPy/cpu/MF6 passed
+heterogeneous SciPy/cpu/MF6 passed
+masked SciPy/cpu/MF6 passed
+disconnected SciPy/cpu/MF6 passed
+Terrain branch separation [m]: 0.3771228345055704

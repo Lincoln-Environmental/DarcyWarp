@@ -14,6 +14,72 @@ from DARCY_WARP_PACKAGE.validation.head_checks import inspect_heads
 from DARCY_WARP_PACKAGE.validation.npf662_metrics import final_tolerances, stable_rms, stable_sum
 
 
+@dataclass(frozen=True)
+class ReferenceLinearControls:
+    """Linear accuracy controls; final physical acceptance remains unchanged."""
+    relative_residual: float = 1e-8
+    backward_error: float = 1e-12
+    refinement_steps: int = 3
+
+    def validate(self):
+        if any(not np.isfinite(value) or not 0. < value < 1. for value in
+               (self.relative_residual, self.backward_error)):
+            raise ValueError('Reference linear tolerances must lie in (0,1)')
+        if isinstance(self.refinement_steps, (bool, np.bool_)) or not isinstance(self.refinement_steps, (int, np.integer)) or self.refinement_steps < 0:
+            raise ValueError('refinement_steps must be a nonnegative integer')
+
+
+def solve_reference_correction(*, matrix, rhs, controls):
+    """Equilibrated SciPy solve, checked in the original physical equations.
+
+    Extended-precision residual evaluation makes iterative refinement useful
+    without sharing any production coefficients or Warp kernels. Both forcing
+    and componentwise backward error must pass before nonlinear line search.
+    """
+    controls.validate()
+    matrix = matrix.tocsr()
+    if not np.all(np.isfinite(matrix.data)) or not np.all(np.isfinite(rhs)):
+        raise ValueError('Reference linear system is nonfinite')
+    row_scale = abs(matrix).max(axis=1).toarray().ravel()
+    if np.any(row_scale <= 0.):
+        raise ValueError('Reference linear system contains a zero row')
+    coo = matrix.tocoo()
+    row_scaled = sparse.coo_matrix((coo.data/row_scale[coo.row], (coo.row, coo.col)), shape=matrix.shape).tocsr()
+    column_scale = abs(row_scaled).max(axis=0).toarray().ravel()
+    if np.any(column_scale <= 0.):
+        raise ValueError('Reference linear system contains a zero column')
+    scaled_coo = row_scaled.tocoo()
+    equilibrated = sparse.coo_matrix((scaled_coo.data/column_scale[scaled_coo.col],
+        (scaled_coo.row, scaled_coo.col)), shape=matrix.shape).tocsc()
+    extended = matrix.astype(np.longdouble)
+    extended_rhs = np.asarray(rhs, dtype=np.longdouble)
+    correction = np.zeros_like(rhs, dtype=float)
+    residual = extended_rhs.copy()
+    records = []
+    for refinement in range(controls.refinement_steps+1):
+        with warnings.catch_warnings():
+            warnings.simplefilter('error')
+            increment = spsolve(A=equilibrated, b=np.asarray(residual/row_scale, dtype=float))/column_scale
+        correction += increment
+        residual = extended_rhs-extended@np.asarray(correction, dtype=np.longdouble)
+        denominator = abs(extended)@np.abs(np.asarray(correction, dtype=np.longdouble))+np.abs(extended_rhs)
+        ratios = np.divide(np.abs(residual), denominator, out=np.zeros_like(residual), where=denominator > 0.)
+        ratios[(denominator == 0.) & (residual != 0.)] = np.inf
+        backward = float(np.max(ratios)) if ratios.size else 0.
+        residual_rms = stable_rms(values=residual)
+        rhs_rms = stable_rms(values=rhs)
+        relative = residual_rms/max(rhs_rms, np.finfo(float).tiny)
+        accepted = bool(np.all(np.isfinite(correction)) and np.isfinite(relative) and
+                        backward <= controls.backward_error and relative <= controls.relative_residual)
+        records.append(dict(refinement=refinement, linear_residual_rms=residual_rms,
+            linear_residual_max=float(np.max(np.abs(residual))) if residual.size else 0.,
+            linear_relative_residual=relative, linear_backward_error=backward, linear_accepted=accepted))
+        if accepted or not np.all(np.isfinite(correction)):
+            break
+    return correction, dict(**records[-1], refinement_history=records,
+        scaling='row and column maximum equilibration; original-equation extended residual')
+
+
 def serialized_case_fields(*,case):
     names=tuple(case.__dataclass_fields__)
     if getattr(case,'_legacy_implicit_cell_type',False) and np.ndim(case.cell_type)==0 and case.cell_type==0:
@@ -309,7 +375,9 @@ class NPF662Reference:
         result.update(linear_residual_max=linear_max,linear_backward_error=backward)
         return head,result,fields
 
-    def solve_newton(self,*,max_outer):
+    def solve_newton(self,*,max_outer,linear_controls=None):
+        linear_controls = ReferenceLinearControls() if linear_controls is None else linear_controls
+        linear_controls.validate()
         c=self.case;f=self.free.ravel()
         head=np.where(c.fixed,c.values,c.initial).astype(float).copy()
         history=[];reason='outer_budget'
@@ -323,13 +391,11 @@ class NPF662Reference:
             for mode in ('newton','full_saturated_safeguard'):
                 A=(self.jacobian(head=head) if mode=='newton' else self.matrix)[f][:,f].tocsc()
                 try:
-                    with warnings.catch_warnings():
-                        warnings.simplefilter('error')
-                        correction=spsolve(A=A,b=rhs)
-                except (RuntimeError,Warning) as error:
+                    correction, linear_info = solve_reference_correction(matrix=A, rhs=rhs, controls=linear_controls)
+                except (RuntimeError, Warning, ValueError) as error:
                     trials.append(dict(direction=mode,factorization_failure=str(error)));continue
-                if not np.all(np.isfinite(correction)):
-                    trials.append(dict(direction=mode,nonfinite_correction=True));continue
+                if not linear_info['linear_accepted']:
+                    trials.append(dict(direction=mode, accepted=False, stopping='inadequate_linear_solve', **linear_info));continue
                 delta=np.zeros_like(head);delta.ravel()[f]=correction
                 alpha=min(1.,50./max(float(np.max(np.abs(correction))),np.finfo(float).tiny))
                 for attempt in range(30):
@@ -338,8 +404,7 @@ class NPF662Reference:
                     if check['input_valid'] and (check['physical_rms']<old or check['independent_accepted']):
                         head=trial;found=True;break
                     alpha*=.5
-                linear=float(np.max(np.abs(A@correction-rhs)))
-                trials.append(dict(direction=mode,alpha=alpha,accepted=found,linear_residual_max=linear,
+                trials.append(dict(direction=mode,alpha=alpha,accepted=found,**linear_info,
                     physical_rms=check['physical_rms']))
                 if found:break
             history.append(dict(outer=outer+1,accepted=found,attempts=trials))

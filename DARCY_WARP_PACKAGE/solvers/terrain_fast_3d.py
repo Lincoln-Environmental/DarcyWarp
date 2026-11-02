@@ -23,6 +23,9 @@ from DARCY_WARP_PACKAGE.physics.terrain_budget_3d import compute_terrain_budget_
 from DARCY_WARP_PACKAGE.physics.storage_contract_3d import validate_unconfined_storage_inputs
 from DARCY_WARP_PACKAGE.physics.storage_3d import storage_increment_3d, seed_zero_capacity_state_3d
 from DARCY_WARP_PACKAGE.physics.components_3d import hydraulic_component_labels_3d
+from DARCY_WARP_PACKAGE.physics.inputs_3d import binary_mask
+from DARCY_WARP_PACKAGE.physics.budget_3d import is_3d_budget_conserved
+from DARCY_WARP_PACKAGE.solvers.work_counters_3d import increment_work
 
 
 def pack_terrain_coefficients(*, operator):
@@ -163,6 +166,7 @@ class TerrainGPUWorkspace3D:
         self.nz,self.ny,self.nx = self.shape
         self.n = int(np.prod(self.shape))
         self.device = device
+        self.work_counts = wp.zeros(shape=2, dtype=wp.int64, device=device)
         self.datum = float(datum)
         self.max_levels,self.min_coarse_n = max_levels,min_coarse_n
         self.x = wp.zeros(self.n,dtype=wp.float64,device=device)
@@ -272,9 +276,11 @@ class TerrainGPUWorkspace3D:
         self.smooth(level=level,iterations=2)
 
     def precondition(self, x, y, z, alpha, beta):
+        wp.launch(kernel=increment_work, dim=1, inputs=[self.work_counts, 0], device=self.device)
         fine = self.levels[0]
         wp.launch(terrain_preconditioner_rhs_kernel,dim=self.shape,inputs=[x,self.scale,fine["rhs"],fine["x"],fine["active"],fine["bc_mask"]],device=self.device)
         self.vcycle(index=0)
+        wp.launch(kernel=increment_work, dim=1, inputs=[self.work_counts, 1], device=self.device)
         wp.launch(terrain_preconditioner_output_kernel,dim=self.shape,inputs=[x,fine["x"],fine["active"],fine["bc_mask"],self.preconditioned],device=self.device)
         wp.launch(terrain_combine_kernel,dim=self.n,inputs=[self.preconditioned,y,z,float(alpha),float(beta)],device=self.device)
 
@@ -295,13 +301,17 @@ class TerrainOperatorSession3D:
         self.kx = field_3d(value=kx,shape=self.shape,name="kx",nonnegative=True)
         self.ky = field_3d(value=ky,shape=self.shape,name="ky",nonnegative=True)
         self.kz = field_3d(value=kz,shape=self.shape,name="kz",nonnegative=True)
-        self.bc_mask = np.asarray(bc_mask,dtype=np.int32).copy()
+        self.bc_mask = binary_mask(value=bc_mask, name="bc_mask", shape=self.shape)
         if self.bc_mask.shape != self.shape or not np.all((self.bc_mask == 0)|(self.bc_mask == 1)) or np.any((self.bc_mask != 0)&(grid.active == 0)):
             raise ValueError("bc_mask must be binary, grid-shaped and active")
         self.bc_values = field_3d(value=bc_values,shape=self.shape,name="bc_values")
         self.rhs = field_3d(value=rhs,shape=self.shape,name="rhs")
         self.initial_head = None if initial_head is None else field_3d(value=initial_head,shape=self.shape,name="initial_head")
         self.contacts = tuple(contacts)
+        # Validate contacts and geometric/material compatibility before a
+        # public builder can install this replacement session.
+        TerrainReferenceOperator3D(metrics=self.metrics, kx=self.kx, ky=self.ky,
+                                   kz=self.kz, contacts=self.contacts)
         if any(self.bc_mask[contact.cell] for contact in self.contacts):
             raise ValueError("a fixed-head cell cannot also own an exchange subface")
         self.workspace = None
@@ -333,8 +343,11 @@ class TerrainOperatorSession3D:
             raise ValueError("terrain geometry updates must retain grid shape")
         if np.any((self.bc_mask != 0)&(grid.active == 0)):
             raise ValueError("geometry update would deactivate a fixed-head cell")
+        metrics = TerrainMetrics3D(grid=grid)
+        TerrainReferenceOperator3D(metrics=metrics, kx=self.kx, ky=self.ky,
+                                   kz=self.kz, contacts=self.contacts)
         self.grid = grid
-        self.metrics = TerrainMetrics3D(grid=grid)
+        self.metrics = metrics
         self.geometry_revision += 1
 
     def close(self):
@@ -419,6 +432,8 @@ class TerrainOperatorSession3D:
         free = (self.grid.active != 0)&(self.bc_mask == 0)
         key = (device,max_levels,min_coarse_n,krylov_restart,max_cycles,rel_tol,abs_tol_min)
         total_iterations = 0
+        work_counts = np.zeros(2, dtype=np.int64)
+        restart_blocks = 0
         history = []
         refresh_seconds = 0.0
         discharge_seeds = 0
@@ -522,11 +537,15 @@ class TerrainOperatorSession3D:
             self.workspace.krylov._atol = inner_head_target*np.sqrt(n_free)
             self.workspace.krylov._maxiter = int(max_cycles)
             refresh_seconds += perf_counter()-start
+            work_before = self.workspace.work_counts.numpy().copy()
+            blocks_before = getattr(self.workspace.krylov, "restart_blocks", 0)
             if max_cycles > 0:
                 iterations,error,tolerance = self.workspace.krylov()
             else:
                 iterations,error,tolerance = 0, float("nan"),abs_tol_min
             total_iterations += iterations
+            work_counts += self.workspace.work_counts.numpy()-work_before
+            restart_blocks += getattr(self.workspace.krylov, "restart_blocks", 0)-blocks_before
             candidate = self.workspace.x.numpy().reshape(self.shape)+datum
             candidate[self.grid.active == 0] = 0
             candidate[self.bc_mask != 0] = self.bc_values[self.bc_mask != 0]
@@ -557,7 +576,8 @@ class TerrainOperatorSession3D:
                     mode=unconfined_storage_mode,sy=sy_field,ss=ss_field,coeff=coeff,dt=dt)
                 budget = compute_terrain_budget_3d(operator=final_operator,head=head,source=self.rhs,fixed=self.bc_mask,
                     storage_change=final_change,storage_diagonal=final_storage)
-            converged = np.all(np.isfinite(head)) and budget["head_residual_rms"] <= head_tolerance and (budget["cell_residual_rms"] <= abs_tol_min or budget["relative_cell_imbalance"] <= final_budget_relative_tol)
+            converged = np.all(np.isfinite(head)) and budget["head_residual_rms"] <= head_tolerance and is_3d_budget_conserved(
+                budget=budget, absolute_tolerance=abs_tol_min, relative_tolerance=final_budget_relative_tol)
             proposed_change_max = float(np.max(np.abs(dh[free]))) if free.any() else 0
             # Convergence diagnostics must describe the state that was
             # actually accepted: a small DAMPED update is not convergence.
@@ -588,7 +608,8 @@ class TerrainOperatorSession3D:
             proposed_dh_rms_lastcheck=float(np.sqrt(np.mean(dh[free]**2))) if free.any() else 0,
             proposed_dh_max_lastcheck=proposed_change_max,requested_min_saturated_thickness=unconfined_min_sat,
             effective_layer_min_saturated_thickness=np.minimum(unconfined_min_sat,self.grid.thickness.min(axis=(1,2))).tolist(),
-            multigrid_cycles=(total_iterations+self.workspace.krylov._restart-1)//self.workspace.krylov._restart,
+            gmres_restart_blocks=restart_blocks, preconditioner_applications=int(work_counts[0]),
+            multigrid_cycles=int(work_counts[1]),
             multigrid_hierarchy="conservative approximate principal part; not exact Galerkin")
         if unconfined:
             info["dry_cell_approximation"] = terrain_dry_diagnostics_3d(operator=final_operator,head=head,source=self.rhs,fixed=self.bc_mask,budget=budget)
@@ -673,8 +694,10 @@ class TerrainOperatorSession3D:
             budget_relative_tol=final_budget_relative_tol,rel_tol=rel_tol,
             min_sat=unconfined_min_sat,outer_limit=outer_limit,
             unconfined_relax=unconfined_relax, **driver_options)
+        work_before = self.workspace.work_counts.numpy().copy()
         result = driver.run(max_outer=outer_limit)
-        head_device = state.head.numpy().reshape(self.shape)
+        work_counts = self.workspace.work_counts.numpy()-work_before
+        head_device = state.head.numpy().reshape(self.shape).copy()
         head_device[self.grid.active == 0] = 0
         head_device[self.bc_mask != 0] = self.bc_values[self.bc_mask != 0]
         # Independent final host acceptance at the completed physical state.
@@ -697,8 +720,8 @@ class TerrainOperatorSession3D:
         self.workspace.scale_host = state.scale.numpy().reshape(self.shape)
         converged = bool(np.all(np.isfinite(head_device))
             and budget["head_residual_rms"] <= head_tolerance
-            and (budget["cell_residual_rms"] <= abs_tol_min
-                 or budget["relative_cell_imbalance"] <= final_budget_relative_tol))
+            and is_3d_budget_conserved(budget=budget, absolute_tolerance=abs_tol_min,
+                                      relative_tolerance=final_budget_relative_tol))
         info = dict(implementation="fast",geometry="terrain",solver_type="terrain_device_picard_3d",
             fast_operator="fp64_conservative_transformed_faces_device",
             converged=converged,final_physical_acceptance=converged,budget=budget,
@@ -737,8 +760,7 @@ class TerrainOperatorSession3D:
             dh_max_lastcheck=float(last_trial.get("accepted_head_change_max", 0.0)),
             proposed_dh_max_lastcheck=float(last_trial.get("proposed_head_change_max", 0.0)),
             gmres_restart_blocks=sum(row["restart_blocks"] for row in result["history"]),
-            multigrid_cycles=result["krylov_iterations"]
-                + sum(row["restart_blocks"] for row in result["history"]),
+            preconditioner_applications=int(work_counts[0]), multigrid_cycles=int(work_counts[1]),
             multigrid_hierarchy="conservative approximate principal part; not exact Galerkin")
         if terrain_nonlinear_method == "newton":
             driver.close()

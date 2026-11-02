@@ -1,0 +1,180 @@
+{
+  "native_success": true,
+  "returncode": 0,
+  "stop_reason": "native_converged",
+  "seconds": 0.055291961994953454,
+  "input_hash": "c86d5b2307b1b62db7225a6b805dcbc53a05c8ff4abd7e0fc2509a637a171e4f",
+  "mf6_version": "mf6: 6.6.2 05/12/2025",
+  "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+  "native_solver_options": {
+    "complexity": "COMPLEX",
+    "print_option": "ALL",
+    "outer_maximum": 2000,
+    "outer_dvclose": 1e-14,
+    "inner_maximum": 2000,
+    "inner_dvclose": 1e-14,
+    "rcloserecord": [
+      1e-14,
+      "STRICT"
+    ],
+    "linear_acceleration": "CG",
+    "under_relaxation": "DBD",
+    "relaxation_factor": 0.97,
+    "preconditioner_drop_tolerance": 0.0,
+    "scaling_method": "DIAGONAL",
+    "preconditioner_levels": 100,
+    "csv_outer_output_filerecord": "outer.csv",
+    "csv_inner_output_filerecord": "inner.csv"
+  },
+  "timeout_seconds": 600,
+  "source_package": "wel",
+  "contract": "NPF662_CARTESIAN_V1_confined",
+  "geometry": "orthogonal_cartesian_uniform_dz",
+  "supplied_state_verification": false,
+  "settings": {
+    "xt3d": false,
+    "icelltype": [
+      [
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      [
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      [
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ]
+    ],
+    "newton": false,
+    "linear_acceleration": "CG",
+    "variablecv": false,
+    "perched": false,
+    "thickstrt": false,
+    "rewet": false,
+    "steady": true,
+    "outer_dvclose_m": 1e-14,
+    "inner_dvclose_m": 1e-14,
+    "inner_rclose_m3_day": 1e-14,
+    "scaling_method": "DIAGONAL",
+    "preconditioner_levels": 100,
+    "preconditioner_drop_tolerance": 0.0,
+    "relaxation_factor": 0.97
+  },
+  "independent": {
+    "prescribed_cells_checked": 40,
+    "prescribed_head_error_max_m": 0.0,
+    "prescribed_head_tolerance_m": 1e-10,
+    "boundary_condition_valid": true,
+    "invalid_active_heads": 0,
+    "inactive_marker_cells": 0,
+    "active_cells_checked": 60,
+    "input_valid": true,
+    "head_residual_rms": 4.484192170887169e-16,
+    "physical_rms": 5.1445349535322074e-15,
+    "physical_max": 8.188138752099339e-15,
+    "residual_l1": 8.528117448336481e-14,
+    "relative_cell_imbalance": 1.4213973253344572e-11,
+    "gross_throughput": 0.005999812505859191,
+    "signed_imbalance": -5.004921173681898e-14,
+    "boundary_inflow": 0.0029999062529045706,
+    "boundary_outflow": 0.00299990625295462,
+    "fixed_cell_source_total": 0.0,
+    "free_cells": 20,
+    "fixed_reservoir_required_inflow": -5.004906627403812e-14,
+    "ungrounded_current_components": 0,
+    "physical_metrics_valid": true,
+    "final_acceptance_thresholds": {
+      "physical_rms_m3_day": 1e-12,
+      "relative_cell_imbalance": 1e-08,
+      "head_equivalent_rms_m": 1e-06,
+      "prescribed_head_error_m": 1e-10
+    },
+    "independent_accepted": true
+  },
+  "source_allocation_max_error": 0.0,
+  "reciprocity_max": 0.0,
+  "saturation_max_error": 0.0,
+  "native_flux_residual_rms": 5.1445349535322074e-15,
+  "native_flux_residual_relative": 1.4213973253344572e-11,
+  "independent_conservation": true
+}

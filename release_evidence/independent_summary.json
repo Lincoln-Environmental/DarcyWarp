@@ -1,0 +1,13 @@
+{
+  "independent_confined_cases": 8,
+  "maximum_warp_scipy_head_error_m": 4.231281991451397e-12,
+  "maximum_mf6_scipy_head_error_m": 4.462208380573429e-12,
+  "maximum_supplied_head_native_flux_error_m3_day": 2.842170943040401e-14,
+  "maximum_warp_relative_cell_imbalance": 4.19537171884228e-10,
+  "maximum_warp_physical_rms_m3_day": 1.6950661438563779e-12,
+  "terrain_maximum_branch_separation_m": 0.3771228345055704,
+  "terrain_relative_cell_imbalances": {
+    "first": 3.793231931861109e-13,
+    "second": 3.3235085820226876e-13
+  }
+}

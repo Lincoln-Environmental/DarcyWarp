@@ -1,0 +1,211 @@
+{
+  "first": {
+    "converged": true,
+    "stop_reason": "converged",
+    "outers": 2,
+    "seconds": 0.0588569879764691,
+    "factorizations": 2,
+    "discharge_component_seeds": 0,
+    "residual_evaluations": 6,
+    "budget": {
+      "cell_residual_max": 8.246070493100888e-12,
+      "cell_residual_rms": 1.1369044041061319e-12,
+      "head_residual_rms": 7.0442931795232986e-15,
+      "source_total": 34.178859765487914,
+      "boundary_inflow": 98.1943987712986,
+      "boundary_outflow": -132.3732585367811,
+      "boundary_net": -34.1788597654825,
+      "storage_uptake": 0.0,
+      "imbalance": 5.417578712030301e-12,
+      "domain_imbalance": 5.417578712030301e-12,
+      "relative_imbalance": 2.0463267173123443e-14,
+      "relative_cell_imbalance": 3.793231931861109e-13,
+      "throughput": 264.7465170735676,
+      "physical_diagonal_scaling": "seven-point principal part",
+      "coastal_subface_outflows": [],
+      "physical_metrics_valid": true,
+      "finite_physical_state": true
+    },
+    "history": [
+      {
+        "outer": 1,
+        "accepted": true,
+        "direction": "newton",
+        "trials": [
+          {
+            "method": "newton",
+            "alpha": 1.0,
+            "merit": 2.4460309462006777e-10,
+            "flow": 2.544818643770836e-07,
+            "head": 1.441323200800286e-09,
+            "linear_relative": 3.5898914109482263e-16,
+            "backward_error": 2.1796240078367193e-16
+          }
+        ],
+        "budget": {
+          "cell_residual_max": 2.0315529746239847e-06,
+          "cell_residual_rms": 2.544818643770836e-07,
+          "head_residual_rms": 1.441323200800286e-09,
+          "source_total": 34.178859765487914,
+          "boundary_inflow": 98.19439893048849,
+          "boundary_outflow": -132.37325856930835,
+          "boundary_net": -34.17885963881986,
+          "storage_uptake": 0.0,
+          "imbalance": 1.2666805984011886e-07,
+          "domain_imbalance": 1.2666805984011886e-07,
+          "relative_imbalance": 4.784503348657587e-10,
+          "relative_cell_imbalance": 5.082674406485276e-08,
+          "throughput": 264.74651726528475,
+          "physical_diagonal_scaling": "seven-point principal part",
+          "coastal_subface_outflows": [],
+          "physical_metrics_valid": true,
+          "finite_physical_state": true
+        },
+        "alpha": 1.0,
+        "acceptance": "descent"
+      },
+      {
+        "outer": 2,
+        "accepted": true,
+        "direction": "newton",
+        "trials": [
+          {
+            "method": "newton",
+            "alpha": 1.0,
+            "merit": 1.9958790613708907e-11,
+            "flow": 1.1369044041061319e-12,
+            "head": 7.0442931795232986e-15,
+            "linear_relative": 1.2556553365603285e-14,
+            "backward_error": 1.4894744679111495e-16
+          }
+        ],
+        "budget": {
+          "cell_residual_max": 8.246070493100888e-12,
+          "cell_residual_rms": 1.1369044041061319e-12,
+          "head_residual_rms": 7.0442931795232986e-15,
+          "source_total": 34.178859765487914,
+          "boundary_inflow": 98.1943987712986,
+          "boundary_outflow": -132.3732585367811,
+          "boundary_net": -34.1788597654825,
+          "storage_uptake": 0.0,
+          "imbalance": 5.417578712030301e-12,
+          "domain_imbalance": 5.417578712030301e-12,
+          "relative_imbalance": 2.0463267173123443e-14,
+          "relative_cell_imbalance": 3.793231931861109e-13,
+          "throughput": 264.7465170735676,
+          "physical_diagonal_scaling": "seven-point principal part",
+          "coastal_subface_outflows": [],
+          "physical_metrics_valid": true,
+          "finite_physical_state": true
+        },
+        "alpha": 1.0,
+        "acceptance": "descent"
+      }
+    ]
+  },
+  "second": {
+    "converged": true,
+    "stop_reason": "converged",
+    "outers": 2,
+    "seconds": 0.05383115797303617,
+    "factorizations": 2,
+    "discharge_component_seeds": 0,
+    "residual_evaluations": 6,
+    "budget": {
+      "cell_residual_max": 8.128164807885696e-12,
+      "cell_residual_rms": 1.043439272536479e-12,
+      "head_residual_rms": 6.438558299016798e-15,
+      "source_total": 34.178859765487914,
+      "boundary_inflow": 98.49513063634883,
+      "boundary_outflow": -132.67399040183182,
+      "boundary_net": -34.17885976548298,
+      "storage_uptake": 0.0,
+      "imbalance": 4.9142339503260865e-12,
+      "domain_imbalance": 4.9142339503260865e-12,
+      "relative_imbalance": 1.8519959848355268e-14,
+      "relative_cell_imbalance": 3.3235085820226876e-13,
+      "throughput": 265.3479808036686,
+      "physical_diagonal_scaling": "seven-point principal part",
+      "coastal_subface_outflows": [],
+      "physical_metrics_valid": true,
+      "finite_physical_state": true
+    },
+    "history": [
+      {
+        "outer": 1,
+        "accepted": true,
+        "direction": "newton",
+        "trials": [
+          {
+            "method": "newton",
+            "alpha": 1.0,
+            "merit": 2.3779412116856675e-10,
+            "flow": 2.505217663444222e-07,
+            "head": 1.4244756757113014e-09,
+            "linear_relative": 3.542754892761793e-16,
+            "backward_error": 2.617334925662221e-16
+          }
+        ],
+        "budget": {
+          "cell_residual_max": 2.0715591507736164e-06,
+          "cell_residual_rms": 2.505217663444222e-07,
+          "head_residual_rms": 1.4244756757113014e-09,
+          "source_total": 34.178859765487914,
+          "boundary_inflow": 98.49513062357758,
+          "boundary_outflow": -132.67399017547,
+          "boundary_net": -34.17885955189243,
+          "storage_uptake": 0.0,
+          "imbalance": 2.1359547257163519e-07,
+          "domain_imbalance": 2.1359547257163519e-07,
+          "relative_imbalance": 8.04963625942073e-10,
+          "relative_cell_imbalance": 4.7739821548859643e-08,
+          "throughput": 265.3479805645355,
+          "physical_diagonal_scaling": "seven-point principal part",
+          "coastal_subface_outflows": [],
+          "physical_metrics_valid": true,
+          "finite_physical_state": true
+        },
+        "alpha": 1.0,
+        "acceptance": "descent"
+      },
+      {
+        "outer": 2,
+        "accepted": true,
+        "direction": "newton",
+        "trials": [
+          {
+            "method": "newton",
+            "alpha": 1.0,
+            "merit": 1.7347760861291783e-11,
+            "flow": 1.043439272536479e-12,
+            "head": 6.438558299016798e-15,
+            "linear_relative": 1.047532349888823e-14,
+            "backward_error": 1.1099788090709336e-16
+          }
+        ],
+        "budget": {
+          "cell_residual_max": 8.128164807885696e-12,
+          "cell_residual_rms": 1.043439272536479e-12,
+          "head_residual_rms": 6.438558299016798e-15,
+          "source_total": 34.178859765487914,
+          "boundary_inflow": 98.49513063634883,
+          "boundary_outflow": -132.67399040183182,
+          "boundary_net": -34.17885976548298,
+          "storage_uptake": 0.0,
+          "imbalance": 4.9142339503260865e-12,
+          "domain_imbalance": 4.9142339503260865e-12,
+          "relative_imbalance": 1.8519959848355268e-14,
+          "relative_cell_imbalance": 3.3235085820226876e-13,
+          "throughput": 265.3479808036686,
+          "physical_diagonal_scaling": "seven-point principal part",
+          "coastal_subface_outflows": [],
+          "physical_metrics_valid": true,
+          "finite_physical_state": true
+        },
+        "alpha": 1.0,
+        "acceptance": "descent"
+      }
+    ]
+  },
+  "maximum_branch_separation_m": 0.3771228345055704
+}

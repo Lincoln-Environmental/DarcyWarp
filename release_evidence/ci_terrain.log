@@ -1,0 +1,14 @@
+Warp CUDA error 100: no CUDA-capable device is detected (in function init_cuda_driver, /builds/omniverse/warp/warp/native/cuda_util.cpp:333)
+Warp 1.17.0 initialized:
+   CUDA Toolkit 12.9, CUDA driver not available (NVRTC compilation available)
+   Devices:
+     "cpu"      : "x86_64"
+   Kernel cache:
+     /home/patrickdurney/.cache/warp/1.17.0
+........................................................................ [ 18%]
+........................................................................ [ 37%]
+........................................................................ [ 55%]
+...................sssssssssssssssssssssssssssssssssssssssssssssssssssss [ 74%]
+sssssssssss................ssssssss................ssssssssssssssss..... [ 92%]
+..........ss....ssss.........                                            [100%]
+295 passed, 94 skipped in 5.44s

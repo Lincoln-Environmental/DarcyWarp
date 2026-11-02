@@ -1,0 +1,16 @@
+Warp CUDA error 100: no CUDA-capable device is detected (in function init_cuda_driver, /builds/omniverse/warp/warp/native/cuda_util.cpp:333)
+Warp 1.17.0 initialized:
+   CUDA Toolkit 12.9, CUDA driver not available (NVRTC compilation available)
+   Devices:
+     "cpu"      : "x86_64"
+   Kernel cache:
+     /home/patrickdurney/.cache/warp/1.17.0
+F                                                                        [100%]
+=================================== FAILURES ===================================
+________ test_reference_never_line_searches_inadequate_finite_direction ________
+tests/test_npf662_reference_controller.py:44: in test_reference_never_line_searches_inadequate_finite_direction
+    assert not info['history'][0]['accepted']
+E   assert not True
+=========================== short test summary info ============================
+FAILED tests/test_npf662_reference_controller.py::test_reference_never_line_searches_inadequate_finite_direction
+1 failed in 0.21s

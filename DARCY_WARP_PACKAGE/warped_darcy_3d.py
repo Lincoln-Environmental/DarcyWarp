@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """
 Standalone 3D Darcy solver wrapper.
 
@@ -10,10 +10,12 @@ separate from the 2D solver so the 2D stencil and API remain untouched.
 from __future__ import annotations
 
 from typing import Any
+from time import perf_counter
 
 import numpy as np
 
 from DARCY_WARP_PACKAGE.config import NP_FLOAT
+from DARCY_WARP_PACKAGE.physics.inputs_3d import binary_mask, floating_field, positive_integer
 from DARCY_WARP_PACKAGE.solvers_3d import (
     solve_chebyshev_7point_3d,
     solve_multigrid_kcycle_7point_3d,
@@ -24,7 +26,7 @@ from DARCY_WARP_PACKAGE.solvers_3d import build_7point_face_conductance_from_k
 
 class WarpDarcySolver3D:
     """
-    GPU 3D steady/confined Darcy solver on a structured (nz, ny, nx) grid.
+    Structured (nz, ny, nx) Darcy model for Warp CPU and CUDA.
 
     The solver uses a cell-centered 7-point finite-volume stencil with
     harmonic-mean face conductances.  It is a thin wrapper around the
@@ -53,8 +55,9 @@ class WarpDarcySolver3D:
         implementation: str = "classic",
         formulation: str = "legacy",
     ):
-        if nx <= 0 or ny <= 0 or nz <= 0:
-            raise ValueError("nx, ny, nz must be positive")
+        nx = positive_integer(value=nx, name="nx")
+        ny = positive_integer(value=ny, name="ny")
+        nz = positive_integer(value=nz, name="nz")
         if not np.isfinite(float(dx)) or float(dx) <= 0.0:
             raise ValueError("dx must be finite and > 0")
         self.nx = int(nx)
@@ -77,6 +80,8 @@ class WarpDarcySolver3D:
         if implementation_mode not in {"classic", "fast"}:
             raise ValueError("implementation must be 'classic' or 'fast'.")
         self.implementation = implementation_mode
+        if implementation_mode == 'fast' and backend_mode == 'host':
+            raise ValueError("fast 3D applies its diagonal on the selected Warp device; use diag_preconditioner_backend='auto' or 'device'")
         if formulation not in {'legacy','mf6_6_6_2_npf','experimental_transformed_terrain'}:
             raise ValueError('Unknown 3D formulation; choose legacy, mf6_6_6_2_npf, or experimental_transformed_terrain')
         self.formulation=formulation
@@ -129,22 +134,33 @@ class WarpDarcySolver3D:
         bc_values
             Prescribed heads on Dirichlet cells, shape (nz, ny, nx).
         rhs
-            Right-hand side (recharge / source term), shape (nz, ny, nx).
+            Volumetric cell injection [m³/day] in metre/day units, shape
+            (nz, ny, nx). Multiply recharge [m/day] by dx*dy once.
         initial_head
             Optional initial guess, shape (nz, ny, nx).
         """
         if self.formulation=='experimental_transformed_terrain':
             raise ValueError('experimental_transformed_terrain requires build_from_terrain')
+        active = binary_mask(value=active, name="active", shape=self.shape)
+        fields = self._validated_K_fields(kx_field=kx_field, ky_field=ky_field, kz_field=kz_field)
+        if self.formulation == 'mf6_6_6_2_npf':
+            from DARCY_WARP_PACKAGE.validation.npf662_reference import NPF662Case
+            case = NPF662Case(kx=fields[0], ky=fields[1], kz=fields[2], active=active,
+                fixed=np.asarray(bc_mask), values=np.asarray(bc_values, dtype=NP_FLOAT),
+                source=np.asarray(rhs, dtype=NP_FLOAT),
+                initial=np.zeros(self.shape) if initial_head is None else np.asarray(initial_head, dtype=NP_FLOAT),
+                dx=self.dx, dy=self.dy, dz=self.dz)
+            case.validate()
         tx_p, tx_m, ty_p, ty_m, tz_p, tz_m = build_7point_face_conductance_from_k(
-            kx_field=kx_field,
-            ky_field=ky_field,
-            kz_field=kz_field,
+            kx_field=fields[0],
+            ky_field=fields[1],
+            kz_field=fields[2],
             active=active,
             dx=self.dx,
             dy=self.dy,
             dz=self.dz,
         )
-        self.build_from_face_conductance(
+        self._build_from_face_conductance(
             tx_p=tx_p,
             tx_m=tx_m,
             ty_p=ty_p,
@@ -157,12 +173,25 @@ class WarpDarcySolver3D:
             rhs=rhs,
             initial_head=initial_head,
         )
-        self._kx_field = np.asarray(kx_field, dtype=NP_FLOAT).copy()
-        self._ky_field = np.asarray(ky_field, dtype=NP_FLOAT).copy()
-        self._kz_field = np.asarray(kz_field, dtype=NP_FLOAT).copy()
+        self._kx_field, self._ky_field, self._kz_field = fields
         return self
 
     def build_from_face_conductance(
+        self, tx_p, tx_m, ty_p, ty_m, tz_p, tz_m, active, bc_mask,
+        bc_values, rhs, initial_head=None,
+    ) -> "WarpDarcySolver3D":
+        """Build independent reciprocal faces for legacy confined flow.
+
+        Physical NPF conductivity/geometry must enter through its K or layered
+        builder. Reject an incompatible replacement before changing the model.
+        """
+        if self.formulation == 'mf6_6_6_2_npf':
+            raise ValueError('mf6_6_6_2_npf requires physical K/geometry; use build_from_K_fields or build_from_layers, not arbitrary faces')
+        return self._build_from_face_conductance(tx_p=tx_p, tx_m=tx_m, ty_p=ty_p, ty_m=ty_m,
+            tz_p=tz_p, tz_m=tz_m, active=active, bc_mask=bc_mask, bc_values=bc_values,
+            rhs=rhs, initial_head=initial_head)
+
+    def _build_from_face_conductance(
         self,
         tx_p: np.ndarray,
         tx_m: np.ndarray,
@@ -188,7 +217,6 @@ class WarpDarcySolver3D:
         shape = self.shape
         if self.formulation=='experimental_transformed_terrain':
             raise ValueError('experimental_transformed_terrain requires build_from_terrain')
-        self.geometry = "cartesian"
         for name, arr in (
             ("tx_p", tx_p),
             ("tx_m", tx_m),
@@ -209,17 +237,12 @@ class WarpDarcySolver3D:
         validated_faces = validate_reciprocal_faces(
             faces=(tx_p, tx_m, ty_p, ty_m, tz_p, tz_m), active=active, canonicalize=True)
         input_faces = tuple(np.asarray(value, dtype=NP_FLOAT) for value in validated_faces)
-        input_active = np.asarray(active, dtype=np.int32)
-        input_bc_mask = np.asarray(bc_mask, dtype=np.int32)
+        input_active = binary_mask(value=active, name="active", shape=shape)
+        input_bc_mask = binary_mask(value=bc_mask, name="bc_mask", shape=shape)
         input_bc_values = np.asarray(bc_values, dtype=NP_FLOAT)
         input_rhs = np.asarray(rhs, dtype=NP_FLOAT)
         input_initial = None if initial_head is None else np.asarray(initial_head, dtype=NP_FLOAT)
-        self._kx_field = None
-        self._ky_field = None
-        self._kz_field = None
-        if self._session is not None:
-            self._session.close()
-        self._session = ThreeDOperatorSession(
+        session = ThreeDOperatorSession(
             faces=input_faces,
             active=input_active,
             bc_mask=input_bc_mask,
@@ -230,6 +253,10 @@ class WarpDarcySolver3D:
             dy=self.dy,
             dz=self.dz,
         )
+        previous = self._session
+        self._session = session
+        self.geometry = "cartesian"
+        self._kx_field = self._ky_field = self._kz_field = None
         # The session is the single owner of operator state.  Keep the
         # compatibility attributes as references, so classic, fast and the
         # unconfined fallback cannot observe divergent host arrays.
@@ -239,6 +266,8 @@ class WarpDarcySolver3D:
         self._bc_values = self._session.bc_values
         self._rhs = self._session.rhs
         self._initial_head = self._session.initial_head
+        if previous is not None:
+            previous.close()
         return self
 
     def build_from_terrain(self, *, surface_elevation=None, zeta_faces=None,
@@ -269,10 +298,10 @@ class WarpDarcySolver3D:
                              z_interfaces=z_interfaces,dx=self.dx,dy=self.dy,active_columns=active_columns)
         if grid.shape != self.shape:
             raise ValueError(f"terrain grid shape {grid.shape} expected {self.shape}")
-        if self._session is not None:
-            self._session.close()
-        self._session = TerrainOperatorSession3D(grid=grid,kx=kx_field,ky=ky_field,kz=kz_field,
+        session = TerrainOperatorSession3D(grid=grid,kx=kx_field,ky=ky_field,kz=kz_field,
             bc_mask=bc_mask,bc_values=bc_values,rhs=rhs,initial_head=initial_head,contacts=contacts)
+        previous = self._session
+        self._session = session
         self.geometry = "terrain"
         self._rhs = self._session.rhs
         self._active = grid.active
@@ -281,6 +310,8 @@ class WarpDarcySolver3D:
         self._initial_head = self._session.initial_head
         self._tx_p = self._tx_m = self._ty_p = self._ty_m = self._tz_p = self._tz_m = None
         self._kx_field = self._ky_field = self._kz_field = None
+        if previous is not None:
+            previous.close()
         return self
 
     def build_from_layers(self, *, z_interfaces, kx_field, ky_field, kz_field,
@@ -306,14 +337,54 @@ class WarpDarcySolver3D:
             active=case.active,dx=self.dx,dy=self.dy)
         session=ThreeDOperatorSession(faces=faces,active=case.active,bc_mask=case.fixed,bc_values=case.values,
             rhs=case.source,initial_head=case.initial,dx=self.dx,dy=self.dy,dz=self.dz,z_interfaces=case.z_interfaces)
-        if self._session is not None:self._session.close()
+        # The layered contract already enforces positive active K; finite
+        # inactive conductivity markers remain compatible with that schema.
+        fields = self._validated_K_fields(kx_field=case.kx, ky_field=case.ky, kz_field=case.kz,
+                                           require_nonnegative=False)
+        previous = self._session
         self._session=session
         self.geometry='structured_dis_layered'
-        self._kx_field,self._ky_field,self._kz_field=case.kx.copy(),case.ky.copy(),case.kz.copy()
+        self._kx_field,self._ky_field,self._kz_field=fields
         self._tx_p,self._tx_m,self._ty_p,self._ty_m,self._tz_p,self._tz_m=session.faces
         self._active,self._bc_mask,self._bc_values=session.active,session.bc_mask,session.bc_values
         self._rhs,self._initial_head=session.rhs,session.initial_head
+        if previous is not None:
+            previous.close()
         return self
+
+    def _validated_K_fields(self, *, kx_field, ky_field, kz_field, require_nonnegative=True):
+        fields = tuple(floating_field(value=value, name=name, dtype=NP_FLOAT) for name, value in
+                       (("kx", kx_field), ("ky", ky_field), ("kz", kz_field)))
+        if any(value.shape != self.shape for value in fields):
+            raise ValueError("conductivity fields must match the model shape")
+        if require_nonnegative and any(np.any(value < 0.) for value in fields):
+            raise ValueError("conductivity fields must be nonnegative")
+        for value in fields:
+            value.setflags(write=False)
+        return fields
+
+    def update_K_fields(self, *, kx_field, ky_field, kz_field):
+        """Update physical conductivity, preserving geometry and model ownership.
+
+        All six derived faces change together; cached operators are refreshed
+        on the next solve. Independent face models must use their face API.
+        """
+        if self._session is None or self._kx_field is None or self.geometry == "terrain":
+            raise ValueError("update_K_fields requires build_from_K_fields or build_from_layers")
+        fields = self._validated_K_fields(kx_field=kx_field, ky_field=ky_field, kz_field=kz_field,
+                                           require_nonnegative=self.geometry != 'structured_dis_layered')
+        if self.formulation == 'mf6_6_6_2_npf' and any(np.any(value[self._active != 0] <= 0.) for value in fields):
+            raise ValueError("NPF requires positive physical conductivity in all active cells")
+        if self.geometry == "structured_dis_layered":
+            from DARCY_WARP_PACKAGE.physics.npf662_layers import build_layered_dis_faces
+            faces, unused = build_layered_dis_faces(z_interfaces=self._session.z_interfaces,
+                kx=fields[0], ky=fields[1], kz=fields[2], active=self._active, dx=self.dx, dy=self.dy)
+        else:
+            faces = build_7point_face_conductance_from_k(kx_field=fields[0], ky_field=fields[1],
+                kz_field=fields[2], active=self._active, dx=self.dx, dy=self.dy, dz=self.dz)
+        self._session.update_face_conductance(faces=faces)
+        self._kx_field, self._ky_field, self._kz_field = fields
+        self._tx_p, self._tx_m, self._ty_p, self._ty_m, self._tz_p, self._tz_m = self._session.faces
 
     def update_terrain_K_fields(self, *, kx_field, ky_field, kz_field):
         """Refresh owned physical K fields; the next solve refreshes buffers."""
@@ -322,6 +393,9 @@ class WarpDarcySolver3D:
         from DARCY_WARP_PACKAGE.physics.terrain_reference_3d import field_3d
         fields = tuple(field_3d(value=value,shape=self.shape,name=name,nonnegative=True)
             for name,value in (("kx",kx_field),("ky",ky_field),("kz",kz_field)))
+        from DARCY_WARP_PACKAGE.physics.terrain_reference_3d import TerrainReferenceOperator3D
+        TerrainReferenceOperator3D(metrics=self._session.metrics, kx=fields[0], ky=fields[1],
+                                   kz=fields[2], contacts=self._session.contacts)
         self._session.kx[:],self._session.ky[:],self._session.kz[:] = fields
         self._session.k_version += 1
 
@@ -344,6 +418,19 @@ class WarpDarcySolver3D:
         self._active = grid.active
 
     def solve(self, **kwargs: Any) -> tuple[np.ndarray, dict[str, Any]]:
+        """Solve and time the public call, including independent acceptance.
+
+        Backend/event/synchronisation subintervals can overlap; this wall time
+        is measured directly and is never assembled by adding those fields.
+        """
+        started = perf_counter()
+        result = self._solve(**kwargs)
+        if isinstance(result, tuple):
+            result[1]['public_total_seconds'] = perf_counter()-started
+            result[1]['public_timing_scope'] = 'dispatch, setup, iterations, readback and independent final acceptance'
+        return result
+
+    def _solve(self, **kwargs: Any) -> tuple[np.ndarray, dict[str, Any]]:
         """
         Solve the assembled 3D system.
 
@@ -366,6 +453,8 @@ class WarpDarcySolver3D:
         if self._session is not None:
             solve_kwargs = dict(kwargs)
             if bool(solve_kwargs.get("unconfined", False)):
+                if self._kx_field is None:
+                    raise ValueError("independent face conductances support confined flow; use build_from_K_fields for physical unconfined rebuilding")
                 # Unconfined solves rebuild the operator from the stored K
                 # fields each Picard iteration; supply them by default.
                 for name, field in (
@@ -373,6 +462,8 @@ class WarpDarcySolver3D:
                     ("ky_field", self._ky_field),
                     ("kz_field", self._kz_field),
                 ):
+                    if name in solve_kwargs and field is not None and not np.array_equal(solve_kwargs[name], field):
+                        raise ValueError("physical conductivity owns this model; use update_K_fields before solving")
                     if name not in solve_kwargs and field is not None:
                         solve_kwargs[name] = field
             solve_kwargs.setdefault("return_info", True)
@@ -423,6 +514,10 @@ class WarpDarcySolver3D:
         """Update the source field in the persistent 3D operator session."""
         if self._session is None:
             raise RuntimeError("Solver has not been built.")
+        if self.formulation == 'mf6_6_6_2_npf':
+            value = np.asarray(rhs)
+            if value.shape == self.shape and np.any(value[self._active == 0] != 0.):
+                raise ValueError('Inactive NPF source would be lost; rhs must be zero in inactive cells')
         self._session.update_rhs(rhs)
         self._rhs = self._session.rhs
 
@@ -457,7 +552,9 @@ class WarpDarcySolver3D:
             raise RuntimeError("Solver has not been built.")
         if self.geometry == "terrain":
             raise ValueError("terrain face conductances include metric cross terms; rebuild physical K fields instead")
-        self._session.update_face_conductance((tx_p, tx_m, ty_p, ty_m, tz_p, tz_m))
+        if self._kx_field is not None:
+            raise ValueError("physical conductivity owns these faces; use update_K_fields instead")
+        self._session.update_face_conductance(faces=(tx_p, tx_m, ty_p, ty_m, tz_p, tz_m))
         self._tx_p, self._tx_m, self._ty_p, self._ty_m, self._tz_p, self._tz_m = self._session.faces
 
     def close(self) -> None:

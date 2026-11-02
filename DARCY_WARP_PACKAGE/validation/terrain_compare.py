@@ -52,6 +52,9 @@ def evaluate_saved_head(*,case,head,output=None,boundary_tolerance_m=1e-10):
         gross=float(np.abs(q).sum())) for q in qz]
     free=ref.free
     budget['free_cells']=int(free.sum())
+    # Acceptance uses the actual numeric physical state. Only then represent
+    # an undefined empty-domain maximum as None in the display diagnostics.
+    equation_accepted=accepted(head=head,budget=budget,controls=CPUControls())
     if not free.any():budget['cell_residual_max']=None
     coastal_in=coastal_out=0.
     for axis,q in zip((2,1,0),(qx,qy,qz)):
@@ -65,7 +68,6 @@ def evaluate_saved_head(*,case,head,output=None,boundary_tolerance_m=1e-10):
     order=ids[np.argsort(np.abs(r).ravel()[ids])[-10:][::-1]]
     worst=[dict(cell=[int(i) for i in np.unravel_index(index,head.shape)],residual=float(r.ravel()[index]),
         head_minus_bottom=float((head-g.bottoms).ravel()[index]),floor=bool(floor.ravel()[index])) for index in order]
-    equation_accepted=accepted(head=head,budget=budget,controls=CPUControls())
     result=dict(**checks,independent_accepted=bool(checks['boundary_condition_valid'] and equation_accepted),
         discrete_equation_converged=equation_accepted,budget=budget,
         residual_l1=float(np.sum(np.abs(r))),layers=layers,leakage=leakage,

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="1" time="1.632" timestamp="2026-11-03T08:24:20.568530+13:00" hostname="patrickdurney-Z890-UD-WIFI6E"><testcase classname="tests.test_fas_transient_multistep" name="test_18_fas_vs_picard_complete_transient_histories" time="1.204"><failure message="RuntimeError: Copy source and destination must be arrays">tests/test_fas_transient_multistep.py:572: in test_18_fas_vs_picard_complete_transient_histories
+    heads_pic, info_pic = _run_transient(
+tests/test_fas_transient_multistep.py:78: in _run_transient
+    heads, info = solver.solve_transient_2d_unconfined(
+DARCY_WARP_PACKAGE/warped_darcy.py:7620: in solve_transient_2d_unconfined
+    return solve_transient_unconfined(context, solver=solver, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/transient_unconfined.py:2698: in solve_transient_unconfined
+    result = solve_transient_unconfined_backend(model=context.model, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/transient_unconfined.py:2652: in solve_transient_unconfined_backend
+    head, info, result = session._advance(head_prev=previous, recharge=float(rate), dt=dt)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/transient_unconfined.py:2579: in _advance
+    head, result = self._engine.send(dict(head_prev=previous, recharge=recharge,
+DARCY_WARP_PACKAGE/solvers/transient_unconfined.py:2422: in _persistent_period_engine
+    head, info = self.solve(
+DARCY_WARP_PACKAGE/warped_darcy.py:7705: in solve
+    head_info = solve_selected(
+DARCY_WARP_PACKAGE/solvers/registry.py:68: in solve_selected
+    return backend.solve(context, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/picard_unconfined.py:939: in solve
+    return solve_multigrid_kcycle_backend(model=context.model, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/multigrid_kcycle.py:878: in solve_multigrid_kcycle_backend
+    return solve_unconfined_picard(model=self, state=locals())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/picard_unconfined.py:526: in solve_unconfined_picard
+    head_lin, info_lin = self.solve_multigrid_kcycle(
+DARCY_WARP_PACKAGE/warped_darcy.py:7597: in solve_multigrid_kcycle
+    return solve_selected(
+DARCY_WARP_PACKAGE/solvers/registry.py:68: in solve_selected
+    return backend.solve(context, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/multigrid_kcycle.py:32: in solve
+    return solve_multigrid_kcycle_backend(model=context.model, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/multigrid_kcycle.py:914: in solve_multigrid_kcycle_backend
+    wp.copy(self.storage_diag_wp, wp.array(self.storage_diag_host, dtype=WP_FLOAT, device="cpu"))
+/home/patrickdurney/miniconda3/envs/darcywarp312/lib/python3.12/site-packages/warp/_src/context.py:13938: in copy
+    raise RuntimeError("Copy source and destination must be arrays")
+E   RuntimeError: Copy source and destination must be arrays</failure></testcase></testsuite></testsuites>

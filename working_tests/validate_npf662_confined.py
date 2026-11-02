@@ -85,7 +85,7 @@ def run_confined_matrix(*,root,variants,shape,spacing,end_heads,contrast,source,
         if result['analytical_head_max_error_m'] is not None and result['analytical_head_max_error_m']>1e-7:raise AssertionError(result)
         atomic_json(path=directory/'comparison.json',value=result)
         rows.append(result)
-        print(variant,'CPU/CUDA/MF6 passed',flush=True)
+        print(variant, 'SciPy/'+'/'.join(devices)+'/MF6 passed', flush=True)
     atomic_json(path=root/'gate.json',value=dict(stage=1,passed=True,cases=rows,
         source_revision=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
         source_sha256={name:hashlib.sha256(Path(name).read_bytes()).hexdigest() for name in

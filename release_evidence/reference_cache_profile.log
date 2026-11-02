@@ -1,0 +1,3 @@
+❌ cuInit failed (res=100).
+cuda_device_found = False
+{"shape": [5, 250, 250], "input_sha256": "76e2c7ac7ebabb0175a9ef44d9a967035d119695563909c9acd6a7eeededd7fe", "device": "cpu", "repeats": 3, "scope": "Independent CPU sparse operator setup only; no solve timing", "uncached_seconds": [0.10436307999771088, 0.09479355905205011, 0.09057568304706365], "cached_lookup_seconds": [0.006635322002694011, 0.006090651033446193, 0.0059937890619039536], "uncached_median_seconds": 0.09479355905205011, "cached_median_seconds": 0.006090651033446193, "mathematical_matrix_identity": true, "physical_acceptance": "Not timed or bypassed; every public solve still evaluates its final physical state"}

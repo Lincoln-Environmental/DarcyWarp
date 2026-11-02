@@ -1,0 +1,114 @@
+..........sssss......................................................... [  3%]
+........................................................................ [  7%]
+........................................................................ [ 11%]
+........................................................................ [ 15%]
+........................................................................ [ 19%]
+.................s.....s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s........ [ 23%]
+..............................................s.ss...................... [ 27%]
+......................................................................s. [ 30%]
+s..................s..................Fs.......sss....ssss.ss.sssss..... [ 34%]
+..............................................s..s..........s.s.s.s.s... [ 38%]
+...s...s...sss.s.s.s.s.s...sss.s.s.s.s.s.s.s.s.s.s.s..s......ssss....... [ 42%]
+....s....s.s......s.s.s.s.s.......s.s.s.s..s.......s.........s.s.......s [ 46%]
+..............s......s.....s...s.s.s.s.s.s.............................. [ 50%]
+....................ssssssssssssssssssssssssssssssssssssssss............ [ 54%]
+....................................................ssssssssssssssssssss [ 58%]
+ssssssssssssssssssssssssssssssssssssssssssss........ssssssss............ [ 61%]
+........................................................................ [ 65%]
+........................................................................ [ 69%]
+....................ssssssssssssssssssssssssssssssssssssssssssssssssssss [ 73%]
+ssssssssssss................ssssssss................ssssssssssssssss.... [ 77%]
+...........ss....ssss..........................s.....sssss.............. [ 81%]
+........................................................................ [ 85%]
+......................................ssssssssssssssssssssssssssssssssss [ 88%]
+ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss..ss...... [ 92%]
+.......ssssssss....ssss..ss..ss........ssssssss..ss......ssssss..ss..... [ 96%]
+sssss........s.s..............s.s.......s................F...s           [100%]
+=================================== FAILURES ===================================
+______________ test_18_fas_vs_picard_complete_transient_histories ______________
+tests/test_fas_transient_multistep.py:572: in test_18_fas_vs_picard_complete_transient_histories
+    heads_pic, info_pic = _run_transient(
+tests/test_fas_transient_multistep.py:78: in _run_transient
+    heads, info = solver.solve_transient_2d_unconfined(
+DARCY_WARP_PACKAGE/warped_darcy.py:7620: in solve_transient_2d_unconfined
+    return solve_transient_unconfined(context, solver=solver, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/transient_unconfined.py:2698: in solve_transient_unconfined
+    result = solve_transient_unconfined_backend(model=context.model, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/transient_unconfined.py:2652: in solve_transient_unconfined_backend
+    head, info, result = session._advance(head_prev=previous, recharge=float(rate), dt=dt)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/transient_unconfined.py:2579: in _advance
+    head, result = self._engine.send(dict(head_prev=previous, recharge=recharge,
+DARCY_WARP_PACKAGE/solvers/transient_unconfined.py:2422: in _persistent_period_engine
+    head, info = self.solve(
+DARCY_WARP_PACKAGE/warped_darcy.py:7705: in solve
+    head_info = solve_selected(
+DARCY_WARP_PACKAGE/solvers/registry.py:68: in solve_selected
+    return backend.solve(context, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/picard_unconfined.py:939: in solve
+    return solve_multigrid_kcycle_backend(model=context.model, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/multigrid_kcycle.py:878: in solve_multigrid_kcycle_backend
+    return solve_unconfined_picard(model=self, state=locals())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/picard_unconfined.py:526: in solve_unconfined_picard
+    head_lin, info_lin = self.solve_multigrid_kcycle(
+DARCY_WARP_PACKAGE/warped_darcy.py:7597: in solve_multigrid_kcycle
+    return solve_selected(
+DARCY_WARP_PACKAGE/solvers/registry.py:68: in solve_selected
+    return backend.solve(context, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/multigrid_kcycle.py:32: in solve
+    return solve_multigrid_kcycle_backend(model=context.model, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/multigrid_kcycle.py:914: in solve_multigrid_kcycle_backend
+    wp.copy(self.storage_diag_wp, wp.array(self.storage_diag_host, dtype=WP_FLOAT, device="cpu"))
+../../../miniconda3/envs/darcywarp312/lib/python3.12/site-packages/warp/_src/context.py:13938: in copy
+    raise RuntimeError("Copy source and destination must be arrays")
+E   RuntimeError: Copy source and destination must be arrays
+________________ test_empty_free_layers_and_comparison_subsets _________________
+tests/test_validation_repairs_3d.py:75: in test_empty_free_layers_and_comparison_subsets
+    result, fields = evaluate_saved_head(case=case, head=case.arrays['values'])
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/validation/terrain_compare.py:68: in evaluate_saved_head
+    equation_accepted=accepted(head=head,budget=budget,controls=CPUControls())
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/validation/terrain_cpu.py:198: in accepted
+    is_3d_budget_conserved(budget=budget, absolute_tolerance=controls.flow_tol,
+DARCY_WARP_PACKAGE/physics/budget_3d.py:42: in is_3d_budget_conserved
+    "head_residual_rms")
+DARCY_WARP_PACKAGE/physics/budget_3d.py:43: in <genexpr>
+    valid = budget.get("physical_metrics_valid", True) and all(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: ufunc 'isfinite' not supported for the input types, and the inputs could not be safely coerced to any supported types according to the casting rule ''safe''
+=============================== warnings summary ===============================
+tests/test_fas_2d.py: 13 warnings
+tests/test_fas_transient_multistep.py: 93 warnings
+tests/test_unconfined_solvers_500x500.py: 52 warnings
+  /home/patrickdurney/PycharmProjects/DarcyWarp/.release-worktree/DARCY_WARP_PACKAGE/solvers/registry.py:62: UserWarning: solver='unconfined_fas' is experimental and not validated for production runs.
+    backend = select_backend(
+
+tests/test_fas_2d.py::test_fas_preserves_a_narrow_active_connection_and_isolated_side_cell
+  /home/patrickdurney/PycharmProjects/DarcyWarp/.release-worktree/DARCY_WARP_PACKAGE/warped_darcy.py:5880: RuntimeWarning: MG level 1 coarsening ratio 0.50 is outside [0.7, 1.3]; coarse-grid geometry may be inconsistent.
+    self._two_level_coarsening_diag = self._coarsening_diag_entry(
+
+tests/test_fas_transient_multistep.py: 24 warnings
+tests/test_unconfined_solvers_500x500.py: 1 warning
+  /home/patrickdurney/PycharmProjects/DarcyWarp/.release-worktree/DARCY_WARP_PACKAGE/solvers/transient_unconfined.py:2682: UserWarning: solver='unconfined_fas' is experimental and not validated for production runs.
+    backend = select_backend(
+
+tests/test_scientific_audit_regressions.py::test_transient_riv_is_present_in_accepted_newton_budget[8.5]
+tests/test_scientific_audit_regressions.py::test_transient_riv_is_present_in_accepted_newton_budget[9.0]
+tests/test_scientific_audit_regressions.py::test_transient_riv_is_present_in_accepted_newton_budget[10.0]
+tests/test_shanz_drn_flux_2d.py::test_transient_budget_contains_accepted_drn_volume[cpu]
+  /home/patrickdurney/PycharmProjects/DarcyWarp/.release-worktree/DARCY_WARP_PACKAGE/warped_darcy.py:5880: RuntimeWarning: MG level 1 coarsening ratio 0.69 is outside [0.7, 1.3]; coarse-grid geometry may be inconsistent.
+    self._two_level_coarsening_diag = self._coarsening_diag_entry(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_fas_transient_multistep.py::test_18_fas_vs_picard_complete_transient_histories
+FAILED tests/test_validation_repairs_3d.py::test_empty_free_layers_and_comparison_subsets
+2 failed, 1395 passed, 465 skipped, 188 warnings in 2544.76s (0:42:24)
