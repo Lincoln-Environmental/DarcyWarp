@@ -2,7 +2,7 @@ name: 3D numerical audit
 
 on:
   push:
-    branches: [fix/3d-audit-20261102]
+    branches: [dev, fix/3d-audit-20261102]
   pull_request:
     branches: [dev]
   workflow_dispatch:
@@ -16,8 +16,13 @@ concurrency:
 
 jobs:
   cpu:
+    name: CPU / ${{ matrix.group }}
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [core, physics, npf, terrain, 2d-regression]
     env:
       DARCY_FLOAT: float64
       PYTHONPATH: .:working_tests
@@ -25,15 +30,14 @@ jobs:
       OMP_NUM_THREADS: '1'
       MKL_NUM_THREADS: '1'
       MPLBACKEND: Agg
+      DARCYWARP_AUDIT_GROUP: ${{ matrix.group }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - name: Install the canonical solver runtime
-        run: |
-          python -m pip install -c requirements-pip.txt warp-lang numpy scipy pandas matplotlib pytest pytest-timeout flopy==3.9.5
-          python -m pip freeze
+        run: python -m pip install -c requirements-pip.txt warp-lang numpy scipy pandas matplotlib pytest pytest-timeout flopy==3.9.5
       - name: Install the independently pinned MODFLOW reference
         run: |
           sudo mkdir -p /bin/modflow
@@ -46,50 +50,30 @@ jobs:
           echo /bin/modflow >> "$GITHUB_PATH"
       - name: Record source and runtime provenance
         run: |
-          mkdir -p audit_runtime/wheels
-          python -m pip download --no-deps --dest audit_runtime/wheels warp-lang==1.17.0 flopy==3.9.5 pytest-timeout
-          cp /bin/modflow/mf6 audit_runtime/mf6
-          git rev-parse HEAD > audit_runtime/source_commit.txt
-          python -m pip freeze > audit_runtime/runtime.txt
+          mkdir -p outputs/3d-audit
+          git rev-parse HEAD > outputs/3d-audit/source_commit.txt
+          python -m pip freeze > outputs/3d-audit/runtime.txt
+          sha256sum /bin/modflow/mf6 > outputs/3d-audit/mf6_sha256.txt
           python - <<'PY'
           import hashlib
           import json
           import subprocess
-          import zipfile
           from pathlib import Path
-
+          records = {}
           names = subprocess.check_output(['git', 'ls-files', '-z']).decode().split('\0')
-          suffixes = {'.py', '.md', '.rst', '.txt', '.json', '.csv', '.yml', '.yaml', '.toml', '.cff'}
-          manifest = {}
-          with zipfile.ZipFile('audit_runtime/repo_sources.zip', 'w', zipfile.ZIP_DEFLATED) as archive:
-              for name in names:
-                  path = Path(name)
-                  if not name or not path.is_file():
-                      continue
-                  fixture = name.startswith('tests/fixtures/')
-                  text_file = path.suffix in suffixes or name in {'LICENSE', 'Makefile', '.gitignore'}
-                  if not fixture and not text_file:
-                      continue
-                  if not fixture and path.stat().st_size > 5_000_000:
-                      continue
-                  archive.write(path, name)
-                  manifest[name] = hashlib.sha256(path.read_bytes()).hexdigest()
-          Path('audit_runtime/source_sha256.json').write_text(json.dumps(manifest, indent=2) + '\n')
+          for name in names:
+              path = Path(name)
+              if path.is_file() and path.suffix == '.py':
+                  records[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+          Path('outputs/3d-audit/source_sha256.json').write_text(json.dumps(records, indent=2) + '\n')
           PY
-      - uses: actions/upload-artifact@v4
-        with:
-          name: three-d-audit-source-runtime
-          path: audit_runtime/
-          retention-days: 7
-      - name: Run the complete repository test suite on CPU
+      - name: Run numerical audit group
         run: |
           set -o pipefail
-          python -m pytest tests -q -ra --timeout=120 --junitxml=three-d-audit-tests.xml 2>&1 | tee three-d-audit-tests.log
+          python working_tests/run_3d_audit.py 2>&1 | tee outputs/3d-audit/${{ matrix.group }}.log
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: three-d-audit-test-results
-          path: |
-            three-d-audit-tests.xml
-            three-d-audit-tests.log
+          name: three-d-audit-${{ matrix.group }}
+          path: outputs/3d-audit/
           retention-days: 14
