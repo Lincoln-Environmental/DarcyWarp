@@ -7,6 +7,8 @@ from warp.optim.linear import LinearOperator
 from DARCY_WARP_PACKAGE.solvers.terrain_gmres_3d import TerrainGMRES3D
 from DARCY_WARP_PACKAGE.solvers import npf662_kernels as kernels
 from DARCY_WARP_PACKAGE.validation.head_checks import finite_diagnostics
+from DARCY_WARP_PACKAGE.solvers.work_counters_3d import increment_work
+from DARCY_WARP_PACKAGE.physics.inputs_3d import positive_integer
 
 
 @dataclass(frozen=True)
@@ -18,6 +20,7 @@ class NPF662NewtonControls:
     recovery_growth: float = 1.10
 
     def validate(self):
+        positive_integer(value=self.line_search_steps, name='line_search_steps')
         if not 0.<self.inner_forcing<1. or not 0.<self.newton_budget_fraction<=1.:
             raise ValueError('Newton forcing/budget fraction must lie in (0,1]')
         if self.line_search_steps<1 or not np.isfinite(self.max_head_change_m) or self.max_head_change_m<=0.:
@@ -49,6 +52,7 @@ class NPF662Workspace:
         self.maximum=wp.zeros(shape=1,dtype=wp.float64,device=self.device)
         self.mode=wp.ones(shape=1,dtype=wp.int32,device=self.device)
         self.jv_counter=wp.zeros(shape=1,dtype=wp.int64,device=self.device)
+        self.preconditioner_counter=wp.zeros(shape=1,dtype=wp.int64,device=self.device)
         self.residual_evaluations=0;self.candidate_evaluations=0
         self.multigrid=None;self.flexible=None;self.krylov=None;self.diagonal_flexible=None
         self.load(model=model,case=case)
@@ -91,7 +95,7 @@ class NPF662Workspace:
         self.c0.assign(np.stack([faces[0].ravel(),faces[2].ravel(),faces[4].ravel()],axis=1))
         principal=sum(faces).ravel()
         self.scale.assign(np.where(principal>0.,principal,1.))
-        self.jv_counter.zero_();self.residual_evaluations=0;self.candidate_evaluations=0
+        self.jv_counter.zero_();self.preconditioner_counter.zero_();self.residual_evaluations=0;self.candidate_evaluations=0
 
     def evaluate(self,*,trial,linearize=False):
         head=self.trial if trial else self.head
@@ -116,6 +120,7 @@ class NPF662Workspace:
             self.dl,self.dr,self.c,self.c0,self.scale,self.mode,self.jv_counter,alpha,beta],device=self.device)
 
     def precondition(self,x,y,z,alpha,beta):
+        wp.launch(kernel=increment_work, dim=1, inputs=[self.preconditioner_counter, 0], device=self.device)
         wp.launch(kernel=kernels.diagonal_action,dim=self.n,inputs=[x,y,z,self.free,self.left,self.right,
             self.dl,self.dr,self.c,self.c0,self.scale,self.mode,alpha,beta],device=self.device)
 
@@ -132,7 +137,7 @@ class NPF662Workspace:
         self.flexible=None;self.multigrid=None;self.diagonal_flexible=None
         self.closed=True;self.krylov=None
         for name in ('head','trial','source','bottom','thickness','scale','rhs','trial_rhs','residual','trial_residual','delta',
-            'c0','q','c','trial_q','trial_c','dl','dr','free','fixed','types','left','right','metrics','maximum','mode','jv_counter'):
+            'c0','q','c','trial_q','trial_c','dl','dr','free','fixed','types','left','right','metrics','maximum','mode','jv_counter','preconditioner_counter'):
             setattr(self,name,None)
 
 
@@ -178,6 +183,7 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
                         physical_tolerance=1e-12,relative_tolerance=1e-8,
                         npf_preconditioner='diagonal',npf_kcycle_controls=None,npf_krylov_method=None):
     controls.validate()
+    setup_start=perf_counter()
     if max_outer<0 or krylov_budget<0 or restart<2:raise ValueError('Nonnegative budgets and restart>=2 required')
     method=('fgmres' if npf_preconditioner=='kcycle' else 'gmres') if npf_krylov_method is None else npf_krylov_method
     if method not in ('gmres','fgmres'):raise ValueError('npf_krylov_method must be gmres or fgmres')
@@ -191,6 +197,8 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
         holder['workspace']=workspace
     else:workspace.load(model=model,case=case)
     krylov_reused=workspace.select_krylov(method=method,krylov_budget=krylov_budget)
+    blocks_start=getattr(workspace.krylov, 'restart_blocks', 0) if method=='gmres' else 0
+    graph_start=(getattr(workspace.krylov, 'graph_captures', 0), getattr(workspace.krylov, 'graph_replays', 0))
     mg_reused=False;mg_seconds=0.;linear_history=[]
     if npf_preconditioner=='kcycle':
         from .npf662_kcycle import NPF662KCycleControls,NPF662KCycleWorkspace
@@ -216,6 +224,7 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
         applications_start=flex_preconditioner.applications
     if wp.get_device(ident=model.device).is_cuda:wp.synchronize_device(device=model.device)
     start=perf_counter();total=0;fallbacks=0;saturated=0;backtracks=0;history=[];reason='outer_budget'
+    setup_seconds=start-setup_start
     current=workspace.evaluate(trial=False,linearize=True)
     for outer in range(max_outer):
         if device_accepted(metrics=current,physical_tolerance=physical_tolerance,relative_tolerance=relative_tolerance):reason='converged';break
@@ -261,7 +270,7 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
     current=workspace.evaluate(trial=False,linearize=True)
     if wp.get_device(ident=model.device).is_cuda:wp.synchronize_device(device=model.device)
     seconds=perf_counter()-start
-    head=workspace.head.numpy().reshape(case.active.shape)
+    head=workspace.head.numpy().reshape(case.active.shape).copy()
     checks,unused=reference.evaluate(head=head,physical_tolerance=physical_tolerance,relative_tolerance=relative_tolerance)
     device_passed=device_accepted(metrics=current,physical_tolerance=physical_tolerance,relative_tolerance=relative_tolerance)
     converged=bool(checks['independent_accepted'] and device_passed)
@@ -273,15 +282,24 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
         nonlinear_residual_evaluations=workspace.residual_evaluations,candidate_evaluations=workspace.candidate_evaluations,
         nonlinear_backtracks=backtracks,fallback_count=fallbacks,outer_history=history,independent_acceptance=checks,
         full_saturated_safeguard_solves=saturated,
-        device_final_metrics=current,workspace_reused=reused,seconds=seconds,controls=asdict(controls),
+        device_final_metrics=current,workspace_reused=reused,seconds=seconds,setup_seconds=setup_seconds,controls=asdict(controls),
         linear_budget_units='Krylov iterations shared across Newton and Picard per outer',
         max_krylov_per_outer=krylov_budget,max_outer=max_outer,krylov_restart=restart,
         scaling='fixed full-saturated principal diagonal; S*J and S*R',preconditioner='fixed diagonal within each GMRES solve')
     result['krylov_method']=method.upper()
     result['krylov_workspace_reused']=krylov_reused
     result['npf_preconditioner']=npf_preconditioner
+    result.update(accepted_updates=sum(row['accepted'] for row in history),
+        rejected_updates=sum(not row['accepted'] for row in history),
+        rejected_direction_attempts=sum(not attempt.get('search', {}).get('accepted', False) for row in history for attempt in row['attempts']))
+    if method=='gmres':
+        result.update(krylov_restart_blocks=getattr(workspace.krylov, 'restart_blocks', 0)-blocks_start,
+            preconditioner_applications=int(workspace.preconditioner_counter.numpy()[0]), preconditioner_cycles=0,
+            cuda_graph_captures=getattr(workspace.krylov, 'graph_captures', 0)-graph_start[0],
+            cuda_graph_replays=getattr(workspace.krylov, 'graph_replays', 0)-graph_start[1])
     if method=='fgmres':
         result.update(linear_history=linear_history,krylov_restarts=sum(row['restarts'] for row in linear_history),
+            krylov_restart_blocks=sum(row['blocks'] for row in linear_history),
             preconditioner_applications=flex_preconditioner.applications-applications_start,
             preconditioner_cycles=workspace.multigrid.cycles-mg_start[1] if npf_preconditioner=='kcycle' else 0,
             krylov_synchronization_seconds=sum(row['synchronization_seconds'] for row in linear_history),
