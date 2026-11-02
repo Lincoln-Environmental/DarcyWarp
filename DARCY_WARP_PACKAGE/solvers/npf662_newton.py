@@ -20,6 +20,8 @@ class NPF662NewtonControls:
     recovery_growth: float = 1.10
 
     def validate(self):
+        if not isinstance(self.line_search_steps, (int, np.integer)):
+            raise ValueError('line_search_steps must be a positive integer')
         positive_integer(value=self.line_search_steps, name='line_search_steps')
         if not 0.<self.inner_forcing<1. or not 0.<self.newton_budget_fraction<=1.:
             raise ValueError('Newton forcing/budget fraction must lie in (0,1]')

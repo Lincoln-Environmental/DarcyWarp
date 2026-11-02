@@ -383,3 +383,16 @@ def test_layered_inactive_conductivity_markers_remain_supported():
         model.update_K_fields(kx_field=1.1*data['kx_field'], ky_field=data['ky_field'], kz_field=data['kz_field'])
         unused, second = model.solve()
         assert second['converged']
+
+
+@pytest.mark.parametrize('value', [2.0, True, np.nan, np.inf])
+def test_nested_iteration_controls_reject_noninteger_types(value):
+    from DARCY_WARP_PACKAGE.solvers.npf662_newton import NPF662NewtonControls
+    from DARCY_WARP_PACKAGE.validation.npf662_reference import ReferenceLinearControls
+    for field in ('levels', 'min_coarse_n', 'pre_sweeps', 'post_sweeps', 'coarse_sweeps', 'cycles'):
+        with pytest.raises(ValueError, match='integer'):
+            NPF662KCycleControls(**{field:value}).validate()
+    with pytest.raises(ValueError, match='integer'):
+        NPF662NewtonControls(line_search_steps=value).validate()
+    with pytest.raises(ValueError, match='integer'):
+        ReferenceLinearControls(refinement_steps=value).validate()

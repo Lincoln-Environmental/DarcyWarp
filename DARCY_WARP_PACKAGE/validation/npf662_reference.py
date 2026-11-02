@@ -25,7 +25,7 @@ class ReferenceLinearControls:
         if any(not np.isfinite(value) or not 0. < value < 1. for value in
                (self.relative_residual, self.backward_error)):
             raise ValueError('Reference linear tolerances must lie in (0,1)')
-        if isinstance(self.refinement_steps, bool) or int(self.refinement_steps) != self.refinement_steps or self.refinement_steps < 0:
+        if isinstance(self.refinement_steps, (bool, np.bool_)) or not isinstance(self.refinement_steps, (int, np.integer)) or self.refinement_steps < 0:
             raise ValueError('refinement_steps must be a nonnegative integer')
 
 

@@ -33,10 +33,12 @@ class NPF662KCycleControls:
 
     def validate(self):
         for name in ('levels', 'min_coarse_n', 'coarse_sweeps', 'cycles'):
-            if int(getattr(self, name)) != getattr(self, name) or getattr(self, name) < 1:
+            value = getattr(self, name)
+            if isinstance(value, (bool, np.bool_)) or not isinstance(value, (int, np.integer)) or value < 1:
                 raise ValueError(f'{name} must be a positive integer')
         for name in ('pre_sweeps', 'post_sweeps'):
-            if int(getattr(self, name)) != getattr(self, name) or getattr(self, name) < 0:
+            value = getattr(self, name)
+            if isinstance(value, (bool, np.bool_)) or not isinstance(value, (int, np.integer)) or value < 0:
                 raise ValueError(f'{name} must be a nonnegative integer')
         if not np.isfinite(self.omega) or not 0. < self.omega <= 1.:
             raise ValueError('Line relaxation omega must be in (0,1]')
