@@ -172,6 +172,7 @@ class TerrainGMRES3D(GMRES):
         tolerance = math.sqrt(float(atol_sq.numpy().max()))
         error = math.sqrt(float(r_norm_sq.numpy().max()))
         used = 0
+        self.restart_blocks = getattr(self, "restart_blocks", 0)
         if not hasattr(self, "graph_captures"):
             self.graph_captures = 0
             self.graph_replays = 0
@@ -191,6 +192,7 @@ class TerrainGMRES3D(GMRES):
             else:
                 do_cycle(iterations)
             used += iterations
+            self.restart_blocks += 1
             self.norm_readbacks += 1
             error = math.sqrt(max(float(r_norm_sq.numpy().max()), 0.0))
             if callback is not None:

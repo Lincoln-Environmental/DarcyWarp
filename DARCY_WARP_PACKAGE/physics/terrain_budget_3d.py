@@ -1,5 +1,6 @@
 """Independent final-head terrain flux and exact stored-volume balance."""
 import numpy as np
+from DARCY_WARP_PACKAGE.validation.npf662_metrics import stable_rms, stable_sum
 
 
 def compute_terrain_budget_3d(*, operator, head, source, fixed, storage_change,
@@ -16,16 +17,17 @@ def compute_terrain_budget_3d(*, operator, head, source, fixed, storage_change,
         boundary = free[left] & (np.asarray(fixed)[right] != 0)
         reverse = free[right] & (np.asarray(fixed)[left] != 0)
         exchange = np.concatenate((flux[boundary],-flux[reverse]))
-        inflow += float(np.sum(np.maximum(-exchange,0)))
-        outflow += float(np.sum(np.maximum(exchange,0)))
+        inflow = stable_sum(values=[inflow, stable_sum(values=np.maximum(-exchange,0))])
+        outflow = stable_sum(values=[outflow, stable_sum(values=np.maximum(exchange,0))])
     for q,record in zip(fluxes[3],operator.contact_records):
         if free.ravel()[record[0]]:
             inflow += max(-float(q),0)
             outflow += max(float(q),0)
-    uptake = float(np.sum(storage_change[free]))
-    throughput = float(np.sum(np.abs(source[free])) + inflow + outflow + np.sum(np.abs(storage_change[free])))
+    uptake = stable_sum(values=storage_change[free])
+    throughput = stable_sum(values=[stable_sum(values=np.abs(source[free])), inflow, outflow,
+                                    stable_sum(values=np.abs(storage_change[free]))])
     denominator = max(throughput,np.finfo(np.float64).tiny)
-    imbalance = float(np.sum(residual))
+    imbalance = stable_sum(values=residual[free])
     diagonal = sum(operator.principal_faces()) + storage_diagonal
     for index,record in enumerate(operator.contact_records):
         if not record[6] or fluxes[3][index] > 0:
@@ -33,13 +35,22 @@ def compute_terrain_budget_3d(*, operator, head, source, fixed, storage_change,
     equivalent = np.divide(residual,diagonal,out=np.zeros_like(residual),where=diagonal > 0)
     equivalent[(diagonal <= 0) & (residual != 0)] = np.inf
     result = dict(cell_residual_max=float(np.max(np.abs(residual[free]))) if free.any() else 0,
-        cell_residual_rms=float(np.sqrt(np.mean(residual[free]**2))) if free.any() else 0,
-        head_residual_rms=float(np.sqrt(np.mean(equivalent[free]**2))) if free.any() else 0,
-        source_total=float(np.sum(source[free])),boundary_inflow=inflow,boundary_outflow=-outflow,boundary_net=inflow-outflow,
+        cell_residual_rms=stable_rms(values=residual[free]),
+        head_residual_rms=stable_rms(values=equivalent[free]),
+        source_total=stable_sum(values=source[free]),boundary_inflow=inflow,boundary_outflow=-outflow,boundary_net=inflow-outflow,
         storage_uptake=uptake,imbalance=imbalance,domain_imbalance=imbalance,relative_imbalance=abs(imbalance)/denominator,
-        relative_cell_imbalance=float(np.sum(np.abs(residual)))/denominator,
+        relative_cell_imbalance=stable_sum(values=np.abs(residual[free]))/denominator,
         throughput=throughput,physical_diagonal_scaling="seven-point principal part",
         coastal_subface_outflows=fluxes[3].tolist())
+    valid_fields = all(np.all(np.isfinite(value)) for value in
+        (*fluxes, head[operator.active], source[free], storage_change[free],
+         storage_diagonal[free], divergence[operator.active], residual[free], diagonal[operator.active], equivalent[free]))
+    valid_scalars = all(np.isfinite(value) for value in result.values() if np.isscalar(value) and not isinstance(value, str))
+    result["physical_metrics_valid"] = bool(valid_fields and valid_scalars and
+        np.all(storage_diagonal[free] >= 0.) and np.all(diagonal[operator.active] >= 0.))
+    if not result["physical_metrics_valid"]:
+        result["relative_cell_imbalance"] = float("inf")
+        result["relative_imbalance"] = float("inf")
     if return_fields:
         result.update(cell_residual_field=residual,storage_change_field=storage_change,
                       face_fluxes=fluxes)
