@@ -20,7 +20,7 @@ physical model matter.
 
 **Developed by Patrick Durney and Jaco Fourie at [Lincoln Agritech Ltd](https://lincolnagritech.co.nz/), which owns the DarcyWarp software.** DarcyWarp is released under the [GNU Affero General Public License v3.0 or later](LICENSE).
 
-## A first groundwater model
+## Synthetic groundwater verification example
 
 ![DarcyWarp steady recharge example: simulated groundwater head and comparison with the analytical solution](source/_static/steady_recharge.svg)
 
