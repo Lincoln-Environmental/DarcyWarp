@@ -292,3 +292,14 @@ def test_explicit_diagonal_selects_gmres_and_default_valued_conflicts_raise():
         for controls in (dict(max_levels=6), dict(min_coarse_n=2), dict(rel_tol=1e-12)):
             with pytest.raises(ValueError, match='npf_'):
                 model.solve(npf_preconditioner='kcycle', npf_kcycle_controls=NPF662KCycleControls(levels=2), **controls)
+
+
+@pytest.mark.parametrize('value', [.9, 1.9, np.nan, np.inf])
+def test_low_level_layer_builder_rejects_nonbinary_active_mask(value):
+    from DARCY_WARP_PACKAGE.physics.npf662_layers import build_layered_dis_faces
+    data = inputs()
+    active = np.full(data['active'].shape, value)
+    interfaces = np.broadcast_to(-np.arange(3.)[:, None, None], (3, 3, 5))
+    with pytest.raises(ValueError, match='binary'):
+        build_layered_dis_faces(z_interfaces=interfaces, kx=data['kx_field'], ky=data['ky_field'],
+            kz=data['kz_field'], active=active, dx=1., dy=1.)

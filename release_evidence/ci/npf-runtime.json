@@ -1,0 +1,18 @@
+{
+  "python": "3.12.14",
+  "packages": {
+    "warp-lang": "1.17.0",
+    "numpy": "2.5.2",
+    "scipy": "1.18.1",
+    "pytest": "9.1.1",
+    "flopy": "3.12.0"
+  },
+  "commit": "3fa6c5617e9a26d03f2bffcc9da90c7f52b4ba9e",
+  "cpu_only": true,
+  "tests": [
+    "tests/test_npf662_reference_controller.py",
+    "tests/test_npf662_acceptance.py",
+    "tests/test_npf662_kcycle.py",
+    "tests/test_3d_release_contract.py"
+  ]
+}

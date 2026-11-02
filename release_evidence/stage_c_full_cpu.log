@@ -1,0 +1,229 @@
+..........sssss......................................................... [  3%]
+....F.F................................................................. [  7%]
+........................................................................ [ 11%]
+........................................................................ [ 15%]
+........................................................................ [ 19%]
+.........s.....s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s.s................ [ 23%]
+......................................s.ss.............................. [ 27%]
+..............................................................s.s....... [ 31%]
+...........s..................Fs.......sss....ssss.ss.sssss............. [ 34%]
+......................................s..s..........s.s.s.s.s......s...s [ 38%]
+...sss.s.s.s.s.s...sss.s.s.s.s.s.s.s.s.s.s.s..s......ssss...........s... [ 42%]
+.s.s......s.s.s.s.s.......s.s.s.s..s.......s........s.s.......s......... [ 46%]
+.....s......s.....s...s.s.s.s.s.s....................................... [ 50%]
+...........ssssssssssssssssssssssssssssssssssssssss..................... [ 54%]
+...........................................sssssssssssssssssssssssssssss [ 58%]
+sssssssssssssssssssssssssssssssssss........ssssssss..................... [ 62%]
+........................................................................ [ 66%]
+........................................................................ [ 69%]
+...........sssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss [ 73%]
+sss................ssssssss................ssssssssssssssss............. [ 77%]
+..ss....ssss..........................s.....sssss....................... [ 81%]
+........................................................................ [ 85%]
+.............................sssssssssssssssssssssssssssssssssssssssssss [ 89%]
+sssssssssssssssssssssssssssssssssssssssssssssssssssss..ss.............ss [ 93%]
+ssssss....ssss..ss..ss........ssssssss..ss......ssssss..ss.....sssss.... [ 97%]
+....s.s..............s.s.......s..........EEE.......s                    [100%]
+==================================== ERRORS ====================================
+___________ ERROR at setup of test_picard_production_replay_500x500 ____________
+tests/test_unconfined_solvers_500x500.py:64: in case_artifact
+    return ensure_case_artifact(setup)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+working_tests/run_2d_transient_warp_replay.py:224: in ensure_case_artifact
+    truth_generator.main(
+working_tests/run_2d_transient_vs_mf6.py:1320: in main
+    return run_mf6_transient(
+working_tests/run_2d_transient_vs_mf6.py:1106: in run_mf6_transient
+    ok, _ = sim.run_simulation(silent=True, report=False)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../miniconda3/envs/darcywarp312/lib/python3.12/site-packages/flopy/mf6/mfsimbase.py:1874: in run_simulation
+    return run_model(
+../../../miniconda3/envs/darcywarp312/lib/python3.12/site-packages/flopy/mbase.py:1800: in run_model
+    line = proc.stdout.readline().decode("utf-8")
+           ^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: Timeout (>180.0s) from pytest-timeout.
+---------------------------- Captured stdout setup -----------------------------
+MF6 truth artifact missing; generating (this can take a while):
+  /home/patrickdurney/PycharmProjects/DarcyWarp/.release-worktree/DARCY_WARP_PACKAGE/data/working_tests/mf6_transient_2d_unconfined_500x500_52w/mf6_transient_heads.npz.lzma
+Transient 2D unconfined MF6 truth: 500x500, 52 weekly steps, K=100.0
+_ ERROR at setup of test_alternate_nonlinear_backend_500x500[unconfined_semismooth_newton_kcycle] _
+tests/test_unconfined_solvers_500x500.py:64: in case_artifact
+    return ensure_case_artifact(setup)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+working_tests/run_2d_transient_warp_replay.py:224: in ensure_case_artifact
+    truth_generator.main(
+working_tests/run_2d_transient_vs_mf6.py:1320: in main
+    return run_mf6_transient(
+working_tests/run_2d_transient_vs_mf6.py:1106: in run_mf6_transient
+    ok, _ = sim.run_simulation(silent=True, report=False)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../miniconda3/envs/darcywarp312/lib/python3.12/site-packages/flopy/mf6/mfsimbase.py:1874: in run_simulation
+    return run_model(
+../../../miniconda3/envs/darcywarp312/lib/python3.12/site-packages/flopy/mbase.py:1800: in run_model
+    line = proc.stdout.readline().decode("utf-8")
+           ^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: Timeout (>180.0s) from pytest-timeout.
+__ ERROR at setup of test_alternate_nonlinear_backend_500x500[unconfined_fas] __
+tests/test_unconfined_solvers_500x500.py:64: in case_artifact
+    return ensure_case_artifact(setup)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+working_tests/run_2d_transient_warp_replay.py:224: in ensure_case_artifact
+    truth_generator.main(
+working_tests/run_2d_transient_vs_mf6.py:1320: in main
+    return run_mf6_transient(
+working_tests/run_2d_transient_vs_mf6.py:1106: in run_mf6_transient
+    ok, _ = sim.run_simulation(silent=True, report=False)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../miniconda3/envs/darcywarp312/lib/python3.12/site-packages/flopy/mf6/mfsimbase.py:1874: in run_simulation
+    return run_model(
+../../../miniconda3/envs/darcywarp312/lib/python3.12/site-packages/flopy/mbase.py:1800: in run_model
+    line = proc.stdout.readline().decode("utf-8")
+           ^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: Timeout (>180.0s) from pytest-timeout.
+=================================== FAILURES ===================================
+_________ test_unconfined_warp_matches_mf6_truth_all_grids[2000x2000] __________
+tests/test_2d_unconfined.py:340: in test_unconfined_warp_matches_mf6_truth_all_grids
+    heads, info = solver.solve(**build_solve_kwargs(artifact))
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/warped_darcy.py:7705: in solve
+    head_info = solve_selected(
+DARCY_WARP_PACKAGE/solvers/registry.py:68: in solve_selected
+    return backend.solve(context, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/picard_unconfined.py:939: in solve
+    return solve_multigrid_kcycle_backend(model=context.model, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/multigrid_kcycle.py:878: in solve_multigrid_kcycle_backend
+    return solve_unconfined_picard(model=self, state=locals())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/picard_unconfined.py:526: in solve_unconfined_picard
+    head_lin, info_lin = self.solve_multigrid_kcycle(
+DARCY_WARP_PACKAGE/warped_darcy.py:7597: in solve_multigrid_kcycle
+    return solve_selected(
+DARCY_WARP_PACKAGE/solvers/registry.py:68: in solve_selected
+    return backend.solve(context, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/multigrid_kcycle.py:32: in solve
+    return solve_multigrid_kcycle_backend(model=context.model, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/multigrid_kcycle.py:1473: in solve_multigrid_kcycle_backend
+    kcycle(0)
+DARCY_WARP_PACKAGE/solvers/multigrid_kcycle.py:1319: in kcycle
+    kcycle(level_id + 1)
+DARCY_WARP_PACKAGE/solvers/multigrid_kcycle.py:1346: in kcycle
+    kcycle(level_id + 1)
+DARCY_WARP_PACKAGE/solvers/multigrid_kcycle.py:1281: in kcycle
+    wp.launch(kernel=_jac_k, dim=dimL, inputs=_jac_in, device=device)
+../../../miniconda3/envs/darcywarp312/lib/python3.12/site-packages/warp/_src/context.py:11460: in launch
+    invoke(kernel, hooks, params, adjoint)
+../../../miniconda3/envs/darcywarp312/lib/python3.12/site-packages/warp/_src/context.py:10570: in invoke
+    hooks.forward(ctypes.byref(params[0]), ctypes.byref(args))
+E   Failed: Timeout (>180.0s) from pytest-timeout.
+_________ test_unconfined_warp_matches_mf6_truth_all_grids[3000x3000] __________
+tests/test_2d_unconfined.py:340: in test_unconfined_warp_matches_mf6_truth_all_grids
+    heads, info = solver.solve(**build_solve_kwargs(artifact))
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/warped_darcy.py:7705: in solve
+    head_info = solve_selected(
+DARCY_WARP_PACKAGE/solvers/registry.py:68: in solve_selected
+    return backend.solve(context, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/picard_unconfined.py:939: in solve
+    return solve_multigrid_kcycle_backend(model=context.model, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/multigrid_kcycle.py:878: in solve_multigrid_kcycle_backend
+    return solve_unconfined_picard(model=self, state=locals())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/picard_unconfined.py:526: in solve_unconfined_picard
+    head_lin, info_lin = self.solve_multigrid_kcycle(
+DARCY_WARP_PACKAGE/warped_darcy.py:7597: in solve_multigrid_kcycle
+    return solve_selected(
+DARCY_WARP_PACKAGE/solvers/registry.py:68: in solve_selected
+    return backend.solve(context, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/multigrid_kcycle.py:32: in solve
+    return solve_multigrid_kcycle_backend(model=context.model, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/multigrid_kcycle.py:1473: in solve_multigrid_kcycle_backend
+    kcycle(0)
+DARCY_WARP_PACKAGE/solvers/multigrid_kcycle.py:1309: in kcycle
+    wp.launch(
+../../../miniconda3/envs/darcywarp312/lib/python3.12/site-packages/warp/_src/context.py:11460: in launch
+    invoke(kernel, hooks, params, adjoint)
+../../../miniconda3/envs/darcywarp312/lib/python3.12/site-packages/warp/_src/context.py:10570: in invoke
+    hooks.forward(ctypes.byref(params[0]), ctypes.byref(args))
+E   Failed: Timeout (>180.0s) from pytest-timeout.
+______________ test_18_fas_vs_picard_complete_transient_histories ______________
+tests/test_fas_transient_multistep.py:572: in test_18_fas_vs_picard_complete_transient_histories
+    heads_pic, info_pic = _run_transient(
+tests/test_fas_transient_multistep.py:78: in _run_transient
+    heads, info = solver.solve_transient_2d_unconfined(
+DARCY_WARP_PACKAGE/warped_darcy.py:7620: in solve_transient_2d_unconfined
+    return solve_transient_unconfined(context, solver=solver, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/transient_unconfined.py:2698: in solve_transient_unconfined
+    result = solve_transient_unconfined_backend(model=context.model, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/transient_unconfined.py:2652: in solve_transient_unconfined_backend
+    head, info, result = session._advance(head_prev=previous, recharge=float(rate), dt=dt)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/transient_unconfined.py:2579: in _advance
+    head, result = self._engine.send(dict(head_prev=previous, recharge=recharge,
+DARCY_WARP_PACKAGE/solvers/transient_unconfined.py:2422: in _persistent_period_engine
+    head, info = self.solve(
+DARCY_WARP_PACKAGE/warped_darcy.py:7705: in solve
+    head_info = solve_selected(
+DARCY_WARP_PACKAGE/solvers/registry.py:68: in solve_selected
+    return backend.solve(context, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/picard_unconfined.py:939: in solve
+    return solve_multigrid_kcycle_backend(model=context.model, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/multigrid_kcycle.py:878: in solve_multigrid_kcycle_backend
+    return solve_unconfined_picard(model=self, state=locals())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/picard_unconfined.py:526: in solve_unconfined_picard
+    head_lin, info_lin = self.solve_multigrid_kcycle(
+DARCY_WARP_PACKAGE/warped_darcy.py:7597: in solve_multigrid_kcycle
+    return solve_selected(
+DARCY_WARP_PACKAGE/solvers/registry.py:68: in solve_selected
+    return backend.solve(context, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/multigrid_kcycle.py:32: in solve
+    return solve_multigrid_kcycle_backend(model=context.model, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/multigrid_kcycle.py:914: in solve_multigrid_kcycle_backend
+    wp.copy(self.storage_diag_wp, wp.array(self.storage_diag_host, dtype=WP_FLOAT, device="cpu"))
+../../../miniconda3/envs/darcywarp312/lib/python3.12/site-packages/warp/_src/context.py:13938: in copy
+    raise RuntimeError("Copy source and destination must be arrays")
+E   RuntimeError: Copy source and destination must be arrays
+=============================== warnings summary ===============================
+tests/test_fas_2d.py: 13 warnings
+tests/test_fas_transient_multistep.py: 93 warnings
+  /home/patrickdurney/PycharmProjects/DarcyWarp/.release-worktree/DARCY_WARP_PACKAGE/solvers/registry.py:62: UserWarning: solver='unconfined_fas' is experimental and not validated for production runs.
+    backend = select_backend(
+
+tests/test_fas_2d.py::test_fas_preserves_a_narrow_active_connection_and_isolated_side_cell
+  /home/patrickdurney/PycharmProjects/DarcyWarp/.release-worktree/DARCY_WARP_PACKAGE/warped_darcy.py:5880: RuntimeWarning: MG level 1 coarsening ratio 0.50 is outside [0.7, 1.3]; coarse-grid geometry may be inconsistent.
+    self._two_level_coarsening_diag = self._coarsening_diag_entry(
+
+tests/test_fas_transient_multistep.py: 24 warnings
+  /home/patrickdurney/PycharmProjects/DarcyWarp/.release-worktree/DARCY_WARP_PACKAGE/solvers/transient_unconfined.py:2682: UserWarning: solver='unconfined_fas' is experimental and not validated for production runs.
+    backend = select_backend(
+
+tests/test_scientific_audit_regressions.py::test_transient_riv_is_present_in_accepted_newton_budget[8.5]
+tests/test_scientific_audit_regressions.py::test_transient_riv_is_present_in_accepted_newton_budget[9.0]
+tests/test_scientific_audit_regressions.py::test_transient_riv_is_present_in_accepted_newton_budget[10.0]
+tests/test_shanz_drn_flux_2d.py::test_transient_budget_contains_accepted_drn_volume[cpu]
+  /home/patrickdurney/PycharmProjects/DarcyWarp/.release-worktree/DARCY_WARP_PACKAGE/warped_darcy.py:5880: RuntimeWarning: MG level 1 coarsening ratio 0.69 is outside [0.7, 1.3]; coarse-grid geometry may be inconsistent.
+    self._two_level_coarsening_diag = self._coarsening_diag_entry(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_2d_unconfined.py::test_unconfined_warp_matches_mf6_truth_all_grids[2000x2000]
+FAILED tests/test_2d_unconfined.py::test_unconfined_warp_matches_mf6_truth_all_grids[3000x3000]
+FAILED tests/test_fas_transient_multistep.py::test_18_fas_vs_picard_complete_transient_histories
+ERROR tests/test_unconfined_solvers_500x500.py::test_picard_production_replay_500x500
+ERROR tests/test_unconfined_solvers_500x500.py::test_alternate_nonlinear_backend_500x500[unconfined_semismooth_newton_kcycle]
+ERROR tests/test_unconfined_solvers_500x500.py::test_alternate_nonlinear_backend_500x500[unconfined_fas]
+3 failed, 1382 passed, 465 skipped, 135 warnings, 3 errors in 1011.75s (0:16:51)

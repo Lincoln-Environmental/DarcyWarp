@@ -1,0 +1,74 @@
+Warp CUDA error 100: no CUDA-capable device is detected (in function init_cuda_driver, /builds/omniverse/warp/warp/native/cuda_util.cpp:333)
+Warp 1.17.0 initialized:
+   CUDA Toolkit 12.9, CUDA driver not available (NVRTC compilation available)
+   Devices:
+     "cpu"      : "x86_64"
+   Kernel cache:
+     /tmp/darcywarp-warp-cache/1.17.0
+F                                                                        [100%]
+=================================== FAILURES ===================================
+______________ test_18_fas_vs_picard_complete_transient_histories ______________
+tests/test_fas_transient_multistep.py:572: in test_18_fas_vs_picard_complete_transient_histories
+    heads_pic, info_pic = _run_transient(
+tests/test_fas_transient_multistep.py:78: in _run_transient
+    heads, info = solver.solve_transient_2d_unconfined(
+DARCY_WARP_PACKAGE/warped_darcy.py:7620: in solve_transient_2d_unconfined
+    return solve_transient_unconfined(context, solver=solver, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/transient_unconfined.py:2698: in solve_transient_unconfined
+    result = solve_transient_unconfined_backend(model=context.model, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/transient_unconfined.py:2652: in solve_transient_unconfined_backend
+    head, info, result = session._advance(head_prev=previous, recharge=float(rate), dt=dt)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/transient_unconfined.py:2579: in _advance
+    head, result = self._engine.send(dict(head_prev=previous, recharge=recharge,
+DARCY_WARP_PACKAGE/solvers/transient_unconfined.py:2422: in _persistent_period_engine
+    head, info = self.solve(
+DARCY_WARP_PACKAGE/warped_darcy.py:7705: in solve
+    head_info = solve_selected(
+DARCY_WARP_PACKAGE/solvers/registry.py:68: in solve_selected
+    return backend.solve(context, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/picard_unconfined.py:939: in solve
+    return solve_multigrid_kcycle_backend(model=context.model, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/multigrid_kcycle.py:878: in solve_multigrid_kcycle_backend
+    return solve_unconfined_picard(model=self, state=locals())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/picard_unconfined.py:526: in solve_unconfined_picard
+    head_lin, info_lin = self.solve_multigrid_kcycle(
+DARCY_WARP_PACKAGE/warped_darcy.py:7597: in solve_multigrid_kcycle
+    return solve_selected(
+DARCY_WARP_PACKAGE/solvers/registry.py:68: in solve_selected
+    return backend.solve(context, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/multigrid_kcycle.py:32: in solve
+    return solve_multigrid_kcycle_backend(model=context.model, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/multigrid_kcycle.py:914: in solve_multigrid_kcycle_backend
+    wp.copy(self.storage_diag_wp, wp.array(self.storage_diag_host, dtype=WP_FLOAT, device="cpu"))
+/home/patrickdurney/miniconda3/envs/darcywarp312/lib/python3.12/site-packages/warp/_src/context.py:13938: in copy
+    raise RuntimeError("Copy source and destination must be arrays")
+E   RuntimeError: Copy source and destination must be arrays
+----------------------------- Captured stdout call -----------------------------
+❌ cuInit failed (res=100).
+cuda_device_found = False
+Module DARCY_WARP_PACKAGE.warped_darcy 7e590bc load on device 'cpu' took 0.75 ms  (cached)
+Module DARCY_WARP_PACKAGE.nonlinear.kernels b1cd117 load on device 'cpu' took 0.14 ms  (cached)
+Module DARCY_WARP_PACKAGE.solvers.fas_kernels 23a1174 load on device 'cpu' took 0.12 ms  (cached)
+=============================== warnings summary ===============================
+tests/test_fas_transient_multistep.py::test_18_fas_vs_picard_complete_transient_histories
+  /tmp/darcywarp-release-baseline/DARCY_WARP_PACKAGE/solvers/transient_unconfined.py:2682: UserWarning: solver='unconfined_fas' is experimental and not validated for production runs.
+    backend = select_backend(
+
+tests/test_fas_transient_multistep.py::test_18_fas_vs_picard_complete_transient_histories
+tests/test_fas_transient_multistep.py::test_18_fas_vs_picard_complete_transient_histories
+tests/test_fas_transient_multistep.py::test_18_fas_vs_picard_complete_transient_histories
+  /tmp/darcywarp-release-baseline/DARCY_WARP_PACKAGE/solvers/registry.py:62: UserWarning: solver='unconfined_fas' is experimental and not validated for production runs.
+    backend = select_backend(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_fas_transient_multistep.py::test_18_fas_vs_picard_complete_transient_histories
+1 failed, 4 warnings in 1.63s

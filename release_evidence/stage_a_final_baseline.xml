@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="39" skipped="0" tests="71" time="0.949" timestamp="2026-11-03T08:31:46.724141+13:00" hostname="patrickdurney-Z890-UD-WIFI6E"><testcase classname="tests.test_3d_release_contract" name="test_masks_validated_before_conversion[0.9-active-cartesian]" time="0.001"><failure message="Failed: DID NOT RAISE ValueError">tests/test_3d_release_contract.py:56: in test_masks_validated_before_conversion
+    with pytest.raises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError</failure></testcase><testcase classname="tests.test_3d_release_contract" name="test_masks_validated_before_conversion[0.9-active-layered]" time="0.051" /><testcase classname="tests.test_3d_release_contract" name="test_masks_validated_before_conversion[0.9-active-terrain]" time="0.000" /><testcase classname="tests.test_3d_release_contract" name="test_masks_validated_before_conversion[0.9-bc_mask-cartesian]" time="0.001"><failure message="Failed: DID NOT RAISE ValueError">tests/test_3d_release_contract.py:56: in test_masks_validated_before_conversion
+    with pytest.raises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError</failure></testcase><testcase classname="tests.test_3d_release_contract" name="test_masks_validated_before_conversion[0.9-bc_mask-layered]" time="0.000" /><testcase classname="tests.test_3d_release_contract" name="test_masks_validated_before_conversion[0.9-bc_mask-terrain]" time="0.030"><failure message="Failed: DID NOT RAISE ValueError">tests/test_3d_release_contract.py:56: in test_masks_validated_before_conversion
+    with pytest.raises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError</failure></testcase><testcase classname="tests.test_3d_release_contract" name="test_masks_validated_before_conversion[1.9-active-cartesian]" time="0.001"><failure message="Failed: DID NOT RAISE ValueError">tests/test_3d_release_contract.py:56: in test_masks_validated_before_conversion
+    with pytest.raises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError</failure></testcase><testcase classname="tests.test_3d_release_contract" name="test_masks_validated_before_conversion[1.9-active-layered]" time="0.000" /><testcase classname="tests.test_3d_release_contract" name="test_masks_validated_before_conversion[1.9-active-terrain]" time="0.000" /><testcase classname="tests.test_3d_release_contract" name="test_masks_validated_before_conversion[1.9-bc_mask-cartesian]" time="0.000"><failure message="Failed: DID NOT RAISE ValueError">tests/test_3d_release_contract.py:56: in test_masks_validated_before_conversion
+    with pytest.raises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError</failure></testcase><testcase classname="tests.test_3d_release_contract" name="test_masks_validated_before_conversion[1.9-bc_mask-layered]" time="0.000" /><testcase classname="tests.test_3d_release_contract" name="test_masks_validated_before_conversion[1.9-bc_mask-terrain]" time="0.001"><failure message="Failed: DID NOT RAISE ValueError">tests/test_3d_release_contract.py:56: in test_masks_validated_before_conversion
+    with pytest.raises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError</failure></testcase><testcase classname="tests.test_3d_release_contract" name="test_masks_validated_before_conversion[-0.1-active-cartesian]" time="0.001"><failure message="Failed: DID NOT RAISE ValueError">tests/test_3d_release_contract.py:56: in test_masks_validated_before_conversion
+    with pytest.raises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError</failure></testcase><testcase classname="tests.test_3d_release_contract" name="test_masks_validated_before_conversion[-0.1-active-layered]" time="0.000" /><testcase classname="tests.test_3d_release_contract" name="test_masks_validated_before_conversion[-0.1-active-terrain]" time="0.000" /><testcase classname="tests.test_3d_release_contract" name="test_masks_validated_before_conversion[-0.1-bc_mask-cartesian]" time="0.000"><failure message="Failed: DID NOT RAISE ValueError">tests/test_3d_release_contract.py:56: in test_masks_validated_before_conversion
+    with pytest.raises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError</failure></testcase><testcase classname="tests.test_3d_release_contract" name="test_masks_validated_before_conversion[-0.1-bc_mask-layered]" time="0.000" /><testcase classname="tests.test_3d_release_contract" name="test_masks_validated_before_conversion[-0.1-bc_mask-terrain]" time="0.001"><failure message="Failed: DID NOT RAISE ValueError">tests/test_3d_release_contract.py:56: in test_masks_validated_before_conversion
+    with pytest.raises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError</failure></testcase><testcase classname="tests.test_3d_release_contract" name="test_masks_validated_before_conversion[nan-active-cartesian]" time="0.000" /><testcase classname="tests.test_3d_release_contract" name="test_masks_validated_before_conversion[nan-active-layered]" time="0.000" /><testcase classname="tests.test_3d_release_contract" name="test_masks_validated_before_conversion[nan-active-terrain]" time="0.000" /><testcase classname="tests.test_3d_release_contract" name="test_masks_validated_before_conversion[nan-bc_mask-cartesian]" time="0.000" /><testcase classname="tests.test_3d_release_contract" name="test_masks_validated_before_conversion[nan-bc_mask-layered]" time="0.000" /><testcase classname="tests.test_3d_release_contract" name="test_masks_validated_before_conversion[nan-bc_mask-terrain]" time="0.001" /><testcase classname="tests.test_3d_release_contract" name="test_masks_validated_before_conversion[inf-active-cartesian]" time="0.000" /><testcase classname="tests.test_3d_release_contract" name="test_masks_validated_before_conversion[inf-active-layered]" time="0.000" /><testcase classname="tests.test_3d_release_contract" name="test_masks_validated_before_conversion[inf-active-terrain]" time="0.000" /><testcase classname="tests.test_3d_release_contract" name="test_masks_validated_before_conversion[inf-bc_mask-cartesian]" time="0.000" /><testcase classname="tests.test_3d_release_contract" name="test_masks_validated_before_conversion[inf-bc_mask-layered]" time="0.000" /><testcase classname="tests.test_3d_release_contract" name="test_masks_validated_before_conversion[inf-bc_mask-terrain]" time="0.001" /><testcase classname="tests.test_3d_release_contract" name="test_failed_rebuild_preserves_usable_model[shape-cartesian]" time="0.005" /><testcase classname="tests.test_3d_release_contract" name="test_failed_rebuild_preserves_usable_model[shape-layered]" time="0.014" /><testcase classname="tests.test_3d_release_contract" name="test_failed_rebuild_preserves_usable_model[shape-terrain]" time="0.009" /><testcase classname="tests.test_3d_release_contract" name="test_failed_rebuild_preserves_usable_model[nonfinite-cartesian]" time="0.002"><failure message="RuntimeError: ThreeDOperatorSession is closed.">tests/test_3d_release_contract.py:76: in test_failed_rebuild_preserves_usable_model
+    actual, info = model.solve()
+                   ^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/warped_darcy_3d.py:379: in solve
+    result=self._session.solve(
+DARCY_WARP_PACKAGE/solvers/session_3d.py:159: in solve
+    self._ensure_open()
+DARCY_WARP_PACKAGE/solvers/session_3d.py:238: in _ensure_open
+    raise RuntimeError("ThreeDOperatorSession is closed.")
+E   RuntimeError: ThreeDOperatorSession is closed.</failure></testcase><testcase classname="tests.test_3d_release_contract" name="test_failed_rebuild_preserves_usable_model[nonfinite-layered]" time="0.003" /><testcase classname="tests.test_3d_release_contract" name="test_failed_rebuild_preserves_usable_model[nonfinite-terrain]" time="0.007" /><testcase classname="tests.test_3d_release_contract" name="test_failed_rebuild_preserves_usable_model[mask-cartesian]" time="0.002"><failure message="RuntimeError: ThreeDOperatorSession is closed.">tests/test_3d_release_contract.py:76: in test_failed_rebuild_preserves_usable_model
+    actual, info = model.solve()
+                   ^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/warped_darcy_3d.py:379: in solve
+    result=self._session.solve(
+DARCY_WARP_PACKAGE/solvers/session_3d.py:159: in solve
+    self._ensure_open()
+DARCY_WARP_PACKAGE/solvers/session_3d.py:238: in _ensure_open
+    raise RuntimeError("ThreeDOperatorSession is closed.")
+E   RuntimeError: ThreeDOperatorSession is closed.</failure></testcase><testcase classname="tests.test_3d_release_contract" name="test_failed_rebuild_preserves_usable_model[mask-layered]" time="0.003" /><testcase classname="tests.test_3d_release_contract" name="test_failed_rebuild_preserves_usable_model[mask-terrain]" time="0.007" /><testcase classname="tests.test_3d_release_contract" name="test_physical_model_rejects_raw_face_update" time="0.001"><failure message="Failed: DID NOT RAISE ValueError">tests/test_3d_release_contract.py:83: in test_physical_model_rejects_raw_face_update
+    with pytest.raises(ValueError, match='physical|conductivity|K_fields'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError</failure></testcase><testcase classname="tests.test_3d_release_contract" name="test_uniform_npf_newton_dispatch_rejects_legacy_overrides[option0]" time="0.009"><failure message="Failed: DID NOT RAISE ValueError">tests/test_3d_release_contract.py:91: in test_uniform_npf_newton_dispatch_rejects_legacy_overrides
+    with pytest.raises(ValueError, match='npf_'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError</failure></testcase><testcase classname="tests.test_3d_release_contract" name="test_uniform_npf_newton_dispatch_rejects_legacy_overrides[option1]" time="0.005"><failure message="Failed: DID NOT RAISE ValueError">tests/test_3d_release_contract.py:91: in test_uniform_npf_newton_dispatch_rejects_legacy_overrides
+    with pytest.raises(ValueError, match='npf_'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError</failure></testcase><testcase classname="tests.test_3d_release_contract" name="test_uniform_npf_newton_dispatch_rejects_legacy_overrides[option2]" time="0.005"><failure message="Failed: DID NOT RAISE ValueError">tests/test_3d_release_contract.py:91: in test_uniform_npf_newton_dispatch_rejects_legacy_overrides
+    with pytest.raises(ValueError, match='npf_'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError</failure></testcase><testcase classname="tests.test_3d_release_contract" name="test_explicit_gmres_is_honoured_and_unused_controls_rejected" time="0.003"><failure message="KeyError: 'krylov_method'">tests/test_3d_release_contract.py:98: in test_explicit_gmres_is_honoured_and_unused_controls_rejected
+    assert info['krylov_method'] == 'GMRES'
+           ^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'krylov_method'</failure></testcase><testcase classname="tests.test_3d_release_contract" name="test_cartesian_budget_stable_residual_rms[1e-200]" time="0.001"><failure message="assert 0.0 == 8.16496580927...201 ± 8.2e-215&#10;  &#10;  comparison failed&#10;  Obtained: 0.0&#10;  Expected: 8.16496580927726e-201 ± 8.2e-215">tests/test_3d_release_contract.py:110: in test_cartesian_budget_stable_residual_rms
+    assert budget['cell_residual_rms'] == pytest.approx(scale*np.sqrt(2./3.), rel=1e-14, abs=0.)
+E   assert 0.0 == 8.16496580927...201 ± 8.2e-215
+E     
+E     comparison failed
+E     Obtained: 0.0
+E     Expected: 8.16496580927726e-201 ± 8.2e-215</failure></testcase><testcase classname="tests.test_3d_release_contract" name="test_cartesian_budget_stable_residual_rms[1.0]" time="0.000" /><testcase classname="tests.test_3d_release_contract" name="test_cartesian_budget_stable_residual_rms[1e+200]" time="0.000"><failure message="assert inf == 8.16496580927...199 ± 8.2e+185&#10;  &#10;  comparison failed&#10;  Obtained: inf&#10;  Expected: 8.16496580927726e+199 ± 8.2e+185">tests/test_3d_release_contract.py:110: in test_cartesian_budget_stable_residual_rms
+    assert budget['cell_residual_rms'] == pytest.approx(scale*np.sqrt(2./3.), rel=1e-14, abs=0.)
+E   assert inf == 8.16496580927...199 ± 8.2e+185
+E     
+E     comparison failed
+E     Obtained: inf
+E     Expected: 8.16496580927726e+199 ± 8.2e+185</failure></testcase><testcase classname="tests.test_3d_release_contract" name="test_terrain_overflow_cannot_pass_physical_acceptance" time="0.001"><failure message="KeyError: 'physical_metrics_valid'">tests/test_3d_release_contract.py:125: in test_terrain_overflow_cannot_pass_physical_acceptance
+    assert not budget['physical_metrics_valid']
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'physical_metrics_valid'</failure></testcase><testcase classname="tests.test_3d_release_contract" name="test_returned_heads_remain_owned_across_cpu_workspace_reuse" time="0.023"><failure message="AssertionError: &#10;Arrays are not equal&#10;&#10;Mismatched elements: 30 / 30 (100%)&#10;First 5 mismatches are at indices:&#10; [0, 0, 0]: 1.2 (ACTUAL), 1.0 (DESIRED)&#10; [0, 0, 1]: 1.4499999842703524 (ACTUAL), 1.25 (DESIRED)&#10; [0, 0, 2]: 1.7000000208097217 (ACTUAL), 1.5 (DESIRED)&#10; [0, 0, 3]: 1.9500000016139547 (ACTUAL), 1.75 (DESIRED)&#10; [0, 0, 4]: 2.2 (ACTUAL), 2.0 (DESIRED)&#10;Max absolute difference among violations: 0.20000003&#10;Max relative difference among violations: 0.2&#10; ACTUAL: array([[[1.2 , 1.45, 1.7 , 1.95, 2.2 ],&#10;        [1.2 , 1.45, 1.7 , 1.95, 2.2 ],&#10;        [1.2 , 1.45, 1.7 , 1.95, 2.2 ]],...&#10; DESIRED: array([[[1.  , 1.25, 1.5 , 1.75, 2.  ],&#10;        [1.  , 1.25, 1.5 , 1.75, 2.  ],&#10;        [1.  , 1.25, 1.5 , 1.75, 2.  ]],...">tests/test_3d_release_contract.py:137: in test_returned_heads_remain_owned_across_cpu_workspace_reuse
+    np.testing.assert_array_equal(actual=first, desired=snapshot)
+E   AssertionError: 
+E   Arrays are not equal
+E   
+E   Mismatched elements: 30 / 30 (100%)
+E   First 5 mismatches are at indices:
+E    [0, 0, 0]: 1.2 (ACTUAL), 1.0 (DESIRED)
+E    [0, 0, 1]: 1.4499999842703524 (ACTUAL), 1.25 (DESIRED)
+E    [0, 0, 2]: 1.7000000208097217 (ACTUAL), 1.5 (DESIRED)
+E    [0, 0, 3]: 1.9500000016139547 (ACTUAL), 1.75 (DESIRED)
+E    [0, 0, 4]: 2.2 (ACTUAL), 2.0 (DESIRED)
+E   Max absolute difference among violations: 0.20000003
+E   Max relative difference among violations: 0.2
+E    ACTUAL: array([[[1.2 , 1.45, 1.7 , 1.95, 2.2 ],
+E           [1.2 , 1.45, 1.7 , 1.95, 2.2 ],
+E           [1.2 , 1.45, 1.7 , 1.95, 2.2 ]],...
+E    DESIRED: array([[[1.  , 1.25, 1.5 , 1.75, 2.  ],
+E           [1.  , 1.25, 1.5 , 1.75, 2.  ],
+E           [1.  , 1.25, 1.5 , 1.75, 2.  ]],...</failure></testcase><testcase classname="tests.test_3d_release_contract" name="test_updated_physical_model_matches_fresh_and_repeated[legacy-False]" time="0.015"><failure message="AttributeError: 'WarpDarcySolver3D' object has no attribute 'update_K_fields'">tests/test_3d_release_contract.py:159: in test_updated_physical_model_matches_fresh_and_repeated
+    model.update_K_fields(kx_field=changed['kx_field'], ky_field=changed['ky_field'], kz_field=changed['kz_field'])
+    ^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: 'WarpDarcySolver3D' object has no attribute 'update_K_fields'</failure></testcase><testcase classname="tests.test_3d_release_contract" name="test_updated_physical_model_matches_fresh_and_repeated[legacy-True]" time="0.077"><failure message="AttributeError: 'WarpDarcySolver3D' object has no attribute 'update_K_fields'">tests/test_3d_release_contract.py:159: in test_updated_physical_model_matches_fresh_and_repeated
+    model.update_K_fields(kx_field=changed['kx_field'], ky_field=changed['ky_field'], kz_field=changed['kz_field'])
+    ^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: 'WarpDarcySolver3D' object has no attribute 'update_K_fields'</failure></testcase><testcase classname="tests.test_3d_release_contract" name="test_updated_physical_model_matches_fresh_and_repeated[mf6_6_6_2_npf-False]" time="0.020"><failure message="AttributeError: 'WarpDarcySolver3D' object has no attribute 'update_K_fields'">tests/test_3d_release_contract.py:159: in test_updated_physical_model_matches_fresh_and_repeated
+    model.update_K_fields(kx_field=changed['kx_field'], ky_field=changed['ky_field'], kz_field=changed['kz_field'])
+    ^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: 'WarpDarcySolver3D' object has no attribute 'update_K_fields'</failure></testcase><testcase classname="tests.test_3d_release_contract" name="test_updated_physical_model_matches_fresh_and_repeated[mf6_6_6_2_npf-True]" time="0.019"><failure message="AttributeError: 'WarpDarcySolver3D' object has no attribute 'update_K_fields'">tests/test_3d_release_contract.py:159: in test_updated_physical_model_matches_fresh_and_repeated
+    model.update_K_fields(kx_field=changed['kx_field'], ky_field=changed['ky_field'], kz_field=changed['kz_field'])
+    ^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: 'WarpDarcySolver3D' object has no attribute 'update_K_fields'</failure></testcase><testcase classname="tests.test_3d_release_contract" name="test_replacement_constructor_failure_rolls_back[cartesian]" time="0.002"><failure message="RuntimeError: ThreeDOperatorSession is closed.">tests/test_3d_release_contract.py:194: in test_replacement_constructor_failure_rolls_back
+    after, info = model.solve()
+                  ^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/warped_darcy_3d.py:379: in solve
+    result=self._session.solve(
+DARCY_WARP_PACKAGE/solvers/session_3d.py:159: in solve
+    self._ensure_open()
+DARCY_WARP_PACKAGE/solvers/session_3d.py:238: in _ensure_open
+    raise RuntimeError("ThreeDOperatorSession is closed.")
+E   RuntimeError: ThreeDOperatorSession is closed.</failure></testcase><testcase classname="tests.test_3d_release_contract" name="test_replacement_constructor_failure_rolls_back[layered]" time="0.004" /><testcase classname="tests.test_3d_release_contract" name="test_replacement_constructor_failure_rolls_back[terrain]" time="0.007" /><testcase classname="tests.test_3d_release_contract" name="test_invalid_contact_rebuild_leaves_model_usable" time="0.001"><failure message="Failed: DID NOT RAISE ValueError">tests/test_3d_release_contract.py:207: in test_invalid_contact_rebuild_leaves_model_usable
+    with pytest.raises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError</failure></testcase><testcase classname="tests.test_3d_release_contract" name="test_valid_boolean_and_exact_binary_masks" time="0.005" /><testcase classname="tests.test_3d_release_contract" name="test_hierarchy_controls_and_contradictions" time="0.003"><failure message="KeyError: 'effective_solver_settings'">tests/test_3d_release_contract.py:228: in test_hierarchy_controls_and_contradictions
+    assert info['effective_solver_settings']['restart'] == 5
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'effective_solver_settings'</failure></testcase><testcase classname="tests.test_3d_release_contract" name="test_terrain_counts_actual_preconditioner_calls" time="0.027"><failure message="KeyError: 'preconditioner_applications'">tests/test_3d_release_contract.py:256: in test_terrain_counts_actual_preconditioner_calls
+    assert info['preconditioner_applications'] == len(calls)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'preconditioner_applications'</failure></testcase><testcase classname="tests.test_3d_release_contract" name="test_independent_terrain_gate_honours_invalid_physical_aggregates" time="0.001"><failure message="AssertionError: assert not True&#10; +  where True = &lt;function accepted at 0x7f202a9909a0&gt;(head=array([[[0.]]]), budget={'head_residual_rms': 0.0, 'cell_residual_rms': 0.0, 'relative_cell_imbalance': 0.0, 'throughput': 1.0, ...}, controls=CPUControls(method='newton', max_outer=6000, head_tol=1e-06, flow_tol=1e-12, relative_tol=1e-08, relaxation=1.0, max_c...ue, adequate_alpha=0.125, adequate_merit_ratio=0.8, retry_contraction=0.5, stagnation_window=0, stagnation_ratio=0.995))&#10; +    where array([[[0.]]]) = &lt;built-in function zeros&gt;((1, 1, 1))&#10; +      where &lt;built-in function zeros&gt; = np.zeros&#10; +    and   CPUControls(method='newton', max_outer=6000, head_tol=1e-06, flow_tol=1e-12, relative_tol=1e-08, relaxation=1.0, max_c...ue, adequate_alpha=0.125, adequate_merit_ratio=0.8, retry_contraction=0.5, stagnation_window=0, stagnation_ratio=0.995) = &lt;class 'DARCY_WARP_PACKAGE.validation.terrain_cpu.CPUControls'&gt;()">tests/test_3d_release_contract.py:265: in test_independent_terrain_gate_honours_invalid_physical_aggregates
+    assert not accepted(head=np.zeros((1, 1, 1)), budget=budget, controls=CPUControls())
+E   AssertionError: assert not True
+E    +  where True = &lt;function accepted at 0x7f202a9909a0&gt;(head=array([[[0.]]]), budget={'head_residual_rms': 0.0, 'cell_residual_rms': 0.0, 'relative_cell_imbalance': 0.0, 'throughput': 1.0, ...}, controls=CPUControls(method='newton', max_outer=6000, head_tol=1e-06, flow_tol=1e-12, relative_tol=1e-08, relaxation=1.0, max_c...ue, adequate_alpha=0.125, adequate_merit_ratio=0.8, retry_contraction=0.5, stagnation_window=0, stagnation_ratio=0.995))
+E    +    where array([[[0.]]]) = &lt;built-in function zeros&gt;((1, 1, 1))
+E    +      where &lt;built-in function zeros&gt; = np.zeros
+E    +    and   CPUControls(method='newton', max_outer=6000, head_tol=1e-06, flow_tol=1e-12, relative_tol=1e-08, relaxation=1.0, max_c...ue, adequate_alpha=0.125, adequate_merit_ratio=0.8, retry_contraction=0.5, stagnation_window=0, stagnation_ratio=0.995) = &lt;class 'DARCY_WARP_PACKAGE.validation.terrain_cpu.CPUControls'&gt;()</failure></testcase><testcase classname="tests.test_3d_release_contract" name="test_public_timing_includes_independent_acceptance" time="0.003"><failure message="KeyError: 'public_total_seconds'">tests/test_3d_release_contract.py:271: in test_public_timing_includes_independent_acceptance
+    assert info['public_total_seconds'] &gt;= info['seconds'] &gt;= 0.
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'public_total_seconds'</failure></testcase><testcase classname="tests.test_3d_release_contract" name="test_independent_face_model_rejects_implicit_physical_mode_change" time="0.001"><failure message="TypeError: solve_fast_unconfined_kcycle_3d() missing 1 required keyword-only argument: 'zbot_field'">tests/test_3d_release_contract.py:283: in test_independent_face_model_rejects_implicit_physical_mode_change
+    model.solve(unconfined=True, kx_field=data['kx_field'], ky_field=data['ky_field'], kz_field=data['kz_field'])
+DARCY_WARP_PACKAGE/warped_darcy_3d.py:379: in solve
+    result=self._session.solve(
+DARCY_WARP_PACKAGE/solvers/session_3d.py:187: in solve
+    result = solve_fast_unconfined_kcycle_3d(
+E   TypeError: solve_fast_unconfined_kcycle_3d() missing 1 required keyword-only argument: 'zbot_field'</failure></testcase><testcase classname="tests.test_3d_release_contract" name="test_explicit_diagonal_selects_gmres_and_default_valued_conflicts_raise" time="0.003"><failure message="KeyError: 'krylov_method'">tests/test_3d_release_contract.py:291: in test_explicit_diagonal_selects_gmres_and_default_valued_conflicts_raise
+    assert info['krylov_method'] == 'GMRES' and info['npf_preconditioner'] == 'diagonal'
+           ^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'krylov_method'</failure></testcase><testcase classname="tests.test_3d_release_contract" name="test_low_level_layer_builder_rejects_nonbinary_active_mask[0.9]" time="0.000"><failure message="Failed: DID NOT RAISE ValueError">tests/test_3d_release_contract.py:303: in test_low_level_layer_builder_rejects_nonbinary_active_mask
+    with pytest.raises(ValueError, match='binary'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError</failure></testcase><testcase classname="tests.test_3d_release_contract" name="test_low_level_layer_builder_rejects_nonbinary_active_mask[1.9]" time="0.000"><failure message="Failed: DID NOT RAISE ValueError">tests/test_3d_release_contract.py:303: in test_low_level_layer_builder_rejects_nonbinary_active_mask
+    with pytest.raises(ValueError, match='binary'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError</failure></testcase><testcase classname="tests.test_3d_release_contract" name="test_low_level_layer_builder_rejects_nonbinary_active_mask[nan]" time="0.000"><failure message="Failed: DID NOT RAISE ValueError">tests/test_3d_release_contract.py:303: in test_low_level_layer_builder_rejects_nonbinary_active_mask
+    with pytest.raises(ValueError, match='binary'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError</failure></testcase><testcase classname="tests.test_3d_release_contract" name="test_low_level_layer_builder_rejects_nonbinary_active_mask[inf]" time="0.000"><failure message="Failed: DID NOT RAISE ValueError">tests/test_3d_release_contract.py:303: in test_low_level_layer_builder_rejects_nonbinary_active_mask
+    with pytest.raises(ValueError, match='binary'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError</failure></testcase><testcase classname="tests.test_npf662_reference_controller" name="test_reference_linear_controller_rejects_finite_bad_solutions" time="0.000"><failure message="ImportError: cannot import name 'solve_reference_correction' from 'DARCY_WARP_PACKAGE.validation.npf662_reference' (/tmp/darcywarp-release-baseline/DARCY_WARP_PACKAGE/validation/npf662_reference.py)">tests/test_npf662_reference_controller.py:7: in test_reference_linear_controller_rejects_finite_bad_solutions
+    from DARCY_WARP_PACKAGE.validation.npf662_reference import solve_reference_correction, ReferenceLinearControls
+E   ImportError: cannot import name 'solve_reference_correction' from 'DARCY_WARP_PACKAGE.validation.npf662_reference' (/tmp/darcywarp-release-baseline/DARCY_WARP_PACKAGE/validation/npf662_reference.py)</failure></testcase><testcase classname="tests.test_npf662_reference_controller" name="test_reference_scaled_linear_system" time="0.000"><failure message="ImportError: cannot import name 'solve_reference_correction' from 'DARCY_WARP_PACKAGE.validation.npf662_reference' (/tmp/darcywarp-release-baseline/DARCY_WARP_PACKAGE/validation/npf662_reference.py)">tests/test_npf662_reference_controller.py:22: in test_reference_scaled_linear_system
+    from DARCY_WARP_PACKAGE.validation.npf662_reference import solve_reference_correction, ReferenceLinearControls
+E   ImportError: cannot import name 'solve_reference_correction' from 'DARCY_WARP_PACKAGE.validation.npf662_reference' (/tmp/darcywarp-release-baseline/DARCY_WARP_PACKAGE/validation/npf662_reference.py)</failure></testcase><testcase classname="tests.test_npf662_reference_controller" name="test_reference_never_line_searches_inadequate_finite_direction" time="0.002"><failure message="assert not True">tests/test_npf662_reference_controller.py:44: in test_reference_never_line_searches_inadequate_finite_direction
+    assert not info['history'][0]['accepted']
+E   assert not True</failure></testcase></testsuite></testsuites>

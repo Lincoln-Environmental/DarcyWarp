@@ -23,20 +23,24 @@ structured `(nz, ny, nx)` conductivity, activity, boundary, source, and
 initial-head fields. It can build a `WarpDarcySolver3D` through the existing
 public API without adding case-specific concepts to the solver.
 
-`case_studies/river_loss_cross_section.py` is an example case-study builder. It assembles a
-river/channel and far-field outlet configuration into `Model3DInputs`, then
-uses `physics.budget_3d.boundary_interface_flux` for named boundary-flow
-diagnostics. The experiment runner is kept under `working_tests`:
+The historical river-loss case-study dependencies are absent from the tracked
+checkout, so its compatibility runner is not a self-contained verification
+example. The runnable synthetic verification is
+[`examples/verify_3d_series_flow.py`](../examples/verify_3d_series_flow.py):
 
 ```bash
-python working_tests/run_river_loss_cross_section.py --device cpu
+DARCY_FLOAT=float64 PYTHONPATH=. python examples/verify_3d_series_flow.py
 ```
 
-The historical `python -m DARCY_WARP_PACKAGE.river_loss_cross_section` command
-remains available as a compatibility entry point.
+It checks independently known series-resistance heads and fluxes and saves
+the completed numerical results. See the feature branch's
+[3D capability guide](../docs/3D_CAPABILITIES.md) for formulation-specific limits.
 
 3D execution notes
 -------------------
+
+These recovered execution notes are historical. The feature branch's
+[capability guide](../docs/3D_CAPABILITIES.md) records the audited API and limits.
 
 The 3D wrapper owns validated host-side operator inputs with in-place RHS,
 initial-head, and face-conductance updates. Classic K-cycle/Chebyshev remains

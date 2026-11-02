@@ -1,0 +1,572 @@
+{
+  "stage_a_before": {
+    "tests": 49,
+    "passed": 28,
+    "failed": 21,
+    "errors": 0,
+    "skipped": 0,
+    "warnings": 9,
+    "unsuccessful": [
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_masks_validated_before_conversion[0.9-active-cartesian]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_masks_validated_before_conversion[0.9-bc_mask-cartesian]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_masks_validated_before_conversion[0.9-bc_mask-terrain]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_masks_validated_before_conversion[1.9-active-cartesian]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_masks_validated_before_conversion[1.9-bc_mask-cartesian]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_masks_validated_before_conversion[1.9-bc_mask-terrain]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_masks_validated_before_conversion[-0.1-active-cartesian]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_masks_validated_before_conversion[-0.1-bc_mask-cartesian]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_masks_validated_before_conversion[-0.1-bc_mask-terrain]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_failed_rebuild_preserves_usable_model[shape-terrain]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_failed_rebuild_preserves_usable_model[nonfinite-cartesian]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_failed_rebuild_preserves_usable_model[mask-cartesian]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_physical_model_rejects_raw_face_update"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_uniform_npf_newton_dispatch_rejects_legacy_overrides[option0]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_uniform_npf_newton_dispatch_rejects_legacy_overrides[option1]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_uniform_npf_newton_dispatch_rejects_legacy_overrides[option2]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_explicit_gmres_is_honoured_and_unused_controls_rejected"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_cartesian_budget_stable_residual_rms[1e-200]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_cartesian_budget_stable_residual_rms[1e+200]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_terrain_overflow_cannot_pass_physical_acceptance"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_returned_heads_remain_owned_across_cpu_workspace_reuse"
+      }
+    ]
+  },
+  "stage_a_baseline_final_tests": {
+    "tests": 61,
+    "passed": 32,
+    "failed": 29,
+    "errors": 0,
+    "skipped": 0,
+    "warnings": 9,
+    "unsuccessful": [
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_masks_validated_before_conversion[0.9-active-cartesian]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_masks_validated_before_conversion[0.9-bc_mask-cartesian]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_masks_validated_before_conversion[0.9-bc_mask-terrain]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_masks_validated_before_conversion[1.9-active-cartesian]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_masks_validated_before_conversion[1.9-bc_mask-cartesian]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_masks_validated_before_conversion[1.9-bc_mask-terrain]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_masks_validated_before_conversion[-0.1-active-cartesian]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_masks_validated_before_conversion[-0.1-bc_mask-cartesian]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_masks_validated_before_conversion[-0.1-bc_mask-terrain]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_failed_rebuild_preserves_usable_model[nonfinite-cartesian]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_failed_rebuild_preserves_usable_model[mask-cartesian]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_physical_model_rejects_raw_face_update"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_uniform_npf_newton_dispatch_rejects_legacy_overrides[option0]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_uniform_npf_newton_dispatch_rejects_legacy_overrides[option1]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_uniform_npf_newton_dispatch_rejects_legacy_overrides[option2]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_explicit_gmres_is_honoured_and_unused_controls_rejected"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_cartesian_budget_stable_residual_rms[1e-200]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_cartesian_budget_stable_residual_rms[1e+200]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_terrain_overflow_cannot_pass_physical_acceptance"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_returned_heads_remain_owned_across_cpu_workspace_reuse"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_updated_physical_model_matches_fresh_and_repeated[legacy-False]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_updated_physical_model_matches_fresh_and_repeated[legacy-True]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_updated_physical_model_matches_fresh_and_repeated[mf6_6_6_2_npf-False]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_updated_physical_model_matches_fresh_and_repeated[mf6_6_6_2_npf-True]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_replacement_constructor_failure_rolls_back[cartesian]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_invalid_contact_rebuild_leaves_model_usable"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_hierarchy_controls_and_contradictions"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_reference_linear_controller_rejects_finite_bad_solutions"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_reference_scaled_linear_system"
+      }
+    ]
+  },
+  "stage_a_final_baseline": {
+    "tests": 71,
+    "passed": 32,
+    "failed": 39,
+    "errors": 0,
+    "skipped": 0,
+    "warnings": 9,
+    "unsuccessful": [
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_masks_validated_before_conversion[0.9-active-cartesian]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_masks_validated_before_conversion[0.9-bc_mask-cartesian]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_masks_validated_before_conversion[0.9-bc_mask-terrain]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_masks_validated_before_conversion[1.9-active-cartesian]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_masks_validated_before_conversion[1.9-bc_mask-cartesian]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_masks_validated_before_conversion[1.9-bc_mask-terrain]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_masks_validated_before_conversion[-0.1-active-cartesian]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_masks_validated_before_conversion[-0.1-bc_mask-cartesian]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_masks_validated_before_conversion[-0.1-bc_mask-terrain]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_failed_rebuild_preserves_usable_model[nonfinite-cartesian]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_failed_rebuild_preserves_usable_model[mask-cartesian]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_physical_model_rejects_raw_face_update"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_uniform_npf_newton_dispatch_rejects_legacy_overrides[option0]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_uniform_npf_newton_dispatch_rejects_legacy_overrides[option1]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_uniform_npf_newton_dispatch_rejects_legacy_overrides[option2]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_explicit_gmres_is_honoured_and_unused_controls_rejected"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_cartesian_budget_stable_residual_rms[1e-200]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_cartesian_budget_stable_residual_rms[1e+200]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_terrain_overflow_cannot_pass_physical_acceptance"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_returned_heads_remain_owned_across_cpu_workspace_reuse"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_updated_physical_model_matches_fresh_and_repeated[legacy-False]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_updated_physical_model_matches_fresh_and_repeated[legacy-True]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_updated_physical_model_matches_fresh_and_repeated[mf6_6_6_2_npf-False]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_updated_physical_model_matches_fresh_and_repeated[mf6_6_6_2_npf-True]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_replacement_constructor_failure_rolls_back[cartesian]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_invalid_contact_rebuild_leaves_model_usable"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_hierarchy_controls_and_contradictions"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_terrain_counts_actual_preconditioner_calls"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_independent_terrain_gate_honours_invalid_physical_aggregates"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_public_timing_includes_independent_acceptance"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_independent_face_model_rejects_implicit_physical_mode_change"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_explicit_diagonal_selects_gmres_and_default_valued_conflicts_raise"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_low_level_layer_builder_rejects_nonbinary_active_mask[0.9]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_low_level_layer_builder_rejects_nonbinary_active_mask[1.9]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_low_level_layer_builder_rejects_nonbinary_active_mask[nan]"
+      },
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_low_level_layer_builder_rejects_nonbinary_active_mask[inf]"
+      },
+      {
+        "module": "tests.test_npf662_reference_controller",
+        "test": "test_reference_linear_controller_rejects_finite_bad_solutions"
+      },
+      {
+        "module": "tests.test_npf662_reference_controller",
+        "test": "test_reference_scaled_linear_system"
+      },
+      {
+        "module": "tests.test_npf662_reference_controller",
+        "test": "test_reference_never_line_searches_inadequate_finite_direction"
+      }
+    ]
+  },
+  "reference_controller_before": {
+    "tests": 1,
+    "passed": 0,
+    "failed": 1,
+    "errors": 0,
+    "skipped": 0,
+    "warnings": 0,
+    "unsuccessful": [
+      {
+        "module": "tests.test_npf662_reference_controller",
+        "test": "test_reference_never_line_searches_inadequate_finite_direction"
+      }
+    ]
+  },
+  "stage_a_after": {
+    "tests": 89,
+    "passed": 89,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "warnings": 0,
+    "unsuccessful": []
+  },
+  "stage_a_extended": {
+    "tests": 70,
+    "passed": 70,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "warnings": 0,
+    "unsuccessful": []
+  },
+  "stage_a_final_cpu": {
+    "tests": 122,
+    "passed": 99,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 23,
+    "warnings": 0,
+    "unsuccessful": []
+  },
+  "stage_b_cpu": {
+    "tests": 1555,
+    "passed": 1129,
+    "failed": 1,
+    "errors": 0,
+    "skipped": 425,
+    "warnings": 0,
+    "unsuccessful": [
+      {
+        "module": "tests.test_npf662_layers",
+        "test": "test_internal_vertical_inactive_cell_has_no_passthrough"
+      }
+    ]
+  },
+  "stage_b_cpu_recheck": {
+    "tests": 64,
+    "passed": 63,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 1,
+    "warnings": 0,
+    "unsuccessful": []
+  },
+  "stage_c_full_cpu": {
+    "tests": 1853,
+    "passed": 1382,
+    "failed": 3,
+    "errors": 3,
+    "skipped": 465,
+    "warnings": 135,
+    "unsuccessful": [
+      {
+        "module": "tests.test_2d_unconfined",
+        "test": "test_unconfined_warp_matches_mf6_truth_all_grids[2000x2000]"
+      },
+      {
+        "module": "tests.test_2d_unconfined",
+        "test": "test_unconfined_warp_matches_mf6_truth_all_grids[3000x3000]"
+      },
+      {
+        "module": "tests.test_fas_transient_multistep",
+        "test": "test_18_fas_vs_picard_complete_transient_histories"
+      },
+      {
+        "module": "tests.test_unconfined_solvers_500x500",
+        "test": "test_picard_production_replay_500x500"
+      },
+      {
+        "module": "tests.test_unconfined_solvers_500x500",
+        "test": "test_alternate_nonlinear_backend_500x500[unconfined_semismooth_newton_kcycle]"
+      },
+      {
+        "module": "tests.test_unconfined_solvers_500x500",
+        "test": "test_alternate_nonlinear_backend_500x500[unconfined_fas]"
+      }
+    ]
+  },
+  "fas_baseline": {
+    "tests": 1,
+    "passed": 0,
+    "failed": 1,
+    "errors": 0,
+    "skipped": 0,
+    "warnings": 4,
+    "unsuccessful": [
+      {
+        "module": "tests.test_fas_transient_multistep",
+        "test": "test_18_fas_vs_picard_complete_transient_histories"
+      }
+    ]
+  },
+  "final_contract": {
+    "tests": 112,
+    "passed": 104,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 8,
+    "warnings": 0,
+    "unsuccessful": []
+  },
+  "final_acceptance_recheck": {
+    "tests": 93,
+    "passed": 93,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "warnings": 0,
+    "unsuccessful": []
+  },
+  "final_npf_dispatch": {
+    "tests": 246,
+    "passed": 196,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 50,
+    "warnings": 0,
+    "unsuccessful": []
+  },
+  "final_focused": {
+    "tests": 71,
+    "passed": 71,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "warnings": 0,
+    "unsuccessful": []
+  },
+  "ci_contract": {
+    "tests": 123,
+    "passed": 119,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 4,
+    "warnings": 0,
+    "unsuccessful": []
+  },
+  "ci_npf": {
+    "tests": 126,
+    "passed": 111,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 15,
+    "warnings": 0,
+    "unsuccessful": []
+  },
+  "ci_terrain": {
+    "tests": 389,
+    "passed": 295,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 94,
+    "warnings": 0,
+    "unsuccessful": []
+  },
+  "ci_2d": {
+    "tests": 45,
+    "passed": 39,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 6,
+    "warnings": 0,
+    "unsuccessful": []
+  }
+}

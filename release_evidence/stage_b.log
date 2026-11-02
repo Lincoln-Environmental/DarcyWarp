@@ -1,0 +1,6 @@
+........................................................................ [  4%]
+...........
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! KeyboardInterrupt !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+/home/patrickdurney/miniconda3/envs/darcywarp312/lib/python3.12/site-packages/warp/_src/context.py:14099: KeyboardInterrupt
+(to show a full traceback on KeyboardInterrupt use --full-trace)
+83 passed in 142.02s (0:02:22)

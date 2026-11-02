@@ -1,0 +1,426 @@
+{
+  "case": "y",
+  "input_hash": "1a04a5abe4a87e5db5b0ef3446fa70e44c1bed16d795ed9a2784d4e368ea28d4",
+  "cpu": {
+    "prescribed_cells_checked": 30,
+    "prescribed_head_error_max_m": 0.0,
+    "prescribed_head_tolerance_m": 1e-10,
+    "boundary_condition_valid": true,
+    "invalid_active_heads": 0,
+    "inactive_marker_cells": 0,
+    "active_cells_checked": 60,
+    "input_valid": true,
+    "head_residual_rms": 1.239110855423271e-15,
+    "physical_rms": 1.7124837051097592e-14,
+    "physical_max": 3.26405569239796e-14,
+    "residual_l1": 4.3012260420027813e-13,
+    "relative_cell_imbalance": 2.6882662762517364e-14,
+    "gross_throughput": 16.00000000000001,
+    "signed_imbalance": 8.515410598874951e-14,
+    "boundary_inflow": 8.000000000000048,
+    "boundary_outflow": 7.999999999999964,
+    "fixed_cell_source_total": 0.0,
+    "free_cells": 30,
+    "fixed_reservoir_required_inflow": 8.532434018586066e-14,
+    "ungrounded_current_components": 0,
+    "physical_metrics_valid": true,
+    "final_acceptance_thresholds": {
+      "physical_rms_m3_day": 1e-12,
+      "relative_cell_imbalance": 1e-08,
+      "head_equivalent_rms_m": 1e-06,
+      "prescribed_head_error_m": 1e-10
+    },
+    "independent_accepted": true,
+    "linear_residual_max": 3.730349362740526e-14,
+    "linear_backward_error": 1.3724611341944539e-16
+  },
+  "devices": {
+    "cpu": {
+      "info": {
+        "solver_type": "kcycle_7point_3d",
+        "implementation": "fast",
+        "fast_operator": "fp64_face_arrays",
+        "n_levels": 3,
+        "level_shapes": [
+          [
+            3,
+            4,
+            5
+          ],
+          [
+            3,
+            2,
+            3
+          ],
+          [
+            3,
+            2,
+            2
+          ]
+        ],
+        "n_cycles_used": 60,
+        "max_cycles": 2000,
+        "converged": true,
+        "r_rms0": 1.131370849898476,
+        "r_rms_end": 4.764141204851333e-13,
+        "tol_abs": 1.131370849898476e-12,
+        "h_rms_end": 3.088306411210693e-14,
+        "head_residual_tolerance": 1e-12,
+        "dh_rms_lastcheck": 2.6308540252215484e-12,
+        "dh_max_lastcheck": 3.1459279625778436e-12,
+        "smoother": "chebyshev",
+        "workspace_reused": false,
+        "cuda_graph_built_this_call": false,
+        "cuda_graph_capture_failed": false,
+        "cuda_graph_reused": false,
+        "cuda_graph_replayed": false,
+        "transient": false,
+        "transient_formulation": "steady",
+        "dt": null,
+        "n_isolated_cells_excluded": 0,
+        "irregular_correction_energy_projection": false,
+        "operator_refreshed_in_place": false,
+        "n_hydraulic_components": 1,
+        "n_fixed_head_components": 1,
+        "n_storage_constrained_components": 0,
+        "component_topology_reused": false,
+        "budget": {
+          "cell_residual_max": 8.238076887323587e-13,
+          "cell_residual_rms": 4.764141204851333e-13,
+          "source_total": 0.0,
+          "boundary_inflow": 8.000000000005578,
+          "boundary_outflow": -7.999999999994387,
+          "boundary_net": 1.1191048088221578e-11,
+          "storage_uptake": 0.0,
+          "domain_imbalance": 1.1192158311246203e-11,
+          "relative_imbalance": 6.995098944528892e-13,
+          "relative_cell_imbalance": 7.024686388135152e-13,
+          "throughput": 15.999999999999964,
+          "n_free_cells": 30.0,
+          "physical_metrics_valid": true
+        },
+        "final_physical_head_residual_rms": 3.088306411210693e-14,
+        "final_budget_acceptance": true,
+        "final_budget_relative_tolerance": 1e-08,
+        "final_physical_acceptance": true,
+        "session_revision": 0,
+        "operator_revision": 0,
+        "topology_revision": 0,
+        "session_backend": "fast_3d",
+        "backend_converged": true,
+        "formulation": "mf6_6_6_2_npf",
+        "geometry": "orthogonal_cartesian_uniform_dz",
+        "device": "cpu",
+        "precision": "float64",
+        "reference_contract": "NPF662_CARTESIAN_V1_confined",
+        "reference_version": "6.6.2",
+        "independent_acceptance": {
+          "prescribed_cells_checked": 30,
+          "prescribed_head_error_max_m": 0.0,
+          "prescribed_head_tolerance_m": 1e-10,
+          "boundary_condition_valid": true,
+          "invalid_active_heads": 0,
+          "inactive_marker_cells": 0,
+          "active_cells_checked": 60,
+          "input_valid": true,
+          "head_residual_rms": 3.088360110491146e-14,
+          "physical_rms": 4.764204345896811e-13,
+          "physical_max": 8.236966664298962e-13,
+          "residual_l1": 1.1239387198713757e-11,
+          "relative_cell_imbalance": 7.024616999196112e-13,
+          "gross_throughput": 15.999999999999968,
+          "signed_imbalance": 1.119249137815359e-11,
+          "boundary_inflow": 8.00000000000558,
+          "boundary_outflow": 7.999999999994387,
+          "fixed_cell_source_total": 0.0,
+          "free_cells": 30,
+          "fixed_reservoir_required_inflow": 1.1192646809386602e-11,
+          "ungrounded_current_components": 0,
+          "physical_metrics_valid": true,
+          "final_acceptance_thresholds": {
+            "physical_rms_m3_day": 1e-12,
+            "relative_cell_imbalance": 1e-08,
+            "head_equivalent_rms_m": 1e-06,
+            "prescribed_head_error_m": 1e-10
+          },
+          "independent_accepted": true
+        },
+        "final_acceptance_thresholds": {
+          "physical_rms_m3_day": 1e-12,
+          "relative_cell_imbalance": 1e-08,
+          "head_equivalent_rms_m": 1e-06,
+          "prescribed_head_error_m": 1e-10
+        },
+        "effective_options": {
+          "xt3d": false,
+          "newton": false,
+          "icelltype": 0,
+          "variablecv": false,
+          "perched": false,
+          "thickstrt": false,
+          "rewet": false,
+          "storage": false,
+          "packages": [
+            "CHD",
+            "WEL_SOURCE"
+          ]
+        },
+        "stop_reason": "converged",
+        "effective_solver_settings": {
+          "backend": "fast_3d",
+          "krylov_method": null,
+          "hierarchy": {
+            "max_levels": 6,
+            "min_coarse_n": 2,
+            "actual_levels": 3,
+            "dimensions": [
+              [
+                3,
+                4,
+                5
+              ],
+              [
+                3,
+                2,
+                3
+              ],
+              [
+                3,
+                2,
+                2
+              ]
+            ]
+          },
+          "max_cycles": 2000,
+          "rel_tol": 1e-12,
+          "nonlinear": null,
+          "convergence": {
+            "physical_rms_m3_day": 1e-12,
+            "relative_cell_imbalance": 1e-08,
+            "head_equivalent_rms_m": 1e-06,
+            "prescribed_head_error_m": 1e-10
+          }
+        },
+        "reference_reused": false,
+        "reference_setup_seconds": 0.0004251869395375252,
+        "public_total_seconds": 0.0778478269930929,
+        "public_timing_scope": "dispatch, setup, iterations, readback and independent final acceptance"
+      },
+      "independent": {
+        "prescribed_cells_checked": 30,
+        "prescribed_head_error_max_m": 0.0,
+        "prescribed_head_tolerance_m": 1e-10,
+        "boundary_condition_valid": true,
+        "invalid_active_heads": 0,
+        "inactive_marker_cells": 0,
+        "active_cells_checked": 60,
+        "input_valid": true,
+        "head_residual_rms": 3.088360110491146e-14,
+        "physical_rms": 4.764204345896811e-13,
+        "physical_max": 8.236966664298962e-13,
+        "residual_l1": 1.1239387198713757e-11,
+        "relative_cell_imbalance": 7.024616999196112e-13,
+        "gross_throughput": 15.999999999999968,
+        "signed_imbalance": 1.119249137815359e-11,
+        "boundary_inflow": 8.00000000000558,
+        "boundary_outflow": 7.999999999994387,
+        "fixed_cell_source_total": 0.0,
+        "free_cells": 30,
+        "fixed_reservoir_required_inflow": 1.1192646809386602e-11,
+        "ungrounded_current_components": 0,
+        "physical_metrics_valid": true,
+        "final_acceptance_thresholds": {
+          "physical_rms_m3_day": 1e-12,
+          "relative_cell_imbalance": 1e-08,
+          "head_equivalent_rms_m": 1e-06,
+          "prescribed_head_error_m": 1e-10
+        },
+        "independent_accepted": true
+      },
+      "head_max_difference_m": 2.877698079828406e-13
+    }
+  },
+  "mf6": {
+    "native_success": true,
+    "returncode": 0,
+    "stop_reason": "native_converged",
+    "seconds": 0.056035319925285876,
+    "input_hash": "1a04a5abe4a87e5db5b0ef3446fa70e44c1bed16d795ed9a2784d4e368ea28d4",
+    "mf6_version": "mf6: 6.6.2 05/12/2025",
+    "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+    "native_solver_options": {
+      "complexity": "COMPLEX",
+      "print_option": "ALL",
+      "outer_maximum": 2000,
+      "outer_dvclose": 1e-14,
+      "inner_maximum": 2000,
+      "inner_dvclose": 1e-14,
+      "rcloserecord": [
+        1e-14,
+        "STRICT"
+      ],
+      "linear_acceleration": "CG",
+      "under_relaxation": "DBD",
+      "relaxation_factor": 0.97,
+      "preconditioner_drop_tolerance": 0.0,
+      "scaling_method": "DIAGONAL",
+      "preconditioner_levels": 100,
+      "csv_outer_output_filerecord": "outer.csv",
+      "csv_inner_output_filerecord": "inner.csv"
+    },
+    "timeout_seconds": 600,
+    "source_package": "wel",
+    "contract": "NPF662_CARTESIAN_V1_confined",
+    "geometry": "orthogonal_cartesian_uniform_dz",
+    "supplied_state_verification": false,
+    "settings": {
+      "xt3d": false,
+      "icelltype": [
+        [
+          [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        [
+          [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        [
+          [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ]
+      ],
+      "newton": false,
+      "linear_acceleration": "CG",
+      "variablecv": false,
+      "perched": false,
+      "thickstrt": false,
+      "rewet": false,
+      "steady": true,
+      "outer_dvclose_m": 1e-14,
+      "inner_dvclose_m": 1e-14,
+      "inner_rclose_m3_day": 1e-14,
+      "scaling_method": "DIAGONAL",
+      "preconditioner_levels": 100,
+      "preconditioner_drop_tolerance": 0.0,
+      "relaxation_factor": 0.97
+    },
+    "independent": {
+      "prescribed_cells_checked": 30,
+      "prescribed_head_error_max_m": 0.0,
+      "prescribed_head_tolerance_m": 1e-10,
+      "boundary_condition_valid": true,
+      "invalid_active_heads": 0,
+      "inactive_marker_cells": 0,
+      "active_cells_checked": 60,
+      "input_valid": true,
+      "head_residual_rms": 1.1349202990767072e-15,
+      "physical_rms": 1.3302963270809946e-14,
+      "physical_max": 2.318145675417327e-14,
+      "residual_l1": 3.58224561125553e-13,
+      "relative_cell_imbalance": 2.2389035070347103e-14,
+      "gross_throughput": 15.999999999999972,
+      "signed_imbalance": -2.853273173286651e-14,
+      "boundary_inflow": 7.9999999999999725,
+      "boundary_outflow": 8.0,
+      "fixed_cell_source_total": 0.0,
+      "free_cells": 30,
+      "fixed_reservoir_required_inflow": -2.8658557008991066e-14,
+      "ungrounded_current_components": 0,
+      "physical_metrics_valid": true,
+      "final_acceptance_thresholds": {
+        "physical_rms_m3_day": 1e-12,
+        "relative_cell_imbalance": 1e-08,
+        "head_equivalent_rms_m": 1e-06,
+        "prescribed_head_error_m": 1e-10
+      },
+      "independent_accepted": true
+    },
+    "source_allocation_max_error": 0.0,
+    "reciprocity_max": 0.0,
+    "saturation_max_error": 0.0,
+    "native_flux_residual_rms": 1.3302963270809946e-14,
+    "native_flux_residual_relative": 2.2389035070347103e-14,
+    "independent_conservation": true
+  },
+  "mf6_head_max_difference_m": 7.105427357601002e-15,
+  "same_head_native_flux_max_error": 0.0,
+  "analytical_head_max_error_m": 7.105427357601002e-15
+}

@@ -1,0 +1,8 @@
+refs/remotes/origin/HEAD ca67fdcf5302fb3cdd5ae00383f87b77db34a8dc
+refs/remotes/origin/dev f02f4d91ba70e681628c7ea43dbf004a5ccf997c
+refs/remotes/origin/docs/darcywarp-refresh-20261102 57e8b184bb739efd8990a6d0ad204afb57e574bd
+refs/remotes/origin/feature/shanz-steady-hot-start db5ddc85b97e0179e4f5ad1caebdf501a9a950e9
+refs/remotes/origin/feature/shanz-surface-coupling 989b0ee1a3ac007fef9747bd69fd56d9cf942576
+refs/remotes/origin/fix/3d-audit-20261102 13227aa742927c0b304d298f5b5dcbc7816cbddf
+refs/remotes/origin/fix/terrain-contact-law-runtime 48dd46df6626176526473864e49e3e4ddf67c6a5
+refs/remotes/origin/main ca67fdcf5302fb3cdd5ae00383f87b77db34a8dc

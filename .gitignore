@@ -41,3 +41,11 @@ Thumbs.db
 #   python working_tests/regenerate_unconfined_2d_truth.py
 # The test auto-discovers whatever fixtures are present, so a fresh checkout
 # runs the small committed grids and skips these until regenerated.
+
+# Generated CPU release-validation scratch data and superseded local runs.
+DARCY_WARP_PACKAGE/data/working_tests/
+release_evidence/independent_confined/
+release_evidence/independent_confined_initial/
+release_evidence/terrain_roots/
+release_evidence/terrain_roots_initial/
+release_evidence/geology_pre_cpu_request/

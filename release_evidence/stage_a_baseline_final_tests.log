@@ -1,0 +1,254 @@
+Warp CUDA error 100: no CUDA-capable device is detected (in function init_cuda_driver, /builds/omniverse/warp/warp/native/cuda_util.cpp:333)
+Warp 1.17.0 initialized:
+   CUDA Toolkit 12.9, CUDA driver not available (NVRTC compilation available)
+   Devices:
+     "cpu"      : "x86_64"
+   Kernel cache:
+     /home/patrickdurney/.cache/warp/1.17.0
+F..F.FF..F.FF..F.F...............F..F..FFFFFF.FFFFFFFF..F.FFF            [100%]
+=================================== FAILURES ===================================
+_________ test_masks_validated_before_conversion[0.9-active-cartesian] _________
+tests/test_3d_release_contract.py:56: in test_masks_validated_before_conversion
+    with pytest.raises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError
+________ test_masks_validated_before_conversion[0.9-bc_mask-cartesian] _________
+tests/test_3d_release_contract.py:56: in test_masks_validated_before_conversion
+    with pytest.raises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError
+_________ test_masks_validated_before_conversion[0.9-bc_mask-terrain] __________
+tests/test_3d_release_contract.py:56: in test_masks_validated_before_conversion
+    with pytest.raises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError
+_________ test_masks_validated_before_conversion[1.9-active-cartesian] _________
+tests/test_3d_release_contract.py:56: in test_masks_validated_before_conversion
+    with pytest.raises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError
+________ test_masks_validated_before_conversion[1.9-bc_mask-cartesian] _________
+tests/test_3d_release_contract.py:56: in test_masks_validated_before_conversion
+    with pytest.raises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError
+_________ test_masks_validated_before_conversion[1.9-bc_mask-terrain] __________
+tests/test_3d_release_contract.py:56: in test_masks_validated_before_conversion
+    with pytest.raises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError
+________ test_masks_validated_before_conversion[-0.1-active-cartesian] _________
+tests/test_3d_release_contract.py:56: in test_masks_validated_before_conversion
+    with pytest.raises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError
+________ test_masks_validated_before_conversion[-0.1-bc_mask-cartesian] ________
+tests/test_3d_release_contract.py:56: in test_masks_validated_before_conversion
+    with pytest.raises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError
+_________ test_masks_validated_before_conversion[-0.1-bc_mask-terrain] _________
+tests/test_3d_release_contract.py:56: in test_masks_validated_before_conversion
+    with pytest.raises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError
+_______ test_failed_rebuild_preserves_usable_model[nonfinite-cartesian] ________
+tests/test_3d_release_contract.py:76: in test_failed_rebuild_preserves_usable_model
+    actual, info = model.solve()
+                   ^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/warped_darcy_3d.py:379: in solve
+    result=self._session.solve(
+DARCY_WARP_PACKAGE/solvers/session_3d.py:159: in solve
+    self._ensure_open()
+DARCY_WARP_PACKAGE/solvers/session_3d.py:238: in _ensure_open
+    raise RuntimeError("ThreeDOperatorSession is closed.")
+E   RuntimeError: ThreeDOperatorSession is closed.
+__________ test_failed_rebuild_preserves_usable_model[mask-cartesian] __________
+tests/test_3d_release_contract.py:76: in test_failed_rebuild_preserves_usable_model
+    actual, info = model.solve()
+                   ^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/warped_darcy_3d.py:379: in solve
+    result=self._session.solve(
+DARCY_WARP_PACKAGE/solvers/session_3d.py:159: in solve
+    self._ensure_open()
+DARCY_WARP_PACKAGE/solvers/session_3d.py:238: in _ensure_open
+    raise RuntimeError("ThreeDOperatorSession is closed.")
+E   RuntimeError: ThreeDOperatorSession is closed.
+_________________ test_physical_model_rejects_raw_face_update __________________
+tests/test_3d_release_contract.py:83: in test_physical_model_rejects_raw_face_update
+    with pytest.raises(ValueError, match='physical|conductivity|K_fields'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError
+______ test_uniform_npf_newton_dispatch_rejects_legacy_overrides[option0] ______
+tests/test_3d_release_contract.py:91: in test_uniform_npf_newton_dispatch_rejects_legacy_overrides
+    with pytest.raises(ValueError, match='npf_'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError
+----------------------------- Captured stdout call -----------------------------
+Module DARCY_WARP_PACKAGE.kernels_3d c272a89 load on device 'cpu' took 0.20 ms  (cached)
+______ test_uniform_npf_newton_dispatch_rejects_legacy_overrides[option1] ______
+tests/test_3d_release_contract.py:91: in test_uniform_npf_newton_dispatch_rejects_legacy_overrides
+    with pytest.raises(ValueError, match='npf_'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError
+______ test_uniform_npf_newton_dispatch_rejects_legacy_overrides[option2] ______
+tests/test_3d_release_contract.py:91: in test_uniform_npf_newton_dispatch_rejects_legacy_overrides
+    with pytest.raises(ValueError, match='npf_'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError
+_________ test_explicit_gmres_is_honoured_and_unused_controls_rejected _________
+tests/test_3d_release_contract.py:98: in test_explicit_gmres_is_honoured_and_unused_controls_rejected
+    assert info['krylov_method'] == 'GMRES'
+           ^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'krylov_method'
+______________ test_cartesian_budget_stable_residual_rms[1e-200] _______________
+tests/test_3d_release_contract.py:110: in test_cartesian_budget_stable_residual_rms
+    assert budget['cell_residual_rms'] == pytest.approx(scale*np.sqrt(2./3.), rel=1e-14, abs=0.)
+E   assert 0.0 == 8.16496580927...201 ± 8.2e-215
+E     
+E     comparison failed
+E     Obtained: 0.0
+E     Expected: 8.16496580927726e-201 ± 8.2e-215
+______________ test_cartesian_budget_stable_residual_rms[1e+200] _______________
+tests/test_3d_release_contract.py:110: in test_cartesian_budget_stable_residual_rms
+    assert budget['cell_residual_rms'] == pytest.approx(scale*np.sqrt(2./3.), rel=1e-14, abs=0.)
+E   assert inf == 8.16496580927...199 ± 8.2e+185
+E     
+E     comparison failed
+E     Obtained: inf
+E     Expected: 8.16496580927726e+199 ± 8.2e+185
+____________ test_terrain_overflow_cannot_pass_physical_acceptance _____________
+tests/test_3d_release_contract.py:125: in test_terrain_overflow_cannot_pass_physical_acceptance
+    assert not budget['physical_metrics_valid']
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'physical_metrics_valid'
+_________ test_returned_heads_remain_owned_across_cpu_workspace_reuse __________
+tests/test_3d_release_contract.py:137: in test_returned_heads_remain_owned_across_cpu_workspace_reuse
+    np.testing.assert_array_equal(actual=first, desired=snapshot)
+E   AssertionError: 
+E   Arrays are not equal
+E   
+E   Mismatched elements: 30 / 30 (100%)
+E   First 5 mismatches are at indices:
+E    [0, 0, 0]: 1.2 (ACTUAL), 1.0 (DESIRED)
+E    [0, 0, 1]: 1.4499999842703524 (ACTUAL), 1.25 (DESIRED)
+E    [0, 0, 2]: 1.7000000208097217 (ACTUAL), 1.5 (DESIRED)
+E    [0, 0, 3]: 1.9500000016139547 (ACTUAL), 1.75 (DESIRED)
+E    [0, 0, 4]: 2.2 (ACTUAL), 2.0 (DESIRED)
+E   Max absolute difference among violations: 0.20000003
+E   Max relative difference among violations: 0.2
+E    ACTUAL: array([[[1.2 , 1.45, 1.7 , 1.95, 2.2 ],
+E           [1.2 , 1.45, 1.7 , 1.95, 2.2 ],
+E           [1.2 , 1.45, 1.7 , 1.95, 2.2 ]],...
+E    DESIRED: array([[[1.  , 1.25, 1.5 , 1.75, 2.  ],
+E           [1.  , 1.25, 1.5 , 1.75, 2.  ],
+E           [1.  , 1.25, 1.5 , 1.75, 2.  ]],...
+_____ test_updated_physical_model_matches_fresh_and_repeated[legacy-False] _____
+tests/test_3d_release_contract.py:159: in test_updated_physical_model_matches_fresh_and_repeated
+    model.update_K_fields(kx_field=changed['kx_field'], ky_field=changed['ky_field'], kz_field=changed['kz_field'])
+    ^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: 'WarpDarcySolver3D' object has no attribute 'update_K_fields'
+_____ test_updated_physical_model_matches_fresh_and_repeated[legacy-True] ______
+tests/test_3d_release_contract.py:159: in test_updated_physical_model_matches_fresh_and_repeated
+    model.update_K_fields(kx_field=changed['kx_field'], ky_field=changed['ky_field'], kz_field=changed['kz_field'])
+    ^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: 'WarpDarcySolver3D' object has no attribute 'update_K_fields'
+_ test_updated_physical_model_matches_fresh_and_repeated[mf6_6_6_2_npf-False] __
+tests/test_3d_release_contract.py:159: in test_updated_physical_model_matches_fresh_and_repeated
+    model.update_K_fields(kx_field=changed['kx_field'], ky_field=changed['ky_field'], kz_field=changed['kz_field'])
+    ^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: 'WarpDarcySolver3D' object has no attribute 'update_K_fields'
+----------------------------- Captured stdout call -----------------------------
+Module DARCY_WARP_PACKAGE.solvers.npf662_fgmres ed88fe5 load on device 'cpu' took 0.17 ms  (cached)
+Module DARCY_WARP_PACKAGE.solvers.npf662_kcycle a23382e load on device 'cpu' took 0.09 ms  (cached)
+__ test_updated_physical_model_matches_fresh_and_repeated[mf6_6_6_2_npf-True] __
+tests/test_3d_release_contract.py:159: in test_updated_physical_model_matches_fresh_and_repeated
+    model.update_K_fields(kx_field=changed['kx_field'], ky_field=changed['ky_field'], kz_field=changed['kz_field'])
+    ^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: 'WarpDarcySolver3D' object has no attribute 'update_K_fields'
+__________ test_replacement_constructor_failure_rolls_back[cartesian] __________
+tests/test_3d_release_contract.py:194: in test_replacement_constructor_failure_rolls_back
+    after, info = model.solve()
+                  ^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/warped_darcy_3d.py:379: in solve
+    result=self._session.solve(
+DARCY_WARP_PACKAGE/solvers/session_3d.py:159: in solve
+    self._ensure_open()
+DARCY_WARP_PACKAGE/solvers/session_3d.py:238: in _ensure_open
+    raise RuntimeError("ThreeDOperatorSession is closed.")
+E   RuntimeError: ThreeDOperatorSession is closed.
+_______________ test_invalid_contact_rebuild_leaves_model_usable _______________
+tests/test_3d_release_contract.py:207: in test_invalid_contact_rebuild_leaves_model_usable
+    with pytest.raises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError
+__________________ test_hierarchy_controls_and_contradictions __________________
+tests/test_3d_release_contract.py:228: in test_hierarchy_controls_and_contradictions
+    assert info['effective_solver_settings']['restart'] == 5
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'effective_solver_settings'
+________ test_reference_linear_controller_rejects_finite_bad_solutions _________
+tests/test_3d_release_contract.py:239: in test_reference_linear_controller_rejects_finite_bad_solutions
+    from DARCY_WARP_PACKAGE.validation.npf662_reference import solve_reference_correction, ReferenceLinearControls
+E   ImportError: cannot import name 'solve_reference_correction' from 'DARCY_WARP_PACKAGE.validation.npf662_reference' (/tmp/darcywarp-release-baseline/DARCY_WARP_PACKAGE/validation/npf662_reference.py)
+_____________________ test_reference_scaled_linear_system ______________________
+tests/test_3d_release_contract.py:253: in test_reference_scaled_linear_system
+    from DARCY_WARP_PACKAGE.validation.npf662_reference import solve_reference_correction, ReferenceLinearControls
+E   ImportError: cannot import name 'solve_reference_correction' from 'DARCY_WARP_PACKAGE.validation.npf662_reference' (/tmp/darcywarp-release-baseline/DARCY_WARP_PACKAGE/validation/npf662_reference.py)
+=============================== warnings summary ===============================
+tests/test_3d_release_contract.py::test_masks_validated_before_conversion[nan-active-cartesian]
+tests/test_3d_release_contract.py::test_masks_validated_before_conversion[inf-active-cartesian]
+  /tmp/darcywarp-release-baseline/DARCY_WARP_PACKAGE/solvers_3d.py:72: RuntimeWarning: invalid value encountered in cast
+    act = np.asarray(active, dtype=np.int32) != 0
+
+tests/test_3d_release_contract.py::test_masks_validated_before_conversion[nan-active-cartesian]
+tests/test_3d_release_contract.py::test_masks_validated_before_conversion[inf-active-cartesian]
+  /tmp/darcywarp-release-baseline/DARCY_WARP_PACKAGE/warped_darcy_3d.py:212: RuntimeWarning: invalid value encountered in cast
+    input_active = np.asarray(active, dtype=np.int32)
+
+tests/test_3d_release_contract.py::test_masks_validated_before_conversion[nan-bc_mask-cartesian]
+tests/test_3d_release_contract.py::test_masks_validated_before_conversion[inf-bc_mask-cartesian]
+  /tmp/darcywarp-release-baseline/DARCY_WARP_PACKAGE/warped_darcy_3d.py:213: RuntimeWarning: invalid value encountered in cast
+    input_bc_mask = np.asarray(bc_mask, dtype=np.int32)
+
+tests/test_3d_release_contract.py::test_masks_validated_before_conversion[nan-bc_mask-terrain]
+tests/test_3d_release_contract.py::test_masks_validated_before_conversion[inf-bc_mask-terrain]
+  /tmp/darcywarp-release-baseline/DARCY_WARP_PACKAGE/solvers/terrain_fast_3d.py:298: RuntimeWarning: invalid value encountered in cast
+    self.bc_mask = np.asarray(bc_mask,dtype=np.int32).copy()
+
+tests/test_3d_release_contract.py::test_cartesian_budget_stable_residual_rms[1e+200]
+  /tmp/darcywarp-release-baseline/DARCY_WARP_PACKAGE/physics/budget_3d.py:170: RuntimeWarning: overflow encountered in square
+    cell_residual_rms = float(np.sqrt(np.mean(residual[free] ** 2)))
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_3d_release_contract.py::test_masks_validated_before_conversion[0.9-active-cartesian]
+FAILED tests/test_3d_release_contract.py::test_masks_validated_before_conversion[0.9-bc_mask-cartesian]
+FAILED tests/test_3d_release_contract.py::test_masks_validated_before_conversion[0.9-bc_mask-terrain]
+FAILED tests/test_3d_release_contract.py::test_masks_validated_before_conversion[1.9-active-cartesian]
+FAILED tests/test_3d_release_contract.py::test_masks_validated_before_conversion[1.9-bc_mask-cartesian]
+FAILED tests/test_3d_release_contract.py::test_masks_validated_before_conversion[1.9-bc_mask-terrain]
+FAILED tests/test_3d_release_contract.py::test_masks_validated_before_conversion[-0.1-active-cartesian]
+FAILED tests/test_3d_release_contract.py::test_masks_validated_before_conversion[-0.1-bc_mask-cartesian]
+FAILED tests/test_3d_release_contract.py::test_masks_validated_before_conversion[-0.1-bc_mask-terrain]
+FAILED tests/test_3d_release_contract.py::test_failed_rebuild_preserves_usable_model[nonfinite-cartesian]
+FAILED tests/test_3d_release_contract.py::test_failed_rebuild_preserves_usable_model[mask-cartesian]
+FAILED tests/test_3d_release_contract.py::test_physical_model_rejects_raw_face_update
+FAILED tests/test_3d_release_contract.py::test_uniform_npf_newton_dispatch_rejects_legacy_overrides[option0]
+FAILED tests/test_3d_release_contract.py::test_uniform_npf_newton_dispatch_rejects_legacy_overrides[option1]
+FAILED tests/test_3d_release_contract.py::test_uniform_npf_newton_dispatch_rejects_legacy_overrides[option2]
+FAILED tests/test_3d_release_contract.py::test_explicit_gmres_is_honoured_and_unused_controls_rejected
+FAILED tests/test_3d_release_contract.py::test_cartesian_budget_stable_residual_rms[1e-200]
+FAILED tests/test_3d_release_contract.py::test_cartesian_budget_stable_residual_rms[1e+200]
+FAILED tests/test_3d_release_contract.py::test_terrain_overflow_cannot_pass_physical_acceptance
+FAILED tests/test_3d_release_contract.py::test_returned_heads_remain_owned_across_cpu_workspace_reuse
+FAILED tests/test_3d_release_contract.py::test_updated_physical_model_matches_fresh_and_repeated[legacy-False]
+FAILED tests/test_3d_release_contract.py::test_updated_physical_model_matches_fresh_and_repeated[legacy-True]
+FAILED tests/test_3d_release_contract.py::test_updated_physical_model_matches_fresh_and_repeated[mf6_6_6_2_npf-False]
+FAILED tests/test_3d_release_contract.py::test_updated_physical_model_matches_fresh_and_repeated[mf6_6_6_2_npf-True]
+FAILED tests/test_3d_release_contract.py::test_replacement_constructor_failure_rolls_back[cartesian]
+FAILED tests/test_3d_release_contract.py::test_invalid_contact_rebuild_leaves_model_usable
+FAILED tests/test_3d_release_contract.py::test_hierarchy_controls_and_contradictions
+FAILED tests/test_3d_release_contract.py::test_reference_linear_controller_rejects_finite_bad_solutions
+FAILED tests/test_3d_release_contract.py::test_reference_scaled_linear_system
+29 failed, 32 passed, 9 warnings in 0.96s
