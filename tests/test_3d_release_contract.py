@@ -396,3 +396,24 @@ def test_nested_iteration_controls_reject_noninteger_types(value):
         NPF662NewtonControls(line_search_steps=value).validate()
     with pytest.raises(ValueError, match='integer'):
         ReferenceLinearControls(refinement_steps=value).validate()
+
+
+def test_public_terrain_rejects_overflow_with_small_final_head_residual():
+    shape = (2, 2, 3)
+    fixed = np.zeros(shape, dtype=bool)
+    fixed[:, :, 0] = fixed[:, :, -1] = True
+    values = np.broadcast_to(np.array([-10., 0., 10.]), shape).copy()
+    initial = values.copy()
+    initial[:, :, 1] = 1e-7
+    interfaces = np.broadcast_to(-20.-np.arange(3.)[:, None, None], (3, 2, 3))
+    with WarpDarcySolver3D(nx=3, ny=2, nz=2, dx=1., device='cpu', implementation='fast',
+            formulation='experimental_transformed_terrain') as model:
+        model.build_from_terrain(z_interfaces=interfaces, kx_field=1e307, ky_field=1., kz_field=1.,
+            bc_mask=fixed, bc_values=values, rhs=np.zeros(shape), initial_head=initial)
+        with np.errstate(over='ignore', invalid='ignore'):
+            head, info = model.solve(max_cycles=0)
+    assert np.isfinite(head).all()
+    assert info['budget']['head_residual_rms'] < 1e-6
+    assert not np.isfinite(info['budget']['throughput'])
+    assert not info['converged']
+    assert not info['budget']['physical_metrics_valid']
