@@ -214,3 +214,31 @@ def test_returned_cpu_heads_are_snapshots_not_reusable_workspace_views(all_fixed
         np.testing.assert_array_equal(first, snapshot)
         assert not np.shares_memory(first, second)
         np.testing.assert_allclose(second, snapshot + 1.0, atol=1e-6, rtol=0.0)
+
+
+@pytest.mark.parametrize("geometry", ["cartesian", "layered"])
+@pytest.mark.parametrize("unconfined", [False, True])
+@pytest.mark.parametrize("all_fixed", [False, True])
+def test_npf_returned_cpu_heads_remain_owned_across_reuse(geometry, unconfined, all_fixed):
+    fields = case_fields()
+    fields["initial_head"] = fields["bc_values"].copy()
+    if all_fixed:
+        fields["bc_mask"][:] = 1
+    controls = {"unconfined": unconfined, "max_cycles": 300, "max_outer": 40}
+    if geometry == "cartesian" and unconfined:
+        controls["top_elevation"] = 3.0
+    with new_model(formulation="mf6_6_6_2_npf") as model:
+        if geometry == "layered":
+            model.build_from_layers(z_interfaces=interfaces(), **fields)
+        else:
+            model.build_from_K_fields(**fields)
+        first, info = model.solve(**controls)
+        assert info["converged"]
+        snapshot = first.copy()
+        model.update_boundary_values(fields["bc_values"] + 1.0)
+        second, info = model.solve(**controls)
+        assert info["converged"]
+        assert info["workspace_reused"]
+        np.testing.assert_array_equal(first, snapshot)
+        assert not np.shares_memory(first, second)
+        np.testing.assert_allclose(second, snapshot + 1.0, atol=1e-6, rtol=0.0)

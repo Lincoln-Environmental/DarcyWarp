@@ -261,7 +261,8 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
     current=workspace.evaluate(trial=False,linearize=True)
     if wp.get_device(ident=model.device).is_cuda:wp.synchronize_device(device=model.device)
     seconds=perf_counter()-start
-    head=workspace.head.numpy().reshape(case.active.shape)
+    # CPU numpy() aliases the persistent workspace; return an owned snapshot.
+    head=workspace.head.numpy().reshape(case.active.shape).copy()
     checks,unused=reference.evaluate(head=head,physical_tolerance=physical_tolerance,relative_tolerance=relative_tolerance)
     device_passed=device_accepted(metrics=current,physical_tolerance=physical_tolerance,relative_tolerance=relative_tolerance)
     converged=bool(checks['independent_accepted'] and device_passed)
