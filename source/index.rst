@@ -13,6 +13,11 @@ Start with a small CPU model, then choose the formulation and solver that match
 your problem. The benchmark tools and MODFLOW 6 comparisons remain available
 for reproducible numerical and performance assessment.
 
+DarcyWarp was developed by Patrick Durney and Jaco Fourie at
+`Lincoln Agritech Ltd <https://lincolnagritech.co.nz/>`_, which owns the
+software. It is released as open-source software under the GNU Affero General
+Public License, version 3 or later (``AGPL-3.0-or-later``).
+
 .. figure:: _static/steady_recharge.svg
    :alt: Simulated groundwater heads and an analytical head profile for the steady recharge example.
    :width: 100%

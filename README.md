@@ -18,6 +18,8 @@ grid**. It is intended for groundwater investigations, recharge scenarios and
 repeated numerical experiments where both computational speed and an inspectable
 physical model matter.
 
+**Developed by Patrick Durney and Jaco Fourie at [Lincoln Agritech Ltd](https://lincolnagritech.co.nz/), which owns the DarcyWarp software.** DarcyWarp is released under the [GNU Affero General Public License v3.0 or later](LICENSE).
+
 ## A first groundwater model
 
 ![DarcyWarp steady recharge example: simulated groundwater head and comparison with the analytical solution](source/_static/steady_recharge.svg)
@@ -174,10 +176,11 @@ commit or release used. [CITATION.cff](CITATION.cff) provides the software and
 paper metadata recognised by GitHub's **Cite this repository** menu. Describe
 the formulation, solver, precision and convergence settings alongside your results.
 
-## Authors and acknowledgements
+## Development, ownership and acknowledgements
 
-DarcyWarp is developed by **Patrick Durney and Jaco Fourie**, with support from
-[Lincoln Agritech Ltd](https://lincolnagritech.co.nz/).
+DarcyWarp was developed by **Patrick Durney and Jaco Fourie** at
+**[Lincoln Agritech Ltd](https://lincolnagritech.co.nz/)**.
+**The software is owned by Lincoln Agritech Ltd.**
 
 It builds on NVIDIA Warp and the Python scientific computing ecosystem.
 MODFLOW 6 and FloPy support the independent comparison workflows.
