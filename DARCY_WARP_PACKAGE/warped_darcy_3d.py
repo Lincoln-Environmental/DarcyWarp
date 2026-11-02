@@ -26,7 +26,7 @@ from DARCY_WARP_PACKAGE.solvers_3d import build_7point_face_conductance_from_k
 
 class WarpDarcySolver3D:
     """
-    GPU 3D steady/confined Darcy solver on a structured (nz, ny, nx) grid.
+    Structured (nz, ny, nx) Darcy model for Warp CPU and CUDA.
 
     The solver uses a cell-centered 7-point finite-volume stencil with
     harmonic-mean face conductances.  It is a thin wrapper around the
@@ -134,7 +134,8 @@ class WarpDarcySolver3D:
         bc_values
             Prescribed heads on Dirichlet cells, shape (nz, ny, nx).
         rhs
-            Right-hand side (recharge / source term), shape (nz, ny, nx).
+            Volumetric cell injection [m³/day] in metre/day units, shape
+            (nz, ny, nx). Multiply recharge [m/day] by dx*dy once.
         initial_head
             Optional initial guess, shape (nz, ny, nx).
         """
@@ -142,6 +143,14 @@ class WarpDarcySolver3D:
             raise ValueError('experimental_transformed_terrain requires build_from_terrain')
         active = binary_mask(value=active, name="active", shape=self.shape)
         fields = self._validated_K_fields(kx_field=kx_field, ky_field=ky_field, kz_field=kz_field)
+        if self.formulation == 'mf6_6_6_2_npf':
+            from DARCY_WARP_PACKAGE.validation.npf662_reference import NPF662Case
+            case = NPF662Case(kx=fields[0], ky=fields[1], kz=fields[2], active=active,
+                fixed=np.asarray(bc_mask), values=np.asarray(bc_values, dtype=NP_FLOAT),
+                source=np.asarray(rhs, dtype=NP_FLOAT),
+                initial=np.zeros(self.shape) if initial_head is None else np.asarray(initial_head, dtype=NP_FLOAT),
+                dx=self.dx, dy=self.dy, dz=self.dz)
+            case.validate()
         tx_p, tx_m, ty_p, ty_m, tz_p, tz_m = build_7point_face_conductance_from_k(
             kx_field=fields[0],
             ky_field=fields[1],
@@ -151,7 +160,7 @@ class WarpDarcySolver3D:
             dy=self.dy,
             dz=self.dz,
         )
-        self.build_from_face_conductance(
+        self._build_from_face_conductance(
             tx_p=tx_p,
             tx_m=tx_m,
             ty_p=ty_p,
@@ -168,6 +177,21 @@ class WarpDarcySolver3D:
         return self
 
     def build_from_face_conductance(
+        self, tx_p, tx_m, ty_p, ty_m, tz_p, tz_m, active, bc_mask,
+        bc_values, rhs, initial_head=None,
+    ) -> "WarpDarcySolver3D":
+        """Build independent reciprocal faces for legacy confined flow.
+
+        Physical NPF conductivity/geometry must enter through its K or layered
+        builder. Reject an incompatible replacement before changing the model.
+        """
+        if self.formulation == 'mf6_6_6_2_npf':
+            raise ValueError('mf6_6_6_2_npf requires physical K/geometry; use build_from_K_fields or build_from_layers, not arbitrary faces')
+        return self._build_from_face_conductance(tx_p=tx_p, tx_m=tx_m, ty_p=ty_p, ty_m=ty_m,
+            tz_p=tz_p, tz_m=tz_m, active=active, bc_mask=bc_mask, bc_values=bc_values,
+            rhs=rhs, initial_head=initial_head)
+
+    def _build_from_face_conductance(
         self,
         tx_p: np.ndarray,
         tx_m: np.ndarray,
@@ -484,6 +508,10 @@ class WarpDarcySolver3D:
         """Update the source field in the persistent 3D operator session."""
         if self._session is None:
             raise RuntimeError("Solver has not been built.")
+        if self.formulation == 'mf6_6_6_2_npf':
+            value = np.asarray(rhs)
+            if value.shape == self.shape and np.any(value[self._active == 0] != 0.):
+                raise ValueError('Inactive NPF source would be lost; rhs must be zero in inactive cells')
         self._session.update_rhs(rhs)
         self._rhs = self._session.rhs
 

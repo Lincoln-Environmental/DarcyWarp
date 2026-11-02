@@ -46,6 +46,15 @@ def _stable_harmonic_mean(left: np.ndarray, right: np.ndarray) -> np.ndarray:
     return small * (2.0 / (1.0 + ratio))
 
 
+def _representable_face_conductance(*, values, connected, dtype, axis):
+    """A positive physical connection must survive destination conversion."""
+    with np.errstate(over="ignore", under="ignore", invalid="ignore"):
+        result = np.asarray(values, dtype=dtype)
+    if np.any(~np.isfinite(result[connected])) or np.any(result[connected] <= 0.):
+        raise ValueError(f"Unrepresentable positive {axis} face conductance in the selected precision")
+    return result
+
+
 def build_7point_face_conductance_from_k(
     kx_field: np.ndarray,
     ky_field: np.ndarray,
@@ -103,6 +112,7 @@ def build_7point_face_conductance_from_k(
         conn = act[:, :, :-1] & act[:, :, 1:] & (KL > 0.0) & (KR > 0.0)
         cond = np.zeros_like(KL, dtype=np.float64)
         cond[conn] = _stable_harmonic_mean(left=KL[conn], right=KR[conn]) * fac_x
+        cond = _representable_face_conductance(values=cond, connected=conn, dtype=NP_FLOAT, axis="x")
         tx_p[:, :, :-1] = cond
         tx_m[:, :, 1:] = cond
 
@@ -112,6 +122,7 @@ def build_7point_face_conductance_from_k(
         conn = act[:, :-1, :] & act[:, 1:, :] & (KT > 0.0) & (KB > 0.0)
         cond = np.zeros_like(KT, dtype=np.float64)
         cond[conn] = _stable_harmonic_mean(left=KT[conn], right=KB[conn]) * fac_y
+        cond = _representable_face_conductance(values=cond, connected=conn, dtype=NP_FLOAT, axis="y")
         ty_p[:, :-1, :] = cond
         ty_m[:, 1:, :] = cond
 
@@ -121,6 +132,7 @@ def build_7point_face_conductance_from_k(
         conn = act[:-1, :, :] & act[1:, :, :] & (KU > 0.0) & (KD > 0.0)
         cond = np.zeros_like(KU, dtype=np.float64)
         cond[conn] = _stable_harmonic_mean(left=KU[conn], right=KD[conn]) * fac_z
+        cond = _representable_face_conductance(values=cond, connected=conn, dtype=NP_FLOAT, axis="z")
         tz_p[:-1, :, :] = cond
         tz_m[1:, :, :] = cond
 

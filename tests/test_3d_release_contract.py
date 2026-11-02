@@ -321,3 +321,52 @@ def test_standalone_terrain_budget_rejects_nonbinary_fixed_mask(value):
     with pytest.raises(ValueError, match='binary'):
         compute_terrain_budget_3d(operator=operator, head=np.zeros(grid.shape), source=np.zeros(grid.shape),
             fixed=np.full(grid.shape, value), storage_change=np.zeros(grid.shape), storage_diagonal=np.zeros(grid.shape))
+
+
+@pytest.mark.parametrize('defect', ['zero_k', 'inactive_source', 'independent_faces'])
+def test_invalid_npf_replacement_is_rejected_before_commit(defect):
+    data = inputs()
+    data['active'][0, 1, 2] = 0
+    with model_from(data=data, formulation='mf6_6_6_2_npf') as model:
+        original = model._session
+        if defect == 'independent_faces':
+            faces = dict(zip(('tx_p','tx_m','ty_p','ty_m','tz_p','tz_m'), original.faces))
+            fields = {name:data[name] for name in ('active','bc_mask','bc_values','rhs','initial_head')}
+            with pytest.raises(ValueError, match='physical K'):
+                model.build_from_face_conductance(**faces, **fields)
+        else:
+            bad = {name:value.copy() for name,value in data.items()}
+            if defect == 'zero_k': bad['kx_field'][0, 0, 1] = 0.
+            if defect == 'inactive_source': bad['rhs'][0, 1, 2] = 1.
+            with pytest.raises(ValueError):
+                model.build_from_K_fields(**bad)
+        assert model._session is original
+        unused, info = model.solve()
+        assert info['converged']
+
+
+def test_npf_inactive_source_update_preserves_original_forcing():
+    data = inputs()
+    data['active'][0, 1, 2] = 0
+    with model_from(data=data, formulation='mf6_6_6_2_npf') as model:
+        before = model._rhs.copy()
+        bad = before.copy()
+        bad[0, 1, 2] = 1.
+        with pytest.raises(ValueError, match='Inactive'):
+            model.update_rhs(rhs=bad)
+        np.testing.assert_array_equal(actual=model._rhs, desired=before)
+
+
+@pytest.mark.parametrize('formulation', ['legacy', 'mf6_6_6_2_npf'])
+def test_underflowed_physical_connection_rebuild_preserves_original(formulation):
+    data = inputs(shape=(1, 1, 3))
+    with WarpDarcySolver3D(nx=3, ny=1, nz=1, dx=1e100, dy=1e-100, device='cpu',
+            implementation='fast', formulation=formulation) as model:
+        model.build_from_K_fields(**data)
+        original = model._session
+        bad = dict(data)
+        bad['kx_field'] = np.full(model.shape, 1e-250)
+        with pytest.raises(ValueError, match='representable'):
+            model.build_from_K_fields(**bad)
+        assert model._session is original
+        np.testing.assert_array_equal(actual=model._kx_field, desired=data['kx_field'])
