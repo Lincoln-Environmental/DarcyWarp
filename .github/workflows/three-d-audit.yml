@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: three-d-audit-${{ github.ref }}
+  group: three-d-audit-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
