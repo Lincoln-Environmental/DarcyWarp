@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Reusable operator/session state for structured 3D solves.
 
 The session owns validated host-side operator data and stable update/version
@@ -13,6 +13,7 @@ from typing import Any
 import numpy as np
 
 from DARCY_WARP_PACKAGE.physics.faces_3d import validate_reciprocal_faces
+from DARCY_WARP_PACKAGE.physics.inputs_3d import binary_mask, floating_field
 
 
 class ThreeDOperatorSession:
@@ -41,15 +42,15 @@ class ThreeDOperatorSession:
         self.z_interfaces = None if z_interfaces is None else np.asarray(z_interfaces,dtype=float).copy()
         self.layer_geometry = None
         self.dz = float(dz) if z_interfaces is None else None
-        values = tuple(np.asarray(face) for face in faces)
+        values = tuple(floating_field(value=face, name="face") for face in faces)
         if len(values) != 6:
             raise ValueError("faces must contain exactly six conductance arrays.")
         self.faces = tuple(face.copy() for face in values)
-        self.active = np.asarray(active, dtype=np.int32).copy()
-        self.bc_mask = np.asarray(bc_mask, dtype=np.int32).copy()
-        self.bc_values = np.asarray(bc_values).copy()
-        self.rhs = np.asarray(rhs).copy()
-        self.initial_head = None if initial_head is None else np.asarray(initial_head).copy()
+        self.active = binary_mask(value=active, name="active")
+        self.bc_mask = binary_mask(value=bc_mask, name="bc_mask")
+        self.bc_values = floating_field(value=bc_values, name="bc_values")
+        self.rhs = floating_field(value=rhs, name="rhs")
+        self.initial_head = None if initial_head is None else floating_field(value=initial_head, name="initial_head")
         self._fast_workspace_holder: dict[str, Any] = {}
         self._npf662_workspace_holder: dict[str, Any] = {}
         self._validate()
@@ -97,7 +98,7 @@ class ThreeDOperatorSession:
 
     def update_rhs(self, rhs: np.ndarray) -> None:
         self._ensure_open()
-        value = np.asarray(rhs)
+        value = floating_field(value=rhs, name="rhs", dtype=self.rhs.dtype)
         if value.shape != self.shape:
             raise ValueError(f"rhs shape {value.shape} does not match {self.shape}.")
         if not np.all(np.isfinite(value)):
@@ -110,7 +111,7 @@ class ThreeDOperatorSession:
         if initial_head is None:
             self.initial_head = None
         else:
-            value = np.asarray(initial_head)
+            value = floating_field(value=initial_head, name="initial_head")
             if value.shape != self.shape:
                 raise ValueError(f"initial_head shape {value.shape} does not match {self.shape}.")
             if not np.all(np.isfinite(value)):
@@ -122,7 +123,7 @@ class ThreeDOperatorSession:
         """Update Dirichlet values without changing the boundary topology."""
 
         self._ensure_open()
-        value = np.asarray(bc_values)
+        value = floating_field(value=bc_values, name="bc_values", dtype=self.bc_values.dtype)
         if value.shape != self.shape:
             raise ValueError(f"bc_values shape {value.shape} does not match {self.shape}.")
         if not np.all(np.isfinite(value)):
@@ -136,7 +137,10 @@ class ThreeDOperatorSession:
         faces: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray],
     ) -> None:
         self._ensure_open()
-        values = tuple(np.asarray(face) for face in faces)
+        values = tuple(floating_field(value=face, name="face", dtype=old.dtype)
+                       for face, old in zip(faces, self.faces))
+        if len(faces) != 6:
+            raise ValueError("faces must contain exactly six arrays")
         if len(values) != 6 or any(value.shape != self.shape for value in values):
             raise ValueError("faces must contain six arrays matching the session shape.")
         if any(not np.all(np.isfinite(value)) for value in values):

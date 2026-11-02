@@ -25,6 +25,7 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
+from DARCY_WARP_PACKAGE.validation.npf662_metrics import stable_rms
 import warp as wp
 
 from DARCY_WARP_PACKAGE.config import NP_FLOAT, WP_FLOAT
@@ -402,7 +403,7 @@ def _run_kcycles(
         smooth(level, post_omegas)
 
     if n_free == 0:
-        head = fine["x"].numpy()
+        head = fine["x"].numpy().copy()
         if n_isolated and isolated is not None:
             head[isolated] = restore_values[isolated]
         info = {
@@ -511,7 +512,7 @@ def _run_kcycles(
         "n_isolated_cells_excluded": n_isolated,
         "irregular_correction_energy_projection": bool(fine["project_correction"]),
     }
-    head = np.asarray(fine["x"].numpy(), dtype=NP_FLOAT)
+    head = np.array(fine["x"].numpy(), dtype=NP_FLOAT, copy=True)
     if n_isolated and isolated is not None:
         # Excluded singular cells carry no flux and no residual; report their
         # initial head rather than the zero the working mask leaves behind.
@@ -748,7 +749,7 @@ def solve_fast_confined_kcycle_3d(
     head_residual = np.zeros_like(physical)
     np.divide(physical, diagonal, out=head_residual, where=diagonal > 0.0)
     head_residual[(diagonal == 0.0) & (physical != 0.0)] = np.inf
-    info["final_physical_head_residual_rms"] = float(np.sqrt(np.mean(head_residual[free] ** 2))) if np.any(free) else 0.0
+    info["final_physical_head_residual_rms"] = stable_rms(values=head_residual[free])
     info["final_budget_acceptance"] = is_3d_budget_conserved(
         budget=info["budget"], absolute_tolerance=info.get("tol_abs", 0.0),
         relative_tolerance=float(final_budget_relative_tol))

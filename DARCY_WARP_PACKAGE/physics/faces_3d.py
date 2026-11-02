@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import numpy as np
+from DARCY_WARP_PACKAGE.physics.inputs_3d import binary_mask
 
 
 def validate_reciprocal_faces(*, faces, active, canonicalize=False, copy_arrays=True):
@@ -13,7 +14,7 @@ def validate_reciprocal_faces(*, faces, active, canonicalize=False, copy_arrays=
     slots are unused by the stencil; connections touching inactive cells must
     be exactly zero. Substantial asymmetry is never averaged.
     """
-    act = np.asarray(active) != 0
+    act = binary_mask(value=active, name="active") != 0
     arrays = tuple(np.asarray(face) for face in faces)
     if len(arrays) != 6 or any(a.shape != act.shape for a in arrays):
         raise ValueError("Six face arrays must match active shape (nz, ny, nx).")

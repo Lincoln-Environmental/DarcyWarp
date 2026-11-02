@@ -5,6 +5,8 @@ from __future__ import annotations
 import gc
 
 import numpy as np
+from DARCY_WARP_PACKAGE.validation.npf662_metrics import stable_rms
+from DARCY_WARP_PACKAGE.physics.inputs_3d import binary_mask
 import warp as wp
 
 from DARCY_WARP_PACKAGE.kernels_3d import (
@@ -69,7 +71,7 @@ def build_7point_face_conductance_from_k(
     Kx = np.asarray(kx_field, dtype=np.float64)
     Ky = np.asarray(ky_field, dtype=np.float64)
     Kz = np.asarray(kz_field, dtype=np.float64)
-    act = np.asarray(active, dtype=np.int32) != 0
+    act = binary_mask(value=active, name="active") != 0
 
     if Kx.ndim != 3 or Ky.ndim != 3 or Kz.ndim != 3:
         raise ValueError("kx_field, ky_field, kz_field must all be 3D arrays (nz, ny, nx).")
@@ -180,7 +182,7 @@ def build_7point_face_conductance_unconfined_from_sat(
     Ky = np.asarray(ky_field, dtype=np.float64)
     Kz = np.asarray(kz_field, dtype=np.float64)
     b = np.asarray(sat, dtype=np.float64)
-    act = np.asarray(active, dtype=np.int32) != 0
+    act = binary_mask(value=active, name="active") != 0
 
     if Kx.ndim != 3 or Ky.shape != Kx.shape or Kz.shape != Kx.shape or b.shape != Kx.shape:
         raise ValueError("kx_field, ky_field, kz_field, sat must be matching 3D arrays (nz, ny, nx).")
@@ -316,8 +318,8 @@ def build_diag_preconditioner_7point(    tx_p: np.ndarray,
     tym = np.asarray(ty_m, dtype=np.float64)
     tzp = np.asarray(tz_p, dtype=np.float64)
     tzm = np.asarray(tz_m, dtype=np.float64)
-    act = np.asarray(active, dtype=np.int32)
-    bc = np.asarray(bc_mask, dtype=np.int32)
+    act = binary_mask(value=active, name="active")
+    bc = binary_mask(value=bc_mask, name="bc_mask")
 
     shape = txp.shape
     if txp.ndim != 3:
@@ -488,8 +490,8 @@ def _prepare_7point_transient_terms(
     for upload to the Warp kernels.
     """
     b = np.asarray(rhs, dtype=NP_FLOAT).copy()
-    act = np.asarray(active, dtype=np.int32)
-    bcm = np.asarray(bc_mask, dtype=np.int32)
+    act = binary_mask(value=active, name="active")
+    bcm = binary_mask(value=bc_mask, name="bc_mask")
     bcv = np.asarray(bc_values, dtype=NP_FLOAT)
 
     shape = b.shape
@@ -924,8 +926,8 @@ def _solve_chebyshev_7point_3d_linear(
     tzp = np.asarray(tz_p, dtype=NP_FLOAT)
     tzm = np.asarray(tz_m, dtype=NP_FLOAT)
     b = np.asarray(rhs, dtype=NP_FLOAT)
-    act = np.asarray(active, dtype=np.int32)
-    bcm = np.asarray(bc_mask, dtype=np.int32)
+    act = binary_mask(value=active, name="active")
+    bcm = binary_mask(value=bc_mask, name="bc_mask")
     bcv = np.asarray(bc_values, dtype=NP_FLOAT)
 
     shape = txp.shape
@@ -1360,8 +1362,8 @@ def _picard_unconfined_7point_3d(
     Returns ``(h_iter, info_out)`` where ``info_out`` carries both the nonlinear
     (Picard) and the last inner-solve (K-cycle) reporting fields.
     """
-    act = np.asarray(active, dtype=np.int32)
-    bcm = np.asarray(bc_mask, dtype=np.int32)
+    act = binary_mask(value=active, name="active")
+    bcm = binary_mask(value=bc_mask, name="bc_mask")
     bcv = np.asarray(bc_values, dtype=NP_FLOAT)
     b = np.asarray(rhs, dtype=NP_FLOAT)
     active_mask = act != 0
@@ -2046,9 +2048,7 @@ def _picard_unconfined_7point_3d(
             np.where(residual_field == 0.0, 0.0, np.inf),
         )
     if n_free > 0:
-        final_head_residual_rms = float(
-            np.sqrt(np.mean(head_residual_field[free_mask] ** 2))
-        )
+        final_head_residual_rms = stable_rms(values=head_residual_field[free_mask])
     else:
         final_head_residual_rms = 0.0
     final_res_tol_f = (
@@ -2236,8 +2236,8 @@ def solve_chebyshev_7point_3d(
     tzp = np.asarray(tz_p, dtype=NP_FLOAT)
     tzm = np.asarray(tz_m, dtype=NP_FLOAT)
     b = np.asarray(rhs, dtype=NP_FLOAT)
-    act = np.asarray(active, dtype=np.int32)
-    bcm = np.asarray(bc_mask, dtype=np.int32)
+    act = binary_mask(value=active, name="active")
+    bcm = binary_mask(value=bc_mask, name="bc_mask")
     bcv = np.asarray(bc_values, dtype=NP_FLOAT)
 
     shape = txp.shape
@@ -2583,8 +2583,8 @@ def solve_multigrid_kcycle_7point_3d(
     tzp0 = np.asarray(tz_p, dtype=NP_FLOAT)
     tzm0 = np.asarray(tz_m, dtype=NP_FLOAT)
     b0 = np.asarray(rhs, dtype=NP_FLOAT)
-    act0 = np.asarray(active, dtype=np.int32)
-    bcm0 = np.asarray(bc_mask, dtype=np.int32)
+    act0 = binary_mask(value=active, name="active")
+    bcm0 = binary_mask(value=bc_mask, name="bc_mask")
     bcv0 = np.asarray(bc_values, dtype=NP_FLOAT)
 
     shape0 = txp0.shape
