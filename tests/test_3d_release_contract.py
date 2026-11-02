@@ -303,3 +303,21 @@ def test_low_level_layer_builder_rejects_nonbinary_active_mask(value):
     with pytest.raises(ValueError, match='binary'):
         build_layered_dis_faces(z_interfaces=interfaces, kx=data['kx_field'], ky=data['ky_field'],
             kz=data['kz_field'], active=active, dx=1., dy=1.)
+
+
+@pytest.mark.parametrize('value', [.9, 1.9, -.1, np.nan, np.inf])
+def test_standalone_cartesian_budget_rejects_nonbinary_fixed_mask(value):
+    shape = (1, 1, 3)
+    with pytest.raises(ValueError, match='binary'):
+        compute_3d_flow_budget(head=np.zeros(shape), source=np.zeros(shape),
+            faces=tuple(np.zeros(shape) for unused in range(6)), active=np.ones(shape),
+            bc_mask=np.full(shape, value))
+
+
+@pytest.mark.parametrize('value', [.9, 1.9, -.1, np.nan, np.inf])
+def test_standalone_terrain_budget_rejects_nonbinary_fixed_mask(value):
+    grid = TerrainGrid3D(z_interfaces=np.broadcast_to(-np.arange(3.)[:, None, None], (3, 2, 3)), dx=1., dy=1.)
+    operator = TerrainReferenceOperator3D(metrics=TerrainMetrics3D(grid=grid), kx=1., ky=1., kz=1.)
+    with pytest.raises(ValueError, match='binary'):
+        compute_terrain_budget_3d(operator=operator, head=np.zeros(grid.shape), source=np.zeros(grid.shape),
+            fixed=np.full(grid.shape, value), storage_change=np.zeros(grid.shape), storage_diagonal=np.zeros(grid.shape))

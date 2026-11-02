@@ -9,6 +9,7 @@ import numpy as np
 
 from DARCY_WARP_PACKAGE.physics.faces_3d import validate_reciprocal_faces
 from DARCY_WARP_PACKAGE.validation.npf662_metrics import stable_rms, stable_sum
+from DARCY_WARP_PACKAGE.physics.inputs_3d import binary_mask
 
 
 def prepare_3d_budget_source(*, source, head_prev, extra_storage_diag):
@@ -112,8 +113,8 @@ def compute_3d_flow_budget(
     """
     h = np.asarray(head, dtype=np.float64)
     src = np.asarray(source, dtype=np.float64)
-    act = np.asarray(active, dtype=np.int32) != 0
-    bcm = np.asarray(bc_mask, dtype=np.int32) != 0
+    act = binary_mask(value=active, name='active') != 0
+    bcm = binary_mask(value=bc_mask, name='bc_mask') != 0
     shape = h.shape
     if src.shape != shape or act.shape != shape or bcm.shape != shape:
         raise ValueError("head, source, active, bc_mask shapes must match.")

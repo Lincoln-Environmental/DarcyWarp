@@ -1,11 +1,13 @@
 """Independent final-head terrain flux and exact stored-volume balance."""
 import numpy as np
 from DARCY_WARP_PACKAGE.validation.npf662_metrics import stable_rms, stable_sum
+from DARCY_WARP_PACKAGE.physics.inputs_3d import binary_mask
 
 
 def compute_terrain_budget_3d(*, operator, head, source, fixed, storage_change,
                              storage_diagonal, return_fields=False):
-    free = operator.active & ~np.asarray(fixed, dtype=bool)
+    fixed = binary_mask(value=fixed, name='fixed', shape=operator.shape)
+    free = operator.active & (fixed == 0)
     fluxes = operator.fluxes(head=head)
     divergence = operator.divergence(fluxes=fluxes)
     residual = np.where(free, source-divergence-storage_change, 0)
