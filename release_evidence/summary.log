@@ -449,6 +449,15 @@
     "warnings": 0,
     "unsuccessful": []
   },
+  "stage_b_final_cpu": {
+    "tests": 1583,
+    "passed": 1157,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 426,
+    "warnings": 0,
+    "unsuccessful": []
+  },
   "stage_c_full_cpu": {
     "tests": 1853,
     "passed": 1382,
@@ -480,6 +489,24 @@
       {
         "module": "tests.test_unconfined_solvers_500x500",
         "test": "test_alternate_nonlinear_backend_500x500[unconfined_fas]"
+      }
+    ]
+  },
+  "stage_c_uncapped_cpu": {
+    "tests": 1862,
+    "passed": 1395,
+    "failed": 2,
+    "errors": 0,
+    "skipped": 465,
+    "warnings": 188,
+    "unsuccessful": [
+      {
+        "module": "tests.test_fas_transient_multistep",
+        "test": "test_18_fas_vs_picard_complete_transient_histories"
+      },
+      {
+        "module": "tests.test_validation_repairs_3d",
+        "test": "test_empty_free_layers_and_comparison_subsets"
       }
     ]
   },
@@ -525,17 +552,67 @@
     "unsuccessful": []
   },
   "final_focused": {
-    "tests": 71,
-    "passed": 71,
+    "tests": 100,
+    "passed": 100,
     "failed": 0,
     "errors": 0,
     "skipped": 0,
     "warnings": 0,
     "unsuccessful": []
   },
+  "final_budget_mask_validation": {
+    "tests": 111,
+    "passed": 111,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "warnings": 0,
+    "unsuccessful": []
+  },
+  "final_npf_builders": {
+    "tests": 279,
+    "passed": 229,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 50,
+    "warnings": 0,
+    "unsuccessful": []
+  },
+  "final_empty_domain_recheck": {
+    "tests": 126,
+    "passed": 126,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "warnings": 0,
+    "unsuccessful": []
+  },
+  "final_control_types": {
+    "tests": 278,
+    "passed": 228,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 50,
+    "warnings": 0,
+    "unsuccessful": []
+  },
+  "public_terrain_overflow_before": {
+    "tests": 1,
+    "passed": 0,
+    "failed": 1,
+    "errors": 0,
+    "skipped": 0,
+    "warnings": 0,
+    "unsuccessful": [
+      {
+        "module": "tests.test_3d_release_contract",
+        "test": "test_public_terrain_rejects_overflow_with_small_final_head_residual"
+      }
+    ]
+  },
   "ci_contract": {
-    "tests": 123,
-    "passed": 119,
+    "tests": 149,
+    "passed": 145,
     "failed": 0,
     "errors": 0,
     "skipped": 4,
@@ -543,8 +620,8 @@
     "unsuccessful": []
   },
   "ci_npf": {
-    "tests": 126,
-    "passed": 111,
+    "tests": 152,
+    "passed": 137,
     "failed": 0,
     "errors": 0,
     "skipped": 15,

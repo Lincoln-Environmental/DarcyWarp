@@ -68,8 +68,10 @@ if __name__ == "__main__":
     executable = Path('/bin/modflow/mf6')
     test_paths = ('stage_a_before', 'stage_a_baseline_final_tests', 'stage_a_final_baseline', 'reference_controller_before',
                   'stage_a_after', 'stage_a_extended', 'stage_a_final_cpu', 'stage_b_cpu',
-                  'stage_b_cpu_recheck', 'stage_c_full_cpu', 'stage_c_uncapped_cpu', 'fas_baseline', 'final_contract',
-                  'final_acceptance_recheck', 'final_npf_dispatch', 'final_focused', 'final_budget_mask_validation')
+                  'stage_b_cpu_recheck', 'stage_b_final_cpu', 'stage_c_full_cpu', 'stage_c_uncapped_cpu',
+                  'fas_baseline', 'final_contract', 'final_acceptance_recheck', 'final_npf_dispatch',
+                  'final_focused', 'final_budget_mask_validation', 'final_npf_builders',
+                  'final_empty_domain_recheck', 'final_control_types', 'public_terrain_overflow_before')
     ci_groups = ('contract', 'npf', 'terrain', '2d')
     source_patterns = ('DARCY_WARP_PACKAGE/**/*.py', 'working_tests/*3d_release*.py',
                        'working_tests/profile_npf662_reference_cache.py', 'examples/*.py', 'tests/*.py')

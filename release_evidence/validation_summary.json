@@ -12,7 +12,7 @@
     "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.39",
     "mf6_version": "mf6: 6.6.2 05/12/2025",
     "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
-    "revision": "012dffb62ada13c4df008d6c47766439dac481d4",
+    "revision": "3738b6321ae4f2c8615292897f3b2345ffdb327f",
     "source_sha256": {
       "DARCY_WARP_PACKAGE/ascii_grid.py": "37e5043624a5e56389203bb53970d899ecd12e25b459636e00804530ffb4524a",
       "DARCY_WARP_PACKAGE/export_fd_truth_npz.py": "bbb302c72879db79aec3d629dff943b819d91e0f4c77675fea8daa96eca7d450",
@@ -35,7 +35,7 @@
       "DARCY_WARP_PACKAGE/export_mf6_truth_npz.py": "447df5a384db9d1ff6739c9d090ae0a2b84ed9441bcb1d6e4bad625402340d97",
       "DARCY_WARP_PACKAGE/run_benchmarks_and_plots.py": "0657d2a7cacfceaa8f8537eaa5dc5696ed3e427f3630e4a3e893d66f5cd3042c",
       "DARCY_WARP_PACKAGE/factory.py": "5e7581a247f50bdc69b5f4fe168a5846e1b1d9f964980ca12e57e5949f1cfed4",
-      "DARCY_WARP_PACKAGE/solvers_3d.py": "ff9fcf4dbd93e6961ed8af8059317e1a73e55501ddc229d8a3fbc80f0adc4fa6",
+      "DARCY_WARP_PACKAGE/solvers_3d.py": "1f47d57595bb3a926660fcbdd1fcfa3e5bb6e8f226ac9630c95f1b6ca7737699",
       "DARCY_WARP_PACKAGE/river_loss_cross_section.py": "51cbda446148978c38f96a4e15a4da034dd861539b54e6c9bf9dbf3f8b2f79d0",
       "DARCY_WARP_PACKAGE/modflow_truth.py": "55810ffb381d01d33328742d5a6e526a95eaca22bb41e97a9d26c6eaac97739d",
       "DARCY_WARP_PACKAGE/downcast_truth_npz.py": "1c0c9efa6e6041903c845e76927ab063cf7a0c3da124d18fe1f081e97c79e70b",
@@ -43,7 +43,7 @@
       "DARCY_WARP_PACKAGE/bench_and_plot.py": "e78920980ced3def8d97b08ea63844de896fe32fddd1d1c4654fd265c394556f",
       "DARCY_WARP_PACKAGE/graphical_abstract.py": "a1ca62e6b881b99c0be3793628409784209e6505b8d9fed2e5d6909ba358b9c1",
       "DARCY_WARP_PACKAGE/unconfined_truth_io.py": "102df9ae4b7faead6a079644423c84a7eab21291e534fc77da5b2be01b0757b6",
-      "DARCY_WARP_PACKAGE/warped_darcy_3d.py": "28809271275e0a86bce35e8b837df793849c7e82f2c2182e316fcf36be2b0857",
+      "DARCY_WARP_PACKAGE/warped_darcy_3d.py": "01dc2e5f24ea7b6138faa9885b44aa03a332e01b797a5e3699e6dd3267deac39",
       "DARCY_WARP_PACKAGE/config.py": "90203605187889a13d36f9908f87599ebbf545a6d3ac82cd892b70ce898d3c19",
       "DARCY_WARP_PACKAGE/model_benchmarking_recharge_change.py": "91f24ebb4f8386bc705ebf26001ac947f9b1bdfbce58230c98243112ac51b88c",
       "DARCY_WARP_PACKAGE/model_3d_inputs.py": "6d2b5c5af0ff835004a7a7b52baccfeb8f3ab33c98ed720eab09e652575a2e09",
@@ -58,9 +58,9 @@
       "DARCY_WARP_PACKAGE/validation/mf6_tpfa_reference.py": "cadcfbb79c6702b49b03abd6857491f1421c21372c52f38cc2d1894f753218c4",
       "DARCY_WARP_PACKAGE/validation/records.py": "47fa4390fb7542332fb9c398e67c580b604d5e8b555a95306690a8eb5c8ac27e",
       "DARCY_WARP_PACKAGE/validation/evidence_storage.py": "b2f282fdc5c1325313b9d4889e663287ca4201da3e7fbeae771440a40e6bead7",
-      "DARCY_WARP_PACKAGE/validation/npf662_reference.py": "b9e17466ba0f29f80f215a71f5e5ca94fba2bfb883bb25ca241cb328b6352bb9",
+      "DARCY_WARP_PACKAGE/validation/npf662_reference.py": "ba31a9ff907585d9b83761f4be8fad154c4ee790c26da5a92f5fc0a17f8b6b40",
       "DARCY_WARP_PACKAGE/validation/npf662_metrics.py": "249f879bb6629880e678cb18eebd6ae0f17bd3837b1c5edf14d833ffe22ff383",
-      "DARCY_WARP_PACKAGE/validation/terrain_compare.py": "5cb46c4f8b611da22999a54c4da6da412a6a4e1eb8445d13efe648c5661cd681",
+      "DARCY_WARP_PACKAGE/validation/terrain_compare.py": "529c1900759c104bd58f7c4411ca09386d0e38363047c17ef690cfc332d73f36",
       "DARCY_WARP_PACKAGE/validation/head_checks.py": "a66a9ba2d40d3959f6d8f6bf93af5d18780273d4d6dfb0c2ca0f633b0f42db31",
       "DARCY_WARP_PACKAGE/validation/npf662_mf6.py": "d91374ad69a1ccce8961e2f69b43250d4c1bfcd2b62bad6e48a7314bbe7345c9",
       "DARCY_WARP_PACKAGE/validation/terrain_mf6.py": "20b2cc6ec609650ab36fff88b16e5ae51a3076e6c0404262f2f16cf534ac8e62",
@@ -82,7 +82,7 @@
       "DARCY_WARP_PACKAGE/solvers/mixed_transient_f32.py": "ee4deb96768389d9eb40d9b3eac210cd493f38fe6cf07e6f2b7c9af2004b3bdd",
       "DARCY_WARP_PACKAGE/solvers/surface_contact_2d.py": "e2bb2f14f3a42daf486f11e4a536b3e8092221f377954b70e8bdd4aeb9f48f75",
       "DARCY_WARP_PACKAGE/solvers/__init__.py": "6bee52304466417a3a6fbda3ecac6ef47ec0abbc593c22158cf3ed998acf11c7",
-      "DARCY_WARP_PACKAGE/solvers/npf662_kcycle.py": "3406dda7200253c794c64946fe7db13fa22e68fdb2f87fe2d4fbdc4a4fac637e",
+      "DARCY_WARP_PACKAGE/solvers/npf662_kcycle.py": "2bee6e5fe76925a06e1411a0004d10dc783a2f798e0c9f155b678d7156a3881a",
       "DARCY_WARP_PACKAGE/solvers/fast_confined_kcycle.py": "f16f44efe6e96bb08dfd4e0b6c1941d86c1054de7f405fec31379d4c77aae438",
       "DARCY_WARP_PACKAGE/solvers/newton_kernels.py": "d1a91f8bf8c8a4b382cc0310475639a749ca5a8c40476e55cd6e8a0d97eae1e2",
       "DARCY_WARP_PACKAGE/solvers/semismooth_newton.py": "7db4bd6a89a887533d0e1919180347aab4d4ece777c173b23f76b19d2384214f",
@@ -122,12 +122,12 @@
       "DARCY_WARP_PACKAGE/solvers/newton_state.py": "e1e257fc1ceef963f7a4580542824bddfa2dbdfb631d72930801c48fb6e880fe",
       "DARCY_WARP_PACKAGE/solvers/transient_interval.py": "061ef3d947d48ab0e979cf6ac77862ec4b23a2aa567fbabef2b5ce1909463940",
       "DARCY_WARP_PACKAGE/solvers/mixed_precision.py": "f9c5ecd9876df2c578a1791fc9d55ffebcb7ece70227976889bd83aedef8c00d",
-      "DARCY_WARP_PACKAGE/solvers/npf662_newton.py": "898cff3d5230c4c61efae0feabbca75655d1047ea9a10de51da6d01fe81934f0",
+      "DARCY_WARP_PACKAGE/solvers/npf662_newton.py": "0f8379eba197f793f678edaf480ca0f418382e3037fac3b502b93f585ea93e5e",
       "DARCY_WARP_PACKAGE/solvers/transient_unconfined.py": "5648bd45348f00726e03325614c14daf9fa09c6ce9b8f2576365507f6bd99585",
       "DARCY_WARP_PACKAGE/physics/storage_3d.py": "60afecefb5501daa76742a22c2ae86c3fa982f93f960aadb3fba757384297044",
       "DARCY_WARP_PACKAGE/physics/__init__.py": "ec9d9c7ee8b2eb33f8b666f2fa44994f5e4ef46aed92e0dbc983ec0392764999",
-      "DARCY_WARP_PACKAGE/physics/budget_3d.py": "cbe431bde6a8c5c925cb05af57151173d6196543d4ad84346c98b12435dce249",
-      "DARCY_WARP_PACKAGE/physics/terrain_budget_3d.py": "b129950548004c6c06f8208b548ae1e63e5cbf713f7c32b3fcaa21e3b5f8c4fe",
+      "DARCY_WARP_PACKAGE/physics/budget_3d.py": "12c9ece438804580b76c67cdcc3fbae3bd58394b0606094445b07424f0881e56",
+      "DARCY_WARP_PACKAGE/physics/terrain_budget_3d.py": "5bee2db9f05e4a7c969f68e7f4e693adef25669f1a67a5b788d58decefadf015",
       "DARCY_WARP_PACKAGE/physics/budgets_2d.py": "17241f2f3f072e7a129e655e2513148ab8dc08b0368ef58dad3d5b1ebb33bf8c",
       "DARCY_WARP_PACKAGE/physics/components_3d.py": "e1adcf5b80c00cbbffcfd9b8571b6e706d0b03fc0933f34e93615fa6604176b7",
       "DARCY_WARP_PACKAGE/physics/inputs_3d.py": "15767277fd9e8259eb1b9dc8918a1e987303de7715c96ff3fa515d9f1d4a6c30",
@@ -143,9 +143,9 @@
       "DARCY_WARP_PACKAGE/physics/terrain_shanz_diagnostics.py": "b2190176d708f1bed5a29d049291b0ef8fe527927a6a4c6ab74904d3378e6efa",
       "DARCY_WARP_PACKAGE/physics/storage_2d.py": "80a9c70900b52a25abaf91eb5b3c8107eb3d0bd27515d4c1c3065615bee93d68",
       "working_tests/reproduce_3d_release_geology.py": "7dc8717da6527947f5d7422575ed9cb0a112c07c817763962903e0242428e709",
-      "working_tests/run_3d_release_cpu.py": "63680833b8dea0a580b6ed34882767c73709d96930f88d024b98f17c9ea4a708",
+      "working_tests/run_3d_release_cpu.py": "238c111c4d9acc0c7feccf72490cfbf8e11b64bc5628f22a91bf1cbc08dcf139",
       "working_tests/verify_3d_release_cpu.py": "913fe6899fe6ebc82955edd8f7fef978304cc1c3257d9793b6a99da7042f25b5",
-      "working_tests/summarize_3d_release_evidence.py": "78201836930c889ce6ee9e026b7c0c10de68f3081cbbb60b887fecebaa50a7f7",
+      "working_tests/summarize_3d_release_evidence.py": "a6e13947f721dc2ede930f93d3e16464f3e579d3bb066ee5299c203b2df83131",
       "working_tests/profile_npf662_reference_cache.py": "e840c20e7736923dcb4a6a17a8b554cd7c99171a8ac3cba7e5a8406cc015b9bc",
       "examples/verify_3d_series_flow.py": "e033534f9896516aee4207a22603bf5928267a415346b9a9a3ece40e6790dbc3",
       "tests/test_terrain_newton_refinement.py": "c5b1b6fe0d2aaaf3c2de562e10628bcbcc468194a08e8425a70e5cd5332dbffa",
@@ -177,7 +177,7 @@
       "tests/test_3d_solver.py": "c9ab1754f3b68db60c1d59d2d5036e0457d10566d08318c5913ee5289ba32246",
       "tests/test_3d_physics_validation.py": "deb28e7d424a0f565abed97231253d5dce289634c11e921ee37e9c2f3b224e69",
       "tests/test_transient_session.py": "a5675beeeed906002abf7e05cef7717cb579c43ccc4656721e3ccd4284b74004",
-      "tests/test_3d_release_contract.py": "a5ba769fcc9aca75811d4f6a432002c85c5ac8fc09bfe020674f05c07e688105",
+      "tests/test_3d_release_contract.py": "a42c334c8093ef1bfaffdb807976d3dc32f9023447224ed86f3a6ee57841f323",
       "tests/conftest.py": "068d279126e46035d26b668c8638a4f794e9b36f04db4c211cc4309487fd3ce8",
       "tests/test_fast_confined_kcycle.py": "25e0bf12dfe77b1b894bb2ed0f941dba5014dd5993a577c13a04e6bfeccf23fb",
       "tests/test_3d_session.py": "af37c0b64e1119bab716a7aa9172e34387b8387569486bcae781f171d9e64f1c",
@@ -668,6 +668,15 @@
       "warnings": 0,
       "unsuccessful": []
     },
+    "stage_b_final_cpu": {
+      "tests": 1583,
+      "passed": 1157,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 426,
+      "warnings": 0,
+      "unsuccessful": []
+    },
     "stage_c_full_cpu": {
       "tests": 1853,
       "passed": 1382,
@@ -699,6 +708,24 @@
         {
           "module": "tests.test_unconfined_solvers_500x500",
           "test": "test_alternate_nonlinear_backend_500x500[unconfined_fas]"
+        }
+      ]
+    },
+    "stage_c_uncapped_cpu": {
+      "tests": 1862,
+      "passed": 1395,
+      "failed": 2,
+      "errors": 0,
+      "skipped": 465,
+      "warnings": 188,
+      "unsuccessful": [
+        {
+          "module": "tests.test_fas_transient_multistep",
+          "test": "test_18_fas_vs_picard_complete_transient_histories"
+        },
+        {
+          "module": "tests.test_validation_repairs_3d",
+          "test": "test_empty_free_layers_and_comparison_subsets"
         }
       ]
     },
@@ -744,17 +771,67 @@
       "unsuccessful": []
     },
     "final_focused": {
-      "tests": 71,
-      "passed": 71,
+      "tests": 100,
+      "passed": 100,
       "failed": 0,
       "errors": 0,
       "skipped": 0,
       "warnings": 0,
       "unsuccessful": []
     },
+    "final_budget_mask_validation": {
+      "tests": 111,
+      "passed": 111,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "warnings": 0,
+      "unsuccessful": []
+    },
+    "final_npf_builders": {
+      "tests": 279,
+      "passed": 229,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 50,
+      "warnings": 0,
+      "unsuccessful": []
+    },
+    "final_empty_domain_recheck": {
+      "tests": 126,
+      "passed": 126,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "warnings": 0,
+      "unsuccessful": []
+    },
+    "final_control_types": {
+      "tests": 278,
+      "passed": 228,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 50,
+      "warnings": 0,
+      "unsuccessful": []
+    },
+    "public_terrain_overflow_before": {
+      "tests": 1,
+      "passed": 0,
+      "failed": 1,
+      "errors": 0,
+      "skipped": 0,
+      "warnings": 0,
+      "unsuccessful": [
+        {
+          "module": "tests.test_3d_release_contract",
+          "test": "test_public_terrain_rejects_overflow_with_small_final_head_residual"
+        }
+      ]
+    },
     "ci_contract": {
-      "tests": 123,
-      "passed": 119,
+      "tests": 149,
+      "passed": 145,
       "failed": 0,
       "errors": 0,
       "skipped": 4,
@@ -762,8 +839,8 @@
       "unsuccessful": []
     },
     "ci_npf": {
-      "tests": 126,
-      "passed": 111,
+      "tests": 152,
+      "passed": 137,
       "failed": 0,
       "errors": 0,
       "skipped": 15,

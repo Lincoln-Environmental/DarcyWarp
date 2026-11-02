@@ -7,7 +7,7 @@
     "pytest": "9.1.1",
     "flopy": "3.12.0"
   },
-  "commit": "29de7b809ff551fe20bb71b5fed2f470f6faf1b5",
+  "commit": "3738b6321ae4f2c8615292897f3b2345ffdb327f",
   "cpu_only": true,
   "tests": [
     "tests/test_3d_terrain_reference.py",

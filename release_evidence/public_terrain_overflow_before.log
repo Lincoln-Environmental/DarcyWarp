@@ -1,0 +1,20 @@
+Warp CUDA error 100: no CUDA-capable device is detected (in function init_cuda_driver, /builds/omniverse/warp/warp/native/cuda_util.cpp:333)
+Warp 1.17.0 initialized:
+   CUDA Toolkit 12.9, CUDA driver not available (NVRTC compilation available)
+   Devices:
+     "cpu"      : "x86_64"
+   Kernel cache:
+     /home/patrickdurney/.cache/warp/1.17.0
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_____ test_public_terrain_rejects_overflow_with_small_final_head_residual ______
+tests/test_3d_release_contract.py:418: in test_public_terrain_rejects_overflow_with_small_final_head_residual
+    assert not info['converged']
+E   assert not True
+----------------------------- Captured stdout call -----------------------------
+Module _create_tiled_dot_kernels__locals__block_dot_kernel_7cdd1072 9b7db13 load on device 'cpu' took 0.59 ms  (cached)
+Module _create_tiled_dot_kernels__locals__block_sum_kernel_85ad7d89 ea9c79e load on device 'cpu' took 0.10 ms  (cached)
+Module warp.optim.linear 41096ca load on device 'cpu' took 0.12 ms  (cached)
+=========================== short test summary info ============================
+FAILED tests/test_3d_release_contract.py::test_public_terrain_rejects_overflow_with_small_final_head_residual
+1 failed in 0.48s
