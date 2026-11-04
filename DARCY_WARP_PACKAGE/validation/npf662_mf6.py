@@ -129,6 +129,12 @@ def run_reference_mf6(*,case,directory,executable,prescribed_state=None,head_tol
             realised[mapping[int(record['node'])-1]]+=float(record['q'])
     expected=np.where(case.active.astype(bool)&~fixed,case.source,0.)
     source_error=float(np.max(np.abs(realised.reshape(case.active.shape)-expected)))
+    # RCHA multiplies recharge by cell area. Allow FP64 arithmetic roundoff
+    # at each cell's own source scale, while retaining the absolute floor.
+    source_tolerance=np.maximum(1e-14,8.*np.finfo(float).eps*np.maximum(
+        np.abs(expected),np.abs(realised.reshape(case.active.shape))))
+    source_allocation_valid=bool(np.all(np.isfinite(realised)) and np.all(
+        np.abs(realised.reshape(case.active.shape)-expected)<=source_tolerance))
     checks,fields=reference.evaluate(head=raw)
     native_sat=np.full(n,np.nan)
     for record in budget.get_data(text='DATA-SAT')[-1]:native_sat[mapping[int(record['node'])-1]]=float(record['sat'])
@@ -142,8 +148,9 @@ def run_reference_mf6(*,case,directory,executable,prescribed_state=None,head_tol
         if not np.array_equal(raw[case.active!=0],values[case.active!=0]):raise ValueError('Supplied-head verification advanced a head')
         checks['independent_accepted']=False  # A constitutive check is not a root solve.
     result.update(independent=checks,source_allocation_max_error=source_error,reciprocity_max=reciprocity,saturation_max_error=saturation_error,
+        source_allocation_valid=source_allocation_valid,source_allocation_max_tolerance=float(np.max(source_tolerance)),
         native_flux_residual_rms=native_rms,native_flux_residual_relative=native_relative,
-        independent_conservation=bool(native and source_error<=1e-14 and checks['input_valid'] and
+        independent_conservation=bool(native and source_allocation_valid and checks['input_valid'] and
             checks['boundary_condition_valid'] and checks['physical_metrics_valid'] and
             np.all(np.isfinite([native_rms,native_relative])) and (native_rms<=1e-12 or native_relative<=1e-8)))
     fields.update(raw_head=raw,native_saturation=native_sat,active=case.active,flux_native=flux,

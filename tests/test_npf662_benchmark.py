@@ -107,3 +107,37 @@ def test_native_rch_package_preserves_explicit_top_allocation(tmp_path):
     nam = (tmp_path/'rch'/'npf662.nam').read_text().upper()
     assert 'RCH6' in nam and 'WEL6' not in nam
     assert info['source_package'] == 'rch'
+
+
+def test_native_rch_roundoff_on_large_cells_matches_wel_and_cpu(tmp_path):
+    from DARCY_WARP_PACKAGE.validation.npf662_benchmark_cases import generate_case
+    from DARCY_WARP_PACKAGE.warped_darcy_3d import WarpDarcySolver3D
+    from DARCY_WARP_PACKAGE.solvers.npf662_kcycle import NPF662KCycleControls
+    from working_tests.benchmark_npf662_vs_mf6 import suite_settings
+    specification = suite_settings(sizes=[16], variants=['confined'])[0]
+    case = generate_case(settings=dict(specification['geology'],
+        layer_k=np.asarray(specification['geology']['layer_k'])), convertible=[])
+    options = dict(linear_acceleration='BICGSTAB', outer_dvclose=1e-6, inner_dvclose=1e-8,
+        rcloserecord=[1e-7, 'STRICT'], preconditioner_levels=8,
+        preconditioner_drop_tolerance=1e-4, relaxation_factor=0., reordering_method='RCM')
+    native = {}
+    for package in ['rch', 'wel']:
+        head, info, fields = run_reference_mf6(case=case, directory=tmp_path/package,
+            executable=Path('/bin/modflow/mf6'), source_package=package,
+            head_tolerance_m=1e-6, native_solver_options=options)
+        assert info['native_success'] and info['independent_conservation'], info
+        assert info['independent']['independent_accepted']
+        assert info['source_allocation_valid']
+        assert info['source_allocation_max_tolerance'] < 1e-10
+        native[package] = head
+    np.testing.assert_allclose(native['rch'], native['wel'], rtol=0., atol=1e-7)
+    with WarpDarcySolver3D(
+        nx=16, ny=16, nz=5, dx=case.dx, dy=case.dy, device='cpu',
+        implementation='fast', formulation='mf6_6_6_2_npf') as model:
+        model.build_from_layers(z_interfaces=case.z_interfaces, kx_field=case.kx, ky_field=case.ky,
+            kz_field=case.kz, active=case.active, bc_mask=case.fixed, bc_values=case.values,
+            rhs=case.source, initial_head=case.initial)
+        head, info = model.solve(max_outer=80, max_cycles=4000, npf_preconditioner='kcycle',
+            npf_kcycle_controls=NPF662KCycleControls(use_cuda_graph=False))
+    assert info['converged']
+    np.testing.assert_allclose(head, native['rch'], rtol=0., atol=1e-6)
