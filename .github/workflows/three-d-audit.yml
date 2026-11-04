@@ -1,0 +1,79 @@
+name: 3D numerical audit
+
+on:
+  push:
+    branches: [dev, fix/3d-audit-20261102]
+  pull_request:
+    branches: [dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: three-d-audit-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  cpu:
+    name: CPU / ${{ matrix.group }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [core, physics, npf, terrain, 2d-regression]
+    env:
+      DARCY_FLOAT: float64
+      PYTHONPATH: .:working_tests
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+      MPLBACKEND: Agg
+      DARCYWARP_AUDIT_GROUP: ${{ matrix.group }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install the canonical solver runtime
+        run: python -m pip install -c requirements-pip.txt warp-lang numpy scipy pandas matplotlib pytest pytest-timeout flopy==3.9.5
+      - name: Install the independently pinned MODFLOW reference
+        run: |
+          sudo mkdir -p /bin/modflow
+          sudo chown "$(id -u):$(id -g)" /bin/modflow
+          python - <<'PY'
+          from flopy.utils import get_modflow
+          get_modflow('/bin/modflow', repo='modflow6', release_id='6.6.2', subset='mf6')
+          PY
+          /bin/modflow/mf6 -v
+          echo /bin/modflow >> "$GITHUB_PATH"
+      - name: Record source and runtime provenance
+        run: |
+          mkdir -p outputs/3d-audit
+          git rev-parse HEAD > outputs/3d-audit/source_commit.txt
+          python -m pip freeze > outputs/3d-audit/runtime.txt
+          sha256sum /bin/modflow/mf6 > outputs/3d-audit/mf6_sha256.txt
+          python - <<'PY'
+          import hashlib
+          import json
+          import subprocess
+          from pathlib import Path
+          records = {}
+          names = subprocess.check_output(['git', 'ls-files', '-z']).decode().split('\0')
+          for name in names:
+              path = Path(name)
+              if path.is_file() and path.suffix == '.py':
+                  records[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+          Path('outputs/3d-audit/source_sha256.json').write_text(json.dumps(records, indent=2) + '\n')
+          PY
+      - name: Run numerical audit group
+        run: |
+          set -o pipefail
+          python working_tests/run_3d_audit.py 2>&1 | tee outputs/3d-audit/${{ matrix.group }}.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: three-d-audit-${{ matrix.group }}
+          path: outputs/3d-audit/
+          retention-days: 14

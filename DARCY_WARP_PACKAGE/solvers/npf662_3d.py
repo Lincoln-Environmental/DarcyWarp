@@ -8,12 +8,13 @@ def case_from_model(*,model,top,cell_type=0):
     if model.geometry not in ('cartesian','structured_dis_layered') or any(k is None for k in (model._kx_field,model._ky_field,model._kz_field)):
         raise ValueError('mf6_6_6_2_npf requires build_from_K_fields or build_from_layers; arbitrary faces/terrain unsupported')
     s=model._session
+    initial = s.initial_head if s.initial_head is not None else np.zeros(s.shape)
     if model.geometry=='structured_dis_layered':
         return NPF662LayeredCase(kx=model._kx_field,ky=model._ky_field,kz=model._kz_field,active=s.active,fixed=s.bc_mask,
-            values=s.bc_values,source=s.rhs,initial=s.initial_head,dx=model.dx,dy=model.dy,
+            values=s.bc_values,source=s.rhs,initial=initial,dx=model.dx,dy=model.dy,
             z_interfaces=s.z_interfaces,cell_type=cell_type)
     return NPF662Case(kx=model._kx_field,ky=model._ky_field,kz=model._kz_field,active=s.active,fixed=s.bc_mask,
-        values=s.bc_values,source=s.rhs,initial=s.initial_head if s.initial_head is not None else np.zeros(s.shape),
+        values=s.bc_values,source=s.rhs,initial=initial,
         dx=model.dx,dy=model.dy,dz=model.dz,top=top,cell_type=cell_type)
 
 

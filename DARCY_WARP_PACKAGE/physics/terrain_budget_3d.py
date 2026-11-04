@@ -1,5 +1,6 @@
 """Independent final-head terrain flux and exact stored-volume balance."""
 import numpy as np
+from DARCY_WARP_PACKAGE.physics.budget_3d import stable_rms
 
 
 def compute_terrain_budget_3d(*, operator, head, source, fixed, storage_change,
@@ -33,12 +34,14 @@ def compute_terrain_budget_3d(*, operator, head, source, fixed, storage_change,
     equivalent = np.divide(residual,diagonal,out=np.zeros_like(residual),where=diagonal > 0)
     equivalent[(diagonal <= 0) & (residual != 0)] = np.inf
     result = dict(cell_residual_max=float(np.max(np.abs(residual[free]))) if free.any() else 0,
-        cell_residual_rms=float(np.sqrt(np.mean(residual[free]**2))) if free.any() else 0,
-        head_residual_rms=float(np.sqrt(np.mean(equivalent[free]**2))) if free.any() else 0,
+        cell_residual_rms=stable_rms(residual[free]),
+        head_residual_rms=stable_rms(equivalent[free]),
         source_total=float(np.sum(source[free])),boundary_inflow=inflow,boundary_outflow=-outflow,boundary_net=inflow-outflow,
         storage_uptake=uptake,imbalance=imbalance,domain_imbalance=imbalance,relative_imbalance=abs(imbalance)/denominator,
         relative_cell_imbalance=float(np.sum(np.abs(residual)))/denominator,
         throughput=throughput,physical_diagonal_scaling="seven-point principal part",
+        finite_physical_budget=bool(np.all(np.isfinite(np.asarray(head)[operator.active]))
+            and np.all(np.isfinite(residual[free])) and np.all(np.isfinite(diagonal[free]))),
         coastal_subface_outflows=fluxes[3].tolist())
     if return_fields:
         result.update(cell_residual_field=residual,storage_change_field=storage_change,

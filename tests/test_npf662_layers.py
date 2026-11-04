@@ -254,7 +254,8 @@ def test_raw_float32_interfaces_are_differenced_in_fp64():
         np.testing.assert_allclose(packed_faces(model=model,reference=reference),reference.c0,rtol=3e-13,atol=0.)
 
 
-def test_internal_vertical_inactive_cell_has_no_passthrough(tmp_path):
+@pytest.mark.parametrize("device", ["cpu", "cuda:0"])
+def test_internal_vertical_inactive_cell_has_no_passthrough(tmp_path, device):
     case=layered_case()
     case.active[1,1,2]=0
     reference=NPF662Reference(case=case)
@@ -265,8 +266,7 @@ def test_internal_vertical_inactive_cell_has_no_passthrough(tmp_path):
         executable=Path('/bin/modflow/mf6'),head_tolerance_m=1e-12)
     assert info['native_success'] and info['independent_conservation']
     assert info['independent']['inactive_marker_cells']==1
-    for device in ('cpu','cuda:0'):
-        with make_gpu_model(case=case,device=device) as model:
-            head,checks=model.solve(max_outer=50)
-            assert checks['converged']
-            np.testing.assert_allclose(head[reference.free],native[reference.free],rtol=0.,atol=1e-7)
+    with make_gpu_model(case=case,device=device) as model:
+        head,checks=model.solve(max_outer=50)
+        assert checks['converged']
+        np.testing.assert_allclose(head[reference.free],native[reference.free],rtol=0.,atol=1e-7)

@@ -18,6 +18,8 @@ from DARCY_WARP_PACKAGE.solvers.terrain_kernels_3d import terrain_gradients_kern
 from DARCY_WARP_PACKAGE.solvers.terrain_gmres_3d import TerrainGMRES3D
 from DARCY_WARP_PACKAGE.solvers_3d import _resolve_isolated_free_cells
 from DARCY_WARP_PACKAGE.physics.terrain_grid_3d import TerrainMetrics3D
+from DARCY_WARP_PACKAGE.physics.inputs_3d import binary_mask
+from DARCY_WARP_PACKAGE.physics.budget_3d import is_3d_budget_conserved
 from DARCY_WARP_PACKAGE.physics.terrain_reference_3d import TerrainReferenceOperator3D, field_3d
 from DARCY_WARP_PACKAGE.physics.terrain_budget_3d import compute_terrain_budget_3d, terrain_dry_diagnostics_3d
 from DARCY_WARP_PACKAGE.physics.storage_contract_3d import validate_unconfined_storage_inputs
@@ -295,7 +297,7 @@ class TerrainOperatorSession3D:
         self.kx = field_3d(value=kx,shape=self.shape,name="kx",nonnegative=True)
         self.ky = field_3d(value=ky,shape=self.shape,name="ky",nonnegative=True)
         self.kz = field_3d(value=kz,shape=self.shape,name="kz",nonnegative=True)
-        self.bc_mask = np.asarray(bc_mask,dtype=np.int32).copy()
+        self.bc_mask = binary_mask(bc_mask, name="bc_mask", shape=self.shape)
         if self.bc_mask.shape != self.shape or not np.all((self.bc_mask == 0)|(self.bc_mask == 1)) or np.any((self.bc_mask != 0)&(grid.active == 0)):
             raise ValueError("bc_mask must be binary, grid-shaped and active")
         self.bc_values = field_3d(value=bc_values,shape=self.shape,name="bc_values")
@@ -557,7 +559,9 @@ class TerrainOperatorSession3D:
                     mode=unconfined_storage_mode,sy=sy_field,ss=ss_field,coeff=coeff,dt=dt)
                 budget = compute_terrain_budget_3d(operator=final_operator,head=head,source=self.rhs,fixed=self.bc_mask,
                     storage_change=final_change,storage_diagonal=final_storage)
-            converged = np.all(np.isfinite(head)) and budget["head_residual_rms"] <= head_tolerance and (budget["cell_residual_rms"] <= abs_tol_min or budget["relative_cell_imbalance"] <= final_budget_relative_tol)
+            converged = (np.all(np.isfinite(head)) and budget["head_residual_rms"] <= head_tolerance
+                and is_3d_budget_conserved(budget=budget, absolute_tolerance=abs_tol_min,
+                    relative_tolerance=final_budget_relative_tol))
             proposed_change_max = float(np.max(np.abs(dh[free]))) if free.any() else 0
             # Convergence diagnostics must describe the state that was
             # actually accepted: a small DAMPED update is not convergence.
@@ -697,8 +701,8 @@ class TerrainOperatorSession3D:
         self.workspace.scale_host = state.scale.numpy().reshape(self.shape)
         converged = bool(np.all(np.isfinite(head_device))
             and budget["head_residual_rms"] <= head_tolerance
-            and (budget["cell_residual_rms"] <= abs_tol_min
-                 or budget["relative_cell_imbalance"] <= final_budget_relative_tol))
+            and is_3d_budget_conserved(budget=budget, absolute_tolerance=abs_tol_min,
+                relative_tolerance=final_budget_relative_tol))
         info = dict(implementation="fast",geometry="terrain",solver_type="terrain_device_picard_3d",
             fast_operator="fp64_conservative_transformed_faces_device",
             converged=converged,final_physical_acceptance=converged,budget=budget,
