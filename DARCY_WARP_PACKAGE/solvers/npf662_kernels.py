@@ -51,11 +51,31 @@ def physical_faces(head:wp.array(dtype=wp.float64),bottom:wp.array(dtype=wp.floa
 
 
 @wp.kernel
+def storage_terms(head:wp.array(dtype=wp.float64),previous:wp.array(dtype=wp.float64),
+    bottom:wp.array(dtype=wp.float64),thickness:wp.array(dtype=wp.float64),types:wp.array(dtype=wp.int32),
+    ss:wp.array(dtype=wp.float64),sy:wp.array(dtype=wp.float64),free:wp.array(dtype=wp.int32),
+    rate:wp.array(dtype=wp.float64),tangent:wp.array(dtype=wp.float64),factor:wp.float64):
+    i=wp.tid()
+    rate[i]=wp.float64(0.);tangent[i]=wp.float64(0.)
+    if free[i]==0:return
+    pair=saturation_pair(head[i],bottom[i],thickness[i],types[i])
+    old=saturation_pair(previous[i],bottom[i],thickness[i],types[i])
+    change=pair[0]-old[0]
+    yield_coefficient=wp.float64(0.)
+    if types[i]!=0:yield_coefficient=sy[i]
+    elastic=ss[i]*thickness[i]*(pair[0]*(head[i]-previous[i])+
+        change*(previous[i]-bottom[i]-wp.float64(.5)*thickness[i]*(pair[0]+old[0])))
+    rate[i]=factor*(elastic+yield_coefficient*thickness[i]*change)
+    tangent[i]=factor*(ss[i]*thickness[i]*(pair[0]+pair[1]*(head[i]-bottom[i]-thickness[i]*pair[0]))+
+        yield_coefficient*thickness[i]*pair[1])
+
+
+@wp.kernel
 def physical_rows(head:wp.array(dtype=wp.float64),source:wp.array(dtype=wp.float64),
     free:wp.array(dtype=wp.int32),fixed:wp.array(dtype=wp.int32),left:wp.array2d(dtype=wp.int32),
     right:wp.array2d(dtype=wp.int32),flux:wp.array2d(dtype=wp.float64),conductance:wp.array2d(dtype=wp.float64),
     scale:wp.array(dtype=wp.float64),residual:wp.array(dtype=wp.float64),rhs:wp.array(dtype=wp.float64),
-    metrics:wp.array(dtype=wp.float64)):
+    metrics:wp.array(dtype=wp.float64),storage:wp.array(dtype=wp.float64),storage_tangent:wp.array(dtype=wp.float64)):
     i=wp.tid()
     invalid=not wp.isfinite(head[i]) or not wp.isfinite(scale[i]) or scale[i]<=wp.float64(0.)
     for axis in range(3):
@@ -76,14 +96,15 @@ def physical_rows(head:wp.array(dtype=wp.float64),source:wp.array(dtype=wp.float
             q=-flux[j,axis];divergence+=q;diagonal+=conductance[j,axis]
             if fixed[j]!=0:
                 inflow+=wp.max(-q,wp.float64(0.));outflow+=wp.max(q,wp.float64(0.))
-    r=source[i]-divergence
+    diagonal+=storage_tangent[i]
+    r=source[i]-divergence-storage[i]
     equivalent=wp.float64(0.)
     if diagonal>wp.float64(0.):equivalent=r/diagonal
     elif r!=wp.float64(0.):equivalent=wp.float64(wp.inf)
     residual[i]=r;rhs[i]=r/scale[i]
     wp.atomic_add(metrics,0,r*r);wp.atomic_add(metrics,1,wp.abs(r))
     wp.atomic_add(metrics,2,equivalent*equivalent)
-    wp.atomic_add(metrics,3,wp.abs(source[i])+inflow+outflow)
+    wp.atomic_add(metrics,3,wp.abs(source[i])+inflow+outflow+wp.abs(storage[i]))
     wp.atomic_add(metrics,4,inflow);wp.atomic_add(metrics,5,outflow)
     if not wp.isfinite(r) or not wp.isfinite(diagonal):wp.atomic_add(metrics,6,wp.float64(1.))
     wp.atomic_add(metrics,7,rhs[i]*rhs[i]);wp.atomic_add(metrics,8,r)
@@ -94,7 +115,7 @@ def jacobian_action(x:wp.array(dtype=wp.float64),y:wp.array(dtype=wp.float64),z:
     free:wp.array(dtype=wp.int32),left:wp.array2d(dtype=wp.int32),right:wp.array2d(dtype=wp.int32),
     dl:wp.array2d(dtype=wp.float64),dr:wp.array2d(dtype=wp.float64),conductance:wp.array2d(dtype=wp.float64),
     c0:wp.array2d(dtype=wp.float64),scale:wp.array(dtype=wp.float64),mode:wp.array(dtype=wp.int32),counter:wp.array(dtype=wp.int64),
-    alpha:wp.float64,beta:wp.float64):
+    alpha:wp.float64,beta:wp.float64,storage_tangent:wp.array(dtype=wp.float64)):
     i=wp.tid()
     if i==0 and mode[0]==1:wp.atomic_add(counter,0,wp.int64(1))
     value=x[i]
@@ -115,7 +136,7 @@ def jacobian_action(x:wp.array(dtype=wp.float64),y:wp.array(dtype=wp.float64),z:
                 if mode[0]==2:a=c0[j,axis];b=-a
                 value-=b*x[i]
                 if free[j]!=0:value-=a*x[j]
-        value=value/scale[i]
+        value=(value+storage_tangent[i]*x[i])/scale[i]
     old=wp.float64(0.)
     if beta!=wp.float64(0.):old=beta*y[i]
     z[i]=alpha*value+old
@@ -125,7 +146,8 @@ def jacobian_action(x:wp.array(dtype=wp.float64),y:wp.array(dtype=wp.float64),z:
 def diagonal_action(x:wp.array(dtype=wp.float64),y:wp.array(dtype=wp.float64),z:wp.array(dtype=wp.float64),
     free:wp.array(dtype=wp.int32),left:wp.array2d(dtype=wp.int32),right:wp.array2d(dtype=wp.int32),
     dl:wp.array2d(dtype=wp.float64),dr:wp.array2d(dtype=wp.float64),conductance:wp.array2d(dtype=wp.float64),
-    c0:wp.array2d(dtype=wp.float64),scale:wp.array(dtype=wp.float64),mode:wp.array(dtype=wp.int32),alpha:wp.float64,beta:wp.float64):
+    c0:wp.array2d(dtype=wp.float64),scale:wp.array(dtype=wp.float64),mode:wp.array(dtype=wp.int32),alpha:wp.float64,beta:wp.float64,
+    storage_tangent:wp.array(dtype=wp.float64)):
     i=wp.tid();diag=wp.float64(0.)
     if free[i]!=0:
         for axis in range(3):
@@ -138,6 +160,7 @@ def diagonal_action(x:wp.array(dtype=wp.float64),y:wp.array(dtype=wp.float64),z:
                 if mode[0]==2:diag+=c0[j,axis]
                 elif mode[0]==0:diag+=conductance[j,axis]
                 else:diag-=dr[j,axis]
+        diag+=storage_tangent[i]
     if diag==wp.float64(0.):diag=scale[i]
     old=wp.float64(0.)
     if beta!=wp.float64(0.):old=beta*y[i]
@@ -162,7 +185,7 @@ def correction_max(delta:wp.array(dtype=wp.float64),maximum:wp.array(dtype=wp.fl
 def impossible_linear_rows(rhs:wp.array(dtype=wp.float64),free:wp.array(dtype=wp.int32),
     left:wp.array2d(dtype=wp.int32),right:wp.array2d(dtype=wp.int32),dl:wp.array2d(dtype=wp.float64),
     dr:wp.array2d(dtype=wp.float64),conductance:wp.array2d(dtype=wp.float64),c0:wp.array2d(dtype=wp.float64),
-    mode:int,count:wp.array(dtype=wp.float64)):
+    mode:int,count:wp.array(dtype=wp.float64),storage_tangent:wp.array(dtype=wp.float64)):
     i=wp.tid()
     if free[i]==0 or rhs[i]==wp.float64(0.):return
     diag=wp.float64(0.);off=wp.float64(0.)
@@ -181,4 +204,5 @@ def impossible_linear_rows(rhs:wp.array(dtype=wp.float64),free:wp.array(dtype=wp
             if mode==2:a=c0[j,axis];b=-a
             diag-=b
             if free[j]!=0:off+=wp.abs(a)
+    diag+=storage_tangent[i]
     if wp.abs(diag)+off==wp.float64(0.):wp.atomic_add(count,0,wp.float64(1.))

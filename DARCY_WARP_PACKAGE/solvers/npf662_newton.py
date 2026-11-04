@@ -26,11 +26,12 @@ class NPF662NewtonControls:
 
 
 class NPF662Workspace:
-    def __init__(self,*,model,case,restart,krylov_budget):
+    def __init__(self,*,model,case,restart,krylov_budget,reference=None):
         self.device=model.device;self.shape=case.active.shape;self.n=case.active.size;self.closed=False
         self.restart=restart;self.active_snapshot=case.active.copy();self.fixed_snapshot=case.fixed.copy()
         self.free_count=int(np.sum((case.active!=0)&(case.fixed==0)))
-        for name in ('head','trial','source','bottom','thickness','scale','rhs','trial_rhs','residual','trial_residual','delta'):
+        for name in ('head','trial','source','bottom','thickness','scale','rhs','trial_rhs','residual','trial_residual','delta',
+            'storage_previous','storage_ss','storage_sy','storage_rate','storage_tangent','trial_storage_rate','trial_storage_tangent'):
             setattr(self,name,wp.zeros(shape=self.n,dtype=wp.float64,device=self.device))
         for name in ('c0','q','c','trial_q','trial_c','dl','dr'):
             setattr(self,name,wp.zeros(shape=(self.n,3),dtype=wp.float64,device=self.device))
@@ -51,7 +52,7 @@ class NPF662Workspace:
         self.jv_counter=wp.zeros(shape=1,dtype=wp.int64,device=self.device)
         self.residual_evaluations=0;self.candidate_evaluations=0
         self.multigrid=None;self.flexible=None;self.krylov=None;self.diagonal_flexible=None
-        self.load(model=model,case=case)
+        self.load(model=model,case=case,reference=reference)
         self.evaluate(trial=False,linearize=True)
 
     def select_krylov(self,*,method,krylov_budget):
@@ -79,7 +80,7 @@ class NPF662Workspace:
         return not self.closed and self.device==model.device and self.shape==case.active.shape and self.restart==restart and np.array_equal(
             self.active_snapshot,case.active) and np.array_equal(self.fixed_snapshot,case.fixed)
 
-    def load(self,*,model,case):
+    def load(self,*,model,case,reference=None):
         self.source.assign(case.source.ravel())
         self.free.assign(((case.active!=0)&(case.fixed==0)).astype(np.int32).ravel())
         self.fixed.assign(case.fixed.astype(np.int32).ravel());self.types.assign(case.cell_types.astype(np.int32).ravel())
@@ -90,6 +91,16 @@ class NPF662Workspace:
         faces=model._session.faces
         self.c0.assign(np.stack([faces[0].ravel(),faces[2].ravel(),faces[4].ravel()],axis=1))
         principal=sum(faces).ravel()
+        self.transient=reference is not None and hasattr(reference,'previous')
+        self.storage_factor=0.
+        if self.transient:
+            self.storage_previous.assign(reference.previous.ravel())
+            self.storage_ss.assign(reference.ss.ravel());self.storage_sy.assign(reference.sy.ravel())
+            self.storage_factor=case.dx*case.dy/reference.dt
+            principal=principal+reference.preconditioner_storage.ravel()
+        else:
+            for name in ('storage_rate','storage_tangent','trial_storage_rate','trial_storage_tangent'):
+                getattr(self,name).zero_()
         self.scale.assign(np.where(principal>0.,principal,1.))
         self.jv_counter.zero_();self.residual_evaluations=0;self.candidate_evaluations=0
 
@@ -97,11 +108,16 @@ class NPF662Workspace:
         head=self.trial if trial else self.head
         q=self.trial_q if trial else self.q;c=self.trial_c if trial else self.c
         r=self.trial_residual if trial else self.residual;rhs=self.trial_rhs if trial else self.rhs
+        storage=self.trial_storage_rate if trial else self.storage_rate
+        tangent=self.trial_storage_tangent if trial else self.storage_tangent
+        if self.transient:
+            wp.launch(kernel=kernels.storage_terms,dim=self.n,inputs=[head,self.storage_previous,self.bottom,
+                self.thickness,self.types,self.storage_ss,self.storage_sy,self.free,storage,tangent,self.storage_factor],device=self.device)
         wp.launch(kernel=kernels.physical_faces,dim=(self.n,3),inputs=[head,self.bottom,self.types,self.right,
             self.c0,q,c,self.dl,self.dr,self.thickness,int(linearize)],device=self.device)
         self.metrics.zero_()
         wp.launch(kernel=kernels.physical_rows,dim=self.n,inputs=[head,self.source,self.free,self.fixed,self.left,
-            self.right,q,c,self.scale,r,rhs,self.metrics],device=self.device)
+            self.right,q,c,self.scale,r,rhs,self.metrics,storage,tangent],device=self.device)
         self.residual_evaluations+=1
         if trial:self.candidate_evaluations+=1
         m=self.metrics.numpy()
@@ -113,11 +129,11 @@ class NPF662Workspace:
 
     def matvec(self,x,y,z,alpha,beta):
         wp.launch(kernel=kernels.jacobian_action,dim=self.n,inputs=[x,y,z,self.free,self.left,self.right,
-            self.dl,self.dr,self.c,self.c0,self.scale,self.mode,self.jv_counter,alpha,beta],device=self.device)
+            self.dl,self.dr,self.c,self.c0,self.scale,self.mode,self.jv_counter,alpha,beta,self.storage_tangent],device=self.device)
 
     def precondition(self,x,y,z,alpha,beta):
         wp.launch(kernel=kernels.diagonal_action,dim=self.n,inputs=[x,y,z,self.free,self.left,self.right,
-            self.dl,self.dr,self.c,self.c0,self.scale,self.mode,alpha,beta],device=self.device)
+            self.dl,self.dr,self.c,self.c0,self.scale,self.mode,alpha,beta,self.storage_tangent],device=self.device)
 
     def candidate(self,*,alpha):
         wp.launch(kernel=kernels.candidate_head,dim=self.n,inputs=[self.head,self.delta,self.free,self.trial,alpha],device=self.device)
@@ -132,7 +148,8 @@ class NPF662Workspace:
         self.flexible=None;self.multigrid=None;self.diagonal_flexible=None
         self.closed=True;self.krylov=None
         for name in ('head','trial','source','bottom','thickness','scale','rhs','trial_rhs','residual','trial_residual','delta',
-            'c0','q','c','trial_q','trial_c','dl','dr','free','fixed','types','left','right','metrics','maximum','mode','jv_counter'):
+            'c0','q','c','trial_q','trial_c','dl','dr','free','fixed','types','left','right','metrics','maximum','mode','jv_counter',
+            'storage_previous','storage_ss','storage_sy','storage_rate','storage_tangent','trial_storage_rate','trial_storage_tangent'):
             setattr(self,name,None)
 
 
@@ -187,9 +204,9 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
     reused=workspace is not None and workspace.compatible(model=model,case=case,restart=restart)
     if not reused:
         if workspace is not None:workspace.close()
-        workspace=NPF662Workspace(model=model,case=case,restart=restart,krylov_budget=krylov_budget)
+        workspace=NPF662Workspace(model=model,case=case,restart=restart,krylov_budget=krylov_budget,reference=reference)
         holder['workspace']=workspace
-    else:workspace.load(model=model,case=case)
+    else:workspace.load(model=model,case=case,reference=reference)
     krylov_reused=workspace.select_krylov(method=method,krylov_budget=krylov_budget)
     mg_reused=False;mg_seconds=0.;linear_history=[]
     if npf_preconditioner=='kcycle':
@@ -197,12 +214,14 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
         mg_controls=NPF662KCycleControls() if npf_kcycle_controls is None else npf_kcycle_controls
         if not isinstance(mg_controls,NPF662KCycleControls):raise ValueError('npf_kcycle_controls must be NPF662KCycleControls')
         mg_controls.validate()
+        storage_diagonal=getattr(reference,'preconditioner_storage',None)
         mg_reused=workspace.multigrid is not None and workspace.multigrid.compatible(
-            faces=model._session.faces,active=case.active,fixed=case.fixed,device=model.device,controls=mg_controls)
+            faces=model._session.faces,active=case.active,fixed=case.fixed,device=model.device,controls=mg_controls,
+            storage_diag=storage_diagonal)
         if not mg_reused:
             if workspace.multigrid is not None:workspace.multigrid.close()
             workspace.multigrid=NPF662KCycleWorkspace(faces=model._session.faces,active=case.active,
-                fixed=case.fixed,device=model.device,controls=mg_controls)
+                fixed=case.fixed,device=model.device,controls=mg_controls,storage_diag=storage_diagonal)
             mg_seconds=workspace.multigrid.construction_seconds
         mg_start=(workspace.multigrid.applications,workspace.multigrid.cycles,workspace.multigrid.graph_replays)
     elif npf_preconditioner!='diagonal':raise ValueError('npf_preconditioner must be diagonal or kcycle')
@@ -226,7 +245,8 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
             if mode!=1:fallbacks+=1
             workspace.maximum.zero_()
             wp.launch(kernel=kernels.impossible_linear_rows,dim=workspace.n,inputs=[workspace.rhs,workspace.free,
-                workspace.left,workspace.right,workspace.dl,workspace.dr,workspace.c,workspace.c0,mode,workspace.maximum],device=workspace.device)
+                workspace.left,workspace.right,workspace.dl,workspace.dr,workspace.c,workspace.c0,mode,workspace.maximum,
+                workspace.storage_tangent],device=workspace.device)
             impossible=int(workspace.maximum.numpy()[0])
             if impossible:
                 attempts.append(dict(direction=direction,krylov=0,remaining=remaining,stopping='zero_row_nonzero_rhs',zero_rows=impossible))

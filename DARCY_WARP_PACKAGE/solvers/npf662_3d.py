@@ -1,4 +1,4 @@
-"""Opt-in pinned Cartesian NPF contract, retaining the legacy session backend."""
+"""Opt-in pinned NPF flow and implicit STO, retaining the legacy session backend."""
 import numpy as np
 from DARCY_WARP_PACKAGE.validation.npf662_reference import NPF662Case,NPF662LayeredCase,NPF662Reference
 from DARCY_WARP_PACKAGE.validation.npf662_metrics import final_tolerances
@@ -20,8 +20,13 @@ def case_from_model(*,model,top,cell_type=0):
 def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,max_cycles=2000,rel_tol=1e-12,
     abs_tol_min=1e-12,final_budget_relative_tol=1e-8,max_levels=6,min_coarse_n=2,
     return_info=True,max_outer=2000,krylov_restart=24,npf_newton_controls=None,
-    npf_preconditioner='diagonal',npf_kcycle_controls=None,npf_krylov_method=None,**unsupported):
+    npf_preconditioner='diagonal',npf_kcycle_controls=None,npf_krylov_method=None,
+    transient=False,dt=None,head_prev=None,ss=None,sy=None,**unsupported):
     if unsupported:raise ValueError(f'Unsupported mf6_6_6_2_npf controls: {sorted(unsupported)}')
+    if transient and any(value is None for value in (dt,head_prev,ss,sy)):
+        raise ValueError('Unsupported incomplete transient controls: dt, head_prev, ss and sy required')
+    if not transient and any(value is not None for value in (dt,head_prev,ss,sy)):
+        raise ValueError('Storage inputs require transient=True')
     if npf_preconditioner not in ('diagonal','kcycle'):raise ValueError('npf_preconditioner must be diagonal or kcycle')
     if npf_preconditioner=='diagonal' and npf_kcycle_controls is not None:
         raise ValueError('npf_kcycle_controls requires npf_preconditioner=kcycle')
@@ -35,10 +40,13 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
     if unconfined and top_elevation is None and not layered:raise ValueError('Matched unconfined mode requires explicit flat top_elevation')
     types=int(unconfined) if npf_cell_type is None else npf_cell_type
     case=case_from_model(model=model,top=0. if top_elevation is None else top_elevation,cell_type=types)
-    reference=NPF662Reference(case=case)
+    if transient:
+        from DARCY_WARP_PACKAGE.validation.npf662_transient_reference import NPF662TransientReference
+        reference=NPF662TransientReference(case=case,previous=head_prev,dt=dt,ss=ss,sy=sy)
+    else:reference=NPF662Reference(case=case)
     reference.check_components()
     if not unconfined and np.any(case.cell_types):raise ValueError('Convertible cell types require unconfined=True')
-    if unconfined or layered or npf_preconditioner=='kcycle' or npf_krylov_method=='fgmres':
+    if transient or unconfined or layered or npf_preconditioner=='kcycle' or npf_krylov_method=='fgmres':
         if model.implementation!='fast' or model.solver!='kcycle':
             raise ValueError('Matched Newton requires implementation=fast and solver=kcycle; legacy backends remain separate')
         if unconfined and not np.any(case.cell_types[case.active!=0]):raise ValueError('unconfined=True requires convertible active cells')
@@ -56,10 +64,17 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
         info.update(formulation='mf6_6_6_2_npf',geometry=case.geometry,
             device=model.device,precision='float64',
             implementation='device_newton_fgmres' if info['krylov_method']=='FGMRES' else 'device_newton_gmres',session_backend='npf662_newton',
-            reference_contract=case.contract+('_Newton' if unconfined else '_confined'),reference_version='6.6.2',
+            reference_contract=case.contract+('_Newton' if unconfined else '_confined')+('_STO_v1' if transient else ''),reference_version='6.6.2',
             final_acceptance_thresholds=thresholds,
             effective_options=dict(xt3d=False,newton=unconfined,cell_type=case.cell_types.tolist(),saturation_epsilon=1e-6,
-                conductance_floor_m=0.,variablecv=False,perched=False,thickstrt=False,rewet=False,storage=False,packages=['CHD','WEL_SOURCE']))
+                conductance_floor_m=0.,variablecv=False,perched=False,thickstrt=False,rewet=False,storage=bool(transient),
+                packages=['CHD','WEL_SOURCE']+(['STO'] if transient else [])))
+        if transient:
+            info.update(dt=float(dt),storage_formulation='MF6 6.6.2 default SsTerms/SyTerms; Newton saturation smoothing',
+                storage_previous_fixed=True,
+                scaling='full-saturated principal diagonal plus previous-state storage tangent; S*J and S*R')
+            if npf_preconditioner=='kcycle':
+                info['preconditioner']='A0 plus previous-state storage tangent K-cycle; physical RHS D0*v; homogeneous corrections'
         return (head,info) if return_info else head
     head,info=model._session.solve(solver=model.solver,device=model.device,implementation=model.implementation,
         unconfined=False,max_cycles=max_cycles,rel_tol=rel_tol,abs_tol_min=abs_tol_min,

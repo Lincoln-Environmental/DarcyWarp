@@ -1,6 +1,16 @@
 kimi --model kimi-code/k3
 # DarcyWarp — Agent System Memory
 
+> 2026-11-05 NPF/STO transient extension: the explicit `mf6_6_6_2_npf`
+> formulation accepts `transient=True, dt=..., head_prev=..., ss=..., sy=...`.
+> Default MF6 6.6.2 Ss/Sy storage and its tangent enter device residual/Jv,
+> safeguards, independent acceptance and storage-aware K-cycle caching.
+> CPU parity passes the same 20 saved steady cases over 20 weekly steps
+> (400 endpoint comparisons), with Ss=1e-5/m and Sy=0.15. See
+> `docs/NPF662_TRANSIENT_CPU_PARITY_2026-11-05.md` and the recorded summary.
+> Original steady dispatch is retained; transient-to-steady reuse clears STO.
+> `head_prev` is immutable within each solve. CUDA execution is unverified.
+
 > 2026-10-15 numerical audit of device terrain Picard/GMRES (baseline
 > `947d20d`; report `docs/3D_DEVICE_PICARD_AUDIT_2026-10-15.md`): consistent
 > free-cell RMS/L2 conversions; exact per-outer Krylov budgets shared by

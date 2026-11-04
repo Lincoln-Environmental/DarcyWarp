@@ -1,0 +1,344 @@
+{
+  "date_nz": "2026-11-05",
+  "passed": true,
+  "case_count": 20,
+  "weekly_steps_per_case": 20,
+  "endpoint_comparisons": 400,
+  "dt_days": 7.0,
+  "end_time_days": 140.0,
+  "ss_inverse_m": 1e-05,
+  "sy": 0.15,
+  "source_factors": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.5,
+    1.5,
+    1.5,
+    1.5,
+    1.5,
+    0.25,
+    0.25,
+    0.25,
+    0.25,
+    0.25,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+  ],
+  "max_head_m": 7.737544649444317e-08,
+  "max_head_rmse_m": 3.06533487694919e-08,
+  "max_flux_relative_l2": 1.6545992027050376e-07,
+  "max_storage_relative_throughput": 1.5533555997464628e-08,
+  "max_warp_cell_imbalance": 9.822337941226336e-09,
+  "max_mf6_cell_imbalance": 5.307534094900974e-10,
+  "mf6_sha256": "9acdb07cae589555355b5d25b5ec1a7af7a0127ff95339ee14971ec7df6641ab",
+  "base_revision": "14ee142a7620e11d1e99bde35bb75727868c2d81",
+  "cases": [
+    {
+      "case": "confined_16x16x5",
+      "shape": [
+        5,
+        16,
+        16
+      ],
+      "input_hash": "b236fb1ee737200e1ce2c597bd7bdf832b7382ef29090c262ae495467e9fd67b",
+      "passed": true,
+      "worst_head_m": 7.737544649444317e-08,
+      "worst_head_rmse_m": 3.06533487694919e-08,
+      "worst_flux_relative_l2": 6.172674273946265e-09,
+      "worst_storage_relative_throughput": 3.50328072533155e-09,
+      "cumulative_signed_budget_ratio": 5.189442348987066e-10
+    },
+    {
+      "case": "convertible_16x16x5",
+      "shape": [
+        5,
+        16,
+        16
+      ],
+      "input_hash": "57df480a653eba5cdbaa99c1d559a7b966e0fe13c175a9594258e14715dc167b",
+      "passed": true,
+      "worst_head_m": 7.248651012758955e-09,
+      "worst_head_rmse_m": 1.4106043204469613e-09,
+      "worst_flux_relative_l2": 1.6545992027050376e-07,
+      "worst_storage_relative_throughput": 7.043458465442402e-09,
+      "cumulative_signed_budget_ratio": 1.1310393523371786e-10
+    },
+    {
+      "case": "phreatic_16x16x5",
+      "shape": [
+        5,
+        16,
+        16
+      ],
+      "input_hash": "aa232d362802729c8cb89f1df09d165c6209a924e68a9dc2f5955cdf6bf74846",
+      "passed": true,
+      "worst_head_m": 5.133138358814904e-11,
+      "worst_head_rmse_m": 1.0599874512258223e-11,
+      "worst_flux_relative_l2": 6.198098259848668e-10,
+      "worst_storage_relative_throughput": 8.638995718032245e-10,
+      "cumulative_signed_budget_ratio": 6.474493143903551e-12
+    },
+    {
+      "case": "confined_32x32x5",
+      "shape": [
+        5,
+        32,
+        32
+      ],
+      "input_hash": "0b9bd1b536c4f1b4db59c62fd703a43d0ea4ed9a6f608a23a22ae5b33c1fad13",
+      "passed": true,
+      "worst_head_m": 4.690626198566861e-08,
+      "worst_head_rmse_m": 1.2896028418964994e-08,
+      "worst_flux_relative_l2": 1.1267082828166806e-08,
+      "worst_storage_relative_throughput": 2.563287968344764e-09,
+      "cumulative_signed_budget_ratio": 1.302211923867416e-10
+    },
+    {
+      "case": "convertible_32x32x5",
+      "shape": [
+        5,
+        32,
+        32
+      ],
+      "input_hash": "b309d8e070a5532b2c139b3dce362e467f8f7dbbfa3930e08c3e4dc424a04583",
+      "passed": true,
+      "worst_head_m": 2.2262480747770041e-10,
+      "worst_head_rmse_m": 7.012318791778819e-11,
+      "worst_flux_relative_l2": 3.956699302184471e-09,
+      "worst_storage_relative_throughput": 3.0887108392206394e-10,
+      "cumulative_signed_budget_ratio": 3.729485294231694e-12
+    },
+    {
+      "case": "phreatic_32x32x5",
+      "shape": [
+        5,
+        32,
+        32
+      ],
+      "input_hash": "f5359f37db3a47bf9a57d9002d9eed7dc023babfbb2e09072283658ecabf9ab6",
+      "passed": true,
+      "worst_head_m": 5.2595261479382316e-11,
+      "worst_head_rmse_m": 1.646703921564755e-11,
+      "worst_flux_relative_l2": 9.56152761460437e-10,
+      "worst_storage_relative_throughput": 1.3204266198882276e-09,
+      "cumulative_signed_budget_ratio": 6.928436912967302e-11
+    },
+    {
+      "case": "confined_50x50x5",
+      "shape": [
+        5,
+        50,
+        50
+      ],
+      "input_hash": "bc225b016c7c136fe68cb856c6e729edcb3494d0470d402917e2873b2085cf72",
+      "passed": true,
+      "worst_head_m": 9.874469242276973e-09,
+      "worst_head_rmse_m": 3.564643269021838e-09,
+      "worst_flux_relative_l2": 1.411854277992363e-09,
+      "worst_storage_relative_throughput": 1.6252529064901822e-09,
+      "cumulative_signed_budget_ratio": 6.710747375513464e-13
+    },
+    {
+      "case": "convertible_50x50x5",
+      "shape": [
+        5,
+        50,
+        50
+      ],
+      "input_hash": "b007027dde1596551318727c55c1486ef1d964c393b49fdfc9593be1a54b2c54",
+      "passed": true,
+      "worst_head_m": 9.96266780184385e-09,
+      "worst_head_rmse_m": 2.109566629491385e-09,
+      "worst_flux_relative_l2": 7.354083468038332e-08,
+      "worst_storage_relative_throughput": 1.5533555997464628e-08,
+      "cumulative_signed_budget_ratio": 2.6765596890983507e-10
+    },
+    {
+      "case": "phreatic_50x50x5",
+      "shape": [
+        5,
+        50,
+        50
+      ],
+      "input_hash": "ecb55bb5d649a30ca4067e34650845170e0804752b3534f8b03ba774782973e5",
+      "passed": true,
+      "worst_head_m": 1.6852719220139534e-10,
+      "worst_head_rmse_m": 4.2264229438984987e-11,
+      "worst_flux_relative_l2": 3.323292163159682e-09,
+      "worst_storage_relative_throughput": 6.699003554898548e-09,
+      "cumulative_signed_budget_ratio": 2.1058913650950935e-10
+    },
+    {
+      "case": "confined_uniform",
+      "shape": [
+        3,
+        4,
+        5
+      ],
+      "input_hash": "42f7266fc215a8151dc647467982e961ae735bf0927c5269a152d0448227fb39",
+      "passed": true,
+      "worst_head_m": 3.1782718679096433e-09,
+      "worst_head_rmse_m": 1.428529570513027e-09,
+      "worst_flux_relative_l2": 8.150394379832966e-09,
+      "worst_storage_relative_throughput": 5.977488529176382e-14,
+      "cumulative_signed_budget_ratio": 4.601110626565701e-11
+    },
+    {
+      "case": "confined_x",
+      "shape": [
+        3,
+        4,
+        5
+      ],
+      "input_hash": "7b7d2e734a502ddaf8ad920e578a2d8bb2dbe1f8746a897550e962343af301e9",
+      "passed": true,
+      "worst_head_m": 8.674572171685213e-09,
+      "worst_head_rmse_m": 2.776610460582538e-09,
+      "worst_flux_relative_l2": 5.67684189317191e-09,
+      "worst_storage_relative_throughput": 9.271659007193225e-14,
+      "cumulative_signed_budget_ratio": 2.2039392101231316e-12
+    },
+    {
+      "case": "confined_y",
+      "shape": [
+        3,
+        4,
+        5
+      ],
+      "input_hash": "ae28d6f6272c68145b082e065aae27ae801458a51deeae417d6e5841b24933d3",
+      "passed": true,
+      "worst_head_m": 8.666717121741385e-09,
+      "worst_head_rmse_m": 2.7405186159254386e-09,
+      "worst_flux_relative_l2": 5.266274962212267e-09,
+      "worst_storage_relative_throughput": 9.439416864343523e-14,
+      "cumulative_signed_budget_ratio": 1.4003669146679062e-11
+    },
+    {
+      "case": "confined_independent",
+      "shape": [
+        3,
+        4,
+        5
+      ],
+      "input_hash": "2543efdb2f82aa299c4987e8807a76f80b705f50dc74cd45c48a0cbf4ea464bb",
+      "passed": true,
+      "worst_head_m": 8.73491501351964e-09,
+      "worst_head_rmse_m": 2.8270669509610285e-09,
+      "worst_flux_relative_l2": 6.742594473343129e-09,
+      "worst_storage_relative_throughput": 9.772474035058827e-14,
+      "cumulative_signed_budget_ratio": 4.57738927004659e-11
+    },
+    {
+      "case": "confined_masked",
+      "shape": [
+        3,
+        4,
+        5
+      ],
+      "input_hash": "66489cc3730a831593358b6318757b2b2724e3134746e6ae41b7bcf24117a831",
+      "passed": true,
+      "worst_head_m": 2.3640872370833677e-08,
+      "worst_head_rmse_m": 5.77581464151055e-09,
+      "worst_flux_relative_l2": 4.036893979567201e-09,
+      "worst_storage_relative_throughput": 3.3001791012635585e-13,
+      "cumulative_signed_budget_ratio": 3.5333931309264377e-10
+    },
+    {
+      "case": "unconfined_heterogeneous_wet",
+      "shape": [
+        3,
+        4,
+        5
+      ],
+      "input_hash": "ad542e1cd2c7b3cc5b6ffe9d7734fa0812df7709aaa3ecb93150fabd644ca63b",
+      "passed": true,
+      "worst_head_m": 9.66878133112914e-10,
+      "worst_head_rmse_m": 3.264840837805265e-10,
+      "worst_flux_relative_l2": 3.620365880747309e-09,
+      "worst_storage_relative_throughput": 5.335384996618393e-11,
+      "cumulative_signed_budget_ratio": 6.480179693723367e-11
+    },
+    {
+      "case": "unconfined_heterogeneous_dry",
+      "shape": [
+        3,
+        4,
+        5
+      ],
+      "input_hash": "d9fdef769a9bd6f99570b008e40c837b51f56b44c58b50ef00e6dfd49a7a12c7",
+      "passed": true,
+      "worst_head_m": 7.354294950800977e-10,
+      "worst_head_rmse_m": 3.119046312076373e-10,
+      "worst_flux_relative_l2": 3.3995372891709315e-09,
+      "worst_storage_relative_throughput": 5.155152001888472e-11,
+      "cumulative_signed_budget_ratio": 5.839349572631555e-11
+    },
+    {
+      "case": "unconfined_heterogeneous_mixed",
+      "shape": [
+        3,
+        4,
+        5
+      ],
+      "input_hash": "21e303222458a1a71b1cd9fac241539cbb94ce676dba9c273cfb168324029cd5",
+      "passed": true,
+      "worst_head_m": 6.801695384694995e-08,
+      "worst_head_rmse_m": 1.3936420230039798e-08,
+      "worst_flux_relative_l2": 3.0538845721700385e-09,
+      "worst_storage_relative_throughput": 1.626798832537982e-09,
+      "cumulative_signed_budget_ratio": 1.1602412018016949e-10
+    },
+    {
+      "case": "unconfined_masked_mixed",
+      "shape": [
+        3,
+        4,
+        5
+      ],
+      "input_hash": "908f0b4aee8084b30179138dd8bb35ebd391fe912c2f73617e06a7de89c9ab18",
+      "passed": true,
+      "worst_head_m": 1.0473275580125119e-09,
+      "worst_head_rmse_m": 3.232665782287366e-10,
+      "worst_flux_relative_l2": 3.0368877820876573e-09,
+      "worst_storage_relative_throughput": 1.5886213721647986e-10,
+      "cumulative_signed_budget_ratio": 4.728199456919286e-10
+    },
+    {
+      "case": "unconfined_dry_source_initial_-0.2",
+      "shape": [
+        1,
+        1,
+        2
+      ],
+      "input_hash": "16f6b937c25934f3a3c450aa970f27ffd275b43935627f4026fabea113ad7d53",
+      "passed": true,
+      "worst_head_m": 6.1312821486581015e-09,
+      "worst_head_rmse_m": 6.1312821486581015e-09,
+      "worst_flux_relative_l2": 1.4159596719224739e-08,
+      "worst_storage_relative_throughput": 6.599606212628288e-11,
+      "cumulative_signed_budget_ratio": 3.2817175875771653e-10
+    },
+    {
+      "case": "unconfined_dry_source_initial_1.5",
+      "shape": [
+        1,
+        1,
+        2
+      ],
+      "input_hash": "d4ab641611d3ac2ae993275cba096d056e2e83f9d82082ae5d61aec2708f0f95",
+      "passed": true,
+      "worst_head_m": 4.488361127208407e-09,
+      "worst_head_rmse_m": 4.488361127208407e-09,
+      "worst_flux_relative_l2": 1.0365431179054342e-08,
+      "worst_storage_relative_throughput": 4.79343875584627e-11,
+      "cumulative_signed_budget_ratio": 2.65813410688432e-10
+    }
+  ],
+  "max_cumulative_signed_budget_ratio": 5.189442348987066e-10
+}

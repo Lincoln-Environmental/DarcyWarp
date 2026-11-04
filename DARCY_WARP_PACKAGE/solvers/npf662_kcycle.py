@@ -1,4 +1,4 @@
-"""Persistent fixed-work A0 inverse using the fast 3D face-array K-cycle."""
+"""Persistent A0 plus optional storage inverse using the 3D face-array K-cycle."""
 from dataclasses import dataclass
 from time import perf_counter
 
@@ -52,7 +52,7 @@ def scaled_rhs(v: wp.array(dtype=wp.float64), diagonal: wp.array(dtype=wp.float6
 
 
 class NPF662KCycleWorkspace:
-    def __init__(self, *, faces, active, fixed, device, controls):
+    def __init__(self, *, faces, active, fixed, device, controls, storage_diag=None):
         controls.validate()
         if WP_FLOAT != wp.float64:
             raise ValueError('NPF K-cycle requires DARCY_FLOAT=float64')
@@ -60,10 +60,13 @@ class NPF662KCycleWorkspace:
         self.device = str(device)
         self.controls = controls
         self.closed = False
-        self.snapshots = tuple(np.array(value, copy=True) for value in (*faces, active, fixed))
         zeros = np.zeros(shape=active.shape, dtype=np.float64)
+        storage = zeros if storage_diag is None else np.asarray(storage_diag, dtype=float)
+        if storage.shape != active.shape or np.any(~np.isfinite(storage)) or np.any(storage < 0.):
+            raise ValueError('Finite nonnegative per-cell storage diagonal required')
+        self.snapshots = tuple(np.array(value, copy=True) for value in (*faces, active, fixed, storage))
         host = _build_levels(faces=faces, active=active, bc_mask=fixed, bc_values=zeros,
-                             rhs=zeros, storage_diag=zeros, max_levels=controls.levels,
+                             rhs=zeros, storage_diag=storage, max_levels=controls.levels,
                              min_coarse_n=controls.min_coarse_n)
         self.levels = _upload_levels(host_levels=host, device=self.device)
         for level in self.levels:
@@ -92,10 +95,11 @@ class NPF662KCycleWorkspace:
                     self.graph_error = str(error)
         self.construction_seconds = perf_counter() - start
 
-    def compatible(self, *, faces, active, fixed, device, controls):
+    def compatible(self, *, faces, active, fixed, device, controls, storage_diag=None):
+        storage = np.zeros_like(active, dtype=float) if storage_diag is None else storage_diag
         return (not self.closed and self.device == str(device) and self.controls == controls
                 and all(np.array_equal(saved, current) for saved, current
-                        in zip(self.snapshots, (*faces, active, fixed))))
+                        in zip(self.snapshots, (*faces, active, fixed, storage))))
 
     def _smooth(self, *, level, sweeps):
         x, work = level['x'], level['work']

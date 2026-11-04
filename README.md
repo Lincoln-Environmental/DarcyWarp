@@ -19,6 +19,12 @@ Use `--tier standard` for the 50/100/250/500-cell horizontal grid ladder,
 All cases have five layers. This suite requires the existing pinned native
 MF6 executable described in the linked instructions.
 
+The [transient CPU parity report](docs/NPF662_TRANSIENT_CPU_PARITY_2026-11-05.md)
+extends the saved 20-case matrix through twenty weekly NPF/STO steps. All 400
+endpoint comparisons pass against live MF6 6.6.2, including heads, physical
+face flows, storage budgets and cellwise conservation. The explicit NPF API
+now supports opt-in transient steps with `dt`, `head_prev`, `ss` and `sy`.
+
 ## Environment setup
 
 The project uses a dedicated conda environment named **`darcywarp`**, defined in
