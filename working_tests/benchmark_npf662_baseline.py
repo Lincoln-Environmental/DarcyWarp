@@ -21,6 +21,7 @@ import numpy as np
 import warp as wp
 
 from DARCY_WARP_PACKAGE.validation.head_checks import finite_diagnostics
+from DARCY_WARP_PACKAGE.validation.npf662_benchmark_cases import generate_case
 from DARCY_WARP_PACKAGE.validation.npf662_reference import (
     NPF662LayeredCase, NPF662Reference, load_npf662_case, save_npf662_case,
 )
@@ -76,41 +77,6 @@ def snapshot_sources(*, root, paths):
         shutil.copyfile(src=path, dst=target)
         hashes[str(relative)] = digest_file(path=path)
     return hashes
-
-
-def generate_case(*, settings, convertible):
-    nz, ny, nx = settings['shape']
-    rng = np.random.default_rng(seed=settings['seed'])
-    y, x = np.meshgrid(np.linspace(start=0., stop=1., num=ny),
-                       np.linspace(start=0., stop=1., num=nx), indexing='ij')
-    surface = settings['surface_base'] + settings['surface_rise'] * x
-    surface += settings['surface_wave'] * np.sin(2.*np.pi*y) * np.sin(np.pi*x)
-    layers = np.arange(nz)[:, None, None]
-    thickness = settings['layer_thickness'] + settings['layer_increment']*layers
-    thickness = thickness + settings['thickness_wave'] * np.sin(
-        2.*np.pi*x[None] + settings['layer_phase']*layers) * np.cos(
-        2.*np.pi*y[None] - settings['layer_phase']*layers)
-    interfaces = np.concatenate([surface[None], surface[None]-np.cumsum(a=thickness, axis=0)], axis=0)
-    pattern = settings['logk_wave']*np.sin(2.*np.pi*x[None]+layers) * np.cos(2.*np.pi*y[None])
-    noise = rng.uniform(low=-settings['logk_noise'], high=settings['logk_noise'], size=(nz, ny, nx))
-    kx = settings['layer_k'][:, None, None] * np.exp(pattern+noise)
-    ky = kx * (settings['ky_ratio'] + settings['ky_wave']*np.sin(2.*np.pi*y[None]+layers))
-    kz = kx * (settings['kz_ratio'] + settings['kz_wave']*np.cos(2.*np.pi*x[None]-layers))
-    active = np.ones(shape=(nz, ny, nx), dtype=np.int32)
-    fixed = np.zeros_like(a=active); fixed[:, :, 0] = 1
-    values = np.full(shape=active.shape, fill_value=settings['coast_head'], dtype=np.float64)
-    source = np.zeros_like(a=kx)
-    source[0, :, 1:] = settings['recharge']*settings['dx']*settings['dy']*(
-        1.+settings['recharge_wave']*np.sin(2.*np.pi*y[:, 1:])*np.sin(np.pi*x[:, 1:]))
-    initial = settings['coast_head'] + settings['cold_rise']*np.broadcast_to(array=x, shape=active.shape)
-    initial[fixed != 0] = values[fixed != 0]
-    types = np.zeros_like(a=active)
-    types[convertible] = 1
-    case = NPF662LayeredCase(kx=kx, ky=ky, kz=kz, active=active, fixed=fixed,
-        values=values, source=source, initial=initial, dx=settings['dx'], dy=settings['dy'],
-        z_interfaces=interfaces, cell_type=types)
-    case.validate()
-    return case
 
 
 def save_arrays(*, directory, arrays):

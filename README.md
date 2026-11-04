@@ -2,6 +2,23 @@
 
 This repo contains scripts to run ensemble benchmarks (Warp solver, MODFLOW 6, optional CPU finite difference) and to generate standard summary plots from the benchmark outputs.
 
+## 3D NPF versus MODFLOW 6
+
+The [repeated NPF benchmark suite](docs/NPF662_VS_MF6_BENCHMARKS.md) compares
+the dev branch's explicit NPF 6.6.2 formulation with fresh native MF6 solves.
+It covers confined and convertible layered grids, including a lower-recharge
+phreatic case, with three timed repeats, independent conservation and
+head/face-flow gates, separate resident-model timings and CSV/JSON results.
+
+```bash
+DARCY_FLOAT=float64 PYTHONPATH=.:working_tests OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 python working_tests/benchmark_npf662_vs_mf6.py --tier smoke
+```
+
+Use `--tier standard` for the 50/100/250/500-cell horizontal grid ladder,
+`--tier scale` for 1,000 cells per side, or `--dry-run` to inspect the plan.
+All cases have five layers. This suite requires the existing pinned native
+MF6 executable described in the linked instructions.
+
 ## Environment setup
 
 The project uses a dedicated conda environment named **`darcywarp`**, defined in
