@@ -1,6 +1,6 @@
 # DarcyWarp
 
-**Fast two-dimensional groundwater flow on CPUs and NVIDIA GPUs.**
+**Fast structured groundwater flow on CPUs and NVIDIA GPUs.**
 
 [![CI](https://github.com/Lincoln-Environmental/DarcyWarp/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Lincoln-Environmental/DarcyWarp/actions/workflows/ci.yml)
 [![Licence: AGPL-3.0-or-later](https://img.shields.io/badge/Licence-AGPL--3.0--or--later-163b4c)](LICENSE)
@@ -13,10 +13,11 @@ and repeated solves with changing recharge or aquifer properties. The repository
 includes the solver, small reproducible examples, MODFLOW 6 comparisons and
 ensemble benchmarks.
 
-The public `main` branch models **two-dimensional horizontal flow on a square-cell
-grid**. It is intended for groundwater investigations, recharge scenarios and
-repeated numerical experiments where both computational speed and an inspectable
-physical model matter.
+DarcyWarp provides **two-dimensional horizontal flow on a square-cell grid** and
+**three-dimensional flow on structured Cartesian and layered DIS grids**. The
+3D solver includes a legacy Cartesian formulation and an explicit MF6 6.6.2
+NPF/STO formulation. See the [3D guide](docs/3D_CARTESIAN_NPF.md) for setup,
+solver selection and the scope of CPU validation.
 
 **Developed by Patrick Durney and Jaco Fourie at [Lincoln Agritech Ltd](https://lincolnagritech.co.nz/), which owns the DarcyWarp software.** DarcyWarp is released under the [GNU Affero General Public License v3.0 or later](LICENSE).
 
@@ -30,7 +31,7 @@ it shows a numerical solution and its analytical reference, not field observatio
 
 ## What DarcyWarp does
 
-| Capability | Available in `main` |
+| Capability | Two-dimensional solver |
 | --- | --- |
 | Groundwater flow | Confined and unconfined formulations; unconfined transmissivity changes with saturated thickness. |
 | Time | Steady and transient simulations, with storage and changing forcing between periods. Support depends on the selected solver. |
@@ -42,9 +43,9 @@ it shows a numerical solution and its analytical reference, not field observatio
 | Precision | FP64 solvers and a separate mixed-precision path for confined steady benchmarks, with FP64 master heads and FP32 corrections. |
 
 See the [capability guide](source/capabilities.rst) for solver selection and scope.
-This branch does not provide a full three-dimensional or variably saturated
-Richards-equation model. Spatial heterogeneity in a scalar transmissivity field
-does not represent a general anisotropic conductivity tensor.
+For 3D, see the [Cartesian and NPF/STO capability guide](docs/3D_CARTESIAN_NPF.md).
+Both formulations model saturated groundwater flow with directional cell
+conductivities. Transformed terrain remains experimental on `dev`.
 
 ## Quick start
 
@@ -62,7 +63,8 @@ conda activate darcywarp
 The environment installs the numerical and plotting dependencies, Sphinx,
 and the pip dependencies in [requirements-pip.txt](requirements-pip.txt).
 NVIDIA Warp is distributed as `warp-lang` and imported as `warp`; this repository
-pins `warp-lang==1.10.0`. Run the commands below from the repository root.
+pins `warp-lang==1.17.0` for the NPF Krylov backend. CPU release checks
+use Python 3.12. Run the commands below from the repository root.
 
 ### 2. Run a small model
 
@@ -94,6 +96,10 @@ Use the public factory, `DARCY_WARP_PACKAGE.create_solver`, to construct a model
 then supply NumPy arrays for aquifer properties, recharge, the active domain and
 boundary conditions. The [worked example](examples/steady_recharge.py) shows the
 complete build, solve, check and cleanup sequence.
+
+Use `create_solver(dim=3, ...)` or the public `WarpDarcySolver3D` class for
+3D models. Run `DARCY_FLOAT=float64 python -m examples.verify_3d_series_flow`
+for an analytical layered NPF check on CPU.
 
 For other formulations, start with the [capability guide](source/capabilities.rst)
 and the [confined/transient](tests/test_2d_transient.py) or
@@ -141,7 +147,8 @@ the grid, hardware, precision, convergence criteria and setup costs identified.
 | Guide | Start here for |
 | --- | --- |
 | [Quickstart](source/quickstart.rst) | Installation and a complete first model. |
-| [Capabilities and solver selection](source/capabilities.rst) | Formulations, backend choices, boundaries, precision and limitations. |
+| [Capabilities and solver selection](source/capabilities.rst) | 2D formulations, backend choices, boundaries, precision and limitations. |
+| [Structured 3D models](docs/3D_CARTESIAN_NPF.md) | Cartesian and layered DIS models, NPF/STO steps and CPU validation. |
 | [Validation](source/validation.rst) | Analytical checks, numerical comparisons and their scope. |
 | [Benchmarking](source/benchmarking.rst) | Ensemble workflows, flags, generated files and troubleshooting. |
 | [Build the documentation](source/docs_build.rst) | A local HTML documentation site. |

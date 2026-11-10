@@ -7,7 +7,8 @@ DarcyWarp solves two-dimensional, thickness-integrated groundwater flow on
 regular square grids. It supports confined and unconfined aquifers, steady and
 transient simulations, spatially variable properties, recharge, prescribed
 heads and general-head boundaries. Repeated solves can reuse model state for
-scenario and ensemble work.
+scenario and ensemble work. The 3D solver adds legacy Cartesian and
+MF6 6.6.2 NPF/STO formulations for structured grids.
 
 Start with a small CPU model, then choose the formulation and solver that match
 your problem. The benchmark tools and MODFLOW 6 comparisons remain available
@@ -67,8 +68,9 @@ Repository map
    * - ``source/``
      - Sphinx documentation source.
 
-The public ``main`` branch provides the 2D solver. Experimental 3D work on
-``dev`` is outside the scope of this guide.
+The public factory also supports 3D Cartesian and conventional layered DIS
+flow. See :doc:`capabilities` for the 3D formulations and example. Transformed
+terrain remains experimental on ``dev``.
 
 Development and citation
 ------------------------
