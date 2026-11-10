@@ -35,7 +35,7 @@ controls are omitted.
 Pass `unconfined=True` and a binary `npf_cell_type` array for mixed
 confined and convertible cells. For a uniform convertible grid, pass a flat
 `top_elevation` at solve time. Layered DIS uses the supplied interfaces.
-For one NPF/STO timestep, pass:
+A seven-day NPF/STO step uses the previous physical head and Ss/Sy storage.
 
 ```python
 head, info = model.solve(
@@ -65,7 +65,7 @@ promotion remain unverified.
 
 ## Verification
 
-Run the independent layered series-resistance example:
+The layered example checks head and flow against an independent series-resistance solution.
 
 ```bash
 DARCY_FLOAT=float64 python -m examples.verify_3d_series_flow
