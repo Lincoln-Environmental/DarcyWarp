@@ -1,9 +1,9 @@
 Model capabilities
 ==================
 
-DarcyWarp's public solver represents horizontal groundwater flow in a single
-thickness-integrated layer. Grid fields have shape ``(ny, nx)`` and cells are
-square. The public factory rejects 3D inputs and unequal ``dx`` and ``dy``.
+DarcyWarp provides 2D and 3D structured-grid solvers. The 2D solver represents
+horizontal groundwater flow in a single thickness-integrated layer. Its
+fields have shape ``(ny, nx)`` and require square cells.
 
 Model representation
 --------------------
@@ -153,3 +153,18 @@ convergence.
 The public solver owns its device arrays and cached hierarchy. Use it as a
 context manager or call ``close()`` in a ``finally`` block, as the quickstart
 example does.
+
+
+Structured 3D flow
+------------------
+
+Use ``WarpDarcySolver3D`` or ``create_solver(dim=3, ...)`` from
+``DARCY_WARP_PACKAGE``. Fields use ``(nz, ny, nx)`` order. Legacy Cartesian
+models use uniform layer thickness. The explicit ``mf6_6_6_2_npf`` formulation
+supports both uniform grids and conventional layered DIS interfaces, with
+confined or convertible cells and backward Euler Ss/Sy storage. 3D source
+arrays contain volumetric rates per cell.
+
+The `3D guide <https://github.com/Lincoln-Environmental/DarcyWarp/blob/main/docs/3D_CARTESIAN_NPF.md>`_
+describes the public API, the layered example and CPU FP64 validation.
+Transformed terrain remains experimental on ``dev``.

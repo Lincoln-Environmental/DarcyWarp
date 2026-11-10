@@ -1,0 +1,29 @@
+name: Cartesian 3D and NPF CPU
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev, main]
+
+jobs:
+  cpu:
+    runs-on: ubuntu-latest
+    env:
+      DARCYWARP_TEST_CPU_ONLY: '1'
+      CUDA_VISIBLE_DEVICES: '-1'
+      DARCY_FLOAT: float64
+      PYTHONPATH: .:working_tests
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install warp-lang==1.17.0 numpy scipy pandas matplotlib flopy pytest
+      - name: Cartesian and NPF contracts
+        run: |
+          python -m pytest -q -ra tests/test_3d_operator_analytical.py tests/test_3d_budget_acceptance.py \
+            tests/test_3d_public_contract.py tests/test_3d_release_contract.py tests/test_3d_session.py \
+            tests/test_npf662_transient.py tests/test_npf662_reference_controller.py
