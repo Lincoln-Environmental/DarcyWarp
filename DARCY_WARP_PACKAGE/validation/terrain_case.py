@@ -11,14 +11,9 @@ from pathlib import Path
 
 import numpy as np
 
+from DARCY_WARP_PACKAGE.validation.json_output import atomic_json
 from DARCY_WARP_PACKAGE.physics.terrain_grid_3d import TerrainGrid3D, TerrainMetrics3D
 from DARCY_WARP_PACKAGE.physics.terrain_reference_3d import TerrainContact3D
-
-
-def atomic_json(*, path: Path, value) -> None:
-    temporary = path.with_suffix(path.suffix + '.pending')
-    temporary.write_text(json.dumps(value, indent=2, allow_nan=False, default=float))
-    temporary.replace(path)
 
 
 @dataclass

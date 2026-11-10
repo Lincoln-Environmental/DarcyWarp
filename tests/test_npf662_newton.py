@@ -1,14 +1,11 @@
 """Matched-law derivatives, active sets, state safety, budgets and live roots."""
-from pathlib import Path
 import numpy as np
 import pytest
 import warp as wp
 from DARCY_WARP_PACKAGE.validation.npf662_reference import NPF662Case,NPF662Reference,quadratic_saturation_derivative
 from DARCY_WARP_PACKAGE.validation.npf662_mf6 import run_reference_mf6
 from DARCY_WARP_PACKAGE.solvers.npf662_newton import NPF662Workspace,NPF662NewtonControls,search_direction
-from DARCY_WARP_PACKAGE.validation.mf6_tpfa_reference import tpfa_fluxes
 from validate_npf662_confined import make_gpu_model
-from validate_terrain_scalar_roots import scalar_case
 from validate_npf662_dry_start import make_dry_case
 
 
@@ -29,10 +26,18 @@ def unconfined_case(*,initial='mixed',heterogeneous=False):
 
 
 def scalar_npf_case(*,initial):
-    terrain=scalar_case(thickness=4.,high_head=2.,low_head=-1.,source=.8,kx=1.,kz=4.,floor=.01,initial=initial)
-    a=terrain.arrays
-    return NPF662Case(kx=a['kx'],ky=a['ky'],kz=a['kz'],active=terrain.grid().active.astype(int),
-        fixed=a['fixed'],values=a['values'],source=a['source'],initial=a['initial'],dx=1.,dy=1.,dz=4.,top=4.,cell_type=1)
+    shape = (2, 1, 2)
+    ones = np.ones(shape)
+    fixed = np.ones(shape, dtype=int)
+    fixed[0, 0, 0] = 0
+    values = np.full(shape, -1.)
+    values[0, 0, 1] = 2.
+    head = values.copy()
+    head[0, 0, 0] = initial
+    source = np.zeros(shape)
+    source[0, 0, 0] = .8
+    return NPF662Case(kx=ones, ky=.6*ones, kz=4.*ones, active=ones.astype(int),
+        fixed=fixed, values=values, source=source, initial=head, dx=1., dy=1., dz=4., top=4., cell_type=1)
 
 
 @pytest.mark.parametrize('device',['cpu','cuda:0'])
@@ -105,7 +110,7 @@ def test_upstream_tie_uses_mf6_user_node_branch(axis):
 
 @pytest.mark.parametrize('device',['cpu','cuda:0'])
 @pytest.mark.parametrize('initial',['wet','dry','mixed'])
-def test_cold_cpu_gpu_and_native_mf6_solutions(tmp_path,device,initial):
+def test_cold_cpu_gpu_and_native_mf6_solutions(tmp_path,device,initial, pinned_mf6):
     if device.startswith('cuda') and not wp.is_cuda_available():pytest.skip('Local CUDA unavailable')
     case=unconfined_case(initial=initial,heterogeneous=True)
     reference=NPF662Reference(case=case)
@@ -116,14 +121,13 @@ def test_cold_cpu_gpu_and_native_mf6_solutions(tmp_path,device,initial):
         assert info['converged'],info
         np.testing.assert_allclose(head[reference.free],cpu[reference.free],rtol=0.,atol=1e-7)
         assert all(row['krylov']<=2000 for row in info['outer_history'])
-    if not Path('/bin/modflow/mf6').is_file():pytest.skip('Pinned native MF6 unavailable')
-    native,mi,mf=run_reference_mf6(case=case,directory=tmp_path/'mf6',executable=Path('/bin/modflow/mf6'))
+    native,mi,mf=run_reference_mf6(case=case,directory=tmp_path/'mf6',executable=pinned_mf6)
     assert mi['native_success'] and mi['independent_conservation'],mi
     np.testing.assert_allclose(native[reference.free],cpu[reference.free],rtol=0.,atol=1e-7)
 
 
 @pytest.mark.parametrize('device',['cpu','cuda:0'])
-def test_scalar_reference_root_and_preserved_old_control(tmp_path,device):
+def test_scalar_reference_root_and_preserved_old_control(tmp_path,device, pinned_mf6):
     if device.startswith('cuda') and not wp.is_cuda_available():pytest.skip('Local CUDA unavailable')
     case=scalar_npf_case(initial=-.2)
     reference=NPF662Reference(case=case)
@@ -134,7 +138,7 @@ def test_scalar_reference_root_and_preserved_old_control(tmp_path,device):
         gpu,gi=model.solve(unconfined=True,top_elevation=4.,max_outer=30)
         assert gi['converged'],gi
         assert abs(gpu.ravel()[0]-3.8/3.)<1e-10
-    native,mi,mf=run_reference_mf6(case=case,directory=tmp_path/'mf6_scalar',executable=Path('/bin/modflow/mf6'))
+    native,mi,mf=run_reference_mf6(case=case,directory=tmp_path/'mf6_scalar',executable=pinned_mf6)
     assert mi['native_success'] and mi['independent_conservation'],mi
     assert abs(native.ravel()[0]-3.8/3.)<1e-10
 
@@ -217,25 +221,25 @@ def test_shared_budget_exhaustion_and_cold_workspace_reset():
             with pytest.raises(ValueError,match='Unsupported'):model.solve(unconfined=True,top_elevation=4.,**invalid)
 
 
-def test_same_state_native_fluxes_and_old_tpfa_subset(tmp_path):
+def test_same_state_native_fluxes_and_analytical_tpfa(tmp_path, pinned_mf6):
     case=scalar_npf_case(initial=.5)
     reference=NPF662Reference(case=case)
     head=case.values.copy();head.ravel()[0]=.75
-    native,info,mf=run_reference_mf6(case=case,directory=tmp_path/'supplied',executable=Path('/bin/modflow/mf6'),prescribed_state=head)
+    native,info,mf=run_reference_mf6(case=case,directory=tmp_path/'supplied',executable=pinned_mf6,prescribed_state=head)
     unused,expected=reference.evaluate(head=head)
     assert info['native_success']
     np.testing.assert_allclose(mf['flux_native'],expected['flux'],rtol=3e-12,atol=2e-11)
     np.testing.assert_allclose(mf['native_residual'],expected['residual'],rtol=3e-12,atol=2e-11)
-    original=scalar_case(thickness=4.,high_head=2.,low_head=-1.,source=.8,kx=1.,kz=4.,floor=.01,initial=.5)
-    qx,qy,qz=tpfa_fluxes(case=original,head=head)
-    assert abs(qx.ravel()[0]-expected['flux'][0])<1e-12
+    # Upstream head 2 m gives 2 m saturated thickness on the horizontal face.
+    analytical_flux = 2. * (.75 - 2.)
+    assert abs(analytical_flux - expected['flux'][0]) < 1e-12
 
 
 @pytest.mark.parametrize('head_value',[2e-6,4.-2e-6])
-def test_live_native_smoothing_buffers_have_no_terrain_floor(tmp_path,head_value):
+def test_live_native_smoothing_buffers_have_no_terrain_floor(tmp_path,head_value, pinned_mf6):
     case=make_dry_case(initial=head_value,source=1.)
     head=case.initial.copy()
-    native,info,fields=run_reference_mf6(case=case,directory=tmp_path/'buffer',executable=Path('/bin/modflow/mf6'),prescribed_state=head)
+    native,info,fields=run_reference_mf6(case=case,directory=tmp_path/'buffer',executable=pinned_mf6,prescribed_state=head)
     unused,expected=NPF662Reference(case=case).evaluate(head=head)
     assert info['native_success'] and info['saturation_max_error']<1e-13
     np.testing.assert_allclose(fields['flux_native'],expected['flux'],rtol=3e-12,atol=0.)
@@ -269,7 +273,7 @@ def test_newton_value_refresh_and_topology_reset(device):
         assert workspace.closed and workspace.krylov is None and workspace.head is None
 
 
-def test_native_boundary_admissibility_is_enforced_without_repair(tmp_path):
+def test_native_boundary_admissibility_is_enforced_without_repair(tmp_path, pinned_mf6):
     case=scalar_npf_case(initial=-.2)
     case.values[0,0,1]=-.1
     original=case.values.copy()
@@ -279,7 +283,7 @@ def test_native_boundary_admissibility_is_enforced_without_repair(tmp_path):
         with pytest.raises(ValueError,match='Convertible CHD head below cell bottom'):
             model.solve(unconfined=True,top_elevation=4.)
     with pytest.raises(ValueError,match='Convertible CHD head below cell bottom'):
-        run_reference_mf6(case=case,directory=tmp_path/'invalid',executable=Path('/bin/modflow/mf6'))
+        run_reference_mf6(case=case,directory=tmp_path/'invalid',executable=pinned_mf6)
     np.testing.assert_array_equal(case.values,original)
     assert not (tmp_path/'invalid').exists()
     case=scalar_npf_case(initial=.5)

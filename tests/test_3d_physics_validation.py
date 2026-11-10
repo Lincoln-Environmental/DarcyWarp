@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Independent scientific validation of the 3D solver physics.
 
 Every test exercises BOTH the classic and the fast (``implementation="fast"``)

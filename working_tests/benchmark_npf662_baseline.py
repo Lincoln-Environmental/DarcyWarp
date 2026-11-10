@@ -27,7 +27,7 @@ from DARCY_WARP_PACKAGE.validation.npf662_reference import (
 )
 from DARCY_WARP_PACKAGE.validation.npf662_mf6 import run_reference_mf6
 from DARCY_WARP_PACKAGE.validation.npf662_matrix_free import NPF662MatrixFreeReference
-from DARCY_WARP_PACKAGE.validation.terrain_case import atomic_json
+from DARCY_WARP_PACKAGE.validation.json_output import atomic_json
 from DARCY_WARP_PACKAGE.physics.npf662_layers import build_layered_dis_faces
 from DARCY_WARP_PACKAGE.warped_darcy_3d import WarpDarcySolver3D
 from DARCY_WARP_PACKAGE.solvers import npf662_newton

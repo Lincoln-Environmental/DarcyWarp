@@ -12,7 +12,7 @@ import numpy as np
 from DARCY_WARP_PACKAGE.validation.npf662_reference import NPF662Case, NPF662Reference
 from DARCY_WARP_PACKAGE.validation.npf662_reference import load_npf662_case
 from DARCY_WARP_PACKAGE.validation.head_checks import finite_diagnostics
-from DARCY_WARP_PACKAGE.validation.terrain_case import atomic_json
+from DARCY_WARP_PACKAGE.validation.json_output import atomic_json
 from recheck_sevenpoint_delivery import recheck_case
 
 

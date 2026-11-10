@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Hierarchy-shape regression tests for 3D horizontal semi-coarsening."""
 
 from __future__ import annotations

@@ -8,7 +8,7 @@ from flopy.mf6.utils.binarygrid_util import MfGrdFile
 import numpy as np
 
 from DARCY_WARP_PACKAGE.validation.npf662_reference import quadratic_saturation_derivative
-from DARCY_WARP_PACKAGE.validation.terrain_case import atomic_json
+from DARCY_WARP_PACKAGE.validation.json_output import atomic_json
 
 
 def verify_native_connection_laws(*, output, executable, interfaces, kx, ky, kz, dx, dy, convertible):

@@ -4,10 +4,30 @@ import hashlib
 import subprocess
 from time import perf_counter
 import numpy as np
-from DARCY_WARP_PACKAGE.validation.terrain_case import atomic_json
+from DARCY_WARP_PACKAGE.validation.json_output import atomic_json
 from DARCY_WARP_PACKAGE.validation.npf662_reference import NPF662Reference,save_npf662_case
 from DARCY_WARP_PACKAGE.validation.npf662_metrics import stable_rms,stable_sum
 from DARCY_WARP_PACKAGE.validation.head_checks import finite_diagnostics
+
+
+MF6_VERSION = "mf6: 6.6.2 05/12/2025"
+MF6_BUILDS = {
+    "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176": "historical-local-6.6.2",
+    # Official MODFLOW-ORG/modflow6 release 6.6.2, Linux executable from
+    # mf6.6.2_linux.zip; measured independently during the 2026-11-02 audit.
+    "9acdb07cae589555355b5d25b5ec1a7af7a0127ff95339ee14971ec7df6641ab": "official-linux-6.6.2",
+}
+
+
+def validate_mf6_identity(*, version: str, checksum: str) -> str:
+    """Accept only a recorded build of the exact reference version."""
+    if version != MF6_VERSION or checksum not in MF6_BUILDS:
+        raise ValueError(
+            "Native executable differs from the pinned MF6 contract: "
+            f"version={version!r}, sha256={checksum}. "
+            "Use a documented build; a matching version string alone is insufficient."
+        )
+    return MF6_BUILDS[checksum]
 
 
 def run_reference_mf6(*,case,directory,executable,prescribed_state=None,head_tolerance_m=1e-14,
@@ -29,8 +49,7 @@ def run_reference_mf6(*,case,directory,executable,prescribed_state=None,head_tol
     newton=bool(np.any(case.cell_types[case.active!=0]))
     version=subprocess.check_output([str(executable),'-v'],text=True).strip()
     checksum=hashlib.sha256(executable.read_bytes()).hexdigest()
-    if version!='mf6: 6.6.2 05/12/2025' or checksum!='21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176':
-        raise ValueError('Native executable differs from the pinned local MF6 contract')
+    build_identity = validate_mf6_identity(version=version, checksum=checksum)
     directory.mkdir(parents=True,exist_ok=False)
     nz,ny,nx=case.active.shape
     reverse=(slice(None),slice(None,None,-1),slice(None))
@@ -86,7 +105,7 @@ def run_reference_mf6(*,case,directory,executable,prescribed_state=None,head_tol
         (directory/'stdout.log').write_bytes(error.stdout or b'')
         native=False;returncode=None;reason='wall_timeout'
     result=dict(native_success=native,returncode=returncode,stop_reason=reason,seconds=perf_counter()-start,
-        input_hash=case.digest(),mf6_version=version,mf6_sha256=checksum,
+        input_hash=case.digest(),mf6_version=version,mf6_sha256=checksum,mf6_build_identity=build_identity,
         native_solver_options=ims_options,timeout_seconds=timeout_seconds,source_package=source_package,
         contract=case.contract+('_Newton' if newton else '_confined'),geometry=case.geometry,supplied_state_verification=prescribed_state is not None,
         settings=dict(xt3d=False,icelltype=case.cell_types.tolist(),newton=newton,linear_acceleration=ims_options['linear_acceleration'],variablecv=False,perched=False,thickstrt=False,rewet=False,

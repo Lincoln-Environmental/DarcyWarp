@@ -38,3 +38,9 @@ def generate_case(*, settings, convertible):
     return case
 
 
+def make_layered_dry_source(*,initial):
+    shape=(1,1,2);one=np.ones(shape)
+    return NPF662LayeredCase(kx=one,ky=.6*one,kz=.15*one,active=one.astype(int),
+        fixed=np.array([0,1]).reshape(shape),values=np.zeros(shape),source=np.array([1.,0.]).reshape(shape),
+        initial=np.full(shape,initial),dx=1.,dy=1.,
+        z_interfaces=np.array([[[2.,4.]],[[0.,0.]]]),cell_type=1)

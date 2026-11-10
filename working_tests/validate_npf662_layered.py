@@ -3,8 +3,9 @@ from pathlib import Path
 import hashlib
 import numpy as np
 
+from DARCY_WARP_PACKAGE.validation.npf662_benchmark_cases import make_layered_dry_source
 from DARCY_WARP_PACKAGE.validation.npf662_reference import NPF662LayeredCase
-from DARCY_WARP_PACKAGE.validation.terrain_case import atomic_json
+from DARCY_WARP_PACKAGE.validation.json_output import atomic_json
 from validate_npf662_confined import make_case
 from validate_npf662_unconfined import run_case, source_snapshot
 
@@ -33,13 +34,6 @@ def make_layered_control(*, variation, shape, seed, unconfined=False, initial='m
         values=base.values,source=base.source,initial=head,dx=base.dx,dy=base.dy,
         z_interfaces=interfaces,cell_type=types)
 
-
-def make_layered_dry_source(*,initial):
-    shape=(1,1,2);one=np.ones(shape)
-    return NPF662LayeredCase(kx=one,ky=.6*one,kz=.15*one,active=one.astype(int),
-        fixed=np.array([0,1]).reshape(shape),values=np.zeros(shape),source=np.array([1.,0.]).reshape(shape),
-        initial=np.full(shape,initial),dx=1.,dy=1.,
-        z_interfaces=np.array([[[2.,4.]],[[0.,0.]]]),cell_type=1)
 
 
 def run_layered_matrix(*,root,phase,shape,seed,devices,executable,max_outer,krylov_budget):

@@ -6,7 +6,7 @@ from time import perf_counter
 import numpy as np
 from DARCY_WARP_PACKAGE.validation.npf662_reference import NPF662Case,NPF662Reference,save_npf662_case
 from DARCY_WARP_PACKAGE.validation.npf662_mf6 import run_reference_mf6
-from DARCY_WARP_PACKAGE.validation.terrain_case import atomic_json
+from DARCY_WARP_PACKAGE.validation.json_output import atomic_json
 from DARCY_WARP_PACKAGE.validation.head_checks import finite_diagnostics
 from validate_npf662_confined import make_gpu_model
 from validate_npf662_dry_start import make_dry_case

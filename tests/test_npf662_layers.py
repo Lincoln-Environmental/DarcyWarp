@@ -1,7 +1,6 @@
 """Layered DIS faces, public solves, supplied heads and lifecycle controls."""
 from dataclasses import replace
 from pathlib import Path
-import json
 
 import numpy as np
 import pytest
@@ -95,15 +94,14 @@ def test_exact_vertical_series_resistance():
 
 
 def test_v1_loading_hashes_and_layered_roundtrip(tmp_path):
-    original=Path('validation_artifacts/sevenpoint_v1/stage1/final_experiments/x')
-    case=load_npf662_case(path=original/'inputs.npz')
-    assert case.digest()==json.loads((original/'comparison.json').read_text())['input_hash']
+    fixtures = Path(__file__).parent / 'fixtures' / 'npf662'
+    case = load_npf662_case(path=fixtures / 'final_experiments_v1.npz')
+    assert case.digest() == '60fe30213e31e4a304a3a3524b9a3651b52dc76e842374d458a7e0ef55309d12'
     save_npf662_case(case=case,path=tmp_path/'v1.npz')
     assert load_npf662_case(path=tmp_path/'v1.npz').digest()==case.digest()
-    early=Path('validation_artifacts/sevenpoint_v1/stage1/experiments/x')
-    legacy=load_npf662_case(path=early/'inputs.npz')
-    expected=json.loads((early/'comparison.json').read_text())['input_hash']
-    assert legacy.digest()==expected
+    legacy = load_npf662_case(path=fixtures / 'experiments_v1.npz')
+    expected = 'b56b5fe1646ddb3f4812f023340002f933caddb3f124ff032e42cd548e8d5017'
+    assert legacy.digest() == expected
     save_npf662_case(case=legacy,path=tmp_path/'early_v1.npz')
     with np.load(tmp_path/'early_v1.npz') as saved:assert 'cell_type' not in saved.files
     assert load_npf662_case(path=tmp_path/'early_v1.npz').digest()==expected
@@ -164,16 +162,16 @@ def test_layered_lifecycle_and_cold_reset(device):
 
 
 @pytest.mark.parametrize('variation', ['x','y','independent'])
-def test_live_layered_confined_native(tmp_path,variation):
+def test_live_layered_confined_native(tmp_path,variation, pinned_mf6):
     case=layered_case(variation=variation,masked=True)
     reference=NPF662Reference(case=case)
     cpu,ci,unused=reference.solve()
-    head,info,fields=run_reference_mf6(case=case,directory=tmp_path/'root',executable=Path('/bin/modflow/mf6'),head_tolerance_m=1e-12)
+    head,info,fields=run_reference_mf6(case=case,directory=tmp_path/'root',executable=pinned_mf6,head_tolerance_m=1e-12)
     assert info['native_success'] and info['independent_conservation'] and info['independent']['independent_accepted'],info
     np.testing.assert_allclose(head[reference.free],cpu[reference.free],rtol=0.,atol=1e-7)
     head=case.values+.07*np.random.default_rng(seed=3).random(size=case.active.shape)
     head[case.fixed!=0]=case.values[case.fixed!=0]
-    unused,info,fields=run_reference_mf6(case=case,directory=tmp_path/'supplied',executable=Path('/bin/modflow/mf6'),prescribed_state=head)
+    unused,info,fields=run_reference_mf6(case=case,directory=tmp_path/'supplied',executable=pinned_mf6,prescribed_state=head)
     unused,expected=reference.evaluate(head=head)
     assert info['native_success']
     np.testing.assert_allclose(fields['flux_native'],expected['flux'],rtol=3e-12,atol=2e-11)
@@ -254,7 +252,8 @@ def test_raw_float32_interfaces_are_differenced_in_fp64():
         np.testing.assert_allclose(packed_faces(model=model,reference=reference),reference.c0,rtol=3e-13,atol=0.)
 
 
-def test_internal_vertical_inactive_cell_has_no_passthrough(tmp_path):
+@pytest.mark.parametrize('device', ['cpu', 'cuda:0'])
+def test_internal_vertical_inactive_cell_has_no_passthrough(tmp_path, device, pinned_mf6):
     case=layered_case()
     case.active[1,1,2]=0
     reference=NPF662Reference(case=case)
@@ -262,11 +261,10 @@ def test_internal_vertical_inactive_cell_has_no_passthrough(tmp_path):
     edges=set(zip(reference.left,reference.right))
     assert (ids[0,1,2],ids[2,1,2]) not in edges
     native,info,fields=run_reference_mf6(case=case,directory=tmp_path/'internal_hole',
-        executable=Path('/bin/modflow/mf6'),head_tolerance_m=1e-12)
+        executable=pinned_mf6,head_tolerance_m=1e-12)
     assert info['native_success'] and info['independent_conservation']
     assert info['independent']['inactive_marker_cells']==1
-    for device in ('cpu','cuda:0'):
-        with make_gpu_model(case=case,device=device) as model:
-            head,checks=model.solve(max_outer=50)
-            assert checks['converged']
-            np.testing.assert_allclose(head[reference.free],native[reference.free],rtol=0.,atol=1e-7)
+    with make_gpu_model(case=case,device=device) as model:
+        head,checks=model.solve(max_outer=50)
+        assert checks['converged']
+        np.testing.assert_allclose(head[reference.free],native[reference.free],rtol=0.,atol=1e-7)

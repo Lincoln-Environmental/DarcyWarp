@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """CPU parity checks for the experimental FP64 3D face-array kernels."""
 
 from __future__ import annotations

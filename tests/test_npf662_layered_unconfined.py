@@ -1,5 +1,4 @@
 """Owning-thickness Newton law, active branches, live fluxes and resets."""
-from pathlib import Path
 import subprocess
 import sys
 import numpy as np
@@ -13,7 +12,7 @@ from DARCY_WARP_PACKAGE.solvers.npf662_newton import NPF662Workspace
 from DARCY_WARP_PACKAGE.solvers.npf662_kernels import saturation_pair
 from test_npf662_layers import layered_case
 from validate_npf662_confined import make_gpu_model
-from validate_npf662_layered import make_layered_dry_source
+from DARCY_WARP_PACKAGE.validation.npf662_benchmark_cases import make_layered_dry_source
 from test_npf662_newton import unconfined_case
 
 
@@ -96,7 +95,7 @@ def test_owning_thickness_thresholds_on_device(device):
 
 @pytest.mark.parametrize('device',['cpu','cuda:0'])
 @pytest.mark.parametrize('axis',[1,2])
-def test_equal_head_different_convertible_saturation_selected_tie(device,axis,tmp_path):
+def test_equal_head_different_convertible_saturation_selected_tie(device,axis,tmp_path, pinned_mf6):
     shape=(1,2,1) if axis==1 else (1,1,2)
     one=np.ones(shape)
     interfaces=np.stack([np.array([4.,7.]).reshape(shape)[0],np.array([0.,1.]).reshape(shape)[0]])
@@ -122,7 +121,7 @@ def test_equal_head_different_convertible_saturation_selected_tie(device,axis,tm
         fd=-trial['residual'].ravel()[0]/epsilon
     assert abs(fd-expected)<2e-7
     state=head+1e-6*v
-    native,info,fields=run_reference_mf6(case=case,directory=tmp_path/'selected_branch',executable=Path('/bin/modflow/mf6'),prescribed_state=state)
+    native,info,fields=run_reference_mf6(case=case,directory=tmp_path/'selected_branch',executable=pinned_mf6,prescribed_state=state)
     unused,expected_fields=reference.evaluate(head=state)
     assert info['native_success']
     np.testing.assert_allclose(fields['flux_native'],expected_fields['flux'],rtol=3e-12,atol=2e-11)
@@ -167,7 +166,7 @@ def test_layered_unconfined_numerical_reuse_geometry_rebuild_and_cold_reset(devi
         np.testing.assert_allclose(head[case.active!=0],cpu[case.active!=0],rtol=0.,atol=1e-7)
 
 
-def test_invalid_convertible_chd_and_invalid_supplied_state_are_not_repaired(tmp_path):
+def test_invalid_convertible_chd_and_invalid_supplied_state_are_not_repaired(tmp_path, pinned_mf6):
     case=valid_unconfined_case()
     case.values[0,0,0]=case.bottoms[0,0,0]-.1
     values=case.values.copy()
@@ -176,7 +175,7 @@ def test_invalid_convertible_chd_and_invalid_supplied_state_are_not_repaired(tmp
     np.testing.assert_array_equal(case.values,values)
     case=valid_unconfined_case()
     with pytest.raises(ValueError,match='below a convertible bottom'):
-        run_reference_mf6(case=case,directory=tmp_path/'invalid',executable=Path('/bin/modflow/mf6'),
+        run_reference_mf6(case=case,directory=tmp_path/'invalid',executable=pinned_mf6,
             prescribed_state=case.bottoms-.1)
     assert not (tmp_path/'invalid').exists()
 
@@ -205,12 +204,12 @@ def test_uniform_unconfined_explicit_interfaces_preserve_v1(device):
         assert uc['independent_accepted'] and lc['independent_accepted']
 
 
-def test_fully_prescribed_layered_domain_native_empty_free_subset(tmp_path):
+def test_fully_prescribed_layered_domain_native_empty_free_subset(tmp_path, pinned_mf6):
     case=valid_unconfined_case(masked=True);case.fixed=case.active.copy()
     checks,unused=NPF662Reference(case=case).evaluate(head=case.values)
     assert checks['independent_accepted'] and checks['free_cells']==0
     assert checks['physical_rms']==0. and checks['gross_throughput']==0.
-    native,info,fields=run_reference_mf6(case=case,directory=tmp_path/'all_prescribed',executable=Path('/bin/modflow/mf6'))
+    native,info,fields=run_reference_mf6(case=case,directory=tmp_path/'all_prescribed',executable=pinned_mf6)
     assert info['native_success'] and info['independent_conservation']
     assert info['independent']['independent_accepted']
     np.testing.assert_array_equal(native[case.active!=0],case.values[case.active!=0])

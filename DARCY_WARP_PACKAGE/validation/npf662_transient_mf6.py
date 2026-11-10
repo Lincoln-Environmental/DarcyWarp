@@ -6,7 +6,7 @@ import subprocess
 import numpy as np
 from DARCY_WARP_PACKAGE.validation.npf662_reference import NPF662Reference
 from DARCY_WARP_PACKAGE.validation.npf662_transient_reference import NPF662TransientReference
-from DARCY_WARP_PACKAGE.validation.terrain_case import atomic_json
+from DARCY_WARP_PACKAGE.validation.json_output import atomic_json
 from DARCY_WARP_PACKAGE.validation.head_checks import finite_diagnostics
 
 

@@ -10,7 +10,7 @@ import warp as wp
 from DARCY_WARP_PACKAGE.validation.npf662_reference import load_npf662_case, save_npf662_case
 from DARCY_WARP_PACKAGE.validation.npf662_transient_reference import NPF662TransientReference
 from DARCY_WARP_PACKAGE.validation.npf662_transient_mf6 import run_transient_mf6
-from DARCY_WARP_PACKAGE.validation.terrain_case import atomic_json
+from DARCY_WARP_PACKAGE.validation.json_output import atomic_json
 from DARCY_WARP_PACKAGE.validation.head_checks import finite_diagnostics
 from DARCY_WARP_PACKAGE.warped_darcy_3d import WarpDarcySolver3D
 from DARCY_WARP_PACKAGE.solvers.npf662_kcycle import NPF662KCycleControls

@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Parity coverage for the opt-in FP64 3D face-array K-cycle."""
 
 from __future__ import annotations
@@ -163,7 +163,7 @@ def test_fast_3d_session_reuses_workspace_and_invalidates_faces():
         faces = tuple(np.asarray(face).copy() for face in (
             solver._tx_p, solver._tx_m, solver._ty_p, solver._ty_m, solver._tz_p, solver._tz_m
         ))
-        solver.update_face_conductance(*faces)
+        solver.update_K_fields(kx_field=k, ky_field=k, kz_field=k)
         _, after_face_update = solver.solve(**controls)
     assert not first["workspace_reused"]
     assert second["workspace_reused"]

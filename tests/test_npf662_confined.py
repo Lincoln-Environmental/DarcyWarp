@@ -1,5 +1,4 @@
 """Confined contract: conductance, supplied-head, analytic, solve and reuse gates."""
-from pathlib import Path
 import subprocess
 import sys
 import numpy as np
@@ -169,9 +168,8 @@ def test_workspace_value_reuse_and_topology_rebuild(device):
 
 
 @pytest.mark.parametrize('heterogeneous,masked',[(False,False),(True,True)])
-def test_live_mf6_complete_and_supplied_head(tmp_path,heterogeneous,masked):
-    executable=Path('/bin/modflow/mf6')
-    if not executable.is_file():pytest.skip('Pinned local MF6 unavailable')
+def test_live_mf6_complete_and_supplied_head(tmp_path,heterogeneous,masked, pinned_mf6):
+    executable=pinned_mf6
     case=confined_case(heterogeneous=heterogeneous,masked=masked)
     case.source[:,:,0]=.123  # Explicit fixed-reservoir forcing remains in the manifest.
     reference=NPF662Reference(case=case)

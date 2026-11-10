@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Boundary flux diagnostics for structured 3D finite-volume fields."""
 
 from __future__ import annotations
@@ -8,6 +8,8 @@ from dataclasses import dataclass
 import numpy as np
 
 from DARCY_WARP_PACKAGE.physics.faces_3d import validate_reciprocal_faces
+from DARCY_WARP_PACKAGE.validation.npf662_metrics import stable_rms, stable_sum
+from DARCY_WARP_PACKAGE.physics.inputs_3d import binary_mask
 
 
 def prepare_3d_budget_source(*, source, head_prev, extra_storage_diag):
@@ -25,14 +27,32 @@ def prepare_3d_budget_source(*, source, head_prev, extra_storage_diag):
 
 
 def is_3d_budget_conserved(*, budget, absolute_tolerance, relative_tolerance=1e-3):
-    """Dimensional RMS or throughput-normalized L1 cell conservation gate.
+    """Finite dimensional RMS OR normalized L1, never overflow-based success.
 
-    L1 errors prevent opposing cell errors from cancelling in a domain sum.
-    The absolute criterion uses the requested linear volumetric tolerance,
-    so a near-zero-throughput case is not judged solely by an undefined ratio.
+    Both diagnostics and available budget aggregates must remain finite even
+    when only one tolerance branch is needed. In particular, an overflowing
+    throughput cannot turn a finite residual into an accepted zero ratio.
     """
-    if not np.isfinite(relative_tolerance) or relative_tolerance < 0.0:
-        raise ValueError("final_budget_relative_tol must be nonnegative finite.")
+    for name, value in (("absolute_tolerance", absolute_tolerance),
+                        ("final_budget_relative_tol", relative_tolerance)):
+        if np.ndim(value) != 0 or not np.isfinite(value) or value < 0.0:
+            raise ValueError(f"{name} must be a finite nonnegative scalar.")
+    if not budget.get("physical_metrics_valid", True) or not budget.get("finite_physical_budget", True):
+        return False
+    required = ("cell_residual_rms", "relative_cell_imbalance")
+    if any(name not in budget for name in required):
+        return False
+    nonnegative = required + ("cell_residual_max", "relative_imbalance", "throughput", "head_residual_rms")
+    scalars = nonnegative + ("source_total", "boundary_inflow", "boundary_outflow",
+                             "boundary_net", "storage_uptake", "domain_imbalance", "imbalance")
+    for name in scalars:
+        if name not in budget:
+            continue
+        value = budget[name]
+        if value is None or np.ndim(value) != 0 or not np.isfinite(value):
+            return False
+        if name in nonnegative and value < 0.0:
+            return False
     return bool(budget["cell_residual_rms"] <= absolute_tolerance
                 or budget["relative_cell_imbalance"] <= relative_tolerance)
 
@@ -101,8 +121,8 @@ def compute_3d_flow_budget(
     """
     h = np.asarray(head, dtype=np.float64)
     src = np.asarray(source, dtype=np.float64)
-    act = np.asarray(active, dtype=np.int32) != 0
-    bcm = np.asarray(bc_mask, dtype=np.int32) != 0
+    act = binary_mask(value=active, name='active') != 0
+    bcm = binary_mask(value=bc_mask, name='bc_mask') != 0
     shape = h.shape
     if src.shape != shape or act.shape != shape or bcm.shape != shape:
         raise ValueError("head, source, active, bc_mask shapes must match.")
@@ -116,10 +136,12 @@ def compute_3d_flow_budget(
     s = (
         np.zeros(shape, dtype=np.float64)
         if storage_diag is None
-        else np.maximum(np.asarray(storage_diag, dtype=np.float64), 0.0)
+        else np.asarray(storage_diag, dtype=np.float64)
     )
     if s.shape != shape:
         raise ValueError("storage_diag shape must match head.")
+    if not np.all(np.isfinite(s)) or np.any(s < 0.):
+        raise ValueError("storage_diag must be finite and nonnegative")
     if head_prev is None:
         hp = np.zeros(shape, dtype=np.float64)
     else:
@@ -134,6 +156,7 @@ def compute_3d_flow_budget(
     diag_c = np.zeros(shape, dtype=np.float64)
     bc_in = 0.0
     bc_out = 0.0
+    fluxes_finite = True
     for face, axis in ((tx_p, 2), (ty_p, 1), (tz_p, 0)):
         here, there = [slice(None)] * 3, [slice(None)] * 3
         here[axis], there[axis] = slice(None, -1), slice(1, None)
@@ -142,6 +165,7 @@ def compute_3d_flow_budget(
         q = np.zeros_like(c, dtype=np.float64)
         np.subtract(h[here], h[there], out=q, where=c > 0.0)
         q *= c
+        fluxes_finite = fluxes_finite and bool(np.all(np.isfinite(q)))
         div[here] += q
         div[there] -= q
         diag_c[here] += c
@@ -149,25 +173,26 @@ def compute_3d_flow_budget(
         # Gross exchanges are accumulated before opposing boundaries cancel.
         into_here = -q[free[here] & bcm[there]]
         into_there = q[bcm[here] & free[there]]
-        bc_in += float(np.sum(np.maximum(into_here, 0.0)) + np.sum(np.maximum(into_there, 0.0)))
-        bc_out += float(np.sum(np.minimum(into_here, 0.0)) + np.sum(np.minimum(into_there, 0.0)))
+        exchange = np.concatenate((into_here, into_there))
+        bc_in = stable_sum(values=[bc_in, stable_sum(values=np.maximum(exchange, 0.))])
+        bc_out = stable_sum(values=[bc_out, stable_sum(values=np.minimum(exchange, 0.))])
 
     residual = src - div
     residual[~free] = 0.0
     source_free = src[free]
     storage_free = storage_change[free]
-    source_total = float(np.sum(source_free))
-    storage_uptake = float(np.sum(storage_free))
+    source_total = stable_sum(values=source_free)
+    storage_uptake = stable_sum(values=storage_free)
     bc_net = bc_in + bc_out
-    domain_imbalance = float(np.sum(residual[free]))
+    domain_imbalance = stable_sum(values=residual[free])
     throughput = max(
-        float(np.sum(np.abs(source_free))) + abs(bc_in) + abs(bc_out)
-        + float(np.sum(np.abs(storage_free))),
+        stable_sum(values=[stable_sum(values=np.abs(source_free)), abs(bc_in), abs(bc_out),
+                           stable_sum(values=np.abs(storage_free))]),
         np.finfo(np.float64).tiny,
     )
     if n_free > 0:
         cell_residual_max = float(np.max(np.abs(residual[free])))
-        cell_residual_rms = float(np.sqrt(np.mean(residual[free] ** 2)))
+        cell_residual_rms = stable_rms(values=residual[free])
     else:
         cell_residual_max = 0.0
         cell_residual_rms = 0.0
@@ -181,10 +206,17 @@ def compute_3d_flow_budget(
         "storage_uptake": storage_uptake,
         "domain_imbalance": domain_imbalance,
         "relative_imbalance": abs(domain_imbalance) / throughput,
-        "relative_cell_imbalance": float(np.sum(np.abs(residual[free]))) / throughput,
+        "relative_cell_imbalance": stable_sum(values=np.abs(residual[free])) / throughput,
         "throughput": throughput,
         "n_free_cells": float(n_free),
     }
+    result["physical_metrics_valid"] = bool(fluxes_finite and all(np.all(np.isfinite(value)) for value in
+        (h[act], src[act], hp[act], storage_change[act], div[act], residual[free], (diag_c+s)[act])))
+    result["physical_metrics_valid"] = bool(result["physical_metrics_valid"] and
+        all(np.isfinite(value) for value in result.values()))
+    if not result["physical_metrics_valid"]:
+        result["relative_cell_imbalance"] = float("inf")
+        result["relative_imbalance"] = float("inf")
     if return_field:
         result["cell_residual_field"] = residual
         result["operator_diagonal"] = diag_c + s

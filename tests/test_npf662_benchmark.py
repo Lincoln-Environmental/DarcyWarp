@@ -1,6 +1,5 @@
 """Protect the benchmark's physical oracle and optional timing hook."""
 from dataclasses import replace
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -94,10 +93,10 @@ def test_matrix_free_physics_preserves_existing_acceptance(state):
     assert checks['final_acceptance_thresholds'] == oracle['final_acceptance_thresholds']
 
 
-def test_native_rch_package_preserves_explicit_top_allocation(tmp_path):
+def test_native_rch_package_preserves_explicit_top_allocation(tmp_path, pinned_mf6):
     case = simple_case()
     case.source[0, :, 1:] = .01
-    head, info, fields = run_reference_mf6(case=case, directory=tmp_path/'rch', executable=Path('/bin/modflow/mf6'),
+    head, info, fields = run_reference_mf6(case=case, directory=tmp_path/'rch', executable=pinned_mf6,
         source_package='rch', head_tolerance_m=1e-10,
         native_solver_options=dict(linear_acceleration='BICGSTAB', preconditioner_levels=5,
             preconditioner_drop_tolerance=1e-4, rcloserecord=[1e-12, 'STRICT']))
@@ -109,7 +108,7 @@ def test_native_rch_package_preserves_explicit_top_allocation(tmp_path):
     assert info['source_package'] == 'rch'
 
 
-def test_native_rch_roundoff_on_large_cells_matches_wel_and_cpu(tmp_path):
+def test_native_rch_roundoff_on_large_cells_matches_wel_and_cpu(tmp_path, pinned_mf6):
     from DARCY_WARP_PACKAGE.validation.npf662_benchmark_cases import generate_case
     from DARCY_WARP_PACKAGE.warped_darcy_3d import WarpDarcySolver3D
     from DARCY_WARP_PACKAGE.solvers.npf662_kcycle import NPF662KCycleControls
@@ -123,7 +122,7 @@ def test_native_rch_roundoff_on_large_cells_matches_wel_and_cpu(tmp_path):
     native = {}
     for package in ['rch', 'wel']:
         head, info, fields = run_reference_mf6(case=case, directory=tmp_path/package,
-            executable=Path('/bin/modflow/mf6'), source_package=package,
+            executable=pinned_mf6, source_package=package,
             head_tolerance_m=1e-6, native_solver_options=options)
         assert info['native_success'] and info['independent_conservation'], info
         assert info['independent']['independent_accepted']

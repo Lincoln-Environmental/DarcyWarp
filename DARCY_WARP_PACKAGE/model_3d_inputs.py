@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Validated, solver-neutral inputs for structured 3D Darcy models.
 
 The 3D solver already accepts ordinary NumPy fields.  ``Model3DInputs`` is a
@@ -15,6 +15,8 @@ from typing import Any, Mapping
 
 import numpy as np
 
+from DARCY_WARP_PACKAGE.physics.inputs_3d import binary_mask, floating_field
+
 
 FaceConductance = tuple[
     np.ndarray,
@@ -27,25 +29,10 @@ FaceConductance = tuple[
 
 
 def _array(name: str, value: np.ndarray, shape: tuple[int, int, int], dtype: np.dtype) -> np.ndarray:
-    array = np.asarray(value, dtype=dtype)
+    array = floating_field(value=value, name=name, dtype=dtype)
     if array.shape != shape:
         raise ValueError(f"{name} shape {array.shape} does not match {shape}.")
-    if not np.all(np.isfinite(array)):
-        raise ValueError(f"{name} must contain only finite values.")
-    return np.array(array, copy=True)
-
-
-def _binary_mask(name: str, value: np.ndarray, shape: tuple[int, int, int]) -> np.ndarray:
-    raw = np.asarray(value)
-    if raw.shape != shape:
-        raise ValueError(f"{name} shape {raw.shape} does not match {shape}.")
-    if not (np.issubdtype(raw.dtype, np.number) or np.issubdtype(raw.dtype, np.bool_)):
-        raise ValueError(f"{name} must contain only finite numeric values.")
-    if not np.all(np.isfinite(raw.astype(np.float64, copy=False))):
-        raise ValueError(f"{name} must contain only finite numeric values.")
-    if not np.all(np.isin(raw, (0, 1))):
-        raise ValueError(f"{name} must contain only 0/1 values.")
-    return np.asarray(raw, dtype=np.int32).copy()
+    return array
 
 
 @dataclass(frozen=True)
@@ -84,8 +71,8 @@ class Model3DInputs:
                 raise ValueError(f"{name} must be non-negative.")
             object.__setattr__(self, name, conductivity)
 
-        active = _binary_mask("active", self.active, shape)
-        bc_mask = _binary_mask("bc_mask", self.bc_mask, shape)
+        active = binary_mask(value=self.active, name="active", shape=shape)
+        bc_mask = binary_mask(value=self.bc_mask, name="bc_mask", shape=shape)
         if np.any((bc_mask != 0) & (active == 0)):
             raise ValueError("bc_mask cannot select inactive cells.")
         object.__setattr__(self, "active", active)

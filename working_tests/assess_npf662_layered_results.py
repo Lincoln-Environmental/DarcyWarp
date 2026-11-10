@@ -13,7 +13,7 @@ from DARCY_WARP_PACKAGE.validation.head_checks import finite_diagnostics
 from DARCY_WARP_PACKAGE.validation.npf662_reference import (
     NPF662Reference, load_npf662_case, save_npf662_case)
 from DARCY_WARP_PACKAGE.validation.npf662_metrics import stable_rms
-from DARCY_WARP_PACKAGE.validation.terrain_case import atomic_json
+from DARCY_WARP_PACKAGE.validation.json_output import atomic_json
 from validate_npf662_acceptance import reassess_v1, record_runtime
 from validate_npf662_confined import make_gpu_model
 

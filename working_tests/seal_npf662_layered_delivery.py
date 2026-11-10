@@ -2,7 +2,7 @@
 from pathlib import Path
 import json
 
-from DARCY_WARP_PACKAGE.validation.terrain_case import atomic_json
+from DARCY_WARP_PACKAGE.validation.json_output import atomic_json
 from DARCY_WARP_PACKAGE.validation.evidence_storage import verify_archive
 from archive_sevenpoint_logs import archive_native_records
 from seal_sevenpoint_evidence import seal_evidence

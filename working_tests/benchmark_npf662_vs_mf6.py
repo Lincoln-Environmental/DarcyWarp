@@ -106,7 +106,7 @@ def save_progress(*, root, result):
     :param root: New evidence directory for this invocation.
     :param result: Frozen settings and completed measurements.
     """
-    from DARCY_WARP_PACKAGE.validation.terrain_case import atomic_json
+    from DARCY_WARP_PACKAGE.validation.json_output import atomic_json
     from DARCY_WARP_PACKAGE.validation.head_checks import finite_diagnostics
     result['summary'] = [comparison_summary(rows=result['runs'], case_id=case['case_id'],
         preconditioner=label, repeats=result['repeats'])
@@ -172,7 +172,7 @@ def main():
     from DARCY_WARP_PACKAGE.validation.npf662_reference import save_npf662_case
     from DARCY_WARP_PACKAGE.validation.npf662_matrix_free import NPF662MatrixFreeReference
     from DARCY_WARP_PACKAGE.validation.npf662_mf6 import run_reference_mf6
-    from DARCY_WARP_PACKAGE.validation.terrain_case import atomic_json
+    from DARCY_WARP_PACKAGE.validation.json_output import atomic_json
     from DARCY_WARP_PACKAGE.validation.head_checks import finite_diagnostics
     from DARCY_WARP_PACKAGE.solvers.npf662_kcycle import NPF662KCycleControls
     from DARCY_WARP_PACKAGE.warped_darcy_3d import WarpDarcySolver3D

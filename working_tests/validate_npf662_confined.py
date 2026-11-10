@@ -5,7 +5,7 @@ import subprocess
 import numpy as np
 from DARCY_WARP_PACKAGE.validation.npf662_reference import NPF662Case,NPF662Reference
 from DARCY_WARP_PACKAGE.validation.npf662_mf6 import run_reference_mf6
-from DARCY_WARP_PACKAGE.validation.terrain_case import atomic_json
+from DARCY_WARP_PACKAGE.validation.json_output import atomic_json
 
 
 def make_case(*,shape,spacing,variant,end_heads,contrast,source,seed,layer_kz):

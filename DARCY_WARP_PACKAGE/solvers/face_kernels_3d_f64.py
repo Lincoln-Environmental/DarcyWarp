@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Production FP64 face-array kernels for the fast 3D execution path.
 
 These kernels keep the six directional conductance arrays explicit and use
