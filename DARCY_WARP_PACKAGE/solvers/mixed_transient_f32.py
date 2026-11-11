@@ -41,7 +41,7 @@ import warp as wp
 
 from .face_kernels_f64 import (
     _BLOCK,
-    combine_partials_kernel,
+    launch_combine_partials,
 )
 from .mixed_fast_kernels import (
     _mf3_applyA_dot_partials_f32,
@@ -502,14 +502,12 @@ class MixedTransientInnerSession:
             wp.launch(kernel=_mf3_dot_partials_f32, dim=n_c,
                       inputs=[fc.b, fc.x, coarse.active_wp, coarse.bc_mask_wp,
                               fc.partials, nxC, nyC, _BLOCK], device=device)
-            wp.launch(kernel=combine_partials_kernel, dim=1,
-                      inputs=[fc.partials, fc.rho_buf, fc.n_partials], device=device)
+            launch_combine_partials(partials=fc.partials, out=fc.rho_buf, n_partials=fc.n_partials, device=device)
             wp.launch(kernel=_mf3_applyA_dot_partials_f32, dim=n_c,
                       inputs=[fc.x, fc.Te, fc.Tw, fc.Tn, fc.Ts, fc.diag,
                               coarse.active_wp, coarse.bc_mask_wp, fc.partials,
                               nxC, nyC, _BLOCK], device=device)
-            wp.launch(kernel=combine_partials_kernel, dim=1,
-                      inputs=[fc.partials, fc.pAp_buf, fc.n_partials], device=device)
+            launch_combine_partials(partials=fc.partials, out=fc.pAp_buf, n_partials=fc.n_partials, device=device)
             wp.launch(kernel=self._compute_safe_alpha_kernel, dim=1,
                       inputs=[fc.rho_buf, fc.pAp_buf, fc.alpha_buf], device=device)
             wp.launch(kernel=axpy_active_scalar_2dmask_f32_kernel, dim=dimC,

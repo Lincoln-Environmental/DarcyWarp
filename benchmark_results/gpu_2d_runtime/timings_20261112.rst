@@ -1,0 +1,34 @@
+.. list-table:: Entire GPU call seconds; medians of three repetitions
+   :header-rows: 1
+
+   * - Case
+     - Original fast solver
+     - Parallel reduction only
+     - Explicit transient profile
+     - Saved CPU MF6
+   * - Heterogeneous 1000 x 1000, 30 weekly steps
+     - 25.644
+     - 20.346
+     - 6.698
+     - 1276.151
+   * - Uniform 500 x 500, 52 weekly steps
+     - 6.163
+     - 5.471
+     - 2.503
+     - 153.291
+   * - Steady unconfined, 1000 x 1000
+     - 2.372
+     - 2.327
+     - n/a
+     - 56.438
+   * - Steady confined, 1000 x 1000
+     - 0.338
+     - 0.328
+     - n/a
+     - 17.370
+
+The profile retains all final convergence limits. Both production histories
+pass every independent head and budget check in the warmup and all repeats.
+For heterogeneous 1000 x 1000 the maximum MF6 head difference is 3.10e-5 m;
+for uniform 500 x 500 it is 6.40e-6 m. The separately computed maximum
+absolute budget discrepancies are 2.78e-5% and 1.07e-5%, respectively.
