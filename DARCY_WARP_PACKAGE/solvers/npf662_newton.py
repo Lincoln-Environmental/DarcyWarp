@@ -18,6 +18,12 @@ class NPF662NewtonControls:
     line_search_steps: int = 20
     max_head_change_m: float = 50.
     recovery_growth: float = 1.10
+    adaptive_forcing: bool = False
+    forcing_min: float = 1e-4
+    forcing_max: float = .3
+    forcing_power: float = 1.5
+    timestep_predictor: bool = False
+    timestep_predictor_order: int = 1
 
     def validate(self):
         if not isinstance(self.line_search_steps, (int, np.integer)):
@@ -28,6 +34,12 @@ class NPF662NewtonControls:
         if self.line_search_steps<1 or not np.isfinite(self.max_head_change_m) or self.max_head_change_m<=0.:
             raise ValueError('Positive finite step/search controls required')
         if not 1.<=self.recovery_growth<=1.10:raise ValueError('Recovery growth must be between1 and1.10')
+        if not 0. < self.forcing_min <= self.forcing_max < 1. or not np.isfinite(self.forcing_power) or self.forcing_power <= 0.:
+            raise ValueError('Adaptive forcing bounds/power must be positive, with bounds below one')
+        if any(not isinstance(value, (bool, np.bool_)) for value in (self.adaptive_forcing, self.timestep_predictor)):
+            raise ValueError('Adaptive forcing and timestep predictor switches must be Boolean')
+        if isinstance(self.timestep_predictor_order, (bool, np.bool_)) or self.timestep_predictor_order not in (1, 2):
+            raise ValueError('Timestep predictor order must be 1 or 2')
 
 
 class NPF662Workspace:
@@ -36,7 +48,8 @@ class NPF662Workspace:
         self.restart=restart;self.active_snapshot=case.active.copy();self.fixed_snapshot=case.fixed.copy()
         self.free_count=int(np.sum((case.active!=0)&(case.fixed==0)))
         for name in ('head','prescribed','trial','source','bottom','thickness','scale','rhs','trial_rhs','residual','trial_residual','delta',
-            'storage_previous','storage_ss','storage_sy','storage_rate','storage_tangent','trial_storage_rate','trial_storage_tangent'):
+            'storage_previous','storage_ss','storage_sy','storage_rate','storage_tangent','trial_storage_rate','trial_storage_tangent',
+            'principal','previous_storage_tangent','predictor_increment','predictor_older_increment'):
             setattr(self,name,wp.zeros(shape=self.n,dtype=wp.float64,device=self.device))
         for name in ('c0','q','c','trial_q','trial_c','dl','dr'):
             setattr(self,name,wp.zeros(shape=(self.n,3),dtype=wp.float64,device=self.device))
@@ -62,6 +75,7 @@ class NPF662Workspace:
         self.preconditioner_counter=wp.zeros(shape=1,dtype=wp.int64,device=self.device)
         self.residual_evaluations=0;self.candidate_evaluations=0
         self.multigrid=None;self.flexible=None;self.krylov=None;self.diagonal_flexible=None
+        self.device_native = bool(getattr(reference, 'device_storage_state', False))
         self.load(model=model,case=case,reference=reference)
         self.evaluate(trial=False,linearize=True)
 
@@ -91,37 +105,57 @@ class NPF662Workspace:
             self.active_snapshot,case.active) and np.array_equal(self.fixed_snapshot,case.fixed)
 
     def load(self,*,model,case,reference=None):
+        native = getattr(reference, 'device_storage_state', False)
+        static_reused = native and getattr(self, '_native_state', None) is reference
         self.source.assign(case.source.ravel())
         self.prescribed.assign(case.values.ravel())
-        self.free.assign(((case.active!=0)&(case.fixed==0)).astype(np.int32).ravel())
-        self.fixed.assign(case.fixed.astype(np.int32).ravel());self.types.assign(case.cell_types.astype(np.int32).ravel())
-        self.bottom.assign(np.asarray(case.bottoms).ravel())
-        self.thickness.assign(np.asarray(case.thicknesses).ravel())
+        if not static_reused:
+            self.free.assign(((case.active!=0)&(case.fixed==0)).astype(np.int32).ravel())
+            self.fixed.assign(case.fixed.astype(np.int32).ravel())
+            self.bottom.assign(np.asarray(case.bottoms).ravel())
+            self.thickness.assign(np.asarray(case.thicknesses).ravel())
+        if not static_reused or not np.array_equal(self._types_snapshot, case.cell_type):
+            self.types.assign(case.cell_types.astype(np.int32).ravel())
+            self._types_snapshot = np.asarray(case.cell_type).copy()
         self.head.assign(np.where(case.active,np.where(case.fixed,case.values,case.initial),0.).ravel())
         # Production C0 comes from the Cartesian session, not the CPU oracle.
         faces=model._session.faces
-        self.c0.assign(np.stack([faces[0].ravel(),faces[2].ravel(),faces[4].ravel()],axis=1))
-        principal=sum(faces).ravel()
+        self.faces_changed = not static_reused or any(not np.array_equal(old, new)
+            for old, new in zip(self._faces_snapshot, faces))
+        if self.faces_changed:
+            self.c0.assign(np.stack([faces[0].ravel(),faces[2].ravel(),faces[4].ravel()],axis=1))
+            self.principal.assign(sum(faces).ravel())
+            self._faces_snapshot = tuple(face.copy() for face in faces) if native else None
+        self._native_state = reference if native else None
         self.transient=reference is not None and hasattr(reference,'previous')
         self.storage_factor=0.
         if self.transient:
             self.storage_previous.assign(reference.previous.ravel())
-            self.storage_ss.assign(reference.ss.ravel());self.storage_sy.assign(reference.sy.ravel())
+            for name in ('ss', 'sy'):
+                scalar = getattr(reference, name+'_scalar', None)
+                buffer = getattr(self, 'storage_'+name)
+                if scalar is None:
+                    buffer.assign(getattr(reference, name).ravel())
+                else:
+                    buffer.fill_(scalar)
             self.storage_factor=case.dx*case.dy/reference.dt
-            if getattr(reference,'device_storage_state',False):
+            if native:
                 wp.launch(kernel=kernels.storage_terms,dim=self.n,
                     inputs=[self.storage_previous,self.storage_previous,self.bottom,self.thickness,
                         self.types,self.storage_ss,self.storage_sy,self.free,self.storage_rate,
-                        self.storage_tangent,self.storage_factor],device=self.device)
-                tangent=self.storage_tangent.numpy().reshape(case.active.shape).copy()
-                if np.any(~np.isfinite(tangent)) or np.any(tangent<0.):
-                    raise ValueError('Invalid device previous-state storage tangent')
-                reference.preconditioner_storage=tangent
-            principal=principal+reference.preconditioner_storage.ravel()
+                        self.previous_storage_tangent,self.storage_factor],device=self.device)
+                reference.preconditioner_storage_device = self.previous_storage_tangent
+            else:
+                self.previous_storage_tangent.assign(reference.preconditioner_storage.ravel())
         else:
             for name in ('storage_rate','storage_tangent','trial_storage_rate','trial_storage_tangent'):
                 getattr(self,name).zero_()
-        self.scale.assign(np.where(principal>0.,principal,1.))
+            self.previous_storage_tangent.zero_()
+        self.maximum.zero_()
+        wp.launch(kernel=kernels.previous_storage_scale,dim=self.n,
+            inputs=[self.principal,self.previous_storage_tangent,self.scale,self.maximum],device=self.device)
+        if native and self.maximum.numpy()[0] != 0.:
+            raise ValueError('Invalid device previous-state storage tangent')
         self.jv_counter.zero_();self.preconditioner_counter.zero_();self.residual_evaluations=0;self.candidate_evaluations=0
 
     def evaluate(self,*,trial,linearize=False):
@@ -181,6 +215,9 @@ class NPF662Workspace:
         if self.diagonal_flexible is not None:self.diagonal_flexible.close()
         self.flexible=None;self.multigrid=None;self.diagonal_flexible=None
         self.closed=True;self.krylov=None
+        self._native_state = self._faces_snapshot = self._types_snapshot = None
+        self.principal = self.previous_storage_tangent = None
+        self.predictor_increment = self.predictor_older_increment = self.predictor_checkpoint = None
         for name in ('head','prescribed','trial','source','bottom','thickness','scale','rhs','trial_rhs','residual','trial_residual','delta',
             'c0','q','c','trial_q','trial_c','dl','dr','free','fixed','types','left','right','metrics','maximum','mode','jv_counter','preconditioner_counter',
             'storage_previous','storage_ss','storage_sy','storage_rate','storage_tangent','trial_storage_rate','trial_storage_tangent','certificate','metric_partials'):
@@ -254,10 +291,23 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
         mg_controls=NPF662KCycleControls() if npf_kcycle_controls is None else npf_kcycle_controls
         if not isinstance(mg_controls,NPF662KCycleControls):raise ValueError('npf_kcycle_controls must be NPF662KCycleControls')
         mg_controls.validate()
-        storage_diagonal=getattr(reference,'preconditioner_storage',None)
-        mg_reused=workspace.multigrid is not None and workspace.multigrid.compatible(
+        direct_refresh = (device_native and workspace.multigrid is not None
+            and not workspace.multigrid.closed and workspace.multigrid.controls == mg_controls
+            and not workspace.faces_changed)
+        storage_diagonal = None if direct_refresh else getattr(reference,'preconditioner_storage',None)
+        mg_reused=direct_refresh or (workspace.multigrid is not None and workspace.multigrid.compatible(
             faces=model._session.faces,active=case.active,fixed=case.fixed,device=model.device,controls=mg_controls,
-            storage_diag=storage_diagonal)
+            storage_diag=storage_diagonal))
+        if direct_refresh:
+            refresh_start=perf_counter()
+            wp.copy(dest=workspace.multigrid.levels[0]['storage'].flatten(), src=workspace.previous_storage_tangent)
+            workspace.multigrid.refresh_storage_device()
+            workspace.multigrid.value_refresh_count += 1
+            # Host storage snapshot is deliberately unavailable after a device
+            # refresh. A later host path must compare or refresh real values.
+            workspace.multigrid.snapshots = (*workspace.multigrid.snapshots[:-1], None)
+            mg_seconds=perf_counter()-refresh_start
+            mg_values_refreshed=True
         if not mg_reused and device_native and workspace.multigrid is not None and workspace.multigrid.can_refresh(
                 faces=model._session.faces,active=case.active,fixed=case.fixed,device=model.device,controls=mg_controls):
             refresh_start=perf_counter()
@@ -284,8 +334,31 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
     start=perf_counter();total=0;fallbacks=0;saturated=0;backtracks=0;history=[];reason='outer_budget'
     setup_seconds=start-setup_start
     current=workspace.evaluate(trial=False,linearize=True)
+    predictor_used=False
+    predictor_continuation=False
+    checkpoint=getattr(workspace,'predictor_checkpoint',None)
+    if controls.timestep_predictor and workspace.transient and checkpoint is not None:
+        last_head,last_dt,quadratic_available=checkpoint
+        if np.array_equal(reference.previous,last_head) and np.array_equal(case.initial,reference.previous):
+            predictor_continuation=True
+            quadratic=controls.timestep_predictor_order == 2 and quadratic_available and reference.dt == last_dt
+            wp.launch(kernel=kernels.predict_timestep_head,dim=workspace.n,
+                inputs=[workspace.head,workspace.predictor_increment,workspace.predictor_older_increment,
+                    workspace.free,workspace.trial,reference.dt/last_dt,int(quadratic)],
+                device=workspace.device)
+            predicted=workspace.evaluate(trial=True)
+            if predicted['finite'] and predicted['scaled_l2'] < current['scaled_l2'] and residual_merit(candidate=predicted,current=current)<1.:
+                wp.copy(dest=workspace.head,src=workspace.trial)
+                current=workspace.evaluate(trial=False,linearize=True)
+                predictor_used=True
+    forcing_previous=current['scaled_l2']
     for outer in range(max_outer):
         if device_accepted(metrics=current,physical_tolerance=physical_tolerance,relative_tolerance=relative_tolerance):reason='converged';break
+        forcing=controls.inner_forcing
+        if controls.adaptive_forcing and outer:
+            forcing=float(np.clip((current['scaled_l2']/max(forcing_previous,np.finfo(float).tiny))**controls.forcing_power,
+                controls.forcing_min,controls.forcing_max))
+        forcing_previous=current['scaled_l2']
         remaining=krylov_budget;accepted=False;attempts=[]
         for mode in (1,0,2):
             if remaining<=0:reason='krylov_budget';break
@@ -302,13 +375,15 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
             if mode==2:saturated+=1
             allowance=min(remaining,max(1,int(controls.newton_budget_fraction*krylov_budget))) if mode==1 else max(1,remaining//2) if mode==0 else remaining
             workspace.mode.fill_(mode);workspace.delta.zero_()
+            if npf_preconditioner == 'kcycle' and workspace.multigrid.controls.coefficient_state == 'current':
+                workspace.multigrid.refresh_current_operator(workspace=workspace, mode=mode)
             if method=='gmres':
                 workspace.krylov._maxiter=allowance
-                workspace.krylov._atol=max(controls.inner_forcing*current['scaled_l2'],np.finfo(float).tiny)
+                workspace.krylov._atol=max(forcing*current['scaled_l2'],np.finfo(float).tiny)
                 used,error,target=workspace.krylov()
             else:
                 used,error,target=workspace.flexible.solve(preconditioner=flex_preconditioner,max_iterations=allowance,
-                    absolute_tolerance=max(controls.inner_forcing*current['scaled_l2'],np.finfo(float).tiny))
+                    absolute_tolerance=max(forcing*current['scaled_l2'],np.finfo(float).tiny))
                 linear_history.append(dict(outer=outer+1,direction=direction,**workspace.flexible.last_info))
             total+=int(used);remaining-=int(used)
             search=search_direction(workspace=workspace,current=current,controls=controls,
@@ -321,7 +396,7 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
                 wp.copy(src=workspace.trial,dest=workspace.head)
                 current=workspace.evaluate(trial=False,linearize=True)
                 accepted=True;break
-        history.append(dict(outer=outer+1,accepted=accepted,krylov=krylov_budget-remaining,attempts=attempts,metrics=current))
+        history.append(dict(outer=outer+1,accepted=accepted,krylov=krylov_budget-remaining,attempts=attempts,metrics=current,inner_forcing=forcing))
         if not accepted:
             if reason!='krylov_budget':reason='line_search_failed'
             break
@@ -342,6 +417,13 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
         checks=dict(**current,**certificate,ungrounded_current_components=0,
             accepted=accepted,acceptance_source='device physical reductions and positive storage grounding certificate')
     converged=bool(accepted and device_passed)
+    workspace.predictor_checkpoint = None
+    if controls.timestep_predictor and workspace.transient and converged:
+        wp.copy(dest=workspace.predictor_older_increment,src=workspace.predictor_increment)
+        wp.launch(kernel=kernels.store_head_increment,dim=workspace.n,
+            inputs=[workspace.head,workspace.storage_previous,workspace.free,workspace.predictor_increment],device=workspace.device)
+        workspace.predictor_checkpoint = (head.copy(), reference.dt,
+            bool(predictor_continuation and reference.dt == checkpoint[1]))
     if not device_passed and accepted:reason='device_acceptance_failed'
     if not converged and reason=='converged':reason='independent_acceptance_failed' if independent_performed else 'device_certificate_failed'
     if checks['ungrounded_current_components']>0:reason='ungrounded_saturation_components'
@@ -351,7 +433,7 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
         nonlinear_backtracks=backtracks,fallback_count=fallbacks,outer_history=history,
         independent_acceptance=checks if independent_performed else None,physical_acceptance=checks,
         independent_audit_performed=independent_performed,device_native=device_native,
-        full_saturated_safeguard_solves=saturated,
+        full_saturated_safeguard_solves=saturated,timestep_predictor_used=predictor_used,
         device_final_metrics=current,workspace_reused=reused,seconds=seconds,setup_seconds=setup_seconds,controls=asdict(controls),
         linear_budget_units='Krylov iterations shared across Newton and Picard per outer',
         max_krylov_per_outer=krylov_budget,max_outer=max_outer,krylov_restart=restart,
@@ -379,6 +461,7 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
         result.update(preconditioner='full-saturated A0 K-cycle; physical RHS D0*v; homogeneous corrections',
             linear_history=linear_history,krylov_restarts=sum(row['restarts'] for row in linear_history),
             multigrid=dict(controls=asdict(mg.controls),smoother='vertical_line',
+                coefficient_state=mg.controls.coefficient_state,precision=mg.controls.preconditioner_precision,
                 dimensions=[list(level['dim']) for level in mg.levels],actual_levels=len(mg.levels),
                 coarsening_factors=[[level['coarsen_y'],level['coarsen_x']] for level in mg.levels[:-1]],
                 construction_seconds=mg_seconds,hierarchy_reused=mg_reused,

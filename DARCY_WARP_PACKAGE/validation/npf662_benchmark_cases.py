@@ -5,6 +5,10 @@ from DARCY_WARP_PACKAGE.validation.npf662_reference import NPF662LayeredCase
 
 def generate_case(*, settings, convertible):
     nz, ny, nx = settings['shape']
+    indices = np.asarray(convertible)
+    if indices.ndim != 1 or (indices.size and (indices.dtype.kind not in 'iu'
+            or np.any(indices < 0) or np.any(indices >= nz))):
+        raise ValueError('convertible must be a sequence of layer indices, not a Boolean flag')
     rng = np.random.default_rng(seed=settings['seed'])
     y, x = np.meshgrid(np.linspace(start=0., stop=1., num=ny),
                        np.linspace(start=0., stop=1., num=nx), indexing='ij')
@@ -30,7 +34,7 @@ def generate_case(*, settings, convertible):
     initial = settings['coast_head'] + settings['cold_rise']*np.broadcast_to(array=x, shape=active.shape)
     initial[fixed != 0] = values[fixed != 0]
     types = np.zeros_like(a=active)
-    types[convertible] = 1
+    types[indices.astype(np.intp)] = 1
     case = NPF662LayeredCase(kx=kx, ky=ky, kz=kz, active=active, fixed=fixed,
         values=values, source=source, initial=initial, dx=settings['dx'], dy=settings['dy'],
         z_interfaces=interfaces, cell_type=types)

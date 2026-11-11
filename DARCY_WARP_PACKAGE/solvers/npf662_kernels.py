@@ -234,3 +234,36 @@ def impossible_linear_rows(rhs:wp.array(dtype=wp.float64),free:wp.array(dtype=wp
             if free[j]!=0:off+=wp.abs(a)
     diag+=storage_tangent[i]
     if wp.abs(diag)+off==wp.float64(0.):wp.atomic_add(count,0,wp.float64(1.))
+@wp.kernel
+def previous_storage_scale(principal: wp.array(dtype=wp.float64),
+    storage: wp.array(dtype=wp.float64), scale: wp.array(dtype=wp.float64),
+    invalid: wp.array(dtype=wp.float64)):
+    i = wp.tid()
+    value = principal[i]+storage[i]
+    if not wp.isfinite(storage[i]) or storage[i] < wp.float64(0.):
+        wp.atomic_max(invalid, 0, wp.float64(1.))
+    scale[i] = wp.float64(1.)
+    if value > wp.float64(0.):
+        scale[i] = value
+
+
+@wp.kernel
+def store_head_increment(head: wp.array(dtype=wp.float64), previous: wp.array(dtype=wp.float64),
+    free: wp.array(dtype=wp.int32), increment: wp.array(dtype=wp.float64)):
+    i = wp.tid()
+    increment[i] = wp.float64(0.)
+    if free[i] != 0:
+        increment[i] = head[i]-previous[i]
+
+
+@wp.kernel
+def predict_timestep_head(head: wp.array(dtype=wp.float64), increment: wp.array(dtype=wp.float64),
+    older: wp.array(dtype=wp.float64), free: wp.array(dtype=wp.int32), out: wp.array(dtype=wp.float64),
+    ratio: wp.float64, quadratic: int):
+    i = wp.tid()
+    out[i] = head[i]
+    if free[i] != 0:
+        change = ratio*increment[i]
+        if quadratic != 0:
+            change = wp.float64(2.)*increment[i]-older[i]
+        out[i] = head[i]+change

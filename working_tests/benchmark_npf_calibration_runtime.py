@@ -1,6 +1,6 @@
 """Compare numerical solve time when physical K changes between calibrations."""
 from contextlib import ExitStack
-from dataclasses import replace
+from dataclasses import asdict, is_dataclass, replace
 from pathlib import Path
 from time import perf_counter
 import argparse
@@ -9,6 +9,7 @@ import numpy as np
 import warp as wp
 from DARCY_WARP_PACKAGE import WarpDarcySolver3D
 from DARCY_WARP_PACKAGE.solvers.npf662_kcycle import NPF662KCycleControls
+from DARCY_WARP_PACKAGE.solvers.npf662_newton import NPF662NewtonControls
 from DARCY_WARP_PACKAGE.validation.npf662_benchmark_cases import generate_case
 from DARCY_WARP_PACKAGE.validation.npf662_transient_reference import NPF662TransientReference
 from benchmark_npf662_vs_mf6 import suite_settings
@@ -41,11 +42,13 @@ def solve_step(*, model, case, previous, native, options):
 def run(*, size, device, k_factors, source_factors, options, output, head_tolerance):
     definition = suite_settings(sizes=[size], variants=['convertible'])[0]
     geology = dict(definition['geology'], layer_k=np.asarray(definition['geology']['layer_k']))
-    base = generate_case(settings=geology, convertible=True)
+    base = generate_case(settings=geology, convertible=definition['convertible'])
     output.mkdir(parents=True, exist_ok=False)
     results = dict(size=size, k_factors=k_factors, periods=len(source_factors),
+        case_sha256=base.digest(), convertible_layers=definition['convertible'],
+        controls={name:asdict(value) if is_dataclass(value) else value for name, value in options.items()},
         timing='Numerical seconds = synchronized Newton/Krylov interval, excludes setup and final audit. Public solve and K update reported separately.',
-        comparison='Previous FGMRES versus device Arnoldi; independent physical audit at each new K. No MF6 speedup claimed for changed-K cases.', cases=[])
+        comparison='Host versus device execution with identical solver controls and K. Independent physical audit at every endpoint. No MF6 speedup claimed for changed-K cases.', cases=[])
     with ExitStack() as stack:
         models = {native:stack.enter_context(make_model(case=base, device=device)) for native in (False, True)}
         for native, model in models.items():
@@ -70,6 +73,7 @@ def run(*, size, device, k_factors, source_factors, options, output, head_tolera
                     dt=options['dt'], ss=options['ss'], sy=options['sy']).evaluate(
                         head=heads[True], relative_tolerance=options['npf_final_relative_tolerance'])
                 assert checks['independent_accepted']
+                row['runs']['True']['steps'][-1]['independent_physical'] = checks
                 error = float(np.max(np.abs(heads[True]-heads[False])))
                 assert error <= head_tolerance, error
                 row['worst_head_difference_m'] = max(row['worst_head_difference_m'], error)
@@ -96,7 +100,14 @@ if __name__ == "__main__":
         npf_final_relative_tolerance=1e-7, max_outer=80, max_cycles=4000, krylov_restart=48)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, default=Path('benchmark_results/gpu_native/calibration_runtime_500'))
-    output = parser.parse_args().output
+    parser.add_argument('--controls', type=Path)
+    arguments = parser.parse_args()
+    output = arguments.output
+    if arguments.controls:
+        payload = json.loads(arguments.controls.read_text())
+        options.update(payload['solve'], npf_kcycle_controls=NPF662KCycleControls(**payload['multigrid']),
+            npf_newton_controls=NPF662NewtonControls(**payload['newton']))
+        options.pop('npf_device_native', None)
     head_tolerance = 1e-6
     run(size=size, device=device, k_factors=k_factors, source_factors=source_factors,
         options=options, output=output, head_tolerance=head_tolerance)

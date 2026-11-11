@@ -7,6 +7,7 @@ import warp as wp
 
 from DARCY_WARP_PACKAGE import WarpDarcySolver3D
 from DARCY_WARP_PACKAGE.solvers.npf662_kcycle import NPF662KCycleControls
+from DARCY_WARP_PACKAGE.solvers.npf662_newton import NPF662NewtonControls
 from DARCY_WARP_PACKAGE.validation.npf662_reference import NPF662LayeredCase
 from DARCY_WARP_PACKAGE.validation.npf662_transient_reference import NPF662TransientReference
 
@@ -74,10 +75,14 @@ def test_positive_storage_native_matches_independent_without_sparse_build(device
     np.testing.assert_array_equal(actual=previous, desired=case.initial)
 
 
-def test_conductivity_and_dt_refresh_preserve_levels_and_graph(device):
+@pytest.mark.parametrize('precision', ['float64', 'float32'])
+def test_conductivity_and_dt_refresh_preserve_levels_and_graph(device, precision):
     case = make_case(convertible=True)
+    controls = NPF662KCycleControls(levels=3, coarse_sweeps=2,
+        cached_line_factors=True, preconditioner_precision=precision)
     with make_model(case=case, device=device) as model:
-        first, info = model.solve(**solve_options(case=case, previous=case.initial, dt=7.))
+        options = dict(solve_options(case=case, previous=case.initial, dt=7.), npf_kcycle_controls=controls)
+        first, info = model.solve(**options)
         assert info['converged']
         workspace = model._session._npf662_workspace_holder['workspace']
         hierarchy = workspace.multigrid
@@ -86,7 +91,8 @@ def test_conductivity_and_dt_refresh_preserve_levels_and_graph(device):
         changed = replace(case, kx=case.kx*2., ky=case.ky*1.5, kz=case.kz*.8)
         model.update_K_fields(kx_field=changed.kx, ky_field=changed.ky, kz_field=changed.kz)
         model.update_initial_head(initial_head=first)
-        head, updated = model.solve(**solve_options(case=changed, previous=first, dt=3.5))
+        options = dict(solve_options(case=changed, previous=first, dt=3.5), npf_kcycle_controls=controls)
+        head, updated = model.solve(**options)
         assert updated['converged']
         assert workspace.multigrid is hierarchy
         assert hierarchy.graph is graph
@@ -112,6 +118,90 @@ def test_previous_storage_snapshot_is_distinct_from_iterative_tangent(device):
             desired=oracle.preconditioner_storage, rtol=1e-12, atol=1e-14)
         assert not np.shares_memory(state.preconditioner_storage, workspace.storage_tangent.numpy())
         np.testing.assert_array_equal(actual=state.previous, desired=previous)
+
+
+@pytest.mark.parametrize('precision', ['float64', 'float32'])
+def test_device_storage_refresh_keeps_host_lazy_and_honours_live_fields(device, precision):
+    case = make_case(convertible=True, shape=(2, 5, 7))
+    ss = np.full(case.active.shape, 1e-3)
+    sy = np.full(case.active.shape, .15)
+    previous = case.initial.copy()
+    with make_model(case=case, device=device) as model:
+        for step in range(4):
+            if step:
+                ss *= 1.3
+                sy *= .9
+                case.cell_type[0, 1, 2] = 1-step % 2
+                case.source *= 1.2
+                case.values += .1
+                model.update_boundary_values(bc_values=case.values)
+                model.update_rhs(rhs=case.source)
+            model.update_initial_head(initial_head=previous)
+            options = solve_options(case=case, previous=previous, dt=7./(step+1))
+            options.update(ss=ss, sy=sy, npf_device_native=step != 2,
+                npf_kcycle_controls=NPF662KCycleControls(levels=3, coarse_sweeps=2, cached_line_factors=True,
+                    preconditioner_precision=precision))
+            head, info = model.solve(**options)
+            assert info['converged']
+            if step == 1:
+                state = model._session._npf662_workspace_holder['native_state']
+                assert state._preconditioner_storage is None
+                assert info['multigrid']['hierarchy_reused']
+            oracle = NPF662TransientReference(case=case, previous=previous,
+                dt=options['dt'], ss=ss, sy=sy)
+            checks, unused = oracle.evaluate(head=head)
+            assert checks['independent_accepted']
+            previous = head
+
+
+@pytest.mark.parametrize('field', ['source', 'values', 'initial', 'cell_type', 'kx', 'z_interfaces'])
+def test_native_cached_validation_rejects_invalid_mutations(device, field):
+    case = make_case(convertible=True)
+    with make_model(case=case, device=device) as model:
+        head, info = model.solve(**solve_options(case=case, previous=case.initial, dt=7.))
+        state = model._session._npf662_workspace_holder['native_state']
+        live = state.case
+        if not getattr(live, field).flags.writeable:
+            setattr(live, field, getattr(live, field).copy())
+        getattr(live, field).flat[0] = 2 if field == 'cell_type' else np.nan
+        if field == 'z_interfaces':
+            assert not state.compatible(model=model, case=live)
+        else:
+            with pytest.raises(ValueError):
+                state.refresh(model=model, case=live, previous=head, dt=7., ss=1e-3, sy=.15)
+
+
+@pytest.mark.parametrize('order', [1, 2])
+def test_predictor_preserves_physical_previous_and_resets_on_failure(device, order):
+    case = replace(make_case(convertible=True, shape=(2, 7, 9)), dx=50., dy=50.)
+    previous = case.initial.copy()
+    used = []
+    with make_model(case=case, device=device) as model:
+        for period, dt in enumerate((7., 7., 7., 7., 3.5)):
+            step = replace(case, source=case.source*(1. if period < 3 else 1.5))
+            model.update_rhs(rhs=step.source)
+            model.update_initial_head(initial_head=previous)
+            options = solve_options(case=step, previous=previous, dt=dt)
+            options['npf_newton_controls'] = NPF662NewtonControls(inner_forcing=.03,
+                timestep_predictor=True, timestep_predictor_order=order, adaptive_forcing=True)
+            head, info = model.solve(**options)
+            assert info['converged']
+            state = model._session._npf662_workspace_holder['native_state']
+            np.testing.assert_array_equal(actual=state.previous, desired=previous)
+            checks, unused = NPF662TransientReference(case=step, previous=previous,
+                dt=dt, ss=options['ss'], sy=options['sy']).evaluate(head=head)
+            assert checks['independent_accepted']
+            used.append(info['timestep_predictor_used'])
+            assert all(0. < row['inner_forcing'] < 1. for row in info['outer_history'])
+            previous = head
+        assert not used[0] and any(used[1:])
+        model.update_rhs(rhs=case.source*2.)
+        model.update_initial_head(initial_head=previous)
+        options.update(head_prev=previous, max_outer=0, max_cycles=0)
+        unused, info = model.solve(**options)
+        assert not info['converged']
+        workspace = model._session._npf662_workspace_holder['workspace']
+        assert workspace.predictor_checkpoint is None
 
 
 def test_dry_zero_storage_falls_back_and_rejects_ungrounded_state(device):

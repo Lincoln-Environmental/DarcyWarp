@@ -12,6 +12,8 @@ from DARCY_WARP_PACKAGE.kernels_3d import (
     add_correction_3d_kernel,
 )
 from .fast_3d import _build_levels, _upload_levels
+from .npf662_line import factor_lines, smooth_factored_lines
+from . import npf662_mixed_kernels as mixed
 from .face_kernels_3d_f64 import (
     BLOCK_SIZE_3D, residual_partials_3d_f64_kernel,
     dot_partials_3d_f64_kernel, combine_partials_3d_f64_kernel,
@@ -30,8 +32,22 @@ class NPF662KCycleControls:
     cycles: int = 1
     omega: float = 0.8
     use_cuda_graph: bool = True
+    cycle_kind: str = 'k'
+    cached_line_factors: bool = False
+    preconditioner_precision: str = 'float64'
+    coefficient_state: str = 'saturated'
 
     def validate(self):
+        if self.cycle_kind not in ('k', 'v'):
+            raise ValueError('cycle_kind must be k or v')
+        if not isinstance(self.cached_line_factors, (bool, np.bool_)):
+            raise ValueError('cached_line_factors must be Boolean')
+        if self.preconditioner_precision not in ('float64', 'float32'):
+            raise ValueError('preconditioner_precision must be float64 or float32')
+        if self.preconditioner_precision == 'float32' and not self.cached_line_factors:
+            raise ValueError('FP32 preconditioner requires cached_line_factors')
+        if self.coefficient_state not in ('saturated', 'current'):
+            raise ValueError('coefficient_state must be saturated or current')
         for name in ('levels', 'min_coarse_n', 'coarse_sweeps', 'cycles'):
             value = getattr(self, name)
             if isinstance(value, (bool, np.bool_)) or not isinstance(value, (int, np.integer)) or value < 1:
@@ -51,6 +67,23 @@ def scaled_rhs(v: wp.array(dtype=wp.float64), diagonal: wp.array(dtype=wp.float6
     out[i] = wp.float64(0.)
     if free[i] != 0:
         out[i] = v[i] * diagonal[i]
+
+
+@wp.kernel
+def unpack_current_faces(coefficients: wp.array2d(dtype=wp.float64), left: wp.array2d(dtype=wp.int32),
+    xp: wp.array(dtype=wp.float64), xm: wp.array(dtype=wp.float64),
+    yp: wp.array(dtype=wp.float64), ym: wp.array(dtype=wp.float64),
+    zp: wp.array(dtype=wp.float64), zm: wp.array(dtype=wp.float64)):
+    i = wp.tid()
+    xp[i] = coefficients[i,0]
+    yp[i] = coefficients[i,1]
+    zp[i] = coefficients[i,2]
+    xm[i] = wp.float64(0.)
+    ym[i] = wp.float64(0.)
+    zm[i] = wp.float64(0.)
+    if left[i,0] >= 0: xm[i] = coefficients[left[i,0],0]
+    if left[i,1] >= 0: ym[i] = coefficients[left[i,1],1]
+    if left[i,2] >= 0: zm[i] = coefficients[left[i,2],2]
 
 
 @wp.kernel
@@ -167,6 +200,23 @@ class NPF662KCycleWorkspace:
                 np.zeros(shape=level['dim'])), dtype=wp.float64, device=self.device)
             level['c_prime'] = wp.zeros(shape=level['dim'], dtype=wp.float64, device=self.device)
             level['d_prime'] = wp.zeros(shape=level['dim'], dtype=wp.float64, device=self.device)
+            if controls.cached_line_factors:
+                level['line_inverse'] = wp.zeros(shape=level['dim'], dtype=wp.float64, device=self.device)
+                level['line_lower'] = wp.zeros(shape=level['dim'], dtype=wp.float64, device=self.device)
+                self._factor_lines(level=level)
+        self.mixed = controls.preconditioner_precision == 'float32'
+        self.work_levels = self.levels
+        if self.mixed:
+            self.mixed_invalid = wp.zeros(shape=1, dtype=wp.int32, device=self.device)
+            self.work_levels = []
+            for level in self.levels:
+                work = dict(level)
+                work['faces'] = tuple(wp.zeros(shape=level['dim'], dtype=wp.float32, device=self.device) for unused in level['faces'])
+                for name in ('storage', 'diag', 'bc_values', 'rhs', 'x', 'work', 'residual', 'correction', 'z1',
+                        'line_inverse', 'line_lower', 'c_prime', 'd_prime'):
+                    work[name] = wp.zeros(shape=level['dim'], dtype=wp.float32, device=self.device)
+                self.work_levels.append(work)
+            self._refresh_mixed()
         self.graph = None
         self.applications = self.cycles = self.graph_captures = self.graph_replays = 0
         self.graph_failed = False
@@ -232,23 +282,57 @@ class NPF662KCycleWorkspace:
                     fine['coarsen_y'], fine['coarsen_x']], device=self.device)
             wp.launch(kernel=refresh_storage_diagonal, dim=level['dim'], inputs=[
                 level['storage'], *level['faces'], level['active'], level['diag']], device=self.device)
+            if self.controls.cached_line_factors:
+                self._factor_lines(level=level)
         self.device_storage_refresh_count += 1
+        if self.mixed:
+            self._refresh_mixed()
+
+    def _refresh_mixed(self):
+        self.mixed_invalid.zero_()
+        for source, target in zip(self.levels, self.work_levels):
+            names = ('storage', 'diag', 'line_inverse', 'line_lower', 'c_prime')
+            for old, new in zip((*source['faces'], *(source[name] for name in names)),
+                                (*target['faces'], *(target[name] for name in names))):
+                wp.launch(kernel=mixed.cast_coefficients, dim=old.size,
+                    inputs=[old.flatten(), new.flatten(), self.mixed_invalid], device=self.device)
+        if self.mixed_invalid.numpy()[0]:
+            raise ValueError('NPF coefficients cannot be represented by the FP32 preconditioner; use float64')
+
+    def refresh_current_operator(self, *, workspace, mode):
+        fine = self.levels[0]
+        coefficients = workspace.c0 if mode == 2 else workspace.c
+        wp.launch(kernel=unpack_current_faces, dim=workspace.n,
+            inputs=[coefficients, workspace.left, *(face.flatten() for face in fine['faces'])], device=self.device)
+        wp.copy(dest=fine['storage'].flatten(), src=workspace.storage_tangent)
+        self.refresh_storage_device(refresh_faces=True)
+
+    def _factor_lines(self, *, level):
+        wp.launch(kernel=factor_lines, dim=level['dim'][1:], inputs=[level['diag'],
+            *level['faces'][4:], level['active'], level['bc_mask'], level['line_inverse'],
+            level['c_prime'], level['line_lower']], device=self.device)
 
     def _smooth(self, *, level, sweeps):
         x, work = level['x'], level['work']
         for unused in range(sweeps):
-            wp.launch(kernel=vertical_line_relaxation_7point_kernel, dim=level['nx'] * level['ny'],
-                inputs=[*level['faces'], level['active'], level['bc_mask'], level['storage'],
-                        level['rhs'], x, level['bc_values'], self.controls.omega,
-                        level['c_prime'], level['d_prime'], level['nx'], level['ny'], level['nz'], work],
-                device=self.device)
+            if self.controls.cached_line_factors:
+                wp.launch(kernel=mixed.smooth_factored_lines if self.mixed else smooth_factored_lines, dim=level['dim'][1:], inputs=[
+                    *level['faces'][:4], level['diag'], level['active'], level['bc_mask'],
+                    level['rhs'], x, level['line_inverse'], level['c_prime'], level['line_lower'],
+                    level['d_prime'], work, self.controls.omega], device=self.device)
+            else:
+                wp.launch(kernel=vertical_line_relaxation_7point_kernel, dim=level['nx'] * level['ny'],
+                    inputs=[*level['faces'], level['active'], level['bc_mask'], level['storage'],
+                            level['rhs'], x, level['bc_values'], self.controls.omega,
+                            level['c_prime'], level['d_prime'], level['nx'], level['ny'], level['nz'], work],
+                    device=self.device)
             x, work = work, x
         if x is not level['x']:
             wp.copy(dest=level['x'], src=x)
 
     def _residual(self, *, level):
         level['partials_a'].zero_()
-        wp.launch(kernel=residual_partials_3d_f64_kernel, dim=level['n_cells'],
+        wp.launch(kernel=mixed.residual_partials_3d_f64_kernel if self.mixed else residual_partials_3d_f64_kernel, dim=level['n_cells'],
             inputs=[level['x'], level['rhs'], *level['faces'], level['storage'], level['active'],
                     level['bc_mask'], level['residual'], level['partials_a'],
                     level['nx'], level['ny'], level['nz'], BLOCK_SIZE_3D], device=self.device)
@@ -256,10 +340,10 @@ class NPF662KCycleWorkspace:
     def _energy_add(self, *, level, base, correction, rhs):
         level['partials_a'].zero_()
         level['partials_b'].zero_()
-        wp.launch(kernel=dot_partials_3d_f64_kernel, dim=level['n_cells'],
+        wp.launch(kernel=mixed.dot_partials_3d_f64_kernel if self.mixed else dot_partials_3d_f64_kernel, dim=level['n_cells'],
             inputs=[rhs, correction, level['active'], level['bc_mask'], level['partials_a'],
                     level['nx'], level['ny'], level['nz'], BLOCK_SIZE_3D], device=self.device)
-        wp.launch(kernel=apply_a_dot_partials_3d_f64_kernel, dim=level['n_cells'],
+        wp.launch(kernel=mixed.apply_a_dot_partials_3d_f64_kernel if self.mixed else apply_a_dot_partials_3d_f64_kernel, dim=level['n_cells'],
             inputs=[correction, *level['faces'], level['diag'], level['active'], level['bc_mask'],
                     level['partials_b'], level['nx'], level['ny'], level['nz'], BLOCK_SIZE_3D], device=self.device)
         for partial, scalar in (('partials_a', 'num'), ('partials_b', 'den')):
@@ -267,61 +351,67 @@ class NPF662KCycleWorkspace:
                 inputs=[level[partial], level[scalar], level['n_partials']], device=self.device)
         wp.launch(kernel=compute_safe_alpha_3d_kernel, dim=1,
                   inputs=[level['num'], level['den'], level['alpha']], device=self.device)
-        wp.launch(kernel=axpy_active_device_scalar_3d_kernel, dim=level['dim'],
+        wp.launch(kernel=mixed.axpy_active_device_scalar_3d_kernel if self.mixed else axpy_active_device_scalar_3d_kernel, dim=level['dim'],
             inputs=[base, correction, level['active'], level['bc_mask'], level['alpha'],
                     level['nx'], level['ny'], level['nz']], device=self.device)
 
     def _cycle(self, *, index):
-        level = self.levels[index]
+        level = self.work_levels[index]
         self._smooth(level=level, sweeps=self.controls.pre_sweeps)
-        if index == len(self.levels) - 1:
+        if index == len(self.work_levels) - 1:
             self._smooth(level=level, sweeps=self.controls.coarse_sweeps)
             return
         self._residual(level=level)
-        coarse = self.levels[index + 1]
-        wp.launch(kernel=restrict_blockavg_axes_3d_kernel, dim=coarse['dim'],
+        coarse = self.work_levels[index + 1]
+        wp.launch(kernel=mixed.restrict_blockavg_axes_3d_kernel if self.mixed else restrict_blockavg_axes_3d_kernel, dim=coarse['dim'],
             inputs=[level['residual'], level['active'], level['bc_mask'], coarse['rhs'],
                     level['nx'], level['ny'], level['nz'], coarse['nx'], coarse['ny'], coarse['nz'],
                     level['coarsen_y'], level['coarsen_x']], device=self.device)
         coarse['x'].zero_()
         self._cycle(index=index + 1)
-        wp.copy(dest=coarse['z1'], src=coarse['x'])
-        self._residual(level=coarse)
-        wp.copy(dest=coarse['rhs'], src=coarse['residual'])
-        coarse['x'].zero_()
-        self._cycle(index=index + 1)
-        self._energy_add(level=coarse, base=coarse['z1'], correction=coarse['x'], rhs=coarse['rhs'])
-        wp.launch(kernel=prolong_bilinear_axes_3d_kernel, dim=level['dim'],
-            inputs=[coarse['z1'], level['correction'], level['nx'], level['ny'], level['nz'],
+        correction = coarse['x']
+        if self.controls.cycle_kind == 'k':
+            wp.copy(dest=coarse['z1'], src=coarse['x'])
+            self._residual(level=coarse)
+            wp.copy(dest=coarse['rhs'], src=coarse['residual'])
+            coarse['x'].zero_()
+            self._cycle(index=index + 1)
+            self._energy_add(level=coarse, base=coarse['z1'], correction=coarse['x'], rhs=coarse['rhs'])
+            correction = coarse['z1']
+        wp.launch(kernel=mixed.prolong_bilinear_axes_3d_kernel if self.mixed else prolong_bilinear_axes_3d_kernel, dim=level['dim'],
+            inputs=[correction, level['correction'], level['nx'], level['ny'], level['nz'],
                     coarse['nx'], coarse['ny'], coarse['nz'], level['coarsen_y'], level['coarsen_x']], device=self.device)
         if level['project_correction']:
-            wp.launch(kernel=mask_correction_3d_kernel, dim=level['dim'],
+            wp.launch(kernel=mixed.mask_correction_3d_kernel if self.mixed else mask_correction_3d_kernel, dim=level['dim'],
                       inputs=[level['correction'], level['active'], level['bc_mask']], device=self.device)
             self._energy_add(level=level, base=level['x'], correction=level['correction'], rhs=level['residual'])
         else:
-            wp.launch(kernel=add_correction_3d_kernel, dim=level['dim'],
+            wp.launch(kernel=mixed.add_correction_3d_kernel if self.mixed else add_correction_3d_kernel, dim=level['dim'],
                 inputs=[level['x'], level['correction'], level['active'], level['bc_mask'], level['bc_values'],
                         level['nx'], level['ny'], level['nz']], device=self.device)
         self._smooth(level=level, sweeps=self.controls.post_sweeps)
 
     def _enqueue(self):
-        self.levels[0]['x'].zero_()
+        self.work_levels[0]['x'].zero_()
         for unused in range(self.controls.cycles):
             self._cycle(index=0)
 
     def apply(self, *, vector, out, diagonal, free):
         if self.closed:
             raise RuntimeError('K-cycle workspace is closed')
-        fine = self.levels[0]
+        fine = self.work_levels[0]
         if self.cuda:wp.record_event(event=self.start_event)
-        wp.launch(kernel=scaled_rhs, dim=vector.size,
+        wp.launch(kernel=mixed.scaled_rhs if self.mixed else scaled_rhs, dim=vector.size,
                   inputs=[vector, diagonal, free, fine['rhs'].flatten()], device=self.device)
         if self.graph is not None:
             wp.capture_launch(graph=self.graph)
             self.graph_replays += 1
         else:
             self._enqueue()
-        wp.copy(dest=out, src=fine['x'].flatten())
+        if self.mixed:
+            wp.launch(kernel=mixed.cast_correction, dim=out.size, inputs=[fine['x'].flatten(), out], device=self.device)
+        else:
+            wp.copy(dest=out, src=fine['x'].flatten())
         if self.cuda:wp.record_event(event=self.end_event)
         self.applications += 1
         self.cycles += self.controls.cycles
@@ -334,7 +424,7 @@ class NPF662KCycleWorkspace:
 
     def allocated_bytes(self):
         buffers = {}
-        for level in self.levels:
+        for level in (*self.levels, *self.work_levels):
             for value in level.values():
                 for array in value if isinstance(value, tuple) else (value,):
                     if isinstance(array, wp.array):buffers[array.ptr] = array.capacity
@@ -344,6 +434,8 @@ class NPF662KCycleWorkspace:
         if not self.closed:
             self.graph = None
             self.levels = []
+            self.work_levels = []
+            self.mixed_invalid = None
             self.snapshots = ()
             self.start_event = self.end_event = None
             self.closed = True
