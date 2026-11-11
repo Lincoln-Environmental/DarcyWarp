@@ -12,6 +12,7 @@ from time import perf_counter
 import argparse
 import hashlib
 import json
+import re
 import statistics
 import subprocess
 
@@ -68,6 +69,11 @@ def evaluate_heads(*, comparison, finite, gates):
             >= gates['all_period_percent_within_0_01m_min'])
 
 
+def matching_time_grid(*, infos, dt):
+    """A fixed-step MF6 comparison must solve the same backward-Euler steps."""
+    return all(row.get('adaptive_dt_substep_dts', [dt]) == [dt] for row in infos)
+
+
 def measure(*, artifact, spatial, initial, mode, controls, device, audit, implementation):
     started = perf_counter()
     formulation = str(artifact['formulation'])
@@ -94,8 +100,14 @@ def measure(*, artifact, spatial, initial, mode, controls, device, audit, implem
     comparison = compare_transient(warp_result=result,
         mf6_heads_per_period=artifact['heads_per_period'],
         mf6_heads_final=artifact['heads_final'], active=spatial['active'])
-    strict = all(bool(row.get('strict_picard_convergence_passed', row.get('converged', False))) for row in infos)
+    strict = all(bool(row.get('strict_picard_convergence_passed', row.get('converged', False)))
+        and not row.get('adaptive_dt_practical_fallback_count', 0) for row in infos)
+    time_grid_matched = matching_time_grid(infos=infos, dt=float(artifact['dt_days']))
     head_passed = evaluate_heads(comparison=comparison, finite=finite, gates=HEAD_ACCURACY_CRITERIA)
+    ghb_head_error = None
+    ghb_mask = np.asarray(spatial.get('ghb_mask', np.zeros_like(active))) != 0
+    if np.any(ghb_mask):
+        ghb_head_error = float(np.max(np.abs(heads - artifact['heads_per_period'])[:, ghb_mask]))
     budget = None
     audit_seconds = 0.
     if audit:
@@ -109,7 +121,8 @@ def measure(*, artifact, spatial, initial, mode, controls, device, audit, implem
         audit_seconds = perf_counter() - started
     row = dict(public_seconds=timing['seconds'], reported_history_seconds=result['total_time'], wrapper_seconds=wrapper_seconds,
         audit_seconds=audit_seconds, strict=strict, head_passed=head_passed,
-        passed=bool(strict and head_passed and (budget is None or budget['mass_balance_passed'])),
+        passed=bool(strict and head_passed and time_grid_matched and (budget is None or budget['mass_balance_passed'])),
+        time_grid_matched=time_grid_matched, ghb_max_head_error=ghb_head_error,
         outer=sum(info.get('outer_iterations', 0) for info in infos),
         cycles=sum(info.get('total_inner_kcycles', info.get('n_cycles_used', 0)) for info in infos),
         startup_cycles=sum(info.get('startup_inner_kcycles', 0) for info in infos),
@@ -140,7 +153,41 @@ def variant_controls(*, defaults, variants, use_ghb):
     return controls
 
 
-def benchmark(*, artifact_path, output, variants, repeats, device, audit, implementation, baseline_heads, default_overrides):
+def saved_mf6_runtime(*, workspace, artifact):
+    """Read the final engine timer only after matching its heads and times.
+
+    Older GHB artifacts time the initial conductance run. The final listing
+    gives the engine cost of the converged independent fixed-point reference.
+    """
+    import flopy
+
+    listing = workspace / 'mfsim.lst'
+    contents = listing.read_text()
+    if 'Normal termination of simulation.' not in contents:
+        raise ValueError('MF6 final workspace did not terminate normally')
+    head_files = list(workspace.glob('*.hds'))
+    if len(head_files) != 1:
+        raise ValueError('MF6 final workspace must contain exactly one head file')
+    with flopy.utils.HeadFile(filename=head_files[0]) as reader:
+        heads = reader.get_alldata(mflay=0)
+        times = reader.get_times()
+    np.testing.assert_allclose(actual=heads, desired=artifact['heads_per_period'], rtol=0., atol=1.e-12)
+    expected_times = np.arange(1, heads.shape[0] + 1) * float(artifact['dt_days'])
+    np.testing.assert_allclose(actual=times, desired=expected_times, rtol=0., atol=1.e-12)
+    matches = re.findall(r'Elapsed run time:\s*([^\n]+)', contents)
+    if len(matches) != 1:
+        raise ValueError('MF6 final workspace has no unique elapsed engine time')
+    units = {'days': 86400., 'hours': 3600., 'minutes': 60., 'seconds': 1.}
+    parts = re.findall(r'([0-9.]+)\s*(Days|Hours|Minutes|Seconds)', matches[0], flags=re.IGNORECASE)
+    if not parts:
+        raise ValueError('Unrecognized MF6 elapsed engine time')
+    return dict(seconds=sum(float(value) * units[unit.lower()] for value, unit in parts),
+        scope='Final converged fixed-point engine run; native listing timer, build and preceding fixed-point runs excluded',
+        listing=str(listing), listing_sha256=hashlib.sha256(listing.read_bytes()).hexdigest(),
+        heads_match_validated_artifact=True, times_match_validated_artifact=True)
+
+
+def benchmark(*, artifact_path, output, variants, repeats, device, audit, implementation, baseline_heads, default_overrides, mf6_workspace=None):
     artifact = validate_transient_artifact(path=artifact_path)
     spatial = spatial_fields_from_artifact(artifact=artifact)
     initial, mode = select_artifact_warm_start(artifact=artifact, spatial=spatial,
@@ -158,10 +205,15 @@ def benchmark(*, artifact_path, output, variants, repeats, device, audit, implem
             for path in sorted((root/'DARCY_WARP_PACKAGE').rglob('*.py'))},
         device=device, warp_version=wp.__version__, warm_start=mode,
         mf6_engine_seconds=float(artifact.get('engine_time', np.nan)),
+        mf6_engine_timing_scope=('initial engine run before conductance fixed-point iteration'
+            if np.any(spatial.get('ghb_mask', False)) else 'saved engine run'),
+        ghb_reference_settings=json.loads(str(artifact.get('ghb_conductance_settings', '{}'))),
         controls=controls, variant_specifications=variants, head_gates=HEAD_ACCURACY_CRITERIA,
         audit_enabled=audit, implementation=implementation,
         timing='Synchronized entire public API call, including input validation and session creation. External model construction and independent audit excluded; original solver-reported timer retained separately.',
         rows=[], summary={})
+    if mf6_workspace is not None:
+        report['mf6_final_engine'] = saved_mf6_runtime(workspace=mf6_workspace, artifact=artifact)
     reference = None
     if baseline_heads is not None:
         reference = np.load(file=baseline_heads)['heads']
@@ -204,6 +256,8 @@ if __name__ == "__main__":
     parser.add_argument('--audit', action='store_true')
     parser.add_argument('--implementation', choices=('fast', 'classic'), default='fast')
     parser.add_argument('--baseline-heads', type=Path)
+    parser.add_argument('--mf6-workspace', type=Path,
+        help='Verify final saved MF6 heads/times and read its native engine timer (useful for GHB fixed-point references)')
     args = parser.parse_args()
     default_overrides = dict(save_transient_diagnostics=True, transient_mixed_precision_enabled=True)
     variants = {'production': {}} if args.controls is None else json.loads(args.controls.read_text())
@@ -213,5 +267,5 @@ if __name__ == "__main__":
     passed = benchmark(artifact_path=args.artifact, output=args.output, variants=variants,
         repeats=args.repeats, device=args.device, audit=args.audit,
         implementation=args.implementation, baseline_heads=args.baseline_heads,
-        default_overrides=default_overrides)
+        default_overrides=default_overrides, mf6_workspace=args.mf6_workspace)
     raise SystemExit(0 if passed else 1)
