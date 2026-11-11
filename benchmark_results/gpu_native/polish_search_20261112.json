@@ -1,0 +1,1486 @@
+{
+  "status": "Further NPF runtime search after main promotion",
+  "convergence": "Unchanged 1e-7 relative cell imbalance, 1e-6 m head-equivalent RMS; same physical case and original 20-step history",
+  "selected": "device_hierarchy_build=True; same Newton/Krylov algorithm and counts; approximately 0.05 s less first-call setup",
+  "rejected": [
+    "24 multigrid level/sweep/omega combinations did not clearly outperform the release",
+    "Packed Jacobian assembly did not improve convertible or confined runtime",
+    "Register-local line vectors did not improve the numerical interval",
+    "Predictor residual line search saved some Krylov work but cost more evaluations"
+  ],
+  "experimental_implementations": "Rejected implementations were removed. Local reproducer patches are archived alongside polish_sweep_20261112 and polish_predictor_search_20261112 raw evidence.",
+  "experiments": [
+    {
+      "raw_path": "benchmark_results/gpu_native/polish_sweep_20261112/results.json",
+      "sha256": "f20fe67a9d02b8a2706b363a1663e199fc94d56d556c26ccccbaed31dd60f588",
+      "revision": "515603f71e6f9fbed59facf5dd7fadbf353e2eab",
+      "source_sha256": {
+        "DARCY_WARP_PACKAGE/solvers/npf662_3d.py": "4c3b2de1089704730f9b325f31646838b9e6b5aedfca97fae45714e18ebf4cb7",
+        "DARCY_WARP_PACKAGE/solvers/npf662_fgmres.py": "d4e734310b327486080de3cc777ad55ee1bb5f25218cbc22d9938a1c713545f9",
+        "DARCY_WARP_PACKAGE/solvers/npf662_history.py": "da00e320a6d0d1e597e240276aa9632007072be8ca1c895399e19b29ebe2bc2f",
+        "DARCY_WARP_PACKAGE/solvers/npf662_kcycle.py": "43f45a417b5bad68ad2856b06b4f22d9777f6c4a845fc485e74542f4a9fe9d80",
+        "DARCY_WARP_PACKAGE/solvers/npf662_kernels.py": "11ed51ceb2887268abd50ab8a15d037d2b11d28b0567547d7d8dc37903251581",
+        "DARCY_WARP_PACKAGE/solvers/npf662_line.py": "c9211f73afe55dee0516dd234e9da6249787025c601cedbb0c7cd360a6abc1a1",
+        "DARCY_WARP_PACKAGE/solvers/npf662_mixed_kernels.py": "f2f431c534053f7b77df044d50d9854bd66d1f58efddb9f374faf351fadcdb87",
+        "DARCY_WARP_PACKAGE/solvers/npf662_newton.py": "0a1ee8f0205cedad864e6325dea726561b520cd7714edd4391e5007f028400ac",
+        "DARCY_WARP_PACKAGE/solvers/npf662_state.py": "74e5d21d187f8f386f2c4431df520da25736aaafe70be111e58ca00213e5fc73"
+      },
+      "audit": false,
+      "repeats": 1,
+      "variants": [
+        {
+          "specification": {
+            "name": "reuse_jacobi_0.005",
+            "forcing": 0.005,
+            "restart": 8,
+            "newton": {
+              "timestep_predictor": true,
+              "tiled_reductions": true,
+              "reuse_trial_state": true
+            },
+            "mg": {
+              "levels": 3,
+              "pre_sweeps": 2,
+              "post_sweeps": 2,
+              "coarse_sweeps": 2,
+              "omega": 0.8,
+              "cached_line_factors": true,
+              "preconditioner_precision": "float32",
+              "coefficient_state": "current",
+              "line_smoother": "jacobi"
+            }
+          },
+          "passed": true,
+          "median_public_seconds": 0.9790473160028341,
+          "median_numerical_seconds": 0.6418702980226954,
+          "median_first_setup_seconds": 0.1975870579990442,
+          "krylov": [
+            200
+          ],
+          "outer": [
+            49
+          ],
+          "maximum_mf6_head_error_m": 6.841307176319589e-08
+        },
+        {
+          "specification": {
+            "name": "polish_2_1_1_0.8",
+            "forcing": 0.005,
+            "restart": 8,
+            "newton": {
+              "timestep_predictor": true,
+              "tiled_reductions": true,
+              "reuse_trial_state": true
+            },
+            "mg": {
+              "levels": 2,
+              "pre_sweeps": 1,
+              "post_sweeps": 1,
+              "coarse_sweeps": 2,
+              "omega": 0.8,
+              "cached_line_factors": true,
+              "preconditioner_precision": "float32",
+              "coefficient_state": "current"
+            }
+          },
+          "passed": true,
+          "median_public_seconds": 1.4221405080024851,
+          "median_numerical_seconds": 1.0769723190023797,
+          "median_first_setup_seconds": 0.19588413799647242,
+          "krylov": [
+            512
+          ],
+          "outer": [
+            54
+          ],
+          "maximum_mf6_head_error_m": 1.7884560188363707e-07
+        },
+        {
+          "specification": {
+            "name": "polish_2_1_1_1.0",
+            "forcing": 0.005,
+            "restart": 8,
+            "newton": {
+              "timestep_predictor": true,
+              "tiled_reductions": true,
+              "reuse_trial_state": true
+            },
+            "mg": {
+              "levels": 2,
+              "pre_sweeps": 1,
+              "post_sweeps": 1,
+              "coarse_sweeps": 2,
+              "omega": 1.0,
+              "cached_line_factors": true,
+              "preconditioner_precision": "float32",
+              "coefficient_state": "current"
+            }
+          },
+          "passed": true,
+          "median_public_seconds": 3.443767107994063,
+          "median_numerical_seconds": 3.1145097219996387,
+          "median_first_setup_seconds": 0.18093396399490302,
+          "krylov": [
+            1725
+          ],
+          "outer": [
+            56
+          ],
+          "maximum_mf6_head_error_m": 7.174333160886448e-08
+        },
+        {
+          "specification": {
+            "name": "polish_2_1_2_0.8",
+            "forcing": 0.005,
+            "restart": 8,
+            "newton": {
+              "timestep_predictor": true,
+              "tiled_reductions": true,
+              "reuse_trial_state": true
+            },
+            "mg": {
+              "levels": 2,
+              "pre_sweeps": 1,
+              "post_sweeps": 2,
+              "coarse_sweeps": 2,
+              "omega": 0.8,
+              "cached_line_factors": true,
+              "preconditioner_precision": "float32",
+              "coefficient_state": "current"
+            }
+          },
+          "passed": true,
+          "median_public_seconds": 1.4721081840034458,
+          "median_numerical_seconds": 1.14716666899767,
+          "median_first_setup_seconds": 0.1823459700026433,
+          "krylov": [
+            510
+          ],
+          "outer": [
+            58
+          ],
+          "maximum_mf6_head_error_m": 1.0651172865916436e-07
+        },
+        {
+          "specification": {
+            "name": "polish_2_1_2_1.0",
+            "forcing": 0.005,
+            "restart": 8,
+            "newton": {
+              "timestep_predictor": true,
+              "tiled_reductions": true,
+              "reuse_trial_state": true
+            },
+            "mg": {
+              "levels": 2,
+              "pre_sweeps": 1,
+              "post_sweeps": 2,
+              "coarse_sweeps": 2,
+              "omega": 1.0,
+              "cached_line_factors": true,
+              "preconditioner_precision": "float32",
+              "coefficient_state": "current"
+            }
+          },
+          "passed": true,
+          "median_public_seconds": 1.3167049440016854,
+          "median_numerical_seconds": 0.991320759007067,
+          "median_first_setup_seconds": 0.18094873399968492,
+          "krylov": [
+            423
+          ],
+          "outer": [
+            56
+          ],
+          "maximum_mf6_head_error_m": 1.544337012715502e-07
+        },
+        {
+          "specification": {
+            "name": "polish_2_2_1_0.8",
+            "forcing": 0.005,
+            "restart": 8,
+            "newton": {
+              "timestep_predictor": true,
+              "tiled_reductions": true,
+              "reuse_trial_state": true
+            },
+            "mg": {
+              "levels": 2,
+              "pre_sweeps": 2,
+              "post_sweeps": 1,
+              "coarse_sweeps": 2,
+              "omega": 0.8,
+              "cached_line_factors": true,
+              "preconditioner_precision": "float32",
+              "coefficient_state": "current"
+            }
+          },
+          "passed": true,
+          "median_public_seconds": 1.3139287329977378,
+          "median_numerical_seconds": 0.9896461989919771,
+          "median_first_setup_seconds": 0.1858248310018098,
+          "krylov": [
+            416
+          ],
+          "outer": [
+            54
+          ],
+          "maximum_mf6_head_error_m": 1.8233333831663145e-07
+        },
+        {
+          "specification": {
+            "name": "polish_2_2_1_1.0",
+            "forcing": 0.005,
+            "restart": 8,
+            "newton": {
+              "timestep_predictor": true,
+              "tiled_reductions": true,
+              "reuse_trial_state": true
+            },
+            "mg": {
+              "levels": 2,
+              "pre_sweeps": 2,
+              "post_sweeps": 1,
+              "coarse_sweeps": 2,
+              "omega": 1.0,
+              "cached_line_factors": true,
+              "preconditioner_precision": "float32",
+              "coefficient_state": "current"
+            }
+          },
+          "passed": true,
+          "median_public_seconds": 1.178352315997472,
+          "median_numerical_seconds": 0.8627981799872941,
+          "median_first_setup_seconds": 0.17781136599660385,
+          "krylov": [
+            354
+          ],
+          "outer": [
+            53
+          ],
+          "maximum_mf6_head_error_m": 1.2114493663784032e-07
+        },
+        {
+          "specification": {
+            "name": "polish_2_2_2_0.8",
+            "forcing": 0.005,
+            "restart": 8,
+            "newton": {
+              "timestep_predictor": true,
+              "tiled_reductions": true,
+              "reuse_trial_state": true
+            },
+            "mg": {
+              "levels": 2,
+              "pre_sweeps": 2,
+              "post_sweeps": 2,
+              "coarse_sweeps": 2,
+              "omega": 0.8,
+              "cached_line_factors": true,
+              "preconditioner_precision": "float32",
+              "coefficient_state": "current"
+            }
+          },
+          "passed": true,
+          "median_public_seconds": 1.2880829229980009,
+          "median_numerical_seconds": 0.9724320969980909,
+          "median_first_setup_seconds": 0.17472179199830862,
+          "krylov": [
+            386
+          ],
+          "outer": [
+            53
+          ],
+          "maximum_mf6_head_error_m": 1.6161181970453242e-07
+        },
+        {
+          "specification": {
+            "name": "polish_2_2_2_1.0",
+            "forcing": 0.005,
+            "restart": 8,
+            "newton": {
+              "timestep_predictor": true,
+              "tiled_reductions": true,
+              "reuse_trial_state": true
+            },
+            "mg": {
+              "levels": 2,
+              "pre_sweeps": 2,
+              "post_sweeps": 2,
+              "coarse_sweeps": 2,
+              "omega": 1.0,
+              "cached_line_factors": true,
+              "preconditioner_precision": "float32",
+              "coefficient_state": "current"
+            }
+          },
+          "passed": true,
+          "median_public_seconds": 2.6376862739998614,
+          "median_numerical_seconds": 2.3132848879904486,
+          "median_first_setup_seconds": 0.17503978699824074,
+          "krylov": [
+            1080
+          ],
+          "outer": [
+            57
+          ],
+          "maximum_mf6_head_error_m": 6.62678868446065e-08
+        },
+        {
+          "specification": {
+            "name": "polish_3_1_1_0.8",
+            "forcing": 0.005,
+            "restart": 8,
+            "newton": {
+              "timestep_predictor": true,
+              "tiled_reductions": true,
+              "reuse_trial_state": true
+            },
+            "mg": {
+              "levels": 3,
+              "pre_sweeps": 1,
+              "post_sweeps": 1,
+              "coarse_sweeps": 2,
+              "omega": 0.8,
+              "cached_line_factors": true,
+              "preconditioner_precision": "float32",
+              "coefficient_state": "current"
+            }
+          },
+          "passed": true,
+          "median_public_seconds": 1.0200594939960865,
+          "median_numerical_seconds": 0.6895350299892016,
+          "median_first_setup_seconds": 0.19174206899333512,
+          "krylov": [
+            254
+          ],
+          "outer": [
+            52
+          ],
+          "maximum_mf6_head_error_m": 6.987120482193632e-08
+        },
+        {
+          "specification": {
+            "name": "polish_3_1_1_1.0",
+            "forcing": 0.005,
+            "restart": 8,
+            "newton": {
+              "timestep_predictor": true,
+              "tiled_reductions": true,
+              "reuse_trial_state": true
+            },
+            "mg": {
+              "levels": 3,
+              "pre_sweeps": 1,
+              "post_sweeps": 1,
+              "coarse_sweeps": 2,
+              "omega": 1.0,
+              "cached_line_factors": true,
+              "preconditioner_precision": "float32",
+              "coefficient_state": "current"
+            }
+          },
+          "passed": true,
+          "median_public_seconds": 3.3647396249943995,
+          "median_numerical_seconds": 3.0240362799886498,
+          "median_first_setup_seconds": 0.1993192989975796,
+          "krylov": [
+            1454
+          ],
+          "outer": [
+            57
+          ],
+          "maximum_mf6_head_error_m": 6.588449330546808e-08
+        },
+        {
+          "specification": {
+            "name": "polish_3_1_2_0.8",
+            "forcing": 0.005,
+            "restart": 8,
+            "newton": {
+              "timestep_predictor": true,
+              "tiled_reductions": true,
+              "reuse_trial_state": true
+            },
+            "mg": {
+              "levels": 3,
+              "pre_sweeps": 1,
+              "post_sweeps": 2,
+              "coarse_sweeps": 2,
+              "omega": 0.8,
+              "cached_line_factors": true,
+              "preconditioner_precision": "float32",
+              "coefficient_state": "current"
+            }
+          },
+          "passed": true,
+          "median_public_seconds": 0.9789605849946383,
+          "median_numerical_seconds": 0.6265730610030005,
+          "median_first_setup_seconds": 0.19889863899879856,
+          "krylov": [
+            213
+          ],
+          "outer": [
+            47
+          ],
+          "maximum_mf6_head_error_m": 6.717902456543356e-08
+        },
+        {
+          "specification": {
+            "name": "polish_3_1_2_1.0",
+            "forcing": 0.005,
+            "restart": 8,
+            "newton": {
+              "timestep_predictor": true,
+              "tiled_reductions": true,
+              "reuse_trial_state": true
+            },
+            "mg": {
+              "levels": 3,
+              "pre_sweeps": 1,
+              "post_sweeps": 2,
+              "coarse_sweeps": 2,
+              "omega": 1.0,
+              "cached_line_factors": true,
+              "preconditioner_precision": "float32",
+              "coefficient_state": "current"
+            }
+          },
+          "passed": true,
+          "median_public_seconds": 1.0533407869952498,
+          "median_numerical_seconds": 0.7106482029994368,
+          "median_first_setup_seconds": 0.19674173800012795,
+          "krylov": [
+            249
+          ],
+          "outer": [
+            49
+          ],
+          "maximum_mf6_head_error_m": 6.915614680913507e-08
+        },
+        {
+          "specification": {
+            "name": "polish_3_2_1_0.8",
+            "forcing": 0.005,
+            "restart": 8,
+            "newton": {
+              "timestep_predictor": true,
+              "tiled_reductions": true,
+              "reuse_trial_state": true
+            },
+            "mg": {
+              "levels": 3,
+              "pre_sweeps": 2,
+              "post_sweeps": 1,
+              "coarse_sweeps": 2,
+              "omega": 0.8,
+              "cached_line_factors": true,
+              "preconditioner_precision": "float32",
+              "coefficient_state": "current"
+            }
+          },
+          "passed": true,
+          "median_public_seconds": 0.9935377389992937,
+          "median_numerical_seconds": 0.6578064379864372,
+          "median_first_setup_seconds": 0.19449814600375248,
+          "krylov": [
+            221
+          ],
+          "outer": [
+            49
+          ],
+          "maximum_mf6_head_error_m": 6.664397900202346e-08
+        },
+        {
+          "specification": {
+            "name": "polish_3_2_1_1.0",
+            "forcing": 0.005,
+            "restart": 8,
+            "newton": {
+              "timestep_predictor": true,
+              "tiled_reductions": true,
+              "reuse_trial_state": true
+            },
+            "mg": {
+              "levels": 3,
+              "pre_sweeps": 2,
+              "post_sweeps": 1,
+              "coarse_sweeps": 2,
+              "omega": 1.0,
+              "cached_line_factors": true,
+              "preconditioner_precision": "float32",
+              "coefficient_state": "current"
+            }
+          },
+          "passed": true,
+          "median_public_seconds": 1.08990502099914,
+          "median_numerical_seconds": 0.7447020339895971,
+          "median_first_setup_seconds": 0.20176640499994392,
+          "krylov": [
+            259
+          ],
+          "outer": [
+            50
+          ],
+          "maximum_mf6_head_error_m": 6.75822567908213e-08
+        },
+        {
+          "specification": {
+            "name": "polish_3_2_2_0.8",
+            "forcing": 0.005,
+            "restart": 8,
+            "newton": {
+              "timestep_predictor": true,
+              "tiled_reductions": true,
+              "reuse_trial_state": true
+            },
+            "mg": {
+              "levels": 3,
+              "pre_sweeps": 2,
+              "post_sweeps": 2,
+              "coarse_sweeps": 2,
+              "omega": 0.8,
+              "cached_line_factors": true,
+              "preconditioner_precision": "float32",
+              "coefficient_state": "current"
+            }
+          },
+          "passed": true,
+          "median_public_seconds": 0.9817983060056577,
+          "median_numerical_seconds": 0.642491993989097,
+          "median_first_setup_seconds": 0.1956590000045253,
+          "krylov": [
+            200
+          ],
+          "outer": [
+            49
+          ],
+          "maximum_mf6_head_error_m": 6.841307176319589e-08
+        },
+        {
+          "specification": {
+            "name": "polish_3_2_2_1.0",
+            "forcing": 0.005,
+            "restart": 8,
+            "newton": {
+              "timestep_predictor": true,
+              "tiled_reductions": true,
+              "reuse_trial_state": true
+            },
+            "mg": {
+              "levels": 3,
+              "pre_sweeps": 2,
+              "post_sweeps": 2,
+              "coarse_sweeps": 2,
+              "omega": 1.0,
+              "cached_line_factors": true,
+              "preconditioner_precision": "float32",
+              "coefficient_state": "current"
+            }
+          },
+          "passed": true,
+          "median_public_seconds": 2.3463533719987026,
+          "median_numerical_seconds": 2.0043180510183447,
+          "median_first_setup_seconds": 0.1975273499992909,
+          "krylov": [
+            791
+          ],
+          "outer": [
+            54
+          ],
+          "maximum_mf6_head_error_m": 6.549669762101473e-08
+        },
+        {
+          "specification": {
+            "name": "polish_4_1_1_0.8",
+            "forcing": 0.005,
+            "restart": 8,
+            "newton": {
+              "timestep_predictor": true,
+              "tiled_reductions": true,
+              "reuse_trial_state": true
+            },
+            "mg": {
+              "levels": 4,
+              "pre_sweeps": 1,
+              "post_sweeps": 1,
+              "coarse_sweeps": 2,
+              "omega": 0.8,
+              "cached_line_factors": true,
+              "preconditioner_precision": "float32",
+              "coefficient_state": "current"
+            }
+          },
+          "passed": true,
+          "median_public_seconds": 1.1191794309997931,
+          "median_numerical_seconds": 0.757114210005966,
+          "median_first_setup_seconds": 0.2139830840023933,
+          "krylov": [
+            245
+          ],
+          "outer": [
+            50
+          ],
+          "maximum_mf6_head_error_m": 6.766004700953232e-08
+        },
+        {
+          "specification": {
+            "name": "polish_4_1_1_1.0",
+            "forcing": 0.005,
+            "restart": 8,
+            "newton": {
+              "timestep_predictor": true,
+              "tiled_reductions": true,
+              "reuse_trial_state": true
+            },
+            "mg": {
+              "levels": 4,
+              "pre_sweeps": 1,
+              "post_sweeps": 1,
+              "coarse_sweeps": 2,
+              "omega": 1.0,
+              "cached_line_factors": true,
+              "preconditioner_precision": "float32",
+              "coefficient_state": "current"
+            }
+          },
+          "passed": true,
+          "median_public_seconds": 3.835558640996169,
+          "median_numerical_seconds": 3.4890646610001568,
+          "median_first_setup_seconds": 0.20273857899883296,
+          "krylov": [
+            1431
+          ],
+          "outer": [
+            56
+          ],
+          "maximum_mf6_head_error_m": 6.590448675680705e-08
+        },
+        {
+          "specification": {
+            "name": "polish_4_1_2_0.8",
+            "forcing": 0.005,
+            "restart": 8,
+            "newton": {
+              "timestep_predictor": true,
+              "tiled_reductions": true,
+              "reuse_trial_state": true
+            },
+            "mg": {
+              "levels": 4,
+              "pre_sweeps": 1,
+              "post_sweeps": 2,
+              "coarse_sweeps": 2,
+              "omega": 0.8,
+              "cached_line_factors": true,
+              "preconditioner_precision": "float32",
+              "coefficient_state": "current"
+            }
+          },
+          "passed": true,
+          "median_public_seconds": 1.0794349650022923,
+          "median_numerical_seconds": 0.7299089499865659,
+          "median_first_setup_seconds": 0.20063022700196598,
+          "krylov": [
+            218
+          ],
+          "outer": [
+            49
+          ],
+          "maximum_mf6_head_error_m": 6.848578804063976e-08
+        },
+        {
+          "specification": {
+            "name": "polish_4_1_2_1.0",
+            "forcing": 0.005,
+            "restart": 8,
+            "newton": {
+              "timestep_predictor": true,
+              "tiled_reductions": true,
+              "reuse_trial_state": true
+            },
+            "mg": {
+              "levels": 4,
+              "pre_sweeps": 1,
+              "post_sweeps": 2,
+              "coarse_sweeps": 2,
+              "omega": 1.0,
+              "cached_line_factors": true,
+              "preconditioner_precision": "float32",
+              "coefficient_state": "current"
+            }
+          },
+          "passed": true,
+          "median_public_seconds": 1.1762419229999068,
+          "median_numerical_seconds": 0.8277158250057255,
+          "median_first_setup_seconds": 0.20344724699680228,
+          "krylov": [
+            255
+          ],
+          "outer": [
+            50
+          ],
+          "maximum_mf6_head_error_m": 6.536796026690439e-08
+        },
+        {
+          "specification": {
+            "name": "polish_4_2_1_0.8",
+            "forcing": 0.005,
+            "restart": 8,
+            "newton": {
+              "timestep_predictor": true,
+              "tiled_reductions": true,
+              "reuse_trial_state": true
+            },
+            "mg": {
+              "levels": 4,
+              "pre_sweeps": 2,
+              "post_sweeps": 1,
+              "coarse_sweeps": 2,
+              "omega": 0.8,
+              "cached_line_factors": true,
+              "preconditioner_precision": "float32",
+              "coefficient_state": "current"
+            }
+          },
+          "passed": true,
+          "median_public_seconds": 1.1200993820020813,
+          "median_numerical_seconds": 0.7655211739693186,
+          "median_first_setup_seconds": 0.21016518800024642,
+          "krylov": [
+            225
+          ],
+          "outer": [
+            50
+          ],
+          "maximum_mf6_head_error_m": 6.808629737786731e-08
+        },
+        {
+          "specification": {
+            "name": "polish_4_2_1_1.0",
+            "forcing": 0.005,
+            "restart": 8,
+            "newton": {
+              "timestep_predictor": true,
+              "tiled_reductions": true,
+              "reuse_trial_state": true
+            },
+            "mg": {
+              "levels": 4,
+              "pre_sweeps": 2,
+              "post_sweeps": 1,
+              "coarse_sweeps": 2,
+              "omega": 1.0,
+              "cached_line_factors": true,
+              "preconditioner_precision": "float32",
+              "coefficient_state": "current"
+            }
+          },
+          "passed": true,
+          "median_public_seconds": 1.232155845995294,
+          "median_numerical_seconds": 0.871156205983425,
+          "median_first_setup_seconds": 0.20702170300501166,
+          "krylov": [
+            264
+          ],
+          "outer": [
+            51
+          ],
+          "maximum_mf6_head_error_m": 6.543604513797874e-08
+        },
+        {
+          "specification": {
+            "name": "polish_4_2_2_0.8",
+            "forcing": 0.005,
+            "restart": 8,
+            "newton": {
+              "timestep_predictor": true,
+              "tiled_reductions": true,
+              "reuse_trial_state": true
+            },
+            "mg": {
+              "levels": 4,
+              "pre_sweeps": 2,
+              "post_sweeps": 2,
+              "coarse_sweeps": 2,
+              "omega": 0.8,
+              "cached_line_factors": true,
+              "preconditioner_precision": "float32",
+              "coefficient_state": "current"
+            }
+          },
+          "passed": true,
+          "median_public_seconds": 1.060819928003184,
+          "median_numerical_seconds": 0.7187630749976961,
+          "median_first_setup_seconds": 0.20076532500388566,
+          "krylov": [
+            194
+          ],
+          "outer": [
+            49
+          ],
+          "maximum_mf6_head_error_m": 6.670686281129434e-08
+        },
+        {
+          "specification": {
+            "name": "polish_4_2_2_1.0",
+            "forcing": 0.005,
+            "restart": 8,
+            "newton": {
+              "timestep_predictor": true,
+              "tiled_reductions": true,
+              "reuse_trial_state": true
+            },
+            "mg": {
+              "levels": 4,
+              "pre_sweeps": 2,
+              "post_sweeps": 2,
+              "coarse_sweeps": 2,
+              "omega": 1.0,
+              "cached_line_factors": true,
+              "preconditioner_precision": "float32",
+              "coefficient_state": "current"
+            }
+          },
+          "passed": true,
+          "median_public_seconds": 2.6883473100024275,
+          "median_numerical_seconds": 2.3404358869956923,
+          "median_first_setup_seconds": 0.20198496699595125,
+          "krylov": [
+            784
+          ],
+          "outer": [
+            54
+          ],
+          "maximum_mf6_head_error_m": 6.599023927300607e-08
+        },
+        {
+          "specification": {
+            "name": "packed_3_2_2_0.8",
+            "forcing": 0.005,
+            "restart": 8,
+            "newton": {
+              "timestep_predictor": true,
+              "tiled_reductions": true,
+              "reuse_trial_state": true,
+              "packed_jacobian": true
+            },
+            "mg": {
+              "levels": 3,
+              "pre_sweeps": 2,
+              "post_sweeps": 2,
+              "coarse_sweeps": 2,
+              "omega": 0.8,
+              "cached_line_factors": true,
+              "preconditioner_precision": "float32",
+              "coefficient_state": "current"
+            }
+          },
+          "passed": true,
+          "median_public_seconds": 0.9887359089989332,
+          "median_numerical_seconds": 0.6485196640060167,
+          "median_first_setup_seconds": 0.19656523899902822,
+          "krylov": [
+            200
+          ],
+          "outer": [
+            49
+          ],
+          "maximum_mf6_head_error_m": 6.841307054195056e-08
+        },
+        {
+          "specification": {
+            "name": "packed_3_2_2_1.0",
+            "forcing": 0.005,
+            "restart": 8,
+            "newton": {
+              "timestep_predictor": true,
+              "tiled_reductions": true,
+              "reuse_trial_state": true,
+              "packed_jacobian": true
+            },
+            "mg": {
+              "levels": 3,
+              "pre_sweeps": 2,
+              "post_sweeps": 2,
+              "coarse_sweeps": 2,
+              "omega": 1.0,
+              "cached_line_factors": true,
+              "preconditioner_precision": "float32",
+              "coefficient_state": "current"
+            }
+          },
+          "passed": true,
+          "median_public_seconds": 2.320543659996474,
+          "median_numerical_seconds": 1.9783877429945278,
+          "median_first_setup_seconds": 0.19796810099796858,
+          "krylov": [
+            791
+          ],
+          "outer": [
+            54
+          ],
+          "maximum_mf6_head_error_m": 6.549668629673988e-08
+        },
+        {
+          "specification": {
+            "name": "packed_3_1_1_1.0",
+            "forcing": 0.005,
+            "restart": 8,
+            "newton": {
+              "timestep_predictor": true,
+              "tiled_reductions": true,
+              "reuse_trial_state": true,
+              "packed_jacobian": true
+            },
+            "mg": {
+              "levels": 3,
+              "pre_sweeps": 1,
+              "post_sweeps": 1,
+              "coarse_sweeps": 2,
+              "omega": 1.0,
+              "cached_line_factors": true,
+              "preconditioner_precision": "float32",
+              "coefficient_state": "current"
+            }
+          },
+          "passed": true,
+          "median_public_seconds": 3.3260447869979544,
+          "median_numerical_seconds": 2.9536152629734715,
+          "median_first_setup_seconds": 0.2292863140028203,
+          "krylov": [
+            1454
+          ],
+          "outer": [
+            57
+          ],
+          "maximum_mf6_head_error_m": 6.588449119604434e-08
+        }
+      ]
+    },
+    {
+      "raw_path": "benchmark_results/gpu_native/polish_register_20261112/results.json",
+      "sha256": "c575a6195ac78b43d04bf70ff41d5ca28163dd8d80febb07c4d6fa37d136c5d6",
+      "revision": "cd17ae37493109abdb053fd301eba303d36901a7",
+      "source_sha256": {
+        "DARCY_WARP_PACKAGE/solvers/npf662_3d.py": "4c3b2de1089704730f9b325f31646838b9e6b5aedfca97fae45714e18ebf4cb7",
+        "DARCY_WARP_PACKAGE/solvers/npf662_fgmres.py": "d4e734310b327486080de3cc777ad55ee1bb5f25218cbc22d9938a1c713545f9",
+        "DARCY_WARP_PACKAGE/solvers/npf662_history.py": "da00e320a6d0d1e597e240276aa9632007072be8ca1c895399e19b29ebe2bc2f",
+        "DARCY_WARP_PACKAGE/solvers/npf662_kcycle.py": "547d519eba1905a4b96a2d66e22ae774b1c44d4b2115a018d7d38501091824b6",
+        "DARCY_WARP_PACKAGE/solvers/npf662_kernels.py": "11ed51ceb2887268abd50ab8a15d037d2b11d28b0567547d7d8dc37903251581",
+        "DARCY_WARP_PACKAGE/solvers/npf662_line.py": "c9211f73afe55dee0516dd234e9da6249787025c601cedbb0c7cd360a6abc1a1",
+        "DARCY_WARP_PACKAGE/solvers/npf662_mixed_kernels.py": "f2f431c534053f7b77df044d50d9854bd66d1f58efddb9f374faf351fadcdb87",
+        "DARCY_WARP_PACKAGE/solvers/npf662_newton.py": "0a1ee8f0205cedad864e6325dea726561b520cd7714edd4391e5007f028400ac",
+        "DARCY_WARP_PACKAGE/solvers/npf662_register_line.py": "ccc68d30655b59a1d1c2d5a9777baa05a682edf3268cfc375c534075d063662e",
+        "DARCY_WARP_PACKAGE/solvers/npf662_state.py": "74e5d21d187f8f386f2c4431df520da25736aaafe70be111e58ca00213e5fc73"
+      },
+      "audit": false,
+      "repeats": 3,
+      "variants": [
+        {
+          "specification": {
+            "name": "reuse_jacobi_0.005",
+            "forcing": 0.005,
+            "restart": 8,
+            "newton": {
+              "timestep_predictor": true,
+              "tiled_reductions": true,
+              "reuse_trial_state": true
+            },
+            "mg": {
+              "levels": 3,
+              "pre_sweeps": 2,
+              "post_sweeps": 2,
+              "coarse_sweeps": 2,
+              "omega": 0.8,
+              "cached_line_factors": true,
+              "preconditioner_precision": "float32",
+              "coefficient_state": "current",
+              "line_smoother": "jacobi"
+            }
+          },
+          "passed": true,
+          "median_public_seconds": 0.9796860449932865,
+          "median_numerical_seconds": 0.6408119760089903,
+          "median_first_setup_seconds": 0.19498730500345118,
+          "krylov": [
+            200,
+            200,
+            200
+          ],
+          "outer": [
+            49,
+            49,
+            49
+          ],
+          "maximum_mf6_head_error_m": 6.841307176319589e-08
+        },
+        {
+          "specification": {
+            "name": "register_3_2_2",
+            "forcing": 0.005,
+            "restart": 8,
+            "newton": {
+              "timestep_predictor": true,
+              "tiled_reductions": true,
+              "reuse_trial_state": true
+            },
+            "mg": {
+              "levels": 3,
+              "pre_sweeps": 2,
+              "post_sweeps": 2,
+              "coarse_sweeps": 2,
+              "register_line_solve": true,
+              "cached_line_factors": true,
+              "preconditioner_precision": "float32",
+              "coefficient_state": "current"
+            }
+          },
+          "passed": true,
+          "median_public_seconds": 0.991635664999194,
+          "median_numerical_seconds": 0.6404670020128833,
+          "median_first_setup_seconds": 0.19908946499344893,
+          "krylov": [
+            200,
+            200,
+            200
+          ],
+          "outer": [
+            49,
+            49,
+            49
+          ],
+          "maximum_mf6_head_error_m": 6.841307176319589e-08
+        },
+        {
+          "specification": {
+            "name": "register_3_1_2",
+            "forcing": 0.005,
+            "restart": 8,
+            "newton": {
+              "timestep_predictor": true,
+              "tiled_reductions": true,
+              "reuse_trial_state": true
+            },
+            "mg": {
+              "levels": 3,
+              "pre_sweeps": 1,
+              "post_sweeps": 2,
+              "coarse_sweeps": 2,
+              "register_line_solve": true,
+              "cached_line_factors": true,
+              "preconditioner_precision": "float32",
+              "coefficient_state": "current"
+            }
+          },
+          "passed": true,
+          "median_public_seconds": 0.9696738529964932,
+          "median_numerical_seconds": 0.6243028500175569,
+          "median_first_setup_seconds": 0.19715333899512189,
+          "krylov": [
+            213,
+            213,
+            213
+          ],
+          "outer": [
+            47,
+            47,
+            47
+          ],
+          "maximum_mf6_head_error_m": 6.717902456543356e-08
+        }
+      ]
+    },
+    {
+      "raw_path": "benchmark_results/gpu_native/polish_confined_packed_20261112/results.json",
+      "sha256": "f57e1cae7b8ee3588be5a20a5514ea535e2f2e51941ba637ac969ac3191e21c2",
+      "revision": "cd17ae37493109abdb053fd301eba303d36901a7",
+      "source_sha256": {
+        "DARCY_WARP_PACKAGE/solvers/npf662_3d.py": "4c3b2de1089704730f9b325f31646838b9e6b5aedfca97fae45714e18ebf4cb7",
+        "DARCY_WARP_PACKAGE/solvers/npf662_fgmres.py": "d4e734310b327486080de3cc777ad55ee1bb5f25218cbc22d9938a1c713545f9",
+        "DARCY_WARP_PACKAGE/solvers/npf662_history.py": "da00e320a6d0d1e597e240276aa9632007072be8ca1c895399e19b29ebe2bc2f",
+        "DARCY_WARP_PACKAGE/solvers/npf662_kcycle.py": "547d519eba1905a4b96a2d66e22ae774b1c44d4b2115a018d7d38501091824b6",
+        "DARCY_WARP_PACKAGE/solvers/npf662_kernels.py": "11ed51ceb2887268abd50ab8a15d037d2b11d28b0567547d7d8dc37903251581",
+        "DARCY_WARP_PACKAGE/solvers/npf662_line.py": "c9211f73afe55dee0516dd234e9da6249787025c601cedbb0c7cd360a6abc1a1",
+        "DARCY_WARP_PACKAGE/solvers/npf662_mixed_kernels.py": "f2f431c534053f7b77df044d50d9854bd66d1f58efddb9f374faf351fadcdb87",
+        "DARCY_WARP_PACKAGE/solvers/npf662_newton.py": "0a1ee8f0205cedad864e6325dea726561b520cd7714edd4391e5007f028400ac",
+        "DARCY_WARP_PACKAGE/solvers/npf662_register_line.py": "ccc68d30655b59a1d1c2d5a9777baa05a682edf3268cfc375c534075d063662e",
+        "DARCY_WARP_PACKAGE/solvers/npf662_state.py": "74e5d21d187f8f386f2c4431df520da25736aaafe70be111e58ca00213e5fc73"
+      },
+      "audit": false,
+      "repeats": 3,
+      "variants": [
+        {
+          "specification": {
+            "name": "confined_packed_False",
+            "forcing": 0.01,
+            "restart": 24,
+            "newton": {
+              "tiled_reductions": true,
+              "reuse_trial_state": true,
+              "packed_jacobian": false
+            },
+            "mg": {
+              "levels": 5,
+              "pre_sweeps": 2,
+              "post_sweeps": 2,
+              "coarse_sweeps": 2,
+              "cached_line_factors": true,
+              "preconditioner_precision": "float32"
+            }
+          },
+          "passed": true,
+          "median_public_seconds": 1.4509726329997648,
+          "median_numerical_seconds": 1.086575475987047,
+          "median_first_setup_seconds": 0.20799324000108754,
+          "krylov": [
+            284,
+            284,
+            284
+          ],
+          "outer": [
+            63,
+            63,
+            63
+          ],
+          "maximum_mf6_head_error_m": 3.4527949352991527e-06
+        },
+        {
+          "specification": {
+            "name": "confined_packed_True",
+            "forcing": 0.01,
+            "restart": 24,
+            "newton": {
+              "tiled_reductions": true,
+              "reuse_trial_state": true,
+              "packed_jacobian": true
+            },
+            "mg": {
+              "levels": 5,
+              "pre_sweeps": 2,
+              "post_sweeps": 2,
+              "coarse_sweeps": 2,
+              "cached_line_factors": true,
+              "preconditioner_precision": "float32"
+            }
+          },
+          "passed": true,
+          "median_public_seconds": 1.466591308999341,
+          "median_numerical_seconds": 1.095800317991234,
+          "median_first_setup_seconds": 0.21763793400168652,
+          "krylov": [
+            284,
+            284,
+            284
+          ],
+          "outer": [
+            63,
+            63,
+            63
+          ],
+          "maximum_mf6_head_error_m": 3.452759614219758e-06
+        }
+      ]
+    },
+    {
+      "raw_path": "benchmark_results/gpu_native/polish_predictor_search_20261112/results.json",
+      "sha256": "ce5250d6b11344f6b307ddabfb588957aecf4c6e60be28bca3212505b6ff7133",
+      "revision": "cd17ae37493109abdb053fd301eba303d36901a7",
+      "source_sha256": {
+        "DARCY_WARP_PACKAGE/solvers/npf662_3d.py": "4c3b2de1089704730f9b325f31646838b9e6b5aedfca97fae45714e18ebf4cb7",
+        "DARCY_WARP_PACKAGE/solvers/npf662_fgmres.py": "d4e734310b327486080de3cc777ad55ee1bb5f25218cbc22d9938a1c713545f9",
+        "DARCY_WARP_PACKAGE/solvers/npf662_history.py": "da00e320a6d0d1e597e240276aa9632007072be8ca1c895399e19b29ebe2bc2f",
+        "DARCY_WARP_PACKAGE/solvers/npf662_kcycle.py": "43f45a417b5bad68ad2856b06b4f22d9777f6c4a845fc485e74542f4a9fe9d80",
+        "DARCY_WARP_PACKAGE/solvers/npf662_kernels.py": "98a085aa27d0c33d1cb485ddfbb01297a914073513e87ffb0405637343bc7e3f",
+        "DARCY_WARP_PACKAGE/solvers/npf662_line.py": "c9211f73afe55dee0516dd234e9da6249787025c601cedbb0c7cd360a6abc1a1",
+        "DARCY_WARP_PACKAGE/solvers/npf662_mixed_kernels.py": "f2f431c534053f7b77df044d50d9854bd66d1f58efddb9f374faf351fadcdb87",
+        "DARCY_WARP_PACKAGE/solvers/npf662_newton.py": "3826f8fc1ddc8bd295508dd7974d600452c894215ecfa6f0575f67a777cfee7f",
+        "DARCY_WARP_PACKAGE/solvers/npf662_state.py": "74e5d21d187f8f386f2c4431df520da25736aaafe70be111e58ca00213e5fc73"
+      },
+      "audit": false,
+      "repeats": 3,
+      "variants": [
+        {
+          "specification": {
+            "name": "reuse_jacobi_0.005",
+            "forcing": 0.005,
+            "restart": 8,
+            "newton": {
+              "timestep_predictor": true,
+              "tiled_reductions": true,
+              "reuse_trial_state": true
+            },
+            "mg": {
+              "levels": 3,
+              "pre_sweeps": 2,
+              "post_sweeps": 2,
+              "coarse_sweeps": 2,
+              "omega": 0.8,
+              "cached_line_factors": true,
+              "preconditioner_precision": "float32",
+              "coefficient_state": "current",
+              "line_smoother": "jacobi"
+            }
+          },
+          "passed": true,
+          "median_public_seconds": 0.9743784029997187,
+          "median_numerical_seconds": 0.6413482140051201,
+          "median_first_setup_seconds": 0.1960218399981386,
+          "krylov": [
+            200,
+            200,
+            200
+          ],
+          "outer": [
+            49,
+            49,
+            49
+          ],
+          "maximum_mf6_head_error_m": 6.841307176319589e-08
+        },
+        {
+          "specification": {
+            "name": "predictor_search_0.003",
+            "forcing": 0.003,
+            "restart": 8,
+            "newton": {
+              "timestep_predictor": true,
+              "tiled_reductions": true,
+              "reuse_trial_state": true,
+              "predictor_line_search": true
+            },
+            "mg": {
+              "levels": 3,
+              "pre_sweeps": 2,
+              "post_sweeps": 2,
+              "coarse_sweeps": 2,
+              "cached_line_factors": true,
+              "preconditioner_precision": "float32",
+              "coefficient_state": "current"
+            }
+          },
+          "passed": true,
+          "median_public_seconds": 0.9812668969971128,
+          "median_numerical_seconds": 0.6468443980047596,
+          "median_first_setup_seconds": 0.1947926990033011,
+          "krylov": [
+            203,
+            203,
+            203
+          ],
+          "outer": [
+            45,
+            45,
+            45
+          ],
+          "maximum_mf6_head_error_m": 6.616007808268876e-08
+        },
+        {
+          "specification": {
+            "name": "predictor_search_0.005",
+            "forcing": 0.005,
+            "restart": 8,
+            "newton": {
+              "timestep_predictor": true,
+              "tiled_reductions": true,
+              "reuse_trial_state": true,
+              "predictor_line_search": true
+            },
+            "mg": {
+              "levels": 3,
+              "pre_sweeps": 2,
+              "post_sweeps": 2,
+              "coarse_sweeps": 2,
+              "cached_line_factors": true,
+              "preconditioner_precision": "float32",
+              "coefficient_state": "current"
+            }
+          },
+          "passed": true,
+          "median_public_seconds": 0.9793438659980893,
+          "median_numerical_seconds": 0.6373403399993549,
+          "median_first_setup_seconds": 0.19639544100209605,
+          "krylov": [
+            195,
+            195,
+            195
+          ],
+          "outer": [
+            48,
+            48,
+            48
+          ],
+          "maximum_mf6_head_error_m": 6.814003616906206e-08
+        },
+        {
+          "specification": {
+            "name": "predictor_search_0.01",
+            "forcing": 0.01,
+            "restart": 8,
+            "newton": {
+              "timestep_predictor": true,
+              "tiled_reductions": true,
+              "reuse_trial_state": true,
+              "predictor_line_search": true
+            },
+            "mg": {
+              "levels": 3,
+              "pre_sweeps": 2,
+              "post_sweeps": 2,
+              "coarse_sweeps": 2,
+              "cached_line_factors": true,
+              "preconditioner_precision": "float32",
+              "coefficient_state": "current"
+            }
+          },
+          "passed": true,
+          "median_public_seconds": 1.0160992659948533,
+          "median_numerical_seconds": 0.6707911389748915,
+          "median_first_setup_seconds": 0.20288182199874427,
+          "krylov": [
+            200,
+            200,
+            200
+          ],
+          "outer": [
+            55,
+            55,
+            55
+          ],
+          "maximum_mf6_head_error_m": 7.438461202546875e-08
+        },
+        {
+          "specification": {
+            "name": "predictor_search_0.03",
+            "forcing": 0.03,
+            "restart": 8,
+            "newton": {
+              "timestep_predictor": true,
+              "tiled_reductions": true,
+              "reuse_trial_state": true,
+              "predictor_line_search": true
+            },
+            "mg": {
+              "levels": 3,
+              "pre_sweeps": 2,
+              "post_sweeps": 2,
+              "coarse_sweeps": 2,
+              "cached_line_factors": true,
+              "preconditioner_precision": "float32",
+              "coefficient_state": "current"
+            }
+          },
+          "passed": true,
+          "median_public_seconds": 1.03036943400366,
+          "median_numerical_seconds": 0.6908176159631694,
+          "median_first_setup_seconds": 0.19659764200332575,
+          "krylov": [
+            191,
+            191,
+            191
+          ],
+          "outer": [
+            67,
+            67,
+            67
+          ],
+          "maximum_mf6_head_error_m": 6.497875204569681e-08
+        }
+      ]
+    },
+    {
+      "raw_path": "benchmark_results/gpu_native/polish_device_build_20261112/results.json",
+      "sha256": "ff6e4974e41d1ead7c6cac526f3f755b7d8388817c23175b827512a3bb03f96c",
+      "revision": "cd17ae37493109abdb053fd301eba303d36901a7",
+      "source_sha256": {
+        "DARCY_WARP_PACKAGE/solvers/npf662_3d.py": "4c3b2de1089704730f9b325f31646838b9e6b5aedfca97fae45714e18ebf4cb7",
+        "DARCY_WARP_PACKAGE/solvers/npf662_fgmres.py": "d4e734310b327486080de3cc777ad55ee1bb5f25218cbc22d9938a1c713545f9",
+        "DARCY_WARP_PACKAGE/solvers/npf662_history.py": "da00e320a6d0d1e597e240276aa9632007072be8ca1c895399e19b29ebe2bc2f",
+        "DARCY_WARP_PACKAGE/solvers/npf662_kcycle.py": "552c8929a1193b6f1d31ae1330af8ccbb7963fe43a2316da003f6aeab8a92b56",
+        "DARCY_WARP_PACKAGE/solvers/npf662_kernels.py": "bc8719b7f5fd628b51c89fa99be0957e4c990f77192f440ec5c52f5a66d6dd08",
+        "DARCY_WARP_PACKAGE/solvers/npf662_line.py": "c9211f73afe55dee0516dd234e9da6249787025c601cedbb0c7cd360a6abc1a1",
+        "DARCY_WARP_PACKAGE/solvers/npf662_mixed_kernels.py": "f2f431c534053f7b77df044d50d9854bd66d1f58efddb9f374faf351fadcdb87",
+        "DARCY_WARP_PACKAGE/solvers/npf662_newton.py": "a25860fff8bbce654483b2666e3d9c2fad0f110ee6ede11c849963433cb9a781",
+        "DARCY_WARP_PACKAGE/solvers/npf662_state.py": "74e5d21d187f8f386f2c4431df520da25736aaafe70be111e58ca00213e5fc73"
+      },
+      "audit": false,
+      "repeats": 3,
+      "variants": [
+        {
+          "specification": {
+            "name": "device_build_False",
+            "forcing": 0.005,
+            "restart": 8,
+            "newton": {
+              "timestep_predictor": true,
+              "tiled_reductions": true,
+              "reuse_trial_state": true
+            },
+            "mg": {
+              "levels": 3,
+              "pre_sweeps": 2,
+              "post_sweeps": 2,
+              "coarse_sweeps": 2,
+              "device_hierarchy_build": false,
+              "cached_line_factors": true,
+              "preconditioner_precision": "float32",
+              "coefficient_state": "current"
+            }
+          },
+          "passed": true,
+          "median_public_seconds": 0.9860027190006804,
+          "median_numerical_seconds": 0.6411677860014606,
+          "median_first_setup_seconds": 0.20058390199847054,
+          "krylov": [
+            200,
+            200,
+            200
+          ],
+          "outer": [
+            49,
+            49,
+            49
+          ],
+          "maximum_mf6_head_error_m": 6.841307176319589e-08
+        },
+        {
+          "specification": {
+            "name": "device_build_True",
+            "forcing": 0.005,
+            "restart": 8,
+            "newton": {
+              "timestep_predictor": true,
+              "tiled_reductions": true,
+              "reuse_trial_state": true
+            },
+            "mg": {
+              "levels": 3,
+              "pre_sweeps": 2,
+              "post_sweeps": 2,
+              "coarse_sweeps": 2,
+              "device_hierarchy_build": true,
+              "cached_line_factors": true,
+              "preconditioner_precision": "float32",
+              "coefficient_state": "current"
+            }
+          },
+          "passed": true,
+          "median_public_seconds": 0.9353917659973376,
+          "median_numerical_seconds": 0.6409812800120562,
+          "median_first_setup_seconds": 0.14817029899859335,
+          "krylov": [
+            200,
+            200,
+            200
+          ],
+          "outer": [
+            49,
+            49,
+            49
+          ],
+          "maximum_mf6_head_error_m": 6.841307176319589e-08
+        }
+      ]
+    }
+  ]
+}

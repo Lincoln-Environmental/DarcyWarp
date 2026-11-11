@@ -12,6 +12,7 @@
     "reuse_trial_state": true
   },
   "multigrid": {
+    "device_hierarchy_build": true,
     "levels": 5,
     "pre_sweeps": 2,
     "post_sweeps": 2,

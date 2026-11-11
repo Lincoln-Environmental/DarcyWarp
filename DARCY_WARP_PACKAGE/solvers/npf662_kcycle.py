@@ -12,6 +12,9 @@ from DARCY_WARP_PACKAGE.kernels_3d import (
     add_correction_3d_kernel,
 )
 from .fast_3d import _build_levels, _upload_levels
+from DARCY_WARP_PACKAGE.solvers_3d import (
+    _choose_horizontal_coarsening, _coarsen_max_edge_axes, _coarsen_bc_mask_axes,
+)
 from .npf662_line import factor_lines, smooth_factored_lines
 from .npf662_kernels import combine_scalar_tiled
 from . import npf662_mixed_kernels as mixed
@@ -38,8 +41,11 @@ class NPF662KCycleControls:
     preconditioner_precision: str = 'float64'
     coefficient_state: str = 'saturated'
     line_smoother: str = 'jacobi'
+    device_hierarchy_build: bool = False
 
     def validate(self):
+        if not isinstance(self.device_hierarchy_build, (bool, np.bool_)):
+            raise ValueError('device_hierarchy_build must be Boolean')
         if self.cycle_kind not in ('k', 'v'):
             raise ValueError('cycle_kind must be k or v')
         if not isinstance(self.cached_line_factors, (bool, np.bool_)):
@@ -183,6 +189,25 @@ def refresh_storage_diagonal(storage: wp.array3d(dtype=wp.float64),
     diagonal[k,j,i] = value
 
 
+def build_hierarchy_topology(*, faces, active, fixed, storage, controls):
+    """Build only mask topology on the host; device kernels fill coarse values."""
+    zeros=np.zeros(shape=active.shape,dtype=np.float64)
+    levels=[dict(faces=faces,active=active,bc_mask=fixed,bc_values=zeros,rhs=zeros,
+        storage=storage,coarsen_y=1,coarsen_x=1)]
+    for unused in range(1,controls.levels):
+        fine=levels[-1]
+        ny,nx=fine['active'].shape[1:]
+        fy,fx=_choose_horizontal_coarsening(ny=ny,nx=nx,min_coarse_n=controls.min_coarse_n)
+        if fy==1 and fx==1:break
+        active_c=_coarsen_max_edge_axes(mask_f=fine['active'],coarsen_y=fy,coarsen_x=fx)
+        fixed_c=_coarsen_bc_mask_axes(bc_mask_f=fine['bc_mask'],active_f=fine['active'],coarsen_y=fy,coarsen_x=fx)
+        zeros=np.zeros(shape=active_c.shape,dtype=np.float64)
+        levels.append(dict(faces=(zeros,)*6,active=active_c,bc_mask=fixed_c,bc_values=zeros,
+            rhs=zeros,storage=zeros,boundary_springs=zeros,coarsen_y=1,coarsen_x=1))
+        fine['coarsen_y'],fine['coarsen_x']=int(fy),int(fx)
+    return levels
+
+
 class NPF662KCycleWorkspace:
     def __init__(self, *, faces, active, fixed, device, controls, storage_diag=None):
         controls.validate()
@@ -197,9 +222,12 @@ class NPF662KCycleWorkspace:
         if storage.shape != active.shape or np.any(~np.isfinite(storage)) or np.any(storage < 0.):
             raise ValueError('Finite nonnegative per-cell storage diagonal required')
         self.snapshots = tuple(np.array(value, copy=True) for value in (*faces, active, fixed, storage))
-        host = _build_levels(faces=faces, active=active, bc_mask=fixed, bc_values=zeros,
-                             rhs=zeros, storage_diag=storage, max_levels=controls.levels,
-                             min_coarse_n=controls.min_coarse_n)
+        if controls.device_hierarchy_build:
+            host = build_hierarchy_topology(faces=faces,active=active,fixed=fixed,storage=storage,controls=controls)
+        else:
+            host = _build_levels(faces=faces, active=active, bc_mask=fixed, bc_values=zeros,
+                                 rhs=zeros, storage_diag=storage, max_levels=controls.levels,
+                                 min_coarse_n=controls.min_coarse_n)
         self.levels = _upload_levels(host_levels=host, device=self.device)
         for level, host_level in zip(self.levels, host):
             level['boundary_springs'] = wp.array(data=host_level.get('boundary_springs',
@@ -209,7 +237,7 @@ class NPF662KCycleWorkspace:
             if controls.cached_line_factors:
                 level['line_inverse'] = wp.zeros(shape=level['dim'], dtype=wp.float64, device=self.device)
                 level['line_lower'] = wp.zeros(shape=level['dim'], dtype=wp.float64, device=self.device)
-                self._factor_lines(level=level)
+                if not controls.device_hierarchy_build:self._factor_lines(level=level)
         self.mixed = controls.preconditioner_precision == 'float32'
         self.work_levels = self.levels
         if self.mixed:
@@ -222,7 +250,7 @@ class NPF662KCycleWorkspace:
                         'line_inverse', 'line_lower', 'c_prime', 'd_prime'):
                     work[name] = wp.zeros(shape=level['dim'], dtype=wp.float32, device=self.device)
                 self.work_levels.append(work)
-            self._refresh_mixed()
+            if not controls.device_hierarchy_build:self._refresh_mixed()
         self.graph = None
         self.refresh_graphs = {}
         self.refresh_graph_failed = False
@@ -236,6 +264,7 @@ class NPF662KCycleWorkspace:
         self.cuda = wp.get_device(ident=self.device).is_cuda
         self.start_event = wp.Event(device=self.device, enable_timing=True) if self.cuda else None
         self.end_event = wp.Event(device=self.device, enable_timing=True) if self.cuda else None
+        if controls.device_hierarchy_build:self.refresh_storage_device(refresh_faces=True)
         # Compile before capture. Graph creation is outside FGMRES applications.
         self._enqueue()
         if wp.get_device(ident=self.device).is_cuda:
