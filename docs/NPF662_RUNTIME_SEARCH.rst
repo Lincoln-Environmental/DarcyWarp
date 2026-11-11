@@ -1,7 +1,8 @@
 NPF runtime search: one-second target
 =====================================
 
-This is development work after the ``cd32e71`` main release. The target is
+This work was developed after ``cd32e71`` and promoted to main as ``a58542d``.
+Fresh main reruns are recorded in ``NPF662_MAIN_2026-11-12.rst``. The target is
 one second for the complete 500 x 500 x 5 convertible NPF/STO history of
 20 weekly steps on the RTX 4070 Ti SUPER. The strict target is met: the
 complete device history API takes **0.957 s**, median of three fresh-model
@@ -337,11 +338,12 @@ in the compact evidence. No MF6 timing claim is made for changed-K cases.
 Reproduce with ``working_tests/benchmark_npf_calibration_runtime.py
 --controls working_tests/npf_runtime_controls.json --output NEW_DIRECTORY``.
 
-Development release details
+Release details
 ---------------------------
 
-This qualification is for ``dev`` after the promoted ``cd32e71`` main
+The original qualification below used ``dev`` after the ``cd32e71`` main
 release and the ``7598f6c`` mixed-preconditioner development checkpoint.
+The NPF implementation is now promoted and independently requalified on main.
 It adds the explicit NPF/STO history API and three reviewable control files
 for strict convertible, MF6-comparable convertible and confined runs.
 Select ``--npf-history`` in the portable sanity driver; omit it to exercise

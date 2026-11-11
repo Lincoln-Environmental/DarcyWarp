@@ -1,0 +1,75 @@
+Main NPF history qualification, 12 November 2026
+================================================
+
+The device-history improvements from dev ``515603f`` are promoted to main ``a58542d``.
+The timings below are fresh runs of that main revision: a separate warmup
+and three repetitions, each built from a fresh model and the original
+prescribed initial heads. There is no steady-state presolve. Every model
+has five layers and runs all 20 weekly timesteps; only the upper layer
+is convertible in the convertible cases. Physical K, storage and source
+schedules match the fingerprint-verified saved MF6 references.
+
+.. list-table:: Entire history seconds; GPU medians of three, MF6 one saved engine run
+   :header-rows: 1
+
+   * - Profile / grid
+     - GPU history (s)
+     - Model construction (s)
+     - Extra audit (s)
+     - MF6 engine (s)
+     - Max head difference (m)
+   * - strict convertible: npf_convertible_250x250x5_transient
+     - 0.268
+     - 0.051
+     - 4.401
+     - 17.319
+     - 3.69e-08
+   * - strict convertible: npf_convertible_500x500x5_transient
+     - 0.954
+     - 0.226
+     - 20.316
+     - 104.391
+     - 6.84e-08
+   * - MF6 accuracy convertible: npf_convertible_500x500x5_transient
+     - 0.945
+     - 0.226
+     - 20.125
+     - 104.391
+     - 7.88e-08
+   * - strict confined: npf_confined_250x250x5_transient
+     - 0.648
+     - 0.051
+     - 4.452
+     - 47.589
+     - 1.06e-06
+   * - strict confined: npf_confined_500x500x5_transient
+     - 1.431
+     - 0.223
+     - 19.927
+     - 346.408
+     - 3.45e-06
+
+The public history timer includes internal workspace construction, graph capture,
+all source/timestep updates, production physical acceptance and output download.
+External model construction and extra independent benchmark audits are separate.
+MF6 output writing remains inside its engine timer. FP64 physical heads,
+storage, fluxes, FGMRES and acceptance use an explicitly selected FP32
+multigrid correction. The strict relative cell imbalance limit is 1e-7;
+head-equivalent RMS remains 1e-6 m. The 1.5e-7 profile matches the saved
+MF6 history's measured physical accuracy envelope; it does not equate
+the differently defined solver convergence norms.
+
+All 400 NPF endpoints pass independent physical audits and MF6 head gates.
+The cached 8 x 8 x 5 Cartesian steady and four-step transient sanity cases
+also pass after warmup and three repetitions. These are smoke checks,
+not new realistic-size Cartesian performance claims.
+
+Validation on main: 615 tests passed, four CPU parameterizations of CUDA-only
+checks skipped, and 43 fresh-MF6 tests deselected. Experimental terrain
+APIs remain on dev. The release uses the explicit ``solve_transient_npf``
+API and the checked-in strict, MF6-accuracy and confined control profiles.
+Library defaults remain unchanged. Reproduction commands and limitations
+are in ``NPF662_RUNTIME_SEARCH.rst`` below.
+
+Compact source fingerprints, repeat timings and physical metrics:
+``benchmark_results/gpu_native/main_history_qualification_20261112.json``.

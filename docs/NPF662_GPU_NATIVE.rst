@@ -1,10 +1,11 @@
 NPF transient GPU execution
 ===========================
 
-The current development qualification is described in ``NPF662_RUNTIME_SEARCH.rst``
+The original development qualification is described in ``NPF662_RUNTIME_SEARCH.rst``
 below: **0.957 s** for the strict 20-step convertible history, or **0.931 s**
 with a case-specific MF6-comparable physical accuracy envelope. Those changes
-are on ``dev``; the following sections preserve the earlier promoted results.
+are now on ``main``. Fresh main timings are in ``NPF662_MAIN_2026-11-12.rst``;
+the following sections preserve earlier results.
 
 The opt-in transient NPF path reduces the 500 x 500 x 5 convertible model's
 20-step solve time from 30.24 s to 9.74 s on an RTX 4070 Ti SUPER. The saved
