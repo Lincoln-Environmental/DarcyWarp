@@ -74,6 +74,17 @@ and precision. CUDA-dependent tests skip when CUDA is unavailable. Some
 comparison workflows also need saved fixtures, FloPy and a MODFLOW 6 executable.
 A run containing skipped tests should be described with those exclusions.
 
+The 2D GPU release suites can also be run together using saved references:
+
+.. code-block:: bash
+
+   DARCY_FLOAT=float64 PYTHONPATH=.:working_tests python -m working_tests.run_2d_gpu_tests
+
+This runner excludes tests that launch native MF6 and reports the exclusions.
+The :doc:`release_2d` records the actual release run, GHB regressions and
+separate full-history benchmarks. A green unit-test run alone does not
+establish the runtime or MF6 parity of a new model.
+
 MODFLOW 6 comparisons
 ---------------------
 

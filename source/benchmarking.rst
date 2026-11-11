@@ -8,6 +8,11 @@ SciPy-based finite-difference reference, then write JSON summaries and plots.
 For a first model, use :doc:`quickstart`. The commands below are ensemble
 benchmarks and can be substantially larger than the introductory example.
 
+For the current fast 2D steady and transient comparison with saved MF6 results,
+see :doc:`release_2d` and :doc:`runtime_2d`. Those drivers report synchronized
+public solve time separately from external construction and independent audits,
+and reject histories that fail convergence, head, budget or timestep parity.
+
 Environment
 -----------
 

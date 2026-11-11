@@ -1,6 +1,12 @@
 2D GPU runtime improvements, 12 November 2026
 =============================================
 
+The promotion report in ``docs/2D_GPU_RELEASE_NOTES.rst`` records fresh
+before/after measurements on ``main`` and the final release checks. The
+development measurements and diagnostic history below are retained for
+provenance; the older ``dev`` registry-test failure is not a current
+``main`` release failure.
+
 The fast 2D solvers now combine residual partial sums in one parallel CUDA
 block instead of a serial GPU thread. The operation still uses FP64,
 overwrites the scalar result and clears the reusable partial buffer.

@@ -23,10 +23,17 @@ and [GPU release notes](docs/3D_GPU_RELEASE_NOTES.md) document reproducible timi
 The [NPF transient GPU guide](docs/NPF662_GPU_NATIVE.rst) describes the opt-in
 device acceptance and persistent hierarchy implementation, including
 convertible benchmarks, conductivity updates and reproduction commands.
-The latest promoted NPF implementation measured **5.92 s** for a 500 x 500 x 5
+The [latest NPF main qualification](docs/NPF662_RUNTIME_POLISH_2026-11-12.rst)
+measured **0.972 s** for a 500 x 500 x 5
 convertible model over 20 weekly steps, versus **104.39 s** for saved MF6.
-The development benchmark excludes construction and extra independent audits;
-the guide records validation and the timing boundaries.
+The synchronized public-history timer excludes external model construction
+and extra independent audits; the report records validation and timing boundaries.
+
+The [2D GPU release notes](docs/2D_GPU_RELEASE_NOTES.rst) cover the parallel
+reductions, faster transient profile and GHB parity repairs, with fresh
+before/after main benchmarks and unchanged convergence gates. The profile is
+explicitly selected using
+[`2d_transient_runtime_controls.json`](working_tests/2d_transient_runtime_controls.json).
 
 **Developed by Patrick Durney and Jaco Fourie at [Lincoln Agritech Ltd](https://lincolnagritech.co.nz/), which owns the DarcyWarp software.** DarcyWarp is released under the [GNU Affero General Public License v3.0 or later](LICENSE).
 
@@ -49,7 +56,7 @@ it shows a numerical solution and its analytical reference, not field observatio
 | Execution | CPU or NVIDIA CUDA devices through Warp. The first example runs on a CPU. |
 | Repeated solves | Recharge and transmissivity updates, reusable solver resources and multigrid hierarchies. |
 | Numerical options | PCG and multigrid K-cycle solvers; Picard and semismooth Newton for unconfined flow; an experimental FAS backend. |
-| Precision | FP64 solvers and a separate mixed-precision path for confined steady benchmarks, with FP64 master heads and FP32 corrections. |
+| Precision | FP64 solvers; explicit mixed-precision paths for fast confined steady and transient unconfined solves, retaining FP64 heads and acceptance with FP32 corrections. |
 
 See the [capability guide](source/capabilities.rst) for solver selection and scope.
 For 3D, see the [Cartesian and NPF/STO capability guide](docs/3D_CARTESIAN_NPF.md).
@@ -159,6 +166,7 @@ the grid, hardware, precision, convergence criteria and setup costs identified.
 | [Capabilities and solver selection](source/capabilities.rst) | 2D formulations, backend choices, boundaries, precision and limitations. |
 | [Structured 3D models](docs/3D_CARTESIAN_NPF.md) | Cartesian and layered DIS models, NPF/STO steps and CPU validation. |
 | [Validation](source/validation.rst) | Analytical checks, numerical comparisons and their scope. |
+| [2D GPU release](docs/2D_GPU_RELEASE_NOTES.rst) | Runtime profile, GHB parity fixes, current main timings and reproducible GPU checks. |
 | [Benchmarking](source/benchmarking.rst) | Ensemble workflows, flags, generated files and troubleshooting. |
 | [Build the documentation](source/docs_build.rst) | A local HTML documentation site. |
 | [Contributing](CONTRIBUTING.md) | Development checks and useful issue reports. |

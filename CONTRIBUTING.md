@@ -15,7 +15,7 @@ conda activate darcywarp
 
 Run Python modules from the repository root so that
 `DARCY_WARP_PACKAGE` is importable. The dependency file pins NVIDIA
-Warp as `warp-lang==1.10.0`; its Python import name is `warp`.
+Warp as `warp-lang==1.17.0`; its Python import name is `warp`.
 
 ## Make a focused change
 
@@ -34,8 +34,8 @@ Preserve attribution and licence notices.
 
 ## Check what changed
 
-The CI workflow runs Python 3.11 with NumPy, SciPy, pandas, pytest and
-Warp 1.10.0, checks imports and syntax, then runs these CPU smoke tests:
+The CI workflow runs Python 3.12 with NumPy, SciPy, pandas, pytest and
+Warp 1.17.0, checks imports and syntax, then runs these CPU smoke tests:
 
 ```bash
 python -m compileall -q DARCY_WARP_PACKAGE tests working_tests
@@ -47,6 +47,17 @@ device affected by a numerical change. Report passes, failures and skips
 separately. A CPU run does not exercise CUDA-only paths. See the
 [verification guide](source/validation.rst) for the test map and the
 [capability guide](source/capabilities.rst) for supported combinations.
+
+For the fast 2D release suites, including GHB, mixed precision and saved MF6
+fixtures, run:
+
+```bash
+DARCY_FLOAT=float64 PYTHONPATH=.:working_tests python -m working_tests.run_2d_gpu_tests
+```
+
+The runner excludes native MF6 generation;
+inspect CUDA skips and use the [2D release guide](docs/2D_GPU_RELEASE_NOTES.rst)
+for separate performance and full-history MF6 checks.
 
 For documentation changes, check the relevant example and build the docs:
 

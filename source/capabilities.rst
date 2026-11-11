@@ -135,7 +135,15 @@ names above. The ensemble command-line runners currently default to their
 ``mixed`` implementation; this does not make mixed precision the default for
 every call to the public solver. The mixed implementation builds its model
 under ``DARCY_FLOAT=float32`` and must run in a separate process from an
-already-imported FP64 implementation.
+already-imported FP64 implementation. This process requirement describes the
+confined steady mixed implementation.
+
+The transient unconfined device path has a separate mixed correction option,
+``transient_mixed_precision_enabled``. It runs under ``DARCY_FLOAT=float64``
+and retains FP64 heads, storage and acceptance with FP32 inner corrections.
+GHB requires the face operator. The :doc:`release_2d` documents the explicit
+runtime profile, unchanged 1e-6 m head-residual gate and GHB-specific damping;
+its benchmarks require matching MF6 timesteps as well as heads and budgets.
 
 See :doc:`benchmarking` for the ``--warp_impl`` options and
 :doc:`validation` for precision and backend comparison tests. Compare
