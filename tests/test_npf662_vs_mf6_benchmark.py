@@ -12,6 +12,13 @@ from DARCY_WARP_PACKAGE.validation.npf662_reference import NPF662Reference, load
 from working_tests.benchmark_npf662_vs_mf6 import suite_settings, parity_metrics, comparison_summary
 
 
+@pytest.mark.parametrize('convertible', [True, False, [True], [-1], [5], [0.5]])
+def test_generator_rejects_ambiguous_layer_selection(convertible):
+    specification = suite_settings(sizes=[8], variants=['convertible'])[0]
+    with pytest.raises(ValueError, match='layer indices'):
+        generate_case(settings=specification['geology'], convertible=convertible)
+
+
 def test_case_units_types_and_exact_cold_head_roundtrip(tmp_path):
     specifications = suite_settings(sizes=[8], variants=['confined', 'convertible', 'phreatic'])
     generated = []

@@ -24,13 +24,17 @@ def device(request):
     return request.param
 
 
-def test_manufactured_scaled_linear_and_fixed_mask(device):
+@pytest.mark.parametrize('cycle_kind,cached_factors,precision', [
+    ('k', False, 'float64'), ('k', True, 'float64'), ('v', True, 'float64'), ('k', True, 'float32')])
+def test_manufactured_scaled_linear_and_fixed_mask(device, cycle_kind, cached_factors, precision):
     case = layered_case(masked=True, shape=(5, 7, 9))
     reference = NPF662Reference(case=case)
     with make_gpu_model(case=case, device=device) as model:
         ws = NPF662Workspace(model=model, case=case, restart=12, krylov_budget=200)
         mg = NPF662KCycleWorkspace(faces=model._session.faces, active=case.active, fixed=case.fixed,
-                                 device=device, controls=NPF662KCycleControls())
+                                 device=device, controls=NPF662KCycleControls(
+                                     cycle_kind=cycle_kind, cached_line_factors=cached_factors,
+                                     preconditioner_precision=precision))
         gmres = RestartedFGMRES3D(workspace=ws, restart=12)
         exact = np.random.default_rng(seed=991).normal(size=case.active.size)
         exact[~reference.free.ravel()] = 0.
@@ -58,13 +62,16 @@ def test_manufactured_scaled_linear_and_fixed_mask(device):
 
 
 @pytest.mark.parametrize('initial', ['wet', 'dry', 'mixed'])
-def test_nonlinear_matches_independent_root(device, initial):
+@pytest.mark.parametrize('coefficient_state', ['saturated', 'current'])
+def test_nonlinear_matches_independent_root(device, initial, coefficient_state):
     case = unconfined_case(initial=initial, heterogeneous=True)
     expected, checks, unused = NPF662Reference(case=case).solve(max_outer=200)
     assert checks['independent_accepted']
     with make_gpu_model(case=case, device=device) as model:
         head, info = model.solve(unconfined=True, top_elevation=case.top, npf_cell_type=case.cell_types,
-            npf_preconditioner='kcycle', krylov_restart=12, max_outer=200, max_cycles=200)
+            npf_preconditioner='kcycle', krylov_restart=12, max_outer=200, max_cycles=200,
+            npf_kcycle_controls=NPF662KCycleControls(coefficient_state=coefficient_state,
+                cached_line_factors=True, preconditioner_precision='float32'))
         assert info['converged'] and info['independent_acceptance']['independent_accepted'], info
         np.testing.assert_allclose(actual=head, desired=expected, rtol=0., atol=1e-7)
         assert info['krylov_method'] == 'FGMRES'

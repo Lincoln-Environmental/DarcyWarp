@@ -146,6 +146,8 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
                 scaling='full-saturated principal diagonal plus previous-state storage tangent; S*J and S*R')
             if npf_preconditioner=='kcycle':
                 info['preconditioner']='A0 plus previous-state storage tangent K-cycle; physical RHS D0*v; homogeneous corrections'
+                if info['multigrid']['controls']['coefficient_state'] == 'current':
+                    info['preconditioner']='Current Picard conductances plus current storage tangent; saturated safeguard on fallback; physical RHS D0*v'
         info['effective_solver_settings'] = dict(backend=info['implementation'], krylov_method=info['krylov_method'],
             restart=krylov_restart, krylov_budget_per_outer=max_cycles, max_outer=max_outer,
             nonlinear=asdict(controls), hierarchy=info.get('multigrid'),

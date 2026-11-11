@@ -152,12 +152,12 @@ Compact timing evidence and source hashes are stored in
 ``benchmark_results/gpu_native/source_manifest.json``. Raw histories and
 heads remain local, outside version control.
 
-Promoted runtime improvements
------------------------------
+Further runtime work promoted to main
+-------------------------------------
 
-These changes, developed at ``bf59a2a``, are now promoted to main.
-The timings below were measured on dev before promotion; they are not
-labelled as fresh main timing measurements.
+These changes were developed on dev at ``bf59a2a`` and promoted to main
+as ``cd32e71``. Main passed 539 tests with 43 live-MF6 cases deselected.
+The following timings were measured on dev before that promotion.
 The repeated 500 x 500 x 5 convertible benchmark now takes 5.916 s
 per 20-step history (median of three). Its Newton/Krylov interval is 3.835 s;
 setup and final acceptance outside that interval remain in the public solve total.

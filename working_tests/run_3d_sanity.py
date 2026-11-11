@@ -44,6 +44,8 @@ def parse_arguments(*, defaults):
         help='Explicit NPF cellwise imbalance limit; omitted retains the 1e-8 default.')
     parser.add_argument('--npf-device-native', action='store_true',
         help='Opt-in transient device acceptance; independent verification remains outside the solve timer.')
+    parser.add_argument('--npf-controls', type=Path,
+        help='JSON containing solve, newton and multigrid controls for a reproducible NPF experiment.')
     parser.add_argument('--legacy-max-cycles', type=int, default=None, help='Explicit override; default uses the 2D sanity budget.')
     args = parser.parse_args()
     if min(args.sizes) < 2 or args.repeats < 1 or args.periods < 1:
@@ -173,6 +175,9 @@ def measure(*, case, family, mode, label, reference, native_accepted, device, pr
     previous = case.initial.copy()
     implementation = label if family == 'cartesian' else 'fast'
     kwargs = dict(profiles['transient'] if mode == 'transient' else profiles['steady'][implementation]) if family == 'cartesian' else dict(npf_options, npf_preconditioner=label)
+    if family == 'npf' and isinstance(kwargs.get('npf_newton_controls'), dict):
+        from DARCY_WARP_PACKAGE.solvers.npf662_newton import NPF662NewtonControls
+        kwargs['npf_newton_controls'] = NPF662NewtonControls(**kwargs['npf_newton_controls'])
     if family == 'npf' and label == 'kcycle':
         kwargs['npf_kcycle_controls'] = kcycle_controls
     wp.synchronize_device(device=device)
@@ -260,6 +265,16 @@ def run(*, args, root, settings):
     profiles = read_profiles(root=root)
     overrides = {}
     settings = dict(settings, npf_options=dict(settings['npf_options']))
+    if args.npf_controls is not None:
+        payload = json.loads(args.npf_controls.read_text())
+        if set(payload) != {'solve', 'newton', 'multigrid'}:
+            raise ValueError('NPF control file requires exactly solve, newton and multigrid sections')
+        if args.npf_preconditioner == 'diagonal' or args.compare:
+            raise ValueError('An explicit NPF multigrid control file requires the kcycle selection without --compare')
+        args.npf_preconditioner = 'kcycle'
+        settings['npf_options'].update(payload['solve'], npf_newton_controls=payload['newton'])
+        settings['kcycle'] = payload['multigrid']
+        overrides['npf_controls'] = payload
     if args.npf_device_native:
         settings['npf_options']['npf_device_native'] = True
         overrides['npf_device_native'] = True
@@ -280,6 +295,8 @@ def run(*, args, root, settings):
     factors = np.resize(a=np.repeat(a=settings['source_factors'], repeats=settings['block_periods']), new_shape=args.periods)
     controls = NPF662KCycleControls(**settings['kcycle'])
     result = dict(device=device, warp=wp.__version__, profiles=profiles, settings=settings,
+        npf_source_sha256={str(path.relative_to(root)):hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in sorted((root/'DARCY_WARP_PACKAGE/solvers').glob('npf662*.py'))},
         python=platform.python_version(), overrides=overrides,
         revision=subprocess.check_output(args=['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True).strip(),
         timing='Primary: synchronized public solve calls only. Model build, cache loading, external audit and file saving excluded. Secondary: full verification runtime.',
