@@ -47,7 +47,8 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
     abs_tol_min=1e-12,final_budget_relative_tol=1e-8,max_levels=None,min_coarse_n=None,
     return_info=True,max_outer=None,krylov_restart=None,npf_newton_controls=None,
     npf_preconditioner=None,npf_kcycle_controls=None,npf_krylov_method=None,
-    transient=False,dt=None,head_prev=None,ss=None,sy=None,npf_final_relative_tolerance=None,**unsupported):
+    transient=False,dt=None,head_prev=None,ss=None,sy=None,npf_final_relative_tolerance=None,
+    npf_device_native=False,**unsupported):
     started = perf_counter()
     # Omission retains historical backend defaults. Explicit selections must
     # either reach their backend or be rejected, even when equal to a former
@@ -62,6 +63,10 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
     krylov_restart = 24 if krylov_restart is None else krylov_restart
     npf_preconditioner = 'diagonal' if npf_preconditioner is None else npf_preconditioner
     if unsupported:raise ValueError(f'Unsupported mf6_6_6_2_npf controls: {sorted(unsupported)}')
+    if not isinstance(npf_device_native,(bool,np.bool_)):
+        raise ValueError('npf_device_native must be Boolean')
+    if npf_device_native and not transient:
+        raise ValueError('npf_device_native currently requires transient=True')
     if transient and any(value is None for value in (dt,head_prev,ss,sy)):
         raise ValueError('Unsupported incomplete transient controls: dt, head_prev, ss and sy required')
     if not transient and any(value is not None for value in (dt,head_prev,ss,sy)):
@@ -90,9 +95,22 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
     types=int(unconfined) if npf_cell_type is None else npf_cell_type
     case=case_from_model(model=model,top=0. if top_elevation is None else top_elevation,cell_type=types)
     if transient:
-        from DARCY_WARP_PACKAGE.validation.npf662_transient_reference import NPF662TransientReference
-        reference = NPF662TransientReference(case=case, previous=head_prev, dt=dt, ss=ss, sy=sy)
-        reference_reused = False
+        if npf_device_native:
+            from .npf662_state import NPF662TransientState
+            holder=model._session._npf662_workspace_holder
+            reference=holder.get('native_state')
+            reference_reused=reference is not None
+            if reference is None:
+                reference=NPF662TransientState(model=model,case=case,previous=head_prev,dt=dt,ss=ss,sy=sy)
+                holder['native_state']=reference
+            else:
+                if not reference.compatible(model=model,case=case):
+                    raise ValueError('Native NPF geometry/topology changed; rebuild the model')
+                reference.refresh(model=model,case=case,previous=head_prev,dt=dt,ss=ss,sy=sy)
+        else:
+            from DARCY_WARP_PACKAGE.validation.npf662_transient_reference import NPF662TransientReference
+            reference = NPF662TransientReference(case=case, previous=head_prev, dt=dt, ss=ss, sy=sy)
+            reference_reused = False
     else:
         reference, reference_reused = independent_reference(model=model, case=case)
     reference_seconds = perf_counter()-started
@@ -112,7 +130,8 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
         head,info=solve_newton_device(model=model,case=case,reference=reference,max_outer=max_outer,
             krylov_budget=max_cycles,restart=krylov_restart,controls=controls,
             physical_tolerance=abs_tol_min,relative_tolerance=relative_tolerance,
-            npf_preconditioner=npf_preconditioner,npf_kcycle_controls=npf_kcycle_controls,npf_krylov_method=npf_krylov_method)
+            npf_preconditioner=npf_preconditioner,npf_kcycle_controls=npf_kcycle_controls,
+            npf_krylov_method=npf_krylov_method,device_native=npf_device_native)
         info.update(formulation='mf6_6_6_2_npf',geometry=case.geometry,
             device=model.device,precision='float64',
             implementation='device_newton_fgmres' if info['krylov_method']=='FGMRES' else 'device_newton_gmres',session_backend='npf662_newton',

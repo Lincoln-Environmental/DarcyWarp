@@ -68,6 +68,10 @@ portable sanity runner, timings and remaining convergence limits are recorded
 in the [GPU release notes](3D_GPU_RELEASE_NOTES.md). CPU qualification does
 not imply that every GPU case meets the same iteration budget.
 
+Transient NPF also offers `npf_device_native=True` for device acceptance
+and persistent hierarchy refresh. See the [GPU execution guide](NPF662_GPU_NATIVE.rst)
+for convertible timings, validation and the reproducible command.
+
 ## Verification
 
 The layered example checks head and flow against an independent series-resistance solution.

@@ -20,6 +20,10 @@ NPF/STO formulation. See the [3D guide](docs/3D_CARTESIAN_NPF.md) for setup,
 solver selection and validation scope. The [GPU sanity runner and implementation guide](docs/3D_IMPLEMENTATIONS.rst)
 and [GPU release notes](docs/3D_GPU_RELEASE_NOTES.md) document reproducible timings and known limits.
 
+The [NPF transient GPU guide](docs/NPF662_GPU_NATIVE.rst) describes the opt-in
+device acceptance and persistent hierarchy implementation, including
+convertible benchmarks, conductivity updates and reproduction commands.
+
 **Developed by Patrick Durney and Jaco Fourie at [Lincoln Agritech Ltd](https://lincolnagritech.co.nz/), which owns the DarcyWarp software.** DarcyWarp is released under the [GNU Affero General Public License v3.0 or later](LICENSE).
 
 ## Synthetic groundwater verification example

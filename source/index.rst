@@ -35,6 +35,7 @@ Public License, version 3 or later (``AGPL-3.0-or-later``).
    validation
    benchmarking
    three_dimensional
+   npf_gpu_native
    docs_build
    license
 

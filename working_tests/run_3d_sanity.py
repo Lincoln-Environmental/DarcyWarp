@@ -42,6 +42,8 @@ def parse_arguments(*, defaults):
     parser.add_argument('--npf-preconditioner', choices=['auto', 'diagonal', 'kcycle'], default=defaults['preconditioner'])
     parser.add_argument('--npf-relative-tolerance', type=float, default=None,
         help='Explicit NPF cellwise imbalance limit; omitted retains the 1e-8 default.')
+    parser.add_argument('--npf-device-native', action='store_true',
+        help='Opt-in transient device acceptance; independent verification remains outside the solve timer.')
     parser.add_argument('--legacy-max-cycles', type=int, default=None, help='Explicit override; default uses the 2D sanity budget.')
     args = parser.parse_args()
     if min(args.sizes) < 2 or args.repeats < 1 or args.periods < 1:
@@ -221,6 +223,14 @@ def measure(*, case, family, mode, label, reference, native_accepted, device, pr
                 head_rmse_m=rmse, head_max_m=maximum, flux_relative_l2=relative_flux,
                 physical=checks, cycles=info.get('n_cycles_used'), krylov=info.get('krylov_iterations'),
                 outer_iterations=info.get('outer_iterations'), residual_rms=info.get('r_rms_end'),
+                device_native=info.get('device_native', False),
+                independent_audit_performed=info.get('independent_audit_performed', True),
+                state_reused=info.get('reference_reused', False),
+                reference_setup_seconds=info.get('reference_setup_seconds'),
+                workspace_setup_seconds=info.get('setup_seconds'),
+                hierarchy_setup_seconds=info.get('multigrid', {}).get('construction_seconds'),
+                hierarchy_reused=info.get('multigrid', {}).get('hierarchy_reused'),
+                coefficients_refreshed=info.get('multigrid', {}).get('coefficients_refreshed'),
                 outer_history=info.get('outer_history'), final_thresholds=info.get('final_acceptance_thresholds')))
             history[-1].update(public_solve_seconds=public_solve_seconds,
                 independent_audit_seconds=perf_counter()-audit_started, backend_seconds=info.get('seconds'))
@@ -248,6 +258,9 @@ def run(*, args, root, settings):
     profiles = read_profiles(root=root)
     overrides = {}
     settings = dict(settings, npf_options=dict(settings['npf_options']))
+    if args.npf_device_native:
+        settings['npf_options']['npf_device_native'] = True
+        overrides['npf_device_native'] = True
     if args.npf_relative_tolerance is not None:
         if not np.isfinite(args.npf_relative_tolerance) or args.npf_relative_tolerance < 0.:
             raise ValueError('--npf-relative-tolerance must be finite and nonnegative')

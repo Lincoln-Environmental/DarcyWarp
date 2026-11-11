@@ -111,6 +111,23 @@ def physical_rows(head:wp.array(dtype=wp.float64),source:wp.array(dtype=wp.float
 
 
 @wp.kernel
+def final_storage_certificate(head:wp.array(dtype=wp.float64),prescribed:wp.array(dtype=wp.float64),
+    free:wp.array(dtype=wp.int32),fixed:wp.array(dtype=wp.int32),storage_tangent:wp.array(dtype=wp.float64),
+    dl:wp.array2d(dtype=wp.float64),dr:wp.array2d(dtype=wp.float64),out:wp.array(dtype=wp.float64)):
+    i=wp.tid()
+    if fixed[i]!=0:
+        error=wp.abs(head[i]-prescribed[i])
+        if not wp.isfinite(error):error=wp.float64(wp.inf)
+        wp.atomic_max(out,0,error)
+    if free[i]!=0 and storage_tangent[i]<=wp.float64(0.):
+        wp.atomic_add(out,1,wp.float64(1.))
+    invalid=not wp.isfinite(storage_tangent[i]) or storage_tangent[i]<wp.float64(0.)
+    for axis in range(3):
+        if not wp.isfinite(dl[i,axis]) or not wp.isfinite(dr[i,axis]):invalid=True
+    if invalid:wp.atomic_add(out,2,wp.float64(1.))
+
+
+@wp.kernel
 def jacobian_action(x:wp.array(dtype=wp.float64),y:wp.array(dtype=wp.float64),z:wp.array(dtype=wp.float64),
     free:wp.array(dtype=wp.int32),left:wp.array2d(dtype=wp.int32),right:wp.array2d(dtype=wp.int32),
     dl:wp.array2d(dtype=wp.float64),dr:wp.array2d(dtype=wp.float64),conductance:wp.array2d(dtype=wp.float64),

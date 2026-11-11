@@ -9,6 +9,20 @@ def read_function(*, path, name):
     return next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == name)
 
 
+def resolve_function_path(*, root, path, name):
+    tree = ast.parse(source=path.read_text())
+    if any(isinstance(node, ast.FunctionDef) and node.name == name for node in tree.body):
+        return path
+    for node in tree.body:
+        if isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+            for alias in node.names:
+                if (alias.asname or alias.name) == name:
+                    candidate = root.joinpath(*node.module.split('.')).with_suffix('.py')
+                    if candidate.is_file():
+                        return resolve_function_path(root=root, path=candidate, name=alias.name)
+    raise ValueError(f'Cannot resolve source for {name} from {path}')
+
+
 def literal_bindings(*, node):
     values = {}
     for item in ast.walk(node=node):
@@ -49,7 +63,8 @@ def read_profiles(*, root):
     steady_path = root/'DARCY_WARP_PACKAGE/model_convergence_and_sanity_tests.py'
     backend_path = root/'DARCY_WARP_PACKAGE/solvers/multigrid_kcycle.py'
     truth_path = root/'DARCY_WARP_PACKAGE/modflow_truth.py'
-    transient_path = root/'working_tests/transient_replay_settings.py'
+    transient_entry_path = root/'working_tests/transient_replay_settings.py'
+    transient_path = resolve_function_path(root=root, path=transient_entry_path, name='default_solve_controls')
     transient_truth_path = root/'working_tests/run_2d_transient_vs_mf6.py'
     unconfined_path = root/'working_tests/run_2d_unconfined_warp_vs_mf6.py'
     steady = read_function(path=steady_path, name='run_solve')
@@ -89,7 +104,8 @@ def read_profiles(*, root):
         native[label] = call_keywords(node=call, bindings=literal_bindings(node=function))
         if len(native[label]) != len(call.keywords):
             raise ValueError(f'Cannot resolve complete native sanity profile: {label}')
-    paths = (steady_path, backend_path, truth_path, transient_path, transient_truth_path, unconfined_path)
+    paths = tuple(dict.fromkeys((steady_path, backend_path, truth_path, transient_entry_path,
+        transient_path, transient_truth_path, unconfined_path)))
     return dict(steady=steady_profiles, transient=transient, mf6=native,
         source_sha256={str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest() for path in paths},
         notes=['Cartesian controls are taken from these 2D source functions.',

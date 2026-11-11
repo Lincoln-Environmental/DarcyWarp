@@ -1,0 +1,4 @@
+*
+!.gitignore
+!comparison.json
+!source_manifest.json
