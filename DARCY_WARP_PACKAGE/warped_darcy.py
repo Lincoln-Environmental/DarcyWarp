@@ -831,6 +831,7 @@ def _adaptive_dt_should_early_shrink(
     outer_iterations_done: int,
     budget: int,
     min_outer: int,
+    update_limit: float | None = None,
 ) -> bool:
     """True when the contraction projection says strict cannot make budget.
 
@@ -840,6 +841,15 @@ def _adaptive_dt_should_early_shrink(
     """
     if int(outer_iterations_done) < int(min_outer):
         return False
+    if update_limit is not None:
+        # A clipped update is a trust-region bound, not a measurement of
+        # nonlinear contraction. Project only from the subsequent unclipped
+        # tail; the hard outer budget still applies if clipping persists.
+        last_clipped = -1
+        for index, change in enumerate(dh_history):
+            if change is not None and float(change) >= float(update_limit) * (1.0 - 1.0e-12):
+                last_clipped = index
+        dh_history = dh_history[last_clipped + 1:]
     estimate = _adaptive_dt_dh_contraction_estimate(dh_history)
     if estimate is None:
         return False

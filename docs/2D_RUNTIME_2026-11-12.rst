@@ -13,14 +13,22 @@ An explicit transient profile in
 ``working_tests/2d_transient_runtime_controls.json`` uses the accepted
 previous head directly at each timestep and sets ``omega=omega_max=1``.
 This removes the separate linear startup solve and uses full Picard updates
-(the same omega also enters coarse Jacobi smoothing). All residual,
-head-change, iteration-budget and adaptive-timestep controls remain at the
-production values. Library defaults retain their existing startup and damping.
+without GHB. With GHB, ``unconfined_ghb_relax=0.8`` damps the outer update;
+coarse smoothing still uses ``omega=1``. The qualified profile
+allows up to 100 m per outer update, replacing the 10 m update cap; this is
+an iteration safeguard, not the final head-change tolerance. All residual,
+head-change acceptance and iteration-budget limits remain at production values.
+Library defaults retain their existing startup, damping and 10 m update cap.
 
 Measured results
 ----------------
 
 .. include:: ../benchmark_results/gpu_2d_runtime/timings_20261112.rst
+
+The following follow-up qualifies the profile for GHB and rechecks the
+production cases after the update-cap and timestep-controller correction:
+
+.. include:: ../benchmark_results/gpu_2d_runtime/ghb_timings_20261112.rst
 
 Measurements use an RTX 4070 Ti SUPER and Warp 1.17.0. Each entry has a
 separate warmup and three timed repetitions on fresh models. Transient
@@ -51,22 +59,75 @@ accepted runtime-profile production histories converged strictly with zero
 adaptive-timestep retries. The independent head and water-budget gates are
 the existing 2D sanity gates; the profile does not relax them.
 
-The rectangular 100 x 250, three-week case also passes. The GHB case passes
-with the shared reduction and original production controls. The aggressive
-profile is **not qualified for GHB**: it triggers four timestep retries and
-differs from the fixed-weekly MF6 history by 13.10 m. Its endpoint budget
-comparison also fails (9.55%, with substeps). Those failed results remain in
-the evidence. The checked-in profile declares ``supports_ghb=false``, and
-the benchmark rejects applying it to GHB. Use the original production
-startup/damping for GHB; the parallel reduction still applies.
+GHB parity is part of qualification. The earlier no-startup profile with
+the 10 m cap failed the 100 x 100 GHB case by 13.10 m. The first timestep
+activates a draining GHB and changes heads by about 124 m. Capped updates
+produced a flat head-change history, which the early-shrink controller
+mistook for nonlinear stagnation. It subdivided the seven-day step, changing
+the backward-Euler solution. The reported strict convergence applied to those
+substeps; it did not establish parity with the fixed-weekly MF6 equations.
+This supersedes the earlier attribution to full-update instability.
+
+The larger 500 x 500, ten-week case additionally exposes a slow oscillatory
+Picard tail with full updates. GHB relaxation of 0.8 resolves it within the
+unchanged iteration budget. The final profile selects this relaxation only
+when GHB is present, preserving the full-update gains without GHB.
+
+The unmodified original settings fail fixed-step parity on this larger case
+(20.52 m maximum head error after timestep subdivision). The original-solver
+timing in the follow-up table therefore uses the 100 m update cap while
+retaining its original startup solve and 0.7 relaxation; it passes all gates.
+The current library defaults also fail this stress case, so the qualified
+large-case result requires the explicit runtime profile. Failed attempts are
+retained in the evidence and are excluded from speedup comparisons.
+
+The controller now estimates contraction only from the unclipped tail of
+the update history. Its hard iteration budget and actual failure/retry
+mechanism remain active. The 100 m runtime-profile cap also avoids spending
+many iterations on the initial GHB drawdown. Both the unchanged 10 m cap
+with the controller fix and the 100 m runtime profile have regression
+coverage. The checked-in profile now supports GHB. The benchmark requires
+the same complete timesteps as MF6 in addition to strict acceptance,
+finite heads, head agreement and the independent water budget.
+
+The graph-disabled mixed-precision path now refreshes its FP32 face operator
+every outer iteration, matching graph replay. Draining and injecting GHB
+regressions cover CPU and CUDA, FP64 and mixed corrections, eager launches
+and CUDA graphs, with independent water-budget checks.
+The saved 100 x 100 MF6 history also passes with the original 10 m cap,
+with eager mixed corrections, and with FP64 graph corrections; all retain
+the complete seven-day steps and maximum head errors below 1e-5 m.
+
+The larger GHB reference uses independently iterated MF6 conductance
+``C = K * sat(h_MF6) * ghb_factor``. DarcyWarp heads do not enter its fixed
+point. Older artifact ``engine_time`` fields time the initial conductance
+run. For the GHB comparison here, ``--mf6-workspace`` verifies the final
+saved head history and times against the validated artifact, then reads
+the final native MF6 engine timer. The preceding fixed-point iterations
+and model build are excluded from that single-run timing. This is a cost
+comparison with the final equivalent MF6 system, not a measurement of the
+entire conductance fixed-point algorithm.
 
 Validation covers CPU/CUDA sum/max reductions, counts spanning CUDA-block
 boundaries, partial-buffer clearing, repeated graph replay, fast confined
 solves, mixed corrections, transient sessions, adaptive control and cached
-MF6 fixtures. The broad run passed 194 tests; two additional benchmark-gate
-tests passed. One solver-registry name assertion fails both on the candidate
+MF6 fixtures. The follow-up broad run passed 204 tests; five additional
+injecting-GHB cases also passed. One solver-registry name assertion fails both on the candidate
 and unchanged baseline ``c1e36b7``: the test expects ``kcycle`` where the
 factory returns ``unconfined_picard_kcycle``. It is unrelated to this change.
+The new clipped-update integration regression fails on unchanged baseline
+``c1e36b7`` because it takes six substeps instead of one, and passes with
+the controller correction.
+After adding GHB-specific relaxation, all 45 affected transient, session,
+GHB and benchmark-gate tests were rerun successfully.
+
+The existing steady unconfined validation also passes uniform and heterogeneous
+100 x 100 GHB cases, a rectangular 140 x 60 GHB case, and the no-GHB control.
+Maximum MF6 head differences are 1.15e-5 m on the square GHB cases and
+7.36e-5 m on the rectangle, below the unchanged 5e-4 m gate. Fast/classic
+agreement is within 4.61e-7 m; the separate heterogeneous cross-check with
+``hclose=1e-6`` agrees within 5.91e-9 m. These are correctness checks;
+their timings are not included in the performance table.
 
 Reproduction
 -------------
@@ -85,6 +146,42 @@ heads, MF6 accuracy or the requested independent budget audit.
      --artifact DARCY_WARP_PACKAGE/data/working_tests/mf6_transient_2d_unconfined_1000x1000_30w_ugly_t_s42/mf6_transient_heads.npz.lzma \
      --controls working_tests/2d_transient_runtime_controls.json \
      --output /tmp/2d-runtime-1000 --repeats 3 --audit
+
+For the GHB case, the same profile applies:
+
+.. code-block:: bash
+
+   python working_tests/benchmark_2d_runtime.py \
+     --artifact DARCY_WARP_PACKAGE/data/working_tests/mf6_transient_2d_unconfined_100x100_3w_ugly_t_s42_ghb_mf6_fixed_point/mf6_transient_heads.npz.lzma \
+     --mf6-workspace DARCY_WARP_PACKAGE/data/working_tests/mf6_transient_2d_unconfined_100x100_3w_ugly_t_s42_ghb_mf6_fixed_point/mf6 \
+     --controls working_tests/2d_transient_runtime_controls.json \
+     --output /tmp/2d-runtime-ghb --repeats 3 --audit
+
+To generate the larger independent GHB reference, call the existing generator
+with explicit case settings. It first computes the common steady initial
+condition, then iterates MF6 conductance to its own fixed point; this can take
+substantially longer than a single engine run.
+
+.. code-block:: python
+
+   from pathlib import Path
+   from working_tests.run_2d_transient_vs_mf6 import main
+
+   if __name__ == "__main__":
+       nx = 500
+       ny = 500
+       n_weeks = 10
+       t_field_kind = "ugly_t"
+       t_field_seed = 42
+       ghb_mode = "mf6_fixed_point"
+       output = Path("DARCY_WARP_PACKAGE/data/working_tests/mf6_transient_2d_unconfined_500x500_10w_ugly_t_s42_ghb_mf6_fixed_point/mf6_transient_heads.npz.lzma")
+       main(nx=nx, ny=ny, n_weeks=n_weeks, t_field_kind=t_field_kind,
+            t_field_seed=t_field_seed, ghb_conductance_mode=ghb_mode,
+            out_path=output)
+
+Use that artifact and its adjacent ``mf6`` workspace in the same benchmark
+command. The measured reference converged in 16 MF6 fixed-point runs, with
+terminal head change 9.46e-7 m and budget discrepancy 3.38e-8%.
 
 Omit ``--controls`` to measure the existing production settings with the
 parallel reduction. For the second production case, use the artifact in
@@ -113,3 +210,7 @@ be treated as modest gains, not evidence of a broad algorithmic speedup.
 Source fingerprints, controls, every repeat, physical metrics, rejected
 experiments and the GHB failure are retained in
 ``benchmark_results/gpu_2d_runtime/qualification_20261112.json``.
+The GHB correction, follow-up measurements and final MF6 timer provenance
+are retained in ``benchmark_results/gpu_2d_runtime/ghb_qualification_20261112.json``.
+Steady GHB validation details are in
+``benchmark_results/gpu_2d_runtime/steady_ghb_validation_20261112.json``.

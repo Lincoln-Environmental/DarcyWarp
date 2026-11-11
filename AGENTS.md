@@ -9,14 +9,29 @@ kimi --model kimi-code/k3
 > 6.163 -> 5.471 s. Explicit `working_tests/2d_transient_runtime_controls.json`
 > adds initial-head startup and omega=omega_max=1, reaching 6.698 / 2.503 s.
 > All tolerances unchanged (strict head residual 1e-6, head change 1e-4).
-> Profile is NO-GHB ONLY: full-update GHB triggered substeps and failed
-> fixed-weekly MF6 parity by 13.10 m; production GHB controls still pass.
-> Profile metadata/benchmark reject GHB; defaults retain existing damping
-> and startup. 196 tests passed across broad + benchmark-guard checks;
-> one existing registry alias assertion fails identically on baseline.
+> GHB follow-up: the profile NOW supports GHB. The earlier 13.10 m failure
+> was a timestep mismatch: the first GHB drawdown is ~124 m, while a 10 m
+> update cap made early-shrink misdiagnose clipping as stagnation. The
+> controller now uses only the unclipped contraction tail; the runtime
+> profile permits 100 m updates (final hclose/residual limits unchanged).
+> The final profile uses `unconfined_ghb_relax=0.8` when GHB is present:
+> the stronger 500x500/10w case has a slow oscillatory full-update tail.
+> 100x100/3w GHB: 0.1339 -> 0.0777 s, MF6 max error 1.84e-5 m, zero retries.
+> 500x500/10w GHB: qualified original 1.666 -> runtime 0.817 s, MF6 80.396 s,
+> max head error 4.22e-5 m, budget 4.53e-5%, zero retries. Original comparator
+> needs a 100 m cap (keeps startup + 0.7 relaxation); unmodified defaults
+> fail fixed-step parity on this stress case. Use the explicit runtime profile.
+> The eager mixed path now refreshes FP32 faces each outer, like graph replay.
+> Draining/injecting GHB pass CPU/CUDA, FP64/mixed, eager/graph regressions.
+> Benchmark gates now require matching time grids. No-GHB production heads
+> remain identical, at 6.731 / 2.513 s. Defaults retain damping and startup.
+> 209 distinct tests passed (204 broad + five injecting-GHB cases); one
+> existing registry alias assertion fails identically on baseline.
+> All 45 affected tests were rerun after final GHB damping selection and pass.
 > Timings, exact source snapshots, failed experiments, reproduction and
 > limitations: `docs/2D_RUNTIME_2026-11-12.rst` and
 > `benchmark_results/gpu_2d_runtime/qualification_20261112.json`.
+> Follow-up evidence: `benchmark_results/gpu_2d_runtime/ghb_qualification_20261112.json`.
 
 > 2026-11-11 follow-up: main promotion and qualification pushed as `95928ec`
 > (526 regressions, 320 audited endpoints; convertible 500x500x5/20 steps

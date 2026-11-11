@@ -103,6 +103,7 @@ def _persistent_period_engine(
     # ``**controls`` spread forwarded to ``solve()`` does not inject unexpected
     # keywords.
     for _control_key in (
+        "unconfined_ghb_relax",
         "strict_head_residual_tol",
         "practical_head_residual_tol",
         "unconfined_inner_max_cycles_early",
@@ -480,6 +481,11 @@ def _persistent_period_engine(
             controls.get("practical_picard_acceptance_enabled", False)
         )
         omega_current_f = float(controls.get("unconfined_relax", controls.get("omega", 0.8)))
+        # Head-dependent GHB conductance can make full Picard updates
+        # oscillate even when the no-GHB problem contracts rapidly. Keep
+        # this optional outer damping independent of coarse smoothing.
+        if self.use_ghb:
+            omega_current_f = float(controls.get("unconfined_ghb_relax", omega_current_f))
         omega_min_f = float(controls.get("omega_min", 0.05))
         omega_max_f = float(controls.get("omega_max", 0.75))
         if not (0.0 < omega_min_f <= omega_max_f):
@@ -1133,6 +1139,8 @@ def _persistent_period_engine(
                     if transient_face_operator_enabled_b:
                         phase_t0 = _fast_path_phase_start()
                         refresh_transient_face_levels(self, self.mg_levels, face_levels)
+                        if mixed_session is not None:
+                            mixed_session.refresh_faces()
                         dynamic_coarse_refresh_seconds += _fast_path_phase_elapsed(phase_t0)
                     else:
                         if hasattr(self, "_update_diag_preconditioner_device"):
@@ -1952,6 +1960,7 @@ def _persistent_period_engine(
                         outer_iterations_done=int(outer_iter + 1),
                         budget=int(adaptive_dt_effective_budget_i),
                         min_outer=adaptive_dt_early_shrink_min_outer_i,
+                        update_limit=max_update_f,
                     ):
                         adaptive_dt_early_shrink_streak_i += 1
                         adaptive_dt_early_shrink_b = bool(
