@@ -1,0 +1,14 @@
+{
+  "DARCY_WARP_PACKAGE/solvers/npf662_3d.py": "c81c35570148aafa280bdf17ef8da17ca636e2049127ce7f7313e63250d8d5d4",
+  "DARCY_WARP_PACKAGE/solvers/npf662_state.py": "3f3a2d2aa66c4c23806295d76cc409008c25584cf28e3f2e85218183687ffdda",
+  "DARCY_WARP_PACKAGE/solvers/npf662_newton.py": "230057128391adabae70e0ad74c42007abb9396b1616bc9ebc1279f44ca8ea63",
+  "DARCY_WARP_PACKAGE/solvers/npf662_kernels.py": "3b01d35b7df9ff33c5de0f0ff7f0eb9e96a176459ac34518e7a0aa1753e094d9",
+  "DARCY_WARP_PACKAGE/solvers/npf662_kcycle.py": "0c616c717699459b8f2016521fbcc4244aa6ddb8c2df191f570f3bc566cfe531",
+  "DARCY_WARP_PACKAGE/solvers/fast_3d.py": "db8cfbbfd297570702e6e9218d12081dde6a7a8314d05a7ebda36ea758ca3e7f",
+  "DARCY_WARP_PACKAGE/validation/npf662_mf6.py": "17ddedfb0cb8381e0269a5e802654b996e5dad3cf56e70e144ab61f257cd9983",
+  "DARCY_WARP_PACKAGE/validation/npf662_transient_mf6.py": "0169207ea6290ff452afacc6baf5dd8e03c6efa89a9bfb076df4eb4664ed4c9e",
+  "working_tests/run_3d_sanity.py": "8b30a08e94823fd4a255e4987c13a3f3d51dea8f96ca965d9a73191b30541811",
+  "working_tests/sanity_3d_controls.py": "7616804b087ffe9cf4bc3737cfa635d35e3921257857b210bdcc0e02004aa7f0",
+  "working_tests/transient_replay_settings.py": "ba8ac2ce2890b6b1b98692072898e3c55dd00c8996a8ce6f2766ecfaeecf2ce0",
+  "tests/test_npf662_device_native.py": "a724a988420ca2369472010491e3c70b1d088cb57d75abaeecaaf64c54cf8075"
+}

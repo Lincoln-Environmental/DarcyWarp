@@ -1,0 +1,482 @@
+{
+  "revision": "495cdd3",
+  "summary": [
+    {
+      "case": "npf_confined_250x250x5_transient",
+      "implementation": "kcycle",
+      "passed": true,
+      "median_public_solve_seconds": 3.2500710579970473,
+      "mf6_single_reference_run_seconds": 47.589,
+      "median_model_construction_seconds": 0.051029330999881495,
+      "median_extra_audit_seconds": 4.480962380999699,
+      "median_verified_total_seconds": 7.818292313999336,
+      "worst_head_rmse_m": 4.009965943311085e-07,
+      "worst_head_max_m": 1.067532021892248e-06,
+      "reference_reused": true
+    },
+    {
+      "case": "npf_convertible_250x250x5_transient",
+      "implementation": "kcycle",
+      "passed": true,
+      "median_public_solve_seconds": 3.2570826019946253,
+      "mf6_single_reference_run_seconds": 17.319,
+      "median_model_construction_seconds": 0.04964139199910278,
+      "median_extra_audit_seconds": 4.44933878199663,
+      "median_verified_total_seconds": 7.819142440001087,
+      "worst_head_rmse_m": 7.245995203304002e-09,
+      "worst_head_max_m": 2.3496250722843115e-08,
+      "reference_reused": true
+    },
+    {
+      "case": "npf_confined_500x500x5_transient",
+      "implementation": "kcycle",
+      "passed": true,
+      "median_public_solve_seconds": 6.864314154003296,
+      "mf6_single_reference_run_seconds": 346.408,
+      "median_model_construction_seconds": 0.2215427360006288,
+      "median_extra_audit_seconds": 20.141843474999405,
+      "median_verified_total_seconds": 27.405441261000306,
+      "worst_head_rmse_m": 1.4138106046523886e-06,
+      "worst_head_max_m": 3.4934874229008983e-06,
+      "reference_reused": true
+    },
+    {
+      "case": "npf_convertible_500x500x5_transient",
+      "implementation": "kcycle",
+      "passed": true,
+      "median_public_solve_seconds": 9.783877980002217,
+      "mf6_single_reference_run_seconds": 104.39099999999999,
+      "median_model_construction_seconds": 0.22345380500155443,
+      "median_extra_audit_seconds": 20.32681661100287,
+      "median_verified_total_seconds": 30.509481125998718,
+      "worst_head_rmse_m": 3.323854424879556e-08,
+      "worst_head_max_m": 6.354741299841038e-08,
+      "reference_reused": true
+    }
+  ],
+  "cases": [
+    {
+      "case": "npf_confined_250x250x5_transient",
+      "case_sha256": "abf458a50bee133839d83281a7b59336cf66d5c35cc440a48222460fce71380d",
+      "reference": {
+        "fingerprint": "4f278f11b0fafd116eed0aef6afd4259afdbf39788621d4ff6d09a901ddd2347",
+        "inputs": {
+          "case_sha256": "abf458a50bee133839d83281a7b59336cf66d5c35cc440a48222460fce71380d",
+          "mode": "transient",
+          "native_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "COMPLEX",
+            "linear_acceleration": "BICGSTAB",
+            "outer_maximum": 150,
+            "outer_dvclose": 1e-06,
+            "inner_maximum": 500,
+            "inner_dvclose": 1e-08,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "factors": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.5,
+            1.5,
+            1.5,
+            1.5,
+            1.5,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "dt": 7.0,
+          "ss": 1e-05,
+          "sy": 0.15,
+          "family": "npf",
+          "acceptance": "NPF fixed physical contract"
+        },
+        "accepted": true,
+        "reference_generation_end_to_end_s": 62.32317743599924,
+        "reused": true,
+        "native_single_run_seconds": 47.589,
+        "acceptance_criteria": "2D sanity validity and 1% cellwise imbalance; strict NPF audit retained separately",
+        "strict_native_npf_audit": false
+      },
+      "repeats": [
+        3.2500710579970473,
+        3.248877680001897,
+        3.2570578169998043
+      ],
+      "accepted_endpoints": 80,
+      "max_relative_imbalance": 5.937190473967486e-08,
+      "max_head_difference_m": 1.067532021892248e-06
+    },
+    {
+      "case": "npf_convertible_250x250x5_transient",
+      "case_sha256": "f8c5b3bad098812a178a8d55e4ef20915eec9128d7155640e5233928e25485dc",
+      "reference": {
+        "fingerprint": "8827fe322005912003710632dc11b294ab06a54a819372eaf9acc34de0e9bbd3",
+        "inputs": {
+          "case_sha256": "f8c5b3bad098812a178a8d55e4ef20915eec9128d7155640e5233928e25485dc",
+          "mode": "transient",
+          "native_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "COMPLEX",
+            "linear_acceleration": "BICGSTAB",
+            "outer_maximum": 150,
+            "outer_dvclose": 1e-06,
+            "inner_maximum": 500,
+            "inner_dvclose": 1e-08,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "factors": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.5,
+            1.5,
+            1.5,
+            1.5,
+            1.5,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "dt": 7.0,
+          "ss": 1e-05,
+          "sy": 0.15,
+          "family": "npf",
+          "acceptance": "NPF fixed physical contract"
+        },
+        "accepted": true,
+        "reference_generation_end_to_end_s": 32.07169883900133,
+        "reused": true,
+        "native_single_run_seconds": 17.319,
+        "acceptance_criteria": "2D sanity validity and 1% cellwise imbalance; strict NPF audit retained separately",
+        "strict_native_npf_audit": false
+      },
+      "repeats": [
+        3.2556854669965105,
+        3.2819126320027863,
+        3.2570826019946253
+      ],
+      "accepted_endpoints": 80,
+      "max_relative_imbalance": 9.296903595606341e-08,
+      "max_head_difference_m": 2.3496250722843115e-08
+    },
+    {
+      "case": "npf_confined_500x500x5_transient",
+      "case_sha256": "ec63acfb62802840cf0d7fa49344bd108ab872271b0554b56dd9a46630891055",
+      "reference": {
+        "fingerprint": "bc7533465ea18c4c86d57aa639cf7eacfb9d8eb88c7b04ad1c30907ca0b6ce96",
+        "inputs": {
+          "case_sha256": "ec63acfb62802840cf0d7fa49344bd108ab872271b0554b56dd9a46630891055",
+          "mode": "transient",
+          "native_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "COMPLEX",
+            "linear_acceleration": "BICGSTAB",
+            "outer_maximum": 150,
+            "outer_dvclose": 1e-06,
+            "inner_maximum": 500,
+            "inner_dvclose": 1e-08,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "factors": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.5,
+            1.5,
+            1.5,
+            1.5,
+            1.5,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "dt": 7.0,
+          "ss": 1e-05,
+          "sy": 0.15,
+          "family": "npf",
+          "acceptance": "NPF fixed physical contract"
+        },
+        "accepted": true,
+        "reference_generation_end_to_end_s": 407.0423653350008,
+        "reused": true,
+        "native_single_run_seconds": 346.408,
+        "acceptance_criteria": "2D sanity validity and 1% cellwise imbalance; strict NPF audit retained separately",
+        "strict_native_npf_audit": false
+      },
+      "repeats": [
+        6.87363777399878,
+        6.864314154003296,
+        6.854219442000613
+      ],
+      "accepted_endpoints": 80,
+      "max_relative_imbalance": 7.138755787017718e-08,
+      "max_head_difference_m": 3.4934874229008983e-06
+    },
+    {
+      "case": "npf_convertible_500x500x5_transient",
+      "case_sha256": "473ce87bc6b5ab9e8b3b2f350e15f6e2e251f7cf75c36b31ef08879911bbfd43",
+      "reference": {
+        "fingerprint": "3ce0d90e2320da4f03725c60760dd2a32bb83af68748756a7484de0d16b00617",
+        "inputs": {
+          "case_sha256": "473ce87bc6b5ab9e8b3b2f350e15f6e2e251f7cf75c36b31ef08879911bbfd43",
+          "mode": "transient",
+          "native_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "COMPLEX",
+            "linear_acceleration": "BICGSTAB",
+            "outer_maximum": 150,
+            "outer_dvclose": 1e-06,
+            "inner_maximum": 500,
+            "inner_dvclose": 1e-08,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "factors": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.5,
+            1.5,
+            1.5,
+            1.5,
+            1.5,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "dt": 7.0,
+          "ss": 1e-05,
+          "sy": 0.15,
+          "family": "npf",
+          "acceptance": "NPF fixed physical contract"
+        },
+        "accepted": true,
+        "reference_generation_end_to_end_s": 167.5814541969994,
+        "reused": true,
+        "native_single_run_seconds": 104.39099999999999,
+        "acceptance_criteria": "2D sanity validity and 1% cellwise imbalance; strict NPF audit retained separately",
+        "strict_native_npf_audit": false
+      },
+      "repeats": [
+        9.783877980002217,
+        9.81573790100083,
+        9.696668379003313
+      ],
+      "accepted_endpoints": 80,
+      "max_relative_imbalance": 9.749488015262758e-08,
+      "max_head_difference_m": 6.354741299841038e-08
+    }
+  ],
+  "settings": {
+    "source_factors": [
+      1.0,
+      1.5,
+      0.25,
+      1.0
+    ],
+    "block_periods": 5,
+    "dt": 7.0,
+    "ss": 1e-05,
+    "sy": 0.15,
+    "progress_seconds": 30.0,
+    "progress_every": 5,
+    "cartesian_top": 8.0,
+    "cartesian_dz": 10.0,
+    "cartesian_dx": 25.0,
+    "kcycle_threshold_cells": 50000,
+    "kcycle": {
+      "levels": 5,
+      "pre_sweeps": 2,
+      "post_sweeps": 2,
+      "coarse_sweeps": 20,
+      "cycles": 1,
+      "omega": 0.8
+    },
+    "npf_options": {
+      "max_outer": 80,
+      "max_cycles": 4000,
+      "krylov_restart": 48,
+      "npf_device_native": true,
+      "npf_final_relative_tolerance": 1e-07
+    },
+    "gates": {
+      "rmse": 0.001,
+      "maximum": 0.01,
+      "budget_percent": 1.0
+    }
+  },
+  "profiles": {
+    "steady": {
+      "classic": {
+        "max_cycles": 200,
+        "nu_pre": 2,
+        "nu_post": 2,
+        "omega": 0.7,
+        "rel_tol": 5e-07,
+        "abs_tol_min": 5e-07,
+        "max_levels": 6,
+        "dh_rms_tol": 0.0001,
+        "dh_max_tol": 0.0005,
+        "check_every_no": 5,
+        "smoother": "chebyshev",
+        "cheby_lambda_min": 0.05,
+        "cheby_lambda_max": 1.95,
+        "nu_coarse": 2
+      },
+      "fast": {
+        "max_cycles": 200,
+        "nu_pre": 2,
+        "nu_post": 2,
+        "omega": 0.7,
+        "rel_tol": 5e-07,
+        "abs_tol_min": 5e-07,
+        "max_levels": 6,
+        "dh_rms_tol": 0.0001,
+        "dh_max_tol": 0.0005,
+        "check_every_no": 5,
+        "smoother": "chebyshev",
+        "cheby_lambda_min": 0.05,
+        "cheby_lambda_max": 1.95,
+        "nu_coarse": 10
+      }
+    },
+    "transient": {
+      "max_cycles": 200,
+      "max_levels": 4,
+      "nu_pre": 1,
+      "nu_post": 1,
+      "nu_coarse": 1,
+      "check_every_no": 1,
+      "rel_tol": 5e-07,
+      "abs_tol_min": 5e-07,
+      "dh_rms_tol": 0.0001,
+      "smoother": "chebyshev",
+      "omega": 0.7,
+      "cheby_lambda_min": 0.1,
+      "cheby_lambda_max": 2.0,
+      "dh_max_tol": 0.0005
+    },
+    "mf6": {
+      "steady_confined": {
+        "pname": "ims",
+        "print_option": "SUMMARY",
+        "complexity": "SIMPLE",
+        "linear_acceleration": "CG",
+        "outer_maximum": 10,
+        "outer_dvclose": 0.0001,
+        "inner_maximum": 2000,
+        "inner_dvclose": 0.0001,
+        "rcloserecord": [
+          1e-06,
+          "RELATIVE_RCLOSE"
+        ],
+        "scaling_method": "DIAGONAL"
+      },
+      "transient": {
+        "pname": "ims",
+        "print_option": "SUMMARY",
+        "complexity": "COMPLEX",
+        "linear_acceleration": "BICGSTAB",
+        "outer_maximum": 150,
+        "outer_dvclose": 1e-06,
+        "inner_maximum": 500,
+        "inner_dvclose": 1e-08,
+        "rcloserecord": [
+          1e-06,
+          "RELATIVE_RCLOSE"
+        ],
+        "scaling_method": "DIAGONAL"
+      },
+      "steady_unconfined": {
+        "pname": "ims",
+        "print_option": "SUMMARY",
+        "complexity": "COMPLEX",
+        "linear_acceleration": "BICGSTAB",
+        "outer_maximum": 500,
+        "outer_dvclose": 1e-06,
+        "inner_maximum": 500,
+        "inner_dvclose": 1e-08,
+        "rcloserecord": [
+          1e-06,
+          "RELATIVE_RCLOSE"
+        ],
+        "scaling_method": "DIAGONAL"
+      }
+    },
+    "source_sha256": {
+      "DARCY_WARP_PACKAGE/model_convergence_and_sanity_tests.py": "c81bc27da7fa48a956ac4f56e9e19e71ef2891ef358aff9938fcffd066b5ed0a",
+      "DARCY_WARP_PACKAGE/solvers/multigrid_kcycle.py": "932b2b01ab9e12776b91c9e99000ad1b5b888e81e182c9abc2d49bb22255bd0c",
+      "DARCY_WARP_PACKAGE/modflow_truth.py": "55810ffb381d01d33328742d5a6e526a95eaca22bb41e97a9d26c6eaac97739d",
+      "working_tests/transient_replay_settings.py": "ba8ac2ce2890b6b1b98692072898e3c55dd00c8996a8ce6f2766ecfaeecf2ce0",
+      "working_tests/run_2d_transient_vs_mf6.py": "7eedc6225f9e0ead46c3178a4204b84c0159a6c80ce49dd24b2e57fe5aa21faa",
+      "working_tests/run_2d_unconfined_warp_vs_mf6.py": "9ee3e3fc0bac3cd8f8cf116e72730f6385bee40dc5b09d61caaa947933fe96cf"
+    },
+    "notes": [
+      "Cartesian controls are taken from these 2D source functions.",
+      "2D min_coarse_cells has no identical 3D min_coarse_n parameter.",
+      "NPF Newton/GMRES has a distinct fixed physical contract and Krylov work units; its final head RMS remains 1e-6 m."
+    ]
+  },
+  "regressions": {
+    "passed": 526,
+    "live_mf6_deselected": 43
+  },
+  "raw_results_sha256": "abcb26b0bcbf11e690f235fdd7c19f80a2638d4380876a345e5a316f363dcaa1"
+}

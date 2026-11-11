@@ -4,10 +4,45 @@ NPF transient GPU execution
 The opt-in transient NPF path reduces the 500 x 500 x 5 convertible model's
 20-step solve time from 30.24 s to 9.74 s on an RTX 4070 Ti SUPER. The saved
 CPU MODFLOW 6 run of the same problem took 104.39 s: a 10.7-fold speedup.
-This is a development implementation; it has not been promoted to main.
+This opt-in implementation is now available on main. The default remains unchanged.
 
-Measured comparison
--------------------
+Main branch rerun
+-----------------
+
+Qualification at main revision ``495cdd3``: 526 tests passed, 43 live-MF6
+cases deselected. All 320 GPU endpoints independently passed. Saved MF6
+references were reused. Timing boundaries and tolerances match the experiment below.
+
+.. list-table:: Main, twenty weekly steps; GPU medians of three repeats
+   :header-rows: 1
+
+   * - Model
+     - GPU seconds
+     - MF6 seconds
+     - MF6/GPU
+   * - confined_250x250x5
+     - 3.250
+     - 47.589
+     - 14.64x
+   * - convertible_250x250x5
+     - 3.257
+     - 17.319
+     - 5.32x
+   * - confined_500x500x5
+     - 6.864
+     - 346.408
+     - 50.47x
+   * - convertible_500x500x5
+     - 9.784
+     - 104.391
+     - 10.67x
+
+Evidence: ``benchmark_results/gpu_native/main_comparison.json`` and
+``main_source_manifest.json``. The development measurements below are retained
+as the before-promotion record.
+
+Development comparison
+----------------------
 
 All times below exclude model construction. GPU time is the sum of
 synchronized public ``model.solve()`` calls across 20 weekly timesteps,

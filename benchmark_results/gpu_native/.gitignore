@@ -2,3 +2,5 @@
 !.gitignore
 !comparison.json
 !source_manifest.json
+!main_comparison.json
+!main_source_manifest.json

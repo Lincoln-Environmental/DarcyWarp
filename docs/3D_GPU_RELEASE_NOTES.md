@@ -33,7 +33,16 @@ Runtime: Python 3.12.14, Warp 1.17.0, FP64, RTX 4070 Ti SUPER 16 GiB;
 single-thread OpenBLAS/OMP/MKL. Native executable is MF6 6.6.2, SHA256
 `21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176`.
 
-## Primary runtime comparison: solve calls only
+
+## GPU-native transient follow-up
+
+The opt-in `npf_device_native=True` implementation is now on main.
+All 320 rerun endpoints passed independent checks; 526 main regressions passed.
+The [GPU execution guide](NPF662_GPU_NATIVE.rst) records the updated timings,
+controls, conductivity refresh behavior and reproducible commands. The tables
+below retain the original implementation baseline.
+
+## Original runtime comparison: solve calls only
 
 Twenty weekly steps at the explicit GPU relative-imbalance limit `1e-7`:
 
