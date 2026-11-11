@@ -5,7 +5,7 @@ import json
 import numpy as np
 import pytest
 
-from DARCY_WARP_PACKAGE.solvers.transient_config import default_solve_controls
+from working_tests.transient_replay_settings import default_solve_controls
 from DARCY_WARP_PACKAGE.warped_darcy import _adaptive_dt_should_early_shrink
 from working_tests.transient_replay_support import run_warp_transient_replay
 from working_tests.transient_replay_mass_balance import compute_replay_mass_balance

@@ -29,7 +29,7 @@ from working_tests.transient_replay_metrics import compare_transient
 from working_tests.transient_replay_mass_balance import (
     compute_replay_mass_balance, annotate_mass_balance_classification,
 )
-from DARCY_WARP_PACKAGE.solvers.transient_config import default_solve_controls
+from working_tests.transient_replay_settings import default_solve_controls
 from DARCY_WARP_PACKAGE.warped_darcy import WarpDarcySolver
 
 
