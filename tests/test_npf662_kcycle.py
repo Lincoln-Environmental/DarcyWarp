@@ -24,9 +24,10 @@ def device(request):
     return request.param
 
 
-@pytest.mark.parametrize('cycle_kind,cached_factors,precision', [
-    ('k', False, 'float64'), ('k', True, 'float64'), ('v', True, 'float64'), ('k', True, 'float32')])
-def test_manufactured_scaled_linear_and_fixed_mask(device, cycle_kind, cached_factors, precision):
+@pytest.mark.parametrize('cycle_kind,cached_factors,precision,smoother', [
+    ('k', False, 'float64', 'jacobi'), ('k', True, 'float64', 'jacobi'), ('v', True, 'float64', 'jacobi'),
+    ('k', True, 'float32', 'jacobi'), ('k', True, 'float64', 'red_black'), ('k', True, 'float32', 'red_black')])
+def test_manufactured_scaled_linear_and_fixed_mask(device, cycle_kind, cached_factors, precision, smoother):
     case = layered_case(masked=True, shape=(5, 7, 9))
     reference = NPF662Reference(case=case)
     with make_gpu_model(case=case, device=device) as model:
@@ -34,7 +35,7 @@ def test_manufactured_scaled_linear_and_fixed_mask(device, cycle_kind, cached_fa
         mg = NPF662KCycleWorkspace(faces=model._session.faces, active=case.active, fixed=case.fixed,
                                  device=device, controls=NPF662KCycleControls(
                                      cycle_kind=cycle_kind, cached_line_factors=cached_factors,
-                                     preconditioner_precision=precision))
+                                     preconditioner_precision=precision, line_smoother=smoother))
         gmres = RestartedFGMRES3D(workspace=ws, restart=12)
         exact = np.random.default_rng(seed=991).normal(size=case.active.size)
         exact[~reference.free.ravel()] = 0.

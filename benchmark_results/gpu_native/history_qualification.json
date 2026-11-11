@@ -1,0 +1,666 @@
+{
+  "status": "One-second strict target achieved; development qualification",
+  "device": "NVIDIA RTX 4070 Ti SUPER, 16 GiB",
+  "physics": "500x500x5 upper-layer-convertible NPF/STO; 20 weekly steps; original initial heads; no SS presolve",
+  "precision": "FP64 physics, heads, FGMRES and acceptance; FP32 multigrid correction",
+  "timing": "Entire synchronized public history API including internal setup, source/timestep updates, acceptance and output download. External model construction and independent benchmark audits separate. MF6 is one saved engine execution.",
+  "qualifications": {
+    "strict": {
+      "raw_path": "benchmark_results/gpu_native/stretch_history_strict_qualification/results.json",
+      "sha256": "9ec3e1947230d42231dc707edcd8832ffdd422b4800f81b71400c7d8204885e1",
+      "revision": "7598f6c9424b9a193631b5e800f83cf95e56a1bc",
+      "source_sha256": {
+        "DARCY_WARP_PACKAGE/solvers/npf662_3d.py": "4c3b2de1089704730f9b325f31646838b9e6b5aedfca97fae45714e18ebf4cb7",
+        "DARCY_WARP_PACKAGE/solvers/npf662_fgmres.py": "d4e734310b327486080de3cc777ad55ee1bb5f25218cbc22d9938a1c713545f9",
+        "DARCY_WARP_PACKAGE/solvers/npf662_history.py": "da00e320a6d0d1e597e240276aa9632007072be8ca1c895399e19b29ebe2bc2f",
+        "DARCY_WARP_PACKAGE/solvers/npf662_kcycle.py": "43f45a417b5bad68ad2856b06b4f22d9777f6c4a845fc485e74542f4a9fe9d80",
+        "DARCY_WARP_PACKAGE/solvers/npf662_kernels.py": "bc8719b7f5fd628b51c89fa99be0957e4c990f77192f440ec5c52f5a66d6dd08",
+        "DARCY_WARP_PACKAGE/solvers/npf662_line.py": "c9211f73afe55dee0516dd234e9da6249787025c601cedbb0c7cd360a6abc1a1",
+        "DARCY_WARP_PACKAGE/solvers/npf662_mixed_kernels.py": "f2f431c534053f7b77df044d50d9854bd66d1f58efddb9f374faf351fadcdb87",
+        "DARCY_WARP_PACKAGE/solvers/npf662_newton.py": "a25860fff8bbce654483b2666e3d9c2fad0f110ee6ede11c849963433cb9a781",
+        "DARCY_WARP_PACKAGE/solvers/npf662_state.py": "74e5d21d187f8f386f2c4431df520da25736aaafe70be111e58ca00213e5fc73"
+      },
+      "controls": {
+        "source_factors": [
+          1.0,
+          1.5,
+          0.25,
+          1.0
+        ],
+        "block_periods": 5,
+        "dt": 7.0,
+        "ss": 1e-05,
+        "sy": 0.15,
+        "progress_seconds": 30.0,
+        "progress_every": 5,
+        "cartesian_top": 8.0,
+        "cartesian_dz": 10.0,
+        "cartesian_dx": 25.0,
+        "kcycle_threshold_cells": 50000,
+        "kcycle": {
+          "levels": 3,
+          "pre_sweeps": 2,
+          "post_sweeps": 2,
+          "coarse_sweeps": 2,
+          "cached_line_factors": true,
+          "preconditioner_precision": "float32",
+          "coefficient_state": "current"
+        },
+        "npf_options": {
+          "max_outer": 80,
+          "max_cycles": 4000,
+          "krylov_restart": 8,
+          "npf_device_native": true,
+          "npf_final_relative_tolerance": 1e-07,
+          "npf_newton_controls": {
+            "inner_forcing": 0.005,
+            "timestep_predictor": true,
+            "tiled_reductions": true,
+            "reuse_trial_state": true
+          }
+        },
+        "gates": {
+          "rmse": 0.001,
+          "maximum": 0.01,
+          "budget_percent": 1.0
+        }
+      },
+      "summary": [
+        {
+          "case": "npf_convertible_250x250x5_transient",
+          "implementation": "kcycle",
+          "passed": true,
+          "median_public_solve_seconds": 0.26700323700060835,
+          "mf6_single_reference_run_seconds": 17.319,
+          "median_model_construction_seconds": 0.04913114500232041,
+          "median_extra_audit_seconds": 4.347807158013893,
+          "median_verified_total_seconds": 4.67659829799959,
+          "worst_head_rmse_m": 7.645645956445428e-09,
+          "worst_head_max_m": 3.689508121240692e-08,
+          "reference_reused": true
+        },
+        {
+          "case": "npf_convertible_500x500x5_transient",
+          "implementation": "kcycle",
+          "passed": true,
+          "median_public_solve_seconds": 0.9566304410000157,
+          "mf6_single_reference_run_seconds": 104.39099999999999,
+          "median_model_construction_seconds": 0.22013312999843038,
+          "median_extra_audit_seconds": 19.74231265602066,
+          "median_verified_total_seconds": 20.959617309999885,
+          "worst_head_rmse_m": 3.553597461713049e-08,
+          "worst_head_max_m": 6.841307176319589e-08,
+          "reference_reused": true
+        }
+      ],
+      "cases": [
+        {
+          "case": "npf_convertible_250x250x5_transient",
+          "case_sha256": "f8c5b3bad098812a178a8d55e4ef20915eec9128d7155640e5233928e25485dc",
+          "public_seconds": [
+            0.26700323700060835,
+            0.2688722160019097,
+            0.26530507400093484
+          ],
+          "numerical_seconds": [
+            0.19827684701158432,
+            0.19818695600770297,
+            0.19555596300051548
+          ],
+          "krylov": [
+            170,
+            170,
+            170
+          ],
+          "outer": [
+            48,
+            48,
+            48
+          ],
+          "audited_endpoints_including_warmup": 80,
+          "relative_imbalance": {
+            "minimum": 3.2784266708851194e-10,
+            "median": 1.3459292561432934e-08,
+            "maximum": 9.962045191605443e-08
+          },
+          "head_residual_rms": {
+            "minimum": 2.875559767958189e-13,
+            "median": 5.007080364097174e-11,
+            "maximum": 1.1968474397389844e-10
+          },
+          "head_max_error_m": 3.689508121240692e-08,
+          "flux_relative_l2_max": 1.2641926585353493e-07,
+          "history_readbacks": [
+            {
+              "solver_head_readbacks": 1,
+              "output_history_readbacks": 1
+            },
+            {
+              "solver_head_readbacks": 1,
+              "output_history_readbacks": 1
+            },
+            {
+              "solver_head_readbacks": 1,
+              "output_history_readbacks": 1
+            }
+          ]
+        },
+        {
+          "case": "npf_convertible_500x500x5_transient",
+          "case_sha256": "473ce87bc6b5ab9e8b3b2f350e15f6e2e251f7cf75c36b31ef08879911bbfd43",
+          "public_seconds": [
+            0.9404603949988086,
+            0.9566304410000157,
+            0.997606609002105
+          ],
+          "numerical_seconds": [
+            0.6457179200042447,
+            0.6464186999946833,
+            0.6484893819942954
+          ],
+          "krylov": [
+            200,
+            200,
+            200
+          ],
+          "outer": [
+            49,
+            49,
+            49
+          ],
+          "audited_endpoints_including_warmup": 80,
+          "relative_imbalance": {
+            "minimum": 1.6783724119185486e-10,
+            "median": 1.534088670265926e-08,
+            "maximum": 7.562948676535312e-08
+          },
+          "head_residual_rms": {
+            "minimum": 5.474954803124378e-14,
+            "median": 1.9210240643073567e-11,
+            "maximum": 9.035721133878649e-11
+          },
+          "head_max_error_m": 6.841307176319589e-08,
+          "flux_relative_l2_max": 1.9264072356411882e-07,
+          "history_readbacks": [
+            {
+              "solver_head_readbacks": 1,
+              "output_history_readbacks": 1
+            },
+            {
+              "solver_head_readbacks": 1,
+              "output_history_readbacks": 1
+            },
+            {
+              "solver_head_readbacks": 1,
+              "output_history_readbacks": 1
+            }
+          ]
+        }
+      ]
+    },
+    "mf6_accuracy": {
+      "raw_path": "benchmark_results/gpu_native/stretch_history_mf6_qualification/results.json",
+      "sha256": "671e70606a6dcee820817aef7dd0d02da53bc66db7db22a4b64732ec13a548ce",
+      "revision": "7598f6c9424b9a193631b5e800f83cf95e56a1bc",
+      "source_sha256": {
+        "DARCY_WARP_PACKAGE/solvers/npf662_3d.py": "4c3b2de1089704730f9b325f31646838b9e6b5aedfca97fae45714e18ebf4cb7",
+        "DARCY_WARP_PACKAGE/solvers/npf662_fgmres.py": "d4e734310b327486080de3cc777ad55ee1bb5f25218cbc22d9938a1c713545f9",
+        "DARCY_WARP_PACKAGE/solvers/npf662_history.py": "da00e320a6d0d1e597e240276aa9632007072be8ca1c895399e19b29ebe2bc2f",
+        "DARCY_WARP_PACKAGE/solvers/npf662_kcycle.py": "43f45a417b5bad68ad2856b06b4f22d9777f6c4a845fc485e74542f4a9fe9d80",
+        "DARCY_WARP_PACKAGE/solvers/npf662_kernels.py": "bc8719b7f5fd628b51c89fa99be0957e4c990f77192f440ec5c52f5a66d6dd08",
+        "DARCY_WARP_PACKAGE/solvers/npf662_line.py": "c9211f73afe55dee0516dd234e9da6249787025c601cedbb0c7cd360a6abc1a1",
+        "DARCY_WARP_PACKAGE/solvers/npf662_mixed_kernels.py": "f2f431c534053f7b77df044d50d9854bd66d1f58efddb9f374faf351fadcdb87",
+        "DARCY_WARP_PACKAGE/solvers/npf662_newton.py": "a25860fff8bbce654483b2666e3d9c2fad0f110ee6ede11c849963433cb9a781",
+        "DARCY_WARP_PACKAGE/solvers/npf662_state.py": "74e5d21d187f8f386f2c4431df520da25736aaafe70be111e58ca00213e5fc73"
+      },
+      "controls": {
+        "source_factors": [
+          1.0,
+          1.5,
+          0.25,
+          1.0
+        ],
+        "block_periods": 5,
+        "dt": 7.0,
+        "ss": 1e-05,
+        "sy": 0.15,
+        "progress_seconds": 30.0,
+        "progress_every": 5,
+        "cartesian_top": 8.0,
+        "cartesian_dz": 10.0,
+        "cartesian_dx": 25.0,
+        "kcycle_threshold_cells": 50000,
+        "kcycle": {
+          "levels": 3,
+          "pre_sweeps": 2,
+          "post_sweeps": 2,
+          "coarse_sweeps": 2,
+          "cached_line_factors": true,
+          "preconditioner_precision": "float32",
+          "coefficient_state": "current"
+        },
+        "npf_options": {
+          "max_outer": 80,
+          "max_cycles": 4000,
+          "krylov_restart": 8,
+          "npf_device_native": true,
+          "npf_final_relative_tolerance": 1.5e-07,
+          "npf_newton_controls": {
+            "inner_forcing": 0.01,
+            "timestep_predictor": true,
+            "tiled_reductions": true,
+            "reuse_trial_state": true
+          }
+        },
+        "gates": {
+          "rmse": 0.001,
+          "maximum": 0.01,
+          "budget_percent": 1.0
+        }
+      },
+      "summary": [
+        {
+          "case": "npf_convertible_500x500x5_transient",
+          "implementation": "kcycle",
+          "passed": true,
+          "median_public_solve_seconds": 0.9314877130018431,
+          "mf6_single_reference_run_seconds": 104.39099999999999,
+          "median_model_construction_seconds": 0.22236615100337076,
+          "median_extra_audit_seconds": 19.90911898399645,
+          "median_verified_total_seconds": 21.12919822800177,
+          "worst_head_rmse_m": 3.5945880198689555e-08,
+          "worst_head_max_m": 7.87905619081819e-08,
+          "reference_reused": true
+        }
+      ],
+      "cases": [
+        {
+          "case": "npf_convertible_500x500x5_transient",
+          "case_sha256": "473ce87bc6b5ab9e8b3b2f350e15f6e2e251f7cf75c36b31ef08879911bbfd43",
+          "public_seconds": [
+            0.9268517080017773,
+            0.9451326230009727,
+            0.9314877130018431
+          ],
+          "numerical_seconds": [
+            0.6382764890113322,
+            0.6436459120086511,
+            0.642038756988768
+          ],
+          "krylov": [
+            192,
+            192,
+            192
+          ],
+          "outer": [
+            53,
+            53,
+            53
+          ],
+          "audited_endpoints_including_warmup": 80,
+          "relative_imbalance": {
+            "minimum": 9.829738652496815e-10,
+            "median": 2.9770139988479905e-08,
+            "maximum": 1.415804731272894e-07
+          },
+          "head_residual_rms": {
+            "minimum": 6.365779283219649e-13,
+            "median": 1.087972181873976e-11,
+            "maximum": 1.7850483492169904e-10
+          },
+          "head_max_error_m": 7.87905619081819e-08,
+          "flux_relative_l2_max": 3.43237158463613e-07,
+          "history_readbacks": [
+            {
+              "solver_head_readbacks": 1,
+              "output_history_readbacks": 1
+            },
+            {
+              "solver_head_readbacks": 1,
+              "output_history_readbacks": 1
+            },
+            {
+              "solver_head_readbacks": 1,
+              "output_history_readbacks": 1
+            }
+          ]
+        }
+      ]
+    },
+    "confined": {
+      "raw_path": "benchmark_results/gpu_native/stretch_history_confined_qualification/results.json",
+      "sha256": "f4b2a733b58bc1a94eead7ce175ffddc4436184a4c26ce315e4ce1a3100e5ef1",
+      "revision": "7598f6c9424b9a193631b5e800f83cf95e56a1bc",
+      "source_sha256": {
+        "DARCY_WARP_PACKAGE/solvers/npf662_3d.py": "4c3b2de1089704730f9b325f31646838b9e6b5aedfca97fae45714e18ebf4cb7",
+        "DARCY_WARP_PACKAGE/solvers/npf662_fgmres.py": "d4e734310b327486080de3cc777ad55ee1bb5f25218cbc22d9938a1c713545f9",
+        "DARCY_WARP_PACKAGE/solvers/npf662_history.py": "da00e320a6d0d1e597e240276aa9632007072be8ca1c895399e19b29ebe2bc2f",
+        "DARCY_WARP_PACKAGE/solvers/npf662_kcycle.py": "43f45a417b5bad68ad2856b06b4f22d9777f6c4a845fc485e74542f4a9fe9d80",
+        "DARCY_WARP_PACKAGE/solvers/npf662_kernels.py": "bc8719b7f5fd628b51c89fa99be0957e4c990f77192f440ec5c52f5a66d6dd08",
+        "DARCY_WARP_PACKAGE/solvers/npf662_line.py": "c9211f73afe55dee0516dd234e9da6249787025c601cedbb0c7cd360a6abc1a1",
+        "DARCY_WARP_PACKAGE/solvers/npf662_mixed_kernels.py": "f2f431c534053f7b77df044d50d9854bd66d1f58efddb9f374faf351fadcdb87",
+        "DARCY_WARP_PACKAGE/solvers/npf662_newton.py": "a25860fff8bbce654483b2666e3d9c2fad0f110ee6ede11c849963433cb9a781",
+        "DARCY_WARP_PACKAGE/solvers/npf662_state.py": "74e5d21d187f8f386f2c4431df520da25736aaafe70be111e58ca00213e5fc73"
+      },
+      "controls": {
+        "source_factors": [
+          1.0,
+          1.5,
+          0.25,
+          1.0
+        ],
+        "block_periods": 5,
+        "dt": 7.0,
+        "ss": 1e-05,
+        "sy": 0.15,
+        "progress_seconds": 30.0,
+        "progress_every": 5,
+        "cartesian_top": 8.0,
+        "cartesian_dz": 10.0,
+        "cartesian_dx": 25.0,
+        "kcycle_threshold_cells": 50000,
+        "kcycle": {
+          "levels": 5,
+          "pre_sweeps": 2,
+          "post_sweeps": 2,
+          "coarse_sweeps": 2,
+          "cached_line_factors": true,
+          "preconditioner_precision": "float32"
+        },
+        "npf_options": {
+          "max_outer": 80,
+          "max_cycles": 4000,
+          "krylov_restart": 24,
+          "npf_device_native": true,
+          "npf_final_relative_tolerance": 1e-07,
+          "npf_newton_controls": {
+            "inner_forcing": 0.01,
+            "tiled_reductions": true,
+            "reuse_trial_state": true
+          }
+        },
+        "gates": {
+          "rmse": 0.001,
+          "maximum": 0.01,
+          "budget_percent": 1.0
+        }
+      },
+      "summary": [
+        {
+          "case": "npf_confined_250x250x5_transient",
+          "implementation": "kcycle",
+          "passed": true,
+          "median_public_solve_seconds": 0.6446158340004331,
+          "mf6_single_reference_run_seconds": 47.589,
+          "median_model_construction_seconds": 0.04990302499936661,
+          "median_extra_audit_seconds": 4.392574723009602,
+          "median_verified_total_seconds": 5.102128435999475,
+          "worst_head_rmse_m": 4.1195296259151194e-07,
+          "worst_head_max_m": 1.064183383192585e-06,
+          "reference_reused": true
+        },
+        {
+          "case": "npf_confined_500x500x5_transient",
+          "implementation": "kcycle",
+          "passed": true,
+          "median_public_solve_seconds": 1.4897440489985456,
+          "mf6_single_reference_run_seconds": 346.408,
+          "median_model_construction_seconds": 0.22166335899964906,
+          "median_extra_audit_seconds": 19.70945096399737,
+          "median_verified_total_seconds": 21.481619647001935,
+          "worst_head_rmse_m": 1.3955732603793177e-06,
+          "worst_head_max_m": 3.4527949352991527e-06,
+          "reference_reused": true
+        }
+      ],
+      "cases": [
+        {
+          "case": "npf_confined_250x250x5_transient",
+          "case_sha256": "abf458a50bee133839d83281a7b59336cf66d5c35cc440a48222460fce71380d",
+          "public_seconds": [
+            0.6462985350008239,
+            0.64045385099962,
+            0.6446158340004331
+          ],
+          "numerical_seconds": [
+            0.5605964940077683,
+            0.554824181002914,
+            0.5589493900006346
+          ],
+          "krylov": [
+            269,
+            269,
+            269
+          ],
+          "outer": [
+            62,
+            62,
+            62
+          ],
+          "audited_endpoints_including_warmup": 80,
+          "relative_imbalance": {
+            "minimum": 3.590669449921706e-10,
+            "median": 2.6397346698775013e-08,
+            "maximum": 6.259386109372035e-08
+          },
+          "head_residual_rms": {
+            "minimum": 6.039430616901632e-13,
+            "median": 4.3945411197405213e-11,
+            "maximum": 7.947795578432364e-11
+          },
+          "head_max_error_m": 1.064183383192585e-06,
+          "flux_relative_l2_max": 5.831006779777164e-08,
+          "history_readbacks": [
+            {
+              "solver_head_readbacks": 1,
+              "output_history_readbacks": 1
+            },
+            {
+              "solver_head_readbacks": 1,
+              "output_history_readbacks": 1
+            },
+            {
+              "solver_head_readbacks": 1,
+              "output_history_readbacks": 1
+            }
+          ]
+        },
+        {
+          "case": "npf_confined_500x500x5_transient",
+          "case_sha256": "ec63acfb62802840cf0d7fa49344bd108ab872271b0554b56dd9a46630891055",
+          "public_seconds": [
+            1.4897440489985456,
+            1.487552937000146,
+            1.491066614002193
+          ],
+          "numerical_seconds": [
+            1.098734405997675,
+            1.102483388996916,
+            1.0999527289895923
+          ],
+          "krylov": [
+            284,
+            284,
+            284
+          ],
+          "outer": [
+            63,
+            63,
+            63
+          ],
+          "audited_endpoints_including_warmup": 80,
+          "relative_imbalance": {
+            "minimum": 3.908101888507939e-10,
+            "median": 3.112127328823745e-08,
+            "maximum": 7.073521119182635e-08
+          },
+          "head_residual_rms": {
+            "minimum": 2.0270544880935906e-13,
+            "median": 1.9896187295036758e-11,
+            "maximum": 6.675957165017481e-11
+          },
+          "head_max_error_m": 3.4527949352991527e-06,
+          "flux_relative_l2_max": 1.0768949016542243e-07,
+          "history_readbacks": [
+            {
+              "solver_head_readbacks": 1,
+              "output_history_readbacks": 1
+            },
+            {
+              "solver_head_readbacks": 1,
+              "output_history_readbacks": 1
+            },
+            {
+              "solver_head_readbacks": 1,
+              "output_history_readbacks": 1
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "verification": {
+    "tests_passed": 1697,
+    "skipped": 4,
+    "native_mf6_deselected": 52,
+    "skip_reason": "CPU parameterizations of CUDA-only graph/reduction checks",
+    "tests_command": "MPLBACKEND=Agg DARCY_FLOAT=float64 PYTHONPATH=.:working_tests python working_tests/run_3d_gpu_tests.py",
+    "documentation": "Sphinx -W HTML build passed",
+    "native_references": "Fingerprint-verified saved MF6 results; no fresh MF6 execution in this checkpoint"
+  },
+  "mf6_relative_imbalance": {
+    "minimum": 1.464583917280143e-08,
+    "median": 3.862325095541263e-08,
+    "maximum": 1.422484957910317e-07
+  },
+  "calibration": {
+    "raw_path": "benchmark_results/gpu_native/stretch_history_calibration/results.json",
+    "sha256": "3f899f2b7933e0169ef4dde570a753052805b20102c6dc3a925c0817a81fc828",
+    "case_sha256": "473ce87bc6b5ab9e8b3b2f350e15f6e2e251f7cf75c36b31ef08879911bbfd43",
+    "controls": {
+      "transient": true,
+      "dt": 7.0,
+      "ss": 1e-05,
+      "sy": 0.15,
+      "npf_preconditioner": "kcycle",
+      "npf_kcycle_controls": {
+        "levels": 3,
+        "min_coarse_n": 2,
+        "pre_sweeps": 2,
+        "post_sweeps": 2,
+        "coarse_sweeps": 2,
+        "cycles": 1,
+        "omega": 0.8,
+        "use_cuda_graph": true,
+        "cycle_kind": "k",
+        "cached_line_factors": true,
+        "preconditioner_precision": "float32",
+        "coefficient_state": "current",
+        "line_smoother": "jacobi"
+      },
+      "npf_final_relative_tolerance": 1e-07,
+      "max_outer": 80,
+      "max_cycles": 4000,
+      "krylov_restart": 8,
+      "npf_newton_controls": {
+        "inner_forcing": 0.005,
+        "newton_budget_fraction": 0.75,
+        "line_search_steps": 20,
+        "max_head_change_m": 50.0,
+        "recovery_growth": 1.1,
+        "adaptive_forcing": false,
+        "forcing_min": 0.0001,
+        "forcing_max": 0.3,
+        "forcing_power": 1.5,
+        "timestep_predictor": true,
+        "timestep_predictor_order": 1,
+        "tiled_reductions": true,
+        "reuse_trial_state": true
+      }
+    },
+    "timing": "One run per changed K, reused models, each from original heads. History API runs after the individual-step comparison has prepared the current K. K update and first changed-K work are reported separately in step-API results; no MF6 speedup claimed for changed K.",
+    "cases": [
+      {
+        "k_factor": 0.5,
+        "host_device_head_max_m": 1.0562384300527583e-13,
+        "history_step_api_head_max_m": 0.0,
+        "history_public_seconds": 0.7078317199993762,
+        "history_numerical_seconds": 0.576731771005143,
+        "history_extra_audit_seconds": 19.83123243799855,
+        "audited_history_endpoints": 20,
+        "runs": {
+          "False": {
+            "k_update_seconds": 0.23592727900177124,
+            "public_seconds": 25.77690521099794,
+            "numerical_seconds": 1.4335790590121178,
+            "setup_seconds": 3.2237966409884393,
+            "readbacks": 1092,
+            "krylov": 172
+          },
+          "True": {
+            "k_update_seconds": 0.23106322300009197,
+            "public_seconds": 1.246537206996436,
+            "numerical_seconds": 0.6077330160042038,
+            "setup_seconds": 0.228328392993717,
+            "readbacks": 264,
+            "krylov": 172
+          }
+        }
+      },
+      {
+        "k_factor": 1.0,
+        "host_device_head_max_m": 7.632783294297951e-14,
+        "history_step_api_head_max_m": 0.0,
+        "history_public_seconds": 0.7758542879964807,
+        "history_numerical_seconds": 0.6473036389979825,
+        "history_extra_audit_seconds": 19.62093344599998,
+        "audited_history_endpoints": 20,
+        "runs": {
+          "False": {
+            "k_update_seconds": 0.19658827500097686,
+            "public_seconds": 25.79630440299661,
+            "numerical_seconds": 1.5786219600049662,
+            "setup_seconds": 3.243104463999771,
+            "readbacks": 1328,
+            "krylov": 200
+          },
+          "True": {
+            "k_update_seconds": 0.1969457909981429,
+            "public_seconds": 1.3412377429922344,
+            "numerical_seconds": 0.6813547110032232,
+            "setup_seconds": 0.23360158199284342,
+            "readbacks": 298,
+            "krylov": 200
+          }
+        }
+      },
+      {
+        "k_factor": 2.0,
+        "host_device_head_max_m": 6.411537967210279e-14,
+        "history_step_api_head_max_m": 0.0,
+        "history_public_seconds": 0.8438745009989361,
+        "history_numerical_seconds": 0.7151785740024934,
+        "history_extra_audit_seconds": 19.92695780500071,
+        "audited_history_endpoints": 20,
+        "runs": {
+          "False": {
+            "k_update_seconds": 0.20786215599946445,
+            "public_seconds": 25.911368172000948,
+            "numerical_seconds": 1.7234161679989484,
+            "setup_seconds": 3.215317230005894,
+            "readbacks": 1532,
+            "krylov": 226
+          },
+          "True": {
+            "k_update_seconds": 0.19296318600027007,
+            "public_seconds": 1.404004943997279,
+            "numerical_seconds": 0.7502375039985054,
+            "setup_seconds": 0.23313315199993667,
+            "readbacks": 332,
+            "krylov": 226
+          }
+        }
+      }
+    ]
+  }
+}

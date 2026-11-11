@@ -341,6 +341,17 @@ class WarpDarcySolver3D:
         self._kx_field, self._ky_field, self._kz_field = fields
         self._tx_p, self._tx_m, self._ty_p, self._ty_m, self._tz_p, self._tz_m = self._session.faces
 
+    def solve_transient_npf(self, *, source_factors, dt, head_prev, ss, sy, **solver_options):
+        """Solve an NPF/STO history with intermediate heads retained on the GPU.
+
+        K, geometry, cell types, storage fields and prescribed heads stay fixed
+        within a call. Source factors and dt vary per step. Update physical K
+        between calls with update_K_fields. A failed step stops the history.
+        """
+        from DARCY_WARP_PACKAGE.solvers.npf662_history import solve_transient_history
+        return solve_transient_history(model=self, source_factors=source_factors, dt=dt,
+            head_prev=head_prev, ss=ss, sy=sy, **solver_options)
+
     def solve(self, **kwargs: Any) -> tuple[np.ndarray, dict[str, Any]]:
         """Solve and time the public call, including independent acceptance.
 

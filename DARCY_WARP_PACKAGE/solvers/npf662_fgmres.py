@@ -9,6 +9,7 @@ import numpy as np
 import warp as wp
 
 from .face_kernels_3d_f64 import dot_partials_3d_f64_kernel, combine_partials_3d_f64_kernel, BLOCK_SIZE_3D
+from .npf662_kernels import combine_scalar_tiled
 
 
 class DiagonalFGMRESPreconditioner:
@@ -70,6 +71,16 @@ def record_column_norm(scalar: wp.array(dtype=wp.float64),
     column[row] = value
 
 
+@wp.kernel
+def masked_dot_tiles(a: wp.array(dtype=wp.float64), b: wp.array(dtype=wp.float64),
+    free: wp.array(dtype=wp.int32), partials: wp.array(dtype=wp.float64), block_span: int):
+    i=wp.tid()
+    value=wp.float64(0.)
+    if free[i] != 0:
+        value=a[i]*b[i]
+    wp.tile_store(partials,wp.tile_sum(wp.tile(value)),offset=i/block_span)
+
+
 class RestartedFGMRES3D:
     def __init__(self, *, workspace, restart):
         self.owner = workspace
@@ -102,12 +113,17 @@ class RestartedFGMRES3D:
 
     def _dot_device(self, *, x, y):
         nz, ny, nx = self.shape
-        self.partials.zero_()
-        wp.launch(kernel=dot_partials_3d_f64_kernel, dim=self.n,
-            inputs=[x.reshape(shape=self.shape), y.reshape(shape=self.shape), self.active, self.fixed,
-                    self.partials, nx, ny, nz, BLOCK_SIZE_3D], device=self.device)
-        wp.launch(kernel=combine_partials_3d_f64_kernel, dim=1,
-                  inputs=[self.partials, self.scalar, self.partials.size], device=self.device)
+        if getattr(self.owner,'device_tiled',False):
+            wp.launch(kernel=masked_dot_tiles,dim=self.n,inputs=[x,y,self.owner.free,self.partials,BLOCK_SIZE_3D],
+                device=self.device,block_dim=BLOCK_SIZE_3D)
+        else:
+            self.partials.zero_()
+            wp.launch(kernel=dot_partials_3d_f64_kernel, dim=self.n,
+                inputs=[x.reshape(shape=self.shape), y.reshape(shape=self.shape), self.active, self.fixed,
+                        self.partials, nx, ny, nz, BLOCK_SIZE_3D], device=self.device)
+        tiled=getattr(self.owner,'device_tiled',False)
+        wp.launch(kernel=combine_scalar_tiled if tiled else combine_partials_3d_f64_kernel, dim=256 if tiled else 1,
+                  inputs=[self.partials, self.scalar, self.partials.size], device=self.device, block_dim=256)
 
     def _dot(self, *, x, y):
         self._dot_device(x=x, y=y)

@@ -2,6 +2,9 @@
 import warp as wp
 
 
+NPFRowMetrics = wp.types.vector(length=9, dtype=wp.float64)
+
+
 @wp.func
 def saturation_pair(head:wp.float64,bottom:wp.float64,dz:wp.float64,cell_type:int):
     if cell_type==0:
@@ -70,21 +73,20 @@ def storage_terms(head:wp.array(dtype=wp.float64),previous:wp.array(dtype=wp.flo
         yield_coefficient*thickness[i]*pair[1])
 
 
-@wp.kernel
-def physical_rows(head:wp.array(dtype=wp.float64),source:wp.array(dtype=wp.float64),
+@wp.func
+def physical_row_metrics(i:int,head:wp.array(dtype=wp.float64),source:wp.array(dtype=wp.float64),
     free:wp.array(dtype=wp.int32),fixed:wp.array(dtype=wp.int32),left:wp.array2d(dtype=wp.int32),
     right:wp.array2d(dtype=wp.int32),flux:wp.array2d(dtype=wp.float64),conductance:wp.array2d(dtype=wp.float64),
     scale:wp.array(dtype=wp.float64),residual:wp.array(dtype=wp.float64),rhs:wp.array(dtype=wp.float64),
-    metrics:wp.array2d(dtype=wp.float64),storage:wp.array(dtype=wp.float64),storage_tangent:wp.array(dtype=wp.float64),block_size:int):
-    i=wp.tid()
-    block=i/block_size
+    storage:wp.array(dtype=wp.float64),storage_tangent:wp.array(dtype=wp.float64)):
+    metrics = NPFRowMetrics(wp.float64(0.))
     invalid=not wp.isfinite(head[i]) or not wp.isfinite(scale[i]) or scale[i]<=wp.float64(0.)
     for axis in range(3):
         if not wp.isfinite(flux[i,axis]) or not wp.isfinite(conductance[i,axis]):invalid=True
-    if invalid:wp.atomic_add(metrics,block,6,wp.float64(1.))
+    if invalid:metrics[6]=wp.float64(1.)
     if free[i]==0:
         residual[i]=wp.float64(0.);rhs[i]=wp.float64(0.)
-        return
+        return metrics
     divergence=wp.float64(0.);diagonal=wp.float64(0.);inflow=wp.float64(0.);outflow=wp.float64(0.)
     for axis in range(3):
         j=right[i,axis]
@@ -103,12 +105,58 @@ def physical_rows(head:wp.array(dtype=wp.float64),source:wp.array(dtype=wp.float
     if diagonal>wp.float64(0.):equivalent=r/diagonal
     elif r!=wp.float64(0.):equivalent=wp.float64(wp.inf)
     residual[i]=r;rhs[i]=r/scale[i]
-    wp.atomic_add(metrics,block,0,r*r);wp.atomic_add(metrics,block,1,wp.abs(r))
-    wp.atomic_add(metrics,block,2,equivalent*equivalent)
-    wp.atomic_add(metrics,block,3,wp.abs(source[i])+inflow+outflow+wp.abs(storage[i]))
-    wp.atomic_add(metrics,block,4,inflow);wp.atomic_add(metrics,block,5,outflow)
-    if not wp.isfinite(r) or not wp.isfinite(diagonal):wp.atomic_add(metrics,block,6,wp.float64(1.))
-    wp.atomic_add(metrics,block,7,rhs[i]*rhs[i]);wp.atomic_add(metrics,block,8,r)
+    metrics[0]=r*r;metrics[1]=wp.abs(r)
+    metrics[2]=equivalent*equivalent
+    metrics[3]=wp.abs(source[i])+inflow+outflow+wp.abs(storage[i])
+    metrics[4]=inflow;metrics[5]=outflow
+    if not wp.isfinite(r) or not wp.isfinite(diagonal):metrics[6]+=wp.float64(1.)
+    metrics[7]=rhs[i]*rhs[i];metrics[8]=r
+    return metrics
+
+
+@wp.kernel
+def physical_rows(head:wp.array(dtype=wp.float64),source:wp.array(dtype=wp.float64),
+    free:wp.array(dtype=wp.int32),fixed:wp.array(dtype=wp.int32),left:wp.array2d(dtype=wp.int32),
+    right:wp.array2d(dtype=wp.int32),flux:wp.array2d(dtype=wp.float64),conductance:wp.array2d(dtype=wp.float64),
+    scale:wp.array(dtype=wp.float64),residual:wp.array(dtype=wp.float64),rhs:wp.array(dtype=wp.float64),
+    metrics:wp.array2d(dtype=wp.float64),storage:wp.array(dtype=wp.float64),storage_tangent:wp.array(dtype=wp.float64),block_size:int):
+    i=wp.tid()
+    values=physical_row_metrics(i,head,source,free,fixed,left,right,flux,conductance,scale,residual,rhs,storage,storage_tangent)
+    for metric in range(9):
+        if values[metric] != wp.float64(0.):
+            wp.atomic_add(metrics,i/block_size,metric,values[metric])
+
+
+@wp.kernel
+def physical_rows_tiled(head:wp.array(dtype=wp.float64),source:wp.array(dtype=wp.float64),
+    free:wp.array(dtype=wp.int32),fixed:wp.array(dtype=wp.int32),left:wp.array2d(dtype=wp.int32),
+    right:wp.array2d(dtype=wp.int32),flux:wp.array2d(dtype=wp.float64),conductance:wp.array2d(dtype=wp.float64),
+    scale:wp.array(dtype=wp.float64),residual:wp.array(dtype=wp.float64),rhs:wp.array(dtype=wp.float64),
+    metrics:wp.array(dtype=wp.float64),storage:wp.array(dtype=wp.float64),storage_tangent:wp.array(dtype=wp.float64),block_size:int):
+    i=wp.tid()
+    values=physical_row_metrics(i,head,source,free,fixed,left,right,flux,conductance,scale,residual,rhs,storage,storage_tangent)
+    for metric in range(9):
+        wp.tile_store(metrics,wp.tile_sum(wp.tile(values[metric])),offset=(i/block_size)*9+metric)
+
+
+@wp.kernel
+def combine_scalar_tiled(partials:wp.array(dtype=wp.float64),out:wp.array(dtype=wp.float64),count:int):
+    lane=wp.tid()
+    value=wp.float64(0.)
+    for index in range(lane,count,256):
+        value+=partials[index]
+    wp.tile_store(out,wp.tile_sum(wp.tile(value)),offset=0)
+
+
+@wp.kernel
+def combine_metrics_tiled(partials:wp.array2d(dtype=wp.float64),out:wp.array(dtype=wp.float64),count:int):
+    thread=wp.tid()
+    metric=thread/256
+    lane=thread%256
+    value=wp.float64(0.)
+    for index in range(lane,count,256):
+        value+=partials[index,metric]
+    wp.tile_store(out,wp.tile_sum(wp.tile(value)),offset=metric)
 
 
 @wp.kernel
@@ -267,3 +315,9 @@ def predict_timestep_head(head: wp.array(dtype=wp.float64), increment: wp.array(
         if quadratic != 0:
             change = wp.float64(2.)*increment[i]-older[i]
         out[i] = head[i]+change
+
+
+@wp.kernel
+def scale_period_source(base: wp.array(dtype=wp.float64), source: wp.array(dtype=wp.float64), factor: wp.float64):
+    i = wp.tid()
+    source[i] = base[i]*factor

@@ -13,9 +13,10 @@ from DARCY_WARP_PACKAGE.kernels_3d import (
 )
 from .fast_3d import _build_levels, _upload_levels
 from .npf662_line import factor_lines, smooth_factored_lines
+from .npf662_kernels import combine_scalar_tiled
 from . import npf662_mixed_kernels as mixed
 from .face_kernels_3d_f64 import (
-    BLOCK_SIZE_3D, residual_partials_3d_f64_kernel,
+    BLOCK_SIZE_3D,
     dot_partials_3d_f64_kernel, combine_partials_3d_f64_kernel,
     apply_a_dot_partials_3d_f64_kernel, compute_safe_alpha_3d_kernel,
     axpy_active_device_scalar_3d_kernel, mask_correction_3d_kernel,
@@ -36,6 +37,7 @@ class NPF662KCycleControls:
     cached_line_factors: bool = False
     preconditioner_precision: str = 'float64'
     coefficient_state: str = 'saturated'
+    line_smoother: str = 'jacobi'
 
     def validate(self):
         if self.cycle_kind not in ('k', 'v'):
@@ -48,6 +50,10 @@ class NPF662KCycleControls:
             raise ValueError('FP32 preconditioner requires cached_line_factors')
         if self.coefficient_state not in ('saturated', 'current'):
             raise ValueError('coefficient_state must be saturated or current')
+        if self.line_smoother not in ('jacobi', 'red_black'):
+            raise ValueError('line_smoother must be jacobi or red_black')
+        if self.line_smoother == 'red_black' and not self.cached_line_factors:
+            raise ValueError('Red/black line smoothing requires cached_line_factors')
         for name in ('levels', 'min_coarse_n', 'coarse_sweeps', 'cycles'):
             value = getattr(self, name)
             if isinstance(value, (bool, np.bool_)) or not isinstance(value, (int, np.integer)) or value < 1:
@@ -218,6 +224,9 @@ class NPF662KCycleWorkspace:
                 self.work_levels.append(work)
             self._refresh_mixed()
         self.graph = None
+        self.refresh_graphs = {}
+        self.refresh_graph_failed = False
+        self.refresh_graph_replays = 0
         self.applications = self.cycles = self.graph_captures = self.graph_replays = 0
         self.graph_failed = False
         self.graph_error = None
@@ -269,6 +278,29 @@ class NPF662KCycleWorkspace:
         self.value_refresh_count += 1
 
     def refresh_storage_device(self, *, refresh_faces=False):
+        if self.cuda and self.controls.use_cuda_graph and not self.refresh_graph_failed:
+            key = bool(refresh_faces)
+            if key not in self.refresh_graphs:
+                try:
+                    with wp.ScopedCapture(device=self.device) as capture:
+                        self._enqueue_refresh(refresh_faces=refresh_faces)
+                    if capture.graph is None:
+                        raise RuntimeError('Empty NPF refresh graph')
+                    self.refresh_graphs[key] = capture.graph
+                except Exception:
+                    self.refresh_graph_failed = True
+            if not self.refresh_graph_failed:
+                wp.capture_launch(graph=self.refresh_graphs[key])
+                self.refresh_graph_replays += 1
+            else:
+                self._enqueue_refresh(refresh_faces=refresh_faces)
+        else:
+            self._enqueue_refresh(refresh_faces=refresh_faces)
+        if self.mixed:
+            self._check_mixed_coefficients()
+        self.device_storage_refresh_count += 1
+
+    def _enqueue_refresh(self, *, refresh_faces):
         for index, level in enumerate(self.levels):
             if index:
                 fine = self.levels[index-1]
@@ -284,11 +316,14 @@ class NPF662KCycleWorkspace:
                 level['storage'], *level['faces'], level['active'], level['diag']], device=self.device)
             if self.controls.cached_line_factors:
                 self._factor_lines(level=level)
-        self.device_storage_refresh_count += 1
         if self.mixed:
-            self._refresh_mixed()
+            self._enqueue_mixed_refresh()
 
     def _refresh_mixed(self):
+        self._enqueue_mixed_refresh()
+        self._check_mixed_coefficients()
+
+    def _enqueue_mixed_refresh(self):
         self.mixed_invalid.zero_()
         for source, target in zip(self.levels, self.work_levels):
             names = ('storage', 'diag', 'line_inverse', 'line_lower', 'c_prime')
@@ -296,6 +331,7 @@ class NPF662KCycleWorkspace:
                                 (*target['faces'], *(target[name] for name in names))):
                 wp.launch(kernel=mixed.cast_coefficients, dim=old.size,
                     inputs=[old.flatten(), new.flatten(), self.mixed_invalid], device=self.device)
+    def _check_mixed_coefficients(self):
         if self.mixed_invalid.numpy()[0]:
             raise ValueError('NPF coefficients cannot be represented by the FP32 preconditioner; use float64')
 
@@ -316,10 +352,17 @@ class NPF662KCycleWorkspace:
         x, work = level['x'], level['work']
         for unused in range(sweeps):
             if self.controls.cached_line_factors:
+                if self.controls.line_smoother == 'red_black':
+                    for color in (0, 1):
+                        wp.launch(kernel=mixed.smooth_factored_lines if self.mixed else smooth_factored_lines,
+                            dim=level['dim'][1:], inputs=[*level['faces'][:4], level['diag'], level['active'],
+                                level['bc_mask'], level['rhs'], x, level['line_inverse'], level['c_prime'],
+                                level['line_lower'], level['d_prime'], x, self.controls.omega, color], device=self.device)
+                    continue
                 wp.launch(kernel=mixed.smooth_factored_lines if self.mixed else smooth_factored_lines, dim=level['dim'][1:], inputs=[
                     *level['faces'][:4], level['diag'], level['active'], level['bc_mask'],
                     level['rhs'], x, level['line_inverse'], level['c_prime'], level['line_lower'],
-                    level['d_prime'], work, self.controls.omega], device=self.device)
+                    level['d_prime'], work, self.controls.omega, -1], device=self.device)
             else:
                 wp.launch(kernel=vertical_line_relaxation_7point_kernel, dim=level['nx'] * level['ny'],
                     inputs=[*level['faces'], level['active'], level['bc_mask'], level['storage'],
@@ -331,8 +374,9 @@ class NPF662KCycleWorkspace:
             wp.copy(dest=level['x'], src=x)
 
     def _residual(self, *, level):
-        level['partials_a'].zero_()
-        wp.launch(kernel=mixed.residual_partials_3d_f64_kernel if self.mixed else residual_partials_3d_f64_kernel, dim=level['n_cells'],
+        # Restriction needs the residual field; its norm is never consumed by
+        # this preconditioner. Keep all convergence reductions in FP64 FGMRES.
+        wp.launch(kernel=mixed.residual_3d_kernel, dim=level['n_cells'],
             inputs=[level['x'], level['rhs'], *level['faces'], level['storage'], level['active'],
                     level['bc_mask'], level['residual'], level['partials_a'],
                     level['nx'], level['ny'], level['nz'], BLOCK_SIZE_3D], device=self.device)
@@ -347,8 +391,8 @@ class NPF662KCycleWorkspace:
             inputs=[correction, *level['faces'], level['diag'], level['active'], level['bc_mask'],
                     level['partials_b'], level['nx'], level['ny'], level['nz'], BLOCK_SIZE_3D], device=self.device)
         for partial, scalar in (('partials_a', 'num'), ('partials_b', 'den')):
-            wp.launch(kernel=combine_partials_3d_f64_kernel, dim=1,
-                inputs=[level[partial], level[scalar], level['n_partials']], device=self.device)
+            wp.launch(kernel=combine_scalar_tiled if self.cuda else combine_partials_3d_f64_kernel, dim=256 if self.cuda else 1,
+                inputs=[level[partial], level[scalar], level['n_partials']], device=self.device, block_dim=256)
         wp.launch(kernel=compute_safe_alpha_3d_kernel, dim=1,
                   inputs=[level['num'], level['den'], level['alpha']], device=self.device)
         wp.launch(kernel=mixed.axpy_active_device_scalar_3d_kernel if self.mixed else axpy_active_device_scalar_3d_kernel, dim=level['dim'],
@@ -433,6 +477,7 @@ class NPF662KCycleWorkspace:
     def close(self):
         if not self.closed:
             self.graph = None
+            self.refresh_graphs.clear()
             self.levels = []
             self.work_levels = []
             self.mixed_invalid = None

@@ -39,6 +39,36 @@ def solve_step(*, model, case, previous, native, options):
         readbacks=info['krylov_scalar_readbacks'], outer=info['outer_iterations'])
 
 
+def check_device_history(*, model, case, factors, options, expected, head_tolerance):
+    model.update_rhs(rhs=case.source)
+    model.update_initial_head(initial_head=case.initial)
+    controls = {key:value for key,value in options.items() if key not in ('transient', 'dt', 'ss', 'sy')}
+    wp.synchronize_device(device=model.device)
+    start = perf_counter()
+    heads, info = model.solve_transient_npf(source_factors=factors, dt=options['dt'],
+        head_prev=case.initial, ss=options['ss'], sy=options['sy'],
+        unconfined=True, npf_cell_type=case.cell_types, **controls)
+    wp.synchronize_device(device=model.device)
+    elapsed = perf_counter()-start
+    assert info['converged']
+    error = float(np.max(np.abs(heads-np.stack(expected))))
+    assert error <= head_tolerance, error
+    start = perf_counter()
+    checks = []
+    previous = case.initial
+    for factor, head in zip(factors, heads):
+        check, unused = NPF662TransientReference(case=replace(case, source=case.source*factor),
+            previous=previous, dt=options['dt'], ss=options['ss'], sy=options['sy']).evaluate(
+                head=head, relative_tolerance=options['npf_final_relative_tolerance'])
+        assert check['independent_accepted']
+        checks.append(check)
+        previous = head
+    return dict(public_seconds=elapsed, numerical_seconds=info['numerical_seconds'],
+        extra_audit_seconds=perf_counter()-start, worst_step_api_head_difference_m=error,
+        independent_physical=checks, solver_head_readbacks=info['solver_head_readbacks'],
+        output_history_readbacks=info['output_history_readbacks'])
+
+
 def run(*, size, device, k_factors, source_factors, options, output, head_tolerance):
     definition = suite_settings(sizes=[size], variants=['convertible'])[0]
     geology = dict(definition['geology'], layer_k=np.asarray(definition['geology']['layer_k']))
@@ -56,6 +86,7 @@ def run(*, size, device, k_factors, source_factors, options, output, head_tolera
         for factor in k_factors:
             case = replace(base, kx=base.kx*factor, ky=base.ky*factor, kz=base.kz*factor)
             row = dict(k_factor=factor, runs={}, worst_head_difference_m=0.)
+            expected_history = []
             previous = {native:case.initial.copy() for native in models}
             for native, model in models.items():
                 start = perf_counter()
@@ -78,11 +109,14 @@ def run(*, size, device, k_factors, source_factors, options, output, head_tolera
                 assert error <= head_tolerance, error
                 row['worst_head_difference_m'] = max(row['worst_head_difference_m'], error)
                 previous = heads
+                expected_history.append(heads[True].copy())
                 if (period+1)%5 == 0:
                     print(f'K factor {factor}: step {period+1} accepted', flush=True)
             for item in row['runs'].values():
                 for name in ('public_seconds', 'numerical_seconds', 'setup_seconds', 'readbacks', 'krylov'):
                     item[name] = sum(step[name] for step in item['steps'])
+            row['device_history'] = check_device_history(model=models[True], case=case,
+                factors=source_factors, options=options, expected=expected_history, head_tolerance=head_tolerance)
             results['cases'].append(row)
             (output/'results.json').write_text(json.dumps(results, indent=2)+'\n')
             print(f"K={factor}: numerical old={row['runs']['False']['numerical_seconds']:.3f}s device={row['runs']['True']['numerical_seconds']:.3f}s", flush=True)
