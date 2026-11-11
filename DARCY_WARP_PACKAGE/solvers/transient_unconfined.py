@@ -401,8 +401,7 @@ def _persistent_period_engine(
         if transient_face_operator_enabled_b:
             from DARCY_WARP_PACKAGE.solvers.face_kernels_f64 import (
                 _BLOCK as _FACE_BLOCK,
-                combine_partials_kernel,
-                combine_partials_max_kernel,
+                launch_combine_partials,
                 dot_partials_f64_kernel,
                 face_residual_f64_kernel,
             )
@@ -431,18 +430,8 @@ def _persistent_period_engine(
                     ],
                     device=device,
                 )
-                wp.launch(
-                    kernel=combine_partials_kernel,
-                    dim=1,
-                    inputs=[storage_change_sum_sq_partials, storage_change_sum_sq_buf, storage_change_n_partials],
-                    device=device,
-                )
-                wp.launch(
-                    kernel=combine_partials_max_kernel,
-                    dim=1,
-                    inputs=[storage_change_max_partials, storage_change_max_buf, storage_change_n_partials],
-                    device=device,
-                )
+                launch_combine_partials(partials=storage_change_sum_sq_partials, out=storage_change_sum_sq_buf, n_partials=storage_change_n_partials, device=device)
+                launch_combine_partials(partials=storage_change_max_partials, out=storage_change_max_buf, n_partials=storage_change_n_partials, device=device, maximum=True)
                 return
             # Classic path: the scalar statistics buffers accumulate via
             # per-thread atomics and must be re-zeroed before every refresh
@@ -799,10 +788,8 @@ def _persistent_period_engine(
                     ],
                     device=device,
                 )
-                wp.launch(kernel=combine_partials_kernel, dim=1,
-                          inputs=[fl0.partials, flow_rTr_buf, fl0.n_partials], device=device)
-                wp.launch(kernel=combine_partials_kernel, dim=1,
-                          inputs=[fl0.partials_b, head_rTr_buf, fl0.n_partials], device=device)
+                launch_combine_partials(partials=fl0.partials, out=flow_rTr_buf, n_partials=fl0.n_partials, device=device)
+                launch_combine_partials(partials=fl0.partials_b, out=head_rTr_buf, n_partials=fl0.n_partials, device=device)
                 wp.launch(
                     kernel=detect_nonfinite_field_kernel,
                     dim=dim2d,
@@ -816,8 +803,7 @@ def _persistent_period_engine(
                             fl0.partials, self.nx, self.ny, _FACE_BLOCK],
                     device=device,
                 )
-                wp.launch(kernel=combine_partials_kernel, dim=1,
-                          inputs=[fl0.partials, rhs_rTr_buf, fl0.n_partials], device=device)
+                launch_combine_partials(partials=fl0.partials, out=rhs_rTr_buf, n_partials=fl0.n_partials, device=device)
             else:
                 wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[flow_rTr_buf], device=device)
                 wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[head_rTr_buf], device=device)
@@ -1674,14 +1660,10 @@ def _persistent_period_engine(
                         ],
                         device=device,
                     )
-                    wp.launch(kernel=combine_partials_kernel, dim=1,
-                              inputs=[fl0.partials, dh_rms_buf, fl0.n_partials], device=device)
-                    wp.launch(kernel=combine_partials_max_kernel, dim=1,
-                              inputs=[fl0.partials_b, dh_max_buf, fl0.n_partials], device=device)
-                    wp.launch(kernel=combine_partials_kernel, dim=1,
-                              inputs=[fl0.partials_c, flow_rTr_buf, fl0.n_partials], device=device)
-                    wp.launch(kernel=combine_partials_kernel, dim=1,
-                              inputs=[fl0.partials_d, head_rTr_buf, fl0.n_partials], device=device)
+                    launch_combine_partials(partials=fl0.partials, out=dh_rms_buf, n_partials=fl0.n_partials, device=device)
+                    launch_combine_partials(partials=fl0.partials_b, out=dh_max_buf, n_partials=fl0.n_partials, device=device, maximum=True)
+                    launch_combine_partials(partials=fl0.partials_c, out=flow_rTr_buf, n_partials=fl0.n_partials, device=device)
+                    launch_combine_partials(partials=fl0.partials_d, out=head_rTr_buf, n_partials=fl0.n_partials, device=device)
                 else:
                     wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[dh_rms_buf], device=device)
                     wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[dh_max_buf], device=device)
@@ -2108,10 +2090,8 @@ def _persistent_period_engine(
                     ],
                     device=device,
                 )
-                wp.launch(kernel=combine_partials_kernel, dim=1,
-                          inputs=[fl0.partials, flow_rTr_buf, fl0.n_partials], device=device)
-                wp.launch(kernel=combine_partials_kernel, dim=1,
-                          inputs=[fl0.partials_b, head_rTr_buf, fl0.n_partials], device=device)
+                launch_combine_partials(partials=fl0.partials, out=flow_rTr_buf, n_partials=fl0.n_partials, device=device)
+                launch_combine_partials(partials=fl0.partials_b, out=head_rTr_buf, n_partials=fl0.n_partials, device=device)
                 wp.launch(
                     kernel=dot_partials_f64_kernel,
                     dim=n_cells0,
@@ -2119,8 +2099,7 @@ def _persistent_period_engine(
                             fl0.partials, self.nx, self.ny, _FACE_BLOCK],
                     device=device,
                 )
-                wp.launch(kernel=combine_partials_kernel, dim=1,
-                          inputs=[fl0.partials, rhs_rTr_buf, fl0.n_partials], device=device)
+                launch_combine_partials(partials=fl0.partials, out=rhs_rTr_buf, n_partials=fl0.n_partials, device=device)
             else:
                 wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[flow_rTr_buf], device=device)
                 wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[head_rTr_buf], device=device)

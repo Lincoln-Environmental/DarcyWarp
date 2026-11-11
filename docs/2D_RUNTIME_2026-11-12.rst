@@ -1,0 +1,115 @@
+2D GPU runtime improvements, 12 November 2026
+=============================================
+
+The fast 2D solvers now combine residual partial sums in one parallel CUDA
+block instead of a serial GPU thread. The operation still uses FP64,
+overwrites the scalar result and clears the reusable partial buffer.
+CPU execution retains its original reduction order. This shared change
+applies to fast steady confined, steady unconfined inner solves, transient
+face operators and mixed-precision corrections. It changes no convergence
+limit or groundwater equation.
+
+An explicit transient profile in
+``working_tests/2d_transient_runtime_controls.json`` uses the accepted
+previous head directly at each timestep and sets ``omega=omega_max=1``.
+This removes the separate linear startup solve and uses full Picard updates
+(the same omega also enters coarse Jacobi smoothing). All residual,
+head-change, iteration-budget and adaptive-timestep controls remain at the
+production values. Library defaults retain their existing startup and damping.
+
+Measured results
+----------------
+
+.. include:: ../benchmark_results/gpu_2d_runtime/timings_20261112.rst
+
+Measurements use an RTX 4070 Ti SUPER and Warp 1.17.0. Each entry has a
+separate warmup and three timed repetitions on fresh models. Transient
+timings cover the entire synchronized public history call, including input
+validation, internal session construction, hierarchy/graph setup, all
+timesteps, acceptance, diagnostic output and head downloads. External model
+construction, reference loading and the additional independent budget audit
+are excluded. The earlier exploratory solver-reported history timer is
+retained separately in the evidence; it excludes some public-call overhead.
+Steady measurements likewise time the entire public solve call.
+
+The transient models start from the same cached MF6 steady solution used
+by the existing 2D sanity checks. No new steady solve is performed inside
+these timed histories. The profile removes a linear startup solve within
+each timestep; it does not change the initial condition. Saved MF6 timings
+are single engine runs, including MF6's native output writing. They are
+not fresh three-repeat CPU measurements.
+
+Convergence and qualification
+-----------------------------
+
+The existing 2D transient gates remain ``hclose=1e-4 m`` for maximum head
+change and ``strict_head_residual_tol=1e-6 m`` for head-equivalent RMS.
+Linear controls remain ``rel_tol=abs_tol_min=5e-7`` and the adaptive inner
+residual floor remains ``1e-12``. FP64 heads, storage, physical acceptance
+and outer residuals surround the existing FP32 inner correction. All
+accepted runtime-profile production histories converged strictly with zero
+adaptive-timestep retries. The independent head and water-budget gates are
+the existing 2D sanity gates; the profile does not relax them.
+
+The rectangular 100 x 250, three-week case also passes. The GHB case passes
+with the shared reduction and original production controls. The aggressive
+profile is **not qualified for GHB**: it triggers four timestep retries and
+differs from the fixed-weekly MF6 history by 13.10 m. Its endpoint budget
+comparison also fails (9.55%, with substeps). Those failed results remain in
+the evidence. The checked-in profile declares ``supports_ghb=false``, and
+the benchmark rejects applying it to GHB. Use the original production
+startup/damping for GHB; the parallel reduction still applies.
+
+Validation covers CPU/CUDA sum/max reductions, counts spanning CUDA-block
+boundaries, partial-buffer clearing, repeated graph replay, fast confined
+solves, mixed corrections, transient sessions, adaptive control and cached
+MF6 fixtures. The broad run passed 194 tests; two additional benchmark-gate
+tests passed. One solver-registry name assertion fails both on the candidate
+and unchanged baseline ``c1e36b7``: the test expects ``kcycle`` where the
+factory returns ``unconfined_picard_kcycle``. It is unrelated to this change.
+
+Reproduction
+-------------
+
+Use the dedicated DarcyWarp environment and run from the repository root.
+The transient driver validates artifact schema, physical fingerprint,
+normal-termination proof and the saved MF6 budget gate before reuse. It
+fails if any warmup or measured history fails strict convergence, finite
+heads, MF6 accuracy or the requested independent budget audit.
+
+.. code-block:: bash
+
+   export PYTHONPATH=.:working_tests DARCY_FLOAT=float64 MPLBACKEND=Agg
+   export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
+   python working_tests/benchmark_2d_runtime.py \
+     --artifact DARCY_WARP_PACKAGE/data/working_tests/mf6_transient_2d_unconfined_1000x1000_30w_ugly_t_s42/mf6_transient_heads.npz.lzma \
+     --controls working_tests/2d_transient_runtime_controls.json \
+     --output /tmp/2d-runtime-1000 --repeats 3 --audit
+
+Omit ``--controls`` to measure the existing production settings with the
+parallel reduction. For the second production case, use the artifact in
+``mf6_transient_2d_unconfined_500x500_52w``. Missing references can be generated
+with the existing ``run_2d_transient_vs_mf6.py`` case generator; this timing
+driver requires an existing validated artifact and never silently generates
+a different reference. To use the profile through the existing production
+replay API, pass its ``runtime.solve_controls`` mapping as
+``solve_control_overrides`` after checking its applicability to the model.
+
+.. code-block:: bash
+
+   python working_tests/benchmark_2d_steady_runtime.py \
+     --formulation unconfined \
+     --artifact tests/fixtures/unconfined_2d/truth_1000x1000.npz.lzma \
+     --output /tmp/2d-steady-unconfined --repeats 3
+   python working_tests/benchmark_2d_steady_runtime.py \
+     --formulation confined \
+     --artifact DARCY_WARP_PACKAGE/data/mf6_truth_npz/mf6_truth_1000x1000_ghb_True_t_isotropic_False.npz \
+     --output /tmp/2d-steady-confined --repeats 3
+
+Steady runs use the existing fixture controls and existing MF6 head gates
+(5e-4 m unconfined; 2e-4 m confined). Their smaller timing differences should
+be treated as modest gains, not evidence of a broad algorithmic speedup.
+
+Source fingerprints, controls, every repeat, physical metrics, rejected
+experiments and the GHB failure are retained in
+``benchmark_results/gpu_2d_runtime/qualification_20261112.json``.

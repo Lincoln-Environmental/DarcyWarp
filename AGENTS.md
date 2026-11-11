@@ -1,6 +1,23 @@
 kimi --model kimi-code/k3
 # DarcyWarp — Agent System Memory
 
+> 2026-11-12 2D runtime search on dev (baseline `c1e36b7`): shared FP64
+> partial-sum/max combination now uses one parallel CUDA block, preserving
+> CPU ordering and graph-safe partial clearing (`face_kernels_f64.py`).
+> Complete public transient API medians: heterogeneous 1000x1000/30 weeks
+> 25.644 -> 20.346 s with unchanged controls; uniform 500x500/52 weeks
+> 6.163 -> 5.471 s. Explicit `working_tests/2d_transient_runtime_controls.json`
+> adds initial-head startup and omega=omega_max=1, reaching 6.698 / 2.503 s.
+> All tolerances unchanged (strict head residual 1e-6, head change 1e-4).
+> Profile is NO-GHB ONLY: full-update GHB triggered substeps and failed
+> fixed-weekly MF6 parity by 13.10 m; production GHB controls still pass.
+> Profile metadata/benchmark reject GHB; defaults retain existing damping
+> and startup. 196 tests passed across broad + benchmark-guard checks;
+> one existing registry alias assertion fails identically on baseline.
+> Timings, exact source snapshots, failed experiments, reproduction and
+> limitations: `docs/2D_RUNTIME_2026-11-12.rst` and
+> `benchmark_results/gpu_2d_runtime/qualification_20261112.json`.
+
 > 2026-11-11 follow-up: main promotion and qualification pushed as `95928ec`
 > (526 regressions, 320 audited endpoints; convertible 500x500x5/20 steps
 > 9.784 s versus MF6 104.391 s). Back on dev, prioritize numerical runtime;

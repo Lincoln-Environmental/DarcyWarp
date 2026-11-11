@@ -14,6 +14,7 @@ Sphinx documentation build process used in this repository.
 
    quickstart
    benchmarking
+   runtime_2d
    npf_gpu_native
    docs_build
    license

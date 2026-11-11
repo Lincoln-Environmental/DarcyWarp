@@ -30,6 +30,8 @@ from typing import Any
 import numpy as np
 import warp as wp
 
+from .face_kernels_f64 import launch_combine_partials
+
 from .mixed_precision import MixedPrecisionDefectCorrectionSession
 from . import mixed_fast_kernels as mf3
 
@@ -337,15 +339,13 @@ def solve_kcycle_fast_device_buffers(
                   inputs=[coarse.b_wp, coarse.x_wp, coarse.active_wp,
                           coarse.bc_mask_wp, fc.partials, nxC, nyC, _BLOCK],
                   device=device)
-        wp.launch(kernel=mf3._mf3_combine_partials_kernel, dim=1,
-                  inputs=[fc.partials, coarse.rho_buf, fc.n_partials], device=device)
+        launch_combine_partials(partials=fc.partials, out=coarse.rho_buf, n_partials=fc.n_partials, device=device)
         wp.launch(kernel=applyA_dot_k, dim=n_c,
                   inputs=[coarse.x_wp, fc.Te, fc.Tw, fc.Tn, fc.Ts, fc.diag,
                           coarse.active_wp, coarse.bc_mask_wp, fc.partials,
                           nxC, nyC, _BLOCK],
                   device=device)
-        wp.launch(kernel=mf3._mf3_combine_partials_kernel, dim=1,
-                  inputs=[fc.partials, coarse.pAp_buf, fc.n_partials], device=device)
+        launch_combine_partials(partials=fc.partials, out=coarse.pAp_buf, n_partials=fc.n_partials, device=device)
         wp.launch(kernel=compute_safe_alpha_kernel, dim=1,
                   inputs=[coarse.rho_buf, coarse.pAp_buf, coarse.alpha_buf],
                   device=device)
@@ -499,12 +499,7 @@ class MixedPrecisionFastSession(MixedPrecisionDefectCorrectionSession):
             ],
             device=self.device,
         )
-        wp.launch(
-            kernel=mf3._mf3_combine_partials_kernel,
-            dim=1,
-            inputs=[self.partials0, self.rTr_buf, self.n_partials0],
-            device=self.device,
-        )
+        launch_combine_partials(partials=self.partials0, out=self.rTr_buf, n_partials=self.n_partials0, device=self.device)
         return float(self.rTr_buf.numpy()[0])
 
     def _accumulate(self) -> tuple[float, float]:
@@ -519,18 +514,8 @@ class MixedPrecisionFastSession(MixedPrecisionDefectCorrectionSession):
             ],
             device=self.device,
         )
-        wp.launch(
-            kernel=mf3._mf3_combine_partials_kernel,
-            dim=1,
-            inputs=[self.partials0, self.dh_sq_buf, self.n_partials0],
-            device=self.device,
-        )
-        wp.launch(
-            kernel=mf3._mf3_combine_partials_max_kernel,
-            dim=1,
-            inputs=[self.partials0_max, self.dh_max_buf, self.n_partials0],
-            device=self.device,
-        )
+        launch_combine_partials(partials=self.partials0, out=self.dh_sq_buf, n_partials=self.n_partials0, device=self.device)
+        launch_combine_partials(partials=self.partials0_max, out=self.dh_max_buf, n_partials=self.n_partials0, device=self.device, maximum=True)
         dh_max = float(self.dh_max_buf.numpy()[0])
         dh_rms = float(np.sqrt(max(float(self.dh_sq_buf.numpy()[0]), 0.0) / float(self.n_free)))
         return dh_max, dh_rms

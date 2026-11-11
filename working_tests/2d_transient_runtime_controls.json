@@ -1,0 +1,10 @@
+{
+  "runtime": {
+    "supports_ghb": false,
+    "solve_controls": {
+      "unconfined_startup_mode": "initial_head",
+      "omega": 1.0,
+      "omega_max": 1.0
+    }
+  }
+}

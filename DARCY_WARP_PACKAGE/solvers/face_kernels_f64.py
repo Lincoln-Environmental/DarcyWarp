@@ -320,6 +320,50 @@ def combine_partials_max_kernel(
 
 
 @wp.kernel
+def combine_partials_tiled_kernel(
+    partials: wp.array(dtype=wp.float64),
+    out: wp.array(dtype=wp.float64),
+    n_partials: int,
+):
+    lane = wp.tid()
+    value = wp.float64(0.0)
+    for index in range(lane, n_partials, 256):
+        value += partials[index]
+        partials[index] = wp.float64(0.0)
+    wp.tile_store(out, wp.tile_sum(wp.tile(value)), offset=0)
+
+
+@wp.kernel
+def combine_partials_max_tiled_kernel(
+    partials: wp.array(dtype=wp.float64),
+    out: wp.array(dtype=wp.float64),
+    n_partials: int,
+):
+    lane = wp.tid()
+    value = wp.float64(0.0)
+    for index in range(lane, n_partials, 256):
+        value = wp.max(value, partials[index])
+        partials[index] = wp.float64(0.0)
+    wp.tile_store(out, wp.tile_max(wp.tile(value)), offset=0)
+
+
+def launch_combine_partials(*, partials, out, n_partials, device, maximum=False):
+    """Combine and clear partials with one CUDA block; retain CPU ordering.
+
+    Every lane participates, including padding lanes when fewer than 256
+    partials exist. The output is overwritten and the input is cleared on
+    every launch, so graph replay and repeated reductions need no host reset.
+    """
+    parallel = wp.get_device(device).is_cuda
+    if maximum:
+        kernel = combine_partials_max_tiled_kernel if parallel else combine_partials_max_kernel
+    else:
+        kernel = combine_partials_tiled_kernel if parallel else combine_partials_kernel
+    wp.launch(kernel=kernel, dim=_BLOCK if parallel else 1, block_dim=_BLOCK,
+        inputs=[partials, out, n_partials], device=device)
+
+
+@wp.kernel
 def face_check_dh_residual_f64_kernel(
     x: wp.array(ndim=2),
     x_prev: wp.array(ndim=2),

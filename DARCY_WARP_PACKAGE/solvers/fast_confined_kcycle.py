@@ -18,8 +18,7 @@ import warp as wp
 from .face_kernels_f64 import (
     _BLOCK,
     applyA_dot_partials_f64_kernel,
-    combine_partials_kernel,
-    combine_partials_max_kernel,
+    launch_combine_partials,
     dot_partials_f64_kernel,
     face_build_f64_kernel,
     face_check_dh_residual_f64_kernel,
@@ -343,8 +342,7 @@ def solve_confined_kcycle_fast_backend(
               inputs=[lvl0.r_wp, lvl0.r_wp, lvl0.active_wp, lvl0.bc_mask_wp,
                       f0.partials, nx0, ny0, _BLOCK],
               device=device)
-    wp.launch(kernel=combine_partials_kernel, dim=1,
-              inputs=[f0.partials, lvl0.rTr_buf, f0.n_partials], device=device)
+    launch_combine_partials(partials=f0.partials, out=lvl0.rTr_buf, n_partials=f0.n_partials, device=device)
     rTr0 = float(lvl0.rTr_buf.numpy()[0])
     r_rms0 = float(np.sqrt(max(rTr0, 0.0) / float(n_free0)))
     tol_abs = float(max(abs_tol_min, rel_tol * r_rms0))
@@ -419,15 +417,13 @@ def solve_confined_kcycle_fast_backend(
                   inputs=[coarse.b_wp, coarse.x_wp, coarse.active_wp,
                           coarse.bc_mask_wp, fc.partials, nxC, nyC, _BLOCK],
                   device=device)
-        wp.launch(kernel=combine_partials_kernel, dim=1,
-                  inputs=[fc.partials, coarse.rho_buf, fc.n_partials], device=device)
+        launch_combine_partials(partials=fc.partials, out=coarse.rho_buf, n_partials=fc.n_partials, device=device)
         wp.launch(kernel=applyA_dot_partials_f64_kernel, dim=n_c,
                   inputs=[coarse.x_wp, fc.Te, fc.Tw, fc.Tn, fc.Ts, fc.diag,
                           coarse.active_wp, coarse.bc_mask_wp, fc.partials,
                           nxC, nyC, _BLOCK],
                   device=device)
-        wp.launch(kernel=combine_partials_kernel, dim=1,
-                  inputs=[fc.partials, coarse.pAp_buf, fc.n_partials], device=device)
+        launch_combine_partials(partials=fc.partials, out=coarse.pAp_buf, n_partials=fc.n_partials, device=device)
         wp.launch(kernel=compute_safe_alpha_kernel, dim=1,
                   inputs=[coarse.rho_buf, coarse.pAp_buf, coarse.alpha_buf],
                   device=device)
@@ -527,12 +523,9 @@ def solve_confined_kcycle_fast_backend(
                     nx0, ny0, _BLOCK],
             device=device,
         )
-        wp.launch(kernel=combine_partials_kernel, dim=1,
-                  inputs=[f0.partials, lvl0.rho_buf, f0.n_partials], device=device)
-        wp.launch(kernel=combine_partials_max_kernel, dim=1,
-                  inputs=[f0.partials_b, lvl0.dh_max_buf, f0.n_partials], device=device)
-        wp.launch(kernel=combine_partials_kernel, dim=1,
-                  inputs=[f0.partials_c, lvl0.rTr_buf, f0.n_partials], device=device)
+        launch_combine_partials(partials=f0.partials, out=lvl0.rho_buf, n_partials=f0.n_partials, device=device)
+        launch_combine_partials(partials=f0.partials_b, out=lvl0.dh_max_buf, n_partials=f0.n_partials, device=device, maximum=True)
+        launch_combine_partials(partials=f0.partials_c, out=lvl0.rTr_buf, n_partials=f0.n_partials, device=device)
         wp.launch(kernel=check_rtr_converged_kernel, dim=1,
                   inputs=[lvl0.rTr_buf, thr_rTr, lvl0.converged_flag], device=device)
 
@@ -595,8 +588,7 @@ def solve_confined_kcycle_fast_backend(
               inputs=[lvl0.r_wp, lvl0.r_wp, lvl0.active_wp, lvl0.bc_mask_wp,
                       f0.partials, nx0, ny0, _BLOCK],
               device=device)
-    wp.launch(kernel=combine_partials_kernel, dim=1,
-              inputs=[f0.partials, lvl0.rTr_buf, f0.n_partials], device=device)
+    launch_combine_partials(partials=f0.partials, out=lvl0.rTr_buf, n_partials=f0.n_partials, device=device)
     rTr_end = float(lvl0.rTr_buf.numpy()[0])
     r_rms_end = float(np.sqrt(max(rTr_end, 0.0) / float(n_free0)))
 
