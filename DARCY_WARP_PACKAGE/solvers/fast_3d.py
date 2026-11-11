@@ -152,6 +152,7 @@ def _build_levels(
             "bc_values": np.zeros_like(storage_c),
             "rhs": np.zeros_like(storage_c),
             "storage": storage_c,
+            "boundary_springs": springs_c,
             "coarsen_y": 1,
             "coarsen_x": 1,
         })

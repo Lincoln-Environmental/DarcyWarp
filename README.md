@@ -23,6 +23,10 @@ and [GPU release notes](docs/3D_GPU_RELEASE_NOTES.md) document reproducible timi
 The [NPF transient GPU guide](docs/NPF662_GPU_NATIVE.rst) describes the opt-in
 device acceptance and persistent hierarchy implementation, including
 convertible benchmarks, conductivity updates and reproduction commands.
+The latest promoted NPF implementation measured **5.92 s** for a 500 x 500 x 5
+convertible model over 20 weekly steps, versus **104.39 s** for saved MF6.
+The development benchmark excludes construction and extra independent audits;
+the guide records validation and the timing boundaries.
 
 **Developed by Patrick Durney and Jaco Fourie at [Lincoln Agritech Ltd](https://lincolnagritech.co.nz/), which owns the DarcyWarp software.** DarcyWarp is released under the [GNU Affero General Public License v3.0 or later](LICENSE).
 

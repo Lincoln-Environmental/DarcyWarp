@@ -36,6 +36,14 @@ single-thread OpenBLAS/OMP/MKL. Native executable is MF6 6.6.2, SHA256
 
 ## GPU-native transient follow-up
 
+The subsequent runtime improvements from dev revision `bf59a2a` are also
+promoted to main: block residual reductions, device Arnoldi updates and
+CUDA graph replay, plus GPU hierarchy value refresh for changing K.
+The pre-promotion convertible benchmark measured **5.916 s** per 20-step
+history. Paired calibration histories show **28–31% less numerical solver
+time**, excluding setup and K updates. See the execution guide for the
+measurement scope and saved MF6 parity evidence.
+
 The opt-in `npf_device_native=True` implementation is now on main.
 All 320 rerun endpoints passed independent checks; 526 main regressions passed.
 The [GPU execution guide](NPF662_GPU_NATIVE.rst) records the updated timings,

@@ -151,3 +151,76 @@ Compact timing evidence and source hashes are stored in
 ``benchmark_results/gpu_native/comparison.json`` and
 ``benchmark_results/gpu_native/source_manifest.json``. Raw histories and
 heads remain local, outside version control.
+
+Promoted runtime improvements
+-----------------------------
+
+These changes, developed at ``bf59a2a``, are now promoted to main.
+The timings below were measured on dev before promotion; they are not
+labelled as fresh main timing measurements.
+The repeated 500 x 500 x 5 convertible benchmark now takes 5.916 s
+per 20-step history (median of three). Its Newton/Krylov interval is 3.835 s;
+setup and final acceptance outside that interval remain in the public solve total.
+All 80 independently audited endpoints pass; maximum MF6 head difference 6.35e-08 m.
+Tolerances, precision and source schedule are unchanged.
+
+Calibration runtime is assessed separately: each of three physical K fields
+(0.5, 1 and 2 times the original K) drives a fresh 20-step history on reused
+models. K changes between histories. Each row is one paired run, not a
+repeat median. Both implementations use the same K, heads, forcing and gates.
+Device results pass independent physical audits and agree with the previous
+solver. No MF6 speedup is claimed for the changed-K cases.
+
+.. list-table:: Numerical solver seconds, excluding setup and K updates
+   :header-rows: 1
+
+   * - K multiplier
+     - Previous solver
+     - Device reductions
+     - Time reduction
+   * - 0.5
+     - 4.587
+     - 3.180
+     - 30.7%
+   * - 1
+     - 5.433
+     - 3.853
+     - 29.1%
+   * - 2
+     - 5.794
+     - 4.189
+     - 27.7%
+
+Iteration findings:
+
+* Device Arnoldi scalar updates and CUDA graph replay cut readbacks but
+  saved only about 1% on these cases. That result is retained in the evidence.
+* Blocked physical residual reductions remove contention on nine global
+  counters during Newton residual evaluations. This produced the main numerical-runtime gain.
+* Coarse conductances, fixed-head springs, storage and diagonals now refresh
+  on the GPU for K value changes with unchanged connection topology. This
+  is a separate setup improvement, checked against fresh hierarchies on
+  odd grids, inactive masks, semi-coarsening and anisotropic K updates.
+
+The implementation still uses host input validation and finest physical-face
+preparation, small FGMRES rotations/backsolves, and stopping decisions.
+Topology changes may rebuild the hierarchy. Uncertified storage grounding
+retains the independent CPU fallback. It is not a wholly device-resident API.
+
+Reproduce the calibration comparison from the repository root::
+
+   DARCY_FLOAT=float64 PYTHONPATH=.:working_tests \
+     OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+     python working_tests/benchmark_npf_calibration_runtime.py \
+       --output benchmark_results/calibration_runtime_new
+
+Model size, K factors, source schedule and solver controls are adjustable
+in that script's main block. It reports K update, setup, public solve and
+numerical times separately. The fixed-K comparison uses the earlier
+``run_3d_sanity.py`` command with a new output directory.
+
+Validation: 1,616 broad regression tests passed (52 new native MF6 tests
+deselected), followed by 23 focused CPU/CUDA tests including multiple
+reduction blocks and an injected CUDA graph capture failure.
+
+Compact results and current source hashes: ``benchmark_results/gpu_native/runtime_progress.json``.
