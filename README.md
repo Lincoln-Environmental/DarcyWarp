@@ -2,6 +2,11 @@
 
 This repo contains scripts to run ensemble benchmarks (Warp solver, MODFLOW 6, optional CPU finite difference) and to generate standard summary plots from the benchmark outputs.
 
+The [2D GPU main release report](docs/2D_GPU_RELEASE_NOTES.rst) documents the
+runtime and GHB parity fixes promoted to `main` at `9f896be`, fresh benchmarks
+against its previous release, unchanged convergence settings and all 201 passing
+release tests. The report's reproduction commands describe the `main` checkout.
+
 ## 3D NPF versus MODFLOW 6
 
 The [repeated NPF benchmark suite](docs/NPF662_VS_MF6_BENCHMARKS.md) compares
