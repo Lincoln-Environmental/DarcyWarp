@@ -60,8 +60,10 @@ solve clears transient storage terms.
 The MF6 6.6.2 contract covers default NPF connections and default Ss/Sy
 storage with Newton saturation smoothing. XT3D, variable CV, rewetting,
 perched flow and alternative STO options are outside this contract. Fresh
-release qualification is CPU FP64. GPU execution and performance for this
-promotion remain unverified.
+release qualification is CPU FP64. The subsequent opt-in transient GPU
+implementation and measured convertible performance are documented in the
+[GPU execution guide](NPF662_GPU_NATIVE.rst). That development path adds
+`npf_device_native=True`; default execution remains unchanged.
 
 ## Verification
 

@@ -11,7 +11,7 @@ from DARCY_WARP_PACKAGE.kernels_3d import (
     restrict_blockavg_axes_3d_kernel, prolong_bilinear_axes_3d_kernel,
     add_correction_3d_kernel,
 )
-from .fast_3d import _build_levels, _upload_levels
+from .fast_3d import _build_levels, _upload_levels, _refresh_levels_in_place
 from .face_kernels_3d_f64 import (
     BLOCK_SIZE_3D, residual_partials_3d_f64_kernel,
     dot_partials_3d_f64_kernel, combine_partials_3d_f64_kernel,
@@ -78,6 +78,7 @@ class NPF662KCycleWorkspace:
         self.applications = self.cycles = self.graph_captures = self.graph_replays = 0
         self.graph_failed = False
         self.graph_error = None
+        self.value_refresh_count = 0
         self.device_seconds = 0.
         self.cuda = wp.get_device(ident=self.device).is_cuda
         self.start_event = wp.Event(device=self.device, enable_timing=True) if self.cuda else None
@@ -102,6 +103,23 @@ class NPF662KCycleWorkspace:
         return (not self.closed and self.device == str(device) and self.controls == controls
                 and all(np.array_equal(saved, current) for saved, current
                         in zip(self.snapshots, (*faces, active, fixed, storage))))
+
+    def can_refresh(self, *, faces, active, fixed, device, controls):
+        """Use the 2D fast-face structure/value split; K values may change."""
+        return (not self.closed and self.device == str(device) and self.controls == controls
+            and np.array_equal(self.snapshots[6], active) and np.array_equal(self.snapshots[7], fixed)
+            and all(np.array_equal(old > 0., new > 0.) for old, new in zip(self.snapshots[:6], faces)))
+
+    def refresh(self, *, faces, active, fixed, storage_diag=None):
+        zeros = np.zeros(shape=active.shape, dtype=float)
+        storage = zeros if storage_diag is None else np.asarray(storage_diag, dtype=float)
+        if storage.shape != active.shape or np.any(~np.isfinite(storage)) or np.any(storage < 0.):
+            raise ValueError('Finite nonnegative per-cell storage diagonal required')
+        _refresh_levels_in_place(levels=self.levels, faces=faces, active=active, bc_mask=fixed,
+            bc_values=zeros, rhs=zeros, storage_diag=storage, max_levels=self.controls.levels,
+            min_coarse_n=self.controls.min_coarse_n, refresh_boundary_values=False)
+        self.snapshots = tuple(np.array(value, copy=True) for value in (*faces, active, fixed, storage))
+        self.value_refresh_count += 1
 
     def _smooth(self, *, level, sweeps):
         x, work = level['x'], level['work']

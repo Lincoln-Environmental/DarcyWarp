@@ -1,0 +1,90 @@
+{
+  "schema": 1,
+  "problem": "500x500x5 convertible, 20 weekly transient steps",
+  "device": "NVIDIA GeForce RTX 4070 Ti SUPER, 16 GB",
+  "python": "3.12.14",
+  "warp": "1.17.0",
+  "precision": "float64",
+  "baseline_main_commit": "2c94d3f",
+  "dev_base_commit": "ab16812",
+  "timing": "Sum of synchronized public solve calls; build and extra benchmark audits excluded",
+  "mf6_timing": "Single saved engine run; FloPy construction and external validation excluded",
+  "mf6_version": "6.6.2",
+  "mf6_binary_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+  "baseline": {
+    "source_file": "/tmp/darcywarp-gpu-main-20261111/release_evidence/realistic_transient_rel1e7/results.json",
+    "source_sha256": "23f857dbcfc6e02cc90b222666e016a52b4393539ecc44b8198b13f20540fe3e",
+    "case_sha256": "473ce87bc6b5ab9e8b3b2f350e15f6e2e251f7cf75c36b31ef08879911bbfd43",
+    "reference_fingerprint": "3ce0d90e2320da4f03725c60760dd2a32bb83af68748756a7484de0d16b00617",
+    "summary": {
+      "case": "npf_convertible_500x500x5_transient",
+      "implementation": "kcycle",
+      "passed": true,
+      "median_gpu_or_cpu_seconds": 50.35301363100007,
+      "median_public_solve_seconds": 30.242568221998226,
+      "worst_head_rmse_m": 3.3238544248548574e-08,
+      "worst_head_max_m": 6.354741299841038e-08,
+      "mf6_single_reference_run_seconds": 104.39099999999999,
+      "reference_reused": true
+    },
+    "timed_public_solve_seconds": [
+      30.242568221998226,
+      30.615913868998177,
+      30.18701852299455
+    ],
+    "endpoints": 80,
+    "accepted_endpoints": 80,
+    "device_native_endpoints": 0,
+    "internal_independent_audit_endpoints": 0,
+    "worst_independent_relative_imbalance": 9.749488016288816e-08,
+    "worst_independent_head_equivalent_rms_m": 2.0653526890386113e-10,
+    "thresholds": {
+      "physical_rms_m3_day": 1e-12,
+      "relative_cell_imbalance": 1e-07,
+      "head_equivalent_rms_m": 1e-06,
+      "prescribed_head_error_m": 1e-10
+    }
+  },
+  "native": {
+    "source_file": "/tmp/darcywarp-gpu-native-dev/benchmark_results/gpu_native/device_storage_convertible_500/results.json",
+    "source_sha256": "68e0fc08235a28d8d2a6f87ba5405c251a5e8a6696c0480f7f116a4c8352282f",
+    "case_sha256": "473ce87bc6b5ab9e8b3b2f350e15f6e2e251f7cf75c36b31ef08879911bbfd43",
+    "reference_fingerprint": "3ce0d90e2320da4f03725c60760dd2a32bb83af68748756a7484de0d16b00617",
+    "summary": {
+      "case": "npf_convertible_500x500x5_transient",
+      "implementation": "kcycle",
+      "passed": true,
+      "median_public_solve_seconds": 9.740499080004156,
+      "mf6_single_reference_run_seconds": 104.39099999999999,
+      "median_model_construction_seconds": 0.22578879899992899,
+      "median_extra_audit_seconds": 20.382151739993787,
+      "median_verified_total_seconds": 30.517449278999266,
+      "worst_head_rmse_m": 3.3238544248857067e-08,
+      "worst_head_max_m": 6.354741299841038e-08,
+      "reference_reused": true
+    },
+    "timed_public_solve_seconds": [
+      9.709925762999774,
+      9.740499080004156,
+      9.798344355000154
+    ],
+    "endpoints": 80,
+    "accepted_endpoints": 80,
+    "device_native_endpoints": 80,
+    "internal_independent_audit_endpoints": 0,
+    "worst_independent_relative_imbalance": 9.749488014421824e-08,
+    "worst_independent_head_equivalent_rms_m": 2.0653526885697796e-10,
+    "thresholds": {
+      "physical_rms_m3_day": 1e-12,
+      "relative_cell_imbalance": 1e-07,
+      "head_equivalent_rms_m": 1e-06,
+      "prescribed_head_error_m": 1e-10
+    }
+  },
+  "native_vs_mf6_speedup": 10.717212654359745,
+  "native_vs_baseline_speedup": 3.10482737830979,
+  "regressions": {
+    "passed": 1608,
+    "native_mf6_tests_deselected": 52
+  }
+}

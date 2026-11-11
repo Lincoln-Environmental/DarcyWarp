@@ -1,6 +1,22 @@
 kimi --model kimi-code/k3
 # DarcyWarp — Agent System Memory
 
+> 2026-11-11 transient GPU optimization on dev: opt-in
+> `npf_device_native=True` uses owned timestep snapshots, device storage
+> preparation/physical acceptance with a positive-storage grounding
+> certificate, and pointer-stable K-cycle value refresh (including public
+> conductivity updates). Dry/uncertified cases retain independent CPU
+> acceptance. Default execution is unchanged. The 500x500x5 convertible
+> 20-week case takes 9.740 s public solve time (three-repeat median) versus
+> 30.243 s previous GPU and 104.391 s saved MF6 engine time. Build and extra
+> benchmark audits excluded. All 80 endpoints independently pass; maximum
+> head difference 6.36e-8 m. Explicit relative imbalance override 1e-7,
+> head-equivalent RMS gate 1e-6 m, FP64; default relative gate remains 1e-8.
+> 1608 regressions passed, 52 new-native-run tests deselected. See
+> `docs/NPF662_GPU_NATIVE.rst`, `working_tests/run_3d_sanity.py` and compact
+> evidence in `benchmark_results/gpu_native/`. CUDA has now been exercised;
+> the older CPU-only statements below describe their historical audits.
+
 > 2026-11-05 NPF/STO transient extension: the explicit `mf6_6_6_2_npf`
 > formulation accepts `transient=True, dt=..., head_prev=..., ss=..., sy=...`.
 > Default MF6 6.6.2 Ss/Sy storage and its tangent enter device residual/Jv,

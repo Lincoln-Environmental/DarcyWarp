@@ -25,6 +25,12 @@ endpoint comparisons pass against live MF6 6.6.2, including heads, physical
 face flows, storage budgets and cellwise conservation. The explicit NPF API
 now supports opt-in transient steps with `dt`, `head_prev`, `ss` and `sy`.
 
+The [transient GPU implementation](docs/NPF662_GPU_NATIVE.rst) adds opt-in
+device acceptance and persistent hierarchy refresh. The 500 x 500 x 5
+convertible model over 20 weekly steps takes **9.74 s**, versus **104.39 s**
+for the saved CPU MF6 run, excluding model construction and extra audits.
+The guide includes the reproducible sanity/convergence command and controls.
+
 ## Environment setup
 
 The project uses a dedicated conda environment named **`darcywarp`**, defined in
