@@ -224,6 +224,8 @@ def measure(*, case, family, mode, label, reference, native_accepted, device, pr
                 physical=checks, cycles=info.get('n_cycles_used'), krylov=info.get('krylov_iterations'),
                 outer_iterations=info.get('outer_iterations'), residual_rms=info.get('r_rms_end'),
                 device_native=info.get('device_native', False),
+                krylov_scalar_readbacks=info.get('krylov_scalar_readbacks'),
+                krylov_synchronization_seconds=info.get('krylov_synchronization_seconds'),
                 independent_audit_performed=info.get('independent_audit_performed', True),
                 state_reused=info.get('reference_reused', False),
                 reference_setup_seconds=info.get('reference_setup_seconds'),

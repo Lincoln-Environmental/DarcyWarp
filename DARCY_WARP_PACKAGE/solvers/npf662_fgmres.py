@@ -1,7 +1,8 @@
 """Persistent FP64 flexible GMRES on masked flat 3D NPF equations.
 
-Stored Z vectors reconstruct the correction for a variable K-cycle. Scalar
-Arnoldi products cross the host; full grid vectors remain device resident.
+Stored Z vectors reconstruct the correction for a variable K-cycle. The
+native path captures reorthogonalized Arnoldi columns on the device; small
+column results cross the host for rotations and stopping decisions.
 """
 from time import perf_counter
 import numpy as np
@@ -47,6 +48,28 @@ def masked_axpy(y: wp.array(dtype=wp.float64), x: wp.array(dtype=wp.float64),
         y[i] = wp.float64(0.)
 
 
+@wp.kernel
+def masked_axpy_device_scalar(y: wp.array(dtype=wp.float64), x: wp.array(dtype=wp.float64),
+    free: wp.array(dtype=wp.int32), scalar: wp.array(dtype=wp.float64),
+    column: wp.array(dtype=wp.float64), row: int):
+    i = wp.tid()
+    if free[i] != 0:
+        y[i] -= scalar[0]*x[i]
+    else:
+        y[i] = wp.float64(0.)
+    if i == 0:
+        column[row] += scalar[0]
+
+
+@wp.kernel
+def record_column_norm(scalar: wp.array(dtype=wp.float64),
+    column: wp.array(dtype=wp.float64), row: int):
+    value = wp.float64(wp.nan)
+    if wp.isfinite(scalar[0]) and scalar[0] >= wp.float64(0.):
+        value = wp.sqrt(scalar[0])
+    column[row] = value
+
+
 class RestartedFGMRES3D:
     def __init__(self, *, workspace, restart):
         self.owner = workspace
@@ -61,12 +84,15 @@ class RestartedFGMRES3D:
         self.Ax = wp.zeros_like(src=workspace.rhs)
         self.partials = wp.zeros(shape=(self.n + BLOCK_SIZE_3D - 1) // BLOCK_SIZE_3D, dtype=wp.float64, device=self.device)
         self.scalar = wp.zeros(shape=1, dtype=wp.float64, device=self.device)
+        self.column_state = wp.zeros(shape=restart+2, dtype=wp.float64, device=self.device)
         self.active = workspace.free.reshape(shape=self.shape)
         self.fixed = wp.zeros(shape=self.shape, dtype=wp.int32, device=self.device)
         self.closed = False
         self.readbacks = 0
         self.synchronization_seconds = 0.
         self.preconditioner_seconds = 0.
+        self.arnoldi_graphs = {}
+        self.arnoldi_graph_failed = False
 
     def _copy(self, *, src, dst, scale=1.):
         wp.launch(kernel=masked_copy, dim=self.n, inputs=[src, self.owner.free, dst, scale], device=self.device)
@@ -74,7 +100,7 @@ class RestartedFGMRES3D:
     def _axpy(self, *, y, x, alpha):
         wp.launch(kernel=masked_axpy, dim=self.n, inputs=[y, x, self.owner.free, alpha], device=self.device)
 
-    def _dot(self, *, x, y):
+    def _dot_device(self, *, x, y):
         nz, ny, nx = self.shape
         self.partials.zero_()
         wp.launch(kernel=dot_partials_3d_f64_kernel, dim=self.n,
@@ -82,11 +108,49 @@ class RestartedFGMRES3D:
                     self.partials, nx, ny, nz, BLOCK_SIZE_3D], device=self.device)
         wp.launch(kernel=combine_partials_3d_f64_kernel, dim=1,
                   inputs=[self.partials, self.scalar, self.partials.size], device=self.device)
+
+    def _dot(self, *, x, y):
+        self._dot_device(x=x, y=y)
         start = perf_counter()
         value = float(self.scalar.numpy()[0])
         self.synchronization_seconds += perf_counter() - start
         self.readbacks += 1
         return value
+
+    def _enqueue_orthogonalize(self, *, column):
+        self.column_state.zero_()
+        for unused in range(2):
+            for row in range(column+1):
+                self._dot_device(x=self.w, y=self.V[row])
+                wp.launch(kernel=masked_axpy_device_scalar, dim=self.n,
+                    inputs=[self.w, self.V[row], self.owner.free, self.scalar,
+                            self.column_state, row], device=self.device)
+        self._dot_device(x=self.w, y=self.w)
+        wp.launch(kernel=record_column_norm, dim=1,
+            inputs=[self.scalar, self.column_state, column+1], device=self.device)
+
+    def _orthogonalize_device(self, *, column):
+        if wp.get_device(ident=self.device).is_cuda and not self.arnoldi_graph_failed:
+            if column not in self.arnoldi_graphs:
+                try:
+                    with wp.ScopedCapture(device=self.device) as capture:
+                        self._enqueue_orthogonalize(column=column)
+                    if capture.graph is None:
+                        raise RuntimeError('Empty Arnoldi graph')
+                    self.arnoldi_graphs[column] = capture.graph
+                except Exception:
+                    self.arnoldi_graph_failed = True
+            if not self.arnoldi_graph_failed:
+                wp.capture_launch(graph=self.arnoldi_graphs[column])
+            else:
+                self._enqueue_orthogonalize(column=column)
+        else:
+            self._enqueue_orthogonalize(column=column)
+        start = perf_counter()
+        values = self.column_state.numpy()[:column+2].copy()
+        self.synchronization_seconds += perf_counter()-start
+        self.readbacks += 1
+        return values
 
     def _norm(self, *, x):
         value = self._dot(x=x, y=x)
@@ -124,12 +188,17 @@ class RestartedFGMRES3D:
                 self.preconditioner_seconds += perf_counter() - start
                 self._matvec(x=self.Z[column], out=self.w)
                 # Reorthogonalized MGS is robust for nonsymmetric scaled J.
-                for unused in range(2):
-                    for row in range(column + 1):
-                        value = self._dot(x=self.w, y=self.V[row])
-                        H[row, column] += value
-                        self._axpy(y=self.w, x=self.V[row], alpha=-value)
-                length = self._norm(x=self.w)
+                if getattr(self.owner, 'device_arnoldi', False):
+                    values = self._orthogonalize_device(column=column)
+                    H[:column+1, column] = values[:-1]
+                    length = float(values[-1])
+                else:
+                    for unused in range(2):
+                        for row in range(column + 1):
+                            value = self._dot(x=self.w, y=self.V[row])
+                            H[row, column] += value
+                            self._axpy(y=self.w, x=self.V[row], alpha=-value)
+                    length = self._norm(x=self.w)
                 preconditioner.collect_timing()
                 used += 1
                 if not np.isfinite(length) or not np.all(np.isfinite(H[:, column])):
@@ -182,6 +251,8 @@ class RestartedFGMRES3D:
         self.last_info = dict(iterations=used, restarts=max(blocks - 1, 0), blocks=blocks,
             true_residual=beta, target=absolute_tolerance, converged=bool(np.isfinite(beta) and beta <= absolute_tolerance),
             stopping=reason, history=history, scalar_readbacks=self.readbacks,
+            device_arnoldi=bool(getattr(self.owner, 'device_arnoldi', False)),
+            arnoldi_graphs=len(self.arnoldi_graphs), arnoldi_graph_fallback=self.arnoldi_graph_failed,
             synchronization_seconds=self.synchronization_seconds,
             multigrid_device_seconds=preconditioner.device_seconds-mg_device_start,
             preconditioner_enqueue_seconds=self.preconditioner_seconds)
@@ -190,6 +261,7 @@ class RestartedFGMRES3D:
     def close(self):
         if not self.closed:
             self.V = self.Z = []
-            self.r = self.w = self.Ax = self.partials = self.scalar = None
+            self.arnoldi_graphs.clear()
+            self.r = self.w = self.Ax = self.partials = self.scalar = self.column_state = None
             self.active = self.fixed = self.owner = None
             self.closed = True

@@ -75,12 +75,13 @@ def physical_rows(head:wp.array(dtype=wp.float64),source:wp.array(dtype=wp.float
     free:wp.array(dtype=wp.int32),fixed:wp.array(dtype=wp.int32),left:wp.array2d(dtype=wp.int32),
     right:wp.array2d(dtype=wp.int32),flux:wp.array2d(dtype=wp.float64),conductance:wp.array2d(dtype=wp.float64),
     scale:wp.array(dtype=wp.float64),residual:wp.array(dtype=wp.float64),rhs:wp.array(dtype=wp.float64),
-    metrics:wp.array(dtype=wp.float64),storage:wp.array(dtype=wp.float64),storage_tangent:wp.array(dtype=wp.float64)):
+    metrics:wp.array2d(dtype=wp.float64),storage:wp.array(dtype=wp.float64),storage_tangent:wp.array(dtype=wp.float64),block_size:int):
     i=wp.tid()
+    block=i/block_size
     invalid=not wp.isfinite(head[i]) or not wp.isfinite(scale[i]) or scale[i]<=wp.float64(0.)
     for axis in range(3):
         if not wp.isfinite(flux[i,axis]) or not wp.isfinite(conductance[i,axis]):invalid=True
-    if invalid:wp.atomic_add(metrics,6,wp.float64(1.))
+    if invalid:wp.atomic_add(metrics,block,6,wp.float64(1.))
     if free[i]==0:
         residual[i]=wp.float64(0.);rhs[i]=wp.float64(0.)
         return
@@ -102,12 +103,22 @@ def physical_rows(head:wp.array(dtype=wp.float64),source:wp.array(dtype=wp.float
     if diagonal>wp.float64(0.):equivalent=r/diagonal
     elif r!=wp.float64(0.):equivalent=wp.float64(wp.inf)
     residual[i]=r;rhs[i]=r/scale[i]
-    wp.atomic_add(metrics,0,r*r);wp.atomic_add(metrics,1,wp.abs(r))
-    wp.atomic_add(metrics,2,equivalent*equivalent)
-    wp.atomic_add(metrics,3,wp.abs(source[i])+inflow+outflow+wp.abs(storage[i]))
-    wp.atomic_add(metrics,4,inflow);wp.atomic_add(metrics,5,outflow)
-    if not wp.isfinite(r) or not wp.isfinite(diagonal):wp.atomic_add(metrics,6,wp.float64(1.))
-    wp.atomic_add(metrics,7,rhs[i]*rhs[i]);wp.atomic_add(metrics,8,r)
+    wp.atomic_add(metrics,block,0,r*r);wp.atomic_add(metrics,block,1,wp.abs(r))
+    wp.atomic_add(metrics,block,2,equivalent*equivalent)
+    wp.atomic_add(metrics,block,3,wp.abs(source[i])+inflow+outflow+wp.abs(storage[i]))
+    wp.atomic_add(metrics,block,4,inflow);wp.atomic_add(metrics,block,5,outflow)
+    if not wp.isfinite(r) or not wp.isfinite(diagonal):wp.atomic_add(metrics,block,6,wp.float64(1.))
+    wp.atomic_add(metrics,block,7,rhs[i]*rhs[i]);wp.atomic_add(metrics,block,8,r)
+
+
+@wp.kernel
+def combine_physical_metrics(partials:wp.array2d(dtype=wp.float64),
+    metrics:wp.array(dtype=wp.float64),count:int):
+    metric=wp.tid()
+    value=wp.float64(0.)
+    for block in range(count):
+        value+=partials[block,metric]
+    metrics[metric]=value
 
 
 @wp.kernel

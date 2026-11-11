@@ -27,9 +27,11 @@ now supports opt-in transient steps with `dt`, `head_prev`, `ss` and `sy`.
 
 The [transient GPU implementation](docs/NPF662_GPU_NATIVE.rst) adds opt-in
 device acceptance and persistent hierarchy refresh. The 500 x 500 x 5
-convertible model over 20 weekly steps takes **9.74 s**, versus **104.39 s**
+convertible model over 20 weekly steps on dev takes **5.92 s**, versus **104.39 s**
 for the saved CPU MF6 run, excluding model construction and extra audits.
 The guide includes the reproducible sanity/convergence command and controls.
+Paired calibration histories at 0.5, 1 and 2 times K show 28–31% less
+Newton/Krylov runtime, measured separately from setup and conductivity updates.
 
 ## Environment setup
 

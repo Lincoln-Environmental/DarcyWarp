@@ -52,6 +52,9 @@ class NPF662Workspace:
         self.left=wp.array(data=left,dtype=wp.int32,device=self.device)
         self.right=wp.array(data=right,dtype=wp.int32,device=self.device)
         self.metrics=wp.zeros(shape=9,dtype=wp.float64,device=self.device)
+        self.metric_block_size=256
+        self.metric_partials=wp.zeros(shape=((self.n+self.metric_block_size-1)//self.metric_block_size,9),
+            dtype=wp.float64,device=self.device)
         self.certificate=wp.zeros(shape=3,dtype=wp.float64,device=self.device)
         self.maximum=wp.zeros(shape=1,dtype=wp.float64,device=self.device)
         self.mode=wp.ones(shape=1,dtype=wp.int32,device=self.device)
@@ -132,9 +135,12 @@ class NPF662Workspace:
                 self.thickness,self.types,self.storage_ss,self.storage_sy,self.free,storage,tangent,self.storage_factor],device=self.device)
         wp.launch(kernel=kernels.physical_faces,dim=(self.n,3),inputs=[head,self.bottom,self.types,self.right,
             self.c0,q,c,self.dl,self.dr,self.thickness,int(linearize)],device=self.device)
-        self.metrics.zero_()
+        self.metric_partials.zero_()
+        block_size=self.metric_block_size if getattr(self,'device_native',False) else self.n
         wp.launch(kernel=kernels.physical_rows,dim=self.n,inputs=[head,self.source,self.free,self.fixed,self.left,
-            self.right,q,c,self.scale,r,rhs,self.metrics,storage,tangent],device=self.device)
+            self.right,q,c,self.scale,r,rhs,self.metric_partials,storage,tangent,block_size],device=self.device)
+        wp.launch(kernel=kernels.combine_physical_metrics,dim=9,
+            inputs=[self.metric_partials,self.metrics,(self.n+block_size-1)//block_size],device=self.device)
         self.residual_evaluations+=1
         if trial:self.candidate_evaluations+=1
         m=self.metrics.numpy()
@@ -177,7 +183,7 @@ class NPF662Workspace:
         self.closed=True;self.krylov=None
         for name in ('head','prescribed','trial','source','bottom','thickness','scale','rhs','trial_rhs','residual','trial_residual','delta',
             'c0','q','c','trial_q','trial_c','dl','dr','free','fixed','types','left','right','metrics','maximum','mode','jv_counter','preconditioner_counter',
-            'storage_previous','storage_ss','storage_sy','storage_rate','storage_tangent','trial_storage_rate','trial_storage_tangent','certificate'):
+            'storage_previous','storage_ss','storage_sy','storage_rate','storage_tangent','trial_storage_rate','trial_storage_tangent','certificate','metric_partials'):
             setattr(self,name,None)
 
 
@@ -238,6 +244,8 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
         holder['workspace']=workspace
     else:workspace.load(model=model,case=case,reference=reference)
     krylov_reused=workspace.select_krylov(method=method,krylov_budget=krylov_budget)
+    workspace.device_arnoldi=device_native
+    workspace.device_native=device_native
     blocks_start=getattr(workspace.krylov, 'restart_blocks', 0) if method=='gmres' else 0
     graph_start=(getattr(workspace.krylov, 'graph_captures', 0), getattr(workspace.krylov, 'graph_replays', 0))
     mg_reused=False;mg_seconds=0.;linear_history=[];mg_values_refreshed=False
@@ -375,6 +383,7 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
                 coarsening_factors=[[level['coarsen_y'],level['coarsen_x']] for level in mg.levels[:-1]],
                 construction_seconds=mg_seconds,hierarchy_reused=mg_reused,
                 coefficients_refreshed=mg_values_refreshed,value_refresh_count=mg.value_refresh_count,
+                device_storage_refresh_count=mg.device_storage_refresh_count,
                 allocated_device_bytes=mg.allocated_bytes(),
                 applications=mg.applications-mg_start[0],cycles=mg.cycles-mg_start[1],
                 graph_captures=int(not mg_reused)*mg.graph_captures,graph_replays=mg.graph_replays-mg_start[2],

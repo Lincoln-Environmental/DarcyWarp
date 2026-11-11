@@ -1,6 +1,23 @@
 kimi --model kimi-code/k3
 # DarcyWarp — Agent System Memory
 
+> 2026-11-11 follow-up: main promotion and qualification pushed as `95928ec`
+> (526 regressions, 320 audited endpoints; convertible 500x500x5/20 steps
+> 9.784 s versus MF6 104.391 s). Back on dev, prioritize numerical runtime;
+> fast K setup is secondary for calibration. Native physical residuals now
+> use 256-cell partial reductions; Arnoldi scalar updates are device-side
+> with cached per-column CUDA graphs (eager fallback retained). Coarse
+> faces, Dirichlet springs and storage refresh on GPU even when K values
+> change; topology changes rebuild. Calibration K multipliers .5/1/2 over
+> 20 steps: numerical runtime 4.587/5.433/5.794 -> 3.180/3.853/4.189 s,
+> same Krylov counts and heads within 1.7e-15 m (single paired histories).
+> Arnoldi/readback work alone saved only ~1%; residual reductions produced
+> the numerical gain. Three-repeat original-case public median now 5.916 s,
+> all 80 endpoints pass against saved MF6, max head difference 6.36e-8 m.
+> 1616 broad regressions plus 23 focused tests pass. Evidence:
+> `benchmark_results/gpu_native/runtime_progress.json`; reproduction and
+> remaining host operations: `docs/NPF662_GPU_NATIVE.rst`.
+
 > 2026-11-11 transient GPU optimization on dev: opt-in
 > `npf_device_native=True` uses owned timestep snapshots, device storage
 > preparation/physical acceptance with a positive-storage grounding
