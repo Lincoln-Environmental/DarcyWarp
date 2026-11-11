@@ -29,6 +29,9 @@ default Krylov choice for those NPF solves is diagonal GMRES. Select
 `npf_preconditioner="kcycle"` for flexible GMRES with a K-cycle
 preconditioner, or `npf_krylov_method="fgmres"` for diagonal flexible GMRES.
 `NPF662NewtonControls` and `NPF662KCycleControls` are package exports.
+See the [GPU implementation guide](3D_IMPLEMENTATIONS.rst) for the measured
+K-cycle configuration, Cartesian fast-path selection and timing conventions.
+Existing defaults remain unchanged.
 Uniform confined steady NPF retains the direct Cartesian solver when Krylov
 controls are omitted.
 
@@ -60,8 +63,10 @@ solve clears transient storage terms.
 The MF6 6.6.2 contract covers default NPF connections and default Ss/Sy
 storage with Newton saturation smoothing. XT3D, variable CV, rewetting,
 perched flow and alternative STO options are outside this contract. Fresh
-release qualification is CPU FP64. GPU execution and performance for this
-promotion remain unverified.
+release qualification was CPU FP64. The subsequent local GPU campaign,
+portable sanity runner, timings and remaining convergence limits are recorded
+in the [GPU release notes](3D_GPU_RELEASE_NOTES.md). CPU qualification does
+not imply that every GPU case meets the same iteration budget.
 
 ## Verification
 

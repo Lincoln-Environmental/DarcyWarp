@@ -31,7 +31,8 @@ def validate_mf6_identity(*, version: str, checksum: str) -> str:
 
 
 def run_reference_mf6(*,case,directory,executable,prescribed_state=None,head_tolerance_m=1e-14,
-                      native_solver_options=None,timeout_seconds=600,source_package='wel'):
+                      native_solver_options=None,timeout_seconds=600,source_package='wel',
+                      replace_native_solver_options=False):
     import flopy
     from flopy.mf6.utils.binarygrid_util import MfGrdFile
     if not executable.is_file():raise FileNotFoundError(f'Pinned local MF6 unavailable: {executable}; live parity unverified')
@@ -68,7 +69,10 @@ def run_reference_mf6(*,case,directory,executable,prescribed_state=None,head_tol
         preconditioner_levels=100,
         csv_outer_output_filerecord='outer.csv',csv_inner_output_filerecord='inner.csv')
     if native_solver_options is not None:
-        ims_options.update(native_solver_options)
+        if replace_native_solver_options:
+            ims_options = dict(native_solver_options)
+        else:
+            ims_options.update(native_solver_options)
     flopy.mf6.ModflowIms(sim,**ims_options)
     gwf=flopy.mf6.ModflowGwf(sim,modelname='npf662',save_flows=True,newtonoptions='UNDER_RELAXATION' if newton else None)
     flopy.mf6.ModflowGwfdis(gwf,length_units='METERS',nlay=nz,nrow=ny,ncol=nx,
@@ -111,9 +115,9 @@ def run_reference_mf6(*,case,directory,executable,prescribed_state=None,head_tol
         settings=dict(xt3d=False,icelltype=case.cell_types.tolist(),newton=newton,linear_acceleration=ims_options['linear_acceleration'],variablecv=False,perched=False,thickstrt=False,rewet=False,
             steady=True,outer_dvclose_m=ims_options['outer_dvclose'],inner_dvclose_m=ims_options['inner_dvclose'],
             inner_rclose_m3_day=ims_options['rcloserecord'][0],scaling_method=ims_options['scaling_method'],
-            preconditioner_levels=ims_options['preconditioner_levels'],
-            preconditioner_drop_tolerance=ims_options['preconditioner_drop_tolerance'],
-            relaxation_factor=ims_options['relaxation_factor']))
+            preconditioner_levels=ims_options.get('preconditioner_levels'),
+            preconditioner_drop_tolerance=ims_options.get('preconditioner_drop_tolerance'),
+            relaxation_factor=ims_options.get('relaxation_factor')))
     paths=[directory/name for name in ('npf662.hds','npf662.cbc','npf662.dis.grb')]
     if not native or not all(path.is_file() and path.stat().st_size>0 for path in paths):
         result.update(independent_conservation=False,stop_reason='native_failure_or_missing_output')

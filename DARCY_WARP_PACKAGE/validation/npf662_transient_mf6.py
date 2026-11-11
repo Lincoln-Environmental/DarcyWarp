@@ -12,7 +12,8 @@ from DARCY_WARP_PACKAGE.validation.head_checks import finite_diagnostics
 
 def run_transient_mf6(*, case, directory, executable, source_factors, dt, ss, sy,
                        executable_sha256='21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176',
-                       timeout_seconds=600., source_package='wel'):
+                       timeout_seconds=600., source_package='wel',
+                       head_tolerance=None, residual_tolerance=None, native_solver_options=None):
     """Run one native simulation with one implicit step per stress period.
 
     :param case: Canonical NPF geometry, materials, boundary and initial state.
@@ -25,9 +26,15 @@ def run_transient_mf6(*, case, directory, executable, source_factors, dt, ss, sy
     :param executable_sha256: Explicit expected binary build hash.
     :param timeout_seconds: Native process wall-time limit.
     :param source_package: WEL or fixed-cell top-array RCH representation.
+    :param head_tolerance: Optional matched benchmark outer/inner head tolerance.
+    :param residual_tolerance: Optional matched benchmark STRICT residual tolerance.
+    :param native_solver_options: Complete IMS profile, for source-matched sanity benchmarks.
     """
     import flopy
     from flopy.mf6.utils.binarygrid_util import MfGrdFile
+    for name, value in (('head_tolerance', head_tolerance), ('residual_tolerance', residual_tolerance)):
+        if value is not None and (not np.isscalar(value) or not np.isfinite(value) or value <= 0.):
+            raise ValueError(f'{name} must be positive finite')
     case.validate()
     NPF662TransientReference(case=case, previous=case.initial, dt=dt, ss=ss, sy=sy)
     factors = np.asarray(source_factors, dtype=float)
@@ -52,12 +59,16 @@ def run_transient_mf6(*, case, directory, executable, source_factors, dt, ss, sy
     sim.simulation_data.float_precision = 17
     sim.simulation_data.float_characters = 25
     flopy.mf6.ModflowTdis(sim, time_units='DAYS', nper=count, perioddata=[(dt, 1, 1.)]*count)
-    flopy.mf6.ModflowIms(sim, complexity='COMPLEX', print_option='ALL', outer_maximum=500,
-        outer_dvclose=1e-9, inner_maximum=2000, inner_dvclose=1e-11,
-        rcloserecord=[1e-10, 'STRICT'], linear_acceleration='BICGSTAB',
+    ims_options = dict(complexity='COMPLEX', print_option='ALL', outer_maximum=500,
+        outer_dvclose=1e-9 if head_tolerance is None else head_tolerance,
+        inner_maximum=2000, inner_dvclose=1e-11 if head_tolerance is None else head_tolerance,
+        rcloserecord=[1e-10 if residual_tolerance is None else residual_tolerance, 'STRICT'], linear_acceleration='BICGSTAB',
         under_relaxation='NONE', scaling_method='DIAGONAL', preconditioner_levels=8,
         preconditioner_drop_tolerance=1e-4, relaxation_factor=0., reordering_method='RCM',
         number_orthogonalizations=8, csv_outer_output_filerecord='outer.csv', csv_inner_output_filerecord='inner.csv')
+    if native_solver_options is not None:
+        ims_options = dict(native_solver_options)
+    flopy.mf6.ModflowIms(sim, **ims_options)
     gwf = flopy.mf6.ModflowGwf(sim, modelname='transient', save_flows=True,
         newtonoptions='UNDER_RELAXATION' if np.any(case.cell_types) else None)
     flopy.mf6.ModflowGwfdis(gwf, length_units='METERS', nlay=nz, nrow=ny, ncol=nx,
@@ -165,6 +176,7 @@ def run_transient_mf6(*, case, directory, executable, source_factors, dt, ss, sy
         np.savez_compressed(stream, **arrays)
     temporary.replace(directory/'decoded.npz')
     result = dict(passed=all(row['accepted'] for row in rows), periods=rows,
+        native_solver_options=ims_options,
         mf6_version=version, mf6_sha256=checksum, source_package=source_package,
         dt_days=dt, source_factors=factors.tolist(), storage='Default MF6 6.6.2 Ss/Sy, no STO optional formulation flags')
     atomic_json(path=directory/'summary.json', value=finite_diagnostics(value=result))

@@ -47,7 +47,7 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
     abs_tol_min=1e-12,final_budget_relative_tol=1e-8,max_levels=None,min_coarse_n=None,
     return_info=True,max_outer=None,krylov_restart=None,npf_newton_controls=None,
     npf_preconditioner=None,npf_kcycle_controls=None,npf_krylov_method=None,
-    transient=False,dt=None,head_prev=None,ss=None,sy=None,**unsupported):
+    transient=False,dt=None,head_prev=None,ss=None,sy=None,npf_final_relative_tolerance=None,**unsupported):
     started = perf_counter()
     # Omission retains historical backend defaults. Explicit selections must
     # either reach their backend or be rejected, even when equal to a former
@@ -76,7 +76,12 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
     krylov_restart = positive_integer(value=krylov_restart, name='krylov_restart', minimum=2)
     max_levels = positive_integer(value=max_levels, name='max_levels')
     min_coarse_n = positive_integer(value=min_coarse_n, name='min_coarse_n')
-    thresholds=final_tolerances(physical_tolerance=abs_tol_min,relative_tolerance=final_budget_relative_tol)
+    if npf_final_relative_tolerance is not None and final_budget_relative_tol != 1e-8:
+        raise ValueError('Choose npf_final_relative_tolerance or final_budget_relative_tol, not both')
+    if isinstance(npf_final_relative_tolerance, (bool, np.bool_)):
+        raise ValueError('npf_final_relative_tolerance must be a numerical scalar, not Boolean')
+    relative_tolerance = final_budget_relative_tol if npf_final_relative_tolerance is None else npf_final_relative_tolerance
+    thresholds=final_tolerances(physical_tolerance=abs_tol_min,relative_tolerance=relative_tolerance)
     if np.ndim(rel_tol)!=0 or not np.isfinite(rel_tol) or rel_tol<0.:
         raise ValueError('Krylov relative tolerance must be a finite nonnegative scalar')
     layered=model.geometry=='structured_dis_layered'
@@ -93,7 +98,7 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
     reference_seconds = perf_counter()-started
     reference.check_components()
     if not unconfined and np.any(case.cell_types):raise ValueError('Convertible cell types require unconfined=True')
-    if transient or unconfined or layered or preconditioner_selected or npf_krylov_method is not None or npf_newton_controls is not None:
+    if transient or unconfined or layered or preconditioner_selected or npf_krylov_method is not None or npf_newton_controls is not None or npf_final_relative_tolerance is not None:
         if model.implementation!='fast' or model.solver!='kcycle':
             raise ValueError('Matched Newton requires implementation=fast and solver=kcycle; legacy backends remain separate')
         if unconfined and not np.any(case.cell_types[case.active!=0]):raise ValueError('unconfined=True requires convertible active cells')
@@ -106,7 +111,7 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
         if not isinstance(controls,NPF662NewtonControls):raise ValueError('npf_newton_controls must be NPF662NewtonControls')
         head,info=solve_newton_device(model=model,case=case,reference=reference,max_outer=max_outer,
             krylov_budget=max_cycles,restart=krylov_restart,controls=controls,
-            physical_tolerance=abs_tol_min,relative_tolerance=final_budget_relative_tol,
+            physical_tolerance=abs_tol_min,relative_tolerance=relative_tolerance,
             npf_preconditioner=npf_preconditioner,npf_kcycle_controls=npf_kcycle_controls,npf_krylov_method=npf_krylov_method)
         info.update(formulation='mf6_6_6_2_npf',geometry=case.geometry,
             device=model.device,precision='float64',
@@ -126,6 +131,9 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
             restart=krylov_restart, krylov_budget_per_outer=max_cycles, max_outer=max_outer,
             nonlinear=asdict(controls), hierarchy=info.get('multigrid'),
             preconditioner=npf_preconditioner, convergence=thresholds)
+        if npf_final_relative_tolerance is not None:
+            info['acceptance_override'] = dict(relative_cell_imbalance=relative_tolerance,
+                default_relative_cell_imbalance=1e-8)
         info.update(reference_reused=reference_reused, reference_setup_seconds=reference_seconds,
                     public_total_seconds=perf_counter()-started)
         return (head,info) if return_info else head

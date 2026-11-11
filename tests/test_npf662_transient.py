@@ -10,7 +10,14 @@ from DARCY_WARP_PACKAGE.solvers.npf662_newton import NPF662Workspace
 from DARCY_WARP_PACKAGE.solvers.npf662_kcycle import NPF662KCycleControls
 
 
-def test_confined_analytic_step_and_reused_previous_state():
+@pytest.fixture(params=['cpu', 'cuda:0'])
+def device(request):
+    if request.param.startswith('cuda') and not wp.is_cuda_available():
+        pytest.skip('CUDA unavailable; transient GPU coverage not executed')
+    return request.param
+
+
+def test_confined_analytic_step_and_reused_previous_state(device):
     shape = (1, 1, 2)
     one = np.ones(shape)
     case = NPF662LayeredCase(kx=one, ky=one, kz=one, active=one.astype(int),
@@ -18,7 +25,7 @@ def test_confined_analytic_step_and_reused_previous_state():
         initial=np.array([.5, 2.]).reshape(shape), dx=1., dy=1.,
         z_interfaces=np.stack([3.*one[0], 0.*one[0]]), cell_type=0)
     previous = case.initial.copy()
-    with WarpDarcySolver3D(nx=2, ny=1, nz=1, dx=1., dy=1., device='cpu',
+    with WarpDarcySolver3D(nx=2, ny=1, nz=1, dx=1., dy=1., device=device,
             formulation='mf6_6_6_2_npf', implementation='fast') as model:
         model.build_from_layers(z_interfaces=case.z_interfaces, kx_field=case.kx, ky_field=case.ky,
             kz_field=case.kz, active=case.active, bc_mask=case.fixed, bc_values=case.values,
@@ -48,7 +55,7 @@ def test_confined_analytic_step_and_reused_previous_state():
 
 
 @pytest.mark.parametrize('fraction', [-.1, .3e-6, .45, 1.-.3e-6, 1.2])
-def test_storage_and_full_device_jacobian_against_finite_differences(fraction):
+def test_storage_and_full_device_jacobian_against_finite_differences(fraction, device):
     shape = (2, 2, 3)
     k, j, i = np.indices(shape)
     one = np.ones(shape)
@@ -72,13 +79,13 @@ def test_storage_and_full_device_jacobian_against_finite_differences(fraction):
         finite = -(plus['residual']-minus['residual'])/(2.*step)
         errors.append(np.linalg.norm((finite-expected)[reference.free])/np.linalg.norm(expected[reference.free]))
     assert min(errors) < 1e-6
-    with WarpDarcySolver3D(nx=3, ny=2, nz=2, dx=2., dy=3., device='cpu',
+    with WarpDarcySolver3D(nx=3, ny=2, nz=2, dx=2., dy=3., device=device,
             formulation='mf6_6_6_2_npf', implementation='fast') as model:
         model.build_from_layers(z_interfaces=interfaces, kx_field=case.kx, ky_field=case.ky,
             kz_field=case.kz, active=case.active, bc_mask=fixed, bc_values=values,
             rhs=case.source, initial_head=case.initial)
         workspace = NPF662Workspace(model=model, case=case, reference=reference, restart=4, krylov_budget=100)
-        x = wp.array(direction.ravel(), dtype=wp.float64, device='cpu')
+        x = wp.array(direction.ravel(), dtype=wp.float64, device=device)
         out = wp.zeros_like(x)
         workspace.matvec(x, out, out, 1., 0.)
         np.testing.assert_allclose((out.numpy()*workspace.scale.numpy()).reshape(shape)[reference.free],
@@ -102,13 +109,13 @@ def test_storage_validation_rejects_invalid_inputs():
             NPF662TransientReference(**values)
 
 
-def test_storage_anchors_an_isolated_transient_cell():
+def test_storage_anchors_an_isolated_transient_cell(device):
     shape = (1, 1, 1)
     one = np.ones(shape)
     case = NPF662LayeredCase(kx=one, ky=one, kz=one, active=one.astype(int),
         fixed=np.zeros(shape, dtype=int), values=np.zeros(shape), source=.2*one,
         initial=one, dx=1., dy=1., z_interfaces=np.stack([3.*one[0], 0.*one[0]]), cell_type=0)
-    with WarpDarcySolver3D(nx=1, ny=1, nz=1, dx=1., dy=1., device='cpu',
+    with WarpDarcySolver3D(nx=1, ny=1, nz=1, dx=1., dy=1., device=device,
             formulation='mf6_6_6_2_npf', implementation='fast') as model:
         model.build_from_layers(z_interfaces=case.z_interfaces, kx_field=case.kx, ky_field=case.ky,
             kz_field=case.kz, active=case.active, bc_mask=case.fixed, bc_values=case.values,
