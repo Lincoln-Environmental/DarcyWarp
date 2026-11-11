@@ -1,0 +1,211 @@
+{
+  "case_sha256": "473ce87bc6b5ab9e8b3b2f350e15f6e2e251f7cf75c36b31ef08879911bbfd43",
+  "reference": "3ce0d90e2320da4f03725c60760dd2a32bb83af68748756a7484de0d16b00617",
+  "profile": {
+    "solve": {
+      "npf_device_native": true,
+      "npf_final_relative_tolerance": 1e-07,
+      "max_outer": 80,
+      "max_cycles": 4000,
+      "krylov_restart": 8
+    },
+    "newton": {
+      "inner_forcing": 0.005,
+      "timestep_predictor": true,
+      "tiled_reductions": true,
+      "reuse_trial_state": true
+    },
+    "multigrid": {
+      "device_hierarchy_build": true,
+      "levels": 3,
+      "pre_sweeps": 2,
+      "post_sweeps": 2,
+      "coarse_sweeps": 2,
+      "cached_line_factors": true,
+      "preconditioner_precision": "float32",
+      "coefficient_state": "current"
+    }
+  },
+  "source_sha256": {
+    "DARCY_WARP_PACKAGE/solvers/npf662_3d.py": "4c3b2de1089704730f9b325f31646838b9e6b5aedfca97fae45714e18ebf4cb7",
+    "DARCY_WARP_PACKAGE/solvers/npf662_fgmres.py": "d4e734310b327486080de3cc777ad55ee1bb5f25218cbc22d9938a1c713545f9",
+    "DARCY_WARP_PACKAGE/solvers/npf662_history.py": "da00e320a6d0d1e597e240276aa9632007072be8ca1c895399e19b29ebe2bc2f",
+    "DARCY_WARP_PACKAGE/solvers/npf662_kcycle.py": "552c8929a1193b6f1d31ae1330af8ccbb7963fe43a2316da003f6aeab8a92b56",
+    "DARCY_WARP_PACKAGE/solvers/npf662_kernels.py": "bc8719b7f5fd628b51c89fa99be0957e4c990f77192f440ec5c52f5a66d6dd08",
+    "DARCY_WARP_PACKAGE/solvers/npf662_line.py": "c9211f73afe55dee0516dd234e9da6249787025c601cedbb0c7cd360a6abc1a1",
+    "DARCY_WARP_PACKAGE/solvers/npf662_mixed_kernels.py": "f2f431c534053f7b77df044d50d9854bd66d1f58efddb9f374faf351fadcdb87",
+    "DARCY_WARP_PACKAGE/solvers/npf662_newton.py": "a25860fff8bbce654483b2666e3d9c2fad0f110ee6ede11c849963433cb9a781",
+    "DARCY_WARP_PACKAGE/solvers/npf662_state.py": "74e5d21d187f8f386f2c4431df520da25736aaafe70be111e58ca00213e5fc73"
+  },
+  "method": "Five paired fresh-model histories, alternating AB/BA order after separate warmups; strict gates unchanged. Same-time cached MF6 heads checked. Internal physical acceptance active; extra independent audits are in the portable qualification.",
+  "records": [
+    {
+      "pair": 0,
+      "warmup": true,
+      "device_build": false,
+      "public_seconds": 1.0155524060028256,
+      "numerical_seconds": 0.6450608270097291,
+      "setup_seconds": 0.2307684400002472,
+      "driver_seconds": 0.08428917099081445,
+      "krylov": 200,
+      "outer": 49,
+      "maximum_head_error_m": 6.841307176319589e-08
+    },
+    {
+      "pair": 0,
+      "warmup": true,
+      "device_build": true,
+      "public_seconds": 0.9258724660030566,
+      "numerical_seconds": 0.6401350229862146,
+      "setup_seconds": 0.1459668040042743,
+      "driver_seconds": 0.08589817699976265,
+      "krylov": 200,
+      "outer": 49,
+      "maximum_head_error_m": 6.841307176319589e-08
+    },
+    {
+      "pair": 1,
+      "warmup": false,
+      "device_build": true,
+      "public_seconds": 0.927597608002543,
+      "numerical_seconds": 0.6400867130068946,
+      "setup_seconds": 0.14817095400212565,
+      "driver_seconds": 0.08557947998633608,
+      "krylov": 200,
+      "outer": 49,
+      "maximum_head_error_m": 6.841307176319589e-08
+    },
+    {
+      "pair": 1,
+      "warmup": false,
+      "device_build": false,
+      "public_seconds": 0.99150967499736,
+      "numerical_seconds": 0.6404185320061515,
+      "setup_seconds": 0.21247322500130394,
+      "driver_seconds": 0.08463079998182366,
+      "krylov": 200,
+      "outer": 49,
+      "maximum_head_error_m": 6.841307176319589e-08
+    },
+    {
+      "pair": 2,
+      "warmup": false,
+      "device_build": false,
+      "public_seconds": 0.9809670130052837,
+      "numerical_seconds": 0.6404799610027112,
+      "setup_seconds": 0.1951984370025457,
+      "driver_seconds": 0.08927199299068889,
+      "krylov": 200,
+      "outer": 49,
+      "maximum_head_error_m": 6.841307176319589e-08
+    },
+    {
+      "pair": 2,
+      "warmup": false,
+      "device_build": true,
+      "public_seconds": 0.9272295060000033,
+      "numerical_seconds": 0.6401587289801682,
+      "setup_seconds": 0.14882959600072354,
+      "driver_seconds": 0.0840389490040252,
+      "krylov": 200,
+      "outer": 49,
+      "maximum_head_error_m": 6.841307176319589e-08
+    },
+    {
+      "pair": 3,
+      "warmup": false,
+      "device_build": true,
+      "public_seconds": 0.9478760119964136,
+      "numerical_seconds": 0.6404658090104931,
+      "setup_seconds": 0.16048332799982745,
+      "driver_seconds": 0.09112372301024152,
+      "krylov": 200,
+      "outer": 49,
+      "maximum_head_error_m": 6.841307176319589e-08
+    },
+    {
+      "pair": 3,
+      "warmup": false,
+      "device_build": false,
+      "public_seconds": 0.9811937240010593,
+      "numerical_seconds": 0.6404058629850624,
+      "setup_seconds": 0.19980278099683346,
+      "driver_seconds": 0.086692280958232,
+      "krylov": 200,
+      "outer": 49,
+      "maximum_head_error_m": 6.841307176319589e-08
+    },
+    {
+      "pair": 4,
+      "warmup": false,
+      "device_build": false,
+      "public_seconds": 0.972790599000291,
+      "numerical_seconds": 0.6401689459744375,
+      "setup_seconds": 0.19411868900351692,
+      "driver_seconds": 0.0835320389669505,
+      "krylov": 200,
+      "outer": 49,
+      "maximum_head_error_m": 6.841307176319589e-08
+    },
+    {
+      "pair": 4,
+      "warmup": false,
+      "device_build": true,
+      "public_seconds": 0.9262281280025491,
+      "numerical_seconds": 0.6402503599892952,
+      "setup_seconds": 0.14537772299809149,
+      "driver_seconds": 0.08562382700620219,
+      "krylov": 200,
+      "outer": 49,
+      "maximum_head_error_m": 6.841307176319589e-08
+    },
+    {
+      "pair": 5,
+      "warmup": false,
+      "device_build": true,
+      "public_seconds": 0.9523853309947299,
+      "numerical_seconds": 0.6404142840328859,
+      "setup_seconds": 0.1690114109951537,
+      "driver_seconds": 0.08591844001057325,
+      "krylov": 200,
+      "outer": 49,
+      "maximum_head_error_m": 6.841307176319589e-08
+    },
+    {
+      "pair": 5,
+      "warmup": false,
+      "device_build": false,
+      "public_seconds": 0.9756912700031535,
+      "numerical_seconds": 0.6413300709828036,
+      "setup_seconds": 0.1952259160025278,
+      "driver_seconds": 0.08552571300242562,
+      "krylov": 200,
+      "outer": 49,
+      "maximum_head_error_m": 6.841307176319589e-08
+    }
+  ],
+  "summary": {
+    "False": {
+      "public_seconds": 0.9809670130052837,
+      "numerical_seconds": 0.6404185320061515,
+      "setup_seconds": 0.1952259160025278,
+      "driver_seconds": 0.08552571300242562
+    },
+    "True": {
+      "public_seconds": 0.927597608002543,
+      "numerical_seconds": 0.6402503599892952,
+      "setup_seconds": 0.14882959600072354,
+      "driver_seconds": 0.08562382700620219
+    }
+  },
+  "benchmark_revision": "871ae34",
+  "median_public_saving_fraction": 0.05440489261635673,
+  "paired_public_savings_seconds": [
+    0.063912066994817,
+    0.05373750700528035,
+    0.03331771200464573,
+    0.04656247099774191,
+    0.023305939008423593
+  ],
+  "device_faster_in_every_pair": true
+}

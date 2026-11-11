@@ -2,7 +2,9 @@ NPF runtime search: one-second target
 =====================================
 
 This work was developed after ``cd32e71`` and promoted to main as ``a58542d``.
-Fresh main reruns are recorded in ``NPF662_MAIN_2026-11-12.rst``. The target is
+Initial main reruns are recorded in ``NPF662_MAIN_2026-11-12.rst``;
+the subsequent construction optimization and final main timings are in
+``NPF662_RUNTIME_POLISH_2026-11-12.rst``. The target is
 one second for the complete 500 x 500 x 5 convertible NPF/STO history of
 20 weekly steps on the RTX 4070 Ti SUPER. The strict target is met: the
 complete device history API takes **0.957 s**, median of three fresh-model
