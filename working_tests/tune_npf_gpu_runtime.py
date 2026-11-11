@@ -344,6 +344,11 @@ if __name__ == "__main__":
                 newton=dict(timestep_predictor=True, tiled_reductions=True, reuse_trial_state=True),
                 mg=dict(levels=3, pre_sweeps=2, post_sweeps=2, coarse_sweeps=2,
                     cached_line_factors=True, preconditioner_precision='float32', coefficient_state='current')))
+    for enabled in (False, True):
+        variants.append(dict(name=f'device_build_{enabled}', forcing=.005, restart=8,
+            newton=dict(timestep_predictor=True, tiled_reductions=True, reuse_trial_state=True),
+            mg=dict(levels=3, pre_sweeps=2, post_sweeps=2, coarse_sweeps=2, device_hierarchy_build=enabled,
+                cached_line_factors=True, preconditioner_precision='float32', coefficient_state='current')))
     selected = variants if arguments.variants == ['all'] else [v for v in variants if v['name'] in arguments.variants]
     unknown = set(arguments.variants)-{v['name'] for v in variants}-{'all'}
     if not selected or unknown or arguments.repeats < 1 or arguments.size < 2 or not np.isfinite(head_gate) or head_gate < 0.:

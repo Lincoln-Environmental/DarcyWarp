@@ -246,6 +246,33 @@ def test_diagonal_fgmres_matches_kcycle_on_identical_nonlinear_problem(device, i
             assert model._session._npf662_workspace_holder['workspace'].krylov is None
 
 
+@pytest.mark.parametrize('shape', [(3, 7, 9), (2, 3, 17), (5, 16, 8)])
+@pytest.mark.parametrize('precision', ['float64', 'float32'])
+def test_device_hierarchy_construction_matches_host_coefficients_and_action(device, shape, precision):
+    case = layered_case(masked=True, shape=shape)
+    storage = np.where((case.active != 0)&(case.fixed == 0), .3, 0.)
+    with make_gpu_model(case=case, device=device) as model:
+        common = dict(levels=5, cached_line_factors=True, preconditioner_precision=precision)
+        host = NPF662KCycleWorkspace(faces=model._session.faces, active=case.active, fixed=case.fixed,
+            device=device, storage_diag=storage, controls=NPF662KCycleControls(**common))
+        native = NPF662KCycleWorkspace(faces=model._session.faces, active=case.active, fixed=case.fixed,
+            device=device, storage_diag=storage, controls=NPF662KCycleControls(**common, device_hierarchy_build=True))
+        assert len(host.levels) == len(native.levels)
+        for expected, actual in zip(host.levels, native.levels):
+            for a, b in zip(expected['faces'], actual['faces']):
+                np.testing.assert_allclose(actual=b.numpy(), desired=a.numpy(), rtol=2e-12, atol=1e-12)
+            for name in ('storage', 'diag', 'active', 'bc_mask', 'boundary_springs', 'line_inverse', 'line_lower', 'c_prime'):
+                np.testing.assert_allclose(actual=actual[name].numpy(), desired=expected[name].numpy(), rtol=2e-12, atol=1e-12)
+        values = np.random.default_rng(seed=59).normal(size=case.active.shape)
+        for workspace in (host, native):
+            workspace.work_levels[0]['rhs'].assign(values.astype(np.float32 if precision == 'float32' else np.float64))
+            workspace._enqueue()
+        np.testing.assert_allclose(actual=native.work_levels[0]['x'].numpy(), desired=host.work_levels[0]['x'].numpy(),
+            rtol=2e-6 if precision == 'float32' else 2e-12, atol=1e-6 if precision == 'float32' else 2e-12)
+        host.close()
+        native.close()
+
+
 def test_diagonal_fgmres_linear_reference_and_value_updates(device):
     from DARCY_WARP_PACKAGE.solvers.npf662_fgmres import DiagonalFGMRESPreconditioner
     case = layered_case(masked=True, shape=(3, 5, 7))

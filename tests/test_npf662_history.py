@@ -49,6 +49,7 @@ def test_history_matches_explicit_steps_and_oracle(device, precision, predictor,
             previous = head
     with make_model(case=case, device=device) as model:
         options['npf_newton_controls'] = replace(options['npf_newton_controls'], reuse_trial_state=True)
+        options['npf_kcycle_controls'] = replace(options['npf_kcycle_controls'], device_hierarchy_build=True)
         heads, info = model.solve_transient_npf(source_factors=factors, dt=times,
             head_prev=case.initial, ss=1e-3, sy=.15, **options)
         assert info['converged'] and info['accepted_steps'] == len(factors)
@@ -74,6 +75,7 @@ def test_history_matches_explicit_steps_and_oracle(device, precision, predictor,
 def test_history_changes_k_between_calls_and_matches_fresh(device):
     case = make_case(convertible=True)
     options = history_options(case=case, precision='float32', predictor=True)
+    options['npf_kcycle_controls'] = replace(options['npf_kcycle_controls'], device_hierarchy_build=True)
     factors = np.array([1., 1.5, .25])
     with make_model(case=case, device=device) as model:
         heads, info = model.solve_transient_npf(source_factors=factors, dt=7.,
