@@ -46,6 +46,8 @@ def parse_arguments(*, defaults):
         help='Opt-in transient device acceptance; independent verification remains outside the solve timer.')
     parser.add_argument('--npf-controls', type=Path,
         help='JSON containing solve, newton and multigrid controls for a reproducible NPF experiment.')
+    parser.add_argument('--npf-history', action='store_true',
+        help='Time the complete device history API for transient NPF, including source updates and output download.')
     parser.add_argument('--legacy-max-cycles', type=int, default=None, help='Explicit override; default uses the 2D sanity budget.')
     args = parser.parse_args()
     if min(args.sizes) < 2 or args.repeats < 1 or args.periods < 1:
@@ -165,7 +167,7 @@ def prepare_reference(*, case, family, mode, cache, executable, cached_only, nat
 
 
 def measure(*, case, family, mode, label, reference, native_accepted, device, profiles,
-            factors, dt, ss, sy, npf_options, kcycle_controls, gates, progress_every):
+            factors, dt, ss, sy, npf_options, kcycle_controls, gates, progress_every, npf_history=False):
     import warp as wp
     from DARCY_WARP_PACKAGE import WarpDarcySolver3D
     from DARCY_WARP_PACKAGE.validation.npf662_matrix_free import NPF662MatrixFreeReference
@@ -194,21 +196,37 @@ def measure(*, case, family, mode, label, reference, native_accepted, device, pr
             model.build_from_layers(z_interfaces=case.z_interfaces, **fields)
         construction_seconds = perf_counter()-started
         schedule = factors if mode == 'transient' else np.ones(shape=1)
-        for period, factor in enumerate(schedule):
-            step = replace(case, source=case.source*factor)
-            model.update_rhs(rhs=step.source)
-            model.update_initial_head(initial_head=previous)
-            options = dict(kwargs)
-            if family == 'npf':
-                options.update(unconfined=bool(np.any(case.cell_types)), npf_cell_type=case.cell_types)
-            if mode == 'transient':
-                options.update(transient=True, dt=dt, head_prev=previous)
-                options.update(dict(storage_coeff=ss) if family == 'cartesian' else dict(ss=ss, sy=sy))
-            old = previous.copy()
+        driver_seconds = None
+        driver_info = None
+        use_history = npf_history and family == 'npf' and mode == 'transient'
+        if use_history:
+            driver_options = dict(kwargs, unconfined=bool(np.any(case.cell_types)),
+                npf_cell_type=case.cell_types, npf_device_native=True)
             solve_started = perf_counter()
-            head, info = model.solve(**options)
+            driver_heads, driver_info = model.solve_transient_npf(source_factors=schedule, dt=dt,
+                head_prev=previous, ss=ss, sy=sy, **driver_options)
             wp.synchronize_device(device=device)
-            public_solve_seconds = perf_counter()-solve_started
+            driver_seconds = perf_counter()-solve_started
+        returned_schedule = schedule[:len(driver_heads)] if use_history else schedule
+        for period, factor in enumerate(returned_schedule):
+            step = replace(case, source=case.source*factor)
+            old = previous.copy()
+            if use_history:
+                head, info = driver_heads[period], driver_info['periods'][period]
+                public_solve_seconds = info['public_step_seconds']
+            else:
+                model.update_rhs(rhs=step.source)
+                model.update_initial_head(initial_head=previous)
+                options = dict(kwargs)
+                if family == 'npf':
+                    options.update(unconfined=bool(np.any(case.cell_types)), npf_cell_type=case.cell_types)
+                if mode == 'transient':
+                    options.update(transient=True, dt=dt, head_prev=previous)
+                    options.update(dict(storage_coeff=ss) if family == 'cartesian' else dict(ss=ss, sy=sy))
+                solve_started = perf_counter()
+                head, info = model.solve(**options)
+                wp.synchronize_device(device=device)
+                public_solve_seconds = perf_counter()-solve_started
             audit_started = perf_counter()
             np.testing.assert_array_equal(actual=previous, desired=old)
             auditor = NPF662TransientReference(case=step, previous=previous, dt=dt, ss=ss,
@@ -250,9 +268,12 @@ def measure(*, case, family, mode, label, reference, native_accepted, device, pr
         wp.synchronize_device(device=device)
         elapsed = perf_counter()-started
     return dict(seconds=elapsed, construction_seconds=construction_seconds,
-        public_solve_seconds=sum(row['public_solve_seconds'] for row in history),
+        public_solve_seconds=driver_seconds if use_history else sum(row['public_solve_seconds'] for row in history),
+        execution='device_transient_history' if use_history else 'individual_solve_calls',
+        history_driver_overhead_seconds=driver_seconds-sum(row['public_solve_seconds'] for row in history) if use_history else 0.,
+        history_readbacks={key:driver_info[key] for key in ('solver_head_readbacks', 'output_history_readbacks')} if use_history else None,
         independent_audit_seconds=sum(row['independent_audit_seconds'] for row in history),
-        accepted=all(row['accepted'] for row in history), periods=history), np.stack(arrays=heads)
+        accepted=len(history) == len(schedule) and all(row['accepted'] for row in history), periods=history), np.stack(arrays=heads)
 
 
 def run(*, args, root, settings):
@@ -264,6 +285,10 @@ def run(*, args, root, settings):
     device = ('cuda:0' if wp.is_cuda_available() else 'cpu') if args.device == 'auto' else args.device
     profiles = read_profiles(root=root)
     overrides = {}
+    if args.npf_history:
+        if args.compare or args.npf_preconditioner == 'diagonal':
+            raise ValueError('--npf-history requires the kcycle selection without --compare')
+        overrides['npf_history'] = True
     settings = dict(settings, npf_options=dict(settings['npf_options']))
     if args.npf_controls is not None:
         payload = json.loads(args.npf_controls.read_text())
@@ -299,7 +324,7 @@ def run(*, args, root, settings):
             for path in sorted((root/'DARCY_WARP_PACKAGE/solvers').glob('npf662*.py'))},
         python=platform.python_version(), overrides=overrides,
         revision=subprocess.check_output(args=['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True).strip(),
-        timing='Primary: synchronized public solve calls only. Model build, cache loading, external audit and file saving excluded. Secondary: full verification runtime.',
+        timing='Primary: synchronized public solver calls. With --npf-history, the entire transient NPF history call includes source updates and output download. Model build, cache loading, external audit and file saving excluded. Secondary: full verification runtime.',
         cases=[])
     for family in args.families:
         variants = args.variants if family == 'npf' else ['confined']
@@ -327,6 +352,7 @@ def run(*, args, root, settings):
                         labels = ('classic', 'fast') if family == 'cartesian' else ('diagonal', 'kcycle')
                     else:
                         selection = args.npf_preconditioner
+                        if args.npf_history and family == 'npf' and mode == 'transient':selection = 'kcycle'
                         if selection == 'auto':
                             selection = 'kcycle' if case.active.size >= settings['kcycle_threshold_cells'] else 'diagonal'
                         labels = ('fast',) if family == 'cartesian' else (selection,)
@@ -337,7 +363,7 @@ def run(*, args, root, settings):
                                 reference=reference, native_accepted=manifest['accepted'], device=device,
                                 profiles=profiles, factors=factors, dt=settings['dt'], ss=settings['ss'], sy=settings['sy'],
                                 npf_options=settings['npf_options'], kcycle_controls=controls, gates=settings['gates'],
-                                progress_every=settings['progress_every'])
+                                progress_every=settings['progress_every'], npf_history=args.npf_history)
                             measured.update(implementation=label, repeat=repeat, warmup=repeat == 0)
                             row['runs'].append(measured)
                             np.savez_compressed(file=args.output/f'{identity}_{label}_{repeat}.npz', heads=heads)

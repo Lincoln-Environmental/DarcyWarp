@@ -24,6 +24,8 @@ class NPF662NewtonControls:
     forcing_power: float = 1.5
     timestep_predictor: bool = False
     timestep_predictor_order: int = 1
+    tiled_reductions: bool = False
+    reuse_trial_state: bool = False
 
     def validate(self):
         if not isinstance(self.line_search_steps, (int, np.integer)):
@@ -36,7 +38,7 @@ class NPF662NewtonControls:
         if not 1.<=self.recovery_growth<=1.10:raise ValueError('Recovery growth must be between1 and1.10')
         if not 0. < self.forcing_min <= self.forcing_max < 1. or not np.isfinite(self.forcing_power) or self.forcing_power <= 0.:
             raise ValueError('Adaptive forcing bounds/power must be positive, with bounds below one')
-        if any(not isinstance(value, (bool, np.bool_)) for value in (self.adaptive_forcing, self.timestep_predictor)):
+        if any(not isinstance(value, (bool, np.bool_)) for value in (self.adaptive_forcing, self.timestep_predictor, self.tiled_reductions, self.reuse_trial_state)):
             raise ValueError('Adaptive forcing and timestep predictor switches must be Boolean')
         if isinstance(self.timestep_predictor_order, (bool, np.bool_)) or self.timestep_predictor_order not in (1, 2):
             raise ValueError('Timestep predictor order must be 1 or 2')
@@ -51,7 +53,7 @@ class NPF662Workspace:
             'storage_previous','storage_ss','storage_sy','storage_rate','storage_tangent','trial_storage_rate','trial_storage_tangent',
             'principal','previous_storage_tangent','predictor_increment','predictor_older_increment'):
             setattr(self,name,wp.zeros(shape=self.n,dtype=wp.float64,device=self.device))
-        for name in ('c0','q','c','trial_q','trial_c','dl','dr'):
+        for name in ('c0','q','c','trial_q','trial_c','dl','dr','trial_dl','trial_dr'):
             setattr(self,name,wp.zeros(shape=(self.n,3),dtype=wp.float64,device=self.device))
         for name in ('free','fixed','types'):
             setattr(self,name,wp.zeros(shape=self.n,dtype=wp.int32,device=self.device))
@@ -75,6 +77,7 @@ class NPF662Workspace:
         self.preconditioner_counter=wp.zeros(shape=1,dtype=wp.int64,device=self.device)
         self.residual_evaluations=0;self.candidate_evaluations=0
         self.multigrid=None;self.flexible=None;self.krylov=None;self.diagonal_flexible=None
+        self.commit_graph=None;self.commit_graph_failed=False;self.reuse_trial_state=False
         self.device_native = bool(getattr(reference, 'device_storage_state', False))
         self.load(model=model,case=case,reference=reference)
         self.evaluate(trial=False,linearize=True)
@@ -164,17 +167,23 @@ class NPF662Workspace:
         r=self.trial_residual if trial else self.residual;rhs=self.trial_rhs if trial else self.rhs
         storage=self.trial_storage_rate if trial else self.storage_rate
         tangent=self.trial_storage_tangent if trial else self.storage_tangent
+        cache_trial=trial and self.reuse_trial_state
+        dl=self.trial_dl if cache_trial else self.dl
+        dr=self.trial_dr if cache_trial else self.dr
         if self.transient:
             wp.launch(kernel=kernels.storage_terms,dim=self.n,inputs=[head,self.storage_previous,self.bottom,
                 self.thickness,self.types,self.storage_ss,self.storage_sy,self.free,storage,tangent,self.storage_factor],device=self.device)
         wp.launch(kernel=kernels.physical_faces,dim=(self.n,3),inputs=[head,self.bottom,self.types,self.right,
-            self.c0,q,c,self.dl,self.dr,self.thickness,int(linearize)],device=self.device)
+            self.c0,q,c,dl,dr,self.thickness,int(linearize or cache_trial)],device=self.device)
         self.metric_partials.zero_()
         block_size=self.metric_block_size if getattr(self,'device_native',False) else self.n
-        wp.launch(kernel=kernels.physical_rows,dim=self.n,inputs=[head,self.source,self.free,self.fixed,self.left,
-            self.right,q,c,self.scale,r,rhs,self.metric_partials,storage,tangent,block_size],device=self.device)
-        wp.launch(kernel=kernels.combine_physical_metrics,dim=9,
-            inputs=[self.metric_partials,self.metrics,(self.n+block_size-1)//block_size],device=self.device)
+        tiled = getattr(self,'device_tiled',False)
+        wp.launch(kernel=kernels.physical_rows_tiled if tiled else kernels.physical_rows,dim=self.n,
+            inputs=[head,self.source,self.free,self.fixed,self.left,self.right,q,c,self.scale,r,rhs,
+                self.metric_partials.flatten() if tiled else self.metric_partials,storage,tangent,block_size],
+            device=self.device,block_dim=self.metric_block_size)
+        wp.launch(kernel=kernels.combine_metrics_tiled if tiled else kernels.combine_physical_metrics,dim=2304 if tiled else 9,
+            inputs=[self.metric_partials,self.metrics,(self.n+block_size-1)//block_size],device=self.device,block_dim=256)
         self.residual_evaluations+=1
         if trial:self.candidate_evaluations+=1
         m=self.metrics.numpy()
@@ -197,6 +206,32 @@ class NPF662Workspace:
         wp.launch(kernel=kernels.candidate_head,dim=self.n,inputs=[self.head,self.delta,self.free,self.trial,alpha],device=self.device)
         return self.evaluate(trial=True)
 
+    def _enqueue_commit(self):
+        for current,trial in (('head','trial'),('q','trial_q'),('c','trial_c'),('dl','trial_dl'),
+                ('dr','trial_dr'),('rhs','trial_rhs'),('residual','trial_residual'),
+                ('storage_rate','trial_storage_rate'),('storage_tangent','trial_storage_tangent')):
+            wp.copy(dest=getattr(self,current),src=getattr(self,trial))
+
+    def accept_trial(self,*,metrics):
+        """Commit the evaluated state into stable buffers referenced by graphs."""
+        if not self.reuse_trial_state:
+            wp.copy(dest=self.head,src=self.trial)
+            return self.evaluate(trial=False,linearize=True)
+        if wp.get_device(ident=self.device).is_cuda and not self.commit_graph_failed:
+            if self.commit_graph is None:
+                try:
+                    with wp.ScopedCapture(device=self.device) as capture:
+                        self._enqueue_commit()
+                    if capture.graph is None:raise RuntimeError('Empty trial commit graph')
+                    self.commit_graph=capture.graph
+                except Exception:
+                    self.commit_graph_failed=True
+            if not self.commit_graph_failed:
+                wp.capture_launch(graph=self.commit_graph)
+            else:self._enqueue_commit()
+        else:self._enqueue_commit()
+        return metrics
+
     def final_certificate(self):
         self.certificate.zero_()
         wp.launch(kernel=kernels.final_storage_certificate,dim=self.n,
@@ -215,11 +250,12 @@ class NPF662Workspace:
         if self.diagonal_flexible is not None:self.diagonal_flexible.close()
         self.flexible=None;self.multigrid=None;self.diagonal_flexible=None
         self.closed=True;self.krylov=None
+        self.commit_graph=None
         self._native_state = self._faces_snapshot = self._types_snapshot = None
         self.principal = self.previous_storage_tangent = None
         self.predictor_increment = self.predictor_older_increment = self.predictor_checkpoint = None
         for name in ('head','prescribed','trial','source','bottom','thickness','scale','rhs','trial_rhs','residual','trial_residual','delta',
-            'c0','q','c','trial_q','trial_c','dl','dr','free','fixed','types','left','right','metrics','maximum','mode','jv_counter','preconditioner_counter',
+            'c0','q','c','trial_q','trial_c','dl','dr','trial_dl','trial_dr','free','fixed','types','left','right','metrics','maximum','mode','jv_counter','preconditioner_counter',
             'storage_previous','storage_ss','storage_sy','storage_rate','storage_tangent','trial_storage_rate','trial_storage_tangent','certificate','metric_partials'):
             setattr(self,name,None)
 
@@ -265,7 +301,7 @@ def search_direction(*,workspace,current,controls,physical_tolerance=1e-12,relat
 def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,controls,
                         physical_tolerance=1e-12,relative_tolerance=1e-8,
                         npf_preconditioner='diagonal',npf_kcycle_controls=None,npf_krylov_method=None,
-                        device_native=False):
+                        device_native=False,prepared_workspace=None,device_sequence=False):
     controls.validate()
     setup_start=perf_counter()
     if max_outer<0 or krylov_budget<0 or restart<2:raise ValueError('Nonnegative budgets and restart>=2 required')
@@ -274,15 +310,27 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
     if npf_preconditioner=='kcycle' and method!='fgmres':raise ValueError('K-cycle requires flexible GMRES')
     holder=model._session._npf662_workspace_holder
     workspace=holder.get('workspace')
-    reused=workspace is not None and workspace.compatible(model=model,case=case,restart=restart)
+    if device_sequence and (prepared_workspace is None or not device_native):
+        raise ValueError('A device sequence requires its prepared native workspace')
+    if prepared_workspace is not None:
+        if workspace is not prepared_workspace or workspace.closed or workspace.restart != restart:
+            raise ValueError('Prepared NPF workspace is no longer current')
+        reused=True
+    else:
+        reused=workspace is not None and workspace.compatible(model=model,case=case,restart=restart)
     if not reused:
         if workspace is not None:workspace.close()
         workspace=NPF662Workspace(model=model,case=case,restart=restart,krylov_budget=krylov_budget,reference=reference)
         holder['workspace']=workspace
-    else:workspace.load(model=model,case=case,reference=reference)
+    elif prepared_workspace is None:workspace.load(model=model,case=case,reference=reference)
     krylov_reused=workspace.select_krylov(method=method,krylov_budget=krylov_budget)
+    tiled = bool(device_native and controls.tiled_reductions and wp.get_device(ident=model.device).is_cuda)
+    if tiled != getattr(workspace,'device_tiled',False) and workspace.flexible is not None:
+        workspace.flexible.arnoldi_graphs.clear()
+    workspace.device_tiled = tiled
     workspace.device_arnoldi=device_native
     workspace.device_native=device_native
+    workspace.reuse_trial_state=controls.reuse_trial_state
     blocks_start=getattr(workspace.krylov, 'restart_blocks', 0) if method=='gmres' else 0
     graph_start=(getattr(workspace.krylov, 'graph_captures', 0), getattr(workspace.krylov, 'graph_replays', 0))
     mg_reused=False;mg_seconds=0.;linear_history=[];mg_values_refreshed=False
@@ -301,7 +349,11 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
         if direct_refresh:
             refresh_start=perf_counter()
             wp.copy(dest=workspace.multigrid.levels[0]['storage'].flatten(), src=workspace.previous_storage_tangent)
-            workspace.multigrid.refresh_storage_device()
+            # Current-coefficient preconditioning refreshes the complete
+            # hierarchy immediately before each Krylov solve. Avoid preparing
+            # an intermediate previous-state hierarchy that is never applied.
+            if mg_controls.coefficient_state != 'current':
+                workspace.multigrid.refresh_storage_device()
             workspace.multigrid.value_refresh_count += 1
             # Host storage snapshot is deliberately unavailable after a device
             # refresh. A later host path must compare or refresh real values.
@@ -339,7 +391,7 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
     checkpoint=getattr(workspace,'predictor_checkpoint',None)
     if controls.timestep_predictor and workspace.transient and checkpoint is not None:
         last_head,last_dt,quadratic_available=checkpoint
-        if np.array_equal(reference.previous,last_head) and np.array_equal(case.initial,reference.previous):
+        if device_sequence or (np.array_equal(reference.previous,last_head) and np.array_equal(case.initial,reference.previous)):
             predictor_continuation=True
             quadratic=controls.timestep_predictor_order == 2 and quadratic_available and reference.dt == last_dt
             wp.launch(kernel=kernels.predict_timestep_head,dim=workspace.n,
@@ -348,8 +400,7 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
                 device=workspace.device)
             predicted=workspace.evaluate(trial=True)
             if predicted['finite'] and predicted['scaled_l2'] < current['scaled_l2'] and residual_merit(candidate=predicted,current=current)<1.:
-                wp.copy(dest=workspace.head,src=workspace.trial)
-                current=workspace.evaluate(trial=False,linearize=True)
+                current=workspace.accept_trial(metrics=predicted)
                 predictor_used=True
     forcing_previous=current['scaled_l2']
     for outer in range(max_outer):
@@ -393,22 +444,25 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
                 achieved_scaled_l2=float(error),requested_scaled_l2=float(target),target_reached=bool(error<=target),
                 stopping='target' if error<=target else 'budget_or_breakdown',search=search))
             if search['accepted']:
-                wp.copy(src=workspace.trial,dest=workspace.head)
-                current=workspace.evaluate(trial=False,linearize=True)
+                current=workspace.accept_trial(metrics=search['metrics'])
                 accepted=True;break
         history.append(dict(outer=outer+1,accepted=accepted,krylov=krylov_budget-remaining,attempts=attempts,metrics=current,inner_forcing=forcing))
         if not accepted:
             if reason!='krylov_budget':reason='line_search_failed'
             break
     workspace.mode.fill_(1)
-    current=workspace.evaluate(trial=False,linearize=True)
+    # No head/source/storage/scaling mutation follows the accepted evaluation.
+    # Rejected trials have separate flux, derivative and storage buffers.
+    if not controls.reuse_trial_state:current=workspace.evaluate(trial=False,linearize=True)
     if wp.get_device(ident=model.device).is_cuda:wp.synchronize_device(device=model.device)
     seconds=perf_counter()-start
-    head=workspace.head.numpy().reshape(case.active.shape).copy()
+    head=None if device_sequence else workspace.head.numpy().reshape(case.active.shape).copy()
     device_passed=device_accepted(metrics=current,physical_tolerance=physical_tolerance,relative_tolerance=relative_tolerance)
     certificate=workspace.final_certificate() if device_native else None
     independent_performed=not device_native or not certificate['all_free_cells_storage_anchored']
     if independent_performed:
+        if head is None:
+            head=workspace.head.numpy().reshape(case.active.shape).copy()
         checks,unused=reference.evaluate(head=head,physical_tolerance=physical_tolerance,relative_tolerance=relative_tolerance)
         accepted=checks['independent_accepted']
     else:
@@ -422,7 +476,7 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
         wp.copy(dest=workspace.predictor_older_increment,src=workspace.predictor_increment)
         wp.launch(kernel=kernels.store_head_increment,dim=workspace.n,
             inputs=[workspace.head,workspace.storage_previous,workspace.free,workspace.predictor_increment],device=workspace.device)
-        workspace.predictor_checkpoint = (head.copy(), reference.dt,
+        workspace.predictor_checkpoint = (None if device_sequence else head.copy(), reference.dt,
             bool(predictor_continuation and reference.dt == checkpoint[1]))
     if not device_passed and accepted:reason='device_acceptance_failed'
     if not converged and reason=='converged':reason='independent_acceptance_failed' if independent_performed else 'device_certificate_failed'
@@ -432,7 +486,7 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
         nonlinear_residual_evaluations=workspace.residual_evaluations,candidate_evaluations=workspace.candidate_evaluations,
         nonlinear_backtracks=backtracks,fallback_count=fallbacks,outer_history=history,
         independent_acceptance=checks if independent_performed else None,physical_acceptance=checks,
-        independent_audit_performed=independent_performed,device_native=device_native,
+        independent_audit_performed=independent_performed,device_native=device_native,tiled_reductions=tiled,
         full_saturated_safeguard_solves=saturated,timestep_predictor_used=predictor_used,
         device_final_metrics=current,workspace_reused=reused,seconds=seconds,setup_seconds=setup_seconds,controls=asdict(controls),
         linear_budget_units='Krylov iterations shared across Newton and Picard per outer',
@@ -467,6 +521,8 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
                 construction_seconds=mg_seconds,hierarchy_reused=mg_reused,
                 coefficients_refreshed=mg_values_refreshed,value_refresh_count=mg.value_refresh_count,
                 device_storage_refresh_count=mg.device_storage_refresh_count,
+                refresh_graph_captures=len(mg.refresh_graphs),refresh_graph_replays=mg.refresh_graph_replays,
+                refresh_graph_fallback=mg.refresh_graph_failed,
                 allocated_device_bytes=mg.allocated_bytes(),
                 applications=mg.applications-mg_start[0],cycles=mg.cycles-mg_start[1],
                 graph_captures=int(not mg_reused)*mg.graph_captures,graph_replays=mg.graph_replays-mg_start[2],

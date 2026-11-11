@@ -120,6 +120,100 @@ def test_previous_storage_snapshot_is_distinct_from_iterative_tangent(device):
         np.testing.assert_array_equal(actual=state.previous, desired=previous)
 
 
+def test_refresh_graph_capture_failure_runs_eager_and_preserves_physics(device, monkeypatch):
+    if not device.startswith('cuda'):
+        pytest.skip('CUDA graph failure path')
+    case = make_case(convertible=True)
+    with make_model(case=case, device=device) as model:
+        options = solve_options(case=case, previous=case.initial, dt=7.)
+        first, info = model.solve(**options)
+        assert info['converged']
+
+        def reject_capture(*args, **kwargs):
+            raise RuntimeError('Forced capture failure')
+
+        monkeypatch.setattr(wp, 'ScopedCapture', reject_capture)
+        model.update_initial_head(initial_head=first)
+        head, info = model.solve(**solve_options(case=case, previous=first, dt=3.5))
+        assert info['converged'] and info['multigrid']['refresh_graph_fallback']
+        checks, unused = NPF662TransientReference(case=case, previous=first, dt=3.5, ss=1e-3, sy=.15).evaluate(head=head)
+        assert checks['independent_accepted']
+
+
+@pytest.mark.parametrize('shape', [(2, 4, 6), (2, 17, 19)])
+def test_tiled_physical_reductions_match_atomic_metrics(device, shape):
+    if not device.startswith('cuda'):
+        pytest.skip('CUDA tiled reductions')
+    case = make_case(convertible=True, shape=shape)
+    with make_model(case=case, device=device) as model:
+        options = dict(solve_options(case=case, previous=case.initial, dt=7.), max_outer=0)
+        unused, info = model.solve(**options)
+        workspace = model._session._npf662_workspace_holder['workspace']
+        workspace.device_tiled = False
+        atomic = workspace.evaluate(trial=False, linearize=True)
+        expected = workspace.residual.numpy().copy()
+        workspace.device_tiled = True
+        tiled = workspace.evaluate(trial=False, linearize=True)
+        np.testing.assert_array_equal(actual=workspace.residual.numpy(), desired=expected)
+        assert tiled['finite'] and atomic['finite']
+        for key in atomic:
+            np.testing.assert_allclose(actual=tiled[key], desired=atomic[key], rtol=2e-12, atol=1e-15)
+
+
+def test_trial_reuse_keeps_rejected_state_and_commits_exact_fields(device):
+    case = make_case(convertible=True, shape=(2, 5, 7))
+    with make_model(case=case, device=device) as model:
+        options = dict(solve_options(case=case, previous=case.initial, dt=7.), max_outer=0)
+        model.solve(**options)
+        workspace = model._session._npf662_workspace_holder['workspace']
+        workspace.reuse_trial_state = True
+        fields = ('head', 'q', 'c', 'dl', 'dr', 'rhs', 'residual', 'storage_rate', 'storage_tangent')
+        original = {name: getattr(workspace, name).numpy().copy() for name in fields}
+        workspace.delta.fill_(.123)
+        metrics = workspace.candidate(alpha=.5)
+        for name in fields:
+            np.testing.assert_array_equal(actual=getattr(workspace, name).numpy(), desired=original[name])
+        workspace.accept_trial(metrics=metrics)
+        cached = {name: getattr(workspace, name).numpy().copy() for name in fields}
+        recomputed = workspace.evaluate(trial=False, linearize=True)
+        for name in fields:
+            np.testing.assert_array_equal(actual=getattr(workspace, name).numpy(), desired=cached[name])
+        for key in metrics:
+            np.testing.assert_allclose(actual=metrics[key], desired=recomputed[key], rtol=2e-12, atol=1e-15)
+
+
+def test_tiled_toggle_replaces_captured_arnoldi_graphs(device):
+    if not device.startswith('cuda'):
+        pytest.skip('CUDA graph identity')
+    from DARCY_WARP_PACKAGE.solvers.npf662_newton import NPF662NewtonControls
+    case = make_case(convertible=True)
+    with make_model(case=case, device=device) as model:
+        options = solve_options(case=case, previous=case.initial, dt=7.)
+        previous_graphs = []
+        for enabled in (False, True, False):
+            head, info = model.solve(**options,
+                npf_newton_controls=NPF662NewtonControls(tiled_reductions=enabled, reuse_trial_state=True))
+            assert info['converged']
+            workspace = model._session._npf662_workspace_holder['workspace']
+            assert workspace.device_tiled == enabled
+            graphs = list(workspace.flexible.arnoldi_graphs.values())
+            assert graphs and all(new is not old for new in graphs for old in previous_graphs)
+            previous_graphs = graphs
+            checks, unused = NPF662TransientReference(case=case, previous=case.initial, dt=7., ss=1e-3, sy=.15).evaluate(head=head)
+            assert checks['independent_accepted']
+
+
+def test_fp32_hierarchy_rejects_unrepresentable_positive_coefficients(device):
+    case = make_case(convertible=True)
+    case = replace(case, kx=case.kx*1e40, ky=case.ky*1e40, kz=case.kz*1e40)
+    with make_model(case=case, device=device) as model:
+        options = solve_options(case=case, previous=case.initial, dt=7.)
+        options['npf_kcycle_controls'] = NPF662KCycleControls(levels=3, coarse_sweeps=2,
+            cached_line_factors=True, preconditioner_precision='float32')
+        with pytest.raises(ValueError, match='FP32'):
+            model.solve(**options)
+
+
 @pytest.mark.parametrize('precision', ['float64', 'float32'])
 def test_device_storage_refresh_keeps_host_lazy_and_honours_live_fields(device, precision):
     case = make_case(convertible=True, shape=(2, 5, 7))

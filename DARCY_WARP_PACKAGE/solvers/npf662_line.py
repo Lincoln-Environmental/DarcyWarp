@@ -41,8 +41,10 @@ def smooth_factored_lines(xp: wp.array3d(dtype=wp.float64), xm: wp.array3d(dtype
     fixed: wp.array3d(dtype=wp.int32), rhs: wp.array3d(dtype=wp.float64),
     old: wp.array3d(dtype=wp.float64), inverse: wp.array3d(dtype=wp.float64),
     upper: wp.array3d(dtype=wp.float64), lower: wp.array3d(dtype=wp.float64),
-    forward: wp.array3d(dtype=wp.float64), out: wp.array3d(dtype=wp.float64), omega: wp.float64):
+    forward: wp.array3d(dtype=wp.float64), out: wp.array3d(dtype=wp.float64), omega: wp.float64, color: int):
     j, i = wp.tid()
+    if color >= 0 and (j+i)%2 != color:
+        return
     previous = wp.float64(0.)
     for k in range(old.shape[0]):
         value = wp.float64(0.)

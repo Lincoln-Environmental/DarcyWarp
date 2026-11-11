@@ -109,7 +109,58 @@ def run_history(*, case, factors, options, controls, device, reference, audit, h
         krylov=sum(s['krylov'] for s in steps), outer=sum(s['outer'] for s in steps), steps=steps)
 
 
-def run_sweep(*, root, cache, output, size, case_variant, device, factors, options, variants, repeats, audit, head_gate, profile):
+def run_device_history(*, case, factors, options, controls, device, reference, audit, head_gate, profile_path):
+    history_start = perf_counter()
+    profiler = cProfile.Profile() if profile_path else None
+    build_start = perf_counter()
+    model = make_model(case=case, device=device)
+    wp.synchronize_device(device=device)
+    construction_seconds = perf_counter()-build_start
+    kwargs = dict(options, **controls, npf_cell_type=case.cell_types)
+    for name in ('dt', 'ss', 'sy'):
+        kwargs.pop(name)
+    with model:
+        wp.synchronize_device(device=device)
+        if profiler:profiler.enable()
+        start = perf_counter()
+        heads, info = model.solve_transient_npf(source_factors=factors, dt=options['dt'],
+            head_prev=case.initial, ss=options['ss'], sy=options['sy'], **kwargs)
+        wp.synchronize_device(device=device)
+        elapsed = perf_counter()-start
+        if profiler:profiler.disable()
+    audit_seconds = 0.
+    steps = []
+    previous = case.initial
+    for period, (head, row) in enumerate(zip(heads, info['periods'])):
+        error = float(np.max(np.abs(head-reference[period])))
+        accepted = bool(row['converged'] and error <= head_gate)
+        checks = row['device_final_metrics']
+        if audit:
+            start = perf_counter()
+            checks, unused = NPF662TransientReference(case=replace(case, source=case.source*factors[period]),
+                previous=previous, dt=options['dt'], ss=options['ss'], sy=options['sy']).evaluate(
+                    head=head, relative_tolerance=kwargs['npf_final_relative_tolerance'])
+            audit_seconds += perf_counter()-start
+            accepted = accepted and checks['independent_accepted']
+        steps.append(dict(period=period+1, accepted=bool(accepted), seconds=row['public_step_seconds'],
+            numerical_seconds=row['seconds'], setup_seconds=row['setup_seconds'],
+            reference_setup_seconds=row.get('reference_setup_seconds', 0.),
+            multigrid_device_seconds=row['multigrid']['device_apply_seconds'],
+            krylov_synchronization_seconds=row['krylov_synchronization_seconds'],
+            krylov=row['krylov_iterations'], outer=row['outer_iterations'],
+            residual_evaluations=row['nonlinear_residual_evaluations'],
+            timestep_predictor_used=row.get('timestep_predictor_used', False), head_max_error_m=error, physical=checks))
+        previous = head
+    if profiler:profiler.dump_stats(file=str(profile_path))
+    return dict(passed=info['converged'] and len(steps) == len(factors) and all(s['accepted'] for s in steps),
+        seconds=elapsed, numerical_seconds=info['numerical_seconds'], construction_seconds=construction_seconds,
+        extra_audit_seconds=audit_seconds, history_wall_seconds=perf_counter()-history_start,
+        driver_overhead_seconds=elapsed-sum(s['seconds'] for s in steps),
+        solver_head_readbacks=info['solver_head_readbacks'], output_history_readbacks=info['output_history_readbacks'],
+        krylov=sum(s['krylov'] for s in steps), outer=sum(s['outer'] for s in steps), steps=steps)
+
+
+def run_sweep(*, root, cache, output, size, case_variant, device, factors, options, variants, repeats, audit, head_gate, profile, execution):
     wp.init()
     output.mkdir(parents=True, exist_ok=False)
     definition = suite_settings(sizes=[size], variants=[case_variant])[0]
@@ -126,7 +177,9 @@ def run_sweep(*, root, cache, output, size, case_variant, device, factors, optio
         mf6_single_engine_seconds=native_elapsed_seconds(text=(reference_folder/'native/stdout.log').read_text()),
         mf6_common_physical_metrics=[period['physical'] for period in manifest['native']['periods']],
         options=options, head_comparison_gate_m=head_gate, audit=audit, repeats=repeats, profiled=profile,
-        timing='Synchronized public model.solve calls only, same exclusion boundaries as run_3d_sanity.py.', variants=[])
+        execution=execution,
+        timing=('Synchronized public model.solve calls only, same exclusion boundaries as run_3d_sanity.py.'
+            if execution == 'steps' else 'Entire synchronized public solve_transient_npf call, including setup, all timestep/source updates and final history download; model construction and external audits excluded.'), variants=[])
     for specification in variants:
         controls = dict(npf_newton_controls=NPF662NewtonControls(inner_forcing=specification['forcing'], **specification.get('newton', {})),
             npf_kcycle_controls=NPF662KCycleControls(**specification['mg']))
@@ -140,7 +193,8 @@ def run_sweep(*, root, cache, output, size, case_variant, device, factors, optio
         result['variants'].append(row)
         for repeat in range(repeats+1):
             print(f"{specification['name']}: {'warmup' if repeat == 0 else 'repeat '+str(repeat)}", flush=True)
-            measured = run_history(case=case, factors=factors, options=options, controls=controls,
+            runner = run_history if execution == 'steps' else run_device_history
+            measured = runner(case=case, factors=factors, options=options, controls=controls,
                 device=device, reference=reference, audit=audit, head_gate=head_gate,
                 profile_path=output/f"{specification['name']}_{repeat}.prof" if profile else None)
             measured.update(warmup=repeat == 0)
@@ -168,6 +222,7 @@ if __name__ == "__main__":
     parser.add_argument('--device', default='cuda:0')
     parser.add_argument('--case', choices=['confined', 'convertible'], default='convertible')
     parser.add_argument('--head-gate', type=float, default=1e-6)
+    parser.add_argument('--execution', choices=['steps', 'history'], default='steps')
     arguments = parser.parse_args()
     size = arguments.size
     device = arguments.device
@@ -252,10 +307,47 @@ if __name__ == "__main__":
             variants.append(dict(name=f'confined_{forcing}_{restart}', forcing=forcing, restart=restart,
                 mg=dict(levels=5, pre_sweeps=2, post_sweeps=2, coarse_sweeps=2,
                     cached_line_factors=True, preconditioner_precision='float32')))
+    for levels in (2, 3, 4):
+        for forcing in (.003, .01, .03, .1):
+            variants.append(dict(name=f'redblack_{levels}_{forcing}', forcing=forcing, restart=8,
+                newton=dict(timestep_predictor=True),
+                mg=dict(levels=levels, pre_sweeps=1, post_sweeps=1, coarse_sweeps=2, omega=1.,
+                    cached_line_factors=True, preconditioner_precision='float32', coefficient_state='current',
+                    line_smoother='red_black')))
+    for levels in (3, 4, 5):
+        for forcing in (.01, .03):
+            variants.append(dict(name=f'redblack_v_{levels}_{forcing}', forcing=forcing, restart=8,
+                newton=dict(timestep_predictor=True),
+                mg=dict(levels=levels, pre_sweeps=1, post_sweeps=1, coarse_sweeps=2, omega=1., cycle_kind='v',
+                    cached_line_factors=True, preconditioner_precision='float32', coefficient_state='current',
+                    line_smoother='red_black')))
+    for forcing in (.003, .01, .03):
+        for smoother in ('jacobi', 'red_black'):
+            variants.append(dict(name=f'tiled_{smoother}_{forcing}', forcing=forcing, restart=8,
+                newton=dict(timestep_predictor=True, tiled_reductions=True),
+                mg=dict(levels=3, pre_sweeps=2 if smoother == 'jacobi' else 1,
+                    post_sweeps=2 if smoother == 'jacobi' else 1, coarse_sweeps=2,
+                    omega=.8 if smoother == 'jacobi' else 1., cached_line_factors=True,
+                    preconditioner_precision='float32', coefficient_state='current', line_smoother=smoother)))
+    for forcing in (.001, .002, .003, .005, .01, .03):
+        for smoother in ('jacobi', 'red_black'):
+            variants.append(dict(name=f'reuse_{smoother}_{forcing}', forcing=forcing, restart=8,
+                newton=dict(timestep_predictor=True, tiled_reductions=True, reuse_trial_state=True),
+                mg=dict(levels=3, pre_sweeps=2 if smoother == 'jacobi' else 1,
+                    post_sweeps=2 if smoother == 'jacobi' else 1, coarse_sweeps=2,
+                    omega=.8 if smoother == 'jacobi' else 1., cached_line_factors=True,
+                    preconditioner_precision='float32', coefficient_state='current', line_smoother=smoother)))
+    for forcing in (.003, .01):
+        for tolerance in (1.5e-7, 1e-6):
+            variants.append(dict(name=f'history_relative_{forcing}_{tolerance}', forcing=forcing, restart=8,
+                relative_limit=tolerance,
+                newton=dict(timestep_predictor=True, tiled_reductions=True, reuse_trial_state=True),
+                mg=dict(levels=3, pre_sweeps=2, post_sweeps=2, coarse_sweeps=2,
+                    cached_line_factors=True, preconditioner_precision='float32', coefficient_state='current')))
     selected = variants if arguments.variants == ['all'] else [v for v in variants if v['name'] in arguments.variants]
     unknown = set(arguments.variants)-{v['name'] for v in variants}-{'all'}
     if not selected or unknown or arguments.repeats < 1 or arguments.size < 2 or not np.isfinite(head_gate) or head_gate < 0.:
         raise ValueError('Select known variants and at least one repeat')
     run_sweep(root=root, cache=cache, output=arguments.output, size=size, case_variant=arguments.case, device=device, factors=factors,
         options=options, variants=selected, repeats=arguments.repeats, audit=arguments.audit,
-        head_gate=head_gate, profile=arguments.profile)
+        head_gate=head_gate, profile=arguments.profile, execution=arguments.execution)

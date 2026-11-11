@@ -7,8 +7,10 @@
     "krylov_restart": 8
   },
   "newton": {
-    "inner_forcing": 0.01,
-    "timestep_predictor": true
+    "inner_forcing": 0.005,
+    "timestep_predictor": true,
+    "tiled_reductions": true,
+    "reuse_trial_state": true
   },
   "multigrid": {
     "levels": 3,

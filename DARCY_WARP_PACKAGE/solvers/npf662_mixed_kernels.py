@@ -40,8 +40,10 @@ def smooth_factored_lines(xp: wp.array3d(dtype=wp.float32), xm: wp.array3d(dtype
     fixed: wp.array3d(dtype=wp.int32), rhs: wp.array3d(dtype=wp.float32),
     old: wp.array3d(dtype=wp.float32), inverse: wp.array3d(dtype=wp.float32),
     upper: wp.array3d(dtype=wp.float32), lower: wp.array3d(dtype=wp.float32),
-    forward: wp.array3d(dtype=wp.float32), out: wp.array3d(dtype=wp.float32), omega: wp.float32):
+    forward: wp.array3d(dtype=wp.float32), out: wp.array3d(dtype=wp.float32), omega: wp.float32, color: int):
     j, i = wp.tid()
+    if color >= 0 and (j+i)%2 != color:
+        return
     previous = wp.float32(0.)
     for k in range(old.shape[0]):
         value = wp.float32(0.)
@@ -66,19 +68,19 @@ def smooth_factored_lines(xp: wp.array3d(dtype=wp.float32), xm: wp.array3d(dtype
 
 
 @wp.kernel
-def residual_partials_3d_f64_kernel(
-    x: wp.array(dtype=wp.float32, ndim=3),
-    rhs: wp.array(dtype=wp.float32, ndim=3),
-    tx_p: wp.array(dtype=wp.float32, ndim=3),
-    tx_m: wp.array(dtype=wp.float32, ndim=3),
-    ty_p: wp.array(dtype=wp.float32, ndim=3),
-    ty_m: wp.array(dtype=wp.float32, ndim=3),
-    tz_p: wp.array(dtype=wp.float32, ndim=3),
-    tz_m: wp.array(dtype=wp.float32, ndim=3),
-    storage: wp.array(dtype=wp.float32, ndim=3),
+def residual_3d_kernel(
+    x: wp.array(ndim=3),
+    rhs: wp.array(ndim=3),
+    tx_p: wp.array(ndim=3),
+    tx_m: wp.array(ndim=3),
+    ty_p: wp.array(ndim=3),
+    ty_m: wp.array(ndim=3),
+    tz_p: wp.array(ndim=3),
+    tz_m: wp.array(ndim=3),
+    storage: wp.array(ndim=3),
     active: wp.array(dtype=wp.int32, ndim=3),
     bc_mask: wp.array(dtype=wp.int32, ndim=3),
-    residual: wp.array(dtype=wp.float32, ndim=3),
+    residual: wp.array(ndim=3),
     partials: wp.array(dtype=wp.float64, ndim=1),
     nx: int,
     ny: int,
@@ -93,7 +95,7 @@ def residual_partials_3d_f64_kernel(
     j = (t // nx) % ny
     k = t // (nx * ny)
     block = t // block_span
-    residual[k, j, i] = wp.float32(0.0)
+    residual[k, j, i] = type(x[0,0,0])(0.0)
     if active[k, j, i] == 0 or bc_mask[k, j, i] != 0:
         return
     cxp = tx_p[k, j, i]
@@ -102,40 +104,39 @@ def residual_partials_3d_f64_kernel(
     cym = ty_m[k, j, i]
     czp = tz_p[k, j, i]
     czm = tz_m[k, j, i]
-    if i + 1 >= nx or active[k, j, i + 1] == 0 or cxp < wp.float32(0.0):
-        cxp = wp.float32(0.0)
-    if i == 0 or active[k, j, i - 1] == 0 or cxm < wp.float32(0.0):
-        cxm = wp.float32(0.0)
-    if j + 1 >= ny or active[k, j + 1, i] == 0 or cyp < wp.float32(0.0):
-        cyp = wp.float32(0.0)
-    if j == 0 or active[k, j - 1, i] == 0 or cym < wp.float32(0.0):
-        cym = wp.float32(0.0)
-    if k + 1 >= nz or active[k + 1, j, i] == 0 or czp < wp.float32(0.0):
-        czp = wp.float32(0.0)
-    if k == 0 or active[k - 1, j, i] == 0 or czm < wp.float32(0.0):
-        czm = wp.float32(0.0)
+    if i + 1 >= nx or active[k, j, i + 1] == 0 or cxp < type(x[0,0,0])(0.0):
+        cxp = type(x[0,0,0])(0.0)
+    if i == 0 or active[k, j, i - 1] == 0 or cxm < type(x[0,0,0])(0.0):
+        cxm = type(x[0,0,0])(0.0)
+    if j + 1 >= ny or active[k, j + 1, i] == 0 or cyp < type(x[0,0,0])(0.0):
+        cyp = type(x[0,0,0])(0.0)
+    if j == 0 or active[k, j - 1, i] == 0 or cym < type(x[0,0,0])(0.0):
+        cym = type(x[0,0,0])(0.0)
+    if k + 1 >= nz or active[k + 1, j, i] == 0 or czp < type(x[0,0,0])(0.0):
+        czp = type(x[0,0,0])(0.0)
+    if k == 0 or active[k - 1, j, i] == 0 or czm < type(x[0,0,0])(0.0):
+        czm = type(x[0,0,0])(0.0)
     sdiag = storage[k, j, i]
-    if sdiag < wp.float32(0.0):
-        sdiag = wp.float32(0.0)
+    if sdiag < type(x[0,0,0])(0.0):
+        sdiag = type(x[0,0,0])(0.0)
     diag = cxp + cxm + cyp + cym + czp + czm + sdiag
-    value = wp.float32(0.0)
-    if diag > wp.float32(0.0):
+    value = type(x[0,0,0])(0.0)
+    if diag > type(x[0,0,0])(0.0):
         value = sdiag * x[k, j, i]
-        if cxp > wp.float32(0.0):
+        if cxp > type(x[0,0,0])(0.0):
             value = value + cxp * (x[k, j, i] - x[k, j, i + 1])
-        if cxm > wp.float32(0.0):
+        if cxm > type(x[0,0,0])(0.0):
             value = value + cxm * (x[k, j, i] - x[k, j, i - 1])
-        if cyp > wp.float32(0.0):
+        if cyp > type(x[0,0,0])(0.0):
             value = value + cyp * (x[k, j, i] - x[k, j + 1, i])
-        if cym > wp.float32(0.0):
+        if cym > type(x[0,0,0])(0.0):
             value = value + cym * (x[k, j, i] - x[k, j - 1, i])
-        if czp > wp.float32(0.0):
+        if czp > type(x[0,0,0])(0.0):
             value = value + czp * (x[k, j, i] - x[k + 1, j, i])
-        if czm > wp.float32(0.0):
+        if czm > type(x[0,0,0])(0.0):
             value = value + czm * (x[k, j, i] - x[k - 1, j, i])
     res = rhs[k, j, i] - value
     residual[k, j, i] = res
-    wp.atomic_add(partials, block, wp.float64(res) * wp.float64(res))
 
 
 @wp.kernel
