@@ -1,6 +1,11 @@
 Main NPF history qualification, 12 November 2026
 ================================================
 
+This is the first promotion checkpoint. The subsequent device-construction
+change and its final main reruns are recorded in
+``NPF662_RUNTIME_POLISH_2026-11-12.rst``; the measurements below are retained
+as the historical baseline.
+
 The device-history improvements from dev ``515603f`` are promoted to main ``a58542d``.
 The timings below are fresh runs of that main revision: a separate warmup
 and three repetitions, each built from a fresh model and the original

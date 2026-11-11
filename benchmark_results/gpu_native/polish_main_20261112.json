@@ -1,0 +1,567 @@
+{
+  "status": "GPU hierarchy construction qualified on main",
+  "benchmark_revision": "871ae34",
+  "source_sha256": {
+    "DARCY_WARP_PACKAGE/solvers/npf662_3d.py": "4c3b2de1089704730f9b325f31646838b9e6b5aedfca97fae45714e18ebf4cb7",
+    "DARCY_WARP_PACKAGE/solvers/npf662_fgmres.py": "d4e734310b327486080de3cc777ad55ee1bb5f25218cbc22d9938a1c713545f9",
+    "DARCY_WARP_PACKAGE/solvers/npf662_history.py": "da00e320a6d0d1e597e240276aa9632007072be8ca1c895399e19b29ebe2bc2f",
+    "DARCY_WARP_PACKAGE/solvers/npf662_kcycle.py": "552c8929a1193b6f1d31ae1330af8ccbb7963fe43a2316da003f6aeab8a92b56",
+    "DARCY_WARP_PACKAGE/solvers/npf662_kernels.py": "bc8719b7f5fd628b51c89fa99be0957e4c990f77192f440ec5c52f5a66d6dd08",
+    "DARCY_WARP_PACKAGE/solvers/npf662_line.py": "c9211f73afe55dee0516dd234e9da6249787025c601cedbb0c7cd360a6abc1a1",
+    "DARCY_WARP_PACKAGE/solvers/npf662_mixed_kernels.py": "f2f431c534053f7b77df044d50d9854bd66d1f58efddb9f374faf351fadcdb87",
+    "DARCY_WARP_PACKAGE/solvers/npf662_newton.py": "a25860fff8bbce654483b2666e3d9c2fad0f110ee6ede11c849963433cb9a781",
+    "DARCY_WARP_PACKAGE/solvers/npf662_state.py": "74e5d21d187f8f386f2c4431df520da25736aaafe70be111e58ca00213e5fc73"
+  },
+  "qualifications": {
+    "strict convertible": {
+      "raw_path": "/tmp/darcywarp-gpu-main-20261111/benchmark_results/gpu_native/main_polish_strict_20261112/results.json",
+      "sha256": "5d0e474724faa4b17a29816864518406114837ab2972459730c6b0e9f830930f",
+      "revision": "871ae34f72978d42a68516b1c525f856bca30829",
+      "source_sha256": {
+        "DARCY_WARP_PACKAGE/solvers/npf662_3d.py": "4c3b2de1089704730f9b325f31646838b9e6b5aedfca97fae45714e18ebf4cb7",
+        "DARCY_WARP_PACKAGE/solvers/npf662_fgmres.py": "d4e734310b327486080de3cc777ad55ee1bb5f25218cbc22d9938a1c713545f9",
+        "DARCY_WARP_PACKAGE/solvers/npf662_history.py": "da00e320a6d0d1e597e240276aa9632007072be8ca1c895399e19b29ebe2bc2f",
+        "DARCY_WARP_PACKAGE/solvers/npf662_kcycle.py": "552c8929a1193b6f1d31ae1330af8ccbb7963fe43a2316da003f6aeab8a92b56",
+        "DARCY_WARP_PACKAGE/solvers/npf662_kernels.py": "bc8719b7f5fd628b51c89fa99be0957e4c990f77192f440ec5c52f5a66d6dd08",
+        "DARCY_WARP_PACKAGE/solvers/npf662_line.py": "c9211f73afe55dee0516dd234e9da6249787025c601cedbb0c7cd360a6abc1a1",
+        "DARCY_WARP_PACKAGE/solvers/npf662_mixed_kernels.py": "f2f431c534053f7b77df044d50d9854bd66d1f58efddb9f374faf351fadcdb87",
+        "DARCY_WARP_PACKAGE/solvers/npf662_newton.py": "a25860fff8bbce654483b2666e3d9c2fad0f110ee6ede11c849963433cb9a781",
+        "DARCY_WARP_PACKAGE/solvers/npf662_state.py": "74e5d21d187f8f386f2c4431df520da25736aaafe70be111e58ca00213e5fc73"
+      },
+      "controls": {
+        "source_factors": [
+          1.0,
+          1.5,
+          0.25,
+          1.0
+        ],
+        "block_periods": 5,
+        "dt": 7.0,
+        "ss": 1e-05,
+        "sy": 0.15,
+        "progress_seconds": 30.0,
+        "progress_every": 5,
+        "cartesian_top": 8.0,
+        "cartesian_dz": 10.0,
+        "cartesian_dx": 25.0,
+        "kcycle_threshold_cells": 50000,
+        "kcycle": {
+          "device_hierarchy_build": true,
+          "levels": 3,
+          "pre_sweeps": 2,
+          "post_sweeps": 2,
+          "coarse_sweeps": 2,
+          "cached_line_factors": true,
+          "preconditioner_precision": "float32",
+          "coefficient_state": "current"
+        },
+        "npf_options": {
+          "max_outer": 80,
+          "max_cycles": 4000,
+          "krylov_restart": 8,
+          "npf_device_native": true,
+          "npf_final_relative_tolerance": 1e-07,
+          "npf_newton_controls": {
+            "inner_forcing": 0.005,
+            "timestep_predictor": true,
+            "tiled_reductions": true,
+            "reuse_trial_state": true
+          }
+        },
+        "gates": {
+          "rmse": 0.001,
+          "maximum": 0.01,
+          "budget_percent": 1.0
+        }
+      },
+      "summary": [
+        {
+          "case": "npf_convertible_250x250x5_transient",
+          "implementation": "kcycle",
+          "passed": true,
+          "median_public_solve_seconds": 0.25590394400205696,
+          "mf6_single_reference_run_seconds": 17.319,
+          "median_model_construction_seconds": 0.04998422800417757,
+          "median_extra_audit_seconds": 4.394754717010073,
+          "median_verified_total_seconds": 4.716498144996876,
+          "worst_head_rmse_m": 7.645645956445428e-09,
+          "worst_head_max_m": 3.689508121240692e-08,
+          "reference_reused": true
+        },
+        {
+          "case": "npf_convertible_500x500x5_transient",
+          "implementation": "kcycle",
+          "passed": true,
+          "median_public_solve_seconds": 0.9716529090001131,
+          "mf6_single_reference_run_seconds": 104.39099999999999,
+          "median_model_construction_seconds": 0.22740578099910636,
+          "median_extra_audit_seconds": 20.398235732965986,
+          "median_verified_total_seconds": 21.58318130599946,
+          "worst_head_rmse_m": 3.553597461713049e-08,
+          "worst_head_max_m": 6.841307176319589e-08,
+          "reference_reused": true
+        }
+      ],
+      "cases": [
+        {
+          "case": "npf_convertible_250x250x5_transient",
+          "case_sha256": "f8c5b3bad098812a178a8d55e4ef20915eec9128d7155640e5233928e25485dc",
+          "public_seconds": [
+            0.25590394400205696,
+            0.25541676699504023,
+            0.2580784290039446
+          ],
+          "numerical_seconds": [
+            0.19663024100009352,
+            0.19398092800111044,
+            0.1967642890085699
+          ],
+          "krylov": [
+            170,
+            170,
+            170
+          ],
+          "outer": [
+            48,
+            48,
+            48
+          ],
+          "audited_endpoints_including_warmup": 80,
+          "relative_imbalance": {
+            "minimum": 3.2784266708851194e-10,
+            "median": 1.3459292561432934e-08,
+            "maximum": 9.962045191605443e-08
+          },
+          "head_residual_rms": {
+            "minimum": 2.875559767958189e-13,
+            "median": 5.007080364097174e-11,
+            "maximum": 1.1968474397389844e-10
+          },
+          "head_max_error_m": 3.689508121240692e-08,
+          "flux_relative_l2_max": 1.2641926585353493e-07,
+          "history_readbacks": [
+            {
+              "solver_head_readbacks": 1,
+              "output_history_readbacks": 1
+            },
+            {
+              "solver_head_readbacks": 1,
+              "output_history_readbacks": 1
+            },
+            {
+              "solver_head_readbacks": 1,
+              "output_history_readbacks": 1
+            }
+          ]
+        },
+        {
+          "case": "npf_convertible_500x500x5_transient",
+          "case_sha256": "473ce87bc6b5ab9e8b3b2f350e15f6e2e251f7cf75c36b31ef08879911bbfd43",
+          "public_seconds": [
+            0.8980359519991907,
+            0.9760493879948626,
+            0.9716529090001131
+          ],
+          "numerical_seconds": [
+            0.6448602859745733,
+            0.6457132570285466,
+            0.6481364629798918
+          ],
+          "krylov": [
+            200,
+            200,
+            200
+          ],
+          "outer": [
+            49,
+            49,
+            49
+          ],
+          "audited_endpoints_including_warmup": 80,
+          "relative_imbalance": {
+            "minimum": 1.6783724119185486e-10,
+            "median": 1.534088670265926e-08,
+            "maximum": 7.562948676535312e-08
+          },
+          "head_residual_rms": {
+            "minimum": 5.474954803124378e-14,
+            "median": 1.9210240643073567e-11,
+            "maximum": 9.035721133878649e-11
+          },
+          "head_max_error_m": 6.841307176319589e-08,
+          "flux_relative_l2_max": 1.9264072356411882e-07,
+          "history_readbacks": [
+            {
+              "solver_head_readbacks": 1,
+              "output_history_readbacks": 1
+            },
+            {
+              "solver_head_readbacks": 1,
+              "output_history_readbacks": 1
+            },
+            {
+              "solver_head_readbacks": 1,
+              "output_history_readbacks": 1
+            }
+          ]
+        }
+      ]
+    },
+    "MF6 accuracy convertible": {
+      "raw_path": "/tmp/darcywarp-gpu-main-20261111/benchmark_results/gpu_native/main_polish_mf6_20261112/results.json",
+      "sha256": "72b75432230de91c769f1635bc25bfd0a488caadcc390d5872101d244e029707",
+      "revision": "871ae34f72978d42a68516b1c525f856bca30829",
+      "source_sha256": {
+        "DARCY_WARP_PACKAGE/solvers/npf662_3d.py": "4c3b2de1089704730f9b325f31646838b9e6b5aedfca97fae45714e18ebf4cb7",
+        "DARCY_WARP_PACKAGE/solvers/npf662_fgmres.py": "d4e734310b327486080de3cc777ad55ee1bb5f25218cbc22d9938a1c713545f9",
+        "DARCY_WARP_PACKAGE/solvers/npf662_history.py": "da00e320a6d0d1e597e240276aa9632007072be8ca1c895399e19b29ebe2bc2f",
+        "DARCY_WARP_PACKAGE/solvers/npf662_kcycle.py": "552c8929a1193b6f1d31ae1330af8ccbb7963fe43a2316da003f6aeab8a92b56",
+        "DARCY_WARP_PACKAGE/solvers/npf662_kernels.py": "bc8719b7f5fd628b51c89fa99be0957e4c990f77192f440ec5c52f5a66d6dd08",
+        "DARCY_WARP_PACKAGE/solvers/npf662_line.py": "c9211f73afe55dee0516dd234e9da6249787025c601cedbb0c7cd360a6abc1a1",
+        "DARCY_WARP_PACKAGE/solvers/npf662_mixed_kernels.py": "f2f431c534053f7b77df044d50d9854bd66d1f58efddb9f374faf351fadcdb87",
+        "DARCY_WARP_PACKAGE/solvers/npf662_newton.py": "a25860fff8bbce654483b2666e3d9c2fad0f110ee6ede11c849963433cb9a781",
+        "DARCY_WARP_PACKAGE/solvers/npf662_state.py": "74e5d21d187f8f386f2c4431df520da25736aaafe70be111e58ca00213e5fc73"
+      },
+      "controls": {
+        "source_factors": [
+          1.0,
+          1.5,
+          0.25,
+          1.0
+        ],
+        "block_periods": 5,
+        "dt": 7.0,
+        "ss": 1e-05,
+        "sy": 0.15,
+        "progress_seconds": 30.0,
+        "progress_every": 5,
+        "cartesian_top": 8.0,
+        "cartesian_dz": 10.0,
+        "cartesian_dx": 25.0,
+        "kcycle_threshold_cells": 50000,
+        "kcycle": {
+          "device_hierarchy_build": true,
+          "levels": 3,
+          "pre_sweeps": 2,
+          "post_sweeps": 2,
+          "coarse_sweeps": 2,
+          "cached_line_factors": true,
+          "preconditioner_precision": "float32",
+          "coefficient_state": "current"
+        },
+        "npf_options": {
+          "max_outer": 80,
+          "max_cycles": 4000,
+          "krylov_restart": 8,
+          "npf_device_native": true,
+          "npf_final_relative_tolerance": 1.5e-07,
+          "npf_newton_controls": {
+            "inner_forcing": 0.01,
+            "timestep_predictor": true,
+            "tiled_reductions": true,
+            "reuse_trial_state": true
+          }
+        },
+        "gates": {
+          "rmse": 0.001,
+          "maximum": 0.01,
+          "budget_percent": 1.0
+        }
+      },
+      "summary": [
+        {
+          "case": "npf_convertible_500x500x5_transient",
+          "implementation": "kcycle",
+          "passed": true,
+          "median_public_solve_seconds": 0.9410491629969329,
+          "mf6_single_reference_run_seconds": 104.39099999999999,
+          "median_model_construction_seconds": 0.22086629599652952,
+          "median_extra_audit_seconds": 19.94597590401827,
+          "median_verified_total_seconds": 21.167870673001744,
+          "worst_head_rmse_m": 3.5945880198689555e-08,
+          "worst_head_max_m": 7.87905619081819e-08,
+          "reference_reused": true
+        }
+      ],
+      "cases": [
+        {
+          "case": "npf_convertible_500x500x5_transient",
+          "case_sha256": "473ce87bc6b5ab9e8b3b2f350e15f6e2e251f7cf75c36b31ef08879911bbfd43",
+          "public_seconds": [
+            0.9425418659957359,
+            0.8806380609967164,
+            0.9410491629969329
+          ],
+          "numerical_seconds": [
+            0.6380438980122562,
+            0.6378922009971575,
+            0.6411771510174731
+          ],
+          "krylov": [
+            192,
+            192,
+            192
+          ],
+          "outer": [
+            53,
+            53,
+            53
+          ],
+          "audited_endpoints_including_warmup": 80,
+          "relative_imbalance": {
+            "minimum": 9.829738652496815e-10,
+            "median": 2.9770139988479905e-08,
+            "maximum": 1.415804731272894e-07
+          },
+          "head_residual_rms": {
+            "minimum": 6.365779283219649e-13,
+            "median": 1.087972181873976e-11,
+            "maximum": 1.7850483492169904e-10
+          },
+          "head_max_error_m": 7.87905619081819e-08,
+          "flux_relative_l2_max": 3.43237158463613e-07,
+          "history_readbacks": [
+            {
+              "solver_head_readbacks": 1,
+              "output_history_readbacks": 1
+            },
+            {
+              "solver_head_readbacks": 1,
+              "output_history_readbacks": 1
+            },
+            {
+              "solver_head_readbacks": 1,
+              "output_history_readbacks": 1
+            }
+          ]
+        }
+      ]
+    },
+    "strict confined": {
+      "raw_path": "/tmp/darcywarp-gpu-main-20261111/benchmark_results/gpu_native/main_polish_confined_20261112/results.json",
+      "sha256": "c3b9b924a155abc132033e9daa2b699ef44433da8053f999f5556fe5b894da7e",
+      "revision": "871ae34f72978d42a68516b1c525f856bca30829",
+      "source_sha256": {
+        "DARCY_WARP_PACKAGE/solvers/npf662_3d.py": "4c3b2de1089704730f9b325f31646838b9e6b5aedfca97fae45714e18ebf4cb7",
+        "DARCY_WARP_PACKAGE/solvers/npf662_fgmres.py": "d4e734310b327486080de3cc777ad55ee1bb5f25218cbc22d9938a1c713545f9",
+        "DARCY_WARP_PACKAGE/solvers/npf662_history.py": "da00e320a6d0d1e597e240276aa9632007072be8ca1c895399e19b29ebe2bc2f",
+        "DARCY_WARP_PACKAGE/solvers/npf662_kcycle.py": "552c8929a1193b6f1d31ae1330af8ccbb7963fe43a2316da003f6aeab8a92b56",
+        "DARCY_WARP_PACKAGE/solvers/npf662_kernels.py": "bc8719b7f5fd628b51c89fa99be0957e4c990f77192f440ec5c52f5a66d6dd08",
+        "DARCY_WARP_PACKAGE/solvers/npf662_line.py": "c9211f73afe55dee0516dd234e9da6249787025c601cedbb0c7cd360a6abc1a1",
+        "DARCY_WARP_PACKAGE/solvers/npf662_mixed_kernels.py": "f2f431c534053f7b77df044d50d9854bd66d1f58efddb9f374faf351fadcdb87",
+        "DARCY_WARP_PACKAGE/solvers/npf662_newton.py": "a25860fff8bbce654483b2666e3d9c2fad0f110ee6ede11c849963433cb9a781",
+        "DARCY_WARP_PACKAGE/solvers/npf662_state.py": "74e5d21d187f8f386f2c4431df520da25736aaafe70be111e58ca00213e5fc73"
+      },
+      "controls": {
+        "source_factors": [
+          1.0,
+          1.5,
+          0.25,
+          1.0
+        ],
+        "block_periods": 5,
+        "dt": 7.0,
+        "ss": 1e-05,
+        "sy": 0.15,
+        "progress_seconds": 30.0,
+        "progress_every": 5,
+        "cartesian_top": 8.0,
+        "cartesian_dz": 10.0,
+        "cartesian_dx": 25.0,
+        "kcycle_threshold_cells": 50000,
+        "kcycle": {
+          "device_hierarchy_build": true,
+          "levels": 5,
+          "pre_sweeps": 2,
+          "post_sweeps": 2,
+          "coarse_sweeps": 2,
+          "cached_line_factors": true,
+          "preconditioner_precision": "float32"
+        },
+        "npf_options": {
+          "max_outer": 80,
+          "max_cycles": 4000,
+          "krylov_restart": 24,
+          "npf_device_native": true,
+          "npf_final_relative_tolerance": 1e-07,
+          "npf_newton_controls": {
+            "inner_forcing": 0.01,
+            "tiled_reductions": true,
+            "reuse_trial_state": true
+          }
+        },
+        "gates": {
+          "rmse": 0.001,
+          "maximum": 0.01,
+          "budget_percent": 1.0
+        }
+      },
+      "summary": [
+        {
+          "case": "npf_confined_250x250x5_transient",
+          "implementation": "kcycle",
+          "passed": true,
+          "median_public_solve_seconds": 0.6348788059985964,
+          "mf6_single_reference_run_seconds": 47.589,
+          "median_model_construction_seconds": 0.05113561199686956,
+          "median_extra_audit_seconds": 4.378118952998193,
+          "median_verified_total_seconds": 5.070172938998439,
+          "worst_head_rmse_m": 4.1195296259151194e-07,
+          "worst_head_max_m": 1.064183383192585e-06,
+          "reference_reused": true
+        },
+        {
+          "case": "npf_confined_500x500x5_transient",
+          "implementation": "kcycle",
+          "passed": true,
+          "median_public_solve_seconds": 1.3784863549954025,
+          "mf6_single_reference_run_seconds": 346.408,
+          "median_model_construction_seconds": 0.22112172200286295,
+          "median_extra_audit_seconds": 20.002401424004347,
+          "median_verified_total_seconds": 21.74658416499733,
+          "worst_head_rmse_m": 1.3955732603793177e-06,
+          "worst_head_max_m": 3.4527949352991527e-06,
+          "reference_reused": true
+        }
+      ],
+      "cases": [
+        {
+          "case": "npf_confined_250x250x5_transient",
+          "case_sha256": "abf458a50bee133839d83281a7b59336cf66d5c35cc440a48222460fce71380d",
+          "public_seconds": [
+            0.6401504989989917,
+            0.6285865480022039,
+            0.6348788059985964
+          ],
+          "numerical_seconds": [
+            0.559897480008658,
+            0.5546295029926114,
+            0.5594590240070829
+          ],
+          "krylov": [
+            269,
+            269,
+            269
+          ],
+          "outer": [
+            62,
+            62,
+            62
+          ],
+          "audited_endpoints_including_warmup": 80,
+          "relative_imbalance": {
+            "minimum": 3.590669449921706e-10,
+            "median": 2.6397346698775013e-08,
+            "maximum": 6.259386109372035e-08
+          },
+          "head_residual_rms": {
+            "minimum": 6.039430616901632e-13,
+            "median": 4.3945411197405213e-11,
+            "maximum": 7.947795578432364e-11
+          },
+          "head_max_error_m": 1.064183383192585e-06,
+          "flux_relative_l2_max": 5.831006779777164e-08,
+          "history_readbacks": [
+            {
+              "solver_head_readbacks": 1,
+              "output_history_readbacks": 1
+            },
+            {
+              "solver_head_readbacks": 1,
+              "output_history_readbacks": 1
+            },
+            {
+              "solver_head_readbacks": 1,
+              "output_history_readbacks": 1
+            }
+          ]
+        },
+        {
+          "case": "npf_confined_500x500x5_transient",
+          "case_sha256": "ec63acfb62802840cf0d7fa49344bd108ab872271b0554b56dd9a46630891055",
+          "public_seconds": [
+            1.368183806000161,
+            1.3784863549954025,
+            1.4491230889980216
+          ],
+          "numerical_seconds": [
+            1.098070783977164,
+            1.0998916189855663,
+            1.0980464080057573
+          ],
+          "krylov": [
+            284,
+            284,
+            284
+          ],
+          "outer": [
+            63,
+            63,
+            63
+          ],
+          "audited_endpoints_including_warmup": 80,
+          "relative_imbalance": {
+            "minimum": 3.908101888507939e-10,
+            "median": 3.112127328823745e-08,
+            "maximum": 7.073521119182635e-08
+          },
+          "head_residual_rms": {
+            "minimum": 2.0270544880935906e-13,
+            "median": 1.9896187295036758e-11,
+            "maximum": 6.675957165017481e-11
+          },
+          "head_max_error_m": 3.4527949352991527e-06,
+          "flux_relative_l2_max": 1.0768949016542243e-07,
+          "history_readbacks": [
+            {
+              "solver_head_readbacks": 1,
+              "output_history_readbacks": 1
+            },
+            {
+              "solver_head_readbacks": 1,
+              "output_history_readbacks": 1
+            },
+            {
+              "solver_head_readbacks": 1,
+              "output_history_readbacks": 1
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "change": "Coarse hierarchy coefficient construction moved to the device; nonlinear iteration and final acceptance unchanged",
+  "timing": "Entire synchronized public history API; model construction and extra independent audit separate",
+  "verification": {
+    "main_tests_passed": 627,
+    "main_skipped": 4,
+    "main_native_mf6_deselected": 43,
+    "dev_tests_passed": 1709,
+    "dev_skipped": 4,
+    "dev_native_mf6_deselected": 52,
+    "audited_endpoints": 400,
+    "documentation": "Sphinx -W HTML build"
+  },
+  "comparison": {
+    "artifact": "benchmark_results/gpu_native/polish_alternating_pairs_20261112.json",
+    "paired_medians": {
+      "False": {
+        "public_seconds": 0.9809670130052837,
+        "numerical_seconds": 0.6404185320061515,
+        "setup_seconds": 0.1952259160025278,
+        "driver_seconds": 0.08552571300242562
+      },
+      "True": {
+        "public_seconds": 0.927597608002543,
+        "numerical_seconds": 0.6402503599892952,
+        "setup_seconds": 0.14882959600072354,
+        "driver_seconds": 0.08562382700620219
+      }
+    },
+    "median_public_saving_fraction": 0.05440489261635673,
+    "device_faster_in_every_pair": true,
+    "qualification_variability": "Final main strict median 0.972 s versus earlier main 0.954 s; every repeat is retained. Numerical work is stable, internal construction is faster, and other history-call overhead varies across sessions.",
+    "interpretation": "Device construction saves first-call setup; no further numerical iteration speedup was demonstrated."
+  },
+  "earlier_main": "benchmark_results/gpu_native/main_history_qualification_20261112.json"
+}
