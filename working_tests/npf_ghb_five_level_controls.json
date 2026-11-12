@@ -1,0 +1,25 @@
+{
+  "solve": {
+    "npf_device_native": true,
+    "npf_final_relative_tolerance": 1e-7,
+    "max_outer": 80,
+    "max_cycles": 4000,
+    "krylov_restart": 8
+  },
+  "newton": {
+    "inner_forcing": 0.005,
+    "timestep_predictor": true,
+    "tiled_reductions": true,
+    "reuse_trial_state": true
+  },
+  "multigrid": {
+    "device_hierarchy_build": true,
+    "levels": 5,
+    "pre_sweeps": 2,
+    "post_sweeps": 2,
+    "coarse_sweeps": 2,
+    "cached_line_factors": true,
+    "preconditioner_precision": "float32",
+    "coefficient_state": "current"
+  }
+}

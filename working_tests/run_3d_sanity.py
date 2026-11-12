@@ -484,7 +484,7 @@ if __name__ == "__main__":
         gates=dict(rmse=1e-3, maximum=1e-2, budget_percent=1.),
         ghb=dict(conductance_factor=1.,draining_offset=-.5,injecting_offset=1.),
         cartesian_linear_options=dict(linear_acceleration='fgmres',linear_krylov_restart=8,
-            linear_kcycle_controls=dict(levels=3,pre_sweeps=2,post_sweeps=2,coarse_sweeps=2,
+            linear_kcycle_controls=dict(levels=5,pre_sweeps=2,post_sweeps=2,coarse_sweeps=2,
                 cached_line_factors=True,preconditioner_precision='float32',device_hierarchy_build=True)),
         tight_cartesian=dict(max_cycles=4000,rel_tol=1e-14,abs_tol_min=1e-12,dh_rms_tol=None,dh_max_tol=None,final_budget_relative_tol=1e-14),
         tight_mf6=dict(outer_dvclose=1e-12,inner_dvclose=1e-12,rcloserecord=[1e-9,'STRICT'],
