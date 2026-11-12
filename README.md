@@ -23,11 +23,14 @@ and [GPU release notes](docs/3D_GPU_RELEASE_NOTES.md) document reproducible timi
 The [NPF transient GPU guide](docs/NPF662_GPU_NATIVE.rst) describes the opt-in
 device acceptance and persistent hierarchy implementation, including
 convertible benchmarks, conductivity updates and reproduction commands.
-The [latest NPF main qualification](docs/NPF662_RUNTIME_POLISH_2026-11-12.rst)
-measured **0.972 s** for a 500 x 500 x 5
-convertible model over 20 weekly steps, versus **104.39 s** for saved MF6.
-The synchronized public-history timer excludes external model construction
-and extra independent audits; the report records validation and timing boundaries.
+The [current NPF GPU performance guide](source/npf_gpu_native.rst) summarizes
+the accelerated 3D transient history on `main`. For 500 x 500 x 5 cells
+over 20 weekly steps, the explicitly selected fast profile recorded
+**0.972 s versus 104.391 s** for convertible NPF/STO (about 107x) and
+**1.378 s versus 346.408 s** for confined NPF/STO (about 251x).
+These comparisons measure the synchronized DarcyWarp GPU history API
+against one saved MODFLOW 6 engine run. External model construction and
+independent benchmark audits are reported separately.
 
 The [2D GPU release notes](docs/2D_GPU_RELEASE_NOTES.rst) cover the parallel
 reductions, faster transient profile and GHB parity repairs, with fresh
@@ -47,21 +50,22 @@ it shows a numerical solution and its analytical reference, not field observatio
 
 ## What DarcyWarp does
 
-| Capability | Two-dimensional solver |
-| --- | --- |
-| Groundwater flow | Confined and unconfined formulations; unconfined transmissivity changes with saturated thickness. |
-| Time | Steady and transient simulations, with storage and changing forcing between periods. Support depends on the selected solver. |
-| Spatial inputs | Spatially variable recharge and scalar aquifer properties, active-cell masks and fixed-head masks. |
-| Boundaries | Fixed head, no flow and general-head exchange. |
-| Execution | CPU or NVIDIA CUDA devices through Warp. The first example runs on a CPU. |
-| Repeated solves | Recharge and transmissivity updates, reusable solver resources and multigrid hierarchies. |
-| Numerical options | PCG and multigrid K-cycle solvers; Picard and semismooth Newton for unconfined flow; an experimental FAS backend. |
-| Precision | FP64 solvers; explicit mixed-precision paths for fast confined steady and transient unconfined solves, retaining FP64 heads and acceptance with FP32 corrections. |
+| Formulation | Grid | Supported physics and modes | Solvers |
+| --- | --- | --- | --- |
+| 2D thickness-integrated | Square cells, `(ny, nx)` | Confined or unconfined, steady or transient; general-head exchange | PCG, K-cycle, Picard, semismooth Newton; experimental FAS |
+| 3D legacy Cartesian | Uniform layers, `(nz, ny, nx)` | Confined or unconfined, steady or transient | Classic and fast 3D K-cycle |
+| 3D MF6 6.6.2 NPF/STO | Uniform Cartesian or layered DIS, `(nz, ny, nx)` | Confined or convertible, steady or backward-Euler transient Ss/Sy | GMRES or K-cycle-preconditioned FGMRES; opt-in device-resident transient history |
 
-See the [capability guide](source/capabilities.rst) for solver selection and scope.
-For 3D, see the [Cartesian and NPF/STO capability guide](docs/3D_CARTESIAN_NPF.md).
-Both formulations model saturated groundwater flow with directional cell
-conductivities. Transformed terrain remains experimental on `dev`.
+All formulations run on CPU or NVIDIA CUDA using Warp and support active-cell
+and fixed-head masks. The 3D source is a *volumetric rate per cell*, whereas
+the 2D source is an *areal recharge or withdrawal rate*. Mixed precision is
+explicitly selected and retains FP64 physical acceptance in the qualified
+fast NPF history. Library defaults are unchanged.
+
+See [2D solver selection](source/capabilities.rst),
+[structured 3D models](docs/3D_CARTESIAN_NPF.md) and
+[current 3D NPF GPU execution](source/npf_gpu_native.rst) for API and
+validation details. Transformed terrain remains experimental on `dev`.
 
 ## Quick start
 
@@ -164,7 +168,8 @@ the grid, hardware, precision, convergence criteria and setup costs identified.
 | --- | --- |
 | [Quickstart](source/quickstart.rst) | Installation and a complete first model. |
 | [Capabilities and solver selection](source/capabilities.rst) | 2D formulations, backend choices, boundaries, precision and limitations. |
-| [Structured 3D models](docs/3D_CARTESIAN_NPF.md) | Cartesian and layered DIS models, NPF/STO steps and CPU validation. |
+| [Structured 3D models](docs/3D_CARTESIAN_NPF.md) | Cartesian/layered DIS, NPF/STO and the device-resident history API. |
+| [Current 3D GPU performance](source/npf_gpu_native.rst) | Verified 20-step GPU/MF6 timings, controls, acceptance and timing scope. |
 | [Validation](source/validation.rst) | Analytical checks, numerical comparisons and their scope. |
 | [2D GPU release](docs/2D_GPU_RELEASE_NOTES.rst) | Runtime profile, GHB parity fixes, current main timings and reproducible GPU checks. |
 | [Benchmarking](source/benchmarking.rst) | Ensemble workflows, flags, generated files and troubleshooting. |
