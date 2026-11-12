@@ -26,6 +26,8 @@ def parse_arguments(*, defaults):
     parser.add_argument('--reference-thickness', type=float, default=defaults['reference_thickness'])
     parser.add_argument('--preferred-head-target', type=float, default=defaults['preferred_head_target'])
     parser.add_argument('--mf6-timeout', type=float, default=defaults['mf6_timeout'])
+    parser.add_argument('--gpu-profile', choices=['sanity', 'roundoff'], default=defaults['gpu_profile'],
+        help='sanity uses original 2D Cartesian controls and the NPF runtime profile; roundoff reproduces the extra-tight experiment.')
     parser.add_argument('--device', default=defaults['device'])
     parser.add_argument('--mf6', type=Path, default=defaults['mf6'])
     parser.add_argument('--output', type=Path, default=defaults['output'])
@@ -63,7 +65,7 @@ def case_jobs(*, args):
                             jobs.append(dict(size=size, ratio=ratio, ghb=ghb, family=family, variant=variant, mode=mode,
                                 periods=args.periods, repeats=args.repeats, seed=args.seed,
                                 reference_thickness=args.reference_thickness, preferred_head_target=args.preferred_head_target,
-                                mf6_timeout=args.mf6_timeout, device=args.device))
+                                mf6_timeout=args.mf6_timeout, device=args.device, gpu_profile=args.gpu_profile))
     return jobs
 
 
@@ -75,7 +77,9 @@ def job_command(*, job, root, directory, cache, mf6):
         '--k-field', 'ugly_t', '--vertical-anisotropy', str(job['ratio']), '--ugly-t-seed', str(job['seed']),
         '--ugly-t-reference-thickness', str(job['reference_thickness']),
         '--preferred-head-target', str(job['preferred_head_target']), '--mf6-timeout', str(job['mf6_timeout']),
-        '--gpu-tight']
+        '--allow-missing-reference']
+    if job['gpu_profile'] == 'roundoff':
+        command.append('--gpu-tight')
     if job['ghb'] == 'on':
         command.append('--ghb')
     if job['family'] == 'cartesian':
@@ -101,6 +105,7 @@ def job_summary(*, record):
     result_path = Path(record['output']) / 'results.json'
     summary = dict(record['job'], fingerprint=record['fingerprint'], returncode=record['returncode'],
         sanity_passed=False, preferred_head_target_met=False, gpu_seconds=None, mf6_seconds=None,
+        gpu_physical_accepted=False,
         speedup=None, max_head_error_m=None, max_physical_head_rms_m=None,
         native_reference_accepted=None, error=record.get('error'), output=record['output'])
     if not result_path.is_file():
@@ -111,6 +116,7 @@ def job_summary(*, record):
     if len(rows) == 1:
         row = rows[0]
         summary.update(sanity_passed=bool(record['returncode'] == 0 and result.get('passed')),
+            gpu_physical_accepted=row.get('gpu_physical_accepted',False),
             preferred_head_target_met=row['preferred_head_target_met'],
             gpu_seconds=row['median_public_solve_seconds'], mf6_seconds=row['mf6_single_reference_run_seconds'],
             max_head_error_m=row['worst_head_max_m'])
@@ -119,7 +125,7 @@ def job_summary(*, record):
     if len(cases) == 1:
         case = cases[0]
         summary['native_reference_accepted'] = case.get('reference', {}).get('accepted')
-        summary['error'] = case.get('error', summary['error'])
+        summary['error'] = case.get('error', case.get('reference', {}).get('error', summary['error']))
         residuals = [period['physical']['head_residual_rms'] for run in case['runs'] for period in run['periods']]
         if residuals:
             summary['max_physical_head_rms_m'] = max(residuals)
@@ -170,6 +176,7 @@ def run_matrix(*, args, root, environment):
         report['selected'].append(job_summary(record=record))
         save_json(path=report_path, value=report)
     report.update(complete=True, sanity_passed=all(row['sanity_passed'] for row in report['selected']),
+        gpu_physical_accepted=all(row['gpu_physical_accepted'] for row in report['selected']),
         preferred_head_target_met=all(row['preferred_head_target_met'] for row in report['selected']))
     save_json(path=report_path, value=report)
     rows = [{key: value for key, value in row.items() if key != 'conductivity'} for row in report['selected']]
@@ -185,7 +192,7 @@ if __name__ == "__main__":
     defaults = dict(sizes=[500], ratios=[1., 10., 100.], ghb_modes=['off', 'on'],
         families=['cartesian', 'npf'], variants=['confined', 'convertible'], modes=['steady', 'transient'],
         periods=20, repeats=3, seed=42, reference_thickness=100., preferred_head_target=1e-6,
-        mf6_timeout=1800., device='cuda:0', mf6=Path('/bin/modflow/mf6'),
+        mf6_timeout=1800., gpu_profile='sanity', device='cuda:0', mf6=Path('/bin/modflow/mf6'),
         output=Path('benchmark_results/ugly_t_3d/matrix'), cache=Path('benchmark_results/ugly_t_3d/mf6_cache'))
     environment = dict(os.environ, DARCY_FLOAT='float64', OPENBLAS_NUM_THREADS='1',
         OMP_NUM_THREADS='1', MKL_NUM_THREADS='1', MPLBACKEND='Agg', PYTHONPATH=str(root) + ':' + str(root / 'working_tests'))

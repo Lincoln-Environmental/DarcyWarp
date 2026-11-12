@@ -37,8 +37,15 @@ from the existing sanity/conservation gates. A miss is not relabelled as
 meeting the preferred target. Native failures, solver failures and missing
 timed repetitions suppress speedups and remain in the results.
 
-GPU controls use the explicit FP64 roundoff qualification profile. Cartesian
-uses FGMRES with the five-level mixed-precision preconditioner. NPF uses
+The default ``--gpu-profile sanity`` uses the original 2D Cartesian controls:
+relative and minimum absolute residual tolerances ``5e-7``, RMS head-change
+limit ``1e-4 m`` and maximum head-change limit ``5e-4 m``. NPF uses the
+existing runtime profile's relative cellwise imbalance limit ``1e-7`` and
+head-equivalent RMS limit ``1e-6 m``. Its dimensional ``1e-12 m3/day`` test
+is an alternative to the relative imbalance test, not a mandatory cutoff.
+No convergence criterion is tightened to ``1e-12`` for this default matrix.
+
+Cartesian uses FGMRES with the five-level mixed-precision preconditioner. NPF uses
 five levels for steady and confined transient cases, and three levels for
 convertible transients. The public NPF history API is timed for transients.
 Public solve timings include internal setup and acceptance, and exclude
@@ -50,10 +57,11 @@ three repetitions after one warmup. The 100 x 100 x 5 smoke campaign uses
 three timesteps and one timed repetition to check all combinations before
 the 500 x 500 x 5 campaign. Smoke timings are not production medians.
 
-Completed smoke qualification
------------------------------
+Initial extra-tight experiment
+------------------------------
 
-All 36 cases at 100 x 100 x 5 passed the recorded sanity and independent
+The initial experiment used ``--gpu-profile roundoff``. All 36 cases at
+100 x 100 x 5 passed the recorded sanity and independent
 physical checks. Twenty-three met the preferred maximum head difference
 of ``1e-6 m``. The largest differences for Kh/Kv of 1, 10 and 100 were
 ``6.858e-6``, ``6.300e-6`` and ``5.933e-6 m``, respectively. The largest
@@ -67,11 +75,14 @@ identities, invalid inputs and refusal of speedups after failed jobs.
 
 * :download:`Smoke matrix and provenance <../benchmark_results/ugly_t_3d/smoke_100_qualification.json>`
 
-The large campaign is in progress. Its extra-tight Cartesian steady case
+The large campaign is in progress. Its initial extra-tight Cartesian steady case
 at Kh/Kv=1 and GHB off reached head-equivalent RMS ``4.855e-16 m`` but
 missed the fixed dimensional ``1e-12 m3/day`` cutoff, with residual RMS
 ``4.352e-12 m3/day`` after 4,000 iterations. It remains a failed strict
 qualification; its timing is not advertised as a converged speedup.
+Following the user's rejection of that unnecessary cutoff, the campaign
+uses the original 2D-matched GPU controls above. The initial experiment
+is retained separately and can be reproduced with ``--gpu-profile roundoff``.
 
 Reproduction
 ------------
@@ -81,12 +92,14 @@ From the repository root with CUDA, Warp, FloPy and pinned MF6 6.6.2::
     PYTHONPATH=.:working_tests DARCY_FLOAT=float64 python \
       working_tests/run_3d_ugly_t_matrix.py \
       --sizes 100 --periods 3 --repeats 1 \
-      --output benchmark_results/ugly_t_3d/smoke_100
+      --gpu-profile sanity \
+      --output benchmark_results/ugly_t_3d/smoke_100_sanity
 
     PYTHONPATH=.:working_tests DARCY_FLOAT=float64 python \
       working_tests/run_3d_ugly_t_matrix.py \
       --sizes 500 --periods 20 --repeats 3 \
-      --output benchmark_results/ugly_t_3d/large_500
+      --gpu-profile sanity \
+      --output benchmark_results/ugly_t_3d/large_500_sanity
 
 The runner sets one CPU thread for BLAS/OpenMP/MKL. ``--mf6-timeout`` is
 an external process limit, not an IMS convergence setting. References are
@@ -96,6 +109,11 @@ Python, repetition count and results hash. Repeating a command resumes
 completed identical jobs; failed attempts are retained. ``--retry-failed``
 requests another attempt. Use a new cache directory if a native run left
 an incomplete reference cache.
+
+If MF6 cannot supply a valid complete reference, the matrix still measures
+the GPU solve and runs the independent physical audit. Such rows explicitly
+report unavailable MF6 head/flow comparisons, remain failed comparisons,
+and have no qualified speedup. GPU physical acceptance is recorded separately.
 
 For a single case, ``run_3d_sanity.py`` accepts ``--k-field ugly_t``,
 ``--vertical-anisotropy``, ``--ugly-t-seed`` and
