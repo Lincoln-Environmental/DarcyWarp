@@ -79,56 +79,70 @@ passes 29 tests.
 * :download:`Practical-control smoke matrix <../benchmark_results/ugly_t_3d/smoke_100_sanity_qualification.json>`
 
 Large-model results in progress
---------------------------------
+-------------------------------
 
-The practical-control campaign at 500 x 500 x 5 is running serially.
-The completed convertible NPF cases below have Kh/Kv=1:
+6 of 36 planned large cases have completed. 6 pass the independent GPU physical checks; 5 pass the full MF6 comparison gates. 3 meet the preferred ``1e-6 m`` maximum head-difference target.
 
-.. list-table:: Completed large cases (seconds, three-repeat GPU medians)
+The tables contain three-repeat GPU medians and single native MF6 process times. Build and extra test audits are excluded as described above. Unavailable references have no speedup or head-parity claim.
+
+.. list-table:: Convertible NPF: 500 x 500 x 5, twenty steps for transients
    :header-rows: 1
 
-   * - Mode
+   * - Kh/Kv
      - GHB
-     - GPU public solve
-     - MF6 native process
+     - Mode
+     - GPU (s)
+     - MF6 (s)
      - MF6/GPU
      - Maximum head difference (m)
-   * - Steady
+   * - 1
      - Off
+     - Steady
      - 1.289
      - 229.647
      - 178.1
-     - 5.023e-5
-   * - Twenty transient steps
+     - 5.023e-05
+   * - 1
      - Off
+     - Transient
      - 2.049
      - 178.780
      - 87.3
-     - 5.415e-7
-   * - Steady
+     - 5.415e-07
+   * - 1
      - On
+     - Steady
      - 1.191
-     - Timed out at 1,800 s
      - Unavailable
      - Unavailable
-   * - Twenty transient steps
+     - Unavailable
+   * - 1
      - On
+     - Transient
      - 2.266
      - 202.817
      - 89.5
-     - 3.562e-7
+     - 3.562e-07
+   * - 10
+     - Off
+     - Steady
+     - 1.585
+     - 444.232
+     - 280.3
+     - 3.473e-06
+   * - 10
+     - Off
+     - Transient
+     - 1.803
+     - 165.223
+     - 91.6
+     - 2.093e-07
 
-All four GPU cases pass the independent physical checks. The three available
-MF6 comparisons pass the existing sanity gates. Both transient histories meet
-the preferred ``1e-6 m`` maximum head-difference target; the GHB-off steady
-case does not. The GHB-on steady reference did not converge before its
-unchanged 1,800-second process limit. It has no qualified speedup or MF6
-head-parity result. Its GPU relative cellwise imbalance is ``1.230e-8``
-and head-equivalent RMS residual is ``1.867e-12 m``.
+1 completed case(s) have no valid complete MF6 reference. The retained evidence records these failures independently from GPU convergence.
 
-The large field has Kh from ``2.240`` to ``679.324 m/day``, a contrast
-of 303.3. The remaining ratios, GHB cases and confined cases are not yet
-qualified by this partial result.
+The large field has Kh from ``2.240`` to ``679.324 m/day``, a contrast of 303.3.
+
+The Kh/Kv=1 GHB-on steady MF6 reference reached its unchanged 1,800-second process limit without convergence. The GPU solve passed with relative cellwise imbalance ``1.230e-8`` and head-equivalent RMS ``1.867e-12 m``.
 
 * :download:`Partial large-model results and source hashes <../benchmark_results/ugly_t_3d/large_500_progress.json>`
 

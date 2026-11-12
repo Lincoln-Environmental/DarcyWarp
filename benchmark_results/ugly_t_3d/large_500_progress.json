@@ -547,6 +547,131 @@
       },
       "fingerprint": "d0050e4ecd49434919a2d195f3030e6dcafd1255361803a8f3381df614c1e952",
       "output": "/home/patrickdurney/PycharmProjects/DarcyWarp/benchmark_results/ugly_t_3d/large_500_sanity/500_va10_off_npf_convertible_steady_d0050e4ecd49_attempt1",
+      "complete": true,
+      "command": [
+        "/home/patrickdurney/miniconda3/envs/darcywarp312/bin/python",
+        "/home/patrickdurney/PycharmProjects/DarcyWarp/working_tests/run_3d_sanity.py",
+        "--sizes",
+        "500",
+        "--families",
+        "npf",
+        "--variants",
+        "convertible",
+        "--modes",
+        "steady",
+        "--periods",
+        "20",
+        "--repeats",
+        "3",
+        "--device",
+        "cuda:0",
+        "--output",
+        "/home/patrickdurney/PycharmProjects/DarcyWarp/benchmark_results/ugly_t_3d/large_500_sanity/500_va10_off_npf_convertible_steady_d0050e4ecd49_attempt1",
+        "--cache",
+        "/home/patrickdurney/PycharmProjects/DarcyWarp/benchmark_results/ugly_t_3d/mf6_cache",
+        "--mf6",
+        "/bin/modflow/mf6",
+        "--k-field",
+        "ugly_t",
+        "--vertical-anisotropy",
+        "10.0",
+        "--ugly-t-seed",
+        "42",
+        "--ugly-t-reference-thickness",
+        "100.0",
+        "--preferred-head-target",
+        "1e-06",
+        "--mf6-timeout",
+        "1800.0",
+        "--allow-missing-reference",
+        "--npf-controls",
+        "/home/patrickdurney/PycharmProjects/DarcyWarp/working_tests/npf_ghb_five_level_controls.json"
+      ],
+      "returncode": 0,
+      "results_sha256": "8714eabfd67bb8f4bd9800a096bce33a712a7210d48a64e9e526aa78d3367593"
+    },
+    {
+      "job": {
+        "size": 500,
+        "ratio": 10.0,
+        "ghb": "off",
+        "family": "npf",
+        "variant": "convertible",
+        "mode": "transient",
+        "periods": 20,
+        "repeats": 3,
+        "seed": 42,
+        "reference_thickness": 100.0,
+        "preferred_head_target": 1e-06,
+        "mf6_timeout": 1800.0,
+        "device": "cuda:0",
+        "gpu_profile": "sanity"
+      },
+      "fingerprint": "a55774e178530887daa0a2955e70289d56340e41c8eae8a72d487bc32e9a408f",
+      "output": "/home/patrickdurney/PycharmProjects/DarcyWarp/benchmark_results/ugly_t_3d/large_500_sanity/500_va10_off_npf_convertible_transient_a55774e17853_attempt1",
+      "complete": true,
+      "command": [
+        "/home/patrickdurney/miniconda3/envs/darcywarp312/bin/python",
+        "/home/patrickdurney/PycharmProjects/DarcyWarp/working_tests/run_3d_sanity.py",
+        "--sizes",
+        "500",
+        "--families",
+        "npf",
+        "--variants",
+        "convertible",
+        "--modes",
+        "transient",
+        "--periods",
+        "20",
+        "--repeats",
+        "3",
+        "--device",
+        "cuda:0",
+        "--output",
+        "/home/patrickdurney/PycharmProjects/DarcyWarp/benchmark_results/ugly_t_3d/large_500_sanity/500_va10_off_npf_convertible_transient_a55774e17853_attempt1",
+        "--cache",
+        "/home/patrickdurney/PycharmProjects/DarcyWarp/benchmark_results/ugly_t_3d/mf6_cache",
+        "--mf6",
+        "/bin/modflow/mf6",
+        "--k-field",
+        "ugly_t",
+        "--vertical-anisotropy",
+        "10.0",
+        "--ugly-t-seed",
+        "42",
+        "--ugly-t-reference-thickness",
+        "100.0",
+        "--preferred-head-target",
+        "1e-06",
+        "--mf6-timeout",
+        "1800.0",
+        "--allow-missing-reference",
+        "--npf-controls",
+        "/home/patrickdurney/PycharmProjects/DarcyWarp/working_tests/npf_runtime_controls.json",
+        "--npf-history"
+      ],
+      "returncode": 0,
+      "results_sha256": "96625a23aa6fd24c7ad0f98ce04a665ccb37e9105c3674d4cce1e5d327ae7138"
+    },
+    {
+      "job": {
+        "size": 500,
+        "ratio": 10.0,
+        "ghb": "on",
+        "family": "npf",
+        "variant": "convertible",
+        "mode": "steady",
+        "periods": 20,
+        "repeats": 3,
+        "seed": 42,
+        "reference_thickness": 100.0,
+        "preferred_head_target": 1e-06,
+        "mf6_timeout": 1800.0,
+        "device": "cuda:0",
+        "gpu_profile": "sanity"
+      },
+      "fingerprint": "e98edbf4a13535cc6a1a28514791b55079cde5497233e1d6cf0891412ceab7d9",
+      "output": "/home/patrickdurney/PycharmProjects/DarcyWarp/benchmark_results/ugly_t_3d/large_500_sanity/500_va10_on_npf_convertible_steady_e98edbf4a135_attempt1",
       "complete": false
     }
   ],
@@ -766,6 +891,116 @@
           "maximum": 1.0
         }
       }
+    },
+    {
+      "size": 500,
+      "ratio": 10.0,
+      "ghb": "off",
+      "family": "npf",
+      "variant": "convertible",
+      "mode": "steady",
+      "periods": 20,
+      "repeats": 3,
+      "seed": 42,
+      "reference_thickness": 100.0,
+      "preferred_head_target": 1e-06,
+      "mf6_timeout": 1800.0,
+      "device": "cuda:0",
+      "gpu_profile": "sanity",
+      "fingerprint": "d0050e4ecd49434919a2d195f3030e6dcafd1255361803a8f3381df614c1e952",
+      "returncode": 0,
+      "sanity_passed": true,
+      "preferred_head_target_met": false,
+      "gpu_seconds": 1.5850580260157585,
+      "mf6_seconds": 444.23211730702315,
+      "gpu_physical_accepted": true,
+      "speedup": 280.2623689579719,
+      "max_head_error_m": 3.473104221995982e-06,
+      "max_physical_head_rms_m": 5.813997766963298e-12,
+      "native_reference_accepted": true,
+      "error": null,
+      "output": "/home/patrickdurney/PycharmProjects/DarcyWarp/benchmark_results/ugly_t_3d/large_500_sanity/500_va10_off_npf_convertible_steady_d0050e4ecd49_attempt1",
+      "conductivity": {
+        "kx": {
+          "minimum": 2.240043029785156,
+          "maximum": 679.3240104166666,
+          "contrast": 303.2638218926629
+        },
+        "ky": {
+          "minimum": 2.240043029785156,
+          "maximum": 679.3240104166666,
+          "contrast": 303.2638218926629
+        },
+        "kz": {
+          "minimum": 0.22400430297851562,
+          "maximum": 67.93240104166667,
+          "contrast": 303.2638218926629
+        },
+        "ky_over_kx": {
+          "minimum": 1.0,
+          "maximum": 1.0
+        },
+        "kx_over_kz": {
+          "minimum": 10.0,
+          "maximum": 10.0
+        }
+      }
+    },
+    {
+      "size": 500,
+      "ratio": 10.0,
+      "ghb": "off",
+      "family": "npf",
+      "variant": "convertible",
+      "mode": "transient",
+      "periods": 20,
+      "repeats": 3,
+      "seed": 42,
+      "reference_thickness": 100.0,
+      "preferred_head_target": 1e-06,
+      "mf6_timeout": 1800.0,
+      "device": "cuda:0",
+      "gpu_profile": "sanity",
+      "fingerprint": "a55774e178530887daa0a2955e70289d56340e41c8eae8a72d487bc32e9a408f",
+      "returncode": 0,
+      "sanity_passed": true,
+      "preferred_head_target_met": true,
+      "gpu_seconds": 1.803009094990557,
+      "mf6_seconds": 165.2225398949813,
+      "gpu_physical_accepted": true,
+      "speedup": 91.63710840618174,
+      "max_head_error_m": 2.0926946175947592e-07,
+      "max_physical_head_rms_m": 2.452903184580613e-11,
+      "native_reference_accepted": true,
+      "error": null,
+      "output": "/home/patrickdurney/PycharmProjects/DarcyWarp/benchmark_results/ugly_t_3d/large_500_sanity/500_va10_off_npf_convertible_transient_a55774e17853_attempt1",
+      "conductivity": {
+        "kx": {
+          "minimum": 2.240043029785156,
+          "maximum": 679.3240104166666,
+          "contrast": 303.2638218926629
+        },
+        "ky": {
+          "minimum": 2.240043029785156,
+          "maximum": 679.3240104166666,
+          "contrast": 303.2638218926629
+        },
+        "kz": {
+          "minimum": 0.22400430297851562,
+          "maximum": 67.93240104166667,
+          "contrast": 303.2638218926629
+        },
+        "ky_over_kx": {
+          "minimum": 1.0,
+          "maximum": 1.0
+        },
+        "kx_over_kz": {
+          "minimum": 10.0,
+          "maximum": 10.0
+        }
+      }
     }
-  ]
+  ],
+  "planned_cases": 36,
+  "scope": "all completed practical-control large cases"
 }
