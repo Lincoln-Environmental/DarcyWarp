@@ -2,6 +2,10 @@
 
 This bounded formulation is `mf6_6_6_2_npf`: structured DIS, unrotated physical Cartesian diagonal positive K, orthogonal cells, uniform scalar dx/dy/dz (dx need not equal dy), flat contiguous layers. It is not universal MODFLOW compatibility or terrain equivalence. The legacy Cartesian default and experimental transformed terrain remain distinct. Stage0 must pass before this contract's implementation; confined parity must pass before its unconfined extension.
 
+This document records the original V1 steady qualification. Current extensions
+include STO and [native 3D GHB](3D_NATIVE_GHB.rst); the exclusions and deferred
+work below describe that historical qualification, not the current API.
+
 Units: metres, days, volumetric cell Q [m³/day], K [m/day], C [m²/day]. Arrays C-order(k top-down,j south-to-north,i west-to-east); MF6 reverses j. Heads are cell-centre total hydraulic heads. CHD constrains that cell's unknown, not an exterior face. Exterior and inactive-neighbour faces are no-flow. IDOMAIN is0/1 only; vertical pass-through is unsupported. Source on inactive cells is rejected. Original source on fixed cells is retained and reported as reservoir forcing; it is excluded from free equations and from WEL allocation rather than redistributed. Reservoir exchange includes that declared forcing when a full reservoir budget is requested.
 
 For an internal orthogonal face with normal axis a, area A and centre distance d:

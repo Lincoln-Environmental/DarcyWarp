@@ -9,6 +9,12 @@ release tests. The report's reproduction commands describe the `main` checkout.
 
 ## 3D NPF versus MODFLOW 6
 
+[Native 3D GHB](docs/3D_NATIVE_GHB.rst) is implemented on `dev` for Cartesian
+and NPF/STO, including steady/transient CPU/CUDA and live MF6 checks. The
+guide documents the build/update API, boundary budgets, the faster Cartesian
+FGMRES option and reproducible `run_3d_sanity.py --ghb` commands. Large-model
+release qualification is in progress; the earlier promoted GHB fixes were 2D.
+
 The [repeated NPF benchmark suite](docs/NPF662_VS_MF6_BENCHMARKS.md) compares
 the dev branch's explicit NPF 6.6.2 formulation with fresh native MF6 solves.
 It covers confined and convertible layered grids, including a lower-recharge

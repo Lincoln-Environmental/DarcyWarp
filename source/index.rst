@@ -17,6 +17,7 @@ Sphinx documentation build process used in this repository.
    release_2d
    runtime_2d
    npf_gpu_native
+   native_3d_ghb
    docs_build
    license
 

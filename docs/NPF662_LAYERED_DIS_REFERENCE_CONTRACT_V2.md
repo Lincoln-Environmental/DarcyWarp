@@ -1,5 +1,10 @@
 # NPF662 conventional layered DIS contract V2
 
+This is the original steady V2 qualification record. The current API also
+supports STO and [native 3D GHB](3D_NATIVE_GHB.rst). The package exclusions
+below describe the original reference campaign; positive GHB conductance or
+positive storage can now supply grounding in addition to prescribed heads.
+
 This extends `formulation="mf6_6_6_2_npf"` to `geometry="structured_dis_layered"`, not transformed terrain. Version-pinned reference: MF6 6.6.2 DIS, NPF harmonic averaging, no XT3D, physical unrotated Cartesian Kx/Ky/Kz. Existing scalar-dz V1 inputs, hashes and defaults retain their original interpretation. Layered inputs use separate schema2 and case identity.
 
 The loader also recognises the early confined V1 encoding that omitted ICELLTYPE (implicitly0): its original12-field hash and save roundtrip are preserved without adding a dataclass field. Explicitly changing its cell type moves it to the explicit encoding/hash. New layered geometry is differenced in FP64 even when raw elevations were supplied as float32; raw input representation remains part of the hash. Native decoding requires the exact canonical adjacency edge set, including no vertical pass-through at an internal inactive cell.
