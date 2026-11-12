@@ -1,5 +1,12 @@
-NPF transient GPU execution
-===========================
+Historical NPF transient GPU execution
+======================================
+
+This is the archived GPU-native development and first-promotion record,
+not the current performance guide. The final `main` 500 x 500 x 5 history
+timings, strict physical acceptance and reproduction instructions are
+summarised in the
+`current NPF GPU guide <https://github.com/Lincoln-Environmental/DarcyWarp/blob/main/source/npf_gpu_native.rst>`_.
+Older 3 to 30-second measurements below are retained for provenance.
 
 The original development qualification is described in ``NPF662_RUNTIME_SEARCH.rst``
 below: **0.957 s** for the strict 20-step convertible history, or **0.931 s**

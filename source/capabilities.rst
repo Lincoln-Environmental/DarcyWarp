@@ -175,4 +175,8 @@ arrays contain volumetric rates per cell.
 
 The `3D guide <https://github.com/Lincoln-Environmental/DarcyWarp/blob/main/docs/3D_CARTESIAN_NPF.md>`_
 describes the public API, the layered example and CPU FP64 validation.
+The :doc:`npf_gpu_native` page summarises the current accelerated
+multi-step NPF history, strict and confined performance control files,
+independent MF6 checks and timing boundaries. The fast history is
+opt-in, and its measured runtime is not a library-default guarantee.
 Transformed terrain remains experimental on ``dev``.
