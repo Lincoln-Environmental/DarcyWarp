@@ -381,3 +381,124 @@ roundoff/storage and device-reduction changes ``2ab046d`` to
 ``bc93bd4``; qualified profiles ``5097ead`` to ``d679da3``. Main
 also restores the missing 2D standalone GHB validator in ``057f439``.
 The experimental terrain mask repair remains on dev as ``04a2bca``.
+
+Direct MF6 parity audit, 13 November 2026
+------------------------------------------------------------
+
+The preferred solution comparison target is a maximum head difference of
+``1e-6 m``. The measured large-model envelope of ``6.467e-5 m`` is accepted
+for the current qualification, but is not labelled as meeting that preferred
+target. The six 500 x 500 x 5 cases give:
+
+.. list-table:: Maximum difference over every saved repetition and timestep
+   :header-rows: 1
+
+   * - Case
+     - Maximum head difference (m)
+     - Meets 1e-6 m
+   * - Cartesian confined steady
+     - 5.187e-5
+     - No
+   * - Cartesian confined transient
+     - 5.184e-6
+     - No
+   * - NPF confined steady
+     - 6.467e-5
+     - No
+   * - NPF confined transient
+     - 1.846e-6
+     - No
+   * - NPF convertible steady
+     - 7.076e-6
+     - No
+   * - NPF convertible transient
+     - 5.338e-8
+     - Yes
+
+The original MF6 profiles are unchanged. Confined steady uses the 2D
+sanity profile's ``outer_dvclose=inner_dvclose=1e-4``; convertible steady
+and all transient cases use ``outer_dvclose=1e-6`` and
+``inner_dvclose=1e-8``. All retain ``RELATIVE_RCLOSE=1e-6``. A stopping
+criterion is not a bound on the maximum difference between two independently
+computed solutions. No production solver controls changed in this audit;
+the runtime table above continues to describe the qualified implementation.
+
+The new ``verify_3d_ghb_mf6_parity.py`` auditor evaluates the production
+operator at each saved MF6 head, using the saved MF6 previous head for
+storage. Zero iteration budgets prevent the evaluation from advancing the
+state. Reference arrays, input fingerprints, timestep grids and saved
+benchmark metadata are checked before comparison. It reads all 63 distinct
+large-model endpoints and compares solution heads from all four histories
+per case, including the warmup.
+
+Every confined Cartesian and NPF face, GHB, storage and free-cell residual
+comparison passes the explicit FP64 arithmetic allowance. GHB and STO also
+pass at every convertible endpoint. The allowance is ``32*eps*scale`` per
+entry with no absolute floor; ``scale`` includes the evaluated equation
+operands and, for convertible saturation/storage, the layer datum. This
+measures arithmetic consistency, not maximum forward error in heads.
+The Cartesian face comparison reconstructs flux from its actual device
+coefficients; its full row comparison reads the production device residual.
+NPF face, storage and residual arrays come directly from production kernels.
+
+Convertible MF6 output requires an additional distinction. The saved
+``DATA-SAT`` values differ from saturation recalculated at final heads by
+up to ``2.136e-8`` in steady flow and ``3.889e-8`` in the transient history.
+The pinned source's ``npf_cf`` updates saturation during coefficient
+formation, while ``npf_cq``/``sgwf_npf_qcalc`` use that stored saturation
+when reporting flow. Consequently, comparing its reported budget directly
+with a fully refreshed final-head operator fails a roundoff-level test:
+the largest face differences are ``2.548e-6`` and ``7.979e-7 m3/day``.
+
+Using MF6's reported saturation reproduces every native face flow within
+the arithmetic allowance, with maximum differences of ``1.137e-13`` and
+``1.421e-14 m3/day``. This diagnostic is a host reconstruction, separately
+labelled in the report; it does not replace the failed final-head check.
+Three additional native all-CHD probes prescribe MF6's own saved steady,
+first-transient and last-transient heads. They retain the original IMS
+settings and compare the production NPF flow law at exactly those states.
+All three pass, with maximum face differences of ``1.137e-13``,
+``1.421e-14`` and ``7.105e-15 m3/day``. These are constitutive probes,
+not new solutions or benchmark timings. MF6 disables GHB/STO at CHD cells,
+so those packages are checked on the original free-cell histories instead.
+
+An already-saved, separately labelled 100 x 100 x 5 experiment with tighter
+MF6 controls provides an additional cross-check: all six steady/transient
+cases meet the ``1e-6 m`` target, with maximum differences from ``9.082e-13``
+to ``1.561e-9 m``. Its original tighter settings are recorded in its report.
+No MF6 settings were changed or rerun for that comparison, and its results
+do not replace the original large-model timing or accuracy evidence.
+
+Reproduce the cached audit with::
+
+    DARCY_FLOAT=float64 PYTHONPATH=.:working_tests python \
+      working_tests/verify_3d_ghb_mf6_parity.py \
+      --qualification benchmark_results/ghb_3d/main_qualification.json \
+      --cache benchmark_results/ghb_3d/mf6_sanity_cache \
+      --head-tolerance 1e-6 --device cuda:0
+
+For portable runs, first generate a local ``results.json`` with
+``run_3d_sanity.py --ghb`` and pass it as ``--qualification``. Use
+``--raw-root`` if relocating the campaign directories containing saved
+DarcyWarp heads. Add ``--prescribed-flow-probes NEW_DIRECTORY`` to run the
+separate first/last convertible flow-law probes, with ``--mf6`` pointing
+to the pinned executable. Without that option the command only reads MF6
+artifacts. The JSON retains separate ``operator_parity`` and
+``solution_parity`` flags: the former compares the reported native budgets
+with the refreshed final-head operator; the latter tests the requested
+head target. The strict command exits with status 1 on the current large
+baseline, retaining both the preferred-target misses and saturation-state
+differences rather than treating them as passes.
+
+The affected regression selection passes 107 tests on CPU/CUDA, including
+the new native-state tests and deliberate face-order, GHB-sign, storage-sign,
+nonfinite-data, cache-hash and timestep corruptions. The qualification
+establishes the tested flow/storage laws at matched states and records the
+remaining solution tolerance differences; it does not claim bitwise MF6
+head identity.
+
+* :download:`Large-model direct parity audit <../benchmark_results/ghb_3d/mf6_parity_large_final.json>`
+* :download:`Existing tighter-reference diagnostic <../benchmark_results/ghb_3d/mf6_parity_existing_tighter_reference.json>`
+
+Pinned source: ``validation_artifacts/terrain_2026-10-16/mf6_source/gwf-npf.f90``
+(``6.6.2``, official source commit ``7cb7958940186ecfdcd3ea9e6a563cc4609581c9``).
