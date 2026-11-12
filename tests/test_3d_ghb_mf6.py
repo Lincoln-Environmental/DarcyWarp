@@ -91,7 +91,8 @@ def test_live_npf_ghb_steady_and_transient(tmp_path, pinned_mf6, device, convert
 
 
 @pytest.mark.parametrize("device", ["cpu", "cuda:0"])
-def test_live_cartesian_ghb_steady_and_transient(tmp_path, pinned_mf6, device):
+@pytest.mark.parametrize("acceleration", ["kcycle", "fgmres"])
+def test_live_cartesian_ghb_steady_and_transient(tmp_path, pinned_mf6, device, acceleration):
     if device.startswith("cuda") and not wp.is_cuda_available():
         pytest.skip("CUDA unavailable")
     case = ghb_case(convertible=False)
@@ -99,7 +100,8 @@ def test_live_cartesian_ghb_steady_and_transient(tmp_path, pinned_mf6, device):
         head_tolerance_m=1e-12,native_solver_options=dict(rcloserecord=[1e-12,"STRICT"],under_relaxation="NONE"))
     assert info["native_success"] and info["independent_conservation"],info
     with build_case(case=case,device=device,formulation="legacy") as model:
-        head,info = model.solve(max_cycles=1000,rel_tol=1e-14,abs_tol_min=1e-13,final_budget_relative_tol=1e-12)
+        head,info = model.solve(max_cycles=1000,rel_tol=1e-14,abs_tol_min=1e-13,final_budget_relative_tol=1e-12,
+            linear_acceleration=acceleration)
         assert info["converged"],info
         np.testing.assert_allclose(actual=head,desired=native,rtol=0.0,atol=2e-11)
     factors = [1.0,0.5,1.5]
@@ -113,7 +115,8 @@ def test_live_cartesian_ghb_steady_and_transient(tmp_path, pinned_mf6, device):
             model.update_rhs(rhs=case.source*factor)
             model.update_initial_head(initial_head=previous)
             head,info=model.solve(transient=True,dt=2.0,storage_coeff=1e-3,head_prev=previous,
-                max_cycles=1000,rel_tol=1e-14,abs_tol_min=1e-13,final_budget_relative_tol=1e-12)
+                max_cycles=1000,rel_tol=1e-14,abs_tol_min=1e-13,final_budget_relative_tol=1e-12,
+                linear_acceleration=acceleration)
             assert info["converged"],info
             np.testing.assert_allclose(actual=head,desired=native_history["heads"][index],rtol=0.0,atol=2e-11)
             previous=head

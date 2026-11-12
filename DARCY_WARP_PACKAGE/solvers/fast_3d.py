@@ -289,6 +289,9 @@ def _run_kcycles(
     n_isolated: int = 0,
     restore_values: np.ndarray | None = None,
     return_info: bool = True,
+    linear_acceleration: str = 'kcycle',
+    linear_krylov_restart: int = 16,
+    linear_kcycle_controls=None,
 ):
     """Run the K-cycle iteration on device levels; capture/replay CUDA graph.
 
@@ -433,6 +436,14 @@ def _run_kcycles(
     rtr0 = residual_norm(fine, fine["x"], fine["residual"])
     rms0 = float(np.sqrt(max(rtr0, 0.0) / n_free))
     tolerance = float(max(abs_tol_min, rel_tol * rms0))
+    if linear_acceleration == 'fgmres':
+        from .linear_fgmres_3d import run_linear_fgmres
+        return run_linear_fgmres(levels=levels,record=workspace_record,device=device,
+            residual_norm=residual_norm,head_residual_norm=head_residual_norm,
+            initial_rms=rms0,tolerance=tolerance,rel_tol=rel_tol,dh_rms_tol=dh_rms_tol,
+            dh_max_tol=dh_max_tol,budget=max_cycles,restart=linear_krylov_restart,
+            controls=linear_kcycle_controls,n_free=n_free,transient=transient,dt_used=dt_used,
+            isolated=isolated,n_isolated=n_isolated,restore_values=restore_values,return_info=return_info)
     graph = (
         workspace_record.get("cycle_graph")
         if str(device).startswith("cuda")
@@ -565,9 +576,21 @@ def solve_fast_confined_kcycle_3d(
     device: str = "cuda:0",
     return_info: bool = True,
     ghb_conductance=None, ghb_head=None,
+    linear_acceleration='kcycle', linear_krylov_restart=16, linear_kcycle_controls=None,
     **unsupported: Any,
 ):
     """Solve a steady or backward-Euler confined FP64 face-array system."""
+    if linear_acceleration not in ('kcycle','fgmres'):
+        raise ValueError('linear_acceleration must be kcycle or fgmres')
+    from DARCY_WARP_PACKAGE.physics.inputs_3d import positive_integer
+    linear_krylov_restart=positive_integer(value=linear_krylov_restart,name='linear_krylov_restart',minimum=2)
+    if linear_acceleration!='fgmres' and (linear_kcycle_controls is not None or linear_krylov_restart!=16):
+        raise ValueError('Linear Krylov controls require linear_acceleration=fgmres')
+    if linear_kcycle_controls is not None:
+        from .npf662_kcycle import NPF662KCycleControls
+        if not isinstance(linear_kcycle_controls,NPF662KCycleControls):
+            raise ValueError('linear_kcycle_controls must be NPF662KCycleControls')
+        linear_kcycle_controls.validate()
     if WP_FLOAT is not wp.float64:
         raise ValueError("implementation='fast' requires DARCY_FLOAT=float64.")
     workspace_holder = unsupported.pop("_workspace_holder", None)
@@ -683,6 +706,8 @@ def solve_fast_confined_kcycle_3d(
         workspace_reused = True
         workspace_record = cached
     else:
+        if cached is not None and cached.get('linear_fgmres') is not None:
+            cached['linear_fgmres'].close()
         host_levels = _build_levels(
             faces=(tx_p, tx_m, ty_p, ty_m, tz_p, tz_m), active=active_work,
             bc_mask=bc_mask, bc_values=bc_values, rhs=rhs_effective,
@@ -731,6 +756,8 @@ def solve_fast_confined_kcycle_3d(
         check_every_no=int(check_every_no),
         transient=bool(transient),
         dt_used=dt_used,
+        linear_acceleration=linear_acceleration,linear_krylov_restart=linear_krylov_restart,
+        linear_kcycle_controls=linear_kcycle_controls,
         isolated=isolated,
         n_isolated=n_isolated,
         restore_values=restore0,
@@ -770,6 +797,8 @@ def solve_fast_confined_kcycle_3d(
         and info["final_physical_head_residual_rms"] <= info.get("head_residual_tolerance", np.inf)
         and info["final_budget_acceptance"])
     info["converged"] = bool(info["converged"] and info["final_physical_acceptance"])
+    if workspace_holder is None and workspace_record.get('linear_fgmres') is not None:
+        workspace_record['linear_fgmres'].close()
     return (head, info) if return_info else head
 
 
