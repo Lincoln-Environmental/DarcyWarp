@@ -9,11 +9,13 @@ release tests. The report's reproduction commands describe the `main` checkout.
 
 ## 3D NPF versus MODFLOW 6
 
-[Native 3D GHB](docs/3D_NATIVE_GHB.rst) is implemented on `dev` for Cartesian
-and NPF/STO, including steady/transient CPU/CUDA and live MF6 checks. The
-guide documents the build/update API, boundary budgets, the faster Cartesian
-FGMRES option and reproducible `run_3d_sanity.py --ghb` commands. Large-model
-release qualification is in progress; the earlier promoted GHB fixes were 2D.
+[Native 3D GHB](docs/3D_NATIVE_GHB.rst) supports Cartesian and NPF/STO on
+`main` and `dev`, including steady/transient CPU/CUDA and live MF6 checks.
+On 500 x 500 x 5 cells, the qualified convertible NPF 20-step history takes
+**1.819 s versus 142.638 s MF6**, with FP64 roundoff checks. All six large
+cases pass and are faster than their matching MF6 runs. The guide includes
+every timing, build/update APIs, budgets, Cartesian FGMRES, separate steady
+and transient profiles, precision limits and runnable sanity commands.
 
 The [repeated NPF benchmark suite](docs/NPF662_VS_MF6_BENCHMARKS.md) compares
 the dev branch's explicit NPF 6.6.2 formulation with fresh native MF6 solves.
@@ -38,8 +40,10 @@ now supports opt-in transient steps with `dt`, `head_prev`, `ss` and `sy`.
 
 The [transient GPU implementation](docs/NPF662_GPU_NATIVE.rst) adds opt-in
 device acceptance and persistent hierarchy refresh. The 500 x 500 x 5
-convertible model over 20 weekly steps on dev takes **5.92 s**, versus **104.39 s**
-for the saved CPU MF6 run, excluding model construction and extra audits.
+convertible model over 20 weekly steps originally measured **5.92 s**, versus
+**104.39 s** for saved CPU MF6, before later runtime improvements. That
+historical case has no GHB; use the native GHB release above for current
+GHB qualification and timing boundaries.
 The guide includes the reproducible sanity/convergence command and controls.
 Paired calibration histories at 0.5, 1 and 2 times K show 28–31% less
 Newton/Krylov runtime, measured separately from setup and conductivity updates.

@@ -1,5 +1,5 @@
 Native 3D general-head boundaries
-================================
+==========================================
 
 The Cartesian and ``mf6_6_6_2_npf`` formulations accept native cell-based
 general-head boundaries in steady and transient solves. Conductance is an
@@ -29,8 +29,9 @@ conductance selects cells. Zero conductance disables exchange.
 
 GHB cells must be active free cells; overlap with CHD is rejected. Interior
 cells are allowed. Values must be finite and conductances nonnegative. NPF
-also rejects a GHB head below a convertible cell's bottom, matching MF6
-6.6.2. Arrays are copied. Invalid updates leave the existing model intact.
+also rejects a GHB head below a convertible cell's bottom at solve time,
+matching MF6 6.6.2. Arrays are copied. Field-validation failures during an
+update leave the existing model intact.
 
 After construction, use::
 
@@ -47,7 +48,7 @@ Exterior face-conductance slots remain no-flow: changing a discarded
 exterior slot cannot create a boundary condition.
 
 Budgets and formulation scope
-----------------------------
+------------------------------------------
 
 ``ghb_inflow`` and ``ghb_outflow`` are positive magnitudes; ``ghb_net`` is
 positive into the model. Cartesian exposes them in ``info['budget']``;
@@ -79,10 +80,14 @@ are exercised. Small analytical cases target FP64 roundoff; live comparisons
 currently assert an absolute head/flow bound of ``2e-11``. This test bound
 is not a claim of bitwise equality between solvers.
 
-The native GHB implementation milestone passed 892 broad 3D/NPF regressions
-(four existing skips), followed by 113 focused tests including all new GHB
-checks. Realistic GPU/MF6 timing qualification is in progress on ``dev``;
-this milestone is not yet the completed ``main`` release.
+The final solver regression selection passed 961 tests on ``dev`` and 798
+on ``main`` (which excludes experimental terrain and includes the restored
+2D standalone-validator checks). Each run has four expected CPU entries
+skipped for CUDA-only checks; their CUDA counterparts ran. The live MF6
+tests cover both the original acceptance mode and explicit roundoff mode.
+Analytical tests cover dry-start GHB grounding, tiny positive conductance,
+gross inflow/outflow cancellation, storage datum rounding and changing
+boundary values after graph capture.
 
 Cartesian linear acceleration
 -----------------------------
@@ -104,8 +109,8 @@ the heterogeneous 100 x 100 x 5 GHB benchmark. The stalled run exhausted
 ``1.8e-13`` in 26 Krylov iterations, with a three-repeat public-solve median
 of 0.262 seconds versus the original tight MF6 run's 1.053 seconds. A trial
 of coarse-correction energy projection failed to resolve the stall and was
-discarded. These are development measurements; full release timings follow
-the larger qualification campaign.
+discarded. These development measurements are retained separately from the
+larger release qualification below.
 
 The acceleration tests include changing K, boundary conductance/head, zero
 conductance, FP64/FP32 preconditioners, exact iteration budgets, invalid
@@ -113,7 +118,7 @@ controls and resource release. The focused accelerator/GHB/session selection
 passes 97 tests on CPU/CUDA.
 
 Reproducible sanity and runtime checks
--------------------------------------
+----------------------------------------------
 
 The existing portable runner now accepts ``--ghb``. It supplies identical
 fixed conductance/head arrays to DarcyWarp and native MF6, decodes native GHB
@@ -125,10 +130,10 @@ must converge and pass the independent head, boundary and budget checks.
 For the faster Cartesian iteration and existing NPF runtime controls::
 
     DARCY_FLOAT=float64 PYTHONPATH=.:working_tests OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
-      python working_tests/run_3d_sanity.py --sizes 16 32 --ghb \
+      python working_tests/run_3d_sanity.py --sizes 16 32 --ghb --gpu-tight \
       --families cartesian npf --variants confined convertible \
       --modes steady transient --cartesian-fgmres --npf-history \
-      --npf-controls working_tests/npf_runtime_controls.json --repeats 3
+      --npf-controls working_tests/npf_ghb_five_level_controls.json --repeats 3
 
 ``--gpu-tight`` retains the original 2D MF6 sanity settings while tightening
 the GPU: NPF requests relative cell imbalance ``1e-12`` (physical RMS floor
@@ -136,7 +141,7 @@ the GPU: NPF requests relative cell imbalance ``1e-12`` (physical RMS floor
 Cartesian relative residual ``1e-14``,
 absolute RMS ``1e-12`` and head-equivalent residual ``1e-14``. These settings
 are explicit overrides, not changed production defaults. The runner's
-Cartesian FGMRES profile uses a three-level FP32 preconditioner, restart 8,
+Cartesian FGMRES profile uses a five-level FP32 preconditioner, restart 8,
 and FP64 heads/residuals/refinement. The API default preconditioner is FP64.
 
 ``--tight`` also replaces MF6's IMS controls and uses stricter head-comparison
@@ -156,8 +161,49 @@ results use three repetitions after warmup; the cached MF6 engine time is a
 single separately identified native reference run. Source hashes, controls,
 all endpoints and failed outcomes are retained with the results.
 
+For the 500 x 500 x 5 release matrix, use five levels for steady and
+confined transient solves, and the existing three-level profile for
+convertible transients. These commands keep the original MF6 sanity controls::
+
+    export DARCY_FLOAT=float64 PYTHONPATH=.:working_tests
+    export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+
+    python working_tests/run_3d_sanity.py --sizes 500 --ghb --gpu-tight \
+      --families cartesian npf --variants confined convertible --modes steady \
+      --cartesian-fgmres --npf-controls working_tests/npf_ghb_five_level_controls.json \
+      --periods 20 --repeats 3 --cache benchmark_results/ghb_references \
+      --output benchmark_results/ghb_steady
+
+    python working_tests/run_3d_sanity.py --sizes 500 --ghb --gpu-tight \
+      --families cartesian npf --variants confined --modes transient \
+      --cartesian-fgmres --npf-history \
+      --npf-controls working_tests/npf_ghb_five_level_controls.json \
+      --periods 20 --repeats 3 --cache benchmark_results/ghb_references \
+      --output benchmark_results/ghb_confined_transient
+
+    python working_tests/run_3d_sanity.py --sizes 500 --ghb --gpu-tight \
+      --families npf --variants convertible --modes transient --npf-history \
+      --npf-controls working_tests/npf_runtime_controls.json \
+      --periods 20 --repeats 3 --cache benchmark_results/ghb_references \
+      --output benchmark_results/ghb_convertible_transient
+
+Use a new output directory for each invocation. Add ``--cached-only`` to
+require an existing validated MF6 reference. A first run needs pinned MF6
+6.6.2 and includes reference generation, native-flow decoding and audits;
+the console's reference-processing time includes all of that work. The
+reported MF6 engine time excludes reference decoding and audit work.
+For a small CPU sanity check, select ``--sizes 16 --device cpu --periods 3``.
+
+Five levels reduced large confined steady NPF from 765 to 42 Krylov
+iterations. The sixth-level trial did not improve its measured public time.
+This is a preconditioning change; the precision and conservation checks
+are unchanged. The stronger Sy storage in convertible transients can make
+those systems easier to solve than weak-storage confined systems. Compare
+each case with its own matching MF6 model, rather than comparing different
+formulations' runtimes as if their equations were identical.
+
 Explicit NPF roundoff acceptance
--------------------------------
+------------------------------------------
 
 ``npf_roundoff_acceptance=True`` selects a componentwise backward-residual
 test. It is off by default. The portable runner enables it for ``--gpu-tight``
@@ -214,3 +260,124 @@ The terrain mask repair is separate: ``04a2bca`` validates original values
 before integer conversion and passed 851 terrain regressions on CPU/CUDA.
 Fractional masks such as 0.9, 1.9 and -0.1 now raise instead of silently
 changing boundary ownership.
+
+2026-11-12 release qualification
+================================
+
+Fresh main runs at ``d679da3`` used an RTX 4070 Ti SUPER (16 GiB),
+Python 3.12 and Warp 1.17.0. Each model has 500 x 500 x 5 cells.
+Transient histories contain twenty seven-day steps from the declared
+initial heads, with no preliminary steady solve. MF6 6.6.2 results
+are saved, validated references for these exact cases and original
+2D sanity controls. GPU times are medians of three runs after warmup;
+each MF6 time is one native engine run on this host.
+
+.. list-table:: Solver time in seconds; model build and external audits excluded
+   :header-rows: 1
+
+   * - Case
+     - GPU
+     - MF6
+     - MF6 / GPU
+     - Max head difference (m)
+   * - Cartesian confined, steady
+     - 0.734
+     - 13.915
+     - 19.0x
+     - 5.187e-05
+   * - NPF confined, steady
+     - 1.355
+     - 13.090
+     - 9.7x
+     - 6.467e-05
+   * - NPF convertible, steady
+     - 1.355
+     - 291.607
+     - 215.3x
+     - 7.076e-06
+   * - Cartesian confined, 20-step transient
+     - 8.680
+     - 458.459
+     - 52.8x
+     - 5.184e-06
+   * - NPF confined, 20-step transient
+     - 2.633
+     - 293.947
+     - 111.6x
+     - 1.846e-06
+   * - NPF convertible, 20-step transient
+     - 1.819
+     - 142.638
+     - 78.4x
+     - 5.338e-08
+
+All 252 endpoints, including warmups, passed independent checks.
+The portable 16/32-grid runner also passed all twelve steady/transient
+cases and 48 additional endpoint audits against fresh MF6 references.
+Its CPU run passed all six 16-grid cases and 24 endpoint audits against
+the same validated references.
+The largest GPU head-equivalent RMS residual was ``8.431e-16 m``.
+All 168 NPF endpoint audits passed the componentwise roundoff test;
+the largest allowance ratio was ``0.821326``. Of these, 12
+used the explicit roundoff alternative while missing the requested
+fixed flow thresholds; they are labelled ``precision_limited``.
+These are FP64 residual results. MF6 head agreement is tolerance-based,
+with the measured differences shown above; bitwise head identity is
+not a qualification claim. Small live MF6 regressions also pass their
+``2e-11`` absolute head, GHB-flow and storage bounds.
+
+.. list-table:: Separately reported costs in seconds
+   :header-rows: 1
+
+   * - Case
+     - Model construction
+     - Extra test audit
+     - Full verified run
+   * - Cartesian confined, steady
+     - 0.162
+     - 0.593
+     - 1.502
+   * - NPF confined, steady
+     - 0.233
+     - 0.635
+     - 2.234
+   * - NPF convertible, steady
+     - 0.232
+     - 0.617
+     - 2.216
+   * - Cartesian confined, 20-step transient
+     - 0.158
+     - 22.915
+     - 31.895
+   * - NPF confined, 20-step transient
+     - 0.237
+     - 23.501
+     - 26.421
+   * - NPF convertible, 20-step transient
+     - 0.237
+     - 24.568
+     - 26.701
+
+Internal solver setup and production acceptance remain inside the
+public solve timer. Cartesian time sums the individual public solves;
+source-update preparation is outside those calls. NPF transient time
+covers the entire public history call, including source updates and
+the final history download. The external audit is test work and is
+excluded from both primary runtime comparisons. Full verified time
+also includes orchestration; medians of components need not sum.
+
+Compact evidence retains every endpoint audit, the exact source hashes,
+controls, MF6 build identity and input/output fingerprints. Large raw
+head and flow files can be regenerated using the commands above.
+
+* :download:`Main qualification <../benchmark_results/ghb_3d/main_qualification.json>`
+* :download:`Complete timing CSV <../benchmark_results/ghb_3d/main_summary.csv>`
+* :download:`Development qualification and tuning <../benchmark_results/ghb_3d/dev_qualification.json>`
+* :download:`Retained failed experiments <../benchmark_results/ghb_3d/development_experiments.json>`
+
+Release changes were selectively promoted: native GHB ``3496a50`` to
+``561e92d``; Cartesian FGMRES ``74ddc6a`` to ``2ac1c32``; final
+roundoff/storage and device-reduction changes ``2ab046d`` to
+``bc93bd4``; qualified profiles ``5097ead`` to ``d679da3``. Main
+also restores the missing 2D standalone GHB validator in ``057f439``.
+The experimental terrain mask repair remains on dev as ``04a2bca``.

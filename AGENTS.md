@@ -1,6 +1,39 @@
 kimi --model kimi-code/k3
 # DarcyWarp — Agent System Memory
 
+> 2026-11-12 native 3D GHB release: selectively promoted to main at
+> `1e23c32` (feature `3496a50` dev -> `561e92d` main); primary checkout stays
+> on dev. Cartesian classic/fast and NPF/STO now accept ghb_conductance,
+> ghb_head and optional ghb_mask in builders, plus update_ghb(). Integrated
+> C is independent of K/saturation; q_out=C*(h-hb), diagonal+C, RHS+C*hb.
+> Native budgets, grounding, Jacobian, preconditioners and cached boundary
+> updates are covered. GHB is not a solve(use_ghb=True) flag; exterior face
+> slots remain no-flow. NPF rejects hb below a convertible bottom at solve.
+> Fast confined Cartesian adds linear_acceleration='fgmres'; five-level
+> FP32 preconditioning retains FP64 heads/residuals/refinement. Five levels
+> also accelerate NPF steady/confined transient; convertible transient uses
+> the existing three-level runtime profile. Tiled residual reductions and
+> device Arnoldi now work for steady NPF too. Explicit npf_roundoff_acceptance
+> checks every row against 32 FP64 eps times equation/evaluation operands,
+> including the convertible STO layer datum, AND retains the original mass
+> gate and head RMS <=1e-12. Defaults unchanged. Requested-threshold failures
+> are separately labelled precision_limited; this is not bitwise MF6 parity.
+> Fresh main 500x500x5 GPU public medians vs saved MF6 engine seconds:
+> Cartesian SS .734/13.915, 20-step TR 8.680/458.459; NPF confined SS
+> 1.355/13.090, TR 2.633/293.947; convertible SS 1.355/291.607,
+> TR 1.819/142.638. No hidden steady startup, build/extra audits excluded.
+> All 252 large endpoints pass; max head-equivalent RMS 8.431e-16 m,
+> largest MF6 head difference 6.467e-5 m with original 2D MF6 controls.
+> 961 dev / 798 main regressions pass (4 expected CPU skips each), plus
+> 48 small GPU and 24 CPU runner endpoints. Live tight MF6 tests use 2e-11
+> head/flow/storage bounds. Both strict Sphinx builds pass. Main restores
+> the previously omitted 2D validator as `057f439`. Terrain mask validation
+> is repaired on dev only in `04a2bca` (851 tests), terrain stays off main.
+> Reproduction, complete timings, limitations and failed experiments:
+> docs/3D_NATIVE_GHB.rst; benchmark_results/ghb_3d/main_qualification.json;
+> working_tests/run_3d_sanity.py --ghb --gpu-tight --cartesian-fgmres;
+> working_tests/npf_ghb_five_level_controls.json for steady/confined flow.
+
 > 2026-11-12 2D runtime search on dev (baseline `c1e36b7`): shared FP64
 > partial-sum/max combination now uses one parallel CUDA block, preserving
 > CPU ordering and graph-safe partial clearing (`face_kernels_f64.py`).
