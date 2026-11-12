@@ -28,7 +28,7 @@ html_theme = 'alabaster'
 html_static_path = ['_static']
 html_title = 'DarcyWarp | Groundwater modelling'
 html_theme_options = {
-    'description': 'Two-dimensional groundwater flow on CPUs and NVIDIA GPUs.',
+    'description': 'Structured 2D and 3D groundwater flow on CPUs and NVIDIA GPUs.',
     'github_user': 'Lincoln-Environmental',
     'github_repo': 'DarcyWarp',
     'github_button': False,
