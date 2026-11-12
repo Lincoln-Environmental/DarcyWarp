@@ -103,7 +103,7 @@ fixed[:, :, 0] = 1
 values = np.full(shape, 4.0)
 initial = np.full(shape, 4.0)
 source = np.zeros(shape)
-source[:, :, 1:] = 0.01  # m3/day per cell; fixed heads have zero source
+source[:, :, 1:-1] = 0.01  # m3/day per active free cell
 cell_types = np.zeros(shape, dtype=int)
 cell_types[0] = 1  # upper layer convertible
 
@@ -125,6 +125,7 @@ with WarpDarcySolver3D(
         dt=7.0, head_prev=initial,
         ss=1e-3, sy=0.15,
         unconfined=True, npf_cell_type=cell_types,
+        npf_device_native=True,
         npf_preconditioner="kcycle",
         npf_newton_controls=NPF662NewtonControls(
             timestep_predictor=True, reuse_trial_state=True,
