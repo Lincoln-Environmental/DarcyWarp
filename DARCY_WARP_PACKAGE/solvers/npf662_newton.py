@@ -81,6 +81,8 @@ class NPF662Workspace:
         self.commit_graph=None;self.commit_graph_failed=False;self.reuse_trial_state=False
         self.ghb_conductance = self.ghb_head = self.ghb_totals = None
         self.ghb_operator = self.trial_ghb_operator = self.previous_ghb_operator = None
+        self.roundoff_acceptance = False
+        self.roundoff_partials = self.roundoff_zero = None
         self.device_native = bool(getattr(reference, 'device_storage_state', False))
         self.load(model=model,case=case,reference=reference)
         self.evaluate(trial=False,linearize=True)
@@ -239,10 +241,27 @@ class NPF662Workspace:
         if trial:self.candidate_evaluations+=1
         m=self.metrics.numpy()
         count=max(self.free_count,1)
-        return dict(physical_rms=float(np.sqrt(m[0]/count)),head_residual_rms=float(np.sqrt(m[2]/count)),
+        result=dict(physical_rms=float(np.sqrt(m[0]/count)),head_residual_rms=float(np.sqrt(m[2]/count)),
             relative_cell_imbalance=float(m[1]/max(m[3],np.finfo(float).tiny)),gross_throughput=float(m[3]),
             residual_l1=float(m[1]),signed_imbalance=float(m[8]),boundary_inflow=float(m[4]),boundary_outflow=float(m[5]),
             scaled_l2=float(np.sqrt(m[7])),finite=bool(m[6]==0 and np.all(np.isfinite(m[[0,1,3,4,5,7,8]]))))
+        if self.roundoff_acceptance:
+            result.update(roundoff_mode=True, roundoff_accepted=False, roundoff_bound_ratio_max=None)
+            if (result['finite'] and result['head_residual_rms'] <= 1e-12 and
+                    (result['physical_rms'] <= 1e-12 or result['relative_cell_imbalance'] <= 1e-8)):
+                if self.roundoff_partials is None:
+                    self.roundoff_partials=wp.zeros(shape=(self.n+255)//256,dtype=wp.float64,device=self.device)
+                    self.roundoff_zero=wp.zeros(shape=self.n,dtype=wp.float64,device=self.device)
+                self.roundoff_partials.zero_();self.maximum.zero_()
+                wp.launch(kernel=kernels.roundoff_rows,dim=self.n,inputs=[head,self.source,r,self.free,
+                    self.left,self.right,c,self.roundoff_zero if self.ghb_conductance is None else self.ghb_conductance,
+                    self.roundoff_zero if self.ghb_head is None else self.ghb_head,storage,tangent,
+                    self.storage_previous,self.previous_storage_tangent,self.roundoff_partials],device=self.device)
+                wp.launch(kernel=kernels.combine_roundoff,dim=self.roundoff_partials.size,
+                    inputs=[self.roundoff_partials,self.maximum],device=self.device)
+                ratio=float(self.maximum.numpy()[0])
+                result.update(roundoff_bound_ratio_max=ratio,roundoff_accepted=bool(np.isfinite(ratio) and ratio<=1.))
+        return result
 
     def matvec(self,x,y,z,alpha,beta):
         wp.launch(kernel=kernels.jacobian_action,dim=self.n,inputs=[x,y,z,self.free,self.left,self.right,
@@ -309,6 +328,7 @@ class NPF662Workspace:
         self.ghb_conductance = self.ghb_head = self.ghb_totals = None
         self.ghb_operator = self.trial_ghb_operator = self.previous_ghb_operator = None
         self.predictor_increment = self.predictor_older_increment = self.predictor_checkpoint = None
+        self.roundoff_partials = self.roundoff_zero = None
         for name in ('head','prescribed','trial','source','bottom','thickness','scale','rhs','trial_rhs','residual','trial_residual','delta',
             'c0','q','c','trial_q','trial_c','dl','dr','trial_dl','trial_dr','free','fixed','types','left','right','metrics','maximum','mode','jv_counter','preconditioner_counter',
             'storage_previous','storage_ss','storage_sy','storage_rate','storage_tangent','trial_storage_rate','trial_storage_tangent','certificate','metric_partials'):
@@ -318,6 +338,9 @@ class NPF662Workspace:
 def device_accepted(*,metrics,physical_tolerance=1e-12,relative_tolerance=1e-8):
     valid=all(np.isfinite(metrics[name]) and metrics[name]>=0. for name in
         ('head_residual_rms','physical_rms','relative_cell_imbalance','gross_throughput'))
+    if metrics.get('roundoff_mode',False):
+        return bool(metrics['finite'] and valid and metrics['head_residual_rms']<=1e-12 and
+            (metrics['physical_rms']<=1e-12 or metrics['relative_cell_imbalance']<=1e-8) and metrics['roundoff_accepted'])
     return metrics['finite'] and valid and metrics['head_residual_rms']<=1e-6 and (
         metrics['physical_rms']<=physical_tolerance or metrics['relative_cell_imbalance']<=relative_tolerance)
 
@@ -356,7 +379,7 @@ def search_direction(*,workspace,current,controls,physical_tolerance=1e-12,relat
 def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,controls,
                         physical_tolerance=1e-12,relative_tolerance=1e-8,
                         npf_preconditioner='diagonal',npf_kcycle_controls=None,npf_krylov_method=None,
-                        device_native=False,prepared_workspace=None,device_sequence=False):
+                        device_native=False,prepared_workspace=None,device_sequence=False,roundoff_acceptance=False):
     controls.validate()
     setup_start=perf_counter()
     if max_outer<0 or krylov_budget<0 or restart<2:raise ValueError('Nonnegative budgets and restart>=2 required')
@@ -386,6 +409,7 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
     workspace.device_arnoldi=device_native
     workspace.device_native=device_native
     workspace.reuse_trial_state=controls.reuse_trial_state
+    workspace.roundoff_acceptance=roundoff_acceptance
     blocks_start=getattr(workspace.krylov, 'restart_blocks', 0) if method=='gmres' else 0
     graph_start=(getattr(workspace.krylov, 'graph_captures', 0), getattr(workspace.krylov, 'graph_replays', 0))
     mg_reused=False;mg_seconds=0.;linear_history=[];mg_values_refreshed=False
@@ -520,7 +544,8 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
     if independent_performed:
         if head is None:
             head=workspace.head.numpy().reshape(case.active.shape).copy()
-        checks,unused=reference.evaluate(head=head,physical_tolerance=physical_tolerance,relative_tolerance=relative_tolerance)
+        checks,unused=reference.evaluate(head=head,physical_tolerance=physical_tolerance,relative_tolerance=relative_tolerance,
+            **(dict(roundoff_acceptance=True) if roundoff_acceptance else {}))
         accepted=checks['independent_accepted']
     else:
         accepted=bool(device_passed and certificate['derivatives_and_storage_finite']
@@ -528,6 +553,8 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
         checks=dict(**current,**certificate,ungrounded_current_components=0,
             accepted=accepted,acceptance_source='device physical reductions and positive storage grounding certificate')
     converged=bool(accepted and device_passed)
+    requested_met=bool(current['finite'] and current['head_residual_rms']<=1e-6 and
+        (current['physical_rms']<=physical_tolerance or current['relative_cell_imbalance']<=relative_tolerance))
     workspace.predictor_checkpoint = None
     if controls.timestep_predictor and workspace.transient and converged:
         wp.copy(dest=workspace.predictor_older_increment,src=workspace.predictor_increment)
@@ -550,6 +577,10 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
         max_krylov_per_outer=krylov_budget,max_outer=max_outer,krylov_restart=restart,
         scaling='fixed full-saturated principal diagonal; S*J and S*R',preconditioner='fixed diagonal within each GMRES solve')
     result['krylov_method']=method.upper()
+    if roundoff_acceptance:
+        result.update(roundoff_accepted=converged,requested_thresholds_met=requested_met,
+            precision_limited=bool(converged and not requested_met),
+            roundoff_bound_ratio_max=current.get('roundoff_bound_ratio_max'))
     result['ghb_budget']=workspace.boundary_budget()
     result['krylov_workspace_reused']=krylov_reused
     result['npf_preconditioner']=npf_preconditioner

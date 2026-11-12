@@ -115,6 +115,7 @@ def solve_transient_history(*, model, source_factors, dt, head_prev, ss, sy, **s
                 restart=first_info['krylov_restart'], controls=nonlinear,
                 physical_tolerance=thresholds['physical_rms_m3_day'],
                 relative_tolerance=thresholds['relative_cell_imbalance'],
+                roundoff_acceptance=thresholds.get('roundoff_acceptance',False),
                 npf_preconditioner='kcycle', npf_kcycle_controls=multigrid,
                 npf_krylov_method=first_info['krylov_method'].lower(), device_native=True,
                 prepared_workspace=workspace, device_sequence=True)

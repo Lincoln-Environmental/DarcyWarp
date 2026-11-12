@@ -160,3 +160,48 @@ def test_cartesian_picard_ghb_analytic(device, implementation, transient):
         expected=(0.125+1.0+0.0625)/2.25 if transient else 0.5625
         assert info["converged"],info
         np.testing.assert_allclose(actual=head,desired=expected,rtol=0.0,atol=2e-12)
+
+
+@pytest.mark.parametrize('formulation',['legacy','mf6_6_6_2_npf'])
+def test_ghb_gross_inflow_and_outflow_survive_domain_cancellation(device,formulation):
+    shape=(1,1,3)
+    with WarpDarcySolver3D(nx=3,ny=1,nz=1,dx=1.,device=device,
+                           implementation='fast',formulation=formulation) as model:
+        model.build_from_K_fields(kx_field=np.ones(shape),ky_field=np.ones(shape),kz_field=np.ones(shape),
+            active=np.array([1,0,1]).reshape(shape),bc_mask=np.zeros(shape),bc_values=np.zeros(shape),
+            rhs=np.array([-1.,0.,1.]).reshape(shape),initial_head=np.zeros(shape),
+            ghb_conductance=np.array([1.,0.,1.]).reshape(shape),ghb_head=2.)
+        head,info=model.solve(rel_tol=1e-13,abs_tol_min=1e-13)
+        assert info['converged'],info
+        np.testing.assert_allclose(actual=head,desired=np.array([1.,0.,3.]).reshape(shape),rtol=0.,atol=1e-13)
+        assert info['budget']['ghb_inflow']==pytest.approx(1.,abs=1e-13)
+        assert info['budget']['ghb_outflow']==pytest.approx(1.,abs=1e-13)
+        assert abs(info['budget']['ghb_net'])<1e-13
+        assert info['budget']['throughput']>=4.-1e-12
+        model.update_ghb(ghb_conductance=np.zeros(shape),ghb_head=2.)
+        with pytest.raises(ValueError):model.solve()
+
+
+@pytest.mark.parametrize('source,boundary_head,expected',[(0.125,0.5,0.5),(-0.125,0.,-0.0625)])
+def test_npf_ghb_anchors_initially_dry_cell(device,source,boundary_head,expected):
+    fields=single_cell_fields(conductance=2.,boundary_head=boundary_head,source=source,initial=-0.2)
+    with WarpDarcySolver3D(nx=1,ny=1,nz=1,dx=1.,device=device,
+                           implementation='fast',formulation='mf6_6_6_2_npf') as model:
+        model.build_from_K_fields(**fields)
+        head,info=model.solve(transient=True,dt=2.,head_prev=fields['initial_head'],ss=0.,sy=0.5,
+            unconfined=True,top_elevation=1.,npf_device_native=True,npf_preconditioner='kcycle')
+        assert info['converged'],info
+        np.testing.assert_allclose(actual=head,desired=expected,rtol=0.,atol=1e-12)
+        if expected<0.:assert info['independent_audit_performed']
+
+
+@pytest.mark.parametrize('formulation',['legacy','mf6_6_6_2_npf'])
+def test_very_small_positive_ghb_is_not_dropped(device,formulation):
+    fields=single_cell_fields(conductance=1e-20,boundary_head=1.,source=1e-20,initial=0.)
+    with WarpDarcySolver3D(nx=1,ny=1,nz=1,dx=1.,device=device,
+                           implementation='fast',formulation=formulation) as model:
+        model.build_from_K_fields(**fields)
+        options=dict(dh_rms_tol=None) if formulation=='legacy' else {}
+        head,info=model.solve(rel_tol=1e-13,abs_tol_min=1e-30,**options)
+        assert info['converged'],info
+        np.testing.assert_allclose(actual=head,desired=2.,rtol=0.,atol=1e-12)

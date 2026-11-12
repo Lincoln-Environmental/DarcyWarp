@@ -317,8 +317,16 @@ class NPF662Reference:
             if not np.any((self.case.fixed.ravel()!=0)[mask] | (self.ghb_conductance.ravel()[mask]>0.)):
                 raise ValueError(f'Ungrounded active component; net source={self.case.source.ravel()[mask].sum():.17g}')
 
+    def certify_roundoff(self, *, head, residual, conductance, storage=None, tangent=None):
+        from .npf662_metrics import componentwise_roundoff
+        return componentwise_roundoff(head=head,source=self.case.source,residual=residual,
+            free=self.free,left=self.left,right=self.right,conductance=conductance,
+            ghb_conductance=self.ghb_conductance,ghb_head=self.ghb_head,
+            storage=storage,tangent=tangent,previous=getattr(self,'previous',None),
+            previous_tangent=getattr(self,'preconditioner_storage',None))
+
     def evaluate(self,*,head,physical_tolerance=1e-12,relative_tolerance=1e-8,
-                 head_tolerance_m=1e-6,boundary_tolerance_m=1e-10):
+                 head_tolerance_m=1e-6,boundary_tolerance_m=1e-10,roundoff_acceptance=False):
         c=self.case
         thresholds=final_tolerances(physical_tolerance=physical_tolerance,relative_tolerance=relative_tolerance,
             head_tolerance_m=head_tolerance_m,boundary_tolerance_m=boundary_tolerance_m)
@@ -374,6 +382,10 @@ class NPF662Reference:
         result['independent_accepted']=bool(checks['input_valid'] and checks['boundary_condition_valid'] and
             result['physical_metrics_valid'] and ungrounded==0 and hrms<=head_tolerance_m and
             (rms<=physical_tolerance or relative<=relative_tolerance))
+        if roundoff_acceptance:
+            from .npf662_metrics import apply_roundoff_acceptance
+            apply_roundoff_acceptance(checks=result,certificate=self.certify_roundoff(
+                head=head,residual=residual,conductance=conductance))
         return result,dict(flux=flux,residual=residual,fixed_reservoir_required_inflow=np.where(c.fixed,divergence-c.source,0.),
             principal_diagonal=diagonal,saturation=saturation,ghb_outflow=ghb_exchange,
             conductance=conductance,dflux_left=dl,dflux_right=dr)

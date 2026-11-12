@@ -50,7 +50,7 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
     return_info=True,max_outer=None,krylov_restart=None,npf_newton_controls=None,
     npf_preconditioner=None,npf_kcycle_controls=None,npf_krylov_method=None,
     transient=False,dt=None,head_prev=None,ss=None,sy=None,npf_final_relative_tolerance=None,
-    npf_device_native=False,**unsupported):
+    npf_device_native=False,npf_roundoff_acceptance=False,**unsupported):
     started = perf_counter()
     # Omission retains historical backend defaults. Explicit selections must
     # either reach their backend or be rejected, even when equal to a former
@@ -67,6 +67,8 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
     if unsupported:raise ValueError(f'Unsupported mf6_6_6_2_npf controls: {sorted(unsupported)}')
     if not isinstance(npf_device_native,(bool,np.bool_)):
         raise ValueError('npf_device_native must be Boolean')
+    if not isinstance(npf_roundoff_acceptance,(bool,np.bool_)):
+        raise ValueError('npf_roundoff_acceptance must be Boolean')
     if npf_device_native and not transient:
         raise ValueError('npf_device_native currently requires transient=True')
     if transient and any(value is None for value in (dt,head_prev,ss,sy)):
@@ -89,6 +91,7 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
         raise ValueError('npf_final_relative_tolerance must be a numerical scalar, not Boolean')
     relative_tolerance = final_budget_relative_tol if npf_final_relative_tolerance is None else npf_final_relative_tolerance
     thresholds=final_tolerances(physical_tolerance=abs_tol_min,relative_tolerance=relative_tolerance)
+    if npf_roundoff_acceptance:thresholds['roundoff_acceptance']=True
     if np.ndim(rel_tol)!=0 or not np.isfinite(rel_tol) or rel_tol<0.:
         raise ValueError('Krylov relative tolerance must be a finite nonnegative scalar')
     layered=model.geometry=='structured_dis_layered'
@@ -118,7 +121,7 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
     reference_seconds = perf_counter()-started
     reference.check_components()
     if not unconfined and np.any(case.cell_types):raise ValueError('Convertible cell types require unconfined=True')
-    if transient or unconfined or layered or preconditioner_selected or npf_krylov_method is not None or npf_newton_controls is not None or npf_final_relative_tolerance is not None:
+    if transient or unconfined or layered or preconditioner_selected or npf_krylov_method is not None or npf_newton_controls is not None or npf_final_relative_tolerance is not None or npf_roundoff_acceptance:
         if model.implementation!='fast' or model.solver!='kcycle':
             raise ValueError('Matched Newton requires implementation=fast and solver=kcycle; legacy backends remain separate')
         if unconfined and not np.any(case.cell_types[case.active!=0]):raise ValueError('unconfined=True requires convertible active cells')
@@ -133,7 +136,7 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
             krylov_budget=max_cycles,restart=krylov_restart,controls=controls,
             physical_tolerance=abs_tol_min,relative_tolerance=relative_tolerance,
             npf_preconditioner=npf_preconditioner,npf_kcycle_controls=npf_kcycle_controls,
-            npf_krylov_method=npf_krylov_method,device_native=npf_device_native)
+            npf_krylov_method=npf_krylov_method,device_native=npf_device_native,roundoff_acceptance=npf_roundoff_acceptance)
         info.update(formulation='mf6_6_6_2_npf',geometry=case.geometry,
             device=model.device,precision='float64',
             implementation='device_newton_fgmres' if info['krylov_method']=='FGMRES' else 'device_newton_gmres',session_backend='npf662_newton',

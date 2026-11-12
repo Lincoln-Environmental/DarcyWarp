@@ -10,6 +10,9 @@ and saturation. Positive outward exchange is
 
    q_{GHB} = C(h-h_b), \qquad Q = \operatorname{div}(q)+q_{GHB}+q_{STO}.
 
+MF6 reports the opposite sign for package flow into the aquifer; see the
+`USGS MODFLOW 6 groundwater-flow formulation <https://pubs.usgs.gov/tm/06/a55/tm6a55.pdf>`_.
+
 The linear operator receives ``+C`` on its diagonal and ``+C*h_b`` on its
 right-hand side. NPF includes the same terms in its physical residual,
 Jacobian, safeguards, multigrid hierarchy and grounding checks. Independent
@@ -128,8 +131,9 @@ For the faster Cartesian iteration and existing NPF runtime controls::
       --npf-controls working_tests/npf_runtime_controls.json --repeats 3
 
 ``--gpu-tight`` retains the original 2D MF6 sanity settings while tightening
-the GPU: NPF relative cell imbalance ``1e-12`` (physical RMS floor ``1e-12``
-and the existing head-equivalent gate); Cartesian relative residual ``1e-14``,
+the GPU: NPF requests relative cell imbalance ``1e-12`` (physical RMS floor
+``1e-12``) and explicitly enables the roundoff mode described below;
+Cartesian relative residual ``1e-14``,
 absolute RMS ``1e-12`` and head-equivalent residual ``1e-14``. These settings
 are explicit overrides, not changed production defaults. The runner's
 Cartesian FGMRES profile uses a three-level FP32 preconditioner, restart 8,
@@ -151,6 +155,42 @@ declared initial heads, without a hidden steady-state pre-solve. Timed GPU
 results use three repetitions after warmup; the cached MF6 engine time is a
 single separately identified native reference run. Source hashes, controls,
 all endpoints and failed outcomes are retained with the results.
+
+Explicit NPF roundoff acceptance
+-------------------------------
+
+``npf_roundoff_acceptance=True`` selects a componentwise backward-residual
+test. It is off by default. The portable runner enables it for ``--gpu-tight``
+and ``--tight``. Every free cell must satisfy
+
+.. math::
+
+   |r_i| \leq 32\epsilon_{64}\left(|Q_i|
+   +\sum_j C_{ij}(|h_i|+|h_j|)+C_i^{GHB}(|h_i|+|h_b|)
+   +|q_i^{STO}|+(|S_i|+|S_i^{previous}|)(|h_i|+|h_i^{previous}|)\right).
+
+``S`` is the physical storage tangent; it excludes GHB. The 32-epsilon
+allowance accounts for a short row's FP64 arithmetic. It measures backward
+error of the frozen endpoint equations, not a bound on forward head error
+or exact nonlinear constitutive evaluation. Conditioning can amplify the
+head difference between two solutions with small residuals.
+
+Acceptance also requires head-equivalent RMS at most ``1e-12 m``, the original
+conservation gate (physical RMS at most ``1e-12`` or relative cell imbalance
+at most ``1e-8``), finite quantities, prescribed heads and grounded hydraulic
+components. A small head-equivalent residual cannot bypass bad mass balance.
+Zero rows require exactly zero residual. CUDA evaluates every row and reduces
+the maximum allowance ratio; an independent NumPy implementation checks the
+reported endpoints outside the benchmark solve timer.
+
+``requested_thresholds_met`` records the original numerical threshold result;
+``roundoff_accepted`` records this explicit mode's result. ``precision_limited``
+is true when the latter passes while the former does not. The maximum row
+ratio is reported as ``roundoff_bound_ratio_max`` and must be at most one.
+This distinction matters on the 1.25-million-cell GHB case: a physical RMS
+of ``1.15e-12`` narrowly misses a literal ``1e-12`` request despite a
+head-equivalent RMS of ``8.1e-16 m``. Its original fixed-threshold run remains
+recorded as failed. The roundoff-mode run is a separate experiment.
 
 The terrain mask repair is separate: ``04a2bca`` validates original values
 before integer conversion and passed 851 terrain regressions on CPU/CUDA.

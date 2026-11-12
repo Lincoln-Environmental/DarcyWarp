@@ -242,6 +242,8 @@ def measure(*, case, family, mode, label, reference, native_accepted, device, pr
             auditor = NPF662TransientReference(case=step, previous=previous, dt=dt, ss=ss,
                 sy=sy if family == 'npf' else 0.) if mode == 'transient' else NPF662MatrixFreeReference(case=step)
             tolerances = dict(relative_tolerance=kwargs['npf_final_relative_tolerance']) if family == 'npf' and 'npf_final_relative_tolerance' in kwargs else {}
+            if family == 'npf' and kwargs.get('npf_roundoff_acceptance',False):
+                tolerances['roundoff_acceptance']=True
             if family == 'cartesian':
                 tolerances = dict(physical_tolerance=kwargs['abs_tol_min'],
                 relative_tolerance=kwargs.get('final_budget_relative_tol',gates['budget_percent']/100.),
@@ -343,6 +345,7 @@ def run(*, args, root, settings):
         for profile in (*profiles['steady'].values(),profiles['transient']):
             profile.update(settings['tight_cartesian'])
         settings['npf_options']['npf_final_relative_tolerance']=settings['tight_npf_relative']
+        settings['npf_options']['npf_roundoff_acceptance']=True
         if args.tight:
             for profile in profiles['mf6'].values():
                 profile.update(settings['tight_mf6'])
