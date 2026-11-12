@@ -68,6 +68,25 @@ head contacts with conductance obey the scalar GHB law. Sloping or offset
 contacts include gradient terms, and contacts are restricted to exterior
 subfaces. They are not substitutes for native Cartesian/NPF GHB.
 
+Planned boundary and transport work
+--------------------------------------------------
+
+The next native 3D boundary extensions are drains (DRN) and rivers (RIV),
+with steady and transient MF6 comparisons covering activation thresholds,
+flow reversal where permitted, changing boundary inputs and water budgets.
+The existing 2D DRN/RIV implementations do not establish 3D support.
+
+Transport follows these boundary extensions. A proposed first scope is
+conservative solute advection and dispersion using the converged flow
+solution's face fluxes, boundary exchanges and storage changes. Transport
+needs its own mass-balance, analytical and MF6 transport comparisons;
+flow parity alone does not qualify it.
+
+Unsaturated-zone flow (UZF) and routed streamflow (SFR) remain separate
+coupled-process extensions. This sequence describes the targeted workflow,
+not complete coverage of every MF6 package or discretisation. These are
+planned capabilities, not features included in this GHB release.
+
 Qualification
 -------------
 

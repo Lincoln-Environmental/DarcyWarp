@@ -799,6 +799,131 @@
       },
       "fingerprint": "845c9768324e5f2cc0b01cb326dd47bb66c66ff599e38365da0d8b0340ae1324",
       "output": "/home/patrickdurney/PycharmProjects/DarcyWarp/benchmark_results/ugly_t_3d/large_500_sanity/500_va100_off_npf_convertible_steady_845c9768324e_attempt1",
+      "complete": true,
+      "command": [
+        "/home/patrickdurney/miniconda3/envs/darcywarp312/bin/python",
+        "/home/patrickdurney/PycharmProjects/DarcyWarp/working_tests/run_3d_sanity.py",
+        "--sizes",
+        "500",
+        "--families",
+        "npf",
+        "--variants",
+        "convertible",
+        "--modes",
+        "steady",
+        "--periods",
+        "20",
+        "--repeats",
+        "3",
+        "--device",
+        "cuda:0",
+        "--output",
+        "/home/patrickdurney/PycharmProjects/DarcyWarp/benchmark_results/ugly_t_3d/large_500_sanity/500_va100_off_npf_convertible_steady_845c9768324e_attempt1",
+        "--cache",
+        "/home/patrickdurney/PycharmProjects/DarcyWarp/benchmark_results/ugly_t_3d/mf6_cache",
+        "--mf6",
+        "/bin/modflow/mf6",
+        "--k-field",
+        "ugly_t",
+        "--vertical-anisotropy",
+        "100.0",
+        "--ugly-t-seed",
+        "42",
+        "--ugly-t-reference-thickness",
+        "100.0",
+        "--preferred-head-target",
+        "1e-06",
+        "--mf6-timeout",
+        "1800.0",
+        "--allow-missing-reference",
+        "--npf-controls",
+        "/home/patrickdurney/PycharmProjects/DarcyWarp/working_tests/npf_ghb_five_level_controls.json"
+      ],
+      "returncode": 0,
+      "results_sha256": "ae0c087f307e583ece06f50c037e88d80330a0a7465a136bb6f1a229b2942751"
+    },
+    {
+      "job": {
+        "size": 500,
+        "ratio": 100.0,
+        "ghb": "off",
+        "family": "npf",
+        "variant": "convertible",
+        "mode": "transient",
+        "periods": 20,
+        "repeats": 3,
+        "seed": 42,
+        "reference_thickness": 100.0,
+        "preferred_head_target": 1e-06,
+        "mf6_timeout": 1800.0,
+        "device": "cuda:0",
+        "gpu_profile": "sanity"
+      },
+      "fingerprint": "1dda8e0a86769ebb1597e7e1a55d4a51b40100207b4e9679f44ef8a126d94c43",
+      "output": "/home/patrickdurney/PycharmProjects/DarcyWarp/benchmark_results/ugly_t_3d/large_500_sanity/500_va100_off_npf_convertible_transient_1dda8e0a8676_attempt1",
+      "complete": true,
+      "command": [
+        "/home/patrickdurney/miniconda3/envs/darcywarp312/bin/python",
+        "/home/patrickdurney/PycharmProjects/DarcyWarp/working_tests/run_3d_sanity.py",
+        "--sizes",
+        "500",
+        "--families",
+        "npf",
+        "--variants",
+        "convertible",
+        "--modes",
+        "transient",
+        "--periods",
+        "20",
+        "--repeats",
+        "3",
+        "--device",
+        "cuda:0",
+        "--output",
+        "/home/patrickdurney/PycharmProjects/DarcyWarp/benchmark_results/ugly_t_3d/large_500_sanity/500_va100_off_npf_convertible_transient_1dda8e0a8676_attempt1",
+        "--cache",
+        "/home/patrickdurney/PycharmProjects/DarcyWarp/benchmark_results/ugly_t_3d/mf6_cache",
+        "--mf6",
+        "/bin/modflow/mf6",
+        "--k-field",
+        "ugly_t",
+        "--vertical-anisotropy",
+        "100.0",
+        "--ugly-t-seed",
+        "42",
+        "--ugly-t-reference-thickness",
+        "100.0",
+        "--preferred-head-target",
+        "1e-06",
+        "--mf6-timeout",
+        "1800.0",
+        "--allow-missing-reference",
+        "--npf-controls",
+        "/home/patrickdurney/PycharmProjects/DarcyWarp/working_tests/npf_runtime_controls.json",
+        "--npf-history"
+      ],
+      "returncode": 0,
+      "results_sha256": "a8e0a2af88dbef89ec54e27355047050755badbfa95762a35d6c9774a2806b20"
+    },
+    {
+      "job": {
+        "size": 500,
+        "ratio": 100.0,
+        "ghb": "on",
+        "family": "npf",
+        "variant": "convertible",
+        "mode": "steady",
+        "periods": 20,
+        "repeats": 3,
+        "seed": 42,
+        "reference_thickness": 100.0,
+        "preferred_head_target": 1e-06,
+        "mf6_timeout": 1800.0,
+        "device": "cuda:0",
+        "gpu_profile": "sanity"
+      },
+      "fingerprint": "9736e11fad2e0a2c574b8aca389a61d37ab4199425dce9cd0daecb0367e86812",
+      "output": "/home/patrickdurney/PycharmProjects/DarcyWarp/benchmark_results/ugly_t_3d/large_500_sanity/500_va100_on_npf_convertible_steady_9736e11fad2e_attempt1",
       "complete": false
     }
   ],
@@ -1232,6 +1357,114 @@
         "kx_over_kz": {
           "minimum": 10.0,
           "maximum": 10.0
+        }
+      }
+    },
+    {
+      "size": 500,
+      "ratio": 100.0,
+      "ghb": "off",
+      "family": "npf",
+      "variant": "convertible",
+      "mode": "steady",
+      "periods": 20,
+      "repeats": 3,
+      "seed": 42,
+      "reference_thickness": 100.0,
+      "preferred_head_target": 1e-06,
+      "mf6_timeout": 1800.0,
+      "device": "cuda:0",
+      "gpu_profile": "sanity",
+      "fingerprint": "845c9768324e5f2cc0b01cb326dd47bb66c66ff599e38365da0d8b0340ae1324",
+      "returncode": 0,
+      "sanity_passed": true,
+      "preferred_head_target_met": false,
+      "gpu_seconds": 1.6880470069881994,
+      "mf6_seconds": 393.36608022497967,
+      "gpu_physical_accepted": true,
+      "speedup": 233.0302880171687,
+      "max_head_error_m": 2.990696359006506e-06,
+      "max_physical_head_rms_m": 7.306016689764896e-13,
+      "native_reference_accepted": true,
+      "error": null,
+      "output": "/home/patrickdurney/PycharmProjects/DarcyWarp/benchmark_results/ugly_t_3d/large_500_sanity/500_va100_off_npf_convertible_steady_845c9768324e_attempt1",
+      "conductivity": {
+        "kx": {
+          "minimum": 2.240043029785156,
+          "maximum": 679.3240104166666,
+          "contrast": 303.2638218926629
+        },
+        "ky": {
+          "minimum": 2.240043029785156,
+          "maximum": 679.3240104166666,
+          "contrast": 303.2638218926629
+        },
+        "kz": {
+          "minimum": 0.022400430297851562,
+          "maximum": 6.793240104166666,
+          "contrast": 303.2638218926629
+        },
+        "ky_over_kx": {
+          "minimum": 1.0,
+          "maximum": 1.0
+        },
+        "kx_over_kz": {
+          "minimum": 99.99999999999999,
+          "maximum": 100.00000000000001
+        }
+      }
+    },
+    {
+      "size": 500,
+      "ratio": 100.0,
+      "ghb": "off",
+      "family": "npf",
+      "variant": "convertible",
+      "mode": "transient",
+      "periods": 20,
+      "repeats": 3,
+      "seed": 42,
+      "reference_thickness": 100.0,
+      "preferred_head_target": 1e-06,
+      "mf6_timeout": 1800.0,
+      "device": "cuda:0",
+      "gpu_profile": "sanity",
+      "fingerprint": "1dda8e0a86769ebb1597e7e1a55d4a51b40100207b4e9679f44ef8a126d94c43",
+      "returncode": 0,
+      "sanity_passed": true,
+      "preferred_head_target_met": true,
+      "gpu_seconds": 2.2282322920218576,
+      "mf6_seconds": 158.87952101498377,
+      "gpu_physical_accepted": true,
+      "speedup": 71.30294340668556,
+      "max_head_error_m": 1.6379465594962284e-07,
+      "max_physical_head_rms_m": 1.5296029471541252e-11,
+      "native_reference_accepted": true,
+      "error": null,
+      "output": "/home/patrickdurney/PycharmProjects/DarcyWarp/benchmark_results/ugly_t_3d/large_500_sanity/500_va100_off_npf_convertible_transient_1dda8e0a8676_attempt1",
+      "conductivity": {
+        "kx": {
+          "minimum": 2.240043029785156,
+          "maximum": 679.3240104166666,
+          "contrast": 303.2638218926629
+        },
+        "ky": {
+          "minimum": 2.240043029785156,
+          "maximum": 679.3240104166666,
+          "contrast": 303.2638218926629
+        },
+        "kz": {
+          "minimum": 0.022400430297851562,
+          "maximum": 6.793240104166666,
+          "contrast": 303.2638218926629
+        },
+        "ky_over_kx": {
+          "minimum": 1.0,
+          "maximum": 1.0
+        },
+        "kx_over_kz": {
+          "minimum": 99.99999999999999,
+          "maximum": 100.00000000000001
         }
       }
     }
