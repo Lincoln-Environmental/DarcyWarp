@@ -18,6 +18,8 @@ class NPF662MatrixFreeReference:
         if case.geometry != 'structured_dis_layered':
             raise ValueError('Matrix-free layered auditor requires canonical layered inputs')
         self.case = case; self.shape = case.active.shape
+        self.ghb_conductance = np.zeros(self.shape) if case.ghb_conductance is None else np.broadcast_to(case.ghb_conductance,self.shape).copy()
+        self.ghb_head = np.zeros(self.shape) if case.ghb_head is None else np.broadcast_to(case.ghb_head,self.shape).copy()
         self.free = (case.active != 0)&(case.fixed == 0)
         ids = np.arange(case.active.size).reshape(self.shape)
         left = []; right = []; axes = []; coefficients = []
@@ -65,15 +67,16 @@ class NPF662MatrixFreeReference:
         dr = -conductance+np.where(~choose_left, extra, 0.)
         flux = conductance*(h[self.left]-h[self.right])
         divergence = self.divergence(flux=flux)
-        residual = np.where(self.free, case.source-divergence, 0.)
+        ghb_exchange = self.ghb_conductance*(np.asarray(head)-self.ghb_head)
+        residual = np.where(self.free, case.source-divergence-ghb_exchange, 0.)
         n = case.active.size
         diagonal = (np.bincount(self.left, weights=conductance, minlength=n)+
-                    np.bincount(self.right, weights=conductance, minlength=n)).reshape(self.shape)
+                    np.bincount(self.right, weights=conductance, minlength=n)).reshape(self.shape)+self.ghb_conductance
         scaled = np.divide(residual, diagonal, out=np.zeros_like(a=residual), where=diagonal > 0.)
         scaled[(diagonal <= 0.)&(residual != 0.)] = np.inf
         boundary = self.free.ravel()[self.left]&(case.fixed.ravel()[self.right] != 0)
         reverse = self.free.ravel()[self.right]&(case.fixed.ravel()[self.left] != 0)
-        exchange = np.concatenate([flux[boundary], -flux[reverse]])
+        exchange = np.concatenate([flux[boundary], -flux[reverse],ghb_exchange[self.free]])
         inflow = stable_sum(values=np.maximum(-exchange, 0.)); outflow = stable_sum(values=np.maximum(exchange, 0.))
         throughput = stable_sum(values=np.concatenate([np.abs(case.source[self.free]), np.abs(exchange)]))
         rms = stable_rms(values=residual[self.free]); hrms = stable_rms(values=scaled[self.free])
@@ -83,7 +86,7 @@ class NPF662MatrixFreeReference:
         graph = sparse.coo_matrix((np.ones(shape=int(edges.sum())), (self.left[edges], self.right[edges])), shape=(n, n)).tocsr()
         unused, labels = connected_components(csgraph=graph, directed=False)
         active_labels = set(labels[case.active.ravel() != 0])
-        grounded_labels = set(labels[(case.active.ravel() != 0)&(case.fixed.ravel() != 0)])
+        grounded_labels = set(labels[(case.active.ravel() != 0)&((case.fixed.ravel() != 0)|(self.ghb_conductance.ravel()>0.))])
         ungrounded = len(active_labels-grounded_labels)
         active = case.active != 0
         valid = all(np.all(np.isfinite(value)) for value in (flux, conductance, dl, dr, saturation[active],
@@ -93,6 +96,8 @@ class NPF662MatrixFreeReference:
             physical_max=float(np.max(np.abs(residual))), residual_l1=l1, relative_cell_imbalance=relative,
             gross_throughput=throughput, signed_imbalance=stable_sum(values=residual[self.free]),
             boundary_inflow=inflow, boundary_outflow=outflow,
+            ghb_inflow=stable_sum(values=np.maximum(-ghb_exchange[self.free],0.)),
+            ghb_outflow=stable_sum(values=np.maximum(ghb_exchange[self.free],0.)),
             fixed_cell_source_total=stable_sum(values=case.source[case.fixed != 0]), free_cells=int(self.free.sum()),
             fixed_reservoir_required_inflow=stable_sum(values=(divergence-case.source)[case.fixed != 0]),
             ungrounded_current_components=ungrounded, physical_metrics_valid=valid, final_acceptance_thresholds=thresholds,
@@ -103,4 +108,5 @@ class NPF662MatrixFreeReference:
             result['physical_metrics_valid'] and ungrounded == 0 and hrms <= head_tolerance_m and
             (rms <= physical_tolerance or relative <= relative_tolerance))
         return result, dict(flux=flux, residual=residual, saturation=saturation, conductance=conductance,
-            principal_diagonal=diagonal, fixed_reservoir_required_inflow=np.where(case.fixed, divergence-case.source, 0.))
+            principal_diagonal=diagonal,ghb_outflow=ghb_exchange,
+            fixed_reservoir_required_inflow=np.where(case.fixed, divergence-case.source, 0.))

@@ -45,9 +45,10 @@ def prepare_next_step(*, workspace, source, factor, dt, area):
         inputs=[workspace.storage_previous, workspace.storage_previous, workspace.bottom, workspace.thickness,
             workspace.types, workspace.storage_ss, workspace.storage_sy, workspace.free,
             workspace.storage_rate, workspace.previous_storage_tangent, workspace.storage_factor], device=workspace.device)
+    workspace.refresh_previous_operator()
     workspace.maximum.zero_()
     wp.launch(kernel=kernels.previous_storage_scale, dim=workspace.n,
-        inputs=[workspace.principal, workspace.previous_storage_tangent, workspace.scale, workspace.maximum],
+        inputs=[workspace.principal, workspace.previous_operator_tangent, workspace.scale, workspace.maximum],
         device=workspace.device)
     if workspace.maximum.numpy()[0] != 0.:
         raise ValueError('Invalid device previous-state storage tangent')
@@ -153,6 +154,6 @@ def solve_transient_history(*, model, source_factors, dt, head_prev, ss, sy, **s
         formulation='mf6_6_6_2_npf', device=model.device, precision='float64',
         numerical_seconds=sum(row['seconds'] for row in periods),
         solver_head_readbacks=head_readbacks, output_history_readbacks=1,
-        fixed_inputs_within_history=['geometry', 'conductivity', 'cell_type', 'Ss', 'Sy', 'prescribed_heads'],
+        fixed_inputs_within_history=['geometry', 'conductivity', 'cell_type', 'Ss', 'Sy', 'prescribed_heads', 'GHB conductance/head'],
         final_acceptance_thresholds=thresholds,
         timing='Entire public history call, including setup, all source/timestep updates, acceptance and output download')

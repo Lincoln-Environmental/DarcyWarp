@@ -74,11 +74,12 @@ def storage_terms(head:wp.array(dtype=wp.float64),previous:wp.array(dtype=wp.flo
 
 
 @wp.func
-def physical_row_metrics(i:int,head:wp.array(dtype=wp.float64),source:wp.array(dtype=wp.float64),
+def physical_row_metrics_base(i:int,head:wp.array(dtype=wp.float64),source:wp.array(dtype=wp.float64),
     free:wp.array(dtype=wp.int32),fixed:wp.array(dtype=wp.int32),left:wp.array2d(dtype=wp.int32),
     right:wp.array2d(dtype=wp.int32),flux:wp.array2d(dtype=wp.float64),conductance:wp.array2d(dtype=wp.float64),
     scale:wp.array(dtype=wp.float64),residual:wp.array(dtype=wp.float64),rhs:wp.array(dtype=wp.float64),
-    storage:wp.array(dtype=wp.float64),storage_tangent:wp.array(dtype=wp.float64)):
+    storage:wp.array(dtype=wp.float64),storage_tangent:wp.array(dtype=wp.float64),
+    ghb_flow:wp.float64,ghb_conductance:wp.float64):
     metrics = NPFRowMetrics(wp.float64(0.))
     invalid=not wp.isfinite(head[i]) or not wp.isfinite(scale[i]) or scale[i]<=wp.float64(0.)
     for axis in range(3):
@@ -99,8 +100,10 @@ def physical_row_metrics(i:int,head:wp.array(dtype=wp.float64),source:wp.array(d
             q=-flux[j,axis];divergence+=q;diagonal+=conductance[j,axis]
             if fixed[j]!=0:
                 inflow+=wp.max(-q,wp.float64(0.));outflow+=wp.max(q,wp.float64(0.))
-    diagonal+=storage_tangent[i]
-    r=source[i]-divergence-storage[i]
+    diagonal+=storage_tangent[i]+ghb_conductance
+    r=source[i]-divergence-storage[i]-ghb_flow
+    inflow+=wp.max(-ghb_flow,wp.float64(0.))
+    outflow+=wp.max(ghb_flow,wp.float64(0.))
     equivalent=wp.float64(0.)
     if diagonal>wp.float64(0.):equivalent=r/diagonal
     elif r!=wp.float64(0.):equivalent=wp.float64(wp.inf)
@@ -112,6 +115,71 @@ def physical_row_metrics(i:int,head:wp.array(dtype=wp.float64),source:wp.array(d
     if not wp.isfinite(r) or not wp.isfinite(diagonal):metrics[6]+=wp.float64(1.)
     metrics[7]=rhs[i]*rhs[i];metrics[8]=r
     return metrics
+
+
+@wp.func
+def physical_row_metrics(i:int,head:wp.array(dtype=wp.float64),source:wp.array(dtype=wp.float64),
+    free:wp.array(dtype=wp.int32),fixed:wp.array(dtype=wp.int32),left:wp.array2d(dtype=wp.int32),
+    right:wp.array2d(dtype=wp.int32),flux:wp.array2d(dtype=wp.float64),conductance:wp.array2d(dtype=wp.float64),
+    scale:wp.array(dtype=wp.float64),residual:wp.array(dtype=wp.float64),rhs:wp.array(dtype=wp.float64),
+    storage:wp.array(dtype=wp.float64),storage_tangent:wp.array(dtype=wp.float64)):
+    return physical_row_metrics_base(i,head,source,free,fixed,left,right,flux,conductance,
+        scale,residual,rhs,storage,storage_tangent,wp.float64(0.),wp.float64(0.))
+
+
+@wp.func
+def ghb_flow_at(i:int,head:wp.array(dtype=wp.float64),conductance:wp.array(dtype=wp.float64),
+    boundary_head:wp.array(dtype=wp.float64)):
+    value=wp.float64(0.)
+    if conductance[i]>wp.float64(0.):value=conductance[i]*(head[i]-boundary_head[i])
+    return value
+
+
+@wp.kernel
+def physical_rows_ghb(head:wp.array(dtype=wp.float64),source:wp.array(dtype=wp.float64),
+    free:wp.array(dtype=wp.int32),fixed:wp.array(dtype=wp.int32),left:wp.array2d(dtype=wp.int32),
+    right:wp.array2d(dtype=wp.int32),flux:wp.array2d(dtype=wp.float64),conductance:wp.array2d(dtype=wp.float64),
+    scale:wp.array(dtype=wp.float64),residual:wp.array(dtype=wp.float64),rhs:wp.array(dtype=wp.float64),
+    metrics:wp.array2d(dtype=wp.float64),storage:wp.array(dtype=wp.float64),storage_tangent:wp.array(dtype=wp.float64),
+    block_size:int,ghb_conductance:wp.array(dtype=wp.float64),ghb_head:wp.array(dtype=wp.float64)):
+    i=wp.tid()
+    q=ghb_flow_at(i,head,ghb_conductance,ghb_head)
+    values=physical_row_metrics_base(i,head,source,free,fixed,left,right,flux,conductance,
+        scale,residual,rhs,storage,storage_tangent,q,ghb_conductance[i])
+    for metric in range(9):
+        if values[metric]!=wp.float64(0.):wp.atomic_add(metrics,i/block_size,metric,values[metric])
+
+
+@wp.kernel
+def physical_rows_ghb_tiled(head:wp.array(dtype=wp.float64),source:wp.array(dtype=wp.float64),
+    free:wp.array(dtype=wp.int32),fixed:wp.array(dtype=wp.int32),left:wp.array2d(dtype=wp.int32),
+    right:wp.array2d(dtype=wp.int32),flux:wp.array2d(dtype=wp.float64),conductance:wp.array2d(dtype=wp.float64),
+    scale:wp.array(dtype=wp.float64),residual:wp.array(dtype=wp.float64),rhs:wp.array(dtype=wp.float64),
+    metrics:wp.array(dtype=wp.float64),storage:wp.array(dtype=wp.float64),storage_tangent:wp.array(dtype=wp.float64),
+    block_size:int,ghb_conductance:wp.array(dtype=wp.float64),ghb_head:wp.array(dtype=wp.float64)):
+    i=wp.tid()
+    q=ghb_flow_at(i,head,ghb_conductance,ghb_head)
+    values=physical_row_metrics_base(i,head,source,free,fixed,left,right,flux,conductance,
+        scale,residual,rhs,storage,storage_tangent,q,ghb_conductance[i])
+    for metric in range(9):
+        wp.tile_store(metrics,wp.tile_sum(wp.tile(values[metric])),offset=(i/block_size)*9+metric)
+
+
+@wp.kernel
+def ghb_diagonal(storage:wp.array(dtype=wp.float64),conductance:wp.array(dtype=wp.float64),
+    result:wp.array(dtype=wp.float64)):
+    i=wp.tid()
+    result[i]=storage[i]+conductance[i]
+
+
+@wp.kernel
+def ghb_budget(head:wp.array(dtype=wp.float64),conductance:wp.array(dtype=wp.float64),
+    boundary_head:wp.array(dtype=wp.float64),result:wp.array(dtype=wp.float64)):
+    i=wp.tid()
+    if conductance[i]>wp.float64(0.):
+        q=ghb_flow_at(i,head,conductance,boundary_head)
+        wp.atomic_add(result,0,wp.max(-q,wp.float64(0.)))
+        wp.atomic_add(result,1,wp.max(q,wp.float64(0.)))
 
 
 @wp.kernel

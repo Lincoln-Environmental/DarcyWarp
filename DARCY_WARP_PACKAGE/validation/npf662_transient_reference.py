@@ -50,7 +50,7 @@ class NPF662TransientReference(NPF662Reference):
         n = self.case.active.size
         graph = sparse.coo_matrix((np.ones(self.left.size), (self.left, self.right)), shape=(n, n)).tocsr()
         unused, labels = connected_components(csgraph=graph, directed=False)
-        anchors = (self.case.fixed != 0)|((self.ss > 0.)|((self.sy > 0.)&(self.case.cell_types != 0)))
+        anchors = (self.case.fixed != 0)|(self.ghb_conductance > 0.)|((self.ss > 0.)|((self.sy > 0.)&(self.case.cell_types != 0)))
         for label in np.unique(labels[self.case.active.ravel() != 0]):
             if not np.any(anchors.ravel()[labels == label]):
                 raise ValueError('Ungrounded transient component without boundary or storage')
@@ -75,7 +75,7 @@ class NPF662TransientReference(NPF662Reference):
             shape=(self.case.active.size, self.case.active.size)).tocsr()
         unused, labels = connected_components(csgraph=graph, directed=False)
         active_labels = set(labels[self.case.active.ravel() != 0])
-        anchors = (self.case.fixed != 0)|((tangent > 0.)&self.free)
+        anchors = (self.case.fixed != 0)|(self.ghb_conductance > 0.)|((tangent > 0.)&self.free)
         grounded = set(labels[anchors.ravel()&(self.case.active.ravel() != 0)])
         ungrounded = len(active_labels-grounded)
         valid = bool(all(np.isfinite(fields[name]).all() for name in

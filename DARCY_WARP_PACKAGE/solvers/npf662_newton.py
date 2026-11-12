@@ -9,6 +9,7 @@ from DARCY_WARP_PACKAGE.solvers import npf662_kernels as kernels
 from DARCY_WARP_PACKAGE.validation.head_checks import finite_diagnostics
 from DARCY_WARP_PACKAGE.solvers.work_counters_3d import increment_work
 from DARCY_WARP_PACKAGE.physics.inputs_3d import positive_integer
+from DARCY_WARP_PACKAGE.physics.ghb_3d import validate_ghb_fields
 
 
 @dataclass(frozen=True)
@@ -78,6 +79,8 @@ class NPF662Workspace:
         self.residual_evaluations=0;self.candidate_evaluations=0
         self.multigrid=None;self.flexible=None;self.krylov=None;self.diagonal_flexible=None
         self.commit_graph=None;self.commit_graph_failed=False;self.reuse_trial_state=False
+        self.ghb_conductance = self.ghb_head = self.ghb_totals = None
+        self.ghb_operator = self.trial_ghb_operator = self.previous_ghb_operator = None
         self.device_native = bool(getattr(reference, 'device_storage_state', False))
         self.load(model=model,case=case,reference=reference)
         self.evaluate(trial=False,linearize=True)
@@ -110,6 +113,24 @@ class NPF662Workspace:
     def load(self,*,model,case,reference=None):
         native = getattr(reference, 'device_storage_state', False)
         static_reused = native and getattr(self, '_native_state', None) is reference
+        conductance, boundary_head = validate_ghb_fields(conductance=case.ghb_conductance,
+            head=case.ghb_head, active=case.active, fixed=case.fixed)
+        if conductance is not None and self.ghb_conductance is None:
+            for name in ('ghb_conductance', 'ghb_head', 'ghb_operator', 'trial_ghb_operator', 'previous_ghb_operator'):
+                setattr(self, name, wp.zeros(shape=self.n, dtype=wp.float64, device=self.device))
+            self.ghb_totals = wp.zeros(shape=2, dtype=wp.float64, device=self.device)
+            # Existing captured matvec/commit graphs reference the old diagonal.
+            self.krylov = None
+            if self.flexible is not None:self.flexible.close()
+            self.flexible = None
+            self.commit_graph = None
+            self.commit_graph_failed = False
+        if self.ghb_conductance is not None:
+            if conductance is None:
+                self.ghb_conductance.zero_();self.ghb_head.zero_()
+            else:
+                self.ghb_conductance.assign(conductance.ravel())
+                self.ghb_head.assign(boundary_head.ravel())
         self.source.assign(case.source.ravel())
         self.prescribed.assign(case.values.ravel())
         if not static_reused:
@@ -154,12 +175,35 @@ class NPF662Workspace:
             for name in ('storage_rate','storage_tangent','trial_storage_rate','trial_storage_tangent'):
                 getattr(self,name).zero_()
             self.previous_storage_tangent.zero_()
+        self.refresh_previous_operator()
         self.maximum.zero_()
         wp.launch(kernel=kernels.previous_storage_scale,dim=self.n,
-            inputs=[self.principal,self.previous_storage_tangent,self.scale,self.maximum],device=self.device)
+            inputs=[self.principal,self.previous_operator_tangent,self.scale,self.maximum],device=self.device)
         if native and self.maximum.numpy()[0] != 0.:
             raise ValueError('Invalid device previous-state storage tangent')
         self.jv_counter.zero_();self.preconditioner_counter.zero_();self.residual_evaluations=0;self.candidate_evaluations=0
+
+    @property
+    def operator_tangent(self):
+        return self.storage_tangent if self.ghb_conductance is None else self.ghb_operator
+
+    @property
+    def previous_operator_tangent(self):
+        return self.previous_storage_tangent if self.ghb_conductance is None else self.previous_ghb_operator
+
+    def refresh_previous_operator(self):
+        if self.ghb_conductance is not None:
+            wp.launch(kernel=kernels.ghb_diagonal, dim=self.n,
+                inputs=[self.previous_storage_tangent,self.ghb_conductance,self.previous_ghb_operator],device=self.device)
+
+    def boundary_budget(self):
+        if self.ghb_conductance is None:
+            return dict(ghb_inflow=0.,ghb_outflow=0.,ghb_net=0.)
+        self.ghb_totals.zero_()
+        wp.launch(kernel=kernels.ghb_budget,dim=self.n,
+            inputs=[self.head,self.ghb_conductance,self.ghb_head,self.ghb_totals],device=self.device)
+        inflow,outflow=self.ghb_totals.numpy()
+        return dict(ghb_inflow=float(inflow),ghb_outflow=float(outflow),ghb_net=float(inflow-outflow))
 
     def evaluate(self,*,trial,linearize=False):
         head=self.trial if trial else self.head
@@ -173,14 +217,21 @@ class NPF662Workspace:
         if self.transient:
             wp.launch(kernel=kernels.storage_terms,dim=self.n,inputs=[head,self.storage_previous,self.bottom,
                 self.thickness,self.types,self.storage_ss,self.storage_sy,self.free,storage,tangent,self.storage_factor],device=self.device)
+        if self.ghb_conductance is not None:
+            wp.launch(kernel=kernels.ghb_diagonal,dim=self.n,
+                inputs=[tangent,self.ghb_conductance,self.trial_ghb_operator if trial else self.ghb_operator],device=self.device)
         wp.launch(kernel=kernels.physical_faces,dim=(self.n,3),inputs=[head,self.bottom,self.types,self.right,
             self.c0,q,c,dl,dr,self.thickness,int(linearize or cache_trial)],device=self.device)
         self.metric_partials.zero_()
         block_size=self.metric_block_size if getattr(self,'device_native',False) else self.n
         tiled = getattr(self,'device_tiled',False)
-        wp.launch(kernel=kernels.physical_rows_tiled if tiled else kernels.physical_rows,dim=self.n,
-            inputs=[head,self.source,self.free,self.fixed,self.left,self.right,q,c,self.scale,r,rhs,
-                self.metric_partials.flatten() if tiled else self.metric_partials,storage,tangent,block_size],
+        row_kernel=kernels.physical_rows_tiled if tiled else kernels.physical_rows
+        row_inputs=[head,self.source,self.free,self.fixed,self.left,self.right,q,c,self.scale,r,rhs,
+            self.metric_partials.flatten() if tiled else self.metric_partials,storage,tangent,block_size]
+        if self.ghb_conductance is not None:
+            row_kernel=kernels.physical_rows_ghb_tiled if tiled else kernels.physical_rows_ghb
+            row_inputs.extend((self.ghb_conductance,self.ghb_head))
+        wp.launch(kernel=row_kernel,dim=self.n,inputs=row_inputs,
             device=self.device,block_dim=self.metric_block_size)
         wp.launch(kernel=kernels.combine_metrics_tiled if tiled else kernels.combine_physical_metrics,dim=2304 if tiled else 9,
             inputs=[self.metric_partials,self.metrics,(self.n+block_size-1)//block_size],device=self.device,block_dim=256)
@@ -195,12 +246,12 @@ class NPF662Workspace:
 
     def matvec(self,x,y,z,alpha,beta):
         wp.launch(kernel=kernels.jacobian_action,dim=self.n,inputs=[x,y,z,self.free,self.left,self.right,
-            self.dl,self.dr,self.c,self.c0,self.scale,self.mode,self.jv_counter,alpha,beta,self.storage_tangent],device=self.device)
+            self.dl,self.dr,self.c,self.c0,self.scale,self.mode,self.jv_counter,alpha,beta,self.operator_tangent],device=self.device)
 
     def precondition(self,x,y,z,alpha,beta):
         wp.launch(kernel=increment_work, dim=1, inputs=[self.preconditioner_counter, 0], device=self.device)
         wp.launch(kernel=kernels.diagonal_action,dim=self.n,inputs=[x,y,z,self.free,self.left,self.right,
-            self.dl,self.dr,self.c,self.c0,self.scale,self.mode,alpha,beta,self.storage_tangent],device=self.device)
+            self.dl,self.dr,self.c,self.c0,self.scale,self.mode,alpha,beta,self.operator_tangent],device=self.device)
 
     def candidate(self,*,alpha):
         wp.launch(kernel=kernels.candidate_head,dim=self.n,inputs=[self.head,self.delta,self.free,self.trial,alpha],device=self.device)
@@ -211,6 +262,8 @@ class NPF662Workspace:
                 ('dr','trial_dr'),('rhs','trial_rhs'),('residual','trial_residual'),
                 ('storage_rate','trial_storage_rate'),('storage_tangent','trial_storage_tangent')):
             wp.copy(dest=getattr(self,current),src=getattr(self,trial))
+        if self.ghb_conductance is not None:
+            wp.copy(dest=self.ghb_operator,src=self.trial_ghb_operator)
 
     def accept_trial(self,*,metrics):
         """Commit the evaluated state into stable buffers referenced by graphs."""
@@ -253,6 +306,8 @@ class NPF662Workspace:
         self.commit_graph=None
         self._native_state = self._faces_snapshot = self._types_snapshot = None
         self.principal = self.previous_storage_tangent = None
+        self.ghb_conductance = self.ghb_head = self.ghb_totals = None
+        self.ghb_operator = self.trial_ghb_operator = self.previous_ghb_operator = None
         self.predictor_increment = self.predictor_older_increment = self.predictor_checkpoint = None
         for name in ('head','prescribed','trial','source','bottom','thickness','scale','rhs','trial_rhs','residual','trial_residual','delta',
             'c0','q','c','trial_q','trial_c','dl','dr','trial_dl','trial_dr','free','fixed','types','left','right','metrics','maximum','mode','jv_counter','preconditioner_counter',
@@ -343,12 +398,14 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
             and not workspace.multigrid.closed and workspace.multigrid.controls == mg_controls
             and not workspace.faces_changed)
         storage_diagonal = None if direct_refresh else getattr(reference,'preconditioner_storage',None)
+        if not direct_refresh and workspace.ghb_conductance is not None:
+            storage_diagonal=workspace.previous_operator_tangent.numpy().reshape(case.active.shape)
         mg_reused=direct_refresh or (workspace.multigrid is not None and workspace.multigrid.compatible(
             faces=model._session.faces,active=case.active,fixed=case.fixed,device=model.device,controls=mg_controls,
             storage_diag=storage_diagonal))
         if direct_refresh:
             refresh_start=perf_counter()
-            wp.copy(dest=workspace.multigrid.levels[0]['storage'].flatten(), src=workspace.previous_storage_tangent)
+            wp.copy(dest=workspace.multigrid.levels[0]['storage'].flatten(), src=workspace.previous_operator_tangent)
             # Current-coefficient preconditioning refreshes the complete
             # hierarchy immediately before each Krylov solve. Avoid preparing
             # an intermediate previous-state hierarchy that is never applied.
@@ -418,7 +475,7 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
             workspace.maximum.zero_()
             wp.launch(kernel=kernels.impossible_linear_rows,dim=workspace.n,inputs=[workspace.rhs,workspace.free,
                 workspace.left,workspace.right,workspace.dl,workspace.dr,workspace.c,workspace.c0,mode,workspace.maximum,
-                workspace.storage_tangent],device=workspace.device)
+                workspace.operator_tangent],device=workspace.device)
             impossible=int(workspace.maximum.numpy()[0])
             if impossible:
                 attempts.append(dict(direction=direction,krylov=0,remaining=remaining,stopping='zero_row_nonzero_rhs',zero_rows=impossible))
@@ -493,6 +550,7 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
         max_krylov_per_outer=krylov_budget,max_outer=max_outer,krylov_restart=restart,
         scaling='fixed full-saturated principal diagonal; S*J and S*R',preconditioner='fixed diagonal within each GMRES solve')
     result['krylov_method']=method.upper()
+    result['ghb_budget']=workspace.boundary_budget()
     result['krylov_workspace_reused']=krylov_reused
     result['npf_preconditioner']=npf_preconditioner
     result.update(accepted_updates=sum(row['accepted'] for row in history),

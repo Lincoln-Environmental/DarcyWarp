@@ -16,6 +16,7 @@ from typing import Any, Mapping
 import numpy as np
 
 from DARCY_WARP_PACKAGE.physics.inputs_3d import binary_mask, floating_field
+from DARCY_WARP_PACKAGE.physics.ghb_3d import validate_ghb_fields
 
 
 FaceConductance = tuple[
@@ -56,6 +57,9 @@ class Model3DInputs:
     dz: float
     named_masks: Mapping[str, np.ndarray] = field(default_factory=dict)
     metadata: Mapping[str, Any] = field(default_factory=dict)
+    ghb_conductance: np.ndarray | float | None = None
+    ghb_head: np.ndarray | float | None = None
+    ghb_mask: np.ndarray | None = None
 
     def __post_init__(self) -> None:
         kx = np.asarray(self.kx)
@@ -77,6 +81,12 @@ class Model3DInputs:
             raise ValueError("bc_mask cannot select inactive cells.")
         object.__setattr__(self, "active", active)
         object.__setattr__(self, "bc_mask", bc_mask)
+        conductance, boundary_head = validate_ghb_fields(conductance=self.ghb_conductance,
+            head=self.ghb_head,mask=self.ghb_mask,active=active,fixed=bc_mask)
+        object.__setattr__(self, "ghb_conductance", conductance)
+        object.__setattr__(self, "ghb_head", boundary_head)
+        if self.ghb_mask is not None:
+            object.__setattr__(self, "ghb_mask", binary_mask(value=self.ghb_mask,name="ghb_mask",shape=shape))
         object.__setattr__(self, "bc_values", _array("bc_values", self.bc_values, shape, np.dtype(np.float64)))
         object.__setattr__(self, "rhs", _array("rhs", self.rhs, shape, np.dtype(np.float64)))
         if self.initial_head is not None:
@@ -168,6 +178,7 @@ class Model3DInputs:
                 bc_values=self.bc_values,
                 rhs=self.rhs,
                 initial_head=self.initial_head,
+                ghb_conductance=self.ghb_conductance, ghb_head=self.ghb_head, ghb_mask=self.ghb_mask,
             )
         else:
             if len(face_conductance) != 6:
@@ -184,5 +195,6 @@ class Model3DInputs:
                 bc_values=self.bc_values,
                 rhs=self.rhs,
                 initial_head=self.initial_head,
+                ghb_conductance=self.ghb_conductance, ghb_head=self.ghb_head, ghb_mask=self.ghb_mask,
             )
         return instance
