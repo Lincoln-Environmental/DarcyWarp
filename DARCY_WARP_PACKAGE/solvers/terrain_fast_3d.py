@@ -23,6 +23,7 @@ from DARCY_WARP_PACKAGE.physics.terrain_budget_3d import compute_terrain_budget_
 from DARCY_WARP_PACKAGE.physics.storage_contract_3d import validate_unconfined_storage_inputs
 from DARCY_WARP_PACKAGE.physics.storage_3d import storage_increment_3d, seed_zero_capacity_state_3d
 from DARCY_WARP_PACKAGE.physics.components_3d import hydraulic_component_labels_3d
+from DARCY_WARP_PACKAGE.physics.inputs_3d import binary_mask
 
 
 def pack_terrain_coefficients(*, operator):
@@ -295,8 +296,8 @@ class TerrainOperatorSession3D:
         self.kx = field_3d(value=kx,shape=self.shape,name="kx",nonnegative=True)
         self.ky = field_3d(value=ky,shape=self.shape,name="ky",nonnegative=True)
         self.kz = field_3d(value=kz,shape=self.shape,name="kz",nonnegative=True)
-        self.bc_mask = np.asarray(bc_mask,dtype=np.int32).copy()
-        if self.bc_mask.shape != self.shape or not np.all((self.bc_mask == 0)|(self.bc_mask == 1)) or np.any((self.bc_mask != 0)&(grid.active == 0)):
+        self.bc_mask = binary_mask(value=bc_mask, name="bc_mask", shape=self.shape)
+        if np.any((self.bc_mask != 0)&(grid.active == 0)):
             raise ValueError("bc_mask must be binary, grid-shaped and active")
         self.bc_values = field_3d(value=bc_values,shape=self.shape,name="bc_values")
         self.rhs = field_3d(value=rhs,shape=self.shape,name="rhs")
