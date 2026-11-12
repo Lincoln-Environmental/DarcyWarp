@@ -1,6 +1,26 @@
 kimi --model kimi-code/k3
 # DarcyWarp — Agent System Memory
 
+> 2026-11-13 direct GHB parity audit: MF6 benchmark settings are unchanged.
+> User accepts the measured 6.467e-5 m large-model envelope but prefers a
+> 1e-6 m maximum head target. Only convertible transient meets that target
+> among the six 500x500x5 cases (5.338e-8 m); do not label the other five
+> as passing it. New verify_3d_ghb_mf6_parity.py evaluates production kernels
+> at saved MF6 heads/previous heads with zero iteration budgets, verifies
+> cache hashes/timesteps, and compares individual native faces/GHB/STO/rows.
+> Confined Cartesian/NPF agree within 32 eps times operands; GHB/STO pass
+> all 63 large endpoints. Convertible CBC uses stored DATA-SAT, differing
+> from saturation refreshed at final heads by up to 3.889e-8. Reusing native
+> DATA-SAT reproduces every native face within roundoff. Separate all-CHD
+> native probes at saved MF6 steady and first/last transient heads verify
+> production NPF face laws (max errors 1.137e-13/1.421e-14/7.105e-15 m3/day).
+> Probes retain IMS settings, are not benchmark solves, and do not test
+> GHB/STO on CHD cells. Existing tighter-reference 100x100x5 experiment
+> agrees in all six cases within 1.561e-9 m; kept separate from baseline.
+> 107 affected CPU/CUDA/live-MF6 regressions pass. Audit code faf4eed on dev
+> -> 4fff475 on main. No production solver or runtime changes. Details and
+> evidence: docs/3D_NATIVE_GHB.rst, benchmark_results/ghb_3d/mf6_parity_*.json.
+
 > 2026-11-12 native 3D GHB release: selectively promoted to main at
 > `1e23c32` (feature `3496a50` dev -> `561e92d` main); primary checkout stays
 > on dev. Cartesian classic/fast and NPF/STO now accept ghb_conductance,

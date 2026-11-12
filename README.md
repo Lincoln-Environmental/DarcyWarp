@@ -13,9 +13,18 @@ release tests. The report's reproduction commands describe the `main` checkout.
 `main` and `dev`, including steady/transient CPU/CUDA and live MF6 checks.
 On 500 x 500 x 5 cells, the qualified convertible NPF 20-step history takes
 **1.819 s versus 142.638 s MF6**, with FP64 roundoff checks. All six large
-cases pass and are faster than their matching MF6 runs. The guide includes
+cases pass their recorded sanity gates and are faster than their matching MF6 runs. The guide includes
 every timing, build/update APIs, budgets, Cartesian FGMRES, separate steady
 and transient profiles, precision limits and runnable sanity commands.
+
+The direct parity audit retains **1e-6 m as the preferred maximum head-error
+target**. The current large-model maximum is **6.467e-5 m**; convertible NPF
+transients agree within **5.338e-8 m**. Matched-state flow, GHB and storage
+checks support the equation parity; the guide distinguishes MF6's stored
+saturation in reported budgets from saturation refreshed at final heads.
+MF6 benchmark settings remain unchanged. Run
+`working_tests/verify_3d_ghb_mf6_parity.py` against saved sanity results for
+the separate head and operator checks.
 
 The [repeated NPF benchmark suite](docs/NPF662_VS_MF6_BENCHMARKS.md) compares
 the dev branch's explicit NPF 6.6.2 formulation with fresh native MF6 solves.
