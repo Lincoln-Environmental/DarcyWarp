@@ -39,6 +39,7 @@ Public License, version 3 or later (``AGPL-3.0-or-later``).
    runtime_2d
    npf_gpu_native
    native_3d_ghb
+   ugly_t_3d
    docs_build
    license
 
