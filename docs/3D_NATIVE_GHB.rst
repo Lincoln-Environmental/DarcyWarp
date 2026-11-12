@@ -81,6 +81,34 @@ The native GHB implementation milestone passed 892 broad 3D/NPF regressions
 checks. Realistic GPU/MF6 timing qualification is in progress on ``dev``;
 this milestone is not yet the completed ``main`` release.
 
+Cartesian linear acceleration
+-----------------------------
+
+Fast confined Cartesian solves additionally accept
+``linear_acceleration='fgmres'``. This retains the Cartesian face operator and
+independent physical budget, and shares the tested NPF flexible-GMRES and
+vertical-line K-cycle machinery. FP64 defect correction recomputes the true
+residual between linear solves. ``max_cycles`` is an exact total Krylov
+iteration budget on this path, rather than a count of standalone K-cycles.
+``linear_krylov_restart`` controls the basis size; ``linear_kcycle_controls``
+accepts ``NPF662KCycleControls``. Defaults use an FP64 preconditioner. An
+explicit FP32 preconditioner still keeps heads, residuals and acceptance in
+FP64. The existing standalone K-cycle remains the default.
+
+This path fixes the observed tight-accuracy stall of standalone K-cycles on
+the heterogeneous 100 x 100 x 5 GHB benchmark. The stalled run exhausted
+4,000 cycles at approximately ``3.3e-7`` volumetric RMS. FGMRES reached
+``1.8e-13`` in 26 Krylov iterations, with a three-repeat public-solve median
+of 0.262 seconds versus the original tight MF6 run's 1.053 seconds. A trial
+of coarse-correction energy projection failed to resolve the stall and was
+discarded. These are development measurements; full release timings follow
+the larger qualification campaign.
+
+The acceleration tests include changing K, boundary conductance/head, zero
+conductance, FP64/FP32 preconditioners, exact iteration budgets, invalid
+controls and resource release. The focused accelerator/GHB/session selection
+passes 97 tests on CPU/CUDA.
+
 The terrain mask repair is separate: ``04a2bca`` validates original values
 before integer conversion and passed 851 terrain regressions on CPU/CUDA.
 Fractional masks such as 0.9, 1.9 and -0.1 now raise instead of silently

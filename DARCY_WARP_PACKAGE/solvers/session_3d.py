@@ -281,6 +281,9 @@ class ThreeDOperatorSession:
         self.ghb_conductance = self.ghb_head = None
         self.z_interfaces = None
         self.layer_geometry = None
+        for record in self._fast_workspace_holder.values():
+            if isinstance(record,dict) and record.get('linear_fgmres') is not None:
+                record['linear_fgmres'].close()
         self._fast_workspace_holder.clear()
         workspace=self._npf662_workspace_holder.get('workspace')
         if workspace is not None:workspace.close()
