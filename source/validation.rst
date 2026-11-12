@@ -63,6 +63,29 @@ and tolerances when interpreting a result.
        retries, fallback and comparison of full histories with Picard.
      - `FAS transient tests <https://github.com/Lincoln-Environmental/DarcyWarp/blob/main/tests/test_fas_transient_multistep.py>`_.
 
+3D Cartesian and NPF/STO validation
+-----------------------------------
+
+The 3D tests cover Cartesian operator accuracy, layered analytical flow,
+CPU/MF6 6.6.2 NPF/STO comparisons, transient storage and stepwise physical
+acceptance, and device-resident multi-step histories.
+
+* `tests/test_3d_operator_analytical.py` and
+  `examples/verify_3d_series_flow.py`: Cartesian and layered analytical checks.
+* `tests/test_npf662_confined.py`, `tests/test_npf662_layered_unconfined.py`
+  and `tests/test_npf662_transient.py`: NPF/STO head, flux and storage checks.
+* `tests/test_npf662_device_native.py` and
+  `tests/test_npf662_history.py`: CPU/CUDA parity, device state reuse,
+  changing K between histories, rejected timesteps and independent audits.
+* `working_tests/run_3d_sanity.py`: portable comparisons with fingerprinted
+  MF6 references, independent physical audits, head/flux gates and distinct
+  timing intervals.
+
+The :doc:`npf_gpu_native` page summarises the current 500 x 500 x 5
+transient GPU qualification and the controls needed to reproduce it.
+The checked-in GitHub Actions workflows are CPU smoke tests; they do not
+repeat the GPU performance qualification at every commit.
+
 Run the existing CI smoke tests from the repository root:
 
 .. code-block:: bash
