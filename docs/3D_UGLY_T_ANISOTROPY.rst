@@ -82,32 +82,47 @@ Large-model results in progress
 --------------------------------
 
 The practical-control campaign at 500 x 500 x 5 is running serially.
-The first completed convertible NPF cases have GHB off and Kh/Kv=1:
+The completed convertible NPF cases below have Kh/Kv=1:
 
 .. list-table:: Completed large cases (seconds, three-repeat GPU medians)
    :header-rows: 1
 
    * - Mode
+     - GHB
      - GPU public solve
      - MF6 native process
      - MF6/GPU
      - Maximum head difference (m)
    * - Steady
+     - Off
      - 1.289
      - 229.647
      - 178.1
      - 5.023e-5
    * - Twenty transient steps
+     - Off
      - 2.049
      - 178.780
      - 87.3
      - 5.415e-7
+   * - Steady
+     - On
+     - 1.191
+     - Timed out at 1,800 s
+     - Unavailable
+     - Unavailable
 
-Both pass the independent physical and existing sanity gates. The transient
-history meets the preferred ``1e-6 m`` maximum head-difference target;
-the steady case does not. The large field has Kh from ``2.240`` to
-``679.324 m/day``, a contrast of 303.3. The remaining ratios, GHB cases
-and confined cases are not yet qualified by this partial result.
+All three GPU runs pass the independent physical checks. Both GHB-off
+comparisons pass the existing sanity gates; their transient history meets
+the preferred ``1e-6 m`` maximum head-difference target and their steady
+case does not. The GHB-on steady reference did not converge before its
+unchanged 1,800-second process limit. It has no qualified speedup or MF6
+head-parity result. Its GPU relative cellwise imbalance is ``1.230e-8``
+and head-equivalent RMS residual is ``1.867e-12 m``.
+
+The large field has Kh from ``2.240`` to ``679.324 m/day``, a contrast
+of 303.3. The remaining ratios, GHB cases and confined cases are not yet
+qualified by this partial result.
 
 * :download:`Partial large-model results and source hashes <../benchmark_results/ugly_t_3d/large_500_progress.json>`
 
