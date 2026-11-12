@@ -203,6 +203,34 @@ def test_tiled_toggle_replaces_captured_arnoldi_graphs(device):
             assert checks['independent_accepted']
 
 
+@pytest.mark.parametrize('convertible', [False, True])
+def test_steady_ghb_tiled_reductions_and_device_arnoldi_preserve_endpoint(device, convertible):
+    from DARCY_WARP_PACKAGE.validation.npf662_reference import NPF662Reference
+    case = make_case(convertible=convertible, shape=(2, 17, 19))
+    conductance = np.zeros_like(a=case.source)
+    conductance[:, :, -1] = .3
+    case = replace(case, ghb_conductance=conductance, ghb_head=np.full_like(a=case.source, fill_value=3.5))
+    reference = NPF662Reference(case=case)
+    answers = []
+    with make_model(case=case, device=device) as model:
+        model.update_ghb(ghb_conductance=case.ghb_conductance, ghb_head=case.ghb_head)
+        for enabled in (False, True, False):
+            head, info = model.solve(unconfined=convertible, npf_cell_type=case.cell_types,
+                npf_preconditioner='kcycle', npf_roundoff_acceptance=True,
+                npf_newton_controls=NPF662NewtonControls(tiled_reductions=enabled, reuse_trial_state=True),
+                max_outer=30, max_cycles=500, krylov_restart=8)
+            assert info['converged'], info
+            workspace = model._session._npf662_workspace_holder['workspace']
+            assert workspace.device_tiled == (enabled and device.startswith('cuda'))
+            assert workspace.device_arnoldi == workspace.device_tiled
+            assert info['independent_audit_performed']
+            checks, unused = reference.evaluate(head=head, roundoff_acceptance=True)
+            assert checks['independent_accepted'], checks
+            answers.append(head.copy())
+    np.testing.assert_allclose(actual=answers[1], desired=answers[0], rtol=0., atol=2e-12)
+    np.testing.assert_allclose(actual=answers[2], desired=answers[0], rtol=0., atol=2e-12)
+
+
 def test_fp32_hierarchy_rejects_unrepresentable_positive_coefficients(device):
     case = make_case(convertible=True)
     case = replace(case, kx=case.kx*1e40, ky=case.ky*1e40, kz=case.kz*1e40)

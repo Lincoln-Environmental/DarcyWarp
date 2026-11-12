@@ -225,7 +225,8 @@ class NPF662Workspace:
         wp.launch(kernel=kernels.physical_faces,dim=(self.n,3),inputs=[head,self.bottom,self.types,self.right,
             self.c0,q,c,dl,dr,self.thickness,int(linearize or cache_trial)],device=self.device)
         self.metric_partials.zero_()
-        block_size=self.metric_block_size if getattr(self,'device_native',False) else self.n
+        block_size=self.metric_block_size if (getattr(self,'device_native',False) or
+            getattr(self,'device_tiled',False)) else self.n
         tiled = getattr(self,'device_tiled',False)
         row_kernel=kernels.physical_rows_tiled if tiled else kernels.physical_rows
         row_inputs=[head,self.source,self.free,self.fixed,self.left,self.right,q,c,self.scale,r,rhs,
@@ -256,7 +257,8 @@ class NPF662Workspace:
                 wp.launch(kernel=kernels.roundoff_rows,dim=self.n,inputs=[head,self.source,r,self.free,
                     self.left,self.right,c,self.roundoff_zero if self.ghb_conductance is None else self.ghb_conductance,
                     self.roundoff_zero if self.ghb_head is None else self.ghb_head,storage,tangent,
-                    self.storage_previous,self.previous_storage_tangent,self.roundoff_partials],device=self.device)
+                    self.storage_previous,self.previous_storage_tangent,self.types,self.bottom,self.thickness,
+                    self.roundoff_partials],device=self.device)
                 wp.launch(kernel=kernels.combine_roundoff,dim=self.roundoff_partials.size,
                     inputs=[self.roundoff_partials,self.maximum],device=self.device)
                 ratio=float(self.maximum.numpy()[0])
@@ -402,11 +404,11 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
         holder['workspace']=workspace
     elif prepared_workspace is None:workspace.load(model=model,case=case,reference=reference)
     krylov_reused=workspace.select_krylov(method=method,krylov_budget=krylov_budget)
-    tiled = bool(device_native and controls.tiled_reductions and wp.get_device(ident=model.device).is_cuda)
+    tiled = bool(controls.tiled_reductions and wp.get_device(ident=model.device).is_cuda)
     if tiled != getattr(workspace,'device_tiled',False) and workspace.flexible is not None:
         workspace.flexible.arnoldi_graphs.clear()
     workspace.device_tiled = tiled
-    workspace.device_arnoldi=device_native
+    workspace.device_arnoldi=device_native or tiled
     workspace.device_native=device_native
     workspace.reuse_trial_state=controls.reuse_trial_state
     workspace.roundoff_acceptance=roundoff_acceptance
@@ -555,6 +557,9 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
     converged=bool(accepted and device_passed)
     requested_met=bool(current['finite'] and current['head_residual_rms']<=1e-6 and
         (current['physical_rms']<=physical_tolerance or current['relative_cell_imbalance']<=relative_tolerance))
+    if roundoff_acceptance:
+        if independent_performed:requested_met=bool(requested_met and checks['requested_thresholds_met'])
+        checks.update(requested_thresholds_met=requested_met,precision_limited=bool(converged and not requested_met))
     workspace.predictor_checkpoint = None
     if controls.timestep_predictor and workspace.transient and converged:
         wp.copy(dest=workspace.predictor_older_increment,src=workspace.predictor_increment)

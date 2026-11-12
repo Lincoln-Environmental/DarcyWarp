@@ -167,13 +167,18 @@ and ``--tight``. Every free cell must satisfy
 
    |r_i| \leq 32\epsilon_{64}\left(|Q_i|
    +\sum_j C_{ij}(|h_i|+|h_j|)+C_i^{GHB}(|h_i|+|h_b|)
-   +|q_i^{STO}|+(|S_i|+|S_i^{previous}|)(|h_i|+|h_i^{previous}|)\right).
+   +|q_i^{STO}|+(|S_i|+|S_i^{previous}|)a_i\right),
 
-``S`` is the physical storage tangent; it excludes GHB. The 32-epsilon
-allowance accounts for a short row's FP64 arithmetic. It measures backward
-error of the frozen endpoint equations, not a bound on forward head error
-or exact nonlinear constitutive evaluation. Conditioning can amplify the
-head difference between two solutions with small residuals.
+   a_i=|h_i|+|h_i^{previous}|+
+       2\,\mathbf{1}_{convertible}(|b_i|+T_i).
+
+``S`` is the physical storage tangent; it excludes GHB. ``b`` and ``T`` are
+cell bottom and thickness. Convertible storage subtracts saturations formed
+relative to those elevations, so small absolute heads do not imply small
+arithmetic operands. The 32-epsilon allowance scales the residual by the
+equation and constitutive-evaluation operands. It is a backward-residual
+indicator, not a rigorous forward head-error bound or an exact-arithmetic
+nonlinear certificate. Conditioning can amplify head differences.
 
 Acceptance also requires head-equivalent RMS at most ``1e-12 m``, the original
 conservation gate (physical RMS at most ``1e-12`` or relative cell imbalance
@@ -191,6 +196,19 @@ This distinction matters on the 1.25-million-cell GHB case: a physical RMS
 of ``1.15e-12`` narrowly misses a literal ``1e-12`` request despite a
 head-equivalent RMS of ``8.1e-16 m``. Its original fixed-threshold run remains
 recorded as failed. The roundoff-mode run is a separate experiment.
+
+An initial roundoff-mode trial also failed the convertible transient case:
+its storage scale used only absolute current/previous heads. The worst cell
+had heads 0.01013/0.00401 m, bottom -15.98994 m and thickness 24.00802 m.
+Its residual ``1.31e-13`` exceeded that incomplete allowance by 13.3%.
+Including the actual layer-datum operands corrects the scale; a dedicated
+CPU/CUDA analytical storage regression protects this case. The original
+failed experiment is retained in the evidence.
+
+The runtime profile's ``tiled_reductions=True`` also enables tiled physical
+reductions and device Arnoldi updates for steady NPF solves. Steady solves
+retain their independent final audit. Defaults remain unchanged; toggling
+the option on a cached GHB model is checked against the original endpoint.
 
 The terrain mask repair is separate: ``04a2bca`` validates original values
 before integer conversion and passed 851 terrain regressions on CPU/CUDA.

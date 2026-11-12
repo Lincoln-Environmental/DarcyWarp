@@ -78,3 +78,25 @@ def test_roundoff_switch_rejects_non_booleans(value):
         build_cell(model=model, source=.1, conductance=3., boundary=1., initial=.25)
         with pytest.raises(ValueError, match='npf_roundoff_acceptance must be Boolean'):
             model.solve(npf_roundoff_acceptance=value)
+
+
+def test_convertible_storage_roundoff_includes_layer_datum(device):
+    previous = np.full(shape=(1, 1, 1), fill_value=.004)
+    expected = .01
+    slope = .15*2500./7./(1.-1e-6)
+    source = slope*(expected-.004)+2.*expected
+    with WarpDarcySolver3D(nx=1, ny=1, nz=1, dx=50., dy=50., dz=24., device=device,
+            implementation='fast', formulation='mf6_6_6_2_npf') as model:
+        build_cell(model=model, source=source, conductance=2., boundary=0., initial=.004)
+        head, info = model.solve(transient=True, dt=7., head_prev=previous, ss=0., sy=.15,
+            unconfined=True, top_elevation=8., npf_roundoff_acceptance=True,
+            npf_final_relative_tolerance=1e-12, npf_device_native=True, max_outer=10)
+        assert info['converged'], info
+        assert info['roundoff_bound_ratio_max'] <= 1.
+        np.testing.assert_allclose(actual=head, desired=expected, rtol=0., atol=1e-14)
+        from DARCY_WARP_PACKAGE.solvers.npf662_3d import case_from_model
+        from DARCY_WARP_PACKAGE.validation.npf662_transient_reference import NPF662TransientReference
+        case = case_from_model(model=model, top=8., cell_type=1)
+        reference = NPF662TransientReference(case=case, previous=previous, dt=7., ss=0., sy=.15)
+        checks, unused = reference.evaluate(head=head, roundoff_acceptance=True)
+        assert checks['independent_accepted'], checks
