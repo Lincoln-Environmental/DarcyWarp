@@ -26,6 +26,7 @@ from typing import Any
 
 import numpy as np
 from DARCY_WARP_PACKAGE.validation.npf662_metrics import stable_rms
+from DARCY_WARP_PACKAGE.physics.ghb_3d import validate_ghb_fields, add_ghb_linear_terms
 import warp as wp
 
 from DARCY_WARP_PACKAGE.config import NP_FLOAT, WP_FLOAT
@@ -563,6 +564,7 @@ def solve_fast_confined_kcycle_3d(
     check_every_no: int = 5,
     device: str = "cuda:0",
     return_info: bool = True,
+    ghb_conductance=None, ghb_head=None,
     **unsupported: Any,
 ):
     """Solve a steady or backward-Euler confined FP64 face-array system."""
@@ -623,6 +625,11 @@ def solve_fast_confined_kcycle_3d(
     # before any smoothing: a nonzero source there is incompatible (raise);
     # otherwise the cell is excluded from the working set instead of being
     # silently pinned by an identity equation.
+    ghb_conductance, ghb_head = validate_ghb_fields(conductance=ghb_conductance,
+        head=ghb_head, active=active, fixed=bc_mask)
+    physical_storage = storage
+    rhs_effective, storage = add_ghb_linear_terms(rhs=rhs_effective, diagonal=storage,
+                                                 conductance=ghb_conductance, head=ghb_head)
     isolated = _resolve_isolated_free_cells(
         faces=(tx_p, tx_m, ty_p, ty_m, tz_p, tz_m),
         active=np.asarray(active, dtype=np.int32),
@@ -742,9 +749,10 @@ def solve_fast_confined_kcycle_3d(
         faces=(tx_p, tx_m, ty_p, ty_m, tz_p, tz_m),
         active=active_work,
         bc_mask=bc_f,
-        storage_diag=storage,
+        storage_diag=physical_storage,
         head_prev=h_prev_used,
         return_field=True,
+        ghb_conductance=ghb_conductance, ghb_head=ghb_head,
     )
     physical = info["budget"].pop("cell_residual_field")
     diagonal = info["budget"].pop("operator_diagonal")
@@ -839,6 +847,7 @@ def solve_fast_unconfined_kcycle_3d(
     final_budget_relative_tol: float = 1e-3,
     device: str = "cuda:0",
     return_info: bool = True,
+    ghb_conductance=None, ghb_head=None,
     **unsupported: Any,
 ):
     """Unconfined 3D solve on the fast face-array K-cycle path.
@@ -941,6 +950,10 @@ def solve_fast_unconfined_kcycle_3d(
             )
             transient_i = legacy_transient
         # Singular-row detection on this iteration's operator.
+        ghb_c, ghb_h = validate_ghb_fields(conductance=ghb_conductance,
+            head=ghb_head, active=act0, fixed=bcm0)
+        rhs_i, storage_i = add_ghb_linear_terms(rhs=rhs_i, diagonal=storage_i,
+                                               conductance=ghb_c, head=ghb_h)
         isolated = _resolve_isolated_free_cells(
             faces=faces_i, active=act0, bc_mask=bcm0,
             rhs_eff=rhs_i, storage_diag=storage_i, topology_cache=state,
@@ -1073,6 +1086,7 @@ def solve_fast_unconfined_kcycle_3d(
         final_budget_relative_tol=final_budget_relative_tol,
         legacy_storage_coeff=storage_coeff,
         return_info=return_info,
+        ghb_conductance=ghb_conductance, ghb_head=ghb_head,
     )
 
 

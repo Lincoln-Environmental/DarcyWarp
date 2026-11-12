@@ -30,6 +30,27 @@ def validate_mf6_identity(*, version: str, checksum: str) -> str:
     return MF6_BUILDS[checksum]
 
 
+def ghb_stress_period_data(*, case):
+    """Map independent cell conductance/head inputs into MF6 row ordering."""
+    if case.ghb_conductance is None:
+        return []
+    conductance = np.broadcast_to(case.ghb_conductance, case.active.shape)
+    boundary_head = np.broadcast_to(case.ghb_head, case.active.shape)
+    ny = case.active.shape[1]
+    return [((int(k), ny-1-int(j), int(i)), float(boundary_head[k,j,i]), float(conductance[k,j,i]))
+        for k,j,i in np.argwhere(conductance > 0.)]
+
+
+def decode_ghb_budget(*, budget, mapping, shape, kstpkper=None):
+    """Native GHB flux into each canonical cell, including repeated entries."""
+    result = np.zeros(shape=shape, dtype=np.float64)
+    names = {name.decode().strip() for name in budget.get_unique_record_names()}
+    if 'GHB' in names:
+        records = budget.get_data(text='GHB', kstpkper=kstpkper)[-1]
+        np.add.at(result.ravel(), mapping[records['node'].astype(int)-1], records['q'])
+    return result
+
+
 def run_reference_mf6(*,case,directory,executable,prescribed_state=None,head_tolerance_m=1e-14,
                       native_solver_options=None,timeout_seconds=600,source_package='wel',
                       replace_native_solver_options=False):
@@ -89,6 +110,8 @@ def run_reference_mf6(*,case,directory,executable,prescribed_state=None,head_tol
         if fixed[k,j,i]:bc.append((cell,float(values[k,j,i])))
         elif case.source[k,j,i]!=0:sources.append((cell,float(case.source[k,j,i])))
     if bc:flopy.mf6.ModflowGwfchd(gwf,stress_period_data=bc,save_flows=True)
+    ghb = ghb_stress_period_data(case=case)
+    if ghb:flopy.mf6.ModflowGwfghb(gwf,stress_period_data=ghb,save_flows=True)
     if sources:
         if source_package=='wel':
             flopy.mf6.ModflowGwfwel(gwf,pname='SOURCE',stress_period_data=sources,auto_flow_reduce=None,save_flows=True)
@@ -163,7 +186,12 @@ def run_reference_mf6(*,case,directory,executable,prescribed_state=None,head_tol
     for record in budget.get_data(text='DATA-SAT')[-1]:native_sat[mapping[int(record['node'])-1]]=float(record['sat'])
     native_sat=native_sat.reshape(case.active.shape)
     saturation_error=float(np.max(np.abs((native_sat-fields['saturation'])[case.active!=0])))
-    physical=np.where(reference.free,case.source-(reference.incidence@flux).reshape(case.active.shape),0.)
+    ghb_native=decode_ghb_budget(budget=budget,mapping=mapping,shape=case.active.shape)
+    ghb_error=float(np.max(np.abs(ghb_native+fields['ghb_outflow'])))
+    ghb_tolerance=np.maximum(1e-14,16.*np.finfo(float).eps*np.maximum(
+        np.abs(ghb_native),np.abs(reference.ghb_conductance*raw)+np.abs(reference.ghb_conductance*reference.ghb_head)))
+    ghb_valid=bool(np.all(np.isfinite(ghb_native)) and np.all(np.abs(ghb_native+fields['ghb_outflow'])<=ghb_tolerance))
+    physical=np.where(reference.free,case.source+ghb_native-(reference.incidence@flux).reshape(case.active.shape),0.)
     native_l1=stable_sum(values=np.abs(physical[reference.free]))
     native_relative=native_l1/max(checks['gross_throughput'],np.finfo(float).tiny)
     native_rms=stable_rms(values=physical[reference.free])
@@ -171,13 +199,14 @@ def run_reference_mf6(*,case,directory,executable,prescribed_state=None,head_tol
         if not np.array_equal(raw[case.active!=0],values[case.active!=0]):raise ValueError('Supplied-head verification advanced a head')
         checks['independent_accepted']=False  # A constitutive check is not a root solve.
     result.update(independent=checks,source_allocation_max_error=source_error,reciprocity_max=reciprocity,saturation_max_error=saturation_error,
+        ghb_flux_max_error=ghb_error,ghb_law_valid=ghb_valid,
         source_allocation_valid=source_allocation_valid,source_allocation_max_tolerance=float(np.max(source_tolerance)),
         native_flux_residual_rms=native_rms,native_flux_residual_relative=native_relative,
-        independent_conservation=bool(native and source_allocation_valid and checks['input_valid'] and
+        independent_conservation=bool(native and source_allocation_valid and ghb_valid and checks['input_valid'] and
             checks['boundary_condition_valid'] and checks['physical_metrics_valid'] and
             np.all(np.isfinite([native_rms,native_relative])) and (native_rms<=1e-12 or native_relative<=1e-8)))
     fields.update(raw_head=raw,native_saturation=native_sat,active=case.active,flux_native=flux,
-        native_residual=physical,source_realised=realised.reshape(case.active.shape),node_to_user=mapping)
+        native_residual=physical,source_realised=realised.reshape(case.active.shape),node_to_user=mapping,ghb_native_inflow=ghb_native)
     np.savez_compressed(directory/'result.npz',**fields,head=raw)
     atomic_json(path=directory/'summary.json',value=finite_diagnostics(value=result))
     budget.close()

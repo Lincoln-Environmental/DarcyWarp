@@ -15,10 +15,12 @@ def case_from_model(*,model,top,cell_type=0):
     if model.geometry=='structured_dis_layered':
         return NPF662LayeredCase(kx=model._kx_field,ky=model._ky_field,kz=model._kz_field,active=s.active,fixed=s.bc_mask,
             values=s.bc_values,source=s.rhs,initial=initial,dx=model.dx,dy=model.dy,
-            z_interfaces=s.z_interfaces,cell_type=cell_type)
+            z_interfaces=s.z_interfaces,cell_type=cell_type,
+            ghb_conductance=s.ghb_conductance,ghb_head=s.ghb_head)
     return NPF662Case(kx=model._kx_field,ky=model._ky_field,kz=model._kz_field,active=s.active,fixed=s.bc_mask,
         values=s.bc_values,source=s.rhs,initial=initial,
-        dx=model.dx,dy=model.dy,dz=model.dz,top=top,cell_type=cell_type)
+        dx=model.dx,dy=model.dy,dz=model.dz,top=top,cell_type=cell_type,
+        ghb_conductance=s.ghb_conductance,ghb_head=s.ghb_head)
 
 
 def independent_reference(*, model, case):
@@ -139,7 +141,7 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
             final_acceptance_thresholds=thresholds,
             effective_options=dict(xt3d=False,newton=unconfined,cell_type=case.cell_types.tolist(),saturation_epsilon=1e-6,
                 conductance_floor_m=0.,variablecv=False,perched=False,thickstrt=False,rewet=False,storage=bool(transient),
-                packages=['CHD','WEL_SOURCE']+(['STO'] if transient else [])))
+                packages=['CHD','WEL_SOURCE']+(['GHB'] if case.ghb_conductance is not None else [])+(['STO'] if transient else [])))
         if transient:
             info.update(dt=float(dt),storage_formulation='MF6 6.6.2 default SsTerms/SyTerms; Newton saturation smoothing',
                 storage_previous_fixed=True,
@@ -173,7 +175,7 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
         independent_acceptance=checks,converged=bool(checks['independent_accepted']),
         final_acceptance_thresholds=thresholds,
         effective_options=dict(xt3d=False,newton=False,icelltype=0,variablecv=False,perched=False,thickstrt=False,
-            rewet=False,storage=False,packages=['CHD','WEL_SOURCE']),
+            rewet=False,storage=False,packages=['CHD','WEL_SOURCE']+(['GHB'] if case.ghb_conductance is not None else [])),
         stop_reason='converged' if checks['independent_accepted'] else 'independent_acceptance_failed')
     info['effective_solver_settings'] = dict(backend=info.get('session_backend'), krylov_method=None,
         hierarchy=dict(max_levels=max_levels, min_coarse_n=min_coarse_n, actual_levels=info.get('n_levels'),

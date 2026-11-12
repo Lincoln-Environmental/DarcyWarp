@@ -7,6 +7,7 @@ import gc
 import numpy as np
 from DARCY_WARP_PACKAGE.validation.npf662_metrics import stable_rms
 from DARCY_WARP_PACKAGE.physics.inputs_3d import binary_mask
+from DARCY_WARP_PACKAGE.physics.ghb_3d import validate_ghb_fields, add_ghb_linear_terms
 import warp as wp
 
 from DARCY_WARP_PACKAGE.kernels_3d import (
@@ -930,6 +931,7 @@ def _solve_chebyshev_7point_3d_linear(
     device: str = "cuda:0",
     diag_preconditioner_backend: str = "auto",
     return_info: bool = True,
+    ghb_conductance=None, ghb_head=None,
 ):
     txp = np.asarray(tx_p, dtype=NP_FLOAT)
     txm = np.asarray(tx_m, dtype=NP_FLOAT)
@@ -1003,6 +1005,11 @@ def _solve_chebyshev_7point_3d_linear(
 
     # Exclude physically singular free rows (zero conductance AND zero
     # storage) instead of silently pinning them with identity equations.
+    ghb_conductance, ghb_head = validate_ghb_fields(conductance=ghb_conductance,
+        head=ghb_head, active=act, fixed=bcm)
+    physical_storage = sdiag
+    b_eff, sdiag = add_ghb_linear_terms(rhs=b_eff, diagonal=sdiag,
+                                       conductance=ghb_conductance, head=ghb_head)
     isolated = _resolve_isolated_free_cells(
         faces=(txp, txm, typ, tym, tzp, tzm),
         active=act,
@@ -1252,8 +1259,9 @@ def _solve_chebyshev_7point_3d_linear(
         faces=(txp, txm, typ, tym, tzp, tzm),
         active=act,
         bc_mask=bcm,
-        storage_diag=sdiag,
+        storage_diag=physical_storage,
         head_prev=h_prev_used,
+        ghb_conductance=ghb_conductance, ghb_head=ghb_head,
     )
     budget_acceptance = is_3d_budget_conserved(budget=budget_lin, absolute_tolerance=tol_abs)
     converged = bool(converged and budget_acceptance)
@@ -1353,6 +1361,7 @@ def _picard_unconfined_7point_3d(
     final_budget_relative_tol=1e-3,
     legacy_storage_coeff=None,
     return_info=True,
+    ghb_conductance=None, ghb_head=None,
 ):
     """
     Shared unconfined Picard driver for the 3D 7-point solvers.
@@ -2042,6 +2051,7 @@ def _picard_unconfined_7point_3d(
         storage_diag=s_final,
         head_prev=hp_final,
         return_field=True,
+        ghb_conductance=ghb_conductance, ghb_head=ghb_head,
     )
     from DARCY_WARP_PACKAGE.physics.dry_cell_3d import quantify_dry_cell_transmission
 
@@ -2240,6 +2250,7 @@ def solve_chebyshev_7point_3d(
     diag_preconditioner_backend: str = "auto",
     device: str = "cuda:0",
     return_info: bool = True,
+    ghb_conductance=None, ghb_head=None,
 ):
     txp = np.asarray(tx_p, dtype=NP_FLOAT)
     txm = np.asarray(tx_m, dtype=NP_FLOAT)
@@ -2347,6 +2358,7 @@ def solve_chebyshev_7point_3d(
                     device=str(device),
                     diag_preconditioner_backend=str(diag_preconditioner_backend),
                     return_info=True,
+                    ghb_conductance=ghb_conductance, ghb_head=ghb_head,
                 )
             # Legacy / steady path. Only enable the inner confined-transient
             # storage term when storage_coeff is available (confined_volume
@@ -2381,6 +2393,7 @@ def solve_chebyshev_7point_3d(
                 device=str(device),
                 diag_preconditioner_backend=str(diag_preconditioner_backend),
                 return_info=True,
+                ghb_conductance=ghb_conductance, ghb_head=ghb_head,
             )
 
         return _picard_unconfined_7point_3d(
@@ -2446,6 +2459,7 @@ def solve_chebyshev_7point_3d(
             final_head_residual_tol=final_head_residual_tol,
             legacy_storage_coeff=storage_coeff,
             return_info=return_info,
+            ghb_conductance=ghb_conductance, ghb_head=ghb_head,
         )
 
     return _solve_chebyshev_7point_3d_linear(
@@ -2477,6 +2491,7 @@ def solve_chebyshev_7point_3d(
         device=str(device),
         diag_preconditioner_backend=str(diag_preconditioner_backend),
         return_info=return_info,
+        ghb_conductance=ghb_conductance, ghb_head=ghb_head,
     )
 
 
@@ -2563,10 +2578,12 @@ def solve_multigrid_kcycle_7point_3d(
     max_head_change_per_outer_iteration: float = 10.0,
     dry_cell_flag_threshold: float = 0.1,
     final_head_residual_tol: float | None = None,
+    final_budget_relative_tol: float = 1e-3,
     diag_preconditioner_backend: str = "auto",
     device: str = "cuda:0",
     return_info: bool = True,
     benchmark_observer=None,
+    ghb_conductance=None, ghb_head=None,
 ):
     """
     3D multilevel K-cycle prototype for a fixed 7-point operator.
@@ -2712,6 +2729,7 @@ def solve_multigrid_kcycle_7point_3d(
                     dt=None,
                     head_prev=None,
                     **common_kwargs,
+                    ghb_conductance=ghb_conductance, ghb_head=ghb_head,
                 )
             # Legacy / steady path. Only enable the inner confined-transient
             # storage term when storage_coeff is available (confined_volume
@@ -2725,6 +2743,7 @@ def solve_multigrid_kcycle_7point_3d(
                 dt=(dt if legacy_transient else None),
                 head_prev=(head_prev if legacy_transient else None),
                 **common_kwargs,
+                ghb_conductance=ghb_conductance, ghb_head=ghb_head,
             )
 
         return _picard_unconfined_7point_3d(
@@ -2788,8 +2807,10 @@ def solve_multigrid_kcycle_7point_3d(
             unconfined_storage_mode=unconfined_storage_mode,
             dry_cell_flag_threshold=dry_cell_flag_threshold,
             final_head_residual_tol=final_head_residual_tol,
+            final_budget_relative_tol=final_budget_relative_tol,
             legacy_storage_coeff=storage_coeff,
             return_info=return_info,
+            ghb_conductance=ghb_conductance, ghb_head=ghb_head,
         )
 
     if n_free0 <= 0:
@@ -2835,6 +2856,11 @@ def solve_multigrid_kcycle_7point_3d(
     # storage) instead of letting the kernels pin them with identity
     # equations.  A nonzero source into such a cell is incompatible and
     # raises in the helper.
+    ghb_conductance, ghb_head = validate_ghb_fields(conductance=ghb_conductance,
+        head=ghb_head, active=act0, fixed=bcm0)
+    physical_storage = sdiag0
+    b_eff0, sdiag0 = add_ghb_linear_terms(rhs=b_eff0, diagonal=sdiag0,
+                                         conductance=ghb_conductance, head=ghb_head)
     isolated0 = _resolve_isolated_free_cells(
         faces=(txp0, txm0, typ0, tym0, tzp0, tzm0),
         active=act0,
@@ -3520,10 +3546,12 @@ def solve_multigrid_kcycle_7point_3d(
         faces=(txp0, txm0, typ0, tym0, tzp0, tzm0),
         active=act0,
         bc_mask=bcm0,
-        storage_diag=sdiag0,
+        storage_diag=physical_storage,
         head_prev=h_prev_used,
+        ghb_conductance=ghb_conductance, ghb_head=ghb_head,
     )
-    budget_acceptance = is_3d_budget_conserved(budget=budget0, absolute_tolerance=tol_abs)
+    budget_acceptance = is_3d_budget_conserved(budget=budget0, absolute_tolerance=tol_abs,
+                                             relative_tolerance=final_budget_relative_tol)
     converged = bool(converged and budget_acceptance)
 
     info = {

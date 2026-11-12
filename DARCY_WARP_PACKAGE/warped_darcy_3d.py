@@ -119,6 +119,7 @@ class WarpDarcySolver3D:
         bc_values: np.ndarray,
         rhs: np.ndarray,
         initial_head: np.ndarray | None = None,
+        *, ghb_conductance=None, ghb_head=None, ghb_mask=None,
     ) -> "WarpDarcySolver3D":
         """
         Build face conductances from cell-centered hydraulic conductivity fields.
@@ -170,6 +171,7 @@ class WarpDarcySolver3D:
             bc_values=bc_values,
             rhs=rhs,
             initial_head=initial_head,
+            ghb_conductance=ghb_conductance, ghb_head=ghb_head, ghb_mask=ghb_mask,
         )
         self._kx_field, self._ky_field, self._kz_field = fields
         return self
@@ -177,6 +179,7 @@ class WarpDarcySolver3D:
     def build_from_face_conductance(
         self, tx_p, tx_m, ty_p, ty_m, tz_p, tz_m, active, bc_mask,
         bc_values, rhs, initial_head=None,
+        *, ghb_conductance=None, ghb_head=None, ghb_mask=None,
     ) -> "WarpDarcySolver3D":
         """Build independent reciprocal faces for legacy confined flow.
 
@@ -187,7 +190,8 @@ class WarpDarcySolver3D:
             raise ValueError('mf6_6_6_2_npf requires physical K/geometry; use build_from_K_fields or build_from_layers, not arbitrary faces')
         return self._build_from_face_conductance(tx_p=tx_p, tx_m=tx_m, ty_p=ty_p, ty_m=ty_m,
             tz_p=tz_p, tz_m=tz_m, active=active, bc_mask=bc_mask, bc_values=bc_values,
-            rhs=rhs, initial_head=initial_head)
+            rhs=rhs, initial_head=initial_head,
+            ghb_conductance=ghb_conductance, ghb_head=ghb_head, ghb_mask=ghb_mask)
 
     def _build_from_face_conductance(
         self,
@@ -202,6 +206,7 @@ class WarpDarcySolver3D:
         bc_values: np.ndarray,
         rhs: np.ndarray,
         initial_head: np.ndarray | None = None,
+        *, ghb_conductance=None, ghb_head=None, ghb_mask=None,
     ) -> "WarpDarcySolver3D":
         """
         Build from reciprocal, nonnegative finite internal conductances.
@@ -251,6 +256,7 @@ class WarpDarcySolver3D:
             dx=self.dx,
             dy=self.dy,
             dz=self.dz,
+            ghb_conductance=ghb_conductance, ghb_head=ghb_head, ghb_mask=ghb_mask,
         )
         previous = self._session
         self._session = session
@@ -270,7 +276,8 @@ class WarpDarcySolver3D:
         return self
 
     def build_from_layers(self, *, z_interfaces, kx_field, ky_field, kz_field,
-                          active, bc_mask, bc_values, rhs, initial_head=None):
+                          active, bc_mask, bc_values, rhs, initial_head=None,
+                          ghb_conductance=None, ghb_head=None, ghb_mask=None):
         """Build conventional layered DIS/NPF connections (not terrain metrics).
 
         Interfaces (nz+1,ny,nx) are authoritative. Constructor dz is unused;
@@ -291,7 +298,8 @@ class WarpDarcySolver3D:
         faces,unused=build_layered_dis_faces(z_interfaces=case.z_interfaces,kx=case.kx,ky=case.ky,kz=case.kz,
             active=case.active,dx=self.dx,dy=self.dy)
         session=ThreeDOperatorSession(faces=faces,active=case.active,bc_mask=case.fixed,bc_values=case.values,
-            rhs=case.source,initial_head=case.initial,dx=self.dx,dy=self.dy,dz=self.dz,z_interfaces=case.z_interfaces)
+            rhs=case.source,initial_head=case.initial,dx=self.dx,dy=self.dy,dz=self.dz,z_interfaces=case.z_interfaces,
+            ghb_conductance=ghb_conductance,ghb_head=ghb_head,ghb_mask=ghb_mask)
         # The layered contract already enforces positive active K; finite
         # inactive conductivity markers remain compatible with that schema.
         fields = self._validated_K_fields(kx_field=case.kx, ky_field=case.ky, kz_field=case.kz,
@@ -306,6 +314,19 @@ class WarpDarcySolver3D:
         if previous is not None:
             previous.close()
         return self
+
+    def update_ghb(self, *, ghb_conductance, ghb_head, ghb_mask=None):
+        """Update integrated cell conductance [L²/T] and external head [L].
+
+        Conductance is independent of aquifer K and saturation. Zero disables
+        a boundary. Terrain subface contacts use update_contacts instead.
+        """
+        if self._session is None:
+            raise RuntimeError("Build the model before updating GHB")
+        if self.geometry == "terrain":
+            raise ValueError("Terrain uses contact exchange; update_contacts is required")
+        self._session.update_ghb(ghb_conductance=ghb_conductance,
+                                 ghb_head=ghb_head, ghb_mask=ghb_mask)
 
     def _validated_K_fields(self, *, kx_field, ky_field, kz_field, require_nonnegative=True):
         fields = tuple(floating_field(value=value, name=name, dtype=NP_FLOAT) for name, value in

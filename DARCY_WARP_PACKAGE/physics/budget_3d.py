@@ -10,6 +10,7 @@ import numpy as np
 from DARCY_WARP_PACKAGE.physics.faces_3d import validate_reciprocal_faces
 from DARCY_WARP_PACKAGE.validation.npf662_metrics import stable_rms, stable_sum
 from DARCY_WARP_PACKAGE.physics.inputs_3d import binary_mask
+from DARCY_WARP_PACKAGE.physics.ghb_3d import validate_ghb_fields, ghb_flux
 
 
 def prepare_3d_budget_source(*, source, head_prev, extra_storage_diag):
@@ -99,6 +100,8 @@ def compute_3d_flow_budget(
     storage_diag: np.ndarray | None = None,
     head_prev: np.ndarray | None = None,
     return_field: bool = False,
+    ghb_conductance: np.ndarray | None = None,
+    ghb_head: np.ndarray | None = None,
 ) -> dict[str, float]:
     """Cellwise and domain water budget for the discrete 7-point system.
 
@@ -112,8 +115,10 @@ def compute_3d_flow_budget(
       - ``cell_residual_max`` / ``cell_residual_rms``: imbalance of the
         discrete balance equation per free cell [m^3/day],
       - ``source_total``: sum of sources over free cells,
-      - ``boundary_inflow`` / ``boundary_outflow``: exchange with Dirichlet
-        cells (positive = into the model),
+      - ``boundary_inflow`` / ``boundary_outflow``: combined CHD/GHB exchange
+        (legacy signed convention: inflow positive, outflow negative),
+      - ``chd_inflow/outflow`` and ``ghb_inflow/outflow``: positive magnitudes
+        for the individual boundary packages; ``ghb_net`` is positive inward,
       - ``storage_uptake``: rate of change of stored water (0 when steady),
       - ``domain_imbalance``: source + boundary net - storage uptake; equals
         the sum of cell residuals (exact telescoping of internal faces),
@@ -132,6 +137,9 @@ def compute_3d_flow_budget(
         raise ValueError("face shapes must match head.")
     free = act & ~bcm
     n_free = int(np.count_nonzero(free))
+    ghb_c, ghb_h = validate_ghb_fields(conductance=ghb_conductance, head=ghb_head,
+                                      active=active, fixed=bc_mask)
+    ghb_q = ghb_flux(head=h, conductance=ghb_c, boundary_head=ghb_h)
 
     s = (
         np.zeros(shape, dtype=np.float64)
@@ -152,11 +160,11 @@ def compute_3d_flow_budget(
     # Compute each physical face once, then add its equal/opposite cell fluxes.
     # Reciprocity and inactive connections have already been validated above.
     storage_change = s * (h - hp)
-    div = storage_change.copy()
-    diag_c = np.zeros(shape, dtype=np.float64)
+    div = storage_change + ghb_q
+    diag_c = np.zeros(shape, dtype=np.float64) if ghb_c is None else ghb_c.copy()
     bc_in = 0.0
     bc_out = 0.0
-    fluxes_finite = True
+    fluxes_finite = bool(np.all(np.isfinite(ghb_q)))
     for face, axis in ((tx_p, 2), (ty_p, 1), (tz_p, 0)):
         here, there = [slice(None)] * 3, [slice(None)] * 3
         here[axis], there[axis] = slice(None, -1), slice(1, None)
@@ -177,6 +185,11 @@ def compute_3d_flow_budget(
         bc_in = stable_sum(values=[bc_in, stable_sum(values=np.maximum(exchange, 0.))])
         bc_out = stable_sum(values=[bc_out, stable_sum(values=np.minimum(exchange, 0.))])
 
+    chd_in, chd_out = bc_in, bc_out
+    ghb_in = stable_sum(values=np.maximum(-ghb_q[free], 0.0))
+    ghb_out = stable_sum(values=np.minimum(-ghb_q[free], 0.0))
+    bc_in = stable_sum(values=[chd_in, ghb_in])
+    bc_out = stable_sum(values=[chd_out, ghb_out])
     residual = src - div
     residual[~free] = 0.0
     source_free = src[free]
@@ -203,6 +216,11 @@ def compute_3d_flow_budget(
         "boundary_inflow": bc_in,
         "boundary_outflow": bc_out,
         "boundary_net": bc_net,
+        "chd_inflow": chd_in,
+        "chd_outflow": -chd_out,
+        "ghb_inflow": ghb_in,
+        "ghb_outflow": -ghb_out,
+        "ghb_net": ghb_in + ghb_out,
         "storage_uptake": storage_uptake,
         "domain_imbalance": domain_imbalance,
         "relative_imbalance": abs(domain_imbalance) / throughput,

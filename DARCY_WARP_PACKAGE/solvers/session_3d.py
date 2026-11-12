@@ -14,6 +14,7 @@ import numpy as np
 
 from DARCY_WARP_PACKAGE.physics.faces_3d import validate_reciprocal_faces
 from DARCY_WARP_PACKAGE.physics.inputs_3d import binary_mask, floating_field
+from DARCY_WARP_PACKAGE.physics.ghb_3d import validate_ghb_fields
 
 
 class ThreeDOperatorSession:
@@ -32,6 +33,9 @@ class ThreeDOperatorSession:
         dy: float,
         dz: float,
         z_interfaces: np.ndarray | None = None,
+        ghb_conductance=None,
+        ghb_head=None,
+        ghb_mask=None,
     ) -> None:
         self._closed = False
         self.revision = 0
@@ -54,6 +58,9 @@ class ThreeDOperatorSession:
         self._fast_workspace_holder: dict[str, Any] = {}
         self._npf662_workspace_holder: dict[str, Any] = {}
         self._validate()
+        self.ghb_conductance, self.ghb_head = validate_ghb_fields(
+            conductance=ghb_conductance, head=ghb_head, mask=ghb_mask,
+            active=self.active, fixed=self.bc_mask)
         self.faces = validate_reciprocal_faces(faces=self.faces, active=self.active, canonicalize=True)
 
     @property
@@ -132,6 +139,24 @@ class ThreeDOperatorSession:
         self.operator_revision += 1
         self.revision += 1
 
+    def update_ghb(self, *, ghb_conductance, ghb_head, ghb_mask=None):
+        """Replace cell GHB values atomically; preserve device buffer ownership."""
+        self._ensure_open()
+        conductance, head = validate_ghb_fields(conductance=ghb_conductance,
+            head=ghb_head, mask=ghb_mask, active=self.active, fixed=self.bc_mask)
+        if conductance is None:
+            raise ValueError("Use zero conductance to disable GHB cells")
+        previous = np.zeros(self.shape, dtype=bool) if self.ghb_conductance is None else self.ghb_conductance > 0.0
+        topology_changed = not np.array_equal(previous, conductance > 0.0)
+        if self.ghb_conductance is None:
+            self.ghb_conductance, self.ghb_head = conductance, head
+        else:
+            self.ghb_conductance[...] = conductance
+            self.ghb_head[...] = head
+        self.operator_revision += 1
+        self.topology_revision += int(topology_changed)
+        self.revision += 1
+
     def update_face_conductance(
         self,
         faces: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray],
@@ -175,6 +200,8 @@ class ThreeDOperatorSession:
             raise ValueError("solver must be 'kcycle' or 'chebyshev'.")
         backend = solve_multigrid_kcycle_7point_3d if solver_name == "kcycle" else solve_chebyshev_7point_3d
         solve_kwargs = dict(kwargs)
+        if self.ghb_conductance is not None:
+            solve_kwargs.update(ghb_conductance=self.ghb_conductance, ghb_head=self.ghb_head)
         # ``initial_head`` is part of the persistent state but transient calls
         # may intentionally override it (for example, a warm start from the
         # previous period).  Let the explicit call value win without passing a
@@ -251,6 +278,7 @@ class ThreeDOperatorSession:
         self.bc_values = np.empty((0, 0, 0))
         self.rhs = np.empty((0, 0, 0))
         self.initial_head = None
+        self.ghb_conductance = self.ghb_head = None
         self.z_interfaces = None
         self.layer_geometry = None
         self._fast_workspace_holder.clear()

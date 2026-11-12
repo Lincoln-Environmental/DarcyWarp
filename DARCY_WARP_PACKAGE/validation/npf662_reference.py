@@ -81,7 +81,8 @@ def solve_reference_correction(*, matrix, rhs, controls):
 
 
 def serialized_case_fields(*,case):
-    names=tuple(case.__dataclass_fields__)
+    names=tuple(name for name in case.__dataclass_fields__
+                if name not in ('ghb_conductance', 'ghb_head') or getattr(case, name) is not None)
     if getattr(case,'_legacy_implicit_cell_type',False) and np.ndim(case.cell_type)==0 and case.cell_type==0:
         return tuple(name for name in names if name!='cell_type')
     return names
@@ -102,6 +103,8 @@ class NPF662Case:
     dz: float
     top: float = 0.
     cell_type: np.ndarray | int = 0
+    ghb_conductance: np.ndarray | None = None
+    ghb_head: np.ndarray | None = None
 
     def validate(self):
         shape=self.active.shape
@@ -126,6 +129,12 @@ class NPF662Case:
         if np.any((types!=0)&(types!=1)):raise ValueError('Only ICELLTYPE 0/1 supported')
         if np.any(active&(self.fixed!=0)&(self.cell_types!=0)&(self.values<self.bottoms)):
             raise ValueError('Convertible CHD head below cell bottom is invalid for MF6 6.6.2; prescribed heads are not repaired')
+        from DARCY_WARP_PACKAGE.physics.ghb_3d import validate_ghb_fields
+        validate_ghb_fields(conductance=self.ghb_conductance, head=self.ghb_head,
+                            active=self.active, fixed=self.fixed)
+        if self.ghb_conductance is not None and np.any((np.asarray(self.ghb_conductance)>0.)
+                &(self.cell_types!=0)&(np.asarray(self.ghb_head)<self.bottoms)):
+            raise ValueError('Convertible GHB head below cell bottom is invalid for MF6 6.6.2')
 
     @property
     def cell_types(self):
@@ -174,6 +183,8 @@ class NPF662LayeredCase:
     dy: float
     z_interfaces: np.ndarray
     cell_type: np.ndarray | int = 0
+    ghb_conductance: np.ndarray | None = None
+    ghb_head: np.ndarray | None = None
 
     def validate(self):
         from DARCY_WARP_PACKAGE.physics.npf662_layers import layered_geometry
@@ -206,7 +217,7 @@ class NPF662LayeredCase:
 
     def digest(self):
         digest=hashlib.sha256(b'NPF662_LAYERED_DIS_V2')
-        for name in self.__dataclass_fields__:
+        for name in serialized_case_fields(case=self):
             value=np.ascontiguousarray(getattr(self,name))
             digest.update(name.encode());digest.update(value.dtype.str.encode());digest.update(str(value.shape).encode());digest.update(value.tobytes())
         return digest.hexdigest()
@@ -223,7 +234,7 @@ def load_npf662_case(*,path):
         schema=int(saved['schema_version']) if 'schema_version' in saved else 1
         if schema not in (1,2):raise ValueError('Unsupported NPF input schema')
         cls=NPF662Case if schema==1 else NPF662LayeredCase
-        missing=set(cls.__dataclass_fields__)-set(saved.files)
+        missing=set(cls.__dataclass_fields__)-set(saved.files)-{'ghb_conductance','ghb_head'}
         implicit=bool(schema==1 and missing=={'cell_type'})
         if missing and not implicit:raise ValueError(f'Missing NPF input fields: {sorted(missing)}')
         case=cls(**{name:saved[name].copy() for name in cls.__dataclass_fields__ if name in saved})
@@ -242,6 +253,10 @@ class NPF662Reference:
         self.case=case
         self.shape=case.active.shape
         self.free=case.active.astype(bool)&~case.fixed.astype(bool)
+        self.ghb_conductance = (np.zeros(self.shape) if case.ghb_conductance is None
+                                else np.broadcast_to(case.ghb_conductance, self.shape).copy())
+        self.ghb_head = (np.zeros(self.shape) if case.ghb_head is None
+                         else np.broadcast_to(case.ghb_head, self.shape).copy())
         ids=np.arange(case.active.size).reshape(self.shape)
         left=[];right=[];conductances=[];axes=[]
         for axis,k,d,width in ((2,case.kx,case.dx,case.dy),
@@ -268,7 +283,8 @@ class NPF662Reference:
         n=ids.size;m=self.left.size
         self.incidence=sparse.coo_matrix((np.concatenate([np.ones(m),-np.ones(m)]),
             (np.concatenate([self.left,self.right]),np.tile(np.arange(m),2))),shape=(n,m)).tocsr()
-        self.matrix=(self.incidence@sparse.diags(self.c0)@self.incidence.T).tocsr()
+        self.matrix=(self.incidence@sparse.diags(self.c0)@self.incidence.T
+                     + sparse.diags(self.ghb_conductance.ravel())).tocsr()
         indices=np.arange(m)
         self.select_left=sparse.csr_matrix((np.ones(m),(indices,self.left)),shape=(m,n))
         self.select_right=sparse.csr_matrix((np.ones(m),(indices,self.right)),shape=(m,n))
@@ -289,7 +305,8 @@ class NPF662Reference:
 
     def jacobian(self,*,head):
         unused,dl,dr,unused_saturation=self.face_terms(head=head)
-        return (self.incidence@(self.select_left.multiply(dl[:,None])+self.select_right.multiply(dr[:,None]))).tocsr()
+        return (self.incidence@(self.select_left.multiply(dl[:,None])+self.select_right.multiply(dr[:,None]))
+                + sparse.diags(self.ghb_conductance.ravel())).tocsr()
 
     def check_components(self):
         n=self.case.active.size
@@ -297,7 +314,7 @@ class NPF662Reference:
         unused,labels=connected_components(csgraph=graph,directed=False)
         for label in np.unique(labels[self.case.active.ravel()!=0]):
             mask=(labels==label)&(self.case.active.ravel()!=0)
-            if not np.any(self.case.fixed.ravel()[mask]):
+            if not np.any((self.case.fixed.ravel()!=0)[mask] | (self.ghb_conductance.ravel()[mask]>0.)):
                 raise ValueError(f'Ungrounded active component; net source={self.case.source.ravel()[mask].sum():.17g}')
 
     def evaluate(self,*,head,physical_tolerance=1e-12,relative_tolerance=1e-8,
@@ -316,13 +333,17 @@ class NPF662Reference:
         for index in np.flatnonzero(~np.isfinite(divergence.ravel())):
             row=self.incidence.getrow(int(index))
             divergence.ravel()[index]=stable_sum(values=row.data*flux[row.indices])
-        residual=np.where(self.free,c.source-divergence,0.)
-        diagonal=np.asarray(abs(self.incidence)@conductance).reshape(self.shape)
+        ghb_exchange=np.zeros(self.shape)
+        selected=self.ghb_conductance>0.
+        ghb_exchange[selected]=self.ghb_conductance[selected]*(head[selected]-self.ghb_head[selected])
+        residual=np.where(self.free,c.source-divergence-ghb_exchange,0.)
+        diagonal=np.asarray(abs(self.incidence)@conductance).reshape(self.shape)+self.ghb_conductance
         scaled=np.divide(residual,diagonal,out=np.zeros_like(residual),where=diagonal>0)
         scaled[(diagonal<=0)&(residual!=0)]=np.inf
         boundary=self.free.ravel()[self.left]&c.fixed.ravel()[self.right].astype(bool)
         reverse=self.free.ravel()[self.right]&c.fixed.ravel()[self.left].astype(bool)
-        exchange=np.concatenate([flux[boundary],-flux[reverse]])
+        chd_exchange=np.concatenate([flux[boundary],-flux[reverse]])
+        exchange=np.concatenate([chd_exchange,ghb_exchange[self.free]])
         inflow=stable_sum(values=np.maximum(-exchange,0.));outflow=stable_sum(values=np.maximum(exchange,0.))
         throughput=stable_sum(values=np.concatenate([np.abs(c.source[self.free]),np.abs(exchange)]))
         rms=stable_rms(values=residual[self.free]);hrms=stable_rms(values=scaled[self.free])
@@ -335,11 +356,15 @@ class NPF662Reference:
         graph=sparse.coo_matrix((np.ones(int(edges.sum())),(self.left[edges],self.right[edges])),shape=self.matrix.shape).tocsr()
         unused,labels=connected_components(csgraph=graph,directed=False)
         active_labels=set(labels[c.active.ravel()!=0])
-        grounded_labels=set(labels[(c.active.ravel()!=0)&(c.fixed.ravel()!=0)])
+        grounded_labels=set(labels[(c.active.ravel()!=0)&((c.fixed.ravel()!=0)|(self.ghb_conductance.ravel()>0.))])
         ungrounded=len(active_labels-grounded_labels)
         result=dict(**checks,head_residual_rms=hrms,physical_rms=rms,
             physical_max=float(np.abs(residual).max()),residual_l1=l1,relative_cell_imbalance=relative,
             gross_throughput=throughput,signed_imbalance=stable_sum(values=residual[self.free]),boundary_inflow=inflow,boundary_outflow=outflow,
+            ghb_inflow=stable_sum(values=np.maximum(-ghb_exchange[self.free],0.)),
+            ghb_outflow=stable_sum(values=np.maximum(ghb_exchange[self.free],0.)),
+            chd_inflow=stable_sum(values=np.maximum(-chd_exchange,0.)),
+            chd_outflow=stable_sum(values=np.maximum(chd_exchange,0.)),
             fixed_cell_source_total=stable_sum(values=c.source[c.fixed!=0]),free_cells=int(self.free.sum()),
             fixed_reservoir_required_inflow=stable_sum(values=(divergence-c.source)[c.fixed!=0]),
             ungrounded_current_components=ungrounded,physical_metrics_valid=metrics_valid,
@@ -350,7 +375,7 @@ class NPF662Reference:
             result['physical_metrics_valid'] and ungrounded==0 and hrms<=head_tolerance_m and
             (rms<=physical_tolerance or relative<=relative_tolerance))
         return result,dict(flux=flux,residual=residual,fixed_reservoir_required_inflow=np.where(c.fixed,divergence-c.source,0.),
-            principal_diagonal=diagonal,saturation=saturation,
+            principal_diagonal=diagonal,saturation=saturation,ghb_outflow=ghb_exchange,
             conductance=conductance,dflux_left=dl,dflux_right=dr)
 
     def solve(self,*,max_outer=200):
@@ -361,7 +386,7 @@ class NPF662Reference:
         head=np.where(c.fixed,c.values,c.initial).astype(float).ravel().copy()
         linear_max=backward=None
         if f.any():
-            rhs=c.source.ravel()[f]-self.matrix[f][:,fixed]@head[fixed]
+            rhs=(c.source+self.ghb_conductance*self.ghb_head).ravel()[f]-self.matrix[f][:,fixed]@head[fixed]
             matrix=self.matrix[f][:,f].tocsc()
             with warnings.catch_warnings():
                 warnings.simplefilter('error')

@@ -3,11 +3,13 @@ from dataclasses import replace
 from pathlib import Path
 import hashlib
 import subprocess
+from time import perf_counter
 import numpy as np
 from DARCY_WARP_PACKAGE.validation.npf662_reference import NPF662Reference
 from DARCY_WARP_PACKAGE.validation.npf662_transient_reference import NPF662TransientReference
 from DARCY_WARP_PACKAGE.validation.json_output import atomic_json
 from DARCY_WARP_PACKAGE.validation.head_checks import finite_diagnostics
+from DARCY_WARP_PACKAGE.validation.npf662_mf6 import ghb_stress_period_data, decode_ghb_budget
 
 
 def run_transient_mf6(*, case, directory, executable, source_factors, dt, ss, sy,
@@ -83,6 +85,9 @@ def run_transient_mf6(*, case, directory, executable, source_factors, dt, ss, sy
         for k, j, i in np.argwhere((case.active != 0)&(case.fixed != 0))]
     if boundary:
         flopy.mf6.ModflowGwfchd(gwf, stress_period_data={0: boundary}, save_flows=True)
+    ghb = ghb_stress_period_data(case=case)
+    if ghb:
+        flopy.mf6.ModflowGwfghb(gwf, stress_period_data={0: ghb}, save_flows=True)
     if source_package == 'wel':
         indices = np.argwhere((case.active != 0)&(case.fixed == 0)&(case.source != 0.))
         schedule = {period: [((int(k), ny-1-int(j), int(i)), float(case.source[k, j, i]*factor))
@@ -97,8 +102,10 @@ def run_transient_mf6(*, case, directory, executable, source_factors, dt, ss, sy
     flopy.mf6.ModflowGwfoc(gwf, head_filerecord='transient.hds', budget_filerecord='transient.cbc',
         saverecord=[('HEAD', 'ALL'), ('BUDGET', 'ALL')], printrecord=[('BUDGET', 'ALL')])
     sim.write_simulation(silent=True)
+    engine_start = perf_counter()
     run = subprocess.run([str(executable)], cwd=directory, capture_output=True, text=True,
         timeout=timeout_seconds, check=False)
+    engine_seconds = perf_counter()-engine_start
     directory.joinpath('stdout.log').write_text(run.stdout+run.stderr)
     if run.returncode != 0 or 'Normal termination of simulation' not in run.stdout:
         raise RuntimeError('Native transient simulation failed; inspect retained stdout/listing')
@@ -132,6 +139,7 @@ def run_transient_mf6(*, case, directory, executable, source_factors, dt, ss, sy
     record_names = {value.decode().strip() for value in budget.get_unique_record_names()}
     fluxes = []
     storage_rates = []
+    ghb_rates = []
     rows = []
     previous = case.initial.copy()
     for period, head in enumerate(heads):
@@ -154,7 +162,12 @@ def run_transient_mf6(*, case, directory, executable, source_factors, dt, ss, sy
         auditor = NPF662TransientReference(case=step_case, previous=previous, dt=dt, ss=ss, sy=sy)
         checks, fields = auditor.evaluate(head=head)
         divergence = (reference.incidence@flux).reshape(case.active.shape)
-        native_residual = np.where(reference.free, realised.reshape(case.active.shape)-storage.reshape(case.active.shape)-divergence, 0.)
+        ghb_native = decode_ghb_budget(budget=budget,mapping=mapping,shape=case.active.shape,kstpkper=(0,period))
+        ghb_difference = np.abs(ghb_native+fields['ghb_outflow'])
+        ghb_tolerance = np.maximum(1e-14,16.*np.finfo(float).eps*(
+            np.abs(reference.ghb_conductance*head)+np.abs(reference.ghb_conductance*reference.ghb_head)))
+        ghb_valid = bool(np.all(np.isfinite(ghb_native)) and np.all(ghb_difference<=ghb_tolerance))
+        native_residual = np.where(reference.free, realised.reshape(case.active.shape)+ghb_native-storage.reshape(case.active.shape)-divergence, 0.)
         native_relative = float(np.sum(np.abs(native_residual[reference.free]))/max(checks['gross_throughput'], np.finfo(float).tiny))
         source_expected = np.where(reference.free, step_case.source, 0.)
         allocation_tolerance = np.maximum(1e-14, 8.*np.finfo(float).eps*np.abs(source_expected))
@@ -162,20 +175,24 @@ def run_transient_mf6(*, case, directory, executable, source_factors, dt, ss, sy
         storage_error = float(np.sum(np.abs(storage.reshape(case.active.shape)-fields['storage_rate']))/
             max(checks['gross_throughput'], np.finfo(float).tiny))
         accepted = bool(checks['independent_accepted'] and native_relative <= 1e-8
-            and allocation_valid and storage_error <= 1e-8)
+            and allocation_valid and ghb_valid and storage_error <= 1e-8)
         rows.append(dict(period=period+1, time_days=float(times[period]), accepted=accepted,
             physical=checks, native_relative_cell_imbalance=native_relative,
-            source_allocation_valid=allocation_valid, storage_difference_relative_throughput=storage_error))
+            source_allocation_valid=allocation_valid, storage_difference_relative_throughput=storage_error,
+            ghb_law_valid=ghb_valid,ghb_flux_max_error=float(np.max(ghb_difference))))
         fluxes.append(flux)
         storage_rates.append(storage.reshape(case.active.shape))
+        ghb_rates.append(ghb_native)
         previous = head.copy()
     budget.close()
-    arrays = dict(heads=heads, fluxes=np.asarray(fluxes), storage_rates=np.asarray(storage_rates), times=times)
+    arrays = dict(heads=heads, fluxes=np.asarray(fluxes), storage_rates=np.asarray(storage_rates),
+        ghb_inflows=np.asarray(ghb_rates),times=times)
     temporary = directory/'.decoded.npz.tmp'
     with temporary.open('wb') as stream:
         np.savez_compressed(stream, **arrays)
     temporary.replace(directory/'decoded.npz')
     result = dict(passed=all(row['accepted'] for row in rows), periods=rows,
+        engine_seconds=engine_seconds,native_success=True,
         native_solver_options=ims_options,
         mf6_version=version, mf6_sha256=checksum, source_package=source_package,
         dt_days=dt, source_factors=factors.tolist(), storage='Default MF6 6.6.2 Ss/Sy, no STO optional formulation flags')

@@ -7,6 +7,7 @@ when an independent audit or an uncertified grounding case requires it.
 import numpy as np
 
 from DARCY_WARP_PACKAGE.validation.npf662_transient_reference import NPF662TransientReference
+from DARCY_WARP_PACKAGE.physics.ghb_3d import validate_ghb_fields
 
 
 class NPF662TransientState:
@@ -16,7 +17,7 @@ class NPF662TransientState:
         self.device = model.device
         self.shape = case.active.shape
         self.structure_names = tuple(name for name in case.__dataclass_fields__
-            if name not in ('source', 'values', 'initial', 'kx', 'ky', 'kz', 'cell_type'))
+            if name not in ('source', 'values', 'initial', 'kx', 'ky', 'kz', 'cell_type', 'ghb_conductance', 'ghb_head'))
         self.structure = tuple(np.asarray(getattr(case, name)).copy() for name in self.structure_names)
         self.material = tuple(np.asarray(getattr(case, name)).copy() for name in ('kx', 'ky', 'kz'))
         self.operator_revision = model._session.operator_revision
@@ -54,6 +55,11 @@ class NPF662TransientState:
                 raise ValueError('Convertible CHD head below cell bottom is invalid for MF6 6.6.2')
         if np.ndim(dt) != 0 or not np.isfinite(dt) or dt <= 0.:
             raise ValueError('Positive finite transient dt required')
+        validate_ghb_fields(conductance=case.ghb_conductance,head=case.ghb_head,
+            active=case.active,fixed=case.fixed)
+        if case.ghb_conductance is not None and np.any((np.asarray(case.ghb_conductance)>0.)
+                &(case.cell_types!=0)&(np.asarray(case.ghb_head)<case.bottoms)):
+            raise ValueError('Convertible GHB head below cell bottom is invalid for MF6 6.6.2')
         self.case = case
         if not self.refresh_count:
             self.free = (case.active != 0)&(case.fixed == 0)
@@ -96,6 +102,8 @@ class NPF662TransientState:
 
     def check_components(self):
         potential = (self.case.fixed != 0)|((self.ss > 0.)|((self.sy > 0.)&(self.case.cell_types != 0)))
+        if self.case.ghb_conductance is not None:
+            potential |= self.case.ghb_conductance > 0.
         if np.all(potential[self.case.active != 0]):
             return
         self.independent().check_components()

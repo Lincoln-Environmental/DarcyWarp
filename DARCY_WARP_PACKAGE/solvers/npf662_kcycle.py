@@ -369,7 +369,7 @@ class NPF662KCycleWorkspace:
         coefficients = workspace.c0 if mode == 2 else workspace.c
         wp.launch(kernel=unpack_current_faces, dim=workspace.n,
             inputs=[coefficients, workspace.left, *(face.flatten() for face in fine['faces'])], device=self.device)
-        wp.copy(dest=fine['storage'].flatten(), src=workspace.storage_tangent)
+        wp.copy(dest=fine['storage'].flatten(), src=workspace.operator_tangent)
         self.refresh_storage_device(refresh_faces=True)
 
     def _factor_lines(self, *, level):
