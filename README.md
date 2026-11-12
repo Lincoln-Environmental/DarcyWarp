@@ -39,10 +39,19 @@ Those original performance cases have no GHB.
 to Cartesian and NPF/STO, including steady/transient CPU/CUDA and live MF6
 checks. The guide documents the build/update API, boundary budgets, the faster
 Cartesian FGMRES option and reproducible `run_3d_sanity.py --ghb` commands.
-All six large GHB cases pass and outperform matching MF6 runs. With the
+All six large GHB cases pass their recorded sanity gates and outperform matching MF6 runs. With the
 explicit FP64 roundoff profile, convertible NPF takes **1.819 s versus
 142.638 s MF6** for twenty steps on 500 x 500 x 5 cells. The release report
 contains all steady/transient timings, accuracy measurements and controls.
+
+The direct parity audit retains **1e-6 m as the preferred maximum head-error
+target**. The current large-model maximum is **6.467e-5 m**; convertible NPF
+transients agree within **5.338e-8 m**. Matched-state flow, GHB and storage
+checks support the equation parity; the guide distinguishes MF6's stored
+saturation in reported budgets from saturation refreshed at final heads.
+MF6 benchmark settings remain unchanged. Run
+`working_tests/verify_3d_ghb_mf6_parity.py` against saved sanity results for
+the separate head and operator checks.
 
 The [2D GPU release notes](docs/2D_GPU_RELEASE_NOTES.rst) cover the parallel
 reductions, faster transient profile and GHB parity repairs, with fresh
