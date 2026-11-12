@@ -1,9 +1,20 @@
-# Cartesian and NPF/STO GPU qualification — 11 November 2026
+# Historical Cartesian and NPF/STO GPU qualification: 11 November 2026
 
-This work targets promoted `main` revision `f18912bff7afe5bb696a226cd8095f7a614352bf`
-([PR #4](https://github.com/Lincoln-Environmental/DarcyWarp/pull/4)). It is
-prepared on `docs/3d-gpu-qualification-20261111`; it is not a new release tag
-or a claim that every Cartesian case converges with 2D iteration budgets.
+> **Historical qualification record.** This report preserves the first
+> 3D GPU comparisons following PR #4. Its original 7 to 30-second NPF/STO
+> solve-call timings have been superseded by the
+> [current GPU history guide](../source/npf_gpu_native.rst):
+> 0.972 s versus 104.391 s (convertible) and 1.378 s versus 346.408 s
+> (confined) on 500 x 500 x 5 grids for 20 weekly steps. Those are
+> specific public history versus saved MF6 engine intervals, not
+> end-to-end model-build or independent-audit comparisons.
+
+The report originally qualified `main` revision
+`f18912bff7afe5bb696a226cd8095f7a614352bf`
+([PR #4](https://github.com/Lincoln-Environmental/DarcyWarp/pull/4))
+and was prepared on `docs/3d-gpu-qualification-20261111`.
+It is not a new release tag and does not imply all Cartesian cases
+converge under the older 2D iteration budgets.
 
 Developers: Patrick Durney and Jaco Fourie. Software ownership: Lincoln
 Agritech Ltd. Existing AGPL and adapted NVIDIA Apache-2.0 attribution remain
@@ -73,8 +84,8 @@ per 500-grid history. It is outside this primary timing. The production-facing
 solver still contains substantial CPU work: for 500-grid confined, its Newton/
 Krylov interval is about 5.3 s within the 27.6 s public solve interval. The
 remainder includes host reference assembly, setup, transfers and acceptance;
-it has not been attributed entirely to any one of those costs. This motivates
-GPU-native performance work on `dev` rather than further tolerance relaxation.
+it has not been attributed entirely to any one of those costs. This motivated the GPU-native performance work later integrated into
+`main`, rather than further tolerance relaxation.
 
 All 320 trial endpoints pass the requested GPU limit. Full verified runtime
 fell from 13.121/13.473/49.636/51.895 s at `1e-8` to
