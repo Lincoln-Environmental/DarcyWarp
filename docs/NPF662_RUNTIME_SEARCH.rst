@@ -1,5 +1,11 @@
-NPF runtime search: one-second target
-=====================================
+Historical NPF runtime search: one-second target
+================================================
+
+This report preserves experimental tuning and intermediate benchmarks.
+The final promoted `main` results, precise timing scope and current
+reproduction instructions are summarised in the
+`current NPF GPU guide <https://github.com/Lincoln-Environmental/DarcyWarp/blob/main/source/npf_gpu_native.rst>`_.
+==
 
 This work was developed after ``cd32e71`` and promoted to main as ``a58542d``.
 Initial main reruns are recorded in ``NPF662_MAIN_2026-11-12.rst``;
