@@ -17,8 +17,10 @@ DarcyWarp provides **two-dimensional horizontal flow on a square-cell grid** and
 **three-dimensional flow on structured Cartesian and layered DIS grids**. The
 3D solver includes a legacy Cartesian formulation and an explicit MF6 6.6.2
 NPF/STO formulation. See the [3D guide](docs/3D_CARTESIAN_NPF.md) for setup,
-solver selection and validation scope. The [GPU sanity runner and implementation guide](docs/3D_IMPLEMENTATIONS.rst)
-and [GPU release notes](docs/3D_GPU_RELEASE_NOTES.md) document reproducible timings and known limits.
+solver selection and validation scope. The [3D implementation guide](docs/3D_IMPLEMENTATIONS.rst)
+covers solver selection and reproduction. The
+[initial GPU release notes](docs/3D_GPU_RELEASE_NOTES.md) preserve
+the historical qualification and its original runtime comparisons.
 
 The [NPF transient GPU guide](docs/NPF662_GPU_NATIVE.rst) describes the opt-in
 device acceptance and persistent hierarchy implementation, including
