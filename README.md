@@ -33,11 +33,16 @@ over 20 weekly steps, the explicitly selected fast profile recorded
 These comparisons measure the synchronized DarcyWarp GPU history API
 against one saved MODFLOW 6 engine run. External model construction and
 independent benchmark audits are reported separately.
+Those original performance cases have no GHB.
 
 [Native 3D GHB](docs/3D_NATIVE_GHB.rst) adds cell-based general-head boundaries
 to Cartesian and NPF/STO, including steady/transient CPU/CUDA and live MF6
 checks. The guide documents the build/update API, boundary budgets, the faster
 Cartesian FGMRES option and reproducible `run_3d_sanity.py --ghb` commands.
+All six large GHB cases pass and outperform matching MF6 runs. With the
+explicit FP64 roundoff profile, convertible NPF takes **1.819 s versus
+142.638 s MF6** for twenty steps on 500 x 500 x 5 cells. The release report
+contains all steady/transient timings, accuracy measurements and controls.
 
 The [2D GPU release notes](docs/2D_GPU_RELEASE_NOTES.rst) cover the parallel
 reductions, faster transient profile and GHB parity repairs, with fresh
@@ -60,8 +65,8 @@ it shows a numerical solution and its analytical reference, not field observatio
 | Formulation | Grid | Supported physics and modes | Solvers |
 | --- | --- | --- | --- |
 | 2D thickness-integrated | Square cells, `(ny, nx)` | Confined or unconfined, steady or transient; general-head exchange | PCG, K-cycle, Picard, semismooth Newton; experimental FAS |
-| 3D legacy Cartesian | Uniform layers, `(nz, ny, nx)` | Confined or unconfined, steady or transient | Classic and fast 3D K-cycle |
-| 3D MF6 6.6.2 NPF/STO | Uniform Cartesian or layered DIS, `(nz, ny, nx)` | Confined or convertible, steady or backward-Euler transient Ss/Sy | GMRES or K-cycle-preconditioned FGMRES; opt-in device-resident transient history |
+| 3D legacy Cartesian | Uniform layers, `(nz, ny, nx)` | Confined or unconfined, steady or transient; native GHB | Classic and fast K-cycle; opt-in confined FGMRES |
+| 3D MF6 6.6.2 NPF/STO | Uniform Cartesian or layered DIS, `(nz, ny, nx)` | Confined or convertible, steady or backward-Euler transient Ss/Sy; native GHB | GMRES or K-cycle-preconditioned FGMRES; opt-in device-resident transient history |
 
 All formulations run on CPU or NVIDIA CUDA using Warp and support active-cell
 and fixed-head masks. The 3D source is a *volumetric rate per cell*, whereas

@@ -12,6 +12,11 @@ below preserve earlier measurements and experimental optimisation work.
 Qualified transient performance
 -------------------------------
 
+These original cases have no GHB. See :doc:`native_3d_ghb` for the separate
+GHB release, its explicit roundoff profile, steady and transient benchmarks,
+and five-level controls for steady and confined flow. The original no-GHB
+timings and controls below remain historical measurements of those cases.
+
 The recorded qualification used an NVIDIA RTX 4070 Ti SUPER (16 GiB),
 Python 3.12, Warp 1.17.0 and a saved MODFLOW 6.6.2 reference.
 Each model had 500 x 500 x 5 cells (1.25 million cells), 20 weekly

@@ -173,6 +173,11 @@ supports both uniform grids and conventional layered DIS interfaces, with
 confined or convertible cells and backward Euler Ss/Sy storage. 3D source
 arrays contain volumetric rates per cell.
 
+Both formulations also support cell-based general-head boundaries through
+``ghb_conductance`` and ``ghb_head`` build inputs and ``update_ghb()``.
+The :doc:`native_3d_ghb` page covers steady/transient GHB, budgets, the
+Cartesian FGMRES option, explicit FP64 roundoff checks and MF6 benchmarks.
+
 The `3D guide <https://github.com/Lincoln-Environmental/DarcyWarp/blob/main/docs/3D_CARTESIAN_NPF.md>`_
 describes the public API, the layered example and CPU FP64 validation.
 The :doc:`npf_gpu_native` page summarises the current accelerated

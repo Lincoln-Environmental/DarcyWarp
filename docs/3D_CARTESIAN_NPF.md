@@ -22,6 +22,14 @@ interfaces of shape `(nz + 1, ny, nx)`. Each column's interfaces must
 decrease strictly with depth. Layered DIS uses conventional orthogonal
 connections.
 
+Both Cartesian and NPF/STO support native cell-based GHB in steady and
+transient solves. Supply `ghb_conductance` and `ghb_head` when building,
+then use `update_ghb()` for boundary changes. Conductance is integrated,
+independent of K and saturation, and contributes both a diagonal term and
+external-head forcing. See the [native 3D GHB release](3D_NATIVE_GHB.rst)
+for budgets, CPU/CUDA and MF6 checks, precision controls and runtime profiles.
+Exterior face arrays remain no-flow; they cannot encode a GHB.
+
 NPF requires `DARCY_FLOAT=float64` before import. Use Python 3.12 and Warp
 1.17.0 for the validated configuration. Convertible, layered and transient
 NPF use `implementation="fast"` and `solver="kcycle"` on the model. The
@@ -132,6 +140,7 @@ with WarpDarcySolver3D(
         ),
         npf_kcycle_controls=NPF662KCycleControls(
             levels=3, coarse_sweeps=2,
+            cached_line_factors=True,
             preconditioner_precision="float32",
             device_hierarchy_build=True,
         ),
