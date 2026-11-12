@@ -111,10 +111,16 @@ The completed convertible NPF cases below have Kh/Kv=1:
      - Timed out at 1,800 s
      - Unavailable
      - Unavailable
+   * - Twenty transient steps
+     - On
+     - 2.266
+     - 202.817
+     - 89.5
+     - 3.562e-7
 
-All three GPU runs pass the independent physical checks. Both GHB-off
-comparisons pass the existing sanity gates; their transient history meets
-the preferred ``1e-6 m`` maximum head-difference target and their steady
+All four GPU cases pass the independent physical checks. The three available
+MF6 comparisons pass the existing sanity gates. Both transient histories meet
+the preferred ``1e-6 m`` maximum head-difference target; the GHB-off steady
 case does not. The GHB-on steady reference did not converge before its
 unchanged 1,800-second process limit. It has no qualified speedup or MF6
 head-parity result. Its GPU relative cellwise imbalance is ``1.230e-8``
