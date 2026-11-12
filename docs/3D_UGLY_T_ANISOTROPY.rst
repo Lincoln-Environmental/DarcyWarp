@@ -81,7 +81,7 @@ passes 29 tests.
 Large-model results in progress
 -------------------------------
 
-6 of 36 planned large cases have completed. 6 pass the independent GPU physical checks; 5 pass the full MF6 comparison gates. 3 meet the preferred ``1e-6 m`` maximum head-difference target.
+8 of 36 planned large cases have completed. 8 pass the independent GPU physical checks; 6 pass the full MF6 comparison gates. 4 meet the preferred ``1e-6 m`` maximum head-difference target.
 
 The tables contain three-repeat GPU medians and single native MF6 process times. Build and extra test audits are excluded as described above. Unavailable references have no speedup or head-parity claim.
 
@@ -137,12 +137,28 @@ The tables contain three-repeat GPU medians and single native MF6 process times.
      - 165.223
      - 91.6
      - 2.093e-07
+   * - 10
+     - On
+     - Steady
+     - 1.223
+     - Unavailable
+     - Unavailable
+     - Unavailable
+   * - 10
+     - On
+     - Transient
+     - 1.919
+     - 199.738
+     - 104.1
+     - 2.638e-07
 
-1 completed case(s) have no valid complete MF6 reference. The retained evidence records these failures independently from GPU convergence.
+2 completed case(s) have no valid complete MF6 reference. The retained evidence records these failures independently from GPU convergence.
 
 The large field has Kh from ``2.240`` to ``679.324 m/day``, a contrast of 303.3.
 
 The Kh/Kv=1 GHB-on steady MF6 reference reached its unchanged 1,800-second process limit without convergence. The GPU solve passed with relative cellwise imbalance ``1.230e-8`` and head-equivalent RMS ``1.867e-12 m``.
+
+The Kh/Kv=10 GHB-on steady MF6 reference also reached the 1,800-second limit without convergence. Its GPU solve passed the physical checks at a 1.223 s median.
 
 * :download:`Partial large-model results and source hashes <../benchmark_results/ugly_t_3d/large_500_progress.json>`
 
@@ -179,6 +195,34 @@ six of twenty timesteps. Its IMS settings were unchanged. That incomplete
 history is not a valid full-history reference or a qualified timing
 comparison; the native files and interrupted strict-profile attempt are
 retained. GPU physical checks and MF6 availability are reported separately.
+
+Separate MF6 strategy diagnostics
+----------------------------------------
+
+Missing native references are being investigated separately, preserving the
+original baseline artifacts and MF6 convergence tolerances. The diagnostic
+harness checks complete matching time histories, verifies the GHB flux law,
+and independently re-audits the saved GPU heads using their original physical
+limits. Eight focused diagnostic regressions pass.
+
+The first alternative used no under-relaxation or backtracking, eight ILUT
+levels and RCM ordering. The pinned historical MF6 6.6.2 executable exited
+with code 174 in ``genrcm`` (``rcm.f90``) before solving the large Kh/Kv=1
+GHB-on steady case. This attempt provides no qualifying timing or parity
+result. The baseline suite retains its original solver strategy.
+
+Repeating that diagnostic with the original ordering completed normally:
+``77.389 s`` MF6 versus the saved ``1.191 s`` GPU median, a ratio of 65.0.
+The physical case, initial heads and MF6 convergence tolerances were unchanged.
+Maximum head difference is ``2.744e-6 m``; head RMSE is ``1.484e-6 m``.
+The reference passes the existing sanity gates, and fresh audits of all four
+saved GPU histories pass their original physical limits and the GHB-law
+comparison. This establishes an independent comparison for the baseline's
+timed-out Kh/Kv=1 GHB-on steady case, while still missing the preferred
+``1e-6 m`` maximum head-difference target. This diagnostic timing is separate
+from the unchanged baseline table above.
+
+* :download:`MF6 diagnostic experiments and provenance <../benchmark_results/ugly_t_3d/mf6_strategy_experiments.json>`
 
 Reproduction
 ------------
