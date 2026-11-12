@@ -81,7 +81,7 @@ passes 29 tests.
 Large-model results in progress
 -------------------------------
 
-13 of 36 planned large cases have completed. 13 pass the independent GPU physical checks; 10 pass the full MF6 comparison gates. 6 meet the preferred ``1e-6 m`` maximum head-difference target.
+17 of 36 planned large cases have completed. 17 pass the independent GPU physical checks; 13 pass the full MF6 comparison gates. 6 meet the preferred ``1e-6 m`` maximum head-difference target.
 
 The tables contain three-repeat GPU medians and single native MF6 process times. Build and extra test audits are excluded as described above. Unavailable references have no speedup or head-parity claim.
 
@@ -180,6 +180,31 @@ The tables contain three-repeat GPU medians and single native MF6 process times.
      - 78.0
      - 2.153e-07
 
+.. list-table:: Confined NPF: 500 x 500 x 5, twenty steps for transients
+   :header-rows: 1
+
+   * - Kh/Kv
+     - GHB
+     - Mode
+     - GPU (s)
+     - MF6 (s)
+     - MF6/GPU
+     - Maximum head difference (m)
+   * - 1
+     - Off
+     - Steady
+     - 1.224
+     - 23.891
+     - 19.5
+     - 1.317e-05
+   * - 1
+     - Off
+     - Transient
+     - 1.809
+     - 630.953
+     - 348.8
+     - 1.412e-05
+
 .. list-table:: Confined Cartesian: 500 x 500 x 5, twenty steps for transients
    :header-rows: 1
 
@@ -197,8 +222,22 @@ The tables contain three-repeat GPU medians and single native MF6 process times.
      - 26.600
      - 35.5
      - 3.401e-05
+   * - 1
+     - Off
+     - Transient
+     - 7.624
+     - Unavailable
+     - Unavailable
+     - Unavailable
+   * - 1
+     - On
+     - Steady
+     - 0.649
+     - 21.375
+     - 33.0
+     - 3.380e-05
 
-3 completed case(s) have no valid complete MF6 reference. The retained evidence records these failures independently from GPU convergence.
+4 completed case(s) have no valid complete MF6 reference. The retained evidence records these failures independently from GPU convergence.
 
 The large field has Kh from ``2.240`` to ``679.324 m/day``, a contrast of 303.3.
 
