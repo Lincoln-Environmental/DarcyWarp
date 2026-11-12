@@ -1,7 +1,10 @@
+# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-# GMRES._run adapted from NVIDIA Warp (Copyright NVIDIA CORPORATION 2024-2026).
-# The adaptation retains persistent restart graphs across solves as well as
-# persistent Krylov arrays. Only scalar norms cross the device at restarts.
+# Adapted from NVIDIA Warp v1.17.0, warp/_src/optim/linear.py (GMRES._run).
+# Modified for persistent CUDA restart graphs and Krylov buffers, reduced norm
+# readbacks, shortened final restart blocks, and bounds-safe buffer handling.
+# Third-party attribution and licence: ../../THIRD_PARTY_NOTICES.md and
+# ../../third_party_licenses/NVIDIA-Warp-Apache-2.0.txt.
 import math
 
 import warp as wp
