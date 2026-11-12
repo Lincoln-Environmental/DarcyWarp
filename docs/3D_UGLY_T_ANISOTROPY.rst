@@ -81,7 +81,7 @@ passes 29 tests.
 Large-model results in progress
 -------------------------------
 
-10 of 36 planned large cases have completed. 10 pass the independent GPU physical checks; 8 pass the full MF6 comparison gates. 5 meet the preferred ``1e-6 m`` maximum head-difference target.
+13 of 36 planned large cases have completed. 13 pass the independent GPU physical checks; 10 pass the full MF6 comparison gates. 6 meet the preferred ``1e-6 m`` maximum head-difference target.
 
 The tables contain three-repeat GPU medians and single native MF6 process times. Build and extra test audits are excluded as described above. Unavailable references have no speedup or head-parity claim.
 
@@ -165,14 +165,48 @@ The tables contain three-repeat GPU medians and single native MF6 process times.
      - 158.880
      - 71.3
      - 1.638e-07
+   * - 100
+     - On
+     - Steady
+     - 1.240
+     - Unavailable
+     - Unavailable
+     - Unavailable
+   * - 100
+     - On
+     - Transient
+     - 2.454
+     - 191.525
+     - 78.0
+     - 2.153e-07
 
-2 completed case(s) have no valid complete MF6 reference. The retained evidence records these failures independently from GPU convergence.
+.. list-table:: Confined Cartesian: 500 x 500 x 5, twenty steps for transients
+   :header-rows: 1
+
+   * - Kh/Kv
+     - GHB
+     - Mode
+     - GPU (s)
+     - MF6 (s)
+     - MF6/GPU
+     - Maximum head difference (m)
+   * - 1
+     - Off
+     - Steady
+     - 0.749
+     - 26.600
+     - 35.5
+     - 3.401e-05
+
+3 completed case(s) have no valid complete MF6 reference. The retained evidence records these failures independently from GPU convergence.
 
 The large field has Kh from ``2.240`` to ``679.324 m/day``, a contrast of 303.3.
 
 The Kh/Kv=1 GHB-on steady MF6 reference reached its unchanged 1,800-second process limit without convergence. The GPU solve passed with relative cellwise imbalance ``1.230e-8`` and head-equivalent RMS ``1.867e-12 m``.
 
 The Kh/Kv=10 GHB-on steady MF6 reference also reached the 1,800-second limit without convergence. Its GPU solve passed the physical checks at a 1.223 s median.
+
+The Kh/Kv=100 GHB-on steady MF6 reference likewise reached the 1,800-second limit without convergence. Its GPU solve passed the physical checks at a 1.240 s median.
 
 * :download:`Partial large-model results and source hashes <../benchmark_results/ugly_t_3d/large_500_progress.json>`
 
