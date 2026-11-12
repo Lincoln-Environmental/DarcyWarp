@@ -39,6 +39,10 @@ def parse_arguments(*, defaults):
     parser.add_argument('--mf6', type=Path, default=defaults['mf6'])
     parser.add_argument('--cached-only', action='store_true')
     parser.add_argument('--compare', action='store_true', help='Compare classic/fast and diagonal/K-cycle; otherwise use the recommended path.')
+    parser.add_argument('--ghb', action='store_true', help='Add native fixed-conductance GHB boundaries and audit MF6 GHB flows.')
+    parser.add_argument('--tight', action='store_true', help='Use explicit tighter FP64 qualification controls; defaults remain the 2D sanity profiles.')
+    parser.add_argument('--gpu-tight', action='store_true', help='Tighten GPU controls while retaining the exact 2D MF6 sanity settings for timing comparisons.')
+    parser.add_argument('--cartesian-fgmres', action='store_true', help='Use FP64 FGMRES with the shared line K-cycle for confined Cartesian solves.')
     parser.add_argument('--npf-preconditioner', choices=['auto', 'diagonal', 'kcycle'], default=defaults['preconditioner'])
     parser.add_argument('--npf-relative-tolerance', type=float, default=None,
         help='Explicit NPF cellwise imbalance limit; omitted retains the 1e-8 default.')
@@ -58,10 +62,10 @@ def parse_arguments(*, defaults):
 def sanity_reference_valid(*, info, mode, gates):
     if mode == 'steady':
         checks = info.get('independent', {})
-        return bool(info['native_success'] and checks.get('input_valid')
+        return bool(info['native_success'] and info.get('ghb_law_valid',True) and checks.get('input_valid')
             and checks.get('boundary_condition_valid') and checks.get('physical_metrics_valid')
             and checks['relative_cell_imbalance'] <= gates['budget_percent']/100.)
-    return all(row['source_allocation_valid'] and row['physical']['input_valid']
+    return bool(info.get('native_success',True) and info['periods']) and all(row.get('ghb_law_valid',True) and row['source_allocation_valid'] and row['physical']['input_valid']
         and row['physical']['boundary_condition_valid'] and row['physical']['physical_metrics_valid']
         and row['native_relative_cell_imbalance'] <= gates['budget_percent']/100. for row in info['periods'])
 
@@ -132,7 +136,7 @@ def prepare_reference(*, case, family, mode, cache, executable, cached_only, nat
             head_tolerance_m=native_options['outer_dvclose'], source_package='rch')
         if head is None:
             raise RuntimeError(f'MF6 failed: {folder}/native')
-        arrays = dict(heads=head[None], fluxes=fields['flux_native'][None])
+        arrays = dict(heads=head[None], fluxes=fields['flux_native'][None],ghb_inflows=fields['ghb_native_inflow'][None])
         accepted = bool(info['native_success'] and info['independent_conservation'])
         if family == 'cartesian':
             checks = info['independent']
@@ -153,7 +157,7 @@ def prepare_reference(*, case, family, mode, cache, executable, cached_only, nat
     accepted = sanity_reference_valid(info=info, mode=mode, gates=gates)
     native_seconds = info.get('seconds')
     if mode == 'transient':
-        native_seconds = native_elapsed_seconds(text=(folder/'native/stdout.log').read_text())
+        native_seconds = info.get('engine_seconds',native_elapsed_seconds(text=(folder/'native/stdout.log').read_text()))
     np.savez_compressed(file=folder/'reference.npz', **arrays)
     manifest = dict(fingerprint=fingerprint, inputs=payload, accepted=accepted,
         strict_native_npf_audit=strict_native_npf_audit,
@@ -177,11 +181,16 @@ def measure(*, case, family, mode, label, reference, native_accepted, device, pr
     previous = case.initial.copy()
     implementation = label if family == 'cartesian' else 'fast'
     kwargs = dict(profiles['transient'] if mode == 'transient' else profiles['steady'][implementation]) if family == 'cartesian' else dict(npf_options, npf_preconditioner=label)
+    if mode == 'steady':
+        kwargs.pop('npf_device_native',None)
     if family == 'npf' and isinstance(kwargs.get('npf_newton_controls'), dict):
         from DARCY_WARP_PACKAGE.solvers.npf662_newton import NPF662NewtonControls
         kwargs['npf_newton_controls'] = NPF662NewtonControls(**kwargs['npf_newton_controls'])
     if family == 'npf' and label == 'kcycle':
         kwargs['npf_kcycle_controls'] = kcycle_controls
+    if family == 'cartesian' and isinstance(kwargs.get('linear_kcycle_controls'),dict):
+        from DARCY_WARP_PACKAGE.solvers.npf662_kcycle import NPF662KCycleControls
+        kwargs['linear_kcycle_controls']=NPF662KCycleControls(**kwargs['linear_kcycle_controls'])
     wp.synchronize_device(device=device)
     started = perf_counter()
     history, heads = [], []
@@ -189,7 +198,8 @@ def measure(*, case, family, mode, label, reference, native_accepted, device, pr
             dz=float(case.thicknesses[0, 0, 0]), device=device, implementation=implementation,
             formulation='legacy' if family == 'cartesian' else 'mf6_6_6_2_npf') as model:
         fields = dict(kx_field=case.kx, ky_field=case.ky, kz_field=case.kz, active=case.active,
-            bc_mask=case.fixed, bc_values=case.values, rhs=case.source, initial_head=case.initial)
+            bc_mask=case.fixed, bc_values=case.values, rhs=case.source, initial_head=case.initial,
+            ghb_conductance=case.ghb_conductance,ghb_head=case.ghb_head)
         if family == 'cartesian':
             model.build_from_K_fields(**fields)
         else:
@@ -234,16 +244,30 @@ def measure(*, case, family, mode, label, reference, native_accepted, device, pr
             tolerances = dict(relative_tolerance=kwargs['npf_final_relative_tolerance']) if family == 'npf' and 'npf_final_relative_tolerance' in kwargs else {}
             if family == 'cartesian':
                 tolerances = dict(physical_tolerance=kwargs['abs_tol_min'],
-                relative_tolerance=gates['budget_percent']/100., head_tolerance_m=kwargs['dh_rms_tol'])
+                relative_tolerance=kwargs.get('final_budget_relative_tol',gates['budget_percent']/100.),
+                head_tolerance_m=kwargs['dh_rms_tol'] if kwargs['dh_rms_tol'] is not None else gates.get('head_residual_rms',1e-6))
             checks, physical = auditor.evaluate(head=head, **tolerances)
             delta = head[free]-reference['heads'][period][free]
             rmse, maximum = float(np.sqrt(np.mean(delta**2))), float(np.max(np.abs(delta)))
             relative_flux = float(np.linalg.norm(physical['flux']-reference['fluxes'][period])/
                 max(np.linalg.norm(reference['fluxes'][period]), np.finfo(float).tiny))
+            ghb_error = 0.
+            ghb_valid = True
+            if case.ghb_conductance is not None:
+                actual = -physical['ghb_outflow']
+                native = reference['ghb_inflows'][period]
+                ghb_error = float(np.max(np.abs(actual-native)))
+                # Propagate the measured head difference through the known
+                # linear boundary law; allow native C*H-C*h arithmetic roundoff.
+                ghb_bound = case.ghb_conductance*np.abs(head-reference['heads'][period])
+                ghb_bound += 32.*np.finfo(float).eps*case.ghb_conductance*(np.abs(head)+np.abs(case.ghb_head))
+                ghb_valid = bool(np.all(np.isfinite(actual)) and np.all(np.abs(actual-native)<=np.maximum(ghb_bound,1e-14)))
             accepted = bool(info['converged'] and checks['independent_accepted'] and native_accepted
-                            and rmse <= gates['rmse'] and maximum <= gates['maximum'])
+                            and ghb_valid and rmse <= gates['rmse'] and maximum <= gates['maximum'])
             history.append(dict(period=period+1, accepted=accepted, solver_converged=bool(info['converged']),
                 head_rmse_m=rmse, head_max_m=maximum, flux_relative_l2=relative_flux,
+                ghb_flux_max_error=ghb_error,ghb_law_parity=ghb_valid,
+                head_error_in_scaled_eps=maximum/(np.finfo(float).eps*max(1.,float(np.max(np.abs(reference['heads'][period][free]))))),
                 physical=checks, cycles=info.get('n_cycles_used'), krylov=info.get('krylov_iterations'),
                 outer_iterations=info.get('outer_iterations'), residual_rms=info.get('r_rms_end'),
                 device_native=info.get('device_native', False),
@@ -315,6 +339,24 @@ def run(*, args, root, settings):
         for controls in profiles['steady'].values():
             controls['max_cycles'] = args.legacy_max_cycles
         profiles['transient']['max_cycles'] = args.legacy_max_cycles
+    if args.tight or args.gpu_tight:
+        for profile in (*profiles['steady'].values(),profiles['transient']):
+            profile.update(settings['tight_cartesian'])
+        settings['npf_options']['npf_final_relative_tolerance']=settings['tight_npf_relative']
+        if args.tight:
+            for profile in profiles['mf6'].values():
+                profile.update(settings['tight_mf6'])
+            settings['gates']=dict(settings['gates'],**settings['tight_gates'])
+        overrides['tight']=dict(cartesian=settings['tight_cartesian'],
+            mf6=settings['tight_mf6'] if args.tight else 'unchanged 2D sanity controls',
+            npf_relative=settings['tight_npf_relative'],gates=settings['gates'])
+    if args.cartesian_fgmres:
+        if args.compare:
+            raise ValueError('--cartesian-fgmres requires the fast-only selection')
+        profiles['steady']['fast'].update(settings['cartesian_linear_options'])
+        profiles['transient'].update(settings['cartesian_linear_options'])
+        overrides['cartesian_linear_options']=settings['cartesian_linear_options']
+    overrides['ghb']=bool(args.ghb)
     args.output.mkdir(parents=True, exist_ok=False)
     args.cache.mkdir(parents=True, exist_ok=True)
     factors = np.resize(a=np.repeat(a=settings['source_factors'], repeats=settings['block_periods']), new_shape=args.periods)
@@ -326,6 +368,16 @@ def run(*, args, root, settings):
         revision=subprocess.check_output(args=['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True).strip(),
         timing='Primary: synchronized public solver calls. With --npf-history, the entire transient NPF history call includes source updates and output download. Model build, cache loading, external audit and file saving excluded. Secondary: full verification runtime.',
         cases=[])
+    sources=set((root/'DARCY_WARP_PACKAGE/solvers').glob('npf662*.py'))
+    sources.update((root/'DARCY_WARP_PACKAGE/validation').glob('npf662*.py'))
+    sources.update(root/name for name in (
+        'DARCY_WARP_PACKAGE/solvers/fast_3d.py','DARCY_WARP_PACKAGE/solvers/linear_fgmres_3d.py',
+        'DARCY_WARP_PACKAGE/solvers/session_3d.py','DARCY_WARP_PACKAGE/solvers/face_kernels_3d_f64.py',
+        'DARCY_WARP_PACKAGE/solvers_3d.py','DARCY_WARP_PACKAGE/warped_darcy_3d.py',
+        'DARCY_WARP_PACKAGE/physics/ghb_3d.py','DARCY_WARP_PACKAGE/physics/budget_3d.py',
+        'working_tests/run_3d_sanity.py','working_tests/sanity_3d_controls.py'))
+    result['solver_source_sha256']={str(path.relative_to(root)):hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in sorted(sources)}
     for family in args.families:
         variants = args.variants if family == 'npf' else ['confined']
         for definition in suite_settings(sizes=args.sizes, variants=variants):
@@ -336,8 +388,11 @@ def run(*, args, root, settings):
                 source = case.source*(settings['cartesian_dx']**2)/(case.dx*case.dy)
                 case = replace(case, z_interfaces=interfaces, dx=settings['cartesian_dx'],
                                dy=settings['cartesian_dx'], source=source)
+            if args.ghb:
+                from DARCY_WARP_PACKAGE.validation.npf662_benchmark_cases import add_ghb_boundaries
+                case=add_ghb_boundaries(case=case,**settings['ghb'])
             for mode in args.modes:
-                identity = f'{family}_{definition["case_id"]}_{mode}'
+                identity = f'{family}_{definition["case_id"]}_{mode}'+('_ghb' if args.ghb else '')
                 row = dict(case=identity, case_sha256=case.digest(), shape=list(case.active.shape), runs=[], accepted=False)
                 result['cases'].append(row)
                 print(f'Starting {identity}; checking saved MF6 reference.', flush=True)
@@ -393,6 +448,8 @@ def run(*, args, root, settings):
                 median_verified_total_seconds=float(np.median(a=[row['seconds'] for row in timed])),
                 worst_head_rmse_m=max(period['head_rmse_m'] for period in periods),
                 worst_head_max_m=max(period['head_max_m'] for period in periods),
+                worst_ghb_flux_max_error=max(period['ghb_flux_max_error'] for period in periods),
+                worst_head_error_in_scaled_eps=max(period['head_error_in_scaled_eps'] for period in periods),
                 reference_reused=case['reference']['reused']))
     result['summary'] = summary
     if summary:
@@ -417,7 +474,16 @@ if __name__ == "__main__":
         cartesian_top=8., cartesian_dz=10., cartesian_dx=25., kcycle_threshold_cells=50000,
         kcycle=dict(levels=5, pre_sweeps=2, post_sweeps=2, coarse_sweeps=20, cycles=1, omega=.8),
         npf_options=dict(max_outer=80, max_cycles=4000, krylov_restart=48),
-        gates=dict(rmse=1e-3, maximum=1e-2, budget_percent=1.))
+        gates=dict(rmse=1e-3, maximum=1e-2, budget_percent=1.),
+        ghb=dict(conductance_factor=1.,draining_offset=-.5,injecting_offset=1.),
+        cartesian_linear_options=dict(linear_acceleration='fgmres',linear_krylov_restart=8,
+            linear_kcycle_controls=dict(levels=3,pre_sweeps=2,post_sweeps=2,coarse_sweeps=2,
+                cached_line_factors=True,preconditioner_precision='float32',device_hierarchy_build=True)),
+        tight_cartesian=dict(max_cycles=4000,rel_tol=1e-14,abs_tol_min=1e-12,dh_rms_tol=None,dh_max_tol=None,final_budget_relative_tol=1e-14),
+        tight_mf6=dict(outer_dvclose=1e-12,inner_dvclose=1e-12,rcloserecord=[1e-9,'STRICT'],
+            under_relaxation='NONE',preconditioner_levels=8,preconditioner_drop_tolerance=1e-4,
+            relaxation_factor=0.,reordering_method='RCM',number_orthogonalizations=8),
+        tight_npf_relative=1e-12,tight_gates=dict(rmse=1e-10,maximum=1e-9,head_residual_rms=1e-12))
     os.environ['DARCY_FLOAT'] = 'float64'
     sys.path.insert(0, str(root))
     arguments = parse_arguments(defaults=defaults)

@@ -34,6 +34,11 @@ These comparisons measure the synchronized DarcyWarp GPU history API
 against one saved MODFLOW 6 engine run. External model construction and
 independent benchmark audits are reported separately.
 
+[Native 3D GHB](docs/3D_NATIVE_GHB.rst) adds cell-based general-head boundaries
+to Cartesian and NPF/STO, including steady/transient CPU/CUDA and live MF6
+checks. The guide documents the build/update API, boundary budgets, the faster
+Cartesian FGMRES option and reproducible `run_3d_sanity.py --ghb` commands.
+
 The [2D GPU release notes](docs/2D_GPU_RELEASE_NOTES.rst) cover the parallel
 reductions, faster transient profile and GHB parity repairs, with fresh
 before/after main benchmarks and unchanged convergence gates. The profile is

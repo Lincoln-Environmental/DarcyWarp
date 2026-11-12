@@ -109,6 +109,49 @@ conductance, FP64/FP32 preconditioners, exact iteration budgets, invalid
 controls and resource release. The focused accelerator/GHB/session selection
 passes 97 tests on CPU/CUDA.
 
+Reproducible sanity and runtime checks
+-------------------------------------
+
+The existing portable runner now accepts ``--ghb``. It supplies identical
+fixed conductance/head arrays to DarcyWarp and native MF6, decodes native GHB
+package flows, and checks the scalar law separately from intercell flows and
+storage. Saved references include these arrays in their fingerprints. Changed
+GHB values cannot reuse a reference for another case. Every measured repeat
+must converge and pass the independent head, boundary and budget checks.
+
+For the faster Cartesian iteration and existing NPF runtime controls::
+
+    DARCY_FLOAT=float64 PYTHONPATH=.:working_tests OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+      python working_tests/run_3d_sanity.py --sizes 16 32 --ghb \
+      --families cartesian npf --variants confined convertible \
+      --modes steady transient --cartesian-fgmres --npf-history \
+      --npf-controls working_tests/npf_runtime_controls.json --repeats 3
+
+``--gpu-tight`` retains the original 2D MF6 sanity settings while tightening
+the GPU: NPF relative cell imbalance ``1e-12`` (physical RMS floor ``1e-12``
+and the existing head-equivalent gate); Cartesian relative residual ``1e-14``,
+absolute RMS ``1e-12`` and head-equivalent residual ``1e-14``. These settings
+are explicit overrides, not changed production defaults. The runner's
+Cartesian FGMRES profile uses a three-level FP32 preconditioner, restart 8,
+and FP64 heads/residuals/refinement. The API default preconditioner is FP64.
+
+``--tight`` also replaces MF6's IMS controls and uses stricter head-comparison
+gates. It is a numerical investigation mode, not the default timing profile.
+The development 100 x 100 x 5 campaign failed two of those tighter comparison
+gates despite both engines converging: the largest head difference was
+``1.56e-9 m``. Independently evaluated Cartesian GPU head-equivalent residuals
+were ``7e-17`` to ``4e-16 m`` versus MF6's ``4e-14`` to ``3e-13 m``. The failed
+campaign is retained; it is not presented as machine-precision MF6 parity.
+Likewise, an NPF relative imbalance request of ``1e-14`` on the coarse
+16 x 16 x 5 layered grid exhausted its outer budget at FP64 roundoff.
+
+Runtime reports distinguish synchronized public solve/history calls, model
+construction and external verification. Transient calls start from the
+declared initial heads, without a hidden steady-state pre-solve. Timed GPU
+results use three repetitions after warmup; the cached MF6 engine time is a
+single separately identified native reference run. Source hashes, controls,
+all endpoints and failed outcomes are retained with the results.
+
 The terrain mask repair is separate: ``04a2bca`` validates original values
 before integer conversion and passed 851 terrain regressions on CPU/CUDA.
 Fractional masks such as 0.9, 1.9 and -0.1 now raise instead of silently

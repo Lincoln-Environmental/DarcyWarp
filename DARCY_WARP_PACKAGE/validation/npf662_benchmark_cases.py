@@ -48,3 +48,19 @@ def make_layered_dry_source(*,initial):
         fixed=np.array([0,1]).reshape(shape),values=np.zeros(shape),source=np.array([1.,0.]).reshape(shape),
         initial=np.full(shape,initial),dx=1.,dy=1.,
         z_interfaces=np.array([[[2.,4.]],[[0.,0.]]]),cell_type=1)
+
+
+def add_ghb_boundaries(*, case, conductance_factor, draining_offset, injecting_offset):
+    """Independent fixed-C regional boundaries plus an interior exchange cell."""
+    from dataclasses import replace
+    conductance = np.zeros_like(a=case.kx)
+    boundary_head = np.zeros_like(a=case.initial)
+    conductance[:, :, -1] = conductance_factor*case.kx[:, :, -1]*case.thicknesses[:, :, -1]*case.dy/case.dx
+    boundary_head[:, :, -1] = case.initial[:, :, -1]+draining_offset
+    if case.active.shape[2] > 2:
+        interior = (slice(None),case.active.shape[1]//2,case.active.shape[2]//2)
+        conductance[interior] = conductance_factor*case.kx[interior]*case.thicknesses[interior]*case.dy/case.dx
+        boundary_head[interior] = case.initial[interior]+injecting_offset
+    result = replace(case,ghb_conductance=conductance,ghb_head=boundary_head)
+    result.validate()
+    return result

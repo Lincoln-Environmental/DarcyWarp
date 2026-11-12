@@ -38,6 +38,7 @@ Public License, version 3 or later (``AGPL-3.0-or-later``).
    release_2d
    runtime_2d
    npf_gpu_native
+   native_3d_ghb
    docs_build
    license
 
