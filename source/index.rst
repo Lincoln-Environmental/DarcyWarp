@@ -3,12 +3,12 @@ DarcyWarp
 
 Fast groundwater flow modelling in Python, on CPU and NVIDIA GPUs.
 
-DarcyWarp solves two-dimensional, thickness-integrated groundwater flow on
-regular square grids. It supports confined and unconfined aquifers, steady and
-transient simulations, spatially variable properties, recharge, prescribed
-heads and general-head boundaries. Repeated solves can reuse model state for
-scenario and ensemble work. The 3D solver adds legacy Cartesian and
-MF6 6.6.2 NPF/STO formulations for structured grids.
+DarcyWarp solves structured groundwater flow in two and three dimensions.
+The 2D thickness-integrated solver supports confined and unconfined flow,
+steady and transient models, recharge, fixed heads and general-head exchange.
+The 3D solver supports legacy Cartesian grids and MF6 6.6.2 NPF/STO on
+Cartesian or layered DIS grids, including convertible cells and Ss/Sy
+transient storage. Models run on CPU or NVIDIA CUDA devices through Warp.
 
 Start with a small CPU model, then choose the formulation and solver that match
 your problem. The benchmark tools and MODFLOW 6 comparisons remain available
@@ -48,6 +48,8 @@ Find your starting point
 * :doc:`capabilities`: understand the model, boundary conditions and solver choices.
 * :doc:`validation`: find analytical checks, numerical tests and MODFLOW comparisons.
 * :doc:`benchmarking`: reproduce recharge and transmissivity ensembles and plots.
+* :doc:`three_dimensional`: configure and verify structured 3D models.
+* :doc:`npf_gpu_native`: see current GPU-resident transient NPF/STO performance.
 * :doc:`docs_build`: build this documentation locally.
 
 Repository map
