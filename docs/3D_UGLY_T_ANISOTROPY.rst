@@ -64,6 +64,14 @@ three repetitions after one warmup. The 100 x 100 x 5 smoke campaign uses
 three timesteps and one timed repetition to check all combinations before
 the 500 x 500 x 5 campaign. Smoke timings are not production medians.
 
+The benchmark host has an Intel Core Ultra 9 285K and an NVIDIA GeForce
+RTX 4070 Ti SUPER with 16 GB of device memory. Runs use FP64 heads and
+physical residuals, Warp 1.17.0 and the pinned historical MF6 6.6.2 build.
+``OMP_NUM_THREADS``, ``OPENBLAS_NUM_THREADS`` and ``MKL_NUM_THREADS`` are
+set to one; CPU affinity is not pinned. The reported speedups apply to
+this hardware and the recorded solver profiles. The separate MF6 strategy
+diagnostics below retain the baseline convergence tolerances.
+
 Practical-control smoke qualification
 ----------------------------------------
 
@@ -81,7 +89,7 @@ passes 29 tests.
 Large-model results in progress
 -------------------------------
 
-19 of 36 planned large cases have completed. 19 pass the independent GPU physical checks; 15 pass the full MF6 comparison gates. 6 meet the preferred ``1e-6 m`` maximum head-difference target.
+21 of 36 planned large cases have completed. 21 pass the independent GPU physical checks; 17 pass the full MF6 comparison gates. 6 meet the preferred ``1e-6 m`` maximum head-difference target.
 
 The tables contain three-repeat GPU medians and single native MF6 process times. Build and extra test audits are excluded as described above. Unavailable references have no speedup or head-parity claim.
 
@@ -211,6 +219,13 @@ The tables contain three-repeat GPU medians and single native MF6 process times.
      - 18.905
      - 15.5
      - 1.854e-05
+   * - 1
+     - On
+     - Transient
+     - 1.891
+     - 602.198
+     - 318.5
+     - 5.370e-06
 
 .. list-table:: Confined Cartesian: 500 x 500 x 5, twenty steps for transients
    :header-rows: 1
@@ -250,6 +265,13 @@ The tables contain three-repeat GPU medians and single native MF6 process times.
      - 788.422
      - 99.9
      - 1.827e-05
+   * - 10
+     - Off
+     - Steady
+     - 0.648
+     - 19.016
+     - 29.3
+     - 3.280e-05
 
 4 completed case(s) have no valid complete MF6 reference. The retained evidence records these failures independently from GPU convergence.
 
