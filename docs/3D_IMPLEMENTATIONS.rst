@@ -1,10 +1,13 @@
 Selecting a 3D GPU implementation
 =================================
 
-This guide applies to the Cartesian and MF6 6.6.2 NPF/STO implementation
-promoted by PR #4, at main revision
-``f18912bff7afe5bb696a226cd8095f7a614352bf``. Transformed terrain remains
-experimental development on ``dev`` and is outside this release.
+This guide covers the Cartesian and MF6 6.6.2 NPF/STO implementation
+originally promoted by PR #4 at revision
+``f18912bff7afe5bb696a226cd8095f7a614352bf``.
+Subsequent GPU-resident history and performance optimisations are now on
+``main``. See :doc:`npf_gpu_native` for the current 3D transient
+qualification and explicit runtime profiles. Transformed terrain
+remains experimental development on ``dev``.
 
 Set ``DARCY_FLOAT=float64`` before importing the package. Qualification uses
 Python 3.12, warp-lang 1.17.0 and an NVIDIA CUDA device. K, head, source and
