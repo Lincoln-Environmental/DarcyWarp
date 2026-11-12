@@ -58,7 +58,7 @@ three timesteps and one timed repetition to check all combinations before
 the 500 x 500 x 5 campaign. Smoke timings are not production medians.
 
 Practical-control smoke qualification
-------------------------------------
+----------------------------------------
 
 All 36 cases at 100 x 100 x 5 pass with the default practical controls.
 Twenty-four meet the preferred ``1e-6 m`` maximum head-difference target.
@@ -72,7 +72,7 @@ passes 29 tests.
 * :download:`Practical-control smoke matrix <../benchmark_results/ugly_t_3d/smoke_100_sanity_qualification.json>`
 
 Large-model results in progress
-------------------------------
+--------------------------------
 
 The practical-control campaign at 500 x 500 x 5 is running serially.
 The first completed convertible NPF cases have GHB off and Kh/Kv=1:
