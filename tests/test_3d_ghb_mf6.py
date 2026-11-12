@@ -48,7 +48,8 @@ def build_case(*, case, device, formulation):
 
 @pytest.mark.parametrize("device", ["cpu", "cuda:0"])
 @pytest.mark.parametrize("convertible", [False, True])
-def test_live_npf_ghb_steady_and_transient(tmp_path, pinned_mf6, device, convertible):
+@pytest.mark.parametrize("roundoff", [False, True])
+def test_live_npf_ghb_steady_and_transient(tmp_path, pinned_mf6, device, convertible, roundoff):
     if device.startswith("cuda") and not wp.is_cuda_available():
         pytest.skip("CUDA unavailable")
     case = ghb_case(convertible=convertible)
@@ -61,7 +62,8 @@ def test_live_npf_ghb_steady_and_transient(tmp_path, pinned_mf6, device, convert
     controls = NPF662NewtonControls(inner_forcing=1e-3,tiled_reductions=True,reuse_trial_state=True)
     with build_case(case=case,device=device,formulation="mf6_6_6_2_npf") as model:
         head,info = model.solve(unconfined=convertible,top_elevation=case.top,npf_preconditioner="kcycle",
-            npf_final_relative_tolerance=1e-12,npf_newton_controls=controls,max_cycles=500,max_outer=50)
+            npf_final_relative_tolerance=1e-12,npf_roundoff_acceptance=roundoff,
+            npf_newton_controls=controls,max_cycles=500,max_outer=50)
         assert info["converged"], info
         np.testing.assert_allclose(actual=head,desired=native,rtol=0.0,atol=2e-11)
         checks,fields = reference.evaluate(head=head)
@@ -76,8 +78,11 @@ def test_live_npf_ghb_steady_and_transient(tmp_path, pinned_mf6, device, convert
     with build_case(case=case,device=device,formulation="mf6_6_6_2_npf") as model:
         heads,info = model.solve_transient_npf(source_factors=factors,dt=2.0,
             head_prev=case.initial,ss=1e-3,sy=0.15,unconfined=convertible,top_elevation=case.top,
-            npf_final_relative_tolerance=1e-12,npf_newton_controls=controls,max_cycles=500,max_outer=50)
+            npf_final_relative_tolerance=1e-12,npf_roundoff_acceptance=roundoff,
+            npf_newton_controls=controls,max_cycles=500,max_outer=50)
         assert info["converged"],info
+        if roundoff:
+            assert all(period['roundoff_accepted'] for period in info['periods'])
         np.testing.assert_allclose(actual=heads,desired=native_history["heads"],rtol=0.0,atol=2e-11)
         previous = case.initial
         for index,head in enumerate(heads):

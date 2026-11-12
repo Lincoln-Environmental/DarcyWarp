@@ -406,6 +406,10 @@ def run(*, args, root, settings):
                         executable=args.mf6, cached_only=args.cached_only, native_options=native_profile,
                         factors=factors, dt=settings['dt'], ss=settings['ss'], sy=settings['sy'] if family == 'npf' else 0., gates=settings['gates'])
                     row['reference'] = {key: value for key, value in manifest.items() if key not in ('native', 'sha256')}
+                    row['reference']['artifact_sha256']=manifest['sha256']
+                    row['reference']['native_identity']={key:manifest['native'][key] for key in
+                        ('mf6_sha256','mf6_version','mf6_build_identity','native_success','executable_sha256','version')
+                        if key in manifest['native']}
                     if args.compare:
                         labels = ('classic', 'fast') if family == 'cartesian' else ('diagonal', 'kcycle')
                     else:
