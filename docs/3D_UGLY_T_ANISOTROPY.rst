@@ -57,6 +57,20 @@ three repetitions after one warmup. The 100 x 100 x 5 smoke campaign uses
 three timesteps and one timed repetition to check all combinations before
 the 500 x 500 x 5 campaign. Smoke timings are not production medians.
 
+Practical-control smoke qualification
+------------------------------------
+
+All 36 cases at 100 x 100 x 5 pass with the default practical controls.
+Twenty-four meet the preferred ``1e-6 m`` maximum head-difference target.
+The largest MF6 differences for Kh/Kv of 1, 10 and 100 are
+``6.858e-6``, ``6.300e-6`` and ``5.934e-6 m``, respectively. They are
+essentially unchanged from the extra-tight experiment. The largest GPU
+head-equivalent RMS residual is ``3.232e-10 m``, well below ``1e-6 m``.
+The revised field/matrix and unavailable-reference regression selection
+passes 29 tests.
+
+* :download:`Practical-control smoke matrix <../benchmark_results/ugly_t_3d/smoke_100_sanity_qualification.json>`
+
 Initial extra-tight experiment
 ------------------------------
 
@@ -83,6 +97,13 @@ qualification; its timing is not advertised as a converged speedup.
 Following the user's rejection of that unnecessary cutoff, the campaign
 uses the original 2D-matched GPU controls above. The initial experiment
 is retained separately and can be reproduced with ``--gpu-profile roundoff``.
+
+The original 500 x 500 x 5 Cartesian transient reference at Kh/Kv=1 with
+GHB off reached the external 1,800-second MF6 process limit after saving
+six of twenty timesteps. Its IMS settings were unchanged. That incomplete
+history is not a valid full-history reference or a qualified timing
+comparison; the native files and interrupted strict-profile attempt are
+retained. GPU physical checks and MF6 availability are reported separately.
 
 Reproduction
 ------------
