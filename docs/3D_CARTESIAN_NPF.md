@@ -156,6 +156,23 @@ gives the qualified 500 x 500 x 5 runtime, strict control files, matching
 MF6 comparison and timing boundaries. This small example demonstrates the
 API, not the large benchmark profile.
 
+## MODFLOW 6 formulation attribution
+
+The `mf6_6_6_2_npf` option is an independent implementation of selected
+**USGS MODFLOW 6** Node Property Flow (NPF) and Storage (STO) equations and
+numerical conventions, using Python and NVIDIA Warp. It is not an official
+USGS distribution or a claim to implement every MODFLOW 6 option.
+
+Reference: Langevin, C. D., Hughes, J. D., Provost, A. M., and contributors
+(2025), *MODFLOW 6 Modular Hydrologic Model*, version 6.6.2,
+USGS software release, [doi:10.5066/F76Q1VQV](https://doi.org/10.5066/F76Q1VQV).
+The [official software citation](https://github.com/MODFLOW-ORG/modflow6/blob/6.6.2/CITATION.cff)
+gives the complete contributor list. MODFLOW 6 is released under
+[CC0-1.0](https://github.com/MODFLOW-ORG/modflow6/blob/6.6.2/LICENSE.md).
+
+See [third-party acknowledgements](../THIRD_PARTY_NOTICES.md) for the
+complete attribution and the separate NVIDIA Warp adapted-code licence.
+
 ## Verification
 
 The layered example checks head and flow against an independent series-resistance solution.
