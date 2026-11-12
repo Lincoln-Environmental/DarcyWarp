@@ -81,7 +81,7 @@ passes 29 tests.
 Large-model results in progress
 -------------------------------
 
-17 of 36 planned large cases have completed. 17 pass the independent GPU physical checks; 13 pass the full MF6 comparison gates. 6 meet the preferred ``1e-6 m`` maximum head-difference target.
+19 of 36 planned large cases have completed. 19 pass the independent GPU physical checks; 15 pass the full MF6 comparison gates. 6 meet the preferred ``1e-6 m`` maximum head-difference target.
 
 The tables contain three-repeat GPU medians and single native MF6 process times. Build and extra test audits are excluded as described above. Unavailable references have no speedup or head-parity claim.
 
@@ -204,6 +204,13 @@ The tables contain three-repeat GPU medians and single native MF6 process times.
      - 630.953
      - 348.8
      - 1.412e-05
+   * - 1
+     - On
+     - Steady
+     - 1.220
+     - 18.905
+     - 15.5
+     - 1.854e-05
 
 .. list-table:: Confined Cartesian: 500 x 500 x 5, twenty steps for transients
    :header-rows: 1
@@ -236,6 +243,13 @@ The tables contain three-repeat GPU medians and single native MF6 process times.
      - 21.375
      - 33.0
      - 3.380e-05
+   * - 1
+     - On
+     - Transient
+     - 7.891
+     - 788.422
+     - 99.9
+     - 1.827e-05
 
 4 completed case(s) have no valid complete MF6 reference. The retained evidence records these failures independently from GPU convergence.
 
