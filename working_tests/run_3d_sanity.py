@@ -40,6 +40,15 @@ def parse_arguments(*, defaults):
     parser.add_argument('--cached-only', action='store_true')
     parser.add_argument('--compare', action='store_true', help='Compare classic/fast and diagonal/K-cycle; otherwise use the recommended path.')
     parser.add_argument('--ghb', action='store_true', help='Add native fixed-conductance GHB boundaries and audit MF6 GHB flows.')
+    parser.add_argument('--k-field', choices=['layered', 'ugly_t'], default=defaults['k_field'])
+    parser.add_argument('--vertical-anisotropy', type=float, default=defaults['vertical_anisotropy'],
+        help='Kh/Kv for ugly_t: Kx=Ky=Kh and Kz=Kh/ratio.')
+    parser.add_argument('--ugly-t-seed', type=int, default=defaults['ugly_t_seed'])
+    parser.add_argument('--ugly-t-reference-thickness', type=float, default=defaults['ugly_t_reference_thickness'])
+    parser.add_argument('--preferred-head-target', type=float, default=defaults['preferred_head_target'],
+        help='Separately report this maximum head-difference target; original sanity gates and MF6 settings remain unchanged.')
+    parser.add_argument('--mf6-timeout', type=float, default=defaults['mf6_timeout'],
+        help='External process timeout in seconds; does not change MF6 convergence controls.')
     parser.add_argument('--tight', action='store_true', help='Use explicit tighter FP64 qualification controls; defaults remain the 2D sanity profiles.')
     parser.add_argument('--gpu-tight', action='store_true', help='Tighten GPU controls while retaining the exact 2D MF6 sanity settings for timing comparisons.')
     parser.add_argument('--cartesian-fgmres', action='store_true', help='Use FP64 FGMRES with the shared line K-cycle for confined Cartesian solves.')
@@ -56,6 +65,9 @@ def parse_arguments(*, defaults):
     args = parser.parse_args()
     if min(args.sizes) < 2 or args.repeats < 1 or args.periods < 1:
         parser.error('Sizes must be >=2; repeats and periods must be positive.')
+    if any(not np.isfinite(value) or value <= 0. for value in
+           (args.vertical_anisotropy, args.ugly_t_reference_thickness, args.preferred_head_target, args.mf6_timeout)):
+        parser.error('Anisotropy, reference thickness, preferred head target and timeout must be positive finite.')
     return args
 
 
@@ -95,7 +107,7 @@ def prepare_reference_with_progress(*, description, interval, **options):
         worker.join()
 
 
-def prepare_reference(*, case, family, mode, cache, executable, cached_only, native_options, factors, dt, ss, sy, gates):
+def prepare_reference(*, case, family, mode, cache, executable, cached_only, native_options, factors, dt, ss, sy, gates, timeout_seconds):
     from DARCY_WARP_PACKAGE.validation.npf662_mf6 import run_reference_mf6
     from DARCY_WARP_PACKAGE.validation.npf662_transient_mf6 import run_transient_mf6
     from DARCY_WARP_PACKAGE.validation.npf662_reference import save_npf662_case
@@ -133,7 +145,7 @@ def prepare_reference(*, case, family, mode, cache, executable, cached_only, nat
     if mode == 'steady':
         head, info, fields = run_reference_mf6(case=case, directory=folder/'native', executable=executable,
             native_solver_options=native_options, replace_native_solver_options=True,
-            head_tolerance_m=native_options['outer_dvclose'], source_package='rch')
+            head_tolerance_m=native_options['outer_dvclose'], source_package='rch', timeout_seconds=timeout_seconds)
         if head is None:
             raise RuntimeError(f'MF6 failed: {folder}/native')
         arrays = dict(heads=head[None], fluxes=fields['flux_native'][None],ghb_inflows=fields['ghb_native_inflow'][None])
@@ -146,7 +158,7 @@ def prepare_reference(*, case, family, mode, cache, executable, cached_only, nat
         checksum = hashlib.sha256(executable.read_bytes()).hexdigest()
         arrays, info = run_transient_mf6(case=case, directory=folder/'native', executable=executable,
             source_factors=factors, dt=dt, ss=ss, sy=sy, executable_sha256=checksum,
-            source_package='rch', native_solver_options=native_options)
+            source_package='rch', native_solver_options=native_options, timeout_seconds=timeout_seconds)
         accepted = bool(info['passed'])
         if family == 'cartesian':
             accepted = all(row['source_allocation_valid'] and row['physical']['boundary_condition_valid']
@@ -360,6 +372,11 @@ def run(*, args, root, settings):
         profiles['transient'].update(settings['cartesian_linear_options'])
         overrides['cartesian_linear_options']=settings['cartesian_linear_options']
     overrides['ghb']=bool(args.ghb)
+    overrides['conductivity'] = dict(kind=args.k_field, vertical_anisotropy=args.vertical_anisotropy if args.k_field == 'ugly_t' else None,
+        seed=args.ugly_t_seed if args.k_field == 'ugly_t' else None,
+        reference_thickness=args.ugly_t_reference_thickness if args.k_field == 'ugly_t' else None)
+    overrides['preferred_head_target_m'] = args.preferred_head_target
+    overrides['mf6_external_timeout_seconds'] = args.mf6_timeout
     args.output.mkdir(parents=True, exist_ok=False)
     args.cache.mkdir(parents=True, exist_ok=True)
     factors = np.resize(a=np.repeat(a=settings['source_factors'], repeats=settings['block_periods']), new_shape=args.periods)
@@ -378,6 +395,7 @@ def run(*, args, root, settings):
         'DARCY_WARP_PACKAGE/solvers/session_3d.py','DARCY_WARP_PACKAGE/solvers/face_kernels_3d_f64.py',
         'DARCY_WARP_PACKAGE/solvers_3d.py','DARCY_WARP_PACKAGE/warped_darcy_3d.py',
         'DARCY_WARP_PACKAGE/physics/ghb_3d.py','DARCY_WARP_PACKAGE/physics/budget_3d.py',
+        'DARCY_WARP_PACKAGE/validation/npf662_benchmark_cases.py','DARCY_WARP_PACKAGE/model_builder.py',
         'working_tests/run_3d_sanity.py','working_tests/sanity_3d_controls.py'))
     result['solver_source_sha256']={str(path.relative_to(root)):hashlib.sha256(path.read_bytes()).hexdigest()
         for path in sorted(sources)}
@@ -391,12 +409,22 @@ def run(*, args, root, settings):
                 source = case.source*(settings['cartesian_dx']**2)/(case.dx*case.dy)
                 case = replace(case, z_interfaces=interfaces, dx=settings['cartesian_dx'],
                                dy=settings['cartesian_dx'], source=source)
+            conductivity_suffix = ''
+            if args.k_field == 'ugly_t':
+                from DARCY_WARP_PACKAGE.validation.npf662_benchmark_cases import with_ugly_conductivity
+                case = with_ugly_conductivity(case=case, seed=args.ugly_t_seed,
+                    reference_thickness=args.ugly_t_reference_thickness,
+                    layer_multipliers=geology['layer_k']/geology['layer_k'][0],
+                    vertical_anisotropy=args.vertical_anisotropy)
+                conductivity_suffix = f'_ugly_t_s{args.ugly_t_seed}_va{args.vertical_anisotropy:g}'
             if args.ghb:
                 from DARCY_WARP_PACKAGE.validation.npf662_benchmark_cases import add_ghb_boundaries
                 case=add_ghb_boundaries(case=case,**settings['ghb'])
             for mode in args.modes:
-                identity = f'{family}_{definition["case_id"]}_{mode}'+('_ghb' if args.ghb else '')
+                identity = f'{family}_{definition["case_id"]}_{mode}'+conductivity_suffix+('_ghb' if args.ghb else '')
                 row = dict(case=identity, case_sha256=case.digest(), shape=list(case.active.shape), runs=[], accepted=False)
+                from DARCY_WARP_PACKAGE.validation.npf662_benchmark_cases import conductivity_summary
+                row['conductivity'] = conductivity_summary(case=case)
                 result['cases'].append(row)
                 print(f'Starting {identity}; checking saved MF6 reference.', flush=True)
                 try:
@@ -404,7 +432,8 @@ def run(*, args, root, settings):
                     reference, manifest = prepare_reference_with_progress(description=identity,
                         interval=settings['progress_seconds'], case=case, family=family, mode=mode, cache=args.cache,
                         executable=args.mf6, cached_only=args.cached_only, native_options=native_profile,
-                        factors=factors, dt=settings['dt'], ss=settings['ss'], sy=settings['sy'] if family == 'npf' else 0., gates=settings['gates'])
+                        factors=factors, dt=settings['dt'], ss=settings['ss'], sy=settings['sy'] if family == 'npf' else 0., gates=settings['gates'],
+                        timeout_seconds=args.mf6_timeout)
                     row['reference'] = {key: value for key, value in manifest.items() if key not in ('native', 'sha256')}
                     row['reference']['artifact_sha256']=manifest['sha256']
                     row['reference']['native_identity']={key:manifest['native'][key] for key in
@@ -446,6 +475,8 @@ def run(*, args, root, settings):
         for implementation in sorted({row['implementation'] for row in case['runs']}):
             timed = [row for row in case['runs'] if row['implementation'] == implementation and not row['warmup']]
             periods = [period for row in timed for period in row['periods']]
+            if not periods:
+                continue
             summary.append(dict(case=case['case'], implementation=implementation,
                 passed=bool(len(timed) == args.repeats and all(row['accepted'] for row in timed)),
                 median_public_solve_seconds=float(np.median(a=[row['public_solve_seconds'] for row in timed])),
@@ -455,6 +486,9 @@ def run(*, args, root, settings):
                 median_verified_total_seconds=float(np.median(a=[row['seconds'] for row in timed])),
                 worst_head_rmse_m=max(period['head_rmse_m'] for period in periods),
                 worst_head_max_m=max(period['head_max_m'] for period in periods),
+                preferred_head_target_m=args.preferred_head_target,
+                preferred_head_target_met=bool(len(timed) == args.repeats and all(row['accepted'] for row in timed)
+                    and max(period['head_max_m'] for period in periods) <= args.preferred_head_target),
                 worst_ghb_flux_max_error=max(period['ghb_flux_max_error'] for period in periods),
                 worst_head_error_in_scaled_eps=max(period['head_error_in_scaled_eps'] for period in periods),
                 reference_reused=case['reference']['reused']))
@@ -475,7 +509,9 @@ if __name__ == "__main__":
         variants=['confined', 'convertible', 'phreatic'], device='auto', repeats=3, periods=20,
         output=Path('benchmark_results')/datetime.now(tz=timezone.utc).strftime('3d_sanity_%Y%m%dT%H%M%S'),
         cache=Path('benchmark_results/mf6_3d_cache'),
-        mf6=Path(shutil.which('mf6') or '/bin/modflow/mf6'), preconditioner='auto')
+        mf6=Path(shutil.which('mf6') or '/bin/modflow/mf6'), preconditioner='auto',
+        k_field='layered', vertical_anisotropy=1., ugly_t_seed=42, ugly_t_reference_thickness=100.,
+        preferred_head_target=1e-6, mf6_timeout=600.)
     settings = dict(source_factors=[1., 1.5, .25, 1.], block_periods=5, dt=7., ss=1e-5, sy=.15,
         progress_seconds=30., progress_every=5,
         cartesian_top=8., cartesian_dz=10., cartesian_dx=25., kcycle_threshold_cells=50000,
