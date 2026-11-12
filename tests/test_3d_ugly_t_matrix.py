@@ -68,17 +68,19 @@ def test_invalid_ratio_rejected(ratio):
             layer_multipliers=multipliers, vertical_anisotropy=ratio)
 
 
-def test_matrix_covers_all_requested_physics_and_preserves_mf6_settings(tmp_path):
+@pytest.mark.parametrize('profile', ['sanity', 'roundoff'])
+def test_matrix_covers_all_requested_physics_and_preserves_mf6_settings(tmp_path, profile):
     args = SimpleNamespace(sizes=[500], vertical_anisotropy=[1., 10., 100.], ghb_modes=['off', 'on'],
         families=['cartesian', 'npf'], variants=['confined', 'convertible'], modes=['steady', 'transient'],
         periods=20, repeats=3, seed=42, reference_thickness=100., preferred_head_target=1e-6,
-        mf6_timeout=1800., device='cuda:0')
+        mf6_timeout=1800., device='cuda:0', gpu_profile=profile)
     jobs = case_jobs(args=args)
     assert len(jobs) == 36
     for job in jobs:
         command = job_command(job=job, root=tmp_path, directory=tmp_path / 'run', cache=tmp_path / 'cache', mf6=tmp_path / 'mf6')
         assert '--tight' not in command
-        assert '--gpu-tight' in command
+        assert ('--gpu-tight' in command) == (profile == 'roundoff')
+        assert '--allow-missing-reference' in command
         assert ('--ghb' in command) == (job['ghb'] == 'on')
         if job['family'] == 'npf' and job['mode'] == 'transient':
             assert '--npf-history' in command

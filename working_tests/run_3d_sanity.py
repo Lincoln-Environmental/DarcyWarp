@@ -38,6 +38,8 @@ def parse_arguments(*, defaults):
     parser.add_argument('--cache', type=Path, default=defaults['cache'])
     parser.add_argument('--mf6', type=Path, default=defaults['mf6'])
     parser.add_argument('--cached-only', action='store_true')
+    parser.add_argument('--allow-missing-reference', action='store_true',
+        help='Still measure and independently audit GPU solves when MF6 fails; comparison stays failed/unavailable and no speedup is qualified.')
     parser.add_argument('--compare', action='store_true', help='Compare classic/fast and diagonal/K-cycle; otherwise use the recommended path.')
     parser.add_argument('--ghb', action='store_true', help='Add native fixed-conductance GHB boundaries and audit MF6 GHB flows.')
     parser.add_argument('--k-field', choices=['layered', 'ugly_t'], default=defaults['k_field'])
@@ -261,13 +263,16 @@ def measure(*, case, family, mode, label, reference, native_accepted, device, pr
                 relative_tolerance=kwargs.get('final_budget_relative_tol',gates['budget_percent']/100.),
                 head_tolerance_m=kwargs['dh_rms_tol'] if kwargs['dh_rms_tol'] is not None else gates.get('head_residual_rms',1e-6))
             checks, physical = auditor.evaluate(head=head, **tolerances)
-            delta = head[free]-reference['heads'][period][free]
-            rmse, maximum = float(np.sqrt(np.mean(delta**2))), float(np.max(np.abs(delta)))
-            relative_flux = float(np.linalg.norm(physical['flux']-reference['fluxes'][period])/
-                max(np.linalg.norm(reference['fluxes'][period]), np.finfo(float).tiny))
-            ghb_error = 0.
-            ghb_valid = True
-            if case.ghb_conductance is not None:
+            rmse = maximum = relative_flux = scaled_error = None
+            if reference is not None:
+                delta = head[free]-reference['heads'][period][free]
+                rmse, maximum = float(np.sqrt(np.mean(delta**2))), float(np.max(np.abs(delta)))
+                relative_flux = float(np.linalg.norm(physical['flux']-reference['fluxes'][period])/
+                    max(np.linalg.norm(reference['fluxes'][period]), np.finfo(float).tiny))
+                scaled_error = maximum/(np.finfo(float).eps*max(1.,float(np.max(np.abs(reference['heads'][period][free])))))
+            ghb_error = 0. if reference is not None else None
+            ghb_valid = True if reference is not None else None
+            if case.ghb_conductance is not None and reference is not None:
                 actual = -physical['ghb_outflow']
                 native = reference['ghb_inflows'][period]
                 ghb_error = float(np.max(np.abs(actual-native)))
@@ -276,12 +281,12 @@ def measure(*, case, family, mode, label, reference, native_accepted, device, pr
                 ghb_bound = case.ghb_conductance*np.abs(head-reference['heads'][period])
                 ghb_bound += 32.*np.finfo(float).eps*case.ghb_conductance*(np.abs(head)+np.abs(case.ghb_head))
                 ghb_valid = bool(np.all(np.isfinite(actual)) and np.all(np.abs(actual-native)<=np.maximum(ghb_bound,1e-14)))
-            accepted = bool(info['converged'] and checks['independent_accepted'] and native_accepted
+            accepted = bool(reference is not None and info['converged'] and checks['independent_accepted'] and native_accepted
                             and ghb_valid and rmse <= gates['rmse'] and maximum <= gates['maximum'])
             history.append(dict(period=period+1, accepted=accepted, solver_converged=bool(info['converged']),
                 head_rmse_m=rmse, head_max_m=maximum, flux_relative_l2=relative_flux,
                 ghb_flux_max_error=ghb_error,ghb_law_parity=ghb_valid,
-                head_error_in_scaled_eps=maximum/(np.finfo(float).eps*max(1.,float(np.max(np.abs(reference['heads'][period][free]))))),
+                reference_available=reference is not None, head_error_in_scaled_eps=scaled_error,
                 physical=checks, cycles=info.get('n_cycles_used'), krylov=info.get('krylov_iterations'),
                 outer_iterations=info.get('outer_iterations'), residual_rms=info.get('r_rms_end'),
                 device_native=info.get('device_native', False),
@@ -311,7 +316,13 @@ def measure(*, case, family, mode, label, reference, native_accepted, device, pr
         history_driver_overhead_seconds=driver_seconds-sum(row['public_solve_seconds'] for row in history) if use_history else 0.,
         history_readbacks={key:driver_info[key] for key in ('solver_head_readbacks', 'output_history_readbacks')} if use_history else None,
         independent_audit_seconds=sum(row['independent_audit_seconds'] for row in history),
+        gpu_physical_accepted=len(history) == len(schedule) and all(row['solver_converged'] and row['physical']['independent_accepted'] for row in history),
         accepted=len(history) == len(schedule) and all(row['accepted'] for row in history), periods=history), np.stack(arrays=heads)
+
+
+def maximum_available(*, values):
+    present = [value for value in values if value is not None]
+    return max(present) if present else None
 
 
 def run(*, args, root, settings):
@@ -429,11 +440,20 @@ def run(*, args, root, settings):
                 print(f'Starting {identity}; checking saved MF6 reference.', flush=True)
                 try:
                     native_profile = profiles['mf6']['transient'] if mode == 'transient' else profiles['mf6']['steady_unconfined' if np.any(case.cell_types) else 'steady_confined']
-                    reference, manifest = prepare_reference_with_progress(description=identity,
-                        interval=settings['progress_seconds'], case=case, family=family, mode=mode, cache=args.cache,
-                        executable=args.mf6, cached_only=args.cached_only, native_options=native_profile,
-                        factors=factors, dt=settings['dt'], ss=settings['ss'], sy=settings['sy'] if family == 'npf' else 0., gates=settings['gates'],
-                        timeout_seconds=args.mf6_timeout)
+                    try:
+                        reference, manifest = prepare_reference_with_progress(description=identity,
+                            interval=settings['progress_seconds'], case=case, family=family, mode=mode, cache=args.cache,
+                            executable=args.mf6, cached_only=args.cached_only, native_options=native_profile,
+                            factors=factors, dt=settings['dt'], ss=settings['ss'], sy=settings['sy'] if family == 'npf' else 0., gates=settings['gates'],
+                            timeout_seconds=args.mf6_timeout)
+                    except Exception as error:
+                        if not args.allow_missing_reference:
+                            raise
+                        reference = None
+                        manifest = dict(accepted=False, reused=False, unavailable=True,
+                            error=f'{type(error).__name__}: {error}', sha256={}, native={},
+                            native_single_run_seconds=None, native_options=native_profile)
+                        print(f'  MF6 comparison unavailable: {manifest["error"]}; retaining independent GPU measurements.', flush=True)
                     row['reference'] = {key: value for key, value in manifest.items() if key not in ('native', 'sha256')}
                     row['reference']['artifact_sha256']=manifest['sha256']
                     row['reference']['native_identity']={key:manifest['native'][key] for key in
@@ -479,18 +499,21 @@ def run(*, args, root, settings):
                 continue
             summary.append(dict(case=case['case'], implementation=implementation,
                 passed=bool(len(timed) == args.repeats and all(row['accepted'] for row in timed)),
+                gpu_physical_accepted=bool(len(timed) == args.repeats and all(row['gpu_physical_accepted'] for row in timed)),
+                reference_available=not case['reference'].get('unavailable',False),
                 median_public_solve_seconds=float(np.median(a=[row['public_solve_seconds'] for row in timed])),
                 mf6_single_reference_run_seconds=case['reference'].get('native_single_run_seconds'),
                 median_model_construction_seconds=float(np.median(a=[row['construction_seconds'] for row in timed])),
                 median_extra_audit_seconds=float(np.median(a=[row['independent_audit_seconds'] for row in timed])),
                 median_verified_total_seconds=float(np.median(a=[row['seconds'] for row in timed])),
-                worst_head_rmse_m=max(period['head_rmse_m'] for period in periods),
-                worst_head_max_m=max(period['head_max_m'] for period in periods),
+                worst_head_rmse_m=maximum_available(values=[period['head_rmse_m'] for period in periods]),
+                worst_head_max_m=maximum_available(values=[period['head_max_m'] for period in periods]),
                 preferred_head_target_m=args.preferred_head_target,
                 preferred_head_target_met=bool(len(timed) == args.repeats and all(row['accepted'] for row in timed)
-                    and max(period['head_max_m'] for period in periods) <= args.preferred_head_target),
-                worst_ghb_flux_max_error=max(period['ghb_flux_max_error'] for period in periods),
-                worst_head_error_in_scaled_eps=max(period['head_error_in_scaled_eps'] for period in periods),
+                    and maximum_available(values=[period['head_max_m'] for period in periods]) is not None
+                    and maximum_available(values=[period['head_max_m'] for period in periods]) <= args.preferred_head_target),
+                worst_ghb_flux_max_error=maximum_available(values=[period['ghb_flux_max_error'] for period in periods]),
+                worst_head_error_in_scaled_eps=maximum_available(values=[period['head_error_in_scaled_eps'] for period in periods]),
                 reference_reused=case['reference']['reused']))
     result['summary'] = summary
     if summary:

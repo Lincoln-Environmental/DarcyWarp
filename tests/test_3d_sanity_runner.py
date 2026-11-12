@@ -1,5 +1,6 @@
 """Sanity reporting must retain full histories and distinguish reference criteria."""
 import numpy as np
+import pytest
 
 from run_3d_sanity import measure, native_elapsed_seconds, sanity_reference_valid
 
@@ -18,7 +19,8 @@ def test_reference_uses_sanity_gate_and_still_rejects_invalid_physics():
     assert not sanity_reference_valid(info=info, mode='transient', gates=dict(budget_percent=1.))
 
 
-def test_bad_reference_does_not_truncate_physically_accepted_gpu_driver_history():
+@pytest.mark.parametrize('missing', [False, True])
+def test_bad_reference_does_not_truncate_physically_accepted_gpu_driver_history(missing):
     import warp as wp
     from DARCY_WARP_PACKAGE.validation.npf662_reference import NPF662LayeredCase
     from DARCY_WARP_PACKAGE.validation.npf662_transient_reference import NPF662TransientReference
@@ -44,11 +46,14 @@ def test_bad_reference_does_not_truncate_physically_accepted_gpu_driver_history(
         old = head.copy()
     reference = dict(heads=np.stack(arrays=heads), fluxes=np.stack(arrays=fluxes))
     row, actual = measure(case=case, family='npf', mode='transient', label='diagonal',
-        reference=reference, native_accepted=False, device='cpu', profiles={}, factors=np.ones(3),
+        reference=None if missing else reference, native_accepted=False, device='cpu', profiles={}, factors=np.ones(3),
         dt=dt, ss=ss, sy=0., npf_options=dict(max_outer=30, max_cycles=100, krylov_restart=4),
         kcycle_controls=NPF662KCycleControls(use_cuda_graph=False),
         gates=dict(rmse=1e-3, maximum=1e-2), progress_every=3)
     assert not row['accepted']
+    assert row['gpu_physical_accepted']
     assert len(row['periods']) == 3
     assert all(period['solver_converged'] for period in row['periods'])
+    if missing:
+        assert all(period['head_max_m'] is None and period['ghb_law_parity'] is None for period in row['periods'])
     np.testing.assert_allclose(actual=actual, desired=reference['heads'], rtol=0., atol=1e-9)
