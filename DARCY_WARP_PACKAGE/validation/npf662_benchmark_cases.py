@@ -64,3 +64,43 @@ def add_ghb_boundaries(*, case, conductance_factor, draining_offset, injecting_o
     result = replace(case,ghb_conductance=conductance,ghb_head=boundary_head)
     result.validate()
     return result
+
+
+def with_ugly_conductivity(*, case, seed, reference_thickness, layer_multipliers, vertical_anisotropy):
+    """Lift the original 2D channel/lens field into 3D, with Kh/Kv explicit.
+
+    Horizontal K is isotropic within each cell. The same channel/lens map
+    appears in each layer, multiplied by the specified stratigraphic factors.
+    T/reference_thickness is the same dimensional conversion used in 2D.
+    Apply GHB afterwards so its fixed conductance uses the selected K field.
+    """
+    from dataclasses import replace
+    from DARCY_WARP_PACKAGE.model_builder import make_ugly_T_field
+    if any(not np.isscalar(value) or not np.isfinite(value) or value <= 0.
+           for value in (reference_thickness, vertical_anisotropy)):
+        raise ValueError('Reference thickness and vertical anisotropy must be positive finite scalars')
+    multipliers = np.asarray(layer_multipliers, dtype=np.float64)
+    nz, ny, nx = case.active.shape
+    if multipliers.shape != (nz,) or not np.isfinite(multipliers).all() or np.any(multipliers <= 0.):
+        raise ValueError('One positive finite conductivity multiplier per layer is required')
+    if case.ghb_conductance is not None:
+        raise ValueError('Select conductivity before adding GHB boundaries')
+    transmissivity = make_ugly_T_field(nx=nx, ny=ny, seed=seed)
+    horizontal = np.asarray(transmissivity, dtype=np.float64)[None] / reference_thickness * multipliers[:, None, None]
+    result = replace(case, kx=horizontal, ky=horizontal.copy(), kz=horizontal / vertical_anisotropy)
+    result.validate()
+    return result
+
+
+def conductivity_summary(*, case):
+    """Record measured input ranges, not just the requested anisotropy label."""
+    active = case.active != 0
+    result = {}
+    for name in ('kx', 'ky', 'kz'):
+        field = getattr(case, name)[active]
+        result[name] = dict(minimum=float(np.min(field)), maximum=float(np.max(field)),
+            contrast=float(np.max(field) / np.min(field)))
+    for name, numerator, denominator in (('ky_over_kx', case.ky, case.kx), ('kx_over_kz', case.kx, case.kz)):
+        ratio = numerator[active] / denominator[active]
+        result[name] = dict(minimum=float(np.min(ratio)), maximum=float(np.max(ratio)))
+    return result
