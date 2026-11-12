@@ -323,7 +323,9 @@ class NPF662Reference:
             free=self.free,left=self.left,right=self.right,conductance=conductance,
             ghb_conductance=self.ghb_conductance,ghb_head=self.ghb_head,
             storage=storage,tangent=tangent,previous=getattr(self,'previous',None),
-            previous_tangent=getattr(self,'preconditioner_storage',None))
+            previous_tangent=getattr(self,'preconditioner_storage',None),
+            storage_coordinate_scale=np.where(self.case.cell_types!=0,
+                np.abs(self.case.bottoms)+self.case.thicknesses,0.) if storage is not None else None)
 
     def evaluate(self,*,head,physical_tolerance=1e-12,relative_tolerance=1e-8,
                  head_tolerance_m=1e-6,boundary_tolerance_m=1e-10,roundoff_acceptance=False):

@@ -80,11 +80,17 @@ def roundoff_rows(head:wp.array(dtype=wp.float64), source:wp.array(dtype=wp.floa
     conductance:wp.array2d(dtype=wp.float64), ghb_conductance:wp.array(dtype=wp.float64),
     ghb_head:wp.array(dtype=wp.float64), storage:wp.array(dtype=wp.float64),
     tangent:wp.array(dtype=wp.float64), previous:wp.array(dtype=wp.float64),
-    previous_tangent:wp.array(dtype=wp.float64), partials:wp.array(dtype=wp.float64)):
+    previous_tangent:wp.array(dtype=wp.float64), types:wp.array(dtype=wp.int32),
+    bottom:wp.array(dtype=wp.float64), thickness:wp.array(dtype=wp.float64),
+    partials:wp.array(dtype=wp.float64)):
     i=wp.tid()
     if free[i]==0:return
     scale=wp.abs(source[i])+wp.abs(storage[i])
-    scale+=(wp.abs(tangent[i])+wp.abs(previous_tangent[i]))*(wp.abs(head[i])+wp.abs(previous[i]))
+    coordinates=wp.abs(head[i])+wp.abs(previous[i])
+    # Convertible STO subtracts layer-referenced saturations. Small absolute
+    # heads do not imply small operands in that subtraction.
+    if types[i]!=0:coordinates+=wp.float64(2.)*(wp.abs(bottom[i])+thickness[i])
+    scale+=(wp.abs(tangent[i])+wp.abs(previous_tangent[i]))*coordinates
     for axis in range(3):
         j=right[i,axis]
         if j>=0:scale+=conductance[i,axis]*(wp.abs(head[i])+wp.abs(head[j]))

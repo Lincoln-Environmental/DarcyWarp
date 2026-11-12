@@ -6,7 +6,7 @@ import numpy as np
 def componentwise_roundoff(*, head, source, residual, free, left, right,
                           conductance, ghb_conductance, ghb_head,
                           storage=None, tangent=None, previous=None,
-                          previous_tangent=None):
+                          previous_tangent=None, storage_coordinate_scale=None):
     """Independent backward-error indicator for the frozen endpoint equations.
 
     The allowance is 32 FP64 eps times the absolute row terms, before head
@@ -23,9 +23,11 @@ def componentwise_roundoff(*, head, source, residual, free, left, right,
         np.abs(h[selected])+np.abs(np.asarray(ghb_head).ravel()[selected]))
     if storage is not None:
         scale += np.abs(np.asarray(storage).ravel())
+        coordinates = np.abs(h)+np.abs(np.asarray(previous).ravel())
+        if storage_coordinate_scale is not None:
+            coordinates += 2.*np.asarray(storage_coordinate_scale).ravel()
         scale += (np.abs(np.asarray(tangent).ravel())+
-                  np.abs(np.asarray(previous_tangent).ravel()))*(
-                      np.abs(h)+np.abs(np.asarray(previous).ravel()))
+                  np.abs(np.asarray(previous_tangent).ravel()))*coordinates
     selected = np.asarray(free).ravel()
     allowance = 32.*np.finfo(float).eps*scale[selected]
     error = np.abs(np.asarray(residual).ravel()[selected])
