@@ -73,6 +73,40 @@ def storage_terms(head:wp.array(dtype=wp.float64),previous:wp.array(dtype=wp.flo
         yield_coefficient*thickness[i]*pair[1])
 
 
+@wp.kernel
+def roundoff_rows(head:wp.array(dtype=wp.float64), source:wp.array(dtype=wp.float64),
+    residual:wp.array(dtype=wp.float64), free:wp.array(dtype=wp.int32),
+    left:wp.array2d(dtype=wp.int32), right:wp.array2d(dtype=wp.int32),
+    conductance:wp.array2d(dtype=wp.float64), ghb_conductance:wp.array(dtype=wp.float64),
+    ghb_head:wp.array(dtype=wp.float64), storage:wp.array(dtype=wp.float64),
+    tangent:wp.array(dtype=wp.float64), previous:wp.array(dtype=wp.float64),
+    previous_tangent:wp.array(dtype=wp.float64), partials:wp.array(dtype=wp.float64)):
+    i=wp.tid()
+    if free[i]==0:return
+    scale=wp.abs(source[i])+wp.abs(storage[i])
+    scale+=(wp.abs(tangent[i])+wp.abs(previous_tangent[i]))*(wp.abs(head[i])+wp.abs(previous[i]))
+    for axis in range(3):
+        j=right[i,axis]
+        if j>=0:scale+=conductance[i,axis]*(wp.abs(head[i])+wp.abs(head[j]))
+        j=left[i,axis]
+        if j>=0:scale+=conductance[j,axis]*(wp.abs(head[i])+wp.abs(head[j]))
+    if ghb_conductance[i]>wp.float64(0.):
+        scale+=ghb_conductance[i]*(wp.abs(head[i])+wp.abs(ghb_head[i]))
+    allowance=wp.float64(7.105427357601002e-15)*scale  # 32 * FP64 eps
+    ratio=wp.float64(0.)
+    if not wp.isfinite(allowance) or allowance<wp.float64(0.) or not wp.isfinite(residual[i]):
+        ratio=wp.float64(wp.inf)
+    elif allowance>wp.float64(0.):ratio=wp.abs(residual[i])/allowance
+    elif residual[i]!=wp.float64(0.):ratio=wp.float64(wp.inf)
+    wp.atomic_max(partials,i/256,ratio)
+
+
+@wp.kernel
+def combine_roundoff(partials:wp.array(dtype=wp.float64), maximum:wp.array(dtype=wp.float64)):
+    i=wp.tid()
+    wp.atomic_max(maximum,0,partials[i])
+
+
 @wp.func
 def physical_row_metrics_base(i:int,head:wp.array(dtype=wp.float64),source:wp.array(dtype=wp.float64),
     free:wp.array(dtype=wp.int32),fixed:wp.array(dtype=wp.int32),left:wp.array2d(dtype=wp.int32),

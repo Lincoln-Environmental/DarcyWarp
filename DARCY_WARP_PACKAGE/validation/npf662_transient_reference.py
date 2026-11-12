@@ -58,7 +58,7 @@ class NPF662TransientReference(NPF662Reference):
     def jacobian(self, *, head):
         return super().jacobian(head=head)+sparse.diags(self.storage(head=head)[1].ravel())
 
-    def evaluate(self, *, head, **tolerances):
+    def evaluate(self, *, head, roundoff_acceptance=False, **tolerances):
         checks, fields = super().evaluate(head=head, **tolerances)
         storage, tangent = self.storage(head=head)
         residual = np.where(self.free, fields['residual']-storage, 0.)
@@ -92,5 +92,9 @@ class NPF662TransientReference(NPF662Reference):
         checks['independent_accepted'] = bool(checks['input_valid'] and checks['boundary_condition_valid']
             and valid and ungrounded == 0 and hrms <= limits['head_equivalent_rms_m']
             and (rms <= limits['physical_rms_m3_day'] or relative <= limits['relative_cell_imbalance']))
+        if roundoff_acceptance:
+            from .npf662_metrics import apply_roundoff_acceptance
+            apply_roundoff_acceptance(checks=checks,certificate=self.certify_roundoff(
+                head=head,residual=residual,conductance=fields['conductance'],storage=storage,tangent=tangent))
         fields.update(residual=residual, principal_diagonal=diagonal, storage_rate=storage, storage_tangent=tangent)
         return checks, fields

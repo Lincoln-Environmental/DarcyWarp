@@ -49,7 +49,7 @@ class NPF662MatrixFreeReference:
                 np.bincount(self.right, weights=flux, minlength=n)).reshape(self.shape)
 
     def evaluate(self, *, head, physical_tolerance=1e-12, relative_tolerance=1e-8,
-                 head_tolerance_m=1e-6, boundary_tolerance_m=1e-10):
+                 head_tolerance_m=1e-6, boundary_tolerance_m=1e-10, roundoff_acceptance=False):
         case = self.case
         thresholds = final_tolerances(physical_tolerance=physical_tolerance, relative_tolerance=relative_tolerance,
             head_tolerance_m=head_tolerance_m, boundary_tolerance_m=boundary_tolerance_m)
@@ -67,7 +67,9 @@ class NPF662MatrixFreeReference:
         dr = -conductance+np.where(~choose_left, extra, 0.)
         flux = conductance*(h[self.left]-h[self.right])
         divergence = self.divergence(flux=flux)
-        ghb_exchange = self.ghb_conductance*(np.asarray(head)-self.ghb_head)
+        ghb_exchange = np.zeros(self.shape)
+        selected = self.ghb_conductance > 0.
+        ghb_exchange[selected] = self.ghb_conductance[selected]*(np.asarray(head)[selected]-self.ghb_head[selected])
         residual = np.where(self.free, case.source-divergence-ghb_exchange, 0.)
         n = case.active.size
         diagonal = (np.bincount(self.left, weights=conductance, minlength=n)+
@@ -107,6 +109,11 @@ class NPF662MatrixFreeReference:
         result['independent_accepted'] = bool(checks['input_valid'] and checks['boundary_condition_valid'] and
             result['physical_metrics_valid'] and ungrounded == 0 and hrms <= head_tolerance_m and
             (rms <= physical_tolerance or relative <= relative_tolerance))
+        if roundoff_acceptance:
+            from .npf662_metrics import componentwise_roundoff, apply_roundoff_acceptance
+            apply_roundoff_acceptance(checks=result,certificate=componentwise_roundoff(
+                head=head,source=case.source,residual=residual,free=self.free,left=self.left,right=self.right,
+                conductance=conductance,ghb_conductance=self.ghb_conductance,ghb_head=self.ghb_head))
         return result, dict(flux=flux, residual=residual, saturation=saturation, conductance=conductance,
             principal_diagonal=diagonal,ghb_outflow=ghb_exchange,
             fixed_reservoir_required_inflow=np.where(case.fixed, divergence-case.source, 0.))
