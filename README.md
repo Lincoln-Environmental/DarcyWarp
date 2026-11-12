@@ -26,6 +26,13 @@ MF6 benchmark settings remain unchanged. Run
 `working_tests/verify_3d_ghb_mf6_parity.py` against saved sanity results for
 the separate head and operator checks.
 
+The [3D ugly-T anisotropy matrix](docs/3D_UGLY_T_ANISOTROPY.rst) reuses the
+2D channel/lens field with Kh/Kv = 1, 10 and 100, GHB off/on and
+steady/transient cases. All 36 small-grid cases pass with practical GPU
+sanity controls; the 500 x 500 x 5 campaign is in progress. MF6 settings
+are unchanged, and the preferred 1e-6 m head target is reported separately.
+Run `working_tests/run_3d_ugly_t_matrix.py` to reproduce the matrix.
+
 The [repeated NPF benchmark suite](docs/NPF662_VS_MF6_BENCHMARKS.md) compares
 the dev branch's explicit NPF 6.6.2 formulation with fresh native MF6 solves.
 It covers confined and convertible layered grids, including a lower-recharge
