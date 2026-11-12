@@ -213,8 +213,19 @@ DarcyWarp was developed by **Patrick Durney and Jaco Fourie** at
 **[Lincoln Agritech Ltd](https://lincolnagritech.co.nz/)**.
 **The software is owned by Lincoln Agritech Ltd.**
 
-It builds on NVIDIA Warp and the Python scientific computing ecosystem.
-MODFLOW 6 and FloPy support the independent comparison workflows.
+DarcyWarp's `mf6_6_6_2_npf` formulation independently implements selected
+NPF (Node Property Flow) and STO (Storage) methods described in **USGS
+MODFLOW 6.6.2**, using Python and NVIDIA Warp. MODFLOW 6 is a scientific
+reference and validation comparator; DarcyWarp is not an official USGS
+implementation or USGS-endorsed software.
+
+The project also includes a modified GMRES implementation adapted from
+NVIDIA Warp (Apache-2.0) in `terrain_gmres_3d.py`.
+
+See [third-party acknowledgements and licences](THIRD_PARTY_NOTICES.md)
+for the MODFLOW 6 software citation and the adapted NVIDIA Warp copyright,
+modification notice and licence text. FloPy is used in independent comparison
+workflows.
 
 For questions about the code, [open an issue](https://github.com/Lincoln-Environmental/DarcyWarp/issues).
 For research enquiries, contact [Patrick Durney](mailto:patrick.durney@lincolnagritech.co.nz).
