@@ -37,6 +37,13 @@ from the existing sanity/conservation gates. A miss is not relabelled as
 meeting the preferred target. Native failures, solver failures and missing
 timed repetitions suppress speedups and remain in the results.
 
+The inherited broad comparison limits are ``1e-3 m`` head RMSE and
+``1e-2 m`` maximum head difference. Native references must also pass their
+existing ``1%`` cellwise conservation check; GPU solves must satisfy their
+own physical acceptance and GHB boundary-law checks. These broad sanity
+limits do not establish ``1e-6 m`` head agreement: that stricter target
+has its own result flag and every table reports the measured head error.
+
 The default ``--gpu-profile sanity`` uses the original 2D Cartesian controls:
 relative and minimum absolute residual tolerances ``5e-7``, RMS head-change
 limit ``1e-4 m`` and maximum head-change limit ``5e-4 m``. NPF uses the
@@ -101,6 +108,8 @@ history meets the preferred ``1e-6 m`` maximum head-difference target;
 the steady case does not. The large field has Kh from ``2.240`` to
 ``679.324 m/day``, a contrast of 303.3. The remaining ratios, GHB cases
 and confined cases are not yet qualified by this partial result.
+
+* :download:`Partial large-model results and source hashes <../benchmark_results/ugly_t_3d/large_500_progress.json>`
 
 Initial extra-tight experiment
 ------------------------------
