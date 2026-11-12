@@ -71,6 +71,37 @@ passes 29 tests.
 
 * :download:`Practical-control smoke matrix <../benchmark_results/ugly_t_3d/smoke_100_sanity_qualification.json>`
 
+Large-model results in progress
+------------------------------
+
+The practical-control campaign at 500 x 500 x 5 is running serially.
+The first completed convertible NPF cases have GHB off and Kh/Kv=1:
+
+.. list-table:: Completed large cases (seconds, three-repeat GPU medians)
+   :header-rows: 1
+
+   * - Mode
+     - GPU public solve
+     - MF6 native process
+     - MF6/GPU
+     - Maximum head difference (m)
+   * - Steady
+     - 1.289
+     - 229.647
+     - 178.1
+     - 5.023e-5
+   * - Twenty transient steps
+     - 2.049
+     - 178.780
+     - 87.3
+     - 5.415e-7
+
+Both pass the independent physical and existing sanity gates. The transient
+history meets the preferred ``1e-6 m`` maximum head-difference target;
+the steady case does not. The large field has Kh from ``2.240`` to
+``679.324 m/day``, a contrast of 303.3. The remaining ratios, GHB cases
+and confined cases are not yet qualified by this partial result.
+
 Initial extra-tight experiment
 ------------------------------
 
@@ -89,13 +120,13 @@ identities, invalid inputs and refusal of speedups after failed jobs.
 
 * :download:`Smoke matrix and provenance <../benchmark_results/ugly_t_3d/smoke_100_qualification.json>`
 
-The large campaign is in progress. Its initial extra-tight Cartesian steady case
+The initial extra-tight Cartesian steady case at 500 x 500 x 5
 at Kh/Kv=1 and GHB off reached head-equivalent RMS ``4.855e-16 m`` but
 missed the fixed dimensional ``1e-12 m3/day`` cutoff, with residual RMS
 ``4.352e-12 m3/day`` after 4,000 iterations. It remains a failed strict
 qualification; its timing is not advertised as a converged speedup.
-Following the user's rejection of that unnecessary cutoff, the campaign
-uses the original 2D-matched GPU controls above. The initial experiment
+The practical campaign uses the original 2D-matched GPU controls above.
+The initial experiment
 is retained separately and can be reproduced with ``--gpu-profile roundoff``.
 
 The original 500 x 500 x 5 Cartesian transient reference at Kh/Kv=1 with
