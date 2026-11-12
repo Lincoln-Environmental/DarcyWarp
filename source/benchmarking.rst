@@ -1,9 +1,11 @@
 Benchmarking
 ============
 
-The benchmark workflows compare repeated confined solves while changing
-recharge or transmissivity. They run DarcyWarp, MODFLOW 6 and an optional
-SciPy-based finite-difference reference, then write JSON summaries and plots.
+The 2D ensemble benchmark workflows compare repeated confined solves while
+changing recharge or transmissivity. They run DarcyWarp, MODFLOW 6 and an
+optional SciPy-based finite-difference reference, then write JSON summaries
+and plots. The current 3D NPF/STO GPU transient comparison, its recorded
+timing boundaries and independent MF6 checks are in :doc:`npf_gpu_native`.
 
 For a first model, use :doc:`quickstart`. The commands below are ensemble
 benchmarks and can be substantially larger than the introductory example.
