@@ -1,0 +1,3886 @@
+{
+  "schema": 1,
+  "qualification_sha256": "e547cc15034ddb69392eda2293f168ebe0b064c906be1cd9fb05aaee711cc5e6",
+  "revision": "faf4eed85943889fdab07ba2130a5ad0f10f4ae0",
+  "device": "cuda:0",
+  "warp": "1.17.0",
+  "head_tolerance_m": 1e-06,
+  "roundoff_factor": 32.0,
+  "mf6_settings_changed": false,
+  "complete": true,
+  "cases": [
+    {
+      "case": "cartesian_confined_500x500x5_steady_ghb",
+      "shape": [
+        5,
+        500,
+        500
+      ],
+      "reference_fingerprint": "b49c22b4362df30986fc7b922ec367a4d360102868a971b95323293d577ff924",
+      "reference_sha256": {
+        "inputs.npz": "09aef3ce3fe9e864fb7d30dce5ff8af6fc879de758c76dfc0b22c8e1e84962a6",
+        "reference.npz": "ca9cb649fe9ca53907597ef8be25120816f018f2feadcde667efd66978f41b44"
+      },
+      "diagnostic_cbc_sha256": "81aec263ee144f885688de398eaae7ab91c18b5363fff9fb452a13bffe39ada8",
+      "mf6_settings": {
+        "pname": "ims",
+        "print_option": "SUMMARY",
+        "complexity": "SIMPLE",
+        "linear_acceleration": "CG",
+        "outer_maximum": 10,
+        "outer_dvclose": 0.0001,
+        "inner_maximum": 2000,
+        "inner_dvclose": 0.0001,
+        "rcloserecord": [
+          1e-06,
+          "RELATIVE_RCLOSE"
+        ],
+        "scaling_method": "DIAGONAL"
+      },
+      "mf6_settings_changed": false,
+      "mode": "steady",
+      "family": "cartesian",
+      "endpoints": [
+        {
+          "period": 1,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 6.775786666366069e-16,
+              "max_allowance_ratio": 0.0655863701252625
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.1368683772161603e-13,
+              "rms": 5.590423857594018e-16,
+              "max_allowance_ratio": 0.01588505215770527
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 0.0,
+              "rms": 0.0,
+              "max_allowance_ratio": 0.0
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 1.7053025658242404e-13,
+              "rms": 1.933946427948183e-15,
+              "max_allowance_ratio": 0.012328775565704225
+            }
+          },
+          "native_residual_rms": 6.969022703281623e-06,
+          "device_residual_at_native_head_rms": 6.969022703275644e-06,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 6.775786666366069e-16,
+              "max_allowance_ratio": 0.0655863701252625
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        }
+      ],
+      "solution_comparisons": [
+        {
+          "implementation": "fast",
+          "repeat": 0,
+          "warmup": true,
+          "heads_sha256": "61d175db9b5ef5ebc50655b3332eac1813f341c198fe5d565c2b5dc900582e7c",
+          "max_absolute_m": 5.1866744872341997e-05,
+          "rms_m": 2.0550204364605294e-05,
+          "tolerance_m": 1e-06,
+          "passed": false
+        },
+        {
+          "implementation": "fast",
+          "repeat": 1,
+          "warmup": false,
+          "heads_sha256": "61d175db9b5ef5ebc50655b3332eac1813f341c198fe5d565c2b5dc900582e7c",
+          "max_absolute_m": 5.1866744872341997e-05,
+          "rms_m": 2.0550204364605294e-05,
+          "tolerance_m": 1e-06,
+          "passed": false
+        },
+        {
+          "implementation": "fast",
+          "repeat": 2,
+          "warmup": false,
+          "heads_sha256": "61d175db9b5ef5ebc50655b3332eac1813f341c198fe5d565c2b5dc900582e7c",
+          "max_absolute_m": 5.1866744872341997e-05,
+          "rms_m": 2.0550204364605294e-05,
+          "tolerance_m": 1e-06,
+          "passed": false
+        },
+        {
+          "implementation": "fast",
+          "repeat": 3,
+          "warmup": false,
+          "heads_sha256": "61d175db9b5ef5ebc50655b3332eac1813f341c198fe5d565c2b5dc900582e7c",
+          "max_absolute_m": 5.1866744872341997e-05,
+          "rms_m": 2.0550204364605294e-05,
+          "tolerance_m": 1e-06,
+          "passed": false
+        }
+      ],
+      "operator_parity": true,
+      "solution_parity": false
+    },
+    {
+      "case": "npf_confined_500x500x5_steady_ghb",
+      "shape": [
+        5,
+        500,
+        500
+      ],
+      "reference_fingerprint": "e8acacead4a747a0132226a754cff364e56b53f98914a4950923292526689ad3",
+      "reference_sha256": {
+        "inputs.npz": "5ec177e05a87662ecfa0f1ef9f272ac95b246cb08fc3d53bdba5259954fa0c16",
+        "reference.npz": "b1cb5c2e19ab71d1c50b1a091a2ff2577c48217742188d8e5b69e4e778c1919d"
+      },
+      "diagnostic_cbc_sha256": "99d686aa50c125c1a621b7394982d15ba7195f7624c44d9792a9edf44db6e19b",
+      "mf6_settings": {
+        "pname": "ims",
+        "print_option": "SUMMARY",
+        "complexity": "SIMPLE",
+        "linear_acceleration": "CG",
+        "outer_maximum": 10,
+        "outer_dvclose": 0.0001,
+        "inner_maximum": 2000,
+        "inner_dvclose": 0.0001,
+        "rcloserecord": [
+          1e-06,
+          "RELATIVE_RCLOSE"
+        ],
+        "scaling_method": "DIAGONAL"
+      },
+      "mf6_settings_changed": false,
+      "mode": "steady",
+      "family": "npf",
+      "endpoints": [
+        {
+          "period": 1,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 1.1368683772161603e-13,
+              "rms": 2.0980511935344957e-15,
+              "max_allowance_ratio": 0.06363430917710829
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.2737367544323206e-13,
+              "rms": 1.7238592689784552e-15,
+              "max_allowance_ratio": 0.014584405103101236
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 0.0,
+              "rms": 0.0,
+              "max_allowance_ratio": 0.0
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 4.547473508864641e-13,
+              "rms": 5.9382169421403534e-15,
+              "max_allowance_ratio": 0.01327091315212028
+            }
+          },
+          "native_residual_rms": 1.35674825796956e-05,
+          "device_residual_at_native_head_rms": 1.356748257969108e-05,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 1.1368683772161603e-13,
+              "rms": 2.0980511935344957e-15,
+              "max_allowance_ratio": 0.06363430917710829
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        }
+      ],
+      "solution_comparisons": [
+        {
+          "implementation": "kcycle",
+          "repeat": 0,
+          "warmup": true,
+          "heads_sha256": "827f93ef47fd537f82e90e24637274202202eb065b1c454640515bcfaab68181",
+          "max_absolute_m": 6.466870827992466e-05,
+          "rms_m": 2.6595202429855968e-05,
+          "tolerance_m": 1e-06,
+          "passed": false
+        },
+        {
+          "implementation": "kcycle",
+          "repeat": 1,
+          "warmup": false,
+          "heads_sha256": "827f93ef47fd537f82e90e24637274202202eb065b1c454640515bcfaab68181",
+          "max_absolute_m": 6.466870827992466e-05,
+          "rms_m": 2.6595202429855968e-05,
+          "tolerance_m": 1e-06,
+          "passed": false
+        },
+        {
+          "implementation": "kcycle",
+          "repeat": 2,
+          "warmup": false,
+          "heads_sha256": "827f93ef47fd537f82e90e24637274202202eb065b1c454640515bcfaab68181",
+          "max_absolute_m": 6.466870827992466e-05,
+          "rms_m": 2.6595202429855968e-05,
+          "tolerance_m": 1e-06,
+          "passed": false
+        },
+        {
+          "implementation": "kcycle",
+          "repeat": 3,
+          "warmup": false,
+          "heads_sha256": "827f93ef47fd537f82e90e24637274202202eb065b1c454640515bcfaab68181",
+          "max_absolute_m": 6.466870827992466e-05,
+          "rms_m": 2.6595202429855968e-05,
+          "tolerance_m": 1e-06,
+          "passed": false
+        }
+      ],
+      "operator_parity": true,
+      "solution_parity": false
+    },
+    {
+      "case": "npf_convertible_500x500x5_steady_ghb",
+      "shape": [
+        5,
+        500,
+        500
+      ],
+      "reference_fingerprint": "20e7a1de5bdc834a1a97177aee492176ae513846dd7435edc515474b3baf3901",
+      "reference_sha256": {
+        "inputs.npz": "503b50e2a9120a0a06efb0f8da33ca6a0b2aa3ffc82c847ab5915a83b1e75027",
+        "reference.npz": "dfafd8c30c2dc7b5fd99f4867071be24d00365e30f665a18b25e35a77516eed4"
+      },
+      "diagnostic_cbc_sha256": "5706e8ffbd7cec19caa5377dd81fb8edf567ab3f8424e8d61c1e8e1689687b6d",
+      "mf6_settings": {
+        "pname": "ims",
+        "print_option": "SUMMARY",
+        "complexity": "COMPLEX",
+        "linear_acceleration": "BICGSTAB",
+        "outer_maximum": 500,
+        "outer_dvclose": 1e-06,
+        "inner_maximum": 500,
+        "inner_dvclose": 1e-08,
+        "rcloserecord": [
+          1e-06,
+          "RELATIVE_RCLOSE"
+        ],
+        "scaling_method": "DIAGONAL"
+      },
+      "mf6_settings_changed": false,
+      "mode": "steady",
+      "family": "npf",
+      "endpoints": [
+        {
+          "period": 1,
+          "operator_parity": false,
+          "comparisons": {
+            "face_flux": {
+              "passed": false,
+              "entries": 3495000,
+              "failures": 201809,
+              "max_absolute": 2.547668600527686e-06,
+              "rms": 3.3919691599823986e-08,
+              "max_allowance_ratio": 47942.99824395848
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 9.094947017729282e-13,
+              "rms": 1.984005311871299e-15,
+              "max_allowance_ratio": 0.018060525849504346
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 0.0,
+              "rms": 0.0,
+              "max_allowance_ratio": 0.0
+            },
+            "cell_residual": {
+              "passed": false,
+              "entries": 1247500,
+              "failures": 98476,
+              "max_absolute": 8.31723264127504e-06,
+              "rms": 1.0625162164734086e-08,
+              "max_allowance_ratio": 36953.0911562233
+            }
+          },
+          "native_residual_rms": 7.707458787958007e-08,
+          "device_residual_at_native_head_rms": 7.631907356736821e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 2.1364297886350414e-08,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 1.1368683772161603e-13,
+              "rms": 2.1557277812463186e-15,
+              "max_allowance_ratio": 0.06601225118441977
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          },
+          "prescribed_flow_probe": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 1.1368683772161603e-13,
+              "rms": 2.156154254598033e-15,
+              "max_allowance_ratio": 0.06601225118441977
+            },
+            "settings": {
+              "pname": "ims",
+              "print_option": "SUMMARY",
+              "complexity": "COMPLEX",
+              "linear_acceleration": "BICGSTAB",
+              "outer_maximum": 500,
+              "outer_dvclose": 1e-06,
+              "inner_maximum": 500,
+              "inner_dvclose": 1e-08,
+              "rcloserecord": [
+                1e-06,
+                "RELATIVE_RCLOSE"
+              ],
+              "scaling_method": "DIAGONAL"
+            },
+            "settings_changed": false,
+            "prescribed_heads": "saved MF6 endpoint",
+            "native_saturation_max_error": 0.0,
+            "head_sha256": "7411423cb117c07310ffbe56b74113083165bc02b92e324871724ead2eeabfa4",
+            "native_result_sha256": "d572e3a3782905a08cf87518acc48c7919a7d3ee62ec3c4c37015ea582410e9d",
+            "scope": "Fixed-head NPF face constitutive law only; GHB and STO checked on original free cells"
+          }
+        }
+      ],
+      "solution_comparisons": [
+        {
+          "implementation": "kcycle",
+          "repeat": 0,
+          "warmup": true,
+          "heads_sha256": "4a3024ca0567da47f19593b622a9f739643fab42e9149dc030e27d705a156c1c",
+          "max_absolute_m": 7.07638219665796e-06,
+          "rms_m": 3.991678908292448e-06,
+          "tolerance_m": 1e-06,
+          "passed": false
+        },
+        {
+          "implementation": "kcycle",
+          "repeat": 1,
+          "warmup": false,
+          "heads_sha256": "4a3024ca0567da47f19593b622a9f739643fab42e9149dc030e27d705a156c1c",
+          "max_absolute_m": 7.07638219665796e-06,
+          "rms_m": 3.991678908292448e-06,
+          "tolerance_m": 1e-06,
+          "passed": false
+        },
+        {
+          "implementation": "kcycle",
+          "repeat": 2,
+          "warmup": false,
+          "heads_sha256": "4a3024ca0567da47f19593b622a9f739643fab42e9149dc030e27d705a156c1c",
+          "max_absolute_m": 7.07638219665796e-06,
+          "rms_m": 3.991678908292448e-06,
+          "tolerance_m": 1e-06,
+          "passed": false
+        },
+        {
+          "implementation": "kcycle",
+          "repeat": 3,
+          "warmup": false,
+          "heads_sha256": "4a3024ca0567da47f19593b622a9f739643fab42e9149dc030e27d705a156c1c",
+          "max_absolute_m": 7.07638219665796e-06,
+          "rms_m": 3.991678908292448e-06,
+          "tolerance_m": 1e-06,
+          "passed": false
+        }
+      ],
+      "operator_parity": false,
+      "solution_parity": false
+    },
+    {
+      "case": "cartesian_confined_500x500x5_transient_ghb",
+      "shape": [
+        5,
+        500,
+        500
+      ],
+      "reference_fingerprint": "dcd2ef21dea095896a5122b976006901a02b3d24138b54183ab9664beab0c76d",
+      "reference_sha256": {
+        "inputs.npz": "09aef3ce3fe9e864fb7d30dce5ff8af6fc879de758c76dfc0b22c8e1e84962a6",
+        "reference.npz": "d4bcdfde2d3197db9822da0439d770ef6753da72d6ec961334ac92d179bed1d5"
+      },
+      "diagnostic_cbc_sha256": "99d9179b87fc3b2a1908dcadbc84e53bd2bcf85739fe06d209b11b2ca810fab4",
+      "mf6_settings": {
+        "pname": "ims",
+        "print_option": "SUMMARY",
+        "complexity": "COMPLEX",
+        "linear_acceleration": "BICGSTAB",
+        "outer_maximum": 150,
+        "outer_dvclose": 1e-06,
+        "inner_maximum": 500,
+        "inner_dvclose": 1e-08,
+        "rcloserecord": [
+          1e-06,
+          "RELATIVE_RCLOSE"
+        ],
+        "scaling_method": "DIAGONAL"
+      },
+      "mf6_settings_changed": false,
+      "mode": "transient",
+      "family": "cartesian",
+      "endpoints": [
+        {
+          "period": 1,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 1.4210854715202004e-14,
+              "rms": 2.51216057298588e-16,
+              "max_allowance_ratio": 0.0674809959986915
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 5.642691937550221e-16,
+              "max_allowance_ratio": 0.015077098956026387
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 6.938893903907228e-18,
+              "rms": 3.303933777226181e-18,
+              "max_allowance_ratio": 0.040342147992129776
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 1.1901590823981678e-13,
+              "rms": 1.2609297769815884e-15,
+              "max_allowance_ratio": 0.013347340187853822
+            }
+          },
+          "native_residual_rms": 2.0645851775617734e-08,
+          "device_residual_at_native_head_rms": 2.0645851774978135e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 1.4210854715202004e-14,
+              "rms": 2.51216057298588e-16,
+              "max_allowance_ratio": 0.0674809959986915
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 2,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 2.842170943040401e-14,
+              "rms": 3.9344731775850795e-16,
+              "max_allowance_ratio": 0.07243835433921875
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 5.499530202014075e-16,
+              "max_allowance_ratio": 0.01420574684288256
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.0408340855860843e-17,
+              "rms": 3.5908135645753446e-18,
+              "max_allowance_ratio": 0.014365631977487131
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 1.545430450278218e-13,
+              "rms": 1.5259263185814147e-15,
+              "max_allowance_ratio": 0.012862895552854262
+            }
+          },
+          "native_residual_rms": 1.6400330286710012e-08,
+          "device_residual_at_native_head_rms": 1.6400330286799712e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 2.842170943040401e-14,
+              "rms": 3.9344731775850795e-16,
+              "max_allowance_ratio": 0.07243835433921875
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 3,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 2.842170943040401e-14,
+              "rms": 4.9191616991439125e-16,
+              "max_allowance_ratio": 0.07432836785025419
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 5.617798364843031e-16,
+              "max_allowance_ratio": 0.014872472086666973
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.3877787807814457e-17,
+              "rms": 4.565359721185776e-18,
+              "max_allowance_ratio": 0.013780352453696427
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 1.9895196601282805e-13,
+              "rms": 1.7282681908285638e-15,
+              "max_allowance_ratio": 0.015156158818151282
+            }
+          },
+          "native_residual_rms": 1.2665490034978853e-08,
+          "device_residual_at_native_head_rms": 1.266549003486727e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 2.842170943040401e-14,
+              "rms": 4.9191616991439125e-16,
+              "max_allowance_ratio": 0.07432836785025419
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 4,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 5.571836532304435e-16,
+              "max_allowance_ratio": 0.06890397132327912
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 5.719598701309881e-16,
+              "max_allowance_ratio": 0.014845588547546832
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.3877787807814457e-17,
+              "rms": 4.830954765212988e-18,
+              "max_allowance_ratio": 0.013307281349613878
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 1.3500311979441904e-13,
+              "rms": 1.8287499854491068e-15,
+              "max_allowance_ratio": 0.014091941430539115
+            }
+          },
+          "native_residual_rms": 1.2960912033571274e-08,
+          "device_residual_at_native_head_rms": 1.296091203339175e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 5.571836532304435e-16,
+              "max_allowance_ratio": 0.06890397132327912
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 5,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 5.993176147499847e-16,
+              "max_allowance_ratio": 0.0704651061463777
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 5.55097159163756e-16,
+              "max_allowance_ratio": 0.015028007592834614
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.9081958235744878e-17,
+              "rms": 4.966184906622928e-18,
+              "max_allowance_ratio": 0.013426661364906183
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 1.7053025658242404e-13,
+              "rms": 1.9285155153156044e-15,
+              "max_allowance_ratio": 0.014673445483236293
+            }
+          },
+          "native_residual_rms": 1.8408377323331282e-08,
+          "device_residual_at_native_head_rms": 1.8408377322582558e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 5.993176147499847e-16,
+              "max_allowance_ratio": 0.0704651061463777
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 6,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 7.35324711031633e-16,
+              "max_allowance_ratio": 0.07237083254071038
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.2737367544323206e-13,
+              "rms": 6.182630330663844e-16,
+              "max_allowance_ratio": 0.01767116144682816
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.42861286636753e-17,
+              "rms": 6.449110893564692e-18,
+              "max_allowance_ratio": 0.013826816478851906
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 1.2434497875801753e-13,
+              "rms": 2.222466830429369e-15,
+              "max_allowance_ratio": 0.013545245828749174
+            }
+          },
+          "native_residual_rms": 1.6052007030867524e-08,
+          "device_residual_at_native_head_rms": 1.605200703110452e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 7.35324711031633e-16,
+              "max_allowance_ratio": 0.07237083254071038
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 7,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 8.292101094550125e-16,
+              "max_allowance_ratio": 0.07930245073183322
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.1368683772161603e-13,
+              "rms": 5.73373758299501e-16,
+              "max_allowance_ratio": 0.01387324200304325
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.42861286636753e-17,
+              "rms": 8.025074880235999e-18,
+              "max_allowance_ratio": 0.013318294085159213
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 1.966066198733074e-13,
+              "rms": 2.4898230591592795e-15,
+              "max_allowance_ratio": 0.013174216958997611
+            }
+          },
+          "native_residual_rms": 2.3137672997832744e-08,
+          "device_residual_at_native_head_rms": 2.3137672998105088e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 8.292101094550125e-16,
+              "max_allowance_ratio": 0.07930245073183322
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 8,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 8.526512829121202e-14,
+              "rms": 8.935259811729323e-16,
+              "max_allowance_ratio": 0.06727805570074427
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.2737367544323206e-13,
+              "rms": 6.117975138510854e-16,
+              "max_allowance_ratio": 0.01544167485413325
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.7755575615628914e-17,
+              "rms": 8.683969144313059e-18,
+              "max_allowance_ratio": 0.013423355734653183
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 1.4210854715202004e-13,
+              "rms": 2.6151245808881893e-15,
+              "max_allowance_ratio": 0.015218286878253265
+            }
+          },
+          "native_residual_rms": 3.085958126020631e-08,
+          "device_residual_at_native_head_rms": 3.085958126011783e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 8.526512829121202e-14,
+              "rms": 8.935259811729323e-16,
+              "max_allowance_ratio": 0.06727805570074427
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 9,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 8.526512829121202e-14,
+              "rms": 9.352749539246929e-16,
+              "max_allowance_ratio": 0.08038825447307581
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.1368683772161603e-13,
+              "rms": 5.774733638952021e-16,
+              "max_allowance_ratio": 0.014945688477142508
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.7755575615628914e-17,
+              "rms": 8.912940947446185e-18,
+              "max_allowance_ratio": 0.013456141252911938
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 3.694822225952521e-13,
+              "rms": 2.7462559653154364e-15,
+              "max_allowance_ratio": 0.013590622621928863
+            }
+          },
+          "native_residual_rms": 7.970055778664437e-09,
+          "device_residual_at_native_head_rms": 7.970055777452283e-09,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 8.526512829121202e-14,
+              "rms": 9.352749539246929e-16,
+              "max_allowance_ratio": 0.08038825447307581
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 10,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 1.1368683772161603e-13,
+              "rms": 9.628173527625956e-16,
+              "max_allowance_ratio": 0.07089139155831836
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.1368683772161603e-13,
+              "rms": 5.536599652161296e-16,
+              "max_allowance_ratio": 0.014556829621617622
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.7755575615628914e-17,
+              "rms": 9.008315140820594e-18,
+              "max_allowance_ratio": 0.013336287372382134
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 3.126388037344441e-13,
+              "rms": 2.7729117293523705e-15,
+              "max_allowance_ratio": 0.012180938081701337
+            }
+          },
+          "native_residual_rms": 2.250197500967989e-08,
+          "device_residual_at_native_head_rms": 2.250197500989928e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 1.1368683772161603e-13,
+              "rms": 9.628173527625956e-16,
+              "max_allowance_ratio": 0.07089139155831836
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 11,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 6.9109071650114e-16,
+              "max_allowance_ratio": 0.07292028453234091
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 5.511631956777856e-16,
+              "max_allowance_ratio": 0.01433348656270493
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.7755575615628914e-17,
+              "rms": 8.184879436290762e-18,
+              "max_allowance_ratio": 0.014310259419946068
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 1.5987211554602254e-13,
+              "rms": 2.099868307442129e-15,
+              "max_allowance_ratio": 0.012981320343074691
+            }
+          },
+          "native_residual_rms": 1.37749375802061e-08,
+          "device_residual_at_native_head_rms": 1.3774937580768459e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 6.9109071650114e-16,
+              "max_allowance_ratio": 0.07292028453234091
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 12,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 5.101268419157688e-16,
+              "max_allowance_ratio": 0.07943414695810769
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 5.548765571608623e-16,
+              "max_allowance_ratio": 0.014246491076622144
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.0816681711721685e-17,
+              "rms": 5.9094078352794445e-18,
+              "max_allowance_ratio": 0.013679719561498802
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 1.4921397450962104e-13,
+              "rms": 1.7835590614676508e-15,
+              "max_allowance_ratio": 0.015690281408989773
+            }
+          },
+          "native_residual_rms": 1.0941142950492815e-08,
+          "device_residual_at_native_head_rms": 1.0941142949999861e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 5.101268419157688e-16,
+              "max_allowance_ratio": 0.07943414695810769
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 13,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 2.842170943040401e-14,
+              "rms": 3.938081302388468e-16,
+              "max_allowance_ratio": 0.08041426447136667
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 5.424573238812944e-16,
+              "max_allowance_ratio": 0.013851069199178025
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.3877787807814457e-17,
+              "rms": 4.567514603294252e-18,
+              "max_allowance_ratio": 0.013862152176565773
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 1.474376176702208e-13,
+              "rms": 1.4972660371009864e-15,
+              "max_allowance_ratio": 0.012668523326561452
+            }
+          },
+          "native_residual_rms": 2.00062568691319e-08,
+          "device_residual_at_native_head_rms": 2.0006256869378367e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 2.842170943040401e-14,
+              "rms": 3.938081302388468e-16,
+              "max_allowance_ratio": 0.08041426447136667
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 14,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 2.842170943040401e-14,
+              "rms": 3.217348236778113e-16,
+              "max_allowance_ratio": 0.07097993269309585
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.1368683772161603e-13,
+              "rms": 5.542038334787424e-16,
+              "max_allowance_ratio": 0.014231801581688849
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.3877787807814457e-17,
+              "rms": 3.8520607530728474e-18,
+              "max_allowance_ratio": 0.013444538319813558
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 1.7053025658242404e-13,
+              "rms": 1.4067391548405712e-15,
+              "max_allowance_ratio": 0.013024703110231493
+            }
+          },
+          "native_residual_rms": 1.1864235146457648e-08,
+          "device_residual_at_native_head_rms": 1.1864235145985321e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 2.842170943040401e-14,
+              "rms": 3.217348236778113e-16,
+              "max_allowance_ratio": 0.07097993269309585
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 15,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 1.4210854715202004e-14,
+              "rms": 2.702991254007661e-16,
+              "max_allowance_ratio": 0.08112925008049093
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 5.485790707443096e-16,
+              "max_allowance_ratio": 0.014500414730938778
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 8.673617379884035e-18,
+              "rms": 2.961767481786363e-18,
+              "max_allowance_ratio": 0.013256987071439788
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 1.474376176702208e-13,
+              "rms": 1.3100102730081908e-15,
+              "max_allowance_ratio": 0.012181833983229378
+            }
+          },
+          "native_residual_rms": 9.305804869145635e-09,
+          "device_residual_at_native_head_rms": 9.305804869192978e-09,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 1.4210854715202004e-14,
+              "rms": 2.702991254007661e-16,
+              "max_allowance_ratio": 0.08112925008049093
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 16,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 2.842170943040401e-14,
+              "rms": 4.107680063218791e-16,
+              "max_allowance_ratio": 0.0865602522582155
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 5.442071467358733e-16,
+              "max_allowance_ratio": 0.01497533241669914
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.0408340855860843e-17,
+              "rms": 3.652950302814138e-18,
+              "max_allowance_ratio": 0.01477379222689166
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 1.3855583347321954e-13,
+              "rms": 1.570090768177773e-15,
+              "max_allowance_ratio": 0.014742117363332738
+            }
+          },
+          "native_residual_rms": 1.639751286892602e-08,
+          "device_residual_at_native_head_rms": 1.639751286874131e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 2.842170943040401e-14,
+              "rms": 4.107680063218791e-16,
+              "max_allowance_ratio": 0.0865602522582155
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 17,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 2.842170943040401e-14,
+              "rms": 5.049355304763224e-16,
+              "max_allowance_ratio": 0.07797797869561551
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.1368683772161603e-13,
+              "rms": 5.768685674461036e-16,
+              "max_allowance_ratio": 0.014716260574715324
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.3877787807814457e-17,
+              "rms": 4.630583779496328e-18,
+              "max_allowance_ratio": 0.013201374899551454
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 1.8118839761882555e-13,
+              "rms": 1.752715587894384e-15,
+              "max_allowance_ratio": 0.01510920666806678
+            }
+          },
+          "native_residual_rms": 1.6219238750499105e-08,
+          "device_residual_at_native_head_rms": 1.6219238750633826e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 2.842170943040401e-14,
+              "rms": 5.049355304763224e-16,
+              "max_allowance_ratio": 0.07797797869561551
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 18,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 5.65240737331195e-16,
+              "max_allowance_ratio": 0.06824558564889678
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 5.626953422249413e-16,
+              "max_allowance_ratio": 0.01478442762737825
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.3877787807814457e-17,
+              "rms": 4.845298098035813e-18,
+              "max_allowance_ratio": 0.013327041244410698
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 1.7053025658242404e-13,
+              "rms": 1.8787761297137413e-15,
+              "max_allowance_ratio": 0.01312245665895001
+            }
+          },
+          "native_residual_rms": 2.5484409868972937e-08,
+          "device_residual_at_native_head_rms": 2.5484409868597665e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 5.65240737331195e-16,
+              "max_allowance_ratio": 0.06824558564889678
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 19,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 6.046410746763728e-16,
+              "max_allowance_ratio": 0.06996106576031934
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 5.657873608676827e-16,
+              "max_allowance_ratio": 0.013880317165677556
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.9081958235744878e-17,
+              "rms": 5.021193917731277e-18,
+              "max_allowance_ratio": 0.01344444037757332
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 1.8829382497642655e-13,
+              "rms": 1.9240970939629445e-15,
+              "max_allowance_ratio": 0.013380081771508866
+            }
+          },
+          "native_residual_rms": 1.3270672300206704e-08,
+          "device_residual_at_native_head_rms": 1.3270672300193934e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 6.046410746763728e-16,
+              "max_allowance_ratio": 0.06996106576031934
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 20,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 6.2961189511171e-16,
+              "max_allowance_ratio": 0.06980764704938772
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 5.658258414384991e-16,
+              "max_allowance_ratio": 0.01404914263415261
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.42861286636753e-17,
+              "rms": 5.364830938154736e-18,
+              "max_allowance_ratio": 0.01345126683821537
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 2.2737367544323206e-13,
+              "rms": 1.9945365691920054e-15,
+              "max_allowance_ratio": 0.015400235659395226
+            }
+          },
+          "native_residual_rms": 1.7239024873383855e-08,
+          "device_residual_at_native_head_rms": 1.7239024873570907e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 6.2961189511171e-16,
+              "max_allowance_ratio": 0.06980764704938772
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        }
+      ],
+      "solution_comparisons": [
+        {
+          "implementation": "fast",
+          "repeat": 0,
+          "warmup": true,
+          "heads_sha256": "141384aa566638b84c9c5ce60de35ed2daf47ade1ac71126c772541239fde7d3",
+          "max_absolute_m": 5.1839889003701956e-06,
+          "rms_m": 1.017739236397587e-06,
+          "tolerance_m": 1e-06,
+          "passed": false
+        },
+        {
+          "implementation": "fast",
+          "repeat": 1,
+          "warmup": false,
+          "heads_sha256": "141384aa566638b84c9c5ce60de35ed2daf47ade1ac71126c772541239fde7d3",
+          "max_absolute_m": 5.1839889003701956e-06,
+          "rms_m": 1.017739236397587e-06,
+          "tolerance_m": 1e-06,
+          "passed": false
+        },
+        {
+          "implementation": "fast",
+          "repeat": 2,
+          "warmup": false,
+          "heads_sha256": "141384aa566638b84c9c5ce60de35ed2daf47ade1ac71126c772541239fde7d3",
+          "max_absolute_m": 5.1839889003701956e-06,
+          "rms_m": 1.017739236397587e-06,
+          "tolerance_m": 1e-06,
+          "passed": false
+        },
+        {
+          "implementation": "fast",
+          "repeat": 3,
+          "warmup": false,
+          "heads_sha256": "141384aa566638b84c9c5ce60de35ed2daf47ade1ac71126c772541239fde7d3",
+          "max_absolute_m": 5.1839889003701956e-06,
+          "rms_m": 1.017739236397587e-06,
+          "tolerance_m": 1e-06,
+          "passed": false
+        }
+      ],
+      "operator_parity": true,
+      "solution_parity": false
+    },
+    {
+      "case": "npf_confined_500x500x5_transient_ghb",
+      "shape": [
+        5,
+        500,
+        500
+      ],
+      "reference_fingerprint": "fd99184aaa0035632eaea38716cb1277b7a6647f263fd04554087df2ff0a1ef4",
+      "reference_sha256": {
+        "inputs.npz": "5ec177e05a87662ecfa0f1ef9f272ac95b246cb08fc3d53bdba5259954fa0c16",
+        "reference.npz": "291709aee49f57b6e86bae9a9c4615d18daf063940999c66925fc452de1814be"
+      },
+      "diagnostic_cbc_sha256": "f069e2dd00d691aba3f252b04afa70a7734b84a1b2ef7f77a088d52d2d582de2",
+      "mf6_settings": {
+        "pname": "ims",
+        "print_option": "SUMMARY",
+        "complexity": "COMPLEX",
+        "linear_acceleration": "BICGSTAB",
+        "outer_maximum": 150,
+        "outer_dvclose": 1e-06,
+        "inner_maximum": 500,
+        "inner_dvclose": 1e-08,
+        "rcloserecord": [
+          1e-06,
+          "RELATIVE_RCLOSE"
+        ],
+        "scaling_method": "DIAGONAL"
+      },
+      "mf6_settings_changed": false,
+      "mode": "transient",
+      "family": "npf",
+      "endpoints": [
+        {
+          "period": 1,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 1.0658141036401503e-14,
+              "rms": 3.280973000027466e-16,
+              "max_allowance_ratio": 0.06906754884670938
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.2737367544323206e-13,
+              "rms": 1.6866915559279378e-15,
+              "max_allowance_ratio": 0.014715028273746345
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.6653345369377348e-16,
+              "rms": 3.1194675644739017e-17,
+              "max_allowance_ratio": 0.07251731212122779
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 2.2737367544323206e-13,
+              "rms": 1.9023330638480376e-15,
+              "max_allowance_ratio": 0.011076397073596086
+            }
+          },
+          "native_residual_rms": 2.6971219349208712e-08,
+          "device_residual_at_native_head_rms": 2.6971219357235832e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 1.0658141036401503e-14,
+              "rms": 3.280973000027466e-16,
+              "max_allowance_ratio": 0.06906754884670938
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 2,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 2.842170943040401e-14,
+              "rms": 5.353223633191939e-16,
+              "max_allowance_ratio": 0.05719107599868644
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.2026824808563106e-13,
+              "rms": 1.6500025914965533e-15,
+              "max_allowance_ratio": 0.015052426804274996
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.6653345369377348e-16,
+              "rms": 3.297744469069552e-17,
+              "max_allowance_ratio": 0.025562086663490288
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 2.2026824808563106e-13,
+              "rms": 2.183312896147285e-15,
+              "max_allowance_ratio": 0.012703681472687082
+            }
+          },
+          "native_residual_rms": 3.02923621740579e-08,
+          "device_residual_at_native_head_rms": 3.0292362184096385e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 2.842170943040401e-14,
+              "rms": 5.353223633191939e-16,
+              "max_allowance_ratio": 0.05719107599868644
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 3,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 2.842170943040401e-14,
+              "rms": 7.07240905543394e-16,
+              "max_allowance_ratio": 0.06122078228929395
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.2026824808563106e-13,
+              "rms": 1.7097784771703686e-15,
+              "max_allowance_ratio": 0.015260857032732366
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.6653345369377348e-16,
+              "rms": 3.8393003940203777e-17,
+              "max_allowance_ratio": 0.021447517272953794
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 2.2737367544323206e-13,
+              "rms": 2.5617493009814266e-15,
+              "max_allowance_ratio": 0.01313421286204881
+            }
+          },
+          "native_residual_rms": 3.4020761034020136e-08,
+          "device_residual_at_native_head_rms": 3.4020761040787956e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 2.842170943040401e-14,
+              "rms": 7.07240905543394e-16,
+              "max_allowance_ratio": 0.06122078228929395
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 4,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 2.842170943040401e-14,
+              "rms": 8.66290052943016e-16,
+              "max_allowance_ratio": 0.06940281878323425
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.2737367544323206e-13,
+              "rms": 1.7005204212867256e-15,
+              "max_allowance_ratio": 0.015223043617755049
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.220446049250313e-16,
+              "rms": 4.325344741090131e-17,
+              "max_allowance_ratio": 0.017542822417184946
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 2.2737367544323206e-13,
+              "rms": 2.8909276169379475e-15,
+              "max_allowance_ratio": 0.013163511066452253
+            }
+          },
+          "native_residual_rms": 4.4495754659354505e-08,
+          "device_residual_at_native_head_rms": 4.4495754662136234e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 2.842170943040401e-14,
+              "rms": 8.66290052943016e-16,
+              "max_allowance_ratio": 0.06940281878323425
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 5,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 1.011206465903931e-15,
+              "max_allowance_ratio": 0.06254396770168935
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.2737367544323206e-13,
+              "rms": 1.7098247992893286e-15,
+              "max_allowance_ratio": 0.014150682313674577
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.7755575615628914e-16,
+              "rms": 4.8741121524495245e-17,
+              "max_allowance_ratio": 0.0172520989113854
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 4.547473508864641e-13,
+              "rms": 3.2293604079112667e-15,
+              "max_allowance_ratio": 0.011592833996407103
+            }
+          },
+          "native_residual_rms": 3.6315916769843614e-08,
+          "device_residual_at_native_head_rms": 3.63159167755521e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 1.011206465903931e-15,
+              "max_allowance_ratio": 0.06254396770168935
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 6,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 1.2746091132335337e-15,
+              "max_allowance_ratio": 0.06471301019437505
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.2737367544323206e-13,
+              "rms": 1.747592100579185e-15,
+              "max_allowance_ratio": 0.015111297984777153
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.7755575615628914e-16,
+              "rms": 6.393319758116326e-17,
+              "max_allowance_ratio": 0.017662261176072582
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 2.4158453015843406e-13,
+              "rms": 3.840879393846585e-15,
+              "max_allowance_ratio": 0.013650232678088533
+            }
+          },
+          "native_residual_rms": 2.166434725164472e-08,
+          "device_residual_at_native_head_rms": 2.1664347255116126e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 1.2746091132335337e-15,
+              "max_allowance_ratio": 0.06471301019437505
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 7,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 1.4853106429806085e-15,
+              "max_allowance_ratio": 0.06026817375343238
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.2737367544323206e-13,
+              "rms": 1.7418625833356794e-15,
+              "max_allowance_ratio": 0.014450263985171647
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.7755575615628914e-16,
+              "rms": 7.297611360469631e-17,
+              "max_allowance_ratio": 0.01795229448114749
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 4.547473508864641e-13,
+              "rms": 4.4098290335252445e-15,
+              "max_allowance_ratio": 0.012519973717581966
+            }
+          },
+          "native_residual_rms": 1.6544865737335312e-08,
+          "device_residual_at_native_head_rms": 1.654486574400736e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 1.4853106429806085e-15,
+              "max_allowance_ratio": 0.06026817375343238
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 8,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 1.1368683772161603e-13,
+              "rms": 1.6688441332997752e-15,
+              "max_allowance_ratio": 0.05978567931872025
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 9.094947017729282e-13,
+              "rms": 1.9826154156666698e-15,
+              "max_allowance_ratio": 0.01879908564996792
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 3.885780586188048e-16,
+              "rms": 7.870204717973987e-17,
+              "max_allowance_ratio": 0.016583924837753047
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 1.8189894035458565e-12,
+              "rms": 5.126065018825698e-15,
+              "max_allowance_ratio": 0.012252996539535675
+            }
+          },
+          "native_residual_rms": 3.259700226254508e-08,
+          "device_residual_at_native_head_rms": 3.259700226980176e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 1.1368683772161603e-13,
+              "rms": 1.6688441332997752e-15,
+              "max_allowance_ratio": 0.05978567931872025
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 9,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 1.1368683772161603e-13,
+              "rms": 1.8397292259087892e-15,
+              "max_allowance_ratio": 0.06389732095504908
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.2737367544323206e-13,
+              "rms": 1.7726809512086105e-15,
+              "max_allowance_ratio": 0.014571391564312319
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 4.996003610813204e-16,
+              "rms": 8.419611101329718e-17,
+              "max_allowance_ratio": 0.01672153947763869
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 1.8189894035458565e-12,
+              "rms": 5.518240010438923e-15,
+              "max_allowance_ratio": 0.013072190702605922
+            }
+          },
+          "native_residual_rms": 3.358154837840243e-08,
+          "device_residual_at_native_head_rms": 3.3581548377186297e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 1.1368683772161603e-13,
+              "rms": 1.8397292259087892e-15,
+              "max_allowance_ratio": 0.06389732095504908
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 10,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 1.1368683772161603e-13,
+              "rms": 1.993829192953831e-15,
+              "max_allowance_ratio": 0.06191782293676863
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.2737367544323206e-13,
+              "rms": 1.7282380091770974e-15,
+              "max_allowance_ratio": 0.014872945287206162
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 4.996003610813204e-16,
+              "rms": 9.125144331245269e-17,
+              "max_allowance_ratio": 0.015976721447421658
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 9.094947017729282e-13,
+              "rms": 5.719583175844765e-15,
+              "max_allowance_ratio": 0.012110233039422208
+            }
+          },
+          "native_residual_rms": 2.1503811957049952e-08,
+          "device_residual_at_native_head_rms": 2.1503811963215706e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 1.1368683772161603e-13,
+              "rms": 1.993829192953831e-15,
+              "max_allowance_ratio": 0.06191782293676863
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 11,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 1.1368683772161603e-13,
+              "rms": 1.794613662429744e-15,
+              "max_allowance_ratio": 0.06262582653762888
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.9895196601282805e-13,
+              "rms": 1.7199625893059529e-15,
+              "max_allowance_ratio": 0.015024918598057858
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 4.718447854656915e-16,
+              "rms": 9.158633678521186e-17,
+              "max_allowance_ratio": 0.019032078000757065
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 9.094947017729282e-13,
+              "rms": 5.196726355392214e-15,
+              "max_allowance_ratio": 0.013642879093863906
+            }
+          },
+          "native_residual_rms": 4.056374565684584e-08,
+          "device_residual_at_native_head_rms": 4.056374566849747e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 1.1368683772161603e-13,
+              "rms": 1.794613662429744e-15,
+              "max_allowance_ratio": 0.06262582653762888
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 12,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 1.6664069848247622e-15,
+              "max_allowance_ratio": 0.061779100124979766
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.2737367544323206e-13,
+              "rms": 1.7667441876564002e-15,
+              "max_allowance_ratio": 0.015063021738955072
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 4.718447854656915e-16,
+              "rms": 8.322454597131664e-17,
+              "max_allowance_ratio": 0.01635726248848873
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 2.2737367544323206e-13,
+              "rms": 4.821580556927001e-15,
+              "max_allowance_ratio": 0.011712022939647588
+            }
+          },
+          "native_residual_rms": 4.188939543446967e-08,
+          "device_residual_at_native_head_rms": 4.188939544063013e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 1.6664069848247622e-15,
+              "max_allowance_ratio": 0.061779100124979766
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 13,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 8.526512829121202e-14,
+              "rms": 1.5424679992463718e-15,
+              "max_allowance_ratio": 0.0676673507571911
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.1316282072803006e-13,
+              "rms": 1.6882239711996854e-15,
+              "max_allowance_ratio": 0.01515923518725706
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 4.718447854656915e-16,
+              "rms": 7.743825618334702e-17,
+              "max_allowance_ratio": 0.015949784312737685
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 4.547473508864641e-13,
+              "rms": 4.477686438910384e-15,
+              "max_allowance_ratio": 0.01172236261919979
+            }
+          },
+          "native_residual_rms": 2.468578747419771e-08,
+          "device_residual_at_native_head_rms": 2.4685787477466638e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 8.526512829121202e-14,
+              "rms": 1.5424679992463718e-15,
+              "max_allowance_ratio": 0.0676673507571911
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 14,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 1.425893058786035e-15,
+              "max_allowance_ratio": 0.059432680175764085
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.2737367544323206e-13,
+              "rms": 1.68258335182874e-15,
+              "max_allowance_ratio": 0.014355119481028756
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 3.608224830031759e-16,
+              "rms": 7.333272175741163e-17,
+              "max_allowance_ratio": 0.015984433629168168
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 2.2737367544323206e-13,
+              "rms": 4.1588016545863136e-15,
+              "max_allowance_ratio": 0.01175391364051875
+            }
+          },
+          "native_residual_rms": 3.429738664037839e-08,
+          "device_residual_at_native_head_rms": 3.4297386642929185e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 1.425893058786035e-15,
+              "max_allowance_ratio": 0.059432680175764085
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 15,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 1.3118947924114687e-15,
+              "max_allowance_ratio": 0.06231899310876714
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.2737367544323206e-13,
+              "rms": 1.7362515576719875e-15,
+              "max_allowance_ratio": 0.014492583578739362
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.498001805406602e-16,
+              "rms": 7.013979933558224e-17,
+              "max_allowance_ratio": 0.016036840705088217
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 4.547473508864641e-13,
+              "rms": 3.924854528254541e-15,
+              "max_allowance_ratio": 0.012284409715060214
+            }
+          },
+          "native_residual_rms": 1.3826662592899586e-08,
+          "device_residual_at_native_head_rms": 1.3826662596176743e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 1.3118947924114687e-15,
+              "max_allowance_ratio": 0.06231899310876714
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 16,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 1.4202484664722797e-15,
+              "max_allowance_ratio": 0.06134064528681364
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.2737367544323206e-13,
+              "rms": 1.6823350363053216e-15,
+              "max_allowance_ratio": 0.014881568445153278
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.498001805406602e-16,
+              "rms": 7.01648163042297e-17,
+              "max_allowance_ratio": 0.017662382489428172
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 4.547473508864641e-13,
+              "rms": 4.1785407449740434e-15,
+              "max_allowance_ratio": 0.012187443438859805
+            }
+          },
+          "native_residual_rms": 2.1880869715002283e-08,
+          "device_residual_at_native_head_rms": 2.1880869717832613e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 1.4202484664722797e-15,
+              "max_allowance_ratio": 0.06134064528681364
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 17,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 1.1368683772161603e-13,
+              "rms": 1.5040453767729733e-15,
+              "max_allowance_ratio": 0.06259037907064492
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 4.547473508864641e-13,
+              "rms": 1.7930085211529307e-15,
+              "max_allowance_ratio": 0.014928557192099953
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.498001805406602e-16,
+              "rms": 7.246040745454668e-17,
+              "max_allowance_ratio": 0.01585632412268612
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 4.547473508864641e-13,
+              "rms": 4.428010304293223e-15,
+              "max_allowance_ratio": 0.014475747502693138
+            }
+          },
+          "native_residual_rms": 4.002334467676123e-09,
+          "device_residual_at_native_head_rms": 4.002334468183255e-09,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 1.1368683772161603e-13,
+              "rms": 1.5040453767729733e-15,
+              "max_allowance_ratio": 0.06259037907064492
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 18,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 1.5679948011209416e-15,
+              "max_allowance_ratio": 0.05866410576457567
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 4.547473508864641e-13,
+              "rms": 1.825701501756544e-15,
+              "max_allowance_ratio": 0.014632408055710755
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 3.3306690738754696e-16,
+              "rms": 7.465971397831691e-17,
+              "max_allowance_ratio": 0.015675073308772675
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 4.547473508864641e-13,
+              "rms": 4.621478249915871e-15,
+              "max_allowance_ratio": 0.010626119117154586
+            }
+          },
+          "native_residual_rms": 2.586449602735e-08,
+          "device_residual_at_native_head_rms": 2.586449603001371e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 1.5679948011209416e-15,
+              "max_allowance_ratio": 0.05866410576457567
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 19,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 1.1368683772161603e-13,
+              "rms": 1.6314915429144763e-15,
+              "max_allowance_ratio": 0.07795582386122475
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.2737367544323206e-13,
+              "rms": 1.688678472862858e-15,
+              "max_allowance_ratio": 0.014703948028363256
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 4.440892098500626e-16,
+              "rms": 7.660509434427871e-17,
+              "max_allowance_ratio": 0.015575393994283277
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 4.547473508864641e-13,
+              "rms": 4.721673131664108e-15,
+              "max_allowance_ratio": 0.011450319982531421
+            }
+          },
+          "native_residual_rms": 1.634942851594915e-08,
+          "device_residual_at_native_head_rms": 1.6349428515471284e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 1.1368683772161603e-13,
+              "rms": 1.6314915429144763e-15,
+              "max_allowance_ratio": 0.07795582386122475
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 20,
+          "operator_parity": true,
+          "comparisons": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 1.6797139188000411e-15,
+              "max_allowance_ratio": 0.06665510856183568
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 9.094947017729282e-13,
+              "rms": 1.9141367189984087e-15,
+              "max_allowance_ratio": 0.018396936951881816
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 4.440892098500626e-16,
+              "rms": 7.859461765397515e-17,
+              "max_allowance_ratio": 0.015450299434761634
+            },
+            "cell_residual": {
+              "passed": true,
+              "entries": 1247500,
+              "failures": 0,
+              "max_absolute": 9.094947017729282e-13,
+              "rms": 4.915960081380109e-15,
+              "max_allowance_ratio": 0.013176310894584535
+            }
+          },
+          "native_residual_rms": 2.085045814291561e-08,
+          "device_residual_at_native_head_rms": 2.0850458143728562e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 0.0,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 5.684341886080802e-14,
+              "rms": 1.6797139188000411e-15,
+              "max_allowance_ratio": 0.06665510856183568
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        }
+      ],
+      "solution_comparisons": [
+        {
+          "implementation": "kcycle",
+          "repeat": 0,
+          "warmup": true,
+          "heads_sha256": "655634d47fe90c9dd1654ab7090b87bcf780ac90dc8676690a5a482d777e4c80",
+          "max_absolute_m": 1.845756713692026e-06,
+          "rms_m": 4.0800225984378986e-07,
+          "tolerance_m": 1e-06,
+          "passed": false
+        },
+        {
+          "implementation": "kcycle",
+          "repeat": 1,
+          "warmup": false,
+          "heads_sha256": "655634d47fe90c9dd1654ab7090b87bcf780ac90dc8676690a5a482d777e4c80",
+          "max_absolute_m": 1.845756713692026e-06,
+          "rms_m": 4.0800225984378986e-07,
+          "tolerance_m": 1e-06,
+          "passed": false
+        },
+        {
+          "implementation": "kcycle",
+          "repeat": 2,
+          "warmup": false,
+          "heads_sha256": "655634d47fe90c9dd1654ab7090b87bcf780ac90dc8676690a5a482d777e4c80",
+          "max_absolute_m": 1.845756713692026e-06,
+          "rms_m": 4.0800225984378986e-07,
+          "tolerance_m": 1e-06,
+          "passed": false
+        },
+        {
+          "implementation": "kcycle",
+          "repeat": 3,
+          "warmup": false,
+          "heads_sha256": "655634d47fe90c9dd1654ab7090b87bcf780ac90dc8676690a5a482d777e4c80",
+          "max_absolute_m": 1.845756713692026e-06,
+          "rms_m": 4.0800225984378986e-07,
+          "tolerance_m": 1e-06,
+          "passed": false
+        }
+      ],
+      "operator_parity": true,
+      "solution_parity": false
+    },
+    {
+      "case": "npf_convertible_500x500x5_transient_ghb",
+      "shape": [
+        5,
+        500,
+        500
+      ],
+      "reference_fingerprint": "eaeee829e110edce79876fdf6356c54b87dca09882e0e1de93fc5cb9bf329956",
+      "reference_sha256": {
+        "inputs.npz": "503b50e2a9120a0a06efb0f8da33ca6a0b2aa3ffc82c847ab5915a83b1e75027",
+        "reference.npz": "42fdc45835ed693e72ce6697e51c1c72749faa4602ea3883869e16e9d0ab3dee"
+      },
+      "diagnostic_cbc_sha256": "e02f6b8003286f3c7424ff490cfef075c36e2afb6948412531b2ed411c6adfa7",
+      "mf6_settings": {
+        "pname": "ims",
+        "print_option": "SUMMARY",
+        "complexity": "COMPLEX",
+        "linear_acceleration": "BICGSTAB",
+        "outer_maximum": 150,
+        "outer_dvclose": 1e-06,
+        "inner_maximum": 500,
+        "inner_dvclose": 1e-08,
+        "rcloserecord": [
+          1e-06,
+          "RELATIVE_RCLOSE"
+        ],
+        "scaling_method": "DIAGONAL"
+      },
+      "mf6_settings_changed": false,
+      "mode": "transient",
+      "family": "npf",
+      "endpoints": [
+        {
+          "period": 1,
+          "operator_parity": false,
+          "comparisons": {
+            "face_flux": {
+              "passed": false,
+              "entries": 3495000,
+              "failures": 34362,
+              "max_absolute": 7.979226133159045e-07,
+              "rms": 1.3741590053867625e-09,
+              "max_allowance_ratio": 148489.48826118032
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.2026824808563106e-13,
+              "rms": 1.6914238124464047e-15,
+              "max_allowance_ratio": 0.01535875819919178
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.7985612998927536e-13,
+              "rms": 1.8715258008089055e-14,
+              "max_allowance_ratio": 0.04302601406569685
+            },
+            "cell_residual": {
+              "passed": false,
+              "entries": 1247500,
+              "failures": 5508,
+              "max_absolute": 2.8722531624225667e-06,
+              "rms": 3.639592337293578e-09,
+              "max_allowance_ratio": 51392.77664990643
+            }
+          },
+          "native_residual_rms": 1.4206108111914047e-08,
+          "device_residual_at_native_head_rms": 1.3588762716524331e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 1.2483629074910851e-08,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 1.4210854715202004e-14,
+              "rms": 1.4834227247221937e-16,
+              "max_allowance_ratio": 0.05853119439837698
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          },
+          "prescribed_flow_probe": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 1.4210854715202004e-14,
+              "rms": 1.4838137454174141e-16,
+              "max_allowance_ratio": 0.05853119439837698
+            },
+            "settings": {
+              "pname": "ims",
+              "print_option": "SUMMARY",
+              "complexity": "COMPLEX",
+              "linear_acceleration": "BICGSTAB",
+              "outer_maximum": 150,
+              "outer_dvclose": 1e-06,
+              "inner_maximum": 500,
+              "inner_dvclose": 1e-08,
+              "rcloserecord": [
+                1e-06,
+                "RELATIVE_RCLOSE"
+              ],
+              "scaling_method": "DIAGONAL"
+            },
+            "settings_changed": false,
+            "prescribed_heads": "saved MF6 endpoint",
+            "native_saturation_max_error": 0.0,
+            "head_sha256": "c651cd185e0c5a8247f09b592f75b36b8684a804c3e5e9d4d4ecfe046d33b4de",
+            "native_result_sha256": "30ad6a875d10a660096d462f9d12dd67351cc6c92ad303b3babbbd23f3f42ca2",
+            "scope": "Fixed-head NPF face constitutive law only; GHB and STO checked on original free cells"
+          }
+        },
+        {
+          "period": 2,
+          "operator_parity": false,
+          "comparisons": {
+            "face_flux": {
+              "passed": false,
+              "entries": 3495000,
+              "failures": 186551,
+              "max_absolute": 4.2604829886272455e-07,
+              "rms": 6.241716874216438e-10,
+              "max_allowance_ratio": 82417.2052138271
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.2737367544323206e-13,
+              "rms": 1.682949756593547e-15,
+              "max_allowance_ratio": 0.014286887787340982
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.816324868286756e-13,
+              "rms": 1.8746812498684592e-14,
+              "max_allowance_ratio": 0.01687265908597082
+            },
+            "cell_residual": {
+              "passed": false,
+              "entries": 1247500,
+              "failures": 7761,
+              "max_absolute": 7.805091275514542e-07,
+              "rms": 1.43432743170857e-09,
+              "max_allowance_ratio": 15987.871664303382
+            }
+          },
+          "native_residual_rms": 1.112254180867596e-08,
+          "device_residual_at_native_head_rms": 1.102646148895662e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 2.5914142054439537e-08,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 1.4210854715202004e-14,
+              "rms": 1.3923458758232183e-16,
+              "max_allowance_ratio": 0.06326359147090309
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 3,
+          "operator_parity": false,
+          "comparisons": {
+            "face_flux": {
+              "passed": false,
+              "entries": 3495000,
+              "failures": 269849,
+              "max_absolute": 1.5339250936108328e-07,
+              "rms": 4.321626330332476e-10,
+              "max_allowance_ratio": 33618.68444464291
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.2382096176443156e-13,
+              "rms": 1.6897654541374728e-15,
+              "max_allowance_ratio": 0.015151281818261355
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.8185453143360064e-13,
+              "rms": 1.8821078404040808e-14,
+              "max_allowance_ratio": 0.01647073735643936
+            },
+            "cell_residual": {
+              "passed": false,
+              "entries": 1247500,
+              "failures": 12863,
+              "max_absolute": 3.058086204266175e-07,
+              "rms": 7.337962413057718e-10,
+              "max_allowance_ratio": 6541.887825392541
+            }
+          },
+          "native_residual_rms": 8.43640685756575e-09,
+          "device_residual_at_native_head_rms": 8.403835410134024e-09,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 3.88948316054627e-08,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 1.4210854715202004e-14,
+              "rms": 1.3353529556018041e-16,
+              "max_allowance_ratio": 0.05662157561685556
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 4,
+          "operator_parity": false,
+          "comparisons": {
+            "face_flux": {
+              "passed": false,
+              "entries": 3495000,
+              "failures": 264737,
+              "max_absolute": 2.4246207708245038e-08,
+              "rms": 1.1385251097051398e-10,
+              "max_allowance_ratio": 5696.985050080679
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.0961010704922955e-13,
+              "rms": 1.6097735366865419e-15,
+              "max_allowance_ratio": 0.014344315666868963
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.7985612998927536e-13,
+              "rms": 1.88352155938904e-14,
+              "max_allowance_ratio": 0.01600695885432146
+            },
+            "cell_residual": {
+              "passed": false,
+              "entries": 1247500,
+              "failures": 10693,
+              "max_absolute": 5.10997040237271e-08,
+              "rms": 1.6295615280360723e-10,
+              "max_allowance_ratio": 878.9530567699504
+            }
+          },
+          "native_residual_rms": 1.6016724992408843e-08,
+          "device_residual_at_native_head_rms": 1.6013595914762102e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 1.1454007381450637e-08,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 1.0658141036401503e-14,
+              "rms": 1.3118771744792385e-16,
+              "max_allowance_ratio": 0.062028925277881015
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 5,
+          "operator_parity": false,
+          "comparisons": {
+            "face_flux": {
+              "passed": false,
+              "entries": 3495000,
+              "failures": 377804,
+              "max_absolute": 6.372542538102266e-08,
+              "rms": 3.861571539276087e-10,
+              "max_allowance_ratio": 11899.228293742408
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.2026824808563106e-13,
+              "rms": 1.6638981948672073e-15,
+              "max_allowance_ratio": 0.015118513382326174
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.787459069646502e-13,
+              "rms": 1.8933524504284175e-14,
+              "max_allowance_ratio": 0.015754191377074803
+            },
+            "cell_residual": {
+              "passed": false,
+              "entries": 1247500,
+              "failures": 29745,
+              "max_absolute": 7.008038505063041e-08,
+              "rms": 6.125980058410416e-10,
+              "max_allowance_ratio": 1290.0317453316072
+            }
+          },
+          "native_residual_rms": 4.625510058205177e-09,
+          "device_residual_at_native_head_rms": 4.585363633880348e-09,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 1.947423949877347e-08,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 7.105427357601002e-15,
+              "rms": 1.3117522657532916e-16,
+              "max_allowance_ratio": 0.060953530288080475
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 6,
+          "operator_parity": false,
+          "comparisons": {
+            "face_flux": {
+              "passed": false,
+              "entries": 3495000,
+              "failures": 435928,
+              "max_absolute": 5.315541873329721e-08,
+              "rms": 4.135743097719178e-10,
+              "max_allowance_ratio": 10277.577208187991
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.9895196601282805e-13,
+              "rms": 1.6651069108581893e-15,
+              "max_allowance_ratio": 0.015215546040770512
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.8141044222375058e-13,
+              "rms": 1.8949611188157975e-14,
+              "max_allowance_ratio": 0.01624791876416808
+            },
+            "cell_residual": {
+              "passed": false,
+              "entries": 1247500,
+              "failures": 58963,
+              "max_absolute": 5.3155083890032984e-08,
+              "rms": 6.956341277089988e-10,
+              "max_allowance_ratio": 1048.9307468922414
+            }
+          },
+          "native_residual_rms": 6.292670775261421e-09,
+          "device_residual_at_native_head_rms": 6.258229915714064e-09,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 1.1571062330517634e-08,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 1.0658141036401503e-14,
+              "rms": 1.3333267408056223e-16,
+              "max_allowance_ratio": 0.056091565165092915
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 7,
+          "operator_parity": false,
+          "comparisons": {
+            "face_flux": {
+              "passed": false,
+              "entries": 3495000,
+              "failures": 441530,
+              "max_absolute": 1.4161601669115953e-08,
+              "rms": 2.0711365284785647e-10,
+              "max_allowance_ratio": 4587.047032615934
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.2382096176443156e-13,
+              "rms": 1.6912326755691574e-15,
+              "max_allowance_ratio": 0.015382429281504243
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.8118839761882555e-13,
+              "rms": 1.905327521897576e-14,
+              "max_allowance_ratio": 0.016485854224516296
+            },
+            "cell_residual": {
+              "passed": false,
+              "entries": 1247500,
+              "failures": 40904,
+              "max_absolute": 1.625562129348168e-08,
+              "rms": 2.1591820156659786e-10,
+              "max_allowance_ratio": 356.60344747220574
+            }
+          },
+          "native_residual_rms": 5.811206913671322e-09,
+          "device_residual_at_native_head_rms": 5.808313346144386e-09,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 9.355611341188563e-09,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 7.105427357601002e-15,
+              "rms": 1.3617737015052468e-16,
+              "max_allowance_ratio": 0.06208613180937047
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 8,
+          "operator_parity": false,
+          "comparisons": {
+            "face_flux": {
+              "passed": false,
+              "entries": 3495000,
+              "failures": 419286,
+              "max_absolute": 9.85173187473265e-09,
+              "rms": 1.125443722320623e-10,
+              "max_allowance_ratio": 2554.9057118529786
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.2026824808563106e-13,
+              "rms": 1.6735168935553213e-15,
+              "max_allowance_ratio": 0.01485606562893059
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.8185453143360064e-13,
+              "rms": 1.9100511288261846e-14,
+              "max_allowance_ratio": 0.016027658531237287
+            },
+            "cell_residual": {
+              "passed": false,
+              "entries": 1247500,
+              "failures": 36743,
+              "max_absolute": 3.5466584336063534e-08,
+              "rms": 1.1177402697987756e-10,
+              "max_allowance_ratio": 598.0237752016243
+            }
+          },
+          "native_residual_rms": 5.1223103066628e-08,
+          "device_residual_at_native_head_rms": 5.122211184771758e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 7.859602912940744e-09,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 1.0658141036401503e-14,
+              "rms": 1.3964308882146286e-16,
+              "max_allowance_ratio": 0.057264082028852484
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 9,
+          "operator_parity": false,
+          "comparisons": {
+            "face_flux": {
+              "passed": false,
+              "entries": 3495000,
+              "failures": 429313,
+              "max_absolute": 4.512077378393542e-09,
+              "rms": 9.500922600897422e-11,
+              "max_allowance_ratio": 2100.6164381576527
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.1316282072803006e-13,
+              "rms": 1.6979517568046528e-15,
+              "max_allowance_ratio": 0.014750795000042472
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.816324868286756e-13,
+              "rms": 1.9123953581124303e-14,
+              "max_allowance_ratio": 0.015520089815108513
+            },
+            "cell_residual": {
+              "passed": false,
+              "entries": 1247500,
+              "failures": 35789,
+              "max_absolute": 1.1525969512149459e-08,
+              "rms": 6.55568550707956e-11,
+              "max_allowance_ratio": 193.47809645340075
+            }
+          },
+          "native_residual_rms": 5.325723571557307e-08,
+          "device_residual_at_native_head_rms": 5.325655870209152e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 7.104193067153375e-09,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 7.105427357601002e-15,
+              "rms": 1.4286691401342482e-16,
+              "max_allowance_ratio": 0.06182376878477153
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 10,
+          "operator_parity": false,
+          "comparisons": {
+            "face_flux": {
+              "passed": false,
+              "entries": 3495000,
+              "failures": 431268,
+              "max_absolute": 3.1184446136478527e-09,
+              "rms": 8.237904367598602e-11,
+              "max_allowance_ratio": 1704.9177141873097
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.2382096176443156e-13,
+              "rms": 1.746370188358617e-15,
+              "max_allowance_ratio": 0.015059119746990942
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.816324868286756e-13,
+              "rms": 1.9176754703056278e-14,
+              "max_allowance_ratio": 0.015697030802402746
+            },
+            "cell_residual": {
+              "passed": false,
+              "entries": 1247500,
+              "failures": 32465,
+              "max_absolute": 3.5981315704702865e-09,
+              "rms": 3.7583982235499095e-11,
+              "max_allowance_ratio": 64.23166307379353
+            }
+          },
+          "native_residual_rms": 5.0696082305423066e-08,
+          "device_residual_at_native_head_rms": 5.069571079226523e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 5.80232090152677e-09,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 7.105427357601002e-15,
+              "rms": 1.4578689270908814e-16,
+              "max_allowance_ratio": 0.061275755380899764
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 11,
+          "operator_parity": false,
+          "comparisons": {
+            "face_flux": {
+              "passed": false,
+              "entries": 3495000,
+              "failures": 193927,
+              "max_absolute": 1.017794401536598e-08,
+              "rms": 5.2542697948229454e-11,
+              "max_allowance_ratio": 2092.6945874850167
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.2382096176443156e-13,
+              "rms": 1.6524673951645628e-15,
+              "max_allowance_ratio": 0.0154409307498957
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.8129941992128806e-13,
+              "rms": 1.9245919043537713e-14,
+              "max_allowance_ratio": 0.015911335255827788
+            },
+            "cell_residual": {
+              "passed": false,
+              "entries": 1247500,
+              "failures": 14085,
+              "max_absolute": 1.7499316662394904e-08,
+              "rms": 9.891347779005523e-11,
+              "max_allowance_ratio": 353.7270943544748
+            }
+          },
+          "native_residual_rms": 1.566028662771638e-08,
+          "device_residual_at_native_head_rms": 1.5659085301160406e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 1.5060980240733102e-08,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 7.105427357601002e-15,
+              "rms": 1.4407850003218687e-16,
+              "max_allowance_ratio": 0.06138084955956865
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 12,
+          "operator_parity": false,
+          "comparisons": {
+            "face_flux": {
+              "passed": false,
+              "entries": 3495000,
+              "failures": 343499,
+              "max_absolute": 4.3402595295560786e-07,
+              "rms": 4.15653420688132e-09,
+              "max_allowance_ratio": 163261.12141460588
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.2737367544323206e-13,
+              "rms": 1.6652562332873442e-15,
+              "max_allowance_ratio": 0.014995038397908469
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.7799650642302822e-13,
+              "rms": 1.9228700622666423e-14,
+              "max_allowance_ratio": 0.015364019727811176
+            },
+            "cell_residual": {
+              "passed": false,
+              "entries": 1247500,
+              "failures": 48801,
+              "max_absolute": 1.55787365940796e-06,
+              "rms": 3.4007297914540733e-09,
+              "max_allowance_ratio": 26009.229999499355
+            }
+          },
+          "native_residual_rms": 1.1741276794916821e-08,
+          "device_residual_at_native_head_rms": 1.1203378163791802e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 3.3568114121695913e-08,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 7.105427357601002e-15,
+              "rms": 1.4224205203365787e-16,
+              "max_allowance_ratio": 0.06473694300861826
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 13,
+          "operator_parity": false,
+          "comparisons": {
+            "face_flux": {
+              "passed": false,
+              "entries": 3495000,
+              "failures": 339732,
+              "max_absolute": 4.508575308648233e-07,
+              "rms": 2.3985617615271748e-09,
+              "max_allowance_ratio": 82633.78926590183
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.2026824808563106e-13,
+              "rms": 1.6554345349377955e-15,
+              "max_allowance_ratio": 0.015351831508142044
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.8435253323900724e-13,
+              "rms": 1.9232126133875974e-14,
+              "max_allowance_ratio": 0.015460959912883498
+            },
+            "cell_residual": {
+              "passed": false,
+              "entries": 1247500,
+              "failures": 48251,
+              "max_absolute": 1.6178840951397433e-06,
+              "rms": 2.7137219763407616e-09,
+              "max_allowance_ratio": 26988.68987396166
+            }
+          },
+          "native_residual_rms": 1.4380056525762626e-08,
+          "device_residual_at_native_head_rms": 1.4074835928087053e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 2.6528847674178735e-08,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 7.105427357601002e-15,
+              "rms": 1.4064799954999717e-16,
+              "max_allowance_ratio": 0.054903173050072064
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 14,
+          "operator_parity": false,
+          "comparisons": {
+            "face_flux": {
+              "passed": false,
+              "entries": 3495000,
+              "failures": 340814,
+              "max_absolute": 4.472507519892588e-07,
+              "rms": 1.6556774120820329e-09,
+              "max_allowance_ratio": 72774.1464844462
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.255973186038318e-13,
+              "rms": 1.6383651236352495e-15,
+              "max_allowance_ratio": 0.015349114121000157
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.841304886340822e-13,
+              "rms": 1.9250314004438996e-14,
+              "max_allowance_ratio": 0.015418762910859685
+            },
+            "cell_residual": {
+              "passed": false,
+              "entries": 1247500,
+              "failures": 47091,
+              "max_absolute": 1.6045431863176418e-06,
+              "rms": 2.1533229909034777e-09,
+              "max_allowance_ratio": 26743.616524773344
+            }
+          },
+          "native_residual_rms": 1.190866870273658e-08,
+          "device_residual_at_native_head_rms": 1.16918498038975e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 2.2435096169726165e-08,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 7.105427357601002e-15,
+              "rms": 1.3900502812587413e-16,
+              "max_allowance_ratio": 0.05696753287468704
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 15,
+          "operator_parity": false,
+          "comparisons": {
+            "face_flux": {
+              "passed": false,
+              "entries": 3495000,
+              "failures": 343071,
+              "max_absolute": 4.3430173235492475e-07,
+              "rms": 1.2124602908204745e-09,
+              "max_allowance_ratio": 70546.15785046715
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.9895196601282805e-13,
+              "rms": 1.6085829249545317e-15,
+              "max_allowance_ratio": 0.014356430728896157
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.8096635301390052e-13,
+              "rms": 1.9293403810592835e-14,
+              "max_allowance_ratio": 0.015392602735843142
+            },
+            "cell_residual": {
+              "passed": false,
+              "entries": 1247500,
+              "failures": 45263,
+              "max_absolute": 1.5577002301370158e-06,
+              "rms": 1.7985948143237527e-09,
+              "max_allowance_ratio": 25941.153868556346
+            }
+          },
+          "native_residual_rms": 1.0176508792903589e-08,
+          "device_residual_at_native_head_rms": 1.0011721629726073e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 1.9790920069429063e-08,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 7.105427357601002e-15,
+              "rms": 1.3794579477723785e-16,
+              "max_allowance_ratio": 0.05853871111939848
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 16,
+          "operator_parity": false,
+          "comparisons": {
+            "face_flux": {
+              "passed": false,
+              "entries": 3495000,
+              "failures": 390000,
+              "max_absolute": 5.781733980469994e-08,
+              "rms": 5.093493422144422e-10,
+              "max_allowance_ratio": 84528.95537649785
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.220446049250313e-13,
+              "rms": 1.6789117580875692e-15,
+              "max_allowance_ratio": 0.015010049413509021
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.8174350913113813e-13,
+              "rms": 1.9335289687643398e-14,
+              "max_allowance_ratio": 0.015534130788337494
+            },
+            "cell_residual": {
+              "passed": false,
+              "entries": 1247500,
+              "failures": 31643,
+              "max_absolute": 5.780852330161679e-08,
+              "rms": 7.258312760073727e-10,
+              "max_allowance_ratio": 1137.47167904751
+            }
+          },
+          "native_residual_rms": 3.435045498777353e-08,
+          "device_residual_at_native_head_rms": 3.432561803151037e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 4.798412195361479e-09,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 7.105427357601002e-15,
+              "rms": 1.401272341115496e-16,
+              "max_allowance_ratio": 0.060806643762615804
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 17,
+          "operator_parity": false,
+          "comparisons": {
+            "face_flux": {
+              "passed": false,
+              "entries": 3495000,
+              "failures": 380677,
+              "max_absolute": 1.1115625309088273e-08,
+              "rms": 1.1500837035348859e-10,
+              "max_allowance_ratio": 7003.466810972391
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.9895196601282805e-13,
+              "rms": 1.658093855470255e-15,
+              "max_allowance_ratio": 0.014399072027323209
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.7974510768681284e-13,
+              "rms": 1.9353017600898283e-14,
+              "max_allowance_ratio": 0.01546394802905313
+            },
+            "cell_residual": {
+              "passed": false,
+              "entries": 1247500,
+              "failures": 20653,
+              "max_absolute": 8.862802047815421e-09,
+              "rms": 1.1055267075927726e-10,
+              "max_allowance_ratio": 184.8878866249501
+            }
+          },
+          "native_residual_rms": 2.2224464371993544e-08,
+          "device_residual_at_native_head_rms": 2.2223774748109463e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 2.9189369810112e-09,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 7.105427357601002e-15,
+              "rms": 1.4257042467039458e-16,
+              "max_allowance_ratio": 0.07126371975221046
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 18,
+          "operator_parity": false,
+          "comparisons": {
+            "face_flux": {
+              "passed": false,
+              "entries": 3495000,
+              "failures": 382348,
+              "max_absolute": 2.893081330057612e-09,
+              "rms": 4.004636935343344e-11,
+              "max_allowance_ratio": 1511.002540963216
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.2382096176443156e-13,
+              "rms": 1.6392291271271106e-15,
+              "max_allowance_ratio": 0.014976419095594598
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.7985612998927536e-13,
+              "rms": 1.934102111030185e-14,
+              "max_allowance_ratio": 0.015615196622027983
+            },
+            "cell_residual": {
+              "passed": false,
+              "entries": 1247500,
+              "failures": 17547,
+              "max_absolute": 7.488651476705854e-09,
+              "rms": 3.116453687392748e-11,
+              "max_allowance_ratio": 123.64189239433466
+            }
+          },
+          "native_residual_rms": 1.983506455402342e-08,
+          "device_residual_at_native_head_rms": 1.9834990245285477e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 2.8382745043131763e-09,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 7.105427357601002e-15,
+              "rms": 1.4521636744302165e-16,
+              "max_allowance_ratio": 0.06050555160004301
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 19,
+          "operator_parity": false,
+          "comparisons": {
+            "face_flux": {
+              "passed": false,
+              "entries": 3495000,
+              "failures": 381204,
+              "max_absolute": 2.2197248483735166e-09,
+              "rms": 2.879161036368074e-11,
+              "max_allowance_ratio": 635.8202216202712
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.2382096176443156e-13,
+              "rms": 1.6767383089890809e-15,
+              "max_allowance_ratio": 0.01509916971769627
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.8074430840897548e-13,
+              "rms": 1.9363573122908937e-14,
+              "max_allowance_ratio": 0.015437995540215757
+            },
+            "cell_residual": {
+              "passed": false,
+              "entries": 1247500,
+              "failures": 12975,
+              "max_absolute": 7.932484891171043e-09,
+              "rms": 1.454757414647866e-11,
+              "max_allowance_ratio": 130.6252449401277
+            }
+          },
+          "native_residual_rms": 1.9801426895865376e-08,
+          "device_residual_at_native_head_rms": 1.9801377555058296e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 2.4252954644587987e-09,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 7.105427357601002e-15,
+              "rms": 1.4782400050988185e-16,
+              "max_allowance_ratio": 0.0624177138655737
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          }
+        },
+        {
+          "period": 20,
+          "operator_parity": false,
+          "comparisons": {
+            "face_flux": {
+              "passed": false,
+              "entries": 3495000,
+              "failures": 380407,
+              "max_absolute": 2.2203359151262703e-09,
+              "rms": 2.795013109448385e-11,
+              "max_allowance_ratio": 392.56281845231587
+            },
+            "ghb_inflow": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 2.2026824808563106e-13,
+              "rms": 1.7319579388607356e-15,
+              "max_allowance_ratio": 0.01504378354508237
+            },
+            "storage_rate": {
+              "passed": true,
+              "entries": 1250000,
+              "failures": 0,
+              "max_absolute": 1.8207657603852567e-13,
+              "rms": 1.9422614559414694e-14,
+              "max_allowance_ratio": 0.015410906363759332
+            },
+            "cell_residual": {
+              "passed": false,
+              "entries": 1247500,
+              "failures": 9046,
+              "max_absolute": 7.926061584839772e-09,
+              "rms": 1.0900994030644243e-11,
+              "max_allowance_ratio": 130.18213503709413
+            }
+          },
+          "native_residual_rms": 2.0151832917932547e-08,
+          "device_residual_at_native_head_rms": 2.015178422711253e-08,
+          "reported_saturation_diagnostic": {
+            "max_saturation_difference": 2.3726457465400586e-09,
+            "reconstructed_face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 7.105427357601002e-15,
+              "rms": 1.504087265957624e-16,
+              "max_allowance_ratio": 0.06340190213061563
+            },
+            "note": "Host reconstruction with production C0 and MF6 DATA-SAT; does not replace the production final-head operator check."
+          },
+          "prescribed_flow_probe": {
+            "face_flux": {
+              "passed": true,
+              "entries": 3495000,
+              "failures": 0,
+              "max_absolute": 7.105427357601002e-15,
+              "rms": 1.5047006863041733e-16,
+              "max_allowance_ratio": 0.06340190213061563
+            },
+            "settings": {
+              "pname": "ims",
+              "print_option": "SUMMARY",
+              "complexity": "COMPLEX",
+              "linear_acceleration": "BICGSTAB",
+              "outer_maximum": 150,
+              "outer_dvclose": 1e-06,
+              "inner_maximum": 500,
+              "inner_dvclose": 1e-08,
+              "rcloserecord": [
+                1e-06,
+                "RELATIVE_RCLOSE"
+              ],
+              "scaling_method": "DIAGONAL"
+            },
+            "settings_changed": false,
+            "prescribed_heads": "saved MF6 endpoint",
+            "native_saturation_max_error": 0.0,
+            "head_sha256": "22417046de53fc9ba94bbc5e2a8e9ef4b754b99080078ea3641aeb38394ae6e4",
+            "native_result_sha256": "390e5612ab35feb72185a79de8ba1e2022dab8ac2824809e1fa7897a530c3abb",
+            "scope": "Fixed-head NPF face constitutive law only; GHB and STO checked on original free cells"
+          }
+        }
+      ],
+      "solution_comparisons": [
+        {
+          "implementation": "kcycle",
+          "repeat": 0,
+          "warmup": true,
+          "heads_sha256": "ec1eda07479bf510d8787a8afa4dd0eb0b601b846b9b0c605d5ba0f0830ce112",
+          "max_absolute_m": 5.338000108601193e-08,
+          "rms_m": 1.3235407377486425e-08,
+          "tolerance_m": 1e-06,
+          "passed": true
+        },
+        {
+          "implementation": "kcycle",
+          "repeat": 1,
+          "warmup": false,
+          "heads_sha256": "ec1eda07479bf510d8787a8afa4dd0eb0b601b846b9b0c605d5ba0f0830ce112",
+          "max_absolute_m": 5.338000108601193e-08,
+          "rms_m": 1.3235407377486425e-08,
+          "tolerance_m": 1e-06,
+          "passed": true
+        },
+        {
+          "implementation": "kcycle",
+          "repeat": 2,
+          "warmup": false,
+          "heads_sha256": "ec1eda07479bf510d8787a8afa4dd0eb0b601b846b9b0c605d5ba0f0830ce112",
+          "max_absolute_m": 5.338000108601193e-08,
+          "rms_m": 1.3235407377486425e-08,
+          "tolerance_m": 1e-06,
+          "passed": true
+        },
+        {
+          "implementation": "kcycle",
+          "repeat": 3,
+          "warmup": false,
+          "heads_sha256": "ec1eda07479bf510d8787a8afa4dd0eb0b601b846b9b0c605d5ba0f0830ce112",
+          "max_absolute_m": 5.338000108601193e-08,
+          "rms_m": 1.3235407377486425e-08,
+          "tolerance_m": 1e-06,
+          "passed": true
+        }
+      ],
+      "operator_parity": false,
+      "solution_parity": true
+    }
+  ],
+  "audit_source_sha256": {
+    "working_tests/verify_3d_ghb_mf6_parity.py": "c1aefc5247fa13938328f5363351e54ce217eeb625413429b8a4f318d6639f1f",
+    "DARCY_WARP_PACKAGE/validation/ghb_mf6_parity.py": "e18495a5cc80101b6ef941a5036b02319b864f35a864034e3804991d85a22c98"
+  },
+  "solver_source_sha256": {
+    "DARCY_WARP_PACKAGE/physics/budget_3d.py": "fb152b74436b7bc4325089e470f48ce17f7409814c951eaa560ad349804128a8",
+    "DARCY_WARP_PACKAGE/physics/ghb_3d.py": "f1d4e97cc11d4f1056dab7ce049e8825c6fc036c74aa8721cac145f2e247bb7c",
+    "DARCY_WARP_PACKAGE/solvers/face_kernels_3d_f64.py": "492a4e7256452c9328ef418df624d3e7ab1400f6f709d73bdf0b65acb7b13395",
+    "DARCY_WARP_PACKAGE/solvers/fast_3d.py": "3945f4d14ada203ab28760d473dc9b68627b4081dd59c8a82d145a3cf0ac7431",
+    "DARCY_WARP_PACKAGE/solvers/linear_fgmres_3d.py": "aac4d8b61c963ee88d4c6e8781ad634fcbce8cd2b1295e87e219b43743ff4070",
+    "DARCY_WARP_PACKAGE/solvers/npf662_3d.py": "b9c1f45ebbd423eee2ea9e4e1062fea7e699fd0be70302fe735f8d8a353e57ef",
+    "DARCY_WARP_PACKAGE/solvers/npf662_fgmres.py": "d4e734310b327486080de3cc777ad55ee1bb5f25218cbc22d9938a1c713545f9",
+    "DARCY_WARP_PACKAGE/solvers/npf662_history.py": "409b04d47ce67b82244d20f6df0c6932358190a1951165b6026f8cf5c1d364ce",
+    "DARCY_WARP_PACKAGE/solvers/npf662_kcycle.py": "94a65bb6479132f9f147431e2f25d3ff54691c0a734d235afad86c6b84f556ad",
+    "DARCY_WARP_PACKAGE/solvers/npf662_kernels.py": "804846c861e205a3777248125267c84b6542b0834dbcd6d981e335531514679c",
+    "DARCY_WARP_PACKAGE/solvers/npf662_line.py": "c9211f73afe55dee0516dd234e9da6249787025c601cedbb0c7cd360a6abc1a1",
+    "DARCY_WARP_PACKAGE/solvers/npf662_mixed_kernels.py": "f2f431c534053f7b77df044d50d9854bd66d1f58efddb9f374faf351fadcdb87",
+    "DARCY_WARP_PACKAGE/solvers/npf662_newton.py": "2104adc6ceb8c0d61132ce273f1bc78f2a2ab12a1a15dba29d9376f1d120400a",
+    "DARCY_WARP_PACKAGE/solvers/npf662_state.py": "308400a782061f04aed76a04e20a1fe6f0c05ed09adeed7ae05e68c0e3367c37",
+    "DARCY_WARP_PACKAGE/solvers/session_3d.py": "2885c04673828de61d278b7d1012d87d88d5c7ff6c8807e7fb9bb77ef30bc0d8",
+    "DARCY_WARP_PACKAGE/solvers_3d.py": "a18b811758a32c0276d02a81fb839a63c2c588052376074a0fae00e8d869127c",
+    "DARCY_WARP_PACKAGE/validation/npf662_benchmark_cases.py": "9f1ac4dbd51a2575343622eebaee8a502676bbd9dcceda77ebdbb7be43dea99f",
+    "DARCY_WARP_PACKAGE/validation/npf662_matrix_free.py": "f55030181b907c4f1ffb5216f23204daea7476e7d19bc741b0cb513c359a349c",
+    "DARCY_WARP_PACKAGE/validation/npf662_metrics.py": "7a75a405ffc7c853eba2d9acbe8898da7b73443c608c4db0c925625eba8874b8",
+    "DARCY_WARP_PACKAGE/validation/npf662_mf6.py": "c44856ab49079101eec133a63f99d2cc9e7327f96db89ad794e267712e1edc80",
+    "DARCY_WARP_PACKAGE/validation/npf662_reference.py": "f10af073c7e3ca951e3589e356989108d065019bda41cb52b5259fa846f27b38",
+    "DARCY_WARP_PACKAGE/validation/npf662_transient_mf6.py": "78b97446ea1af4f40c76dc84c37af2de9e134f88d2af7ad2df2509166977c5c2",
+    "DARCY_WARP_PACKAGE/validation/npf662_transient_reference.py": "3d42899a9fbace7bc6bd17cf2ee5a8eb581b8f5684299927a6457d0a450ed77f",
+    "DARCY_WARP_PACKAGE/warped_darcy_3d.py": "004629f0cf5e83bd6490d3d1a0836a9861e001b78c24980a7f4f53c436d2e6f8",
+    "working_tests/run_3d_sanity.py": "ce88c295fda895977657e22f0f02ca5c1e7fb89943d6e2543a480d245d16f08c",
+    "working_tests/sanity_3d_controls.py": "7616804b087ffe9cf4bc3737cfa635d35e3921257857b210bdcc0e02004aa7f0"
+  },
+  "device_name": "NVIDIA GeForce RTX 4070 Ti SUPER",
+  "operator_parity": false,
+  "solution_parity": false,
+  "passed": false
+}
