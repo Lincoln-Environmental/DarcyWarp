@@ -1,6 +1,18 @@
 kimi --model kimi-code/k3
 # DarcyWarp — Agent System Memory
 
+> 2026-11-13 main promotion: qualification and tools pushed on main at
+> f8e7683, then the final report copied back to dev. Fresh main checks at
+> numerical snapshot 9631ce8: 52 tests, 36/36 small GPU/MF6 cases, and 6/6
+> large Kh/Kv=100 GHB-on comparisons (five original saved references plus
+> one fresh separately labelled MF6 strategy diagnostic). The full 36-case
+> large sweep remains the dev campaign, not a full main rerun. Main 20-step
+> medians: Cartesian 8.522 s vs MF6 381.407 s; NPF confined 2.225 vs 313.862;
+> NPF convertible 2.442 vs 191.525, max head error 2.153e-7 m. Original
+> convergence tolerances unchanged. Evidence: ugly_t_3d/main_qualification.json;
+> reproduction and complete tables: docs/3D_UGLY_T_ANISOTROPY.rst. Native 3D
+> DRN/RIV, conservative transport, UZF and SFR remain planned, not shipped.
+
 > 2026-11-13 ugly-T qualification: run_3d_ugly_t_matrix.py lifts the exact 2D
 > make_ugly_T_field/100 map into five layers, with Kh/Kv=1/10/100 and GHB
 > off/on. Cartesian confined and NPF confined/convertible cover steady and

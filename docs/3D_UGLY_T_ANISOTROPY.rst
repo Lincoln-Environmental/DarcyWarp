@@ -599,3 +599,74 @@ The final affected regression selection passes 52 tests on ``dev``, including
 live MF6 adapter checks, unchanged-tolerance guards, corrupt-history rejection,
 confined-only diagnostic selection and all three native failure causes.
 The strict Sphinx documentation build passes.
+
+Main promotion verification
+---------------------------
+
+Fresh checks on ``main`` at ``9631ce8`` pass all 52 affected tests
+and all 36 small-grid GPU/MF6 cases (100 x 100 x 5, three transient
+steps, one timed repeat). The strict Sphinx build passes.
+
+The main large-model rerun covers six cases at 500 x 500 x 5, Kh/Kv=100
+and GHB on: Cartesian confined and NPF confined/convertible, each steady
+and transient. Transients use twenty weekly steps; each case has one
+warmup and three timed GPU repetitions. All six pass independent physical
+checks. Five use their saved original MF6 references. Convertible steady
+uses a fresh, separately labelled original-order ILUT strategy diagnostic
+with unchanged convergence tolerances; the failed original reference is
+preserved. This six-case rerun is distinct from the full 36-case large
+campaign on dev reported above.
+
+.. list-table:: Fresh main large-model timings, Kh/Kv=100 and GHB on
+   :header-rows: 1
+
+   * - Formulation / mode
+     - GPU (s)
+     - MF6 (s)
+     - MF6/GPU
+     - Maximum head difference (m)
+     - Reference
+   * - cartesian confined / steady
+     - 0.679
+     - 14.069
+     - 20.7
+     - 3.721e-05
+     - Saved original
+   * - cartesian confined / transient
+     - 8.522
+     - 381.407
+     - 44.8
+     - 1.589e-06
+     - Saved original
+   * - npf confined / steady
+     - 1.238
+     - 14.607
+     - 11.8
+     - 1.229e-05
+     - Saved original
+   * - npf confined / transient
+     - 2.225
+     - 313.862
+     - 141.1
+     - 1.574e-06
+     - Saved original
+   * - npf convertible / steady
+     - 1.262
+     - 57.336
+     - 45.4
+     - 6.337e-07
+     - Separate diagnostic
+   * - npf convertible / transient
+     - 2.442
+     - 191.525
+     - 78.4
+     - 2.153e-07
+     - Saved original
+
+* :download:`Main qualification evidence <../benchmark_results/ugly_t_3d/main_qualification.json>`
+
+Reproduce the main rerun with the matrix commands above, using
+``--vertical-anisotropy 100 --ghb-modes on`` for the large selection and
+a separate output directory. Run ``diagnose_3d_mf6_references.py`` against
+that large matrix with ``--expected-cases 6 --timeout 600`` to reproduce
+the separate native diagnostic.
