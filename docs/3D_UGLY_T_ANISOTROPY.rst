@@ -37,6 +37,31 @@ from the existing sanity/conservation gates. A miss is not relabelled as
 meeting the preferred target. Native failures, solver failures and missing
 timed repetitions suppress speedups and remain in the results.
 
+``sanity_3d_controls.read_profiles`` reads these MF6 controls directly from
+the 2D source functions. All three profiles use ``DIAGONAL`` scaling and
+``RELATIVE_RCLOSE=1e-6``; other IMS choices retain the selected complexity
+profile's defaults.
+
+.. list-table:: Original MF6 controls retained by this matrix
+   :header-rows: 1
+
+   * - Cases
+     - Complexity / linear solver
+     - Outer limit / head change (m)
+     - Inner limit / head change (m)
+   * - Confined steady
+     - SIMPLE / CG
+     - 10 / 1e-4
+     - 2000 / 1e-4
+   * - Convertible steady
+     - COMPLEX / BICGSTAB
+     - 500 / 1e-6
+     - 500 / 1e-8
+   * - All transient
+     - COMPLEX / BICGSTAB
+     - 150 / 1e-6
+     - 500 / 1e-8
+
 The inherited broad comparison limits are ``1e-3 m`` head RMSE and
 ``1e-2 m`` maximum head difference. Native references must also pass their
 existing ``1%`` cellwise conservation check; GPU solves must satisfy their
@@ -58,6 +83,7 @@ convertible transients. The public NPF history API is timed for transients.
 Public solve timings include internal setup and acceptance, and exclude
 external model construction and duplicate test audits. MF6 timings cover
 its native process, excluding input generation and external decoding/audits.
+That process includes MF6's own assembly and output writing.
 
 Runs are serial to avoid CPU/GPU contention. The large campaign measures
 three repetitions after one warmup. The 100 x 100 x 5 smoke campaign uses
@@ -68,7 +94,7 @@ The benchmark host has an Intel Core Ultra 9 285K and an NVIDIA GeForce
 RTX 4070 Ti SUPER with 16 GB of device memory. Runs use FP64 heads and
 physical residuals, Warp 1.17.0 and the pinned historical MF6 6.6.2 build.
 ``OMP_NUM_THREADS``, ``OPENBLAS_NUM_THREADS`` and ``MKL_NUM_THREADS`` are
-set to one; CPU affinity is not pinned. The reported speedups apply to
+set to one; the drivers do not set CPU affinity. The reported speedups apply to
 this hardware and the recorded solver profiles. The separate MF6 strategy
 diagnostics below retain the baseline convergence tolerances.
 
@@ -89,7 +115,7 @@ passes 29 tests.
 Large-model results in progress
 -------------------------------
 
-25 of 36 planned large cases have completed. 25 pass the independent GPU physical checks; 21 pass the full MF6 comparison gates. 6 meet the preferred ``1e-6 m`` maximum head-difference target.
+29 of 36 planned large cases have completed. 29 pass the independent GPU physical checks; 25 pass the full MF6 comparison gates. 6 meet the preferred ``1e-6 m`` maximum head-difference target.
 
 The tables contain three-repeat GPU medians and single native MF6 process times. Build and extra test audits are excluded as described above. Unavailable references have no speedup or head-parity claim.
 
@@ -240,6 +266,20 @@ The tables contain three-repeat GPU medians and single native MF6 process times.
      - 464.305
      - 199.1
      - 5.081e-06
+   * - 10
+     - On
+     - Steady
+     - 1.230
+     - 14.842
+     - 12.1
+     - 2.128e-05
+   * - 10
+     - On
+     - Transient
+     - 1.997
+     - 440.574
+     - 220.6
+     - 2.010e-06
 
 .. list-table:: Confined Cartesian: 500 x 500 x 5, twenty steps for transients
    :header-rows: 1
@@ -300,6 +340,20 @@ The tables contain three-repeat GPU medians and single native MF6 process times.
      - 15.765
      - 24.8
      - 3.550e-05
+   * - 10
+     - On
+     - Transient
+     - 8.022
+     - 640.897
+     - 79.9
+     - 7.024e-06
+   * - 100
+     - Off
+     - Steady
+     - 1.189
+     - 16.785
+     - 14.1
+     - 3.623e-05
 
 4 completed case(s) have no valid complete MF6 reference. The retained evidence records these failures independently from GPU convergence.
 
