@@ -112,8 +112,10 @@ passes 29 tests.
 
 * :download:`Practical-control smoke matrix <../benchmark_results/ugly_t_3d/smoke_100_sanity_qualification.json>`
 
-Large-model results in progress
--------------------------------
+Large-model baseline results
+-----------------------------
+
+All 36 large GPU cases pass the independent physical checks. 32 have valid comparisons with the original MF6 profiles; 4 additional comparisons use the separately recorded strategy below. Together, all 36 comparisons pass the sanity gates. 9 meet the preferred ``1e-06 m`` maximum head target. The largest head difference is ``5.023e-05 m``. The largest GPU head-equivalent RMS is ``2.453e-11 m``.
 
 36 of 36 planned large cases have completed. 36 pass the independent GPU physical checks; 32 pass the full MF6 comparison gates. 6 meet the preferred ``1e-6 m`` maximum head-difference target.
 
@@ -414,7 +416,7 @@ The Kh/Kv=10 GHB-on steady MF6 reference also reached the 1,800-second limit wit
 
 The Kh/Kv=100 GHB-on steady MF6 reference likewise reached the 1,800-second limit without convergence. Its GPU solve passed the physical checks at a 1.240 s median.
 
-* :download:`Partial large-model results and source hashes <../benchmark_results/ugly_t_3d/large_500_progress.json>`
+* :download:`Complete large-model results and source hashes <../benchmark_results/ugly_t_3d/large_500_progress.json>`
 
 Initial extra-tight experiment
 ------------------------------
@@ -453,7 +455,7 @@ retained. GPU physical checks and MF6 availability are reported separately.
 Separate MF6 strategy diagnostics
 ----------------------------------------
 
-Missing native references are being investigated separately, preserving the
+Missing native references were investigated separately, preserving the
 original baseline artifacts and MF6 convergence tolerances. The diagnostic
 harness checks complete matching time histories, verifies the GHB flux law,
 and independently re-audits the saved GPU heads using their original physical
@@ -485,11 +487,52 @@ tolerances. Their saved GPU histories pass fresh physical and GHB-law checks.
 
 For the missing Cartesian transient reference, this strategy reached its
 600-second diagnostic limit after saving 15 of 20 timesteps. That attempt
-is retained as a failure. A separate confined CG/ILU(0) diagnostic is in
-progress, retaining the original convergence tolerances and allowing
-1,200 seconds for the native process.
+is retained as a failure. A separate confined CG/ILU(0) diagnostic completes
+the full history in ``737.054 s``, versus the saved GPU median of ``7.624 s``.
+It retains the original convergence tolerances and allows 1,200 seconds
+for the native process. All four saved GPU histories pass fresh physical
+checks; maximum head difference is ``2.757e-7 m``, meeting the preferred target.
 
 * :download:`MF6 diagnostic experiments and provenance <../benchmark_results/ugly_t_3d/mf6_strategy_experiments.json>`
+
+Final comparisons for missing original references
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. list-table:: Separate MF6 strategy; original convergence tolerances retained
+   :header-rows: 1
+
+   * - Formulation / mode
+     - Kh/Kv / GHB
+     - GPU (s)
+     - Diagnostic MF6 (s)
+     - MF6/GPU
+     - Maximum head difference (m)
+   * - cartesian confined / transient / CG
+     - 1 / off
+     - 7.624
+     - 737.054
+     - 96.7
+     - 2.757e-07
+   * - npf convertible / steady / BICGSTAB
+     - 1 / on
+     - 1.191
+     - 77.389
+     - 65.0
+     - 2.744e-06
+   * - npf convertible / steady / BICGSTAB
+     - 10 / on
+     - 1.223
+     - 87.107
+     - 71.2
+     - 4.038e-07
+   * - npf convertible / steady / BICGSTAB
+     - 100 / on
+     - 1.240
+     - 57.678
+     - 46.5
+     - 6.337e-07
+
+* :download:`Resolved comparison CSV <../benchmark_results/ugly_t_3d/large_500_comparisons.csv>`
 
 Reproduction
 ------------
@@ -527,3 +570,32 @@ For a single case, ``run_3d_sanity.py`` accepts ``--k-field ugly_t``,
 ``--ugly-t-reference-thickness``. The default ``layered`` conductivity
 keeps previous benchmark inputs unchanged. Every new result records the
 actual directional K ranges, contrast and measured Kh/Kv ratio.
+
+The baseline command intentionally exits nonzero when an original MF6 reference is unavailable, even if every GPU physical check passes. To investigate those references separately without changing convergence tolerances::
+
+    PYTHONPATH=.:working_tests DARCY_FLOAT=float64 python \
+      working_tests/diagnose_3d_mf6_references.py \
+      --matrix benchmark_results/ugly_t_3d/large_500_sanity/matrix.json \
+      --expected-cases 36 --timeout 600 \
+      --output benchmark_results/ugly_t_3d/mf6_strategy_diagnostics_original_order
+
+The diagnostic verifies baseline hashes and matching time grids and re-audits every saved GPU history. It uses no GPU heads to initialise MF6 and does not rerun or retime the GPU. Original failures remain in the baseline report.
+
+For the separately qualified confined fallback::
+
+    PYTHONPATH=.:working_tests DARCY_FLOAT=float64 python \
+      working_tests/diagnose_3d_confined_mf6.py \
+      --matrix benchmark_results/ugly_t_3d/large_500_sanity/matrix.json \
+      --size 500 --ratio 1 --ghb off --family cartesian --mode transient \
+      --timeout 1200 --output benchmark_results/ugly_t_3d/mf6_confined_cg_diagnostic
+
+The confined command selects exactly one missing reference and rejects
+convertible cases, failed GPU physical checks and changed source snapshots.
+The steady MF6 adapter now preserves distinct timeout, process-failure and
+missing-output reasons. This is a reporting correction; the benchmark's
+numerical settings and production solver algorithms are unchanged.
+
+The final affected regression selection passes 52 tests on ``dev``, including
+live MF6 adapter checks, unchanged-tolerance guards, corrupt-history rejection,
+confined-only diagnostic selection and all three native failure causes.
+The strict Sphinx documentation build passes.

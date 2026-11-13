@@ -143,7 +143,9 @@ def run_reference_mf6(*,case,directory,executable,prescribed_state=None,head_tol
             relaxation_factor=ims_options.get('relaxation_factor')))
     paths=[directory/name for name in ('npf662.hds','npf662.cbc','npf662.dis.grb')]
     if not native or not all(path.is_file() and path.stat().st_size>0 for path in paths):
-        result.update(independent_conservation=False,stop_reason='native_failure_or_missing_output')
+        result['independent_conservation'] = False
+        if native:
+            result['stop_reason'] = 'native_missing_output'
         atomic_json(path=directory/'summary.json',value=result)
         return None,result,None
     raw=flopy.utils.HeadFile(str(directory/'npf662.hds'),precision='double').get_data()[reverse].copy()

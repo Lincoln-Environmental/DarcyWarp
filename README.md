@@ -55,9 +55,12 @@ the separate head and operator checks.
 
 The [3D ugly-T anisotropy matrix](docs/3D_UGLY_T_ANISOTROPY.rst) reuses the
 2D channel/lens field with Kh/Kv = 1, 10 and 100, GHB off/on and
-steady/transient cases. All 36 small-grid cases pass with practical GPU
-sanity controls; the 500 x 500 x 5 campaign is in progress. MF6 settings
-are unchanged, and the preferred 1e-6 m head target is reported separately.
+steady/transient cases. All 36 small-grid cases and all 36 large GPU physical
+checks pass with practical controls. At 500 x 500 x 5, 32 original MF6
+comparisons pass; four missing references are recovered with separately
+recorded solver strategies and unchanged convergence tolerances. The largest
+head difference is **5.023e-5 m**; **9/36** large comparisons meet the preferred
+1e-6 m target. Original failures and all timings remain in the report.
 Run `working_tests/run_3d_ugly_t_matrix.py` to reproduce the matrix.
 
 The [2D GPU release notes](docs/2D_GPU_RELEASE_NOTES.rst) cover the parallel
