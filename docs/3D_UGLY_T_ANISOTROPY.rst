@@ -476,6 +476,19 @@ timed-out Kh/Kv=1 GHB-on steady case, while still missing the preferred
 ``1e-6 m`` maximum head-difference target. This diagnostic timing is separate
 from the unchanged baseline table above.
 
+The same original-order strategy recovers the Kh/Kv=10 and Kh/Kv=100
+GHB-on convertible steady references. Native MF6 takes ``87.107`` and
+``57.678 s``, respectively, versus saved GPU medians of ``1.223`` and
+``1.240 s``. Maximum head differences are ``4.038e-7`` and ``6.337e-7 m``:
+both meet the preferred ``1e-6 m`` target with unchanged convergence
+tolerances. Their saved GPU histories pass fresh physical and GHB-law checks.
+
+For the missing Cartesian transient reference, this strategy reached its
+600-second diagnostic limit after saving 15 of 20 timesteps. That attempt
+is retained as a failure. A separate confined CG/ILU(0) diagnostic is in
+progress, retaining the original convergence tolerances and allowing
+1,200 seconds for the native process.
+
 * :download:`MF6 diagnostic experiments and provenance <../benchmark_results/ugly_t_3d/mf6_strategy_experiments.json>`
 
 Reproduction
