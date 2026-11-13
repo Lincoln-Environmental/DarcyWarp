@@ -149,7 +149,7 @@ def prepare_reference(*, case, family, mode, cache, executable, cached_only, nat
             native_solver_options=native_options, replace_native_solver_options=True,
             head_tolerance_m=native_options['outer_dvclose'], source_package='rch', timeout_seconds=timeout_seconds)
         if head is None:
-            raise RuntimeError(f'MF6 failed: {folder}/native')
+            raise RuntimeError(f'MF6 failed ({info["stop_reason"]}, returncode={info["returncode"]}): {folder}/native')
         arrays = dict(heads=head[None], fluxes=fields['flux_native'][None],ghb_inflows=fields['ghb_native_inflow'][None])
         accepted = bool(info['native_success'] and info['independent_conservation'])
         if family == 'cartesian':

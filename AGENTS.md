@@ -1,6 +1,31 @@
 kimi --model kimi-code/k3
 # DarcyWarp — Agent System Memory
 
+> 2026-11-13 ugly-T qualification: run_3d_ugly_t_matrix.py lifts the exact 2D
+> make_ugly_T_field/100 map into five layers, with Kh/Kv=1/10/100 and GHB
+> off/on. Cartesian confined and NPF confined/convertible cover steady and
+> 20 weekly transient steps, starting from the original IC without an SS run.
+> Practical controls match the 2D sanity settings; NPF uses relative cellwise
+> imbalance 1e-7 and head RMS 1e-6. The dimensional 1e-12 gate is an alternative,
+> not mandatory. All 36 small and 36 large GPU cases pass physical checks.
+> Large comparisons: 32 original MF6 references plus four separate strategy
+> diagnostics, all retaining the original convergence tolerances. Three
+> convertible GHB steady references hit the original 1800 s limit; Cartesian
+> no-GHB transient also lacked a complete reference. Undamped ILUT(8) recovers
+> the steady cases; its 600 s Cartesian trial stops at 15/20 steps. Separate
+> CG/ILU(0) completes that history in 737.054 s vs GPU 7.624 s, max error
+> 2.757e-7 m. All 36 qualified comparisons are faster on GPU; nine meet the
+> preferred 1e-6 m head target, worst error 5.023e-5 m. Maximum GPU head RMS
+> is 2.453e-11 m. Preserve original failures; do not describe all results as
+> meeting 1e-6 or roundoff head parity. An RCM diagnostic crashed pinned MF6
+> 6.6.2 with code 174 and remains archived. Two portable diagnostic commands
+> re-audit saved GPU histories and verify input/result hashes and time grids.
+> A reporting fix preserves timeout/native-failure/missing-output causes.
+> No production solver algorithms changed. Dev affected selection: 52 passed.
+> Details: docs/3D_UGLY_T_ANISOTROPY.rst, benchmark_results/ugly_t_3d/.
+> Planned native 3D DRN/RIV then conservative solute transport are documented
+> in docs/3D_NATIVE_GHB.rst; UZF/SFR remain separate coupled extensions.
+
 > 2026-11-13 direct GHB parity audit: MF6 benchmark settings are unchanged.
 > User accepts the measured 6.467e-5 m large-model envelope but prefers a
 > 1e-6 m maximum head target. Only convertible transient meets that target
