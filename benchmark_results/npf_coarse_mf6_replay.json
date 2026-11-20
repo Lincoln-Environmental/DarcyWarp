@@ -1,0 +1,589 @@
+{
+  "benchmark": "Pinned MF6 scenario replay with Warp graph smoother and cuDSS",
+  "python": "3.14.7",
+  "source_sha256": {
+    "working_tests/benchmark_npf_coarse_direct.py": "f04b63e80e23084a3c41cf9331740b6fec7d922f92642d7584e3be54773d39ba",
+    "working_tests/npf_coarse_cudss.py": "7f953a217d0946b0e5dc8ba757b11111254514325ef0918e36b16ff61ef0c0f0",
+    "working_tests/run_3d_sanity.py": "079785049d807706086c703e0cae58b6dd5f36a363a4795b3d322098b4b42d81",
+    "working_tests/npf_ghb_five_level_controls.json": "05fce15e44b1fedef46fcf24c837160343f56bde687b85a63925d73667be5de9"
+  },
+  "saved_replay_timing": "Archived local MF6 engine seconds versus fresh synchronized Warp public solve wall times. Warp model build, archive load, independent audit, and output saving are outside the timing. Each Warp pair uses identical NPF solve controls and the same five-level hierarchy.",
+  "saved_inputs": "Both Warp methods load the exact saved MF6 model arrays and storage/schedule metadata after validating case, inputs, reference payload, and timestep checksums or values.",
+  "saved_scopes": {
+    "confined-steady": {
+      "shape_zyx": [
+        5,
+        500,
+        500
+      ],
+      "mode": "steady",
+      "case_sha256": "73b3c6ee01639fbde14d80e167f5c0654bd31c460af1529a638fce718b32257f",
+      "mf6_manifest": "benchmark_results/ugly_t_3d/mf6_cache/607eee8fe802e6e5565b41328c2093d18826260a8cba00aea2d3fa409a506345/manifest.json",
+      "mf6_fingerprint": "607eee8fe802e6e5565b41328c2093d18826260a8cba00aea2d3fa409a506345",
+      "mf6_reference_inputs": {
+        "case_sha256": "73b3c6ee01639fbde14d80e167f5c0654bd31c460af1529a638fce718b32257f",
+        "mode": "steady",
+        "native_options": {
+          "pname": "ims",
+          "print_option": "SUMMARY",
+          "complexity": "SIMPLE",
+          "linear_acceleration": "CG",
+          "outer_maximum": 10,
+          "outer_dvclose": 0.0001,
+          "inner_maximum": 2000,
+          "inner_dvclose": 0.0001,
+          "rcloserecord": [
+            1e-06,
+            "RELATIVE_RCLOSE"
+          ],
+          "scaling_method": "DIAGONAL"
+        },
+        "factors": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.5,
+          1.5,
+          1.5,
+          1.5,
+          1.5,
+          0.25,
+          0.25,
+          0.25,
+          0.25,
+          0.25,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "dt": 7.0,
+        "ss": 1e-05,
+        "sy": 0.15,
+        "family": "npf",
+        "acceptance": "NPF fixed physical contract"
+      },
+      "mf6_engine_seconds": 14.607163879001746,
+      "warp_levels": 5,
+      "methods": {
+        "graph": {
+          "public_seconds_median": 1.5431034590583295,
+          "max_head_difference_from_mf6_m": 1.2293812594599274e-05,
+          "runs": [
+            {
+              "public_seconds": 1.5030674349982291,
+              "backend_seconds": 0.14268259599339217,
+              "krylov_iterations": 36,
+              "head_max_m": 1.2293812594599274e-05,
+              "head_rmse_m": 4.533848088012292e-06,
+              "head_residual_rms_m": 3.559079846756276e-13,
+              "cuda_pool_peak_bytes": 1206899120,
+              "direct": null
+            },
+            {
+              "public_seconds": 1.5495868819998577,
+              "backend_seconds": 0.1479518689448014,
+              "krylov_iterations": 36,
+              "head_max_m": 1.2293812594599274e-05,
+              "head_rmse_m": 4.533848088012292e-06,
+              "head_residual_rms_m": 3.559079846756276e-13,
+              "cuda_pool_peak_bytes": 1206899120,
+              "direct": null
+            },
+            {
+              "public_seconds": 1.5431034590583295,
+              "backend_seconds": 0.14784204703755677,
+              "krylov_iterations": 36,
+              "head_max_m": 1.2293812594599274e-05,
+              "head_rmse_m": 4.533848088012292e-06,
+              "head_residual_rms_m": 3.559079846756276e-13,
+              "cuda_pool_peak_bytes": 1206899120,
+              "direct": null
+            }
+          ],
+          "mf6_speedup": 9.466094961588439
+        },
+        "cudss": {
+          "public_seconds_median": 1.628212837036699,
+          "max_head_difference_from_mf6_m": 1.229768526433972e-05,
+          "runs": [
+            {
+              "public_seconds": 1.5527159679913893,
+              "backend_seconds": 0.161706340033561,
+              "krylov_iterations": 21,
+              "head_max_m": 1.229768526433972e-05,
+              "head_rmse_m": 4.5329340233095835e-06,
+              "head_residual_rms_m": 2.1759414624976036e-13,
+              "cuda_pool_peak_bytes": 1223705312,
+              "direct": {
+                "analysis_seconds": 0.028473756043240428,
+                "assembly_seconds": 0.013352751033380628,
+                "factor_seconds": 0.00638808507937938,
+                "graph_capture_seconds": 0.003661688999272883,
+                "factorizations": 1,
+                "change_checks": 4,
+                "coarse_rows": 5120,
+                "matrix_nnz": 33152,
+                "unit_rhs_coarse_residual_inf": 0.0002512335777282715,
+                "coarse_solves_per_application": 8,
+                "cudss_allocator_peak_bytes": 16162596,
+                "graph_replays": 21,
+                "device_apply_seconds": 0.0713179841041565
+              }
+            },
+            {
+              "public_seconds": 1.628212837036699,
+              "backend_seconds": 0.1620595019776374,
+              "krylov_iterations": 21,
+              "head_max_m": 1.229768526433972e-05,
+              "head_rmse_m": 4.5329340233095835e-06,
+              "head_residual_rms_m": 2.1759414624976036e-13,
+              "cuda_pool_peak_bytes": 1223705312,
+              "direct": {
+                "analysis_seconds": 0.02889958198647946,
+                "assembly_seconds": 0.013132118037901819,
+                "factor_seconds": 0.006587123963981867,
+                "graph_capture_seconds": 0.0035749590024352074,
+                "factorizations": 1,
+                "change_checks": 4,
+                "coarse_rows": 5120,
+                "matrix_nnz": 33152,
+                "unit_rhs_coarse_residual_inf": 0.0002512335777282715,
+                "coarse_solves_per_application": 8,
+                "cudss_allocator_peak_bytes": 16162596,
+                "graph_replays": 21,
+                "device_apply_seconds": 0.07100566411018372
+              }
+            },
+            {
+              "public_seconds": 1.629596267011948,
+              "backend_seconds": 0.16297400498297065,
+              "krylov_iterations": 21,
+              "head_max_m": 1.229768526433972e-05,
+              "head_rmse_m": 4.5329340233095835e-06,
+              "head_residual_rms_m": 2.1759414624976036e-13,
+              "cuda_pool_peak_bytes": 1223705312,
+              "direct": {
+                "analysis_seconds": 0.029059152933768928,
+                "assembly_seconds": 0.013679590891115367,
+                "factor_seconds": 0.006465921993367374,
+                "graph_capture_seconds": 0.0035851590801030397,
+                "factorizations": 1,
+                "change_checks": 4,
+                "coarse_rows": 5120,
+                "matrix_nnz": 33152,
+                "unit_rhs_coarse_residual_inf": 0.0002512335777282715,
+                "coarse_solves_per_application": 8,
+                "cudss_allocator_peak_bytes": 16162596,
+                "graph_replays": 21,
+                "device_apply_seconds": 0.07130825638771057
+              }
+            }
+          ],
+          "mf6_speedup": 8.971286521476129
+        }
+      }
+    },
+    "confined-transient": {
+      "shape_zyx": [
+        5,
+        500,
+        500
+      ],
+      "mode": "transient",
+      "case_sha256": "73b3c6ee01639fbde14d80e167f5c0654bd31c460af1529a638fce718b32257f",
+      "mf6_manifest": "benchmark_results/ugly_t_3d/mf6_cache/84c3970c25c5fac4bcd7639999a7b4e118a7121545a0cea44b5b48ec30f33915/manifest.json",
+      "mf6_fingerprint": "84c3970c25c5fac4bcd7639999a7b4e118a7121545a0cea44b5b48ec30f33915",
+      "mf6_reference_inputs": {
+        "case_sha256": "73b3c6ee01639fbde14d80e167f5c0654bd31c460af1529a638fce718b32257f",
+        "mode": "transient",
+        "native_options": {
+          "pname": "ims",
+          "print_option": "SUMMARY",
+          "complexity": "COMPLEX",
+          "linear_acceleration": "BICGSTAB",
+          "outer_maximum": 150,
+          "outer_dvclose": 1e-06,
+          "inner_maximum": 500,
+          "inner_dvclose": 1e-08,
+          "rcloserecord": [
+            1e-06,
+            "RELATIVE_RCLOSE"
+          ],
+          "scaling_method": "DIAGONAL"
+        },
+        "factors": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.5,
+          1.5,
+          1.5,
+          1.5,
+          1.5,
+          0.25,
+          0.25,
+          0.25,
+          0.25,
+          0.25,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "dt": 7.0,
+        "ss": 1e-05,
+        "sy": 0.15,
+        "family": "npf",
+        "acceptance": "NPF fixed physical contract"
+      },
+      "mf6_engine_seconds": 313.8620074770006,
+      "warp_levels": 5,
+      "methods": {
+        "graph": {
+          "public_seconds_median": 2.3954928839812055,
+          "max_head_difference_from_mf6_m": 1.5735046536846653e-06,
+          "runs": [
+            {
+              "public_seconds": 2.3954928839812055,
+              "backend_seconds": 1.9303720723837614,
+              "krylov_iterations": 472,
+              "head_max_m": 1.5735046536846653e-06,
+              "head_rmse_m": 6.377759554225321e-07,
+              "head_residual_rms_m": 4.3601552830569185e-12,
+              "cuda_pool_peak_bytes": 1416899120,
+              "direct": null
+            }
+          ],
+          "mf6_speedup": 131.02189097526164
+        },
+        "cudss": {
+          "public_seconds_median": 2.2929762239800766,
+          "max_head_difference_from_mf6_m": 1.5794890302345266e-06,
+          "runs": [
+            {
+              "public_seconds": 2.2929762239800766,
+              "backend_seconds": 1.8498696697643027,
+              "krylov_iterations": 354,
+              "head_max_m": 1.5794890302345266e-06,
+              "head_rmse_m": 6.377241358671908e-07,
+              "head_residual_rms_m": 5.434472539169872e-11,
+              "cuda_pool_peak_bytes": 1433705312,
+              "direct": {
+                "analysis_seconds": 0.0288404239108786,
+                "assembly_seconds": 0.015820281696505845,
+                "factor_seconds": 0.007689484977163374,
+                "graph_capture_seconds": 0.0038311240496113896,
+                "factorizations": 1,
+                "change_checks": 60,
+                "coarse_rows": 5120,
+                "matrix_nnz": 33152,
+                "unit_rhs_coarse_residual_inf": 0.000250399112701416,
+                "coarse_solves_per_application": 8,
+                "cudss_allocator_peak_bytes": 16162596,
+                "graph_replays": 354,
+                "device_apply_seconds": 1.1624459648132337
+              }
+            }
+          ],
+          "mf6_speedup": 136.87974789909018
+        }
+      }
+    },
+    "convertible-transient": {
+      "shape_zyx": [
+        5,
+        500,
+        500
+      ],
+      "mode": "transient",
+      "case_sha256": "bd6d4d32caf2d882d5958bf7f03b9a5f3f667e702d5dfe8139ddbb5dfcb3d712",
+      "mf6_manifest": "benchmark_results/ugly_t_3d/mf6_cache/42ffe5cd93b0be2c9f52fe9783670ece007f618e6aa8e22d23b5bf8d7bb150b3/manifest.json",
+      "mf6_fingerprint": "42ffe5cd93b0be2c9f52fe9783670ece007f618e6aa8e22d23b5bf8d7bb150b3",
+      "mf6_reference_inputs": {
+        "case_sha256": "bd6d4d32caf2d882d5958bf7f03b9a5f3f667e702d5dfe8139ddbb5dfcb3d712",
+        "mode": "transient",
+        "native_options": {
+          "pname": "ims",
+          "print_option": "SUMMARY",
+          "complexity": "COMPLEX",
+          "linear_acceleration": "BICGSTAB",
+          "outer_maximum": 150,
+          "outer_dvclose": 1e-06,
+          "inner_maximum": 500,
+          "inner_dvclose": 1e-08,
+          "rcloserecord": [
+            1e-06,
+            "RELATIVE_RCLOSE"
+          ],
+          "scaling_method": "DIAGONAL"
+        },
+        "factors": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.5,
+          1.5,
+          1.5,
+          1.5,
+          1.5,
+          0.25,
+          0.25,
+          0.25,
+          0.25,
+          0.25,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "dt": 7.0,
+        "ss": 1e-05,
+        "sy": 0.15,
+        "family": "npf",
+        "acceptance": "NPF fixed physical contract"
+      },
+      "mf6_engine_seconds": 191.52528527501272,
+      "warp_levels": 5,
+      "methods": {
+        "graph": {
+          "public_seconds_median": 1.6401885290397331,
+          "max_head_difference_from_mf6_m": 2.1273244832364924e-07,
+          "runs": [
+            {
+              "public_seconds": 1.6401885290397331,
+              "backend_seconds": 1.1937129376456141,
+              "krylov_iterations": 268,
+              "head_max_m": 2.1273244832364924e-07,
+              "head_rmse_m": 3.86729637393678e-08,
+              "head_residual_rms_m": 4.3487438900773725e-11,
+              "cuda_pool_peak_bytes": 1416899120,
+              "direct": null
+            }
+          ],
+          "mf6_speedup": 116.77028700300896
+        },
+        "cudss": {
+          "public_seconds_median": 2.178881551953964,
+          "max_head_difference_from_mf6_m": 2.1275524886288366e-07,
+          "runs": [
+            {
+              "public_seconds": 2.178881551953964,
+              "backend_seconds": 1.734580205171369,
+              "krylov_iterations": 268,
+              "head_max_m": 2.1275524886288366e-07,
+              "head_rmse_m": 3.867322158222006e-08,
+              "head_residual_rms_m": 4.384005014281514e-11,
+              "cuda_pool_peak_bytes": 1433705312,
+              "direct": {
+                "analysis_seconds": 0.028671068022958934,
+                "assembly_seconds": 0.014913742546923459,
+                "factor_seconds": 0.08570383454207331,
+                "graph_capture_seconds": 0.1865080981515348,
+                "factorizations": 57,
+                "change_checks": 57,
+                "coarse_rows": 5120,
+                "matrix_nnz": 33152,
+                "unit_rhs_coarse_residual_inf": 4.494190216064453e-05,
+                "coarse_solves_per_application": 8,
+                "cudss_allocator_peak_bytes": 16162596,
+                "graph_replays": 268,
+                "device_apply_seconds": 0.8875801250934595
+              }
+            }
+          ],
+          "mf6_speedup": 87.90073287979232
+        }
+      }
+    }
+  },
+  "oversized": {
+    "shape_zyx": [
+      5,
+      2000,
+      2000
+    ],
+    "cell_type": "confined",
+    "ghb": true,
+    "kh_kv": 100,
+    "levels": 6,
+    "resident_steady_graph": "CUDA out of memory while allocating 160,000,000 bytes for the K-cycle hierarchy",
+    "audit_note": "The cuDSS transient trial reused the independent auditor static data. Fresh and reused auditors matched exactly on confined and convertible test snapshots. This processing was outside solver time.",
+    "managed_memory_trials": {
+      "steady": {
+        "graph": {
+          "gpu_physical_accepted": true,
+          "public_solve_seconds": 47.046313427970745,
+          "krylov_iterations": 63,
+          "outer_iterations": 4,
+          "case_sha256": "b0c1a702f4ab5864947e52bdf7c64fd3f0fa18a12b9bbf7223b3e0364709e690",
+          "device": "NVIDIA GeForce RTX 4070 Ti SUPER",
+          "max_head_residual_rms_m": 1.0358688568601506e-12,
+          "cuda_pool_high_bytes": 1,
+          "process_peak_rss_bytes": 20994129920,
+          "direct": null,
+          "steps": 0,
+          "backend_seconds": 11.089287822018377,
+          "max_head_difference_from_mf6_m": 7.355652033425031e-05
+        },
+        "cudss": {
+          "gpu_physical_accepted": true,
+          "public_solve_seconds": 32.171535184956156,
+          "krylov_iterations": 18,
+          "outer_iterations": 4,
+          "case_sha256": "b0c1a702f4ab5864947e52bdf7c64fd3f0fa18a12b9bbf7223b3e0364709e690",
+          "device": "NVIDIA GeForce RTX 4070 Ti SUPER",
+          "max_head_residual_rms_m": 6.675714246137191e-13,
+          "cuda_pool_high_bytes": 58048172,
+          "process_peak_rss_bytes": 24895582208,
+          "direct": {
+            "analysis_seconds": 0.08463491301517934,
+            "assembly_seconds": 0.056403435999527574,
+            "factor_seconds": 0.038851444027386606,
+            "graph_capture_seconds": 0.006842506001703441,
+            "factorizations": 1,
+            "change_checks": 4,
+            "coarse_rows": 19845,
+            "matrix_nnz": 129717,
+            "unit_rhs_coarse_residual_inf": 0.0012358427047729492,
+            "coarse_solves_per_application": 16,
+            "cudss_allocator_peak_bytes": 58048172,
+            "graph_replays": 18,
+            "device_apply_seconds": 0.6810541172027588
+          },
+          "steps": 0,
+          "backend_seconds": 3.761302132043056,
+          "max_head_difference_from_mf6_m": 7.369327354833644e-05
+        },
+        "max_warp_head_difference_m": 2.398385339219544e-07,
+        "fresh_mf6": {
+          "mode": "steady",
+          "shape": [
+            5,
+            2000,
+            2000
+          ],
+          "case_sha256": "b0c1a702f4ab5864947e52bdf7c64fd3f0fa18a12b9bbf7223b3e0364709e690",
+          "version": "mf6: 6.6.2 05/12/2025",
+          "binary_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+          "identity": "historical-local-6.6.2",
+          "timeout_seconds": 1800.0,
+          "template": "/home/patrickdurney/PycharmProjects/DarcyWarp/benchmark_results/ugly_t_3d/mf6_cache/607eee8fe802e6e5565b41328c2093d18826260a8cba00aea2d3fa409a506345/manifest.json",
+          "template_input_settings": {
+            "case_sha256": "73b3c6ee01639fbde14d80e167f5c0654bd31c460af1529a638fce718b32257f",
+            "mode": "steady",
+            "native_options": {
+              "pname": "ims",
+              "print_option": "SUMMARY",
+              "complexity": "SIMPLE",
+              "linear_acceleration": "CG",
+              "outer_maximum": 10,
+              "outer_dvclose": 0.0001,
+              "inner_maximum": 2000,
+              "inner_dvclose": 0.0001,
+              "rcloserecord": [
+                1e-06,
+                "RELATIVE_RCLOSE"
+              ],
+              "scaling_method": "DIAGONAL"
+            },
+            "factors": [
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.5,
+              1.5,
+              1.5,
+              1.5,
+              1.5,
+              0.25,
+              0.25,
+              0.25,
+              0.25,
+              0.25,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0
+            ],
+            "dt": 7.0,
+            "ss": 1e-05,
+            "sy": 0.15,
+            "family": "npf",
+            "acceptance": "NPF fixed physical contract"
+          },
+          "accepted": true,
+          "engine_seconds": 793.4664984419942,
+          "manifest": "/tmp/darcywarp-cudss-2000/fresh-mf6/90f1fe862f3e1023121b16044fc7983bf0cbd69dada2a1de8ec375a8eca19616/manifest.json",
+          "saved_head_count": 1,
+          "end_to_end_seconds": 1235.3186293450417,
+          "status": "passed",
+          "strict_native_npf_audit": false,
+          "relative_cell_imbalance": 0.00015557263552798837,
+          "reference_sha256": {
+            "inputs.npz": "ad4105f89b38daccb111c445a28b947fe8f42273ddd45414f29dad8915c3e8b9",
+            "reference.npz": "0ad01b7dea1e4c6c220052ac81d2805142bd07d636a5103da623505ea0d6e5a4"
+          }
+        }
+      },
+      "transient": {
+        "graph": {
+          "gpu_physical_accepted": true,
+          "public_solve_seconds": 113.76550773601048,
+          "krylov_iterations": 759,
+          "outer_iterations": 61,
+          "case_sha256": "b0c1a702f4ab5864947e52bdf7c64fd3f0fa18a12b9bbf7223b3e0364709e690",
+          "device": "NVIDIA GeForce RTX 4070 Ti SUPER",
+          "max_head_residual_rms_m": 8.659215219259758e-13,
+          "cuda_pool_high_bytes": 1,
+          "process_peak_rss_bytes": 38702624768,
+          "direct": null,
+          "steps": 20,
+          "backend_seconds": 101.1984714481514
+        },
+        "cudss": {
+          "gpu_physical_accepted": true,
+          "public_solve_seconds": 103.40914414892904,
+          "krylov_iterations": 375,
+          "outer_iterations": 60,
+          "case_sha256": "b0c1a702f4ab5864947e52bdf7c64fd3f0fa18a12b9bbf7223b3e0364709e690",
+          "device": "NVIDIA GeForce RTX 4070 Ti SUPER",
+          "max_head_residual_rms_m": 5.730857892984519e-12,
+          "cuda_pool_high_bytes": 58048172,
+          "process_peak_rss_bytes": 38920843264,
+          "direct": {
+            "analysis_seconds": 0.08381973300129175,
+            "assembly_seconds": 0.7674011758062989,
+            "factor_seconds": 0.03850515093654394,
+            "graph_capture_seconds": 0.007165674003772438,
+            "factorizations": 1,
+            "change_checks": 60,
+            "coarse_rows": 19845,
+            "matrix_nnz": 129717,
+            "unit_rhs_coarse_residual_inf": 0.001135706901550293,
+            "coarse_solves_per_application": 16,
+            "cudss_allocator_peak_bytes": 58048172,
+            "graph_replays": 375,
+            "device_apply_seconds": 23.210457033157358
+          },
+          "steps": 20,
+          "backend_seconds": 87.6557695986703
+        },
+        "max_warp_head_difference_m": 1.0014077833631063e-07,
+        "mf6_status": "No matching saved MF6 reference"
+      }
+    }
+  }
+}

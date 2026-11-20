@@ -1,0 +1,1713 @@
+{
+  "branch": "dev",
+  "revision": "4cbbaae8ef082d0efb9d9ab7302ca75f471078bb",
+  "device": "NVIDIA GeForce RTX 4070 Ti SUPER",
+  "warp": "1.17.0",
+  "python": "3.14.7",
+  "cudss_runtime": "nvidia-cudss-cu12 0.8.0.10",
+  "cold_process_per_trial": true,
+  "environment": {
+    "OPENBLAS_NUM_THREADS": 1,
+    "OMP_NUM_THREADS": 1,
+    "MKL_NUM_THREADS": 1
+  },
+  "source_sha256": {
+    "working_tests/benchmark_npf_coarse_direct.py": "aeaa9045bdae746a313a79bab47b307d284bfa81d6798d22ef83a745f703a9ee",
+    "working_tests/npf_coarse_cudss.py": "7f953a217d0946b0e5dc8ba757b11111254514325ef0918e36b16ff61ef0c0f0",
+    "working_tests/npf_coarse_cudss.c": "4ca6ef7e2834e42d5e999b625bbdd996c8b0d0bbd39960f1757c45199890e612",
+    "working_tests/npf_ghb_five_level_controls.json": "05fce15e44b1fedef46fcf24c837160343f56bde687b85a63925d73667be5de9"
+  },
+  "build": [
+    "Provide the cuDSS 0.8 CUDA 12 wheel's include and lib directories, a complete CUDA header directory, and CUDA 12 cuBLAS and CUDA runtime libraries.",
+    "cc -std=c11 -O2 -Wall -Wextra -Werror -shared -fPIC working_tests/npf_coarse_cudss.c -I\"$CUDSS_INCLUDE\" -I\"$CUDA_INCLUDE\" -L\"$CUDSS_LIB\" -L\"$CUDART_LIB\" -Wl,--disable-new-dtags,-rpath,\"$CUDSS_LIB:$CUDART_LIB:$CUBLAS_LIB\" -l:libcudss.so.0 -l:libcudart.so.12 -o /tmp/libnpf_coarse_cudss.so",
+    "Run working_tests/benchmark_npf_coarse_direct.py --method cudss --cudss-bridge /tmp/libnpf_coarse_cudss.so with the desired case, level and output arguments."
+  ],
+  "methods": {
+    "graph": "Production line smoother with Warp CUDA graph capture.",
+    "direct-single": "Host SuperLU, with one direct correction at the parent of the coarse grid.",
+    "cudss": "Device CSR coefficient updates, FP64 cuDSS numerical LU and repeated solves in the Warp K-cycle graph. Same one-correction K-cycle as host LU."
+  },
+  "cudss_notes": "CPU builds the initial CSR index pattern and cuDSS performs host symbolic ordering. Coefficients, factors, right-hand sides, and corrections are device-resident. A scalar reports coefficient changes. The experiment recaptures the solve graph after numerical refactorization.",
+  "memory_notes": "cuda_pool_high_bytes measures allocations through the Warp CUDA pool. cudss_allocator_peak_bytes tracks cuDSS allocation requests in its registered async allocator, excluding Warp's CSR and vector arrays. They are separate counters and are not additive.",
+  "timing_notes": "The public solve time includes setup and GPU synchronizations. It excludes model build, external physical audit, and result saving. Backend time comes from the numerical solve loop and excludes reference and workspace setup. For repeated steady trials the report uses the median of independent processes.",
+  "acceptance_notes": "All runs converged and passed the independent NPF physical audit. Head differences are from paired solver runs on identical input cases.",
+  "cases": {
+    "500-no-ghb-steady": {
+      "size": 500,
+      "layers": 5,
+      "variant": "confined",
+      "anisotropy": 100.0,
+      "ghb": false,
+      "periods": 0,
+      "case_sha256": "dba656473cf534cc6630dfeda8beeb42836052318c811e91f184170bd70a0037",
+      "depths": {
+        "5": {
+          "graph": {
+            "public_solve_seconds_median": 1.6539550290908664,
+            "backend_seconds_median": 0.45994064304977655,
+            "krylov_iterations_median": 126,
+            "peak_warp_cuda_pool_bytes_median": 1156899104,
+            "max_head_delta_from_same_depth_graph_m": 0.0,
+            "hierarchy_shapes": [
+              [
+                5,
+                500,
+                500
+              ],
+              [
+                5,
+                250,
+                250
+              ],
+              [
+                5,
+                125,
+                125
+              ],
+              [
+                5,
+                63,
+                63
+              ],
+              [
+                5,
+                32,
+                32
+              ]
+            ],
+            "samples": [
+              {
+                "public_solve_seconds": 1.9847088640090078,
+                "krylov_iterations": 126,
+                "outer_iterations": 3,
+                "cuda_pool_high_bytes": 1156899104,
+                "process_peak_rss_bytes": 1971761152,
+                "max_head_residual_rms_m": 7.31036694669525e-12,
+                "backend_seconds": 0.706704196985811,
+                "max_head_delta_from_same_depth_graph_m": 0.0,
+                "direct": null
+              },
+              {
+                "public_solve_seconds": 1.6539550290908664,
+                "krylov_iterations": 126,
+                "outer_iterations": 3,
+                "cuda_pool_high_bytes": 1156899104,
+                "process_peak_rss_bytes": 1990541312,
+                "max_head_residual_rms_m": 7.31036694669525e-12,
+                "backend_seconds": 0.4582415809854865,
+                "max_head_delta_from_same_depth_graph_m": 0.0,
+                "direct": null
+              },
+              {
+                "public_solve_seconds": 1.6305853879312053,
+                "krylov_iterations": 126,
+                "outer_iterations": 3,
+                "cuda_pool_high_bytes": 1156899104,
+                "process_peak_rss_bytes": 1991131136,
+                "max_head_residual_rms_m": 7.31036694669525e-12,
+                "backend_seconds": 0.45994064304977655,
+                "max_head_delta_from_same_depth_graph_m": 0.0,
+                "direct": null
+              }
+            ]
+          },
+          "direct-single": {
+            "public_solve_seconds_median": 1.3389281149720773,
+            "backend_seconds_median": 0.17766300297807902,
+            "krylov_iterations_median": 18,
+            "peak_warp_cuda_pool_bytes_median": 1156899104,
+            "max_head_delta_from_same_depth_graph_m": 1.0562641463707223e-06,
+            "hierarchy_shapes": [
+              [
+                5,
+                500,
+                500
+              ],
+              [
+                5,
+                250,
+                250
+              ],
+              [
+                5,
+                125,
+                125
+              ],
+              [
+                5,
+                63,
+                63
+              ],
+              [
+                5,
+                32,
+                32
+              ]
+            ],
+            "samples": [
+              {
+                "public_solve_seconds": 1.3389281149720773,
+                "krylov_iterations": 18,
+                "outer_iterations": 3,
+                "cuda_pool_high_bytes": 1156899104,
+                "process_peak_rss_bytes": 2005626880,
+                "max_head_residual_rms_m": 5.333011786299949e-12,
+                "backend_seconds": 0.1799511059653014,
+                "max_head_delta_from_same_depth_graph_m": 1.0562641463707223e-06,
+                "direct": {
+                  "solves": 144,
+                  "factorizations": 1,
+                  "matrix_seconds": 0.0028618311043828726,
+                  "factor_seconds": 0.020106895943172276,
+                  "coarse_wall_seconds": 0.08311960299033672,
+                  "factor_nnz": 800912,
+                  "verified_factors": 1,
+                  "lu_relative_residual_inf": 4.978273994978928e-13,
+                  "device_relative_residual_inf": 4.074186596200154e-05,
+                  "shape": [
+                    5,
+                    32,
+                    32
+                  ],
+                  "free_rows": 5120,
+                  "matrix_nnz": 33152,
+                  "matrix_csc_bytes": 418308,
+                  "factor_value_index_bytes_estimate": 9610944
+                }
+              },
+              {
+                "public_solve_seconds": 1.3302402920089662,
+                "krylov_iterations": 18,
+                "outer_iterations": 3,
+                "cuda_pool_high_bytes": 1156899104,
+                "process_peak_rss_bytes": 2006212608,
+                "max_head_residual_rms_m": 5.333011786299949e-12,
+                "backend_seconds": 0.17747972498182207,
+                "max_head_delta_from_same_depth_graph_m": 1.0562641463707223e-06,
+                "direct": {
+                  "solves": 144,
+                  "factorizations": 1,
+                  "matrix_seconds": 0.0026722418842837214,
+                  "factor_seconds": 0.020729720941744745,
+                  "coarse_wall_seconds": 0.08192738494835794,
+                  "factor_nnz": 800912,
+                  "verified_factors": 1,
+                  "lu_relative_residual_inf": 4.978273994978928e-13,
+                  "device_relative_residual_inf": 4.074186596200154e-05,
+                  "shape": [
+                    5,
+                    32,
+                    32
+                  ],
+                  "free_rows": 5120,
+                  "matrix_nnz": 33152,
+                  "matrix_csc_bytes": 418308,
+                  "factor_value_index_bytes_estimate": 9610944
+                }
+              },
+              {
+                "public_solve_seconds": 1.3484247890301049,
+                "krylov_iterations": 18,
+                "outer_iterations": 3,
+                "cuda_pool_high_bytes": 1156899104,
+                "process_peak_rss_bytes": 2005884928,
+                "max_head_residual_rms_m": 5.333011786299949e-12,
+                "backend_seconds": 0.17766300297807902,
+                "max_head_delta_from_same_depth_graph_m": 1.0562641463707223e-06,
+                "direct": {
+                  "solves": 144,
+                  "factorizations": 1,
+                  "matrix_seconds": 0.0026948769809678197,
+                  "factor_seconds": 0.020066428929567337,
+                  "coarse_wall_seconds": 0.08150142198428512,
+                  "factor_nnz": 800912,
+                  "verified_factors": 1,
+                  "lu_relative_residual_inf": 4.978273994978928e-13,
+                  "device_relative_residual_inf": 4.074186596200154e-05,
+                  "shape": [
+                    5,
+                    32,
+                    32
+                  ],
+                  "free_rows": 5120,
+                  "matrix_nnz": 33152,
+                  "matrix_csc_bytes": 418308,
+                  "factor_value_index_bytes_estimate": 9610944
+                }
+              }
+            ]
+          },
+          "cudss": {
+            "public_solve_seconds_median": 1.3262037929380313,
+            "backend_seconds_median": 0.14027603599242866,
+            "krylov_iterations_median": 18,
+            "peak_warp_cuda_pool_bytes_median": 1173705296,
+            "max_head_delta_from_same_depth_graph_m": 1.0562641463707223e-06,
+            "hierarchy_shapes": [
+              [
+                5,
+                500,
+                500
+              ],
+              [
+                5,
+                250,
+                250
+              ],
+              [
+                5,
+                125,
+                125
+              ],
+              [
+                5,
+                63,
+                63
+              ],
+              [
+                5,
+                32,
+                32
+              ]
+            ],
+            "samples": [
+              {
+                "public_solve_seconds": 1.338416103972122,
+                "krylov_iterations": 18,
+                "outer_iterations": 3,
+                "cuda_pool_high_bytes": 1173705296,
+                "process_peak_rss_bytes": 2216460288,
+                "max_head_residual_rms_m": 5.333011786299949e-12,
+                "backend_seconds": 0.14178853889461607,
+                "max_head_delta_from_same_depth_graph_m": 1.0562641463707223e-06,
+                "direct": {
+                  "analysis_seconds": 0.02745328308083117,
+                  "assembly_seconds": 0.01215747615788132,
+                  "factor_seconds": 0.006365354987792671,
+                  "graph_capture_seconds": 0.0034923930652439594,
+                  "factorizations": 1,
+                  "change_checks": 3,
+                  "coarse_rows": 5120,
+                  "matrix_nnz": 33152,
+                  "unit_rhs_coarse_residual_inf": 0.0010814666748046875,
+                  "coarse_solves_per_application": 8,
+                  "cudss_allocator_peak_bytes": 16162596,
+                  "graph_replays": 18,
+                  "device_apply_seconds": 0.0608281602859497
+                },
+                "max_head_delta_from_same_depth_cpu_lu_m": 0.0
+              },
+              {
+                "public_solve_seconds": 1.3262037929380313,
+                "krylov_iterations": 18,
+                "outer_iterations": 3,
+                "cuda_pool_high_bytes": 1173705296,
+                "process_peak_rss_bytes": 2216775680,
+                "max_head_residual_rms_m": 5.333011786299949e-12,
+                "backend_seconds": 0.14020998496562243,
+                "max_head_delta_from_same_depth_graph_m": 1.0562641463707223e-06,
+                "direct": {
+                  "analysis_seconds": 0.027017157059162855,
+                  "assembly_seconds": 0.011310848058201373,
+                  "factor_seconds": 0.006276176078245044,
+                  "graph_capture_seconds": 0.0033815139904618263,
+                  "factorizations": 1,
+                  "change_checks": 3,
+                  "coarse_rows": 5120,
+                  "matrix_nnz": 33152,
+                  "unit_rhs_coarse_residual_inf": 0.0010814666748046875,
+                  "coarse_solves_per_application": 8,
+                  "cudss_allocator_peak_bytes": 16162596,
+                  "graph_replays": 18,
+                  "device_apply_seconds": 0.06081612753868103
+                },
+                "max_head_delta_from_same_depth_cpu_lu_m": 0.0
+              },
+              {
+                "public_solve_seconds": 1.3087583570741117,
+                "krylov_iterations": 18,
+                "outer_iterations": 3,
+                "cuda_pool_high_bytes": 1173705296,
+                "process_peak_rss_bytes": 2216353792,
+                "max_head_residual_rms_m": 5.333011786299949e-12,
+                "backend_seconds": 0.14027603599242866,
+                "max_head_delta_from_same_depth_graph_m": 1.0562641463707223e-06,
+                "direct": {
+                  "analysis_seconds": 0.02729276893660426,
+                  "assembly_seconds": 0.01148338383063674,
+                  "factor_seconds": 0.006111925933510065,
+                  "graph_capture_seconds": 0.0033770930022001266,
+                  "factorizations": 1,
+                  "change_checks": 3,
+                  "coarse_rows": 5120,
+                  "matrix_nnz": 33152,
+                  "unit_rhs_coarse_residual_inf": 0.0010814666748046875,
+                  "coarse_solves_per_application": 8,
+                  "cudss_allocator_peak_bytes": 16162596,
+                  "graph_replays": 18,
+                  "device_apply_seconds": 0.06085004806518555
+                },
+                "max_head_delta_from_same_depth_cpu_lu_m": 0.0
+              }
+            ]
+          }
+        },
+        "6": {
+          "graph": {
+            "public_solve_seconds_median": 1.3826426391024143,
+            "backend_seconds_median": 0.15649863600265235,
+            "krylov_iterations_median": 28,
+            "peak_warp_cuda_pool_bytes_median": 1157211536,
+            "max_head_delta_from_same_depth_graph_m": 0.0,
+            "hierarchy_shapes": [
+              [
+                5,
+                500,
+                500
+              ],
+              [
+                5,
+                250,
+                250
+              ],
+              [
+                5,
+                125,
+                125
+              ],
+              [
+                5,
+                63,
+                63
+              ],
+              [
+                5,
+                32,
+                32
+              ],
+              [
+                5,
+                16,
+                16
+              ]
+            ],
+            "samples": [
+              {
+                "public_solve_seconds": 1.362372182076797,
+                "krylov_iterations": 28,
+                "outer_iterations": 3,
+                "cuda_pool_high_bytes": 1157211536,
+                "process_peak_rss_bytes": 1989353472,
+                "max_head_residual_rms_m": 1.0159320276560995e-11,
+                "backend_seconds": 0.15661889198236167,
+                "max_head_delta_from_same_depth_graph_m": 0.0,
+                "direct": null
+              },
+              {
+                "public_solve_seconds": 1.3826426391024143,
+                "krylov_iterations": 28,
+                "outer_iterations": 3,
+                "cuda_pool_high_bytes": 1157211536,
+                "process_peak_rss_bytes": 1988849664,
+                "max_head_residual_rms_m": 1.0159320276560995e-11,
+                "backend_seconds": 0.15649863600265235,
+                "max_head_delta_from_same_depth_graph_m": 0.0,
+                "direct": null
+              },
+              {
+                "public_solve_seconds": 1.3987679509446025,
+                "krylov_iterations": 28,
+                "outer_iterations": 3,
+                "cuda_pool_high_bytes": 1157211536,
+                "process_peak_rss_bytes": 1988853760,
+                "max_head_residual_rms_m": 1.0159320276560995e-11,
+                "backend_seconds": 0.1555816630134359,
+                "max_head_delta_from_same_depth_graph_m": 0.0,
+                "direct": null
+              }
+            ]
+          },
+          "direct-single": {
+            "public_solve_seconds_median": 1.4769549020566046,
+            "backend_seconds_median": 0.19841002102475613,
+            "krylov_iterations_median": 18,
+            "peak_warp_cuda_pool_bytes_median": 1157211536,
+            "max_head_delta_from_same_depth_graph_m": 3.497448091138722e-07,
+            "hierarchy_shapes": [
+              [
+                5,
+                500,
+                500
+              ],
+              [
+                5,
+                250,
+                250
+              ],
+              [
+                5,
+                125,
+                125
+              ],
+              [
+                5,
+                63,
+                63
+              ],
+              [
+                5,
+                32,
+                32
+              ],
+              [
+                5,
+                16,
+                16
+              ]
+            ],
+            "samples": [
+              {
+                "public_solve_seconds": 1.3672650349326432,
+                "krylov_iterations": 18,
+                "outer_iterations": 3,
+                "cuda_pool_high_bytes": 1157211536,
+                "process_peak_rss_bytes": 1991036928,
+                "max_head_residual_rms_m": 6.054756402742512e-12,
+                "backend_seconds": 0.19620584789663553,
+                "max_head_delta_from_same_depth_graph_m": 3.497448091138722e-07,
+                "direct": {
+                  "solves": 288,
+                  "factorizations": 1,
+                  "matrix_seconds": 0.0017333420692011714,
+                  "factor_seconds": 0.00319693295750767,
+                  "coarse_wall_seconds": 0.03858286968898028,
+                  "factor_nnz": 144846,
+                  "verified_factors": 1,
+                  "lu_relative_residual_inf": 7.409153140378639e-14,
+                  "device_relative_residual_inf": 1.3207402277653641e-05,
+                  "shape": [
+                    5,
+                    16,
+                    16
+                  ],
+                  "free_rows": 1280,
+                  "matrix_nnz": 8128,
+                  "matrix_csc_bytes": 102660,
+                  "factor_value_index_bytes_estimate": 1738152
+                }
+              },
+              {
+                "public_solve_seconds": 1.4812286869855598,
+                "krylov_iterations": 18,
+                "outer_iterations": 3,
+                "cuda_pool_high_bytes": 1157211536,
+                "process_peak_rss_bytes": 1991753728,
+                "max_head_residual_rms_m": 6.054756402742512e-12,
+                "backend_seconds": 0.19841002102475613,
+                "max_head_delta_from_same_depth_graph_m": 3.497448091138722e-07,
+                "direct": {
+                  "solves": 288,
+                  "factorizations": 1,
+                  "matrix_seconds": 0.0017900358652696013,
+                  "factor_seconds": 0.0033557749120518565,
+                  "coarse_wall_seconds": 0.03940556850284338,
+                  "factor_nnz": 144846,
+                  "verified_factors": 1,
+                  "lu_relative_residual_inf": 7.409153140378639e-14,
+                  "device_relative_residual_inf": 1.3207402277653641e-05,
+                  "shape": [
+                    5,
+                    16,
+                    16
+                  ],
+                  "free_rows": 1280,
+                  "matrix_nnz": 8128,
+                  "matrix_csc_bytes": 102660,
+                  "factor_value_index_bytes_estimate": 1738152
+                }
+              },
+              {
+                "public_solve_seconds": 1.4769549020566046,
+                "krylov_iterations": 18,
+                "outer_iterations": 3,
+                "cuda_pool_high_bytes": 1157211536,
+                "process_peak_rss_bytes": 1972367360,
+                "max_head_residual_rms_m": 6.054756402742512e-12,
+                "backend_seconds": 0.19942370196804404,
+                "max_head_delta_from_same_depth_graph_m": 3.497448091138722e-07,
+                "direct": {
+                  "solves": 288,
+                  "factorizations": 1,
+                  "matrix_seconds": 0.001842039986513555,
+                  "factor_seconds": 0.003271042020060122,
+                  "coarse_wall_seconds": 0.04006251529790461,
+                  "factor_nnz": 144846,
+                  "verified_factors": 1,
+                  "lu_relative_residual_inf": 7.409153140378639e-14,
+                  "device_relative_residual_inf": 1.3207402277653641e-05,
+                  "shape": [
+                    5,
+                    16,
+                    16
+                  ],
+                  "free_rows": 1280,
+                  "matrix_nnz": 8128,
+                  "matrix_csc_bytes": 102660,
+                  "factor_value_index_bytes_estimate": 1738152
+                }
+              }
+            ]
+          },
+          "cudss": {
+            "public_solve_seconds_median": 1.3536608329741284,
+            "backend_seconds_median": 0.15351351804565638,
+            "krylov_iterations_median": 18,
+            "peak_warp_cuda_pool_bytes_median": 1163539248,
+            "max_head_delta_from_same_depth_graph_m": 3.497448091138722e-07,
+            "hierarchy_shapes": [
+              [
+                5,
+                500,
+                500
+              ],
+              [
+                5,
+                250,
+                250
+              ],
+              [
+                5,
+                125,
+                125
+              ],
+              [
+                5,
+                63,
+                63
+              ],
+              [
+                5,
+                32,
+                32
+              ],
+              [
+                5,
+                16,
+                16
+              ]
+            ],
+            "samples": [
+              {
+                "public_solve_seconds": 1.3536608329741284,
+                "krylov_iterations": 18,
+                "outer_iterations": 3,
+                "cuda_pool_high_bytes": 1163539248,
+                "process_peak_rss_bytes": 2220998656,
+                "max_head_residual_rms_m": 6.054756402742512e-12,
+                "backend_seconds": 0.151783118955791,
+                "max_head_delta_from_same_depth_graph_m": 3.497448091138722e-07,
+                "direct": {
+                  "analysis_seconds": 0.013647897052578628,
+                  "assembly_seconds": 0.011218808125704527,
+                  "factor_seconds": 0.005241043982096016,
+                  "graph_capture_seconds": 0.00683444004971534,
+                  "factorizations": 1,
+                  "change_checks": 3,
+                  "coarse_rows": 1280,
+                  "matrix_nnz": 8128,
+                  "unit_rhs_coarse_residual_inf": 0.00014013051986694336,
+                  "coarse_solves_per_application": 16,
+                  "cudss_allocator_peak_bytes": 6168724,
+                  "graph_replays": 18,
+                  "device_apply_seconds": 0.0834064645767212
+                },
+                "max_head_delta_from_same_depth_cpu_lu_m": 0.0
+              },
+              {
+                "public_solve_seconds": 1.3532929900102317,
+                "krylov_iterations": 18,
+                "outer_iterations": 3,
+                "cuda_pool_high_bytes": 1163539248,
+                "process_peak_rss_bytes": 2221465600,
+                "max_head_residual_rms_m": 6.054756402742512e-12,
+                "backend_seconds": 0.15351351804565638,
+                "max_head_delta_from_same_depth_graph_m": 3.497448091138722e-07,
+                "direct": {
+                  "analysis_seconds": 0.013568717055022717,
+                  "assembly_seconds": 0.011946105165407062,
+                  "factor_seconds": 0.005071811960078776,
+                  "graph_capture_seconds": 0.00674093107227236,
+                  "factorizations": 1,
+                  "change_checks": 3,
+                  "coarse_rows": 1280,
+                  "matrix_nnz": 8128,
+                  "unit_rhs_coarse_residual_inf": 0.00014013051986694336,
+                  "coarse_solves_per_application": 16,
+                  "cudss_allocator_peak_bytes": 6168724,
+                  "graph_replays": 18,
+                  "device_apply_seconds": 0.08455235242843627
+                },
+                "max_head_delta_from_same_depth_cpu_lu_m": 0.0
+              },
+              {
+                "public_solve_seconds": 1.4170237550279126,
+                "krylov_iterations": 18,
+                "outer_iterations": 3,
+                "cuda_pool_high_bytes": 1163539248,
+                "process_peak_rss_bytes": 2201681920,
+                "max_head_residual_rms_m": 6.054756402742512e-12,
+                "backend_seconds": 0.15401347598526627,
+                "max_head_delta_from_same_depth_graph_m": 3.497448091138722e-07,
+                "direct": {
+                  "analysis_seconds": 0.013621060992591083,
+                  "assembly_seconds": 0.011925255879759789,
+                  "factor_seconds": 0.0052208739798516035,
+                  "graph_capture_seconds": 0.006905355025082827,
+                  "factorizations": 1,
+                  "change_checks": 3,
+                  "coarse_rows": 1280,
+                  "matrix_nnz": 8128,
+                  "unit_rhs_coarse_residual_inf": 0.00014013051986694336,
+                  "coarse_solves_per_application": 16,
+                  "cudss_allocator_peak_bytes": 6168724,
+                  "graph_replays": 18,
+                  "device_apply_seconds": 0.08462540769577026
+                },
+                "max_head_delta_from_same_depth_cpu_lu_m": 0.0
+              }
+            ]
+          }
+        }
+      }
+    },
+    "1000-ghb-steady": {
+      "size": 1000,
+      "layers": 5,
+      "variant": "confined",
+      "anisotropy": 100.0,
+      "ghb": true,
+      "periods": 0,
+      "case_sha256": "2e92fc04c86fe4861911aa412edbad1fc775d1490db2a09a7922954f1f912a9b",
+      "depths": {
+        "5": {
+          "graph": {
+            "public_solve_seconds_median": 7.933686685049906,
+            "backend_seconds_median": 1.3886998299276456,
+            "krylov_iterations_median": 107,
+            "peak_warp_cuda_pool_bytes_median": 4827133952,
+            "max_head_delta_from_same_depth_graph_m": 0.0,
+            "hierarchy_shapes": [
+              [
+                5,
+                1000,
+                1000
+              ],
+              [
+                5,
+                500,
+                500
+              ],
+              [
+                5,
+                250,
+                250
+              ],
+              [
+                5,
+                125,
+                125
+              ],
+              [
+                5,
+                63,
+                63
+              ]
+            ],
+            "samples": [
+              {
+                "public_solve_seconds": 8.985092523973435,
+                "krylov_iterations": 107,
+                "outer_iterations": 4,
+                "cuda_pool_high_bytes": 4827133952,
+                "process_peak_rss_bytes": 6542004224,
+                "max_head_residual_rms_m": 7.888748704160012e-13,
+                "backend_seconds": 1.3937801970168948,
+                "max_head_delta_from_same_depth_graph_m": 0.0,
+                "direct": null
+              },
+              {
+                "public_solve_seconds": 7.933686685049906,
+                "krylov_iterations": 107,
+                "outer_iterations": 4,
+                "cuda_pool_high_bytes": 4827133952,
+                "process_peak_rss_bytes": 6553382912,
+                "max_head_residual_rms_m": 7.888748704160012e-13,
+                "backend_seconds": 1.3885590030113235,
+                "max_head_delta_from_same_depth_graph_m": 0.0,
+                "direct": null
+              },
+              {
+                "public_solve_seconds": 7.914353194064461,
+                "krylov_iterations": 107,
+                "outer_iterations": 4,
+                "cuda_pool_high_bytes": 4827133952,
+                "process_peak_rss_bytes": 6542356480,
+                "max_head_residual_rms_m": 7.888748704160012e-13,
+                "backend_seconds": 1.3886998299276456,
+                "max_head_delta_from_same_depth_graph_m": 0.0,
+                "direct": null
+              }
+            ]
+          },
+          "direct-single": {
+            "public_solve_seconds_median": 7.358088321983814,
+            "backend_seconds_median": 0.7597711409907788,
+            "krylov_iterations_median": 18,
+            "peak_warp_cuda_pool_bytes_median": 4827133952,
+            "max_head_delta_from_same_depth_graph_m": 1.4640997836323777e-07,
+            "hierarchy_shapes": [
+              [
+                5,
+                1000,
+                1000
+              ],
+              [
+                5,
+                500,
+                500
+              ],
+              [
+                5,
+                250,
+                250
+              ],
+              [
+                5,
+                125,
+                125
+              ],
+              [
+                5,
+                63,
+                63
+              ]
+            ],
+            "samples": [
+              {
+                "public_solve_seconds": 7.393101939931512,
+                "krylov_iterations": 18,
+                "outer_iterations": 4,
+                "cuda_pool_high_bytes": 4827133952,
+                "process_peak_rss_bytes": 6607065088,
+                "max_head_residual_rms_m": 1.615397476645149e-12,
+                "backend_seconds": 0.7597711409907788,
+                "max_head_delta_from_same_depth_graph_m": 1.4640997836323777e-07,
+                "direct": {
+                  "solves": 144,
+                  "factorizations": 1,
+                  "matrix_seconds": 0.015300753875635564,
+                  "factor_seconds": 0.07558735308703035,
+                  "coarse_wall_seconds": 0.5054769199341536,
+                  "factor_nnz": 2895286,
+                  "verified_factors": 1,
+                  "lu_relative_residual_inf": 4.613291787577259e-15,
+                  "device_relative_residual_inf": 5.5914120442439e-07,
+                  "shape": [
+                    5,
+                    63,
+                    63
+                  ],
+                  "free_rows": 19845,
+                  "matrix_nnz": 129717,
+                  "matrix_csc_bytes": 1635988,
+                  "factor_value_index_bytes_estimate": 34743432
+                }
+              },
+              {
+                "public_solve_seconds": 7.358088321983814,
+                "krylov_iterations": 18,
+                "outer_iterations": 4,
+                "cuda_pool_high_bytes": 4827133952,
+                "process_peak_rss_bytes": 6606712832,
+                "max_head_residual_rms_m": 1.615397476645149e-12,
+                "backend_seconds": 0.7695363550446928,
+                "max_head_delta_from_same_depth_graph_m": 1.4640997836323777e-07,
+                "direct": {
+                  "solves": 144,
+                  "factorizations": 1,
+                  "matrix_seconds": 0.0156922071473673,
+                  "factor_seconds": 0.07544803305063397,
+                  "coarse_wall_seconds": 0.5159446251345798,
+                  "factor_nnz": 2895286,
+                  "verified_factors": 1,
+                  "lu_relative_residual_inf": 4.613291787577259e-15,
+                  "device_relative_residual_inf": 5.5914120442439e-07,
+                  "shape": [
+                    5,
+                    63,
+                    63
+                  ],
+                  "free_rows": 19845,
+                  "matrix_nnz": 129717,
+                  "matrix_csc_bytes": 1635988,
+                  "factor_value_index_bytes_estimate": 34743432
+                }
+              },
+              {
+                "public_solve_seconds": 7.227118626004085,
+                "krylov_iterations": 18,
+                "outer_iterations": 4,
+                "cuda_pool_high_bytes": 4827133952,
+                "process_peak_rss_bytes": 6607147008,
+                "max_head_residual_rms_m": 1.615397476645149e-12,
+                "backend_seconds": 0.7392124800244346,
+                "max_head_delta_from_same_depth_graph_m": 1.4640997836323777e-07,
+                "direct": {
+                  "solves": 144,
+                  "factorizations": 1,
+                  "matrix_seconds": 0.015602677827700973,
+                  "factor_seconds": 0.07432087406050414,
+                  "coarse_wall_seconds": 0.48769187356811017,
+                  "factor_nnz": 2895286,
+                  "verified_factors": 1,
+                  "lu_relative_residual_inf": 4.613291787577259e-15,
+                  "device_relative_residual_inf": 5.5914120442439e-07,
+                  "shape": [
+                    5,
+                    63,
+                    63
+                  ],
+                  "free_rows": 19845,
+                  "matrix_nnz": 129717,
+                  "matrix_csc_bytes": 1635988,
+                  "factor_value_index_bytes_estimate": 34743432
+                }
+              }
+            ]
+          },
+          "cudss": {
+            "public_solve_seconds_median": 6.963801344041713,
+            "backend_seconds_median": 0.4150274890707806,
+            "krylov_iterations_median": 18,
+            "peak_warp_cuda_pool_bytes_median": 4885975892,
+            "max_head_delta_from_same_depth_graph_m": 1.4640997836323777e-07,
+            "hierarchy_shapes": [
+              [
+                5,
+                1000,
+                1000
+              ],
+              [
+                5,
+                500,
+                500
+              ],
+              [
+                5,
+                250,
+                250
+              ],
+              [
+                5,
+                125,
+                125
+              ],
+              [
+                5,
+                63,
+                63
+              ]
+            ],
+            "samples": [
+              {
+                "public_solve_seconds": 6.963801344041713,
+                "krylov_iterations": 18,
+                "outer_iterations": 4,
+                "cuda_pool_high_bytes": 4885975892,
+                "process_peak_rss_bytes": 6782181376,
+                "max_head_residual_rms_m": 1.615397476645149e-12,
+                "backend_seconds": 0.4160867970203981,
+                "max_head_delta_from_same_depth_graph_m": 1.4640997836323777e-07,
+                "direct": {
+                  "analysis_seconds": 0.07830991805531085,
+                  "assembly_seconds": 0.01317680103238672,
+                  "factor_seconds": 0.009693677071481943,
+                  "graph_capture_seconds": 0.003999468986876309,
+                  "factorizations": 1,
+                  "change_checks": 4,
+                  "coarse_rows": 19845,
+                  "matrix_nnz": 129717,
+                  "unit_rhs_coarse_residual_inf": 0.0014081001281738281,
+                  "coarse_solves_per_application": 8,
+                  "cudss_allocator_peak_bytes": 56332764,
+                  "graph_replays": 18,
+                  "device_apply_seconds": 0.16153552055358886
+                },
+                "max_head_delta_from_same_depth_cpu_lu_m": 0.0
+              },
+              {
+                "public_solve_seconds": 6.958396308938973,
+                "krylov_iterations": 18,
+                "outer_iterations": 4,
+                "cuda_pool_high_bytes": 4885975892,
+                "process_peak_rss_bytes": 6781927424,
+                "max_head_residual_rms_m": 1.615397476645149e-12,
+                "backend_seconds": 0.412936610984616,
+                "max_head_delta_from_same_depth_graph_m": 1.4640997836323777e-07,
+                "direct": {
+                  "analysis_seconds": 0.07717169600073248,
+                  "assembly_seconds": 0.012779657961800694,
+                  "factor_seconds": 0.009721994050778449,
+                  "graph_capture_seconds": 0.0034597180783748627,
+                  "factorizations": 1,
+                  "change_checks": 4,
+                  "coarse_rows": 19845,
+                  "matrix_nnz": 129717,
+                  "unit_rhs_coarse_residual_inf": 0.0014081001281738281,
+                  "coarse_solves_per_application": 8,
+                  "cudss_allocator_peak_bytes": 56332764,
+                  "graph_replays": 18,
+                  "device_apply_seconds": 0.16064012813568118
+                },
+                "max_head_delta_from_same_depth_cpu_lu_m": 0.0
+              },
+              {
+                "public_solve_seconds": 7.013097616028972,
+                "krylov_iterations": 18,
+                "outer_iterations": 4,
+                "cuda_pool_high_bytes": 4885975892,
+                "process_peak_rss_bytes": 6781476864,
+                "max_head_residual_rms_m": 1.615397476645149e-12,
+                "backend_seconds": 0.4150274890707806,
+                "max_head_delta_from_same_depth_graph_m": 1.4640997836323777e-07,
+                "direct": {
+                  "analysis_seconds": 0.07715004694182426,
+                  "assembly_seconds": 0.012898231972940266,
+                  "factor_seconds": 0.009637587005272508,
+                  "graph_capture_seconds": 0.003399572102352977,
+                  "factorizations": 1,
+                  "change_checks": 4,
+                  "coarse_rows": 19845,
+                  "matrix_nnz": 129717,
+                  "unit_rhs_coarse_residual_inf": 0.0014081001281738281,
+                  "coarse_solves_per_application": 8,
+                  "cudss_allocator_peak_bytes": 56332764,
+                  "graph_replays": 18,
+                  "device_apply_seconds": 0.16279222297668458
+                },
+                "max_head_delta_from_same_depth_cpu_lu_m": 0.0
+              }
+            ]
+          }
+        },
+        "6": {
+          "graph": {
+            "public_solve_seconds_median": 6.978260851930827,
+            "backend_seconds_median": 0.4390521979657933,
+            "krylov_iterations_median": 27,
+            "peak_warp_cuda_pool_bytes_median": 4828383584,
+            "max_head_delta_from_same_depth_graph_m": 0.0,
+            "hierarchy_shapes": [
+              [
+                5,
+                1000,
+                1000
+              ],
+              [
+                5,
+                500,
+                500
+              ],
+              [
+                5,
+                250,
+                250
+              ],
+              [
+                5,
+                125,
+                125
+              ],
+              [
+                5,
+                63,
+                63
+              ],
+              [
+                5,
+                32,
+                32
+              ]
+            ],
+            "samples": [
+              {
+                "public_solve_seconds": 6.916121631977148,
+                "krylov_iterations": 27,
+                "outer_iterations": 4,
+                "cuda_pool_high_bytes": 4828383584,
+                "process_peak_rss_bytes": 6557790208,
+                "max_head_residual_rms_m": 4.140932114900047e-13,
+                "backend_seconds": 0.4399967900244519,
+                "max_head_delta_from_same_depth_graph_m": 0.0,
+                "direct": null
+              },
+              {
+                "public_solve_seconds": 6.986706239986233,
+                "krylov_iterations": 27,
+                "outer_iterations": 4,
+                "cuda_pool_high_bytes": 4828383584,
+                "process_peak_rss_bytes": 6557888512,
+                "max_head_residual_rms_m": 4.140932114900047e-13,
+                "backend_seconds": 0.4390521979657933,
+                "max_head_delta_from_same_depth_graph_m": 0.0,
+                "direct": null
+              },
+              {
+                "public_solve_seconds": 6.978260851930827,
+                "krylov_iterations": 27,
+                "outer_iterations": 4,
+                "cuda_pool_high_bytes": 4828383584,
+                "process_peak_rss_bytes": 6557327360,
+                "max_head_residual_rms_m": 4.140932114900047e-13,
+                "backend_seconds": 0.43842352798674256,
+                "max_head_delta_from_same_depth_graph_m": 0.0,
+                "direct": null
+              }
+            ]
+          },
+          "direct-single": {
+            "public_solve_seconds_median": 7.062218258040957,
+            "backend_seconds_median": 0.5306384910363704,
+            "krylov_iterations_median": 19,
+            "peak_warp_cuda_pool_bytes_median": 4828383584,
+            "max_head_delta_from_same_depth_graph_m": 9.529645517147856e-09,
+            "hierarchy_shapes": [
+              [
+                5,
+                1000,
+                1000
+              ],
+              [
+                5,
+                500,
+                500
+              ],
+              [
+                5,
+                250,
+                250
+              ],
+              [
+                5,
+                125,
+                125
+              ],
+              [
+                5,
+                63,
+                63
+              ],
+              [
+                5,
+                32,
+                32
+              ]
+            ],
+            "samples": [
+              {
+                "public_solve_seconds": 6.989699412952177,
+                "krylov_iterations": 19,
+                "outer_iterations": 4,
+                "cuda_pool_high_bytes": 4828383584,
+                "process_peak_rss_bytes": 6571364352,
+                "max_head_residual_rms_m": 4.4034379367141854e-13,
+                "backend_seconds": 0.5306384910363704,
+                "max_head_delta_from_same_depth_graph_m": 9.529645517147856e-09,
+                "direct": {
+                  "solves": 304,
+                  "factorizations": 1,
+                  "matrix_seconds": 0.010960919898934662,
+                  "factor_seconds": 0.020626985002309084,
+                  "coarse_wall_seconds": 0.20790932059753686,
+                  "factor_nnz": 800912,
+                  "verified_factors": 1,
+                  "lu_relative_residual_inf": 1.2096694345755395e-15,
+                  "device_relative_residual_inf": 7.326974008359011e-07,
+                  "shape": [
+                    5,
+                    32,
+                    32
+                  ],
+                  "free_rows": 5120,
+                  "matrix_nnz": 33152,
+                  "matrix_csc_bytes": 418308,
+                  "factor_value_index_bytes_estimate": 9610944
+                }
+              },
+              {
+                "public_solve_seconds": 7.289309996063821,
+                "krylov_iterations": 19,
+                "outer_iterations": 4,
+                "cuda_pool_high_bytes": 4828383584,
+                "process_peak_rss_bytes": 6571864064,
+                "max_head_residual_rms_m": 4.4034379367141854e-13,
+                "backend_seconds": 0.5371448789956048,
+                "max_head_delta_from_same_depth_graph_m": 9.529645517147856e-09,
+                "direct": {
+                  "solves": 304,
+                  "factorizations": 1,
+                  "matrix_seconds": 0.01089474989566952,
+                  "factor_seconds": 0.021169031970202923,
+                  "coarse_wall_seconds": 0.21089521318208426,
+                  "factor_nnz": 800912,
+                  "verified_factors": 1,
+                  "lu_relative_residual_inf": 1.2096694345755395e-15,
+                  "device_relative_residual_inf": 7.326974008359011e-07,
+                  "shape": [
+                    5,
+                    32,
+                    32
+                  ],
+                  "free_rows": 5120,
+                  "matrix_nnz": 33152,
+                  "matrix_csc_bytes": 418308,
+                  "factor_value_index_bytes_estimate": 9610944
+                }
+              },
+              {
+                "public_solve_seconds": 7.062218258040957,
+                "krylov_iterations": 19,
+                "outer_iterations": 4,
+                "cuda_pool_high_bytes": 4828383584,
+                "process_peak_rss_bytes": 6571491328,
+                "max_head_residual_rms_m": 4.4034379367141854e-13,
+                "backend_seconds": 0.5177752189338207,
+                "max_head_delta_from_same_depth_graph_m": 9.529645517147856e-09,
+                "direct": {
+                  "solves": 304,
+                  "factorizations": 1,
+                  "matrix_seconds": 0.010966465924866498,
+                  "factor_seconds": 0.02035003900527954,
+                  "coarse_wall_seconds": 0.19878825929481536,
+                  "factor_nnz": 800912,
+                  "verified_factors": 1,
+                  "lu_relative_residual_inf": 1.2096694345755395e-15,
+                  "device_relative_residual_inf": 7.326974008359011e-07,
+                  "shape": [
+                    5,
+                    32,
+                    32
+                  ],
+                  "free_rows": 5120,
+                  "matrix_nnz": 33152,
+                  "matrix_csc_bytes": 418308,
+                  "factor_value_index_bytes_estimate": 9610944
+                }
+              }
+            ]
+          },
+          "cudss": {
+            "public_solve_seconds_median": 7.050012612016872,
+            "backend_seconds_median": 0.39747799606993794,
+            "krylov_iterations_median": 19,
+            "peak_warp_cuda_pool_bytes_median": 4845189776,
+            "max_head_delta_from_same_depth_graph_m": 9.529645517147856e-09,
+            "hierarchy_shapes": [
+              [
+                5,
+                1000,
+                1000
+              ],
+              [
+                5,
+                500,
+                500
+              ],
+              [
+                5,
+                250,
+                250
+              ],
+              [
+                5,
+                125,
+                125
+              ],
+              [
+                5,
+                63,
+                63
+              ],
+              [
+                5,
+                32,
+                32
+              ]
+            ],
+            "samples": [
+              {
+                "public_solve_seconds": 7.1508987080305815,
+                "krylov_iterations": 19,
+                "outer_iterations": 4,
+                "cuda_pool_high_bytes": 4845189776,
+                "process_peak_rss_bytes": 6784704512,
+                "max_head_residual_rms_m": 4.4034379367141854e-13,
+                "backend_seconds": 0.39747799606993794,
+                "max_head_delta_from_same_depth_graph_m": 9.529645517147856e-09,
+                "direct": {
+                  "analysis_seconds": 0.02743577805813402,
+                  "assembly_seconds": 0.012750362977385521,
+                  "factor_seconds": 0.006382146035321057,
+                  "graph_capture_seconds": 0.007039129035547376,
+                  "factorizations": 1,
+                  "change_checks": 4,
+                  "coarse_rows": 5120,
+                  "matrix_nnz": 33152,
+                  "unit_rhs_coarse_residual_inf": 0.00027823448181152344,
+                  "coarse_solves_per_application": 16,
+                  "cudss_allocator_peak_bytes": 16162596,
+                  "graph_replays": 19,
+                  "device_apply_seconds": 0.18730441474914553
+                },
+                "max_head_delta_from_same_depth_cpu_lu_m": 0.0
+              },
+              {
+                "public_solve_seconds": 6.929892151034437,
+                "krylov_iterations": 19,
+                "outer_iterations": 4,
+                "cuda_pool_high_bytes": 4845189776,
+                "process_peak_rss_bytes": 6785105920,
+                "max_head_residual_rms_m": 4.4034379367141854e-13,
+                "backend_seconds": 0.3967641410417855,
+                "max_head_delta_from_same_depth_graph_m": 9.529645517147856e-09,
+                "direct": {
+                  "analysis_seconds": 0.02764404797926545,
+                  "assembly_seconds": 0.012530248030088842,
+                  "factor_seconds": 0.006333258002996445,
+                  "graph_capture_seconds": 0.006889536045491695,
+                  "factorizations": 1,
+                  "change_checks": 4,
+                  "coarse_rows": 5120,
+                  "matrix_nnz": 33152,
+                  "unit_rhs_coarse_residual_inf": 0.00027823448181152344,
+                  "coarse_solves_per_application": 16,
+                  "cudss_allocator_peak_bytes": 16162596,
+                  "graph_replays": 19,
+                  "device_apply_seconds": 0.18717881584167478
+                },
+                "max_head_delta_from_same_depth_cpu_lu_m": 0.0
+              },
+              {
+                "public_solve_seconds": 7.050012612016872,
+                "krylov_iterations": 19,
+                "outer_iterations": 4,
+                "cuda_pool_high_bytes": 4845189776,
+                "process_peak_rss_bytes": 6783606784,
+                "max_head_residual_rms_m": 4.4034379367141854e-13,
+                "backend_seconds": 0.39980222191661596,
+                "max_head_delta_from_same_depth_graph_m": 9.529645517147856e-09,
+                "direct": {
+                  "analysis_seconds": 0.028064275975339115,
+                  "assembly_seconds": 0.012253168853931129,
+                  "factor_seconds": 0.006292485981248319,
+                  "graph_capture_seconds": 0.007166028022766113,
+                  "factorizations": 1,
+                  "change_checks": 4,
+                  "coarse_rows": 5120,
+                  "matrix_nnz": 33152,
+                  "unit_rhs_coarse_residual_inf": 0.00027823448181152344,
+                  "coarse_solves_per_application": 16,
+                  "cudss_allocator_peak_bytes": 16162596,
+                  "graph_replays": 19,
+                  "device_apply_seconds": 0.18933753585815433
+                },
+                "max_head_delta_from_same_depth_cpu_lu_m": 0.0
+              }
+            ]
+          }
+        }
+      }
+    },
+    "500-convertible-transient": {
+      "size": 500,
+      "layers": 5,
+      "variant": "convertible",
+      "anisotropy": 100.0,
+      "ghb": true,
+      "periods": 20,
+      "case_sha256": "bd6d4d32caf2d882d5958bf7f03b9a5f3f667e702d5dfe8139ddbb5dfcb3d712",
+      "depths": {
+        "5": {
+          "graph": {
+            "public_solve_seconds_median": 1.6411154909292236,
+            "backend_seconds_median": 1.1924334878567606,
+            "krylov_iterations_median": 268,
+            "peak_warp_cuda_pool_bytes_median": 1416899120,
+            "max_head_delta_from_same_depth_graph_m": 0.0,
+            "hierarchy_shapes": [
+              [
+                5,
+                500,
+                500
+              ],
+              [
+                5,
+                250,
+                250
+              ],
+              [
+                5,
+                125,
+                125
+              ],
+              [
+                5,
+                63,
+                63
+              ],
+              [
+                5,
+                32,
+                32
+              ]
+            ],
+            "samples": [
+              {
+                "public_solve_seconds": 1.6411154909292236,
+                "krylov_iterations": 268,
+                "outer_iterations": 57,
+                "cuda_pool_high_bytes": 1416899120,
+                "process_peak_rss_bytes": 3097571328,
+                "max_head_residual_rms_m": 4.3487438900773725e-11,
+                "backend_seconds": 1.1924334878567606,
+                "max_head_delta_from_same_depth_graph_m": 0.0,
+                "direct": null
+              }
+            ]
+          },
+          "direct-single": {
+            "public_solve_seconds_median": 4.294266219018027,
+            "backend_seconds_median": 3.834120716084726,
+            "krylov_iterations_median": 268,
+            "peak_warp_cuda_pool_bytes_median": 1416899120,
+            "max_head_delta_from_same_depth_graph_m": 4.309069767671758e-09,
+            "hierarchy_shapes": [
+              [
+                5,
+                500,
+                500
+              ],
+              [
+                5,
+                250,
+                250
+              ],
+              [
+                5,
+                125,
+                125
+              ],
+              [
+                5,
+                63,
+                63
+              ],
+              [
+                5,
+                32,
+                32
+              ]
+            ],
+            "samples": [
+              {
+                "public_solve_seconds": 4.294266219018027,
+                "krylov_iterations": 268,
+                "outer_iterations": 57,
+                "cuda_pool_high_bytes": 1416899120,
+                "process_peak_rss_bytes": 3097968640,
+                "max_head_residual_rms_m": 4.384005014281514e-11,
+                "backend_seconds": 3.834120716084726,
+                "max_head_delta_from_same_depth_graph_m": 4.309069767671758e-09,
+                "direct": {
+                  "solves": 2144,
+                  "factorizations": 57,
+                  "matrix_seconds": 0.05384670605417341,
+                  "factor_seconds": 1.2035219827666879,
+                  "coarse_wall_seconds": 2.2676316204015166,
+                  "factor_nnz": 800912,
+                  "verified_factors": 57,
+                  "lu_relative_residual_inf": 1.7564663750204543e-14,
+                  "device_relative_residual_inf": 2.62297890492571e-06,
+                  "shape": [
+                    5,
+                    32,
+                    32
+                  ],
+                  "free_rows": 5120,
+                  "matrix_nnz": 33152,
+                  "matrix_csc_bytes": 418308,
+                  "factor_value_index_bytes_estimate": 9610944
+                }
+              }
+            ]
+          },
+          "cudss": {
+            "public_solve_seconds_median": 2.2081573789473623,
+            "backend_seconds_median": 1.7579126033233479,
+            "krylov_iterations_median": 268,
+            "peak_warp_cuda_pool_bytes_median": 1433705312,
+            "max_head_delta_from_same_depth_graph_m": 4.309069767671758e-09,
+            "hierarchy_shapes": [
+              [
+                5,
+                500,
+                500
+              ],
+              [
+                5,
+                250,
+                250
+              ],
+              [
+                5,
+                125,
+                125
+              ],
+              [
+                5,
+                63,
+                63
+              ],
+              [
+                5,
+                32,
+                32
+              ]
+            ],
+            "samples": [
+              {
+                "public_solve_seconds": 2.2081573789473623,
+                "krylov_iterations": 268,
+                "outer_iterations": 57,
+                "cuda_pool_high_bytes": 1433705312,
+                "process_peak_rss_bytes": 3363536896,
+                "max_head_residual_rms_m": 4.384005014281514e-11,
+                "backend_seconds": 1.7579126033233479,
+                "max_head_delta_from_same_depth_graph_m": 4.309069767671758e-09,
+                "direct": {
+                  "analysis_seconds": 0.028429816011339426,
+                  "assembly_seconds": 0.01465512067079544,
+                  "factor_seconds": 0.0872440297389403,
+                  "graph_capture_seconds": 0.193781319539994,
+                  "factorizations": 57,
+                  "change_checks": 57,
+                  "coarse_rows": 5120,
+                  "matrix_nnz": 33152,
+                  "unit_rhs_coarse_residual_inf": 4.494190216064453e-05,
+                  "coarse_solves_per_application": 8,
+                  "cudss_allocator_peak_bytes": 16162596,
+                  "graph_replays": 268,
+                  "device_apply_seconds": 0.8945527436733248
+                },
+                "max_head_delta_from_same_depth_cpu_lu_m": 0.0
+              }
+            ]
+          }
+        },
+        "6": {
+          "graph": {
+            "public_solve_seconds_median": 2.0329397190362215,
+            "backend_seconds_median": 1.5766672797035426,
+            "krylov_iterations_median": 268,
+            "peak_warp_cuda_pool_bytes_median": 1417211552,
+            "max_head_delta_from_same_depth_graph_m": 0.0,
+            "hierarchy_shapes": [
+              [
+                5,
+                500,
+                500
+              ],
+              [
+                5,
+                250,
+                250
+              ],
+              [
+                5,
+                125,
+                125
+              ],
+              [
+                5,
+                63,
+                63
+              ],
+              [
+                5,
+                32,
+                32
+              ],
+              [
+                5,
+                16,
+                16
+              ]
+            ],
+            "samples": [
+              {
+                "public_solve_seconds": 2.0329397190362215,
+                "krylov_iterations": 268,
+                "outer_iterations": 57,
+                "cuda_pool_high_bytes": 1417211552,
+                "process_peak_rss_bytes": 3080253440,
+                "max_head_residual_rms_m": 4.4060358785910556e-11,
+                "backend_seconds": 1.5766672797035426,
+                "max_head_delta_from_same_depth_graph_m": 0.0,
+                "direct": null
+              }
+            ]
+          },
+          "direct-single": {
+            "public_solve_seconds_median": 3.6336303470889106,
+            "backend_seconds_median": 3.174889830988832,
+            "krylov_iterations_median": 268,
+            "peak_warp_cuda_pool_bytes_median": 1417211552,
+            "max_head_delta_from_same_depth_graph_m": 4.871238967751879e-10,
+            "hierarchy_shapes": [
+              [
+                5,
+                500,
+                500
+              ],
+              [
+                5,
+                250,
+                250
+              ],
+              [
+                5,
+                125,
+                125
+              ],
+              [
+                5,
+                63,
+                63
+              ],
+              [
+                5,
+                32,
+                32
+              ],
+              [
+                5,
+                16,
+                16
+              ]
+            ],
+            "samples": [
+              {
+                "public_solve_seconds": 3.6336303470889106,
+                "krylov_iterations": 268,
+                "outer_iterations": 57,
+                "cuda_pool_high_bytes": 1417211552,
+                "process_peak_rss_bytes": 3070242816,
+                "max_head_residual_rms_m": 4.4006913797702726e-11,
+                "backend_seconds": 3.174889830988832,
+                "max_head_delta_from_same_depth_graph_m": 4.871238967751879e-10,
+                "direct": {
+                  "solves": 4288,
+                  "factorizations": 57,
+                  "matrix_seconds": 0.03406387974973768,
+                  "factor_seconds": 0.18678399629425257,
+                  "coarse_wall_seconds": 0.7357900184579194,
+                  "factor_nnz": 144846,
+                  "verified_factors": 57,
+                  "lu_relative_residual_inf": 1.4259676069429067e-14,
+                  "device_relative_residual_inf": 1.369331209028169e-06,
+                  "shape": [
+                    5,
+                    16,
+                    16
+                  ],
+                  "free_rows": 1280,
+                  "matrix_nnz": 8128,
+                  "matrix_csc_bytes": 102660,
+                  "factor_value_index_bytes_estimate": 1738152
+                }
+              }
+            ]
+          },
+          "cudss": {
+            "public_solve_seconds_median": 2.721284047001973,
+            "backend_seconds_median": 2.27201821829658,
+            "krylov_iterations_median": 268,
+            "peak_warp_cuda_pool_bytes_median": 1423539264,
+            "max_head_delta_from_same_depth_graph_m": 4.871238967751879e-10,
+            "hierarchy_shapes": [
+              [
+                5,
+                500,
+                500
+              ],
+              [
+                5,
+                250,
+                250
+              ],
+              [
+                5,
+                125,
+                125
+              ],
+              [
+                5,
+                63,
+                63
+              ],
+              [
+                5,
+                32,
+                32
+              ],
+              [
+                5,
+                16,
+                16
+              ]
+            ],
+            "samples": [
+              {
+                "public_solve_seconds": 2.721284047001973,
+                "krylov_iterations": 268,
+                "outer_iterations": 57,
+                "cuda_pool_high_bytes": 1423539264,
+                "process_peak_rss_bytes": 3241787392,
+                "max_head_residual_rms_m": 4.4006913797702726e-11,
+                "backend_seconds": 2.27201821829658,
+                "max_head_delta_from_same_depth_graph_m": 4.871238967751879e-10,
+                "direct": {
+                  "analysis_seconds": 0.013886002008803189,
+                  "assembly_seconds": 0.014911498641595244,
+                  "factor_seconds": 0.034669151762500405,
+                  "graph_capture_seconds": 0.38746298698242754,
+                  "factorizations": 57,
+                  "change_checks": 57,
+                  "coarse_rows": 1280,
+                  "matrix_nnz": 8128,
+                  "unit_rhs_coarse_residual_inf": 9.894371032714844e-06,
+                  "coarse_solves_per_application": 16,
+                  "cudss_allocator_peak_bytes": 6168724,
+                  "graph_replays": 268,
+                  "device_apply_seconds": 1.2554989805221572
+                },
+                "max_head_delta_from_same_depth_cpu_lu_m": 0.0
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "trial_count": 42
+}
