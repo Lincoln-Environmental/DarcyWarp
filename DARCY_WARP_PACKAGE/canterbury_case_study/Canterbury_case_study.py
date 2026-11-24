@@ -15,6 +15,7 @@ from DARCY_WARP_PACKAGE.canterbury_case_study.canterbury_data_prep import (
     load_case_inputs,
 )
 from DARCY_WARP_PACKAGE.warped_darcy import WarpDarcySolver
+from DARCY_WARP_PACKAGE.physics.budgets_2d import compute_mass_balance_budget
 
 
 def _prepare_obs_arrays(case: CanterburyCaseInputs):
@@ -54,6 +55,12 @@ def _weighted_sse(residual: np.ndarray, weights: np.ndarray) -> float:
         return float(np.sum(residual * residual))
     # Use sum((w_i * r_i)^2) = sum(w_i^2 * r_i^2)
     return float(np.sum((w * residual) ** 2))
+
+
+def _regularisation(*, log_t, pilot_active, sigma, weight):
+    horizontal = np.diff(log_t, axis=1)[pilot_active[:, :-1] & pilot_active[:, 1:]]
+    vertical = np.diff(log_t, axis=0)[pilot_active[:-1] & pilot_active[1:]]
+    return float(weight * (np.sum((horizontal / sigma) ** 2) + np.sum((vertical / sigma) ** 2)))
 
 
 def _compute_pilot_active_mask(
@@ -575,14 +582,21 @@ def dual_annealing_calibration(
     else:
         x0 = logT0_full[pilot_active_flat].astype(np.float64, copy=False)
 
+    hydraulics = dict(use_ghb=bool(use_ghb), gh_alpha=float(gh_alpha), aq_thickness=float(aq_thickness),
+        perturbation_strength=float(perturbation_strength), reg_weight=float(reg_weight), sigma_dlogT=float(sigma_dlogT),
+        boundary_policy=case.boundary_audit.get("policy"), solve=dict(
+            max_cycles=int(max_cycles), nu_pre=int(nu_pre), nu_post=int(nu_post), nu_coarse=int(nu_coarse),
+            omega=float(omega), rel_tol=float(rel_tol), abs_tol_min=float(abs_tol_min),
+            max_levels=int(max_levels), check_every_no=int(check_every_no),
+        ))
     with WarpDarcySolver(
             nx=case.nx,
             ny=case.ny,
             dx=case.dx,
             device=device,
-            use_ghb=use_ghb,
+            use_ghb=hydraulics["use_ghb"],
             solver_type="pcg",
-            aq_thickness=float(aq_thickness),
+            aq_thickness=hydraulics["aq_thickness"],
         ) as solver:
         solver.build_from_fields(
             T_field=T_init,
@@ -593,7 +607,7 @@ def dual_annealing_calibration(
             gh_mask=case.gh_mask,
             gh_head=case.gh_head,
             gh_width=case.gh_width,
-            gh_alpha=float(gh_alpha),
+            gh_alpha=hydraulics["gh_alpha"],
         )
         solver.build_hierarchy(max_levels=6, min_coarse_n=4)
         nfev_counter = {"n": 0}
@@ -625,7 +639,7 @@ def dual_annealing_calibration(
                 T_min=T_min,
                 T_max=T_max,
                 rbf_cache=rbf_cache,
-                perturbation_strength=float(perturbation_strength),
+                perturbation_strength=hydraulics["perturbation_strength"],
             )
             T_field = np.where(case.active == 1, T_field, 0.0).astype(np.float32, copy=False)
 
@@ -636,33 +650,19 @@ def dual_annealing_calibration(
             solver.update_T_in_place(T_field)
             solver.update_R_in_place(R_field)
             head, info = solver.solve_multigrid_kcycle(
-                max_cycles=int(max_cycles),
-                nu_pre=int(nu_pre),
-                nu_post=int(nu_post),
-                nu_coarse=int(nu_coarse),
-                omega=float(omega),
-                rel_tol=float(rel_tol),
-                abs_tol_min=float(abs_tol_min),
-                initial_head=case.model_top,
-                return_info=True,
-                max_levels=int(max_levels),
-                check_every_no=int(check_every_no),
+                initial_head=case.model_top, return_info=True, **hydraulics["solve"],
             )
+            if not info["converged"] or not np.isfinite(head[case.active != 0]).all():
+                return np.inf
             t1 = time.perf_counter()
 
             pred = head[obs_i, obs_j]
             residual = pred - obs_gwl
             phi_obs = _weighted_sse(residual, obs_w)
 
-            dx = logT_grid[:, 1:] - logT_grid[:, :-1]
-            dy = logT_grid[1:, :] - logT_grid[:-1, :]
-            w_reg = 1.0 / float(sigma_dlogT)
-            valid_dx = pilot_active_mask[:, 1:] & pilot_active_mask[:, :-1]
-            valid_dy = pilot_active_mask[1:, :] & pilot_active_mask[:-1, :]
-            phi_reg = float(
-                np.sum((w_reg * dx[valid_dx]) ** 2) + np.sum((w_reg * dy[valid_dy]) ** 2)
-            )
-            objective = float(phi_obs + float(reg_weight) * phi_reg)
+            phi_reg = _regularisation(log_t=logT_grid, pilot_active=pilot_active_mask,
+                sigma=hydraulics["sigma_dlogT"], weight=1.0)
+            objective = float(phi_obs + hydraulics["reg_weight"] * phi_reg)
 
             prev_best = float(best["objective"])
             if objective < best["objective"]:
@@ -764,8 +764,11 @@ def dual_annealing_calibration(
         else:
             raise ValueError("optimizer_algorithm must be 'dual_annealing' or 'pso'.")
 
+    if best["params"] is None:
+        raise RuntimeError("Canterbury calibration produced no converged candidate.")
     return {
         "result": result,
+        "hydraulic_settings": hydraulics,
         "best_wsse": best["wsse"],
         "best_objective": best["objective"],
         "best_params": best["params"],
@@ -954,14 +957,21 @@ def lbfgsb_calibration(
     else:
         x0 = logT0_full[pilot_active_flat].astype(np.float64, copy=False)
 
+    hydraulics = dict(use_ghb=bool(use_ghb), gh_alpha=float(gh_alpha), aq_thickness=float(aq_thickness),
+        perturbation_strength=float(perturbation_strength), reg_weight=float(reg_weight), sigma_dlogT=float(sigma_dlogT),
+        boundary_policy=case.boundary_audit.get("policy"), solve=dict(
+            max_cycles=int(max_cycles), nu_pre=int(nu_pre), nu_post=int(nu_post), nu_coarse=int(nu_coarse),
+            omega=float(omega), rel_tol=float(rel_tol), abs_tol_min=float(abs_tol_min),
+            max_levels=int(max_levels), check_every_no=int(check_every_no),
+        ))
     with WarpDarcySolver(
             nx=case.nx,
             ny=case.ny,
             dx=case.dx,
             device=device,
-            use_ghb=use_ghb,
+            use_ghb=hydraulics["use_ghb"],
             solver_type="pcg",
-            aq_thickness=float(aq_thickness),
+            aq_thickness=hydraulics["aq_thickness"],
     ) as solver:
         solver.build_from_fields(
             T_field=T_init,
@@ -972,7 +982,7 @@ def lbfgsb_calibration(
             gh_mask=case.gh_mask,
             gh_head=case.gh_head,
             gh_width=case.gh_width,
-            gh_alpha=float(gh_alpha),
+            gh_alpha=hydraulics["gh_alpha"],
         )
         solver.build_hierarchy(max_levels=6, min_coarse_n=4)
 
@@ -1000,7 +1010,7 @@ def lbfgsb_calibration(
                 T_min=T_min,
                 T_max=T_max,
                 rbf_cache=rbf_cache,
-                perturbation_strength=float(perturbation_strength),
+                perturbation_strength=hydraulics["perturbation_strength"],
             )
             T_field = np.where(case.active == 1, T_field, 0.0).astype(np.float32, copy=False)
 
@@ -1011,33 +1021,19 @@ def lbfgsb_calibration(
             solver.update_T_in_place(T_field)
             solver.update_R_in_place(R_field)
             head, info = solver.solve_multigrid_kcycle(
-                max_cycles=int(max_cycles),
-                nu_pre=int(nu_pre),
-                nu_post=int(nu_post),
-                nu_coarse=int(nu_coarse),
-                omega=float(omega),
-                rel_tol=float(rel_tol),
-                abs_tol_min=float(abs_tol_min),
-                initial_head=case.model_top,
-                return_info=True,
-                max_levels=int(max_levels),
-                check_every_no=int(check_every_no),
+                initial_head=case.model_top, return_info=True, **hydraulics["solve"],
             )
+            if not info["converged"] or not np.isfinite(head[case.active != 0]).all():
+                return np.inf
             t1 = time.perf_counter()
 
             pred = head[obs_i, obs_j]
             residual = pred - obs_gwl
             phi_obs = _weighted_sse(residual, obs_w)
 
-            dx = logT_grid[:, 1:] - logT_grid[:, :-1]
-            dy = logT_grid[1:, :] - logT_grid[:-1, :]
-            w_reg = 1.0 / float(sigma_dlogT)
-            valid_dx = pilot_active_mask[:, 1:] & pilot_active_mask[:, :-1]
-            valid_dy = pilot_active_mask[1:, :] & pilot_active_mask[:-1, :]
-            phi_reg = float(
-                np.sum((w_reg * dx[valid_dx]) ** 2) + np.sum((w_reg * dy[valid_dy]) ** 2)
-            )
-            objective = float(phi_obs + float(reg_weight) * phi_reg)
+            phi_reg = _regularisation(log_t=logT_grid, pilot_active=pilot_active_mask,
+                sigma=hydraulics["sigma_dlogT"], weight=1.0)
+            objective = float(phi_obs + hydraulics["reg_weight"] * phi_reg)
 
             if objective < best["objective"]:
                 best["objective"] = objective
@@ -1105,8 +1101,11 @@ def lbfgsb_calibration(
         )
         opt_end = time.perf_counter()
 
+    if best["params"] is None:
+        raise RuntimeError("Canterbury calibration produced no converged candidate.")
     return {
         "result": result,
+        "hydraulic_settings": hydraulics,
         "best_wsse": best["wsse"],
         "best_objective": best["objective"],
         "best_params": best["params"],
@@ -1389,6 +1388,8 @@ def _summarize_best(best: dict) -> dict:
     result = best.get("result")
     if result is not None:
         summary.update(_summarize_opt_result(result))
+    if "hydraulic_settings" in best:
+        summary["hydraulic_settings"] = best["hydraulic_settings"]
     if best.get("best_wsse") is not None:
         summary["best_wsse"] = float(best["best_wsse"])
     if best.get("best_objective") is not None:
@@ -1479,26 +1480,21 @@ def run_best_solution_and_save_outputs(
         outputs: dict,
         out_dir: Path,
         device: str = "cuda:0",
-        use_ghb: bool = True,
-        gh_alpha: float = 1.0,
-        aq_thickness: float = 300.0,
-        rbf_epsilon: float = 10.0,
-        T_min: float | None = None,
-        T_max: float | None = None,
-        max_cycles: int = 200,
-        nu_pre: int = 2,
-        nu_post: int = 2,
-        nu_coarse: int = 2,
-        omega: float = 0.7,
-        rel_tol: float = 5.0e-7,
-        abs_tol_min: float = 5.0e-7,
-        max_levels: int = 6,
-        check_every_no: int = 1,
+        *,
+        archived_hydraulic_settings: dict | None = None,
 ) -> dict:
-    """
-    Run a final solve using the best parameters and save head + obs vs sim plot.
-    """
+    """Solve and export a converged model using its recorded calibration settings."""
     best = _extract_best_solution(outputs)
+    if "hydraulic_settings" in best:
+        if archived_hydraulic_settings is not None:
+            raise ValueError("Use recorded hydraulic settings for calibrated models.")
+        hydraulics = best["hydraulic_settings"]
+        if hydraulics["boundary_policy"] != case.boundary_audit.get("policy"):
+            raise ValueError("Export boundary policy differs from the calibrated model.")
+    elif archived_hydraulic_settings is not None:
+        hydraulics = archived_hydraulic_settings
+    else:
+        raise ValueError("The archive requires explicit archived_hydraulic_settings.")
     pilot_shape = best.get("pilot_shape")
     if pilot_shape is None:
         raise ValueError("Missing pilot_shape in outputs; cannot rebuild T field.")
@@ -1514,38 +1510,20 @@ def run_best_solution_and_save_outputs(
     else:
         best_T_pilots = np.asarray(best_T_pilots, dtype=float).reshape(pilot_ny, pilot_nx)
 
-    r_scale = 0.6
-    best_params = best.get("best_params") or {}
-    if "r_scale" in best_params:
-        r_scale = float(best_params["r_scale"])
+    r_scale = float(best["best_params"]["r_scale"])
 
-    if "rbf_epsilon" in best:
-        rbf_epsilon = float(best["rbf_epsilon"])
-
-    if T_min is None and "T_min" in best:
-        T_min = float(best["T_min"])
-    if T_max is None and "T_max" in best:
-        T_max = float(best["T_max"])
-
+    rbf_epsilon = float(best["rbf_epsilon"])
+    t_min, t_max = float(best["T_min"]), float(best["T_max"])
     rbf_cache = precompute_rbf_cache(
-        nx=case.nx,
-        ny=case.ny,
-        nx_p=pilot_nx,
-        ny_p=pilot_ny,
-        epsilon=float(rbf_epsilon),
+        nx=case.nx, ny=case.ny, nx_p=pilot_nx, ny_p=pilot_ny, epsilon=rbf_epsilon,
     )
-
-    if T_min is None:
-        T_min = float(np.min(best_T_pilots))
-    if T_max is None:
-        T_max = float(np.max(best_T_pilots))
 
     T_field = get_T_field_from_pilots_cached(
         T_pilot_raw=best_T_pilots,
-        T_min=float(T_min),
-        T_max=float(T_max),
+        T_min=t_min,
+        T_max=t_max,
         rbf_cache=rbf_cache,
-        perturbation_strength=0.0,
+        perturbation_strength=hydraulics["perturbation_strength"],
     )
     T_field = np.where(case.active == 1, T_field, 0.0).astype(np.float32, copy=False)
 
@@ -1557,9 +1535,9 @@ def run_best_solution_and_save_outputs(
             ny=case.ny,
             dx=case.dx,
             device=device,
-            use_ghb=use_ghb,
+            use_ghb=hydraulics["use_ghb"],
             solver_type="pcg",
-            aq_thickness=float(aq_thickness),
+            aq_thickness=hydraulics["aq_thickness"],
     ) as solver:
         solver.build_from_fields(
             T_field=T_field,
@@ -1570,30 +1548,37 @@ def run_best_solution_and_save_outputs(
             gh_mask=case.gh_mask,
             gh_head=case.gh_head,
             gh_width=case.gh_width,
-            gh_alpha=float(gh_alpha),
+            gh_alpha=hydraulics["gh_alpha"],
         )
-        solver.build_hierarchy(max_levels=int(max_levels), min_coarse_n=4)
+        solver.build_hierarchy(max_levels=hydraulics["solve"]["max_levels"], min_coarse_n=4)
         head, info = solver.solve_multigrid_kcycle(
-            max_cycles=int(max_cycles),
-            nu_pre=int(nu_pre),
-            nu_post=int(nu_post),
-            nu_coarse=int(nu_coarse),
-            omega=float(omega),
-            rel_tol=float(rel_tol),
-            abs_tol_min=float(abs_tol_min),
-            initial_head=case.model_top,
-            return_info=True,
-            max_levels=int(max_levels),
-            check_every_no=int(check_every_no),
+            initial_head=case.model_top, return_info=True, **hydraulics["solve"],
         )
+        if not info["converged"] or not np.isfinite(head[case.active != 0]).all():
+            raise RuntimeError(f"Canterbury final solve did not converge; flow RMS={info.get('r_rms_end')}")
+        budget = compute_mass_balance_budget(
+            T_field=T_field, R_field=R_field, head=head, active=case.active, bc_mask=case.bc_mask,
+            bc_values=case.bc_values, dx=case.dx, gh_mask=solver.gh_mask_host,
+            gh_head=solver.gh_head_host, ghb_factor=solver.ghb_factor_host,
+        ).iloc[0].to_dict()
+        ghb_cells = int(np.count_nonzero((solver.ghb_factor_host > 0.) & (case.bc_mask == 0)))
+
+    obs_i, obs_j, obs_gwl, obs_w = _prepare_obs_arrays(case=case)
+    sim_gwl = head[obs_i, obs_j]
+    residual = sim_gwl - obs_gwl
+    pilot_active = np.asarray(best["pilot_active_mask"], dtype=bool)
+    log_t = np.asarray(best["best_logT"]).reshape(pilot_ny, pilot_nx)
+    metrics = dict(
+        n_obs=int(residual.size), observational_weighted_sse=_weighted_sse(residual=residual, weights=obs_w),
+        regularisation_term=_regularisation(log_t=log_t, pilot_active=pilot_active,
+            sigma=hydraulics["sigma_dlogT"], weight=hydraulics["reg_weight"]),
+        rmse_m=float(np.sqrt(np.mean(residual ** 2))), mean_simulated_minus_observed_m=float(np.mean(residual)),
+    )
 
     out_dir = Path(out_dir)
-    out_dir.mkdir(exist_ok=True)
+    out_dir.mkdir(parents=True, exist_ok=True)
     head_path = out_dir / "best_head.npz"
     np.savez(head_path, head=head)
-
-    obs_i, obs_j, obs_gwl, _obs_w = _prepare_obs_arrays(case)
-    sim_gwl = head[obs_i, obs_j]
 
     import matplotlib.pyplot as plt
 
@@ -1613,7 +1598,14 @@ def run_best_solution_and_save_outputs(
     return {
         "head_path": str(head_path),
         "scatter_path": str(scatter_path),
-        "r_scale": float(r_scale),
+        "r_scale": r_scale,
+        "hydraulic_settings": dict(hydraulics, r_scale=r_scale, t_min=t_min, t_max=t_max,
+            rbf_epsilon=rbf_epsilon, device=device, precision=str(head.dtype),
+            boundary_policy=case.boundary_audit.get("policy")),
+        "metrics": metrics,
+        "water_budget_m3_day": budget,
+        "free_ghb_cells": ghb_cells,
+        "boundary_audit": case.boundary_audit,
         "solver_info": info,
     }
 
@@ -1963,7 +1955,7 @@ if __name__ == "__main__":
     result_dict = _build_results_summary(outputs)
 
     final_best_run_wall_seconds = None
-    if "stage2" in outputs:
+    if best.get("best_params") is not None:
         # Final run with best parameters + save head and obs vs sim plot
         case_inputs = load_case_inputs(grid_size=grid_size, inputs_dir=inputs_dir)
         final_best_start = time.perf_counter()
@@ -1973,6 +1965,9 @@ if __name__ == "__main__":
             out_dir=out_dir,
             device=device,
         )
+        result_dict["final_model"] = {key: best_outputs[key] for key in (
+            "hydraulic_settings", "metrics", "water_budget_m3_day", "free_ghb_cells", "boundary_audit",
+        )}
         final_best_end = time.perf_counter()
         final_best_run_wall_seconds = float(final_best_end - final_best_start)
         print("Saved best head to:", best_outputs["head_path"])

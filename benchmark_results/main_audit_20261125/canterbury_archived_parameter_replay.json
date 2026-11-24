@@ -1,0 +1,250 @@
+{
+  "archive_sha256": {
+    "results.pt": "0e70715de9906cf2c514a31d544e4792b6825266233e908ded47baf3796f7371",
+    "best_head.npz": "cf4ff0177a7ebd1b80291a83e8edcafdd721ba0329febc0eb149e8e21f3b97fb"
+  },
+  "archived_export": {
+    "n_obs": 1826,
+    "rmse": 3.995985405957828,
+    "weighted_rmse": 7.022241646283546,
+    "weighted_sse": 90043.48875104706,
+    "mean_residual": 1.3643464224664428
+  },
+  "archived_stage_two_observational_weighted_sse": 91807.18024874883,
+  "replays": {
+    "legacy_archive": {
+      "hydraulic_settings": {
+        "use_ghb": true,
+        "gh_alpha": 2.0,
+        "aq_thickness": 300.0,
+        "perturbation_strength": 0.0,
+        "reg_weight": 1.0,
+        "sigma_dlogT": 0.2,
+        "solve": {
+          "max_cycles": 200,
+          "nu_pre": 2,
+          "nu_post": 2,
+          "nu_coarse": 2,
+          "omega": 0.7,
+          "rel_tol": 5e-06,
+          "abs_tol_min": 5e-06,
+          "max_levels": 6,
+          "check_every_no": 10
+        },
+        "r_scale": 0.5,
+        "t_min": 100.0,
+        "t_max": 10000.0,
+        "rbf_epsilon": 30.0,
+        "device": "cuda:0",
+        "precision": "float64",
+        "boundary_policy": "legacy_archive"
+      },
+      "metrics": {
+        "n_obs": 1826,
+        "observational_weighted_sse": 91806.98276325688,
+        "regularisation_term": 2732.20703125,
+        "rmse_m": 4.0184685025768765,
+        "mean_simulated_minus_observed_m": 1.3410317382517094
+      },
+      "water_budget_m3_day": {
+        "case": "",
+        "rcha_in": 1658937.0872540893,
+        "rcha_out": 0.0,
+        "chd_in": 592437.7743197158,
+        "chd_out": 2015334.9910887314,
+        "ghb_in": 11567696.339265006,
+        "ghb_out": 11803736.965419933,
+        "total_in": 13819071.200838812,
+        "total_out": 13819071.956508664,
+        "in_minus_out": -0.7556698527187109,
+        "percent_discrepancy": -5.468311300195429e-06,
+        "throughflow": 13819071.578673739,
+        "imbalance_fraction": -5.468311300195429e-08,
+        "chd_net_out_positive": 1422897.2167690156,
+        "ghb_net_out_positive": 236040.62615492754
+      },
+      "free_ghb_cells": 32485,
+      "boundary_audit": {
+        "policy": "legacy_archive",
+        "missing_stages": [
+          {
+            "row": 58,
+            "column": 834,
+            "source": "north",
+            "nztm_easting": 1574150.0,
+            "nztm_northing": 5195750.0
+          },
+          {
+            "row": 59,
+            "column": 841,
+            "source": "north",
+            "nztm_easting": 1574850.0,
+            "nztm_northing": 5195650.0
+          },
+          {
+            "row": 59,
+            "column": 842,
+            "source": "north",
+            "nztm_easting": 1574950.0,
+            "nztm_northing": 5195650.0
+          },
+          {
+            "row": 59,
+            "column": 843,
+            "source": "north",
+            "nztm_easting": 1575050.0,
+            "nztm_northing": 5195650.0
+          },
+          {
+            "row": 60,
+            "column": 852,
+            "source": "north",
+            "nztm_easting": 1575950.0,
+            "nztm_northing": 5195550.0
+          }
+        ],
+        "overlaps": [
+          {
+            "row": 625,
+            "column": 455,
+            "stages": {
+              "south": 1.2999999523162842,
+              "sea": 0.10000000149011612
+            },
+            "selected_source": "legacy_sum",
+            "nztm_easting": 1536250.0,
+            "nztm_northing": 5139050.0
+          }
+        ],
+        "source_precedence": [
+          "sea",
+          "south",
+          "north"
+        ],
+        "west_boundary": "no flow"
+      },
+      "solver": {
+        "converged": true,
+        "n_cycles_used": 70,
+        "r_rms_end": 0.0006038364988991037
+      }
+    },
+    "sea_precedence": {
+      "hydraulic_settings": {
+        "use_ghb": true,
+        "gh_alpha": 2.0,
+        "aq_thickness": 300.0,
+        "perturbation_strength": 0.0,
+        "reg_weight": 1.0,
+        "sigma_dlogT": 0.2,
+        "solve": {
+          "max_cycles": 200,
+          "nu_pre": 2,
+          "nu_post": 2,
+          "nu_coarse": 2,
+          "omega": 0.7,
+          "rel_tol": 5e-06,
+          "abs_tol_min": 5e-06,
+          "max_levels": 6,
+          "check_every_no": 10
+        },
+        "r_scale": 0.5,
+        "t_min": 100.0,
+        "t_max": 10000.0,
+        "rbf_epsilon": 30.0,
+        "device": "cuda:0",
+        "precision": "float64",
+        "boundary_policy": "sea_precedence"
+      },
+      "metrics": {
+        "n_obs": 1826,
+        "observational_weighted_sse": 91805.4142535894,
+        "regularisation_term": 2732.20703125,
+        "rmse_m": 4.018467805141709,
+        "mean_simulated_minus_observed_m": 1.3410365447991959
+      },
+      "water_budget_m3_day": {
+        "case": "",
+        "rcha_in": 1658955.0080427579,
+        "rcha_out": 0.0,
+        "chd_in": 592467.5390595666,
+        "chd_out": 2015197.9787320858,
+        "ghb_in": 11567706.872110918,
+        "ghb_out": 11803932.196198793,
+        "total_in": 13819129.419213243,
+        "total_out": 13819130.174930878,
+        "in_minus_out": -0.7557176351547241,
+        "percent_discrepancy": -5.468634033054979e-06,
+        "throughflow": 13819129.79707206,
+        "imbalance_fraction": -5.468634033054979e-08,
+        "chd_net_out_positive": 1422730.4396725192,
+        "ghb_net_out_positive": 236225.32408787496
+      },
+      "free_ghb_cells": 32486,
+      "boundary_audit": {
+        "policy": "sea_precedence",
+        "missing_stages": [
+          {
+            "row": 58,
+            "column": 834,
+            "source": "north",
+            "nztm_easting": 1574150.0,
+            "nztm_northing": 5195750.0
+          },
+          {
+            "row": 59,
+            "column": 841,
+            "source": "north",
+            "nztm_easting": 1574850.0,
+            "nztm_northing": 5195650.0
+          },
+          {
+            "row": 59,
+            "column": 842,
+            "source": "north",
+            "nztm_easting": 1574950.0,
+            "nztm_northing": 5195650.0
+          },
+          {
+            "row": 59,
+            "column": 843,
+            "source": "north",
+            "nztm_easting": 1575050.0,
+            "nztm_northing": 5195650.0
+          },
+          {
+            "row": 60,
+            "column": 852,
+            "source": "north",
+            "nztm_easting": 1575950.0,
+            "nztm_northing": 5195550.0
+          }
+        ],
+        "overlaps": [
+          {
+            "row": 625,
+            "column": 455,
+            "stages": {
+              "south": 1.2999999523162842,
+              "sea": 0.10000000149011612
+            },
+            "selected_source": "sea",
+            "nztm_easting": 1536250.0,
+            "nztm_northing": 5139050.0
+          }
+        ],
+        "source_precedence": [
+          "sea",
+          "south",
+          "north"
+        ],
+        "west_boundary": "no flow"
+      },
+      "solver": {
+        "converged": true,
+        "n_cycles_used": 70,
+        "r_rms_end": 0.0006038809146764681
+      }
+    }
+  }
+}
