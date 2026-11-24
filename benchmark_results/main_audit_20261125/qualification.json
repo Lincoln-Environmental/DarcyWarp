@@ -1,0 +1,3396 @@
+{
+  "main_start": "f8e7683d13b94f03f1c0f830d807527e4255ce04",
+  "dev_start": "e5535ddb523c9783089fab7bdd1cd1143046e0cc",
+  "hardware": {
+    "cpu": "Intel Core Ultra 9 285K",
+    "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+    "gpu_memory_mib": 16376,
+    "nvidia_driver": "595.99.02",
+    "cuda_toolkit_reported_by_warp": "12.9",
+    "python": "3.14.7",
+    "warp": "1.17.0",
+    "flopy": "3.9.5",
+    "mf6": "6.6.2 05/12/2025",
+    "mf6_executable_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+    "precision": "FP64 except explicitly named FP32 inner-correction profile"
+  },
+  "before": {
+    "main_supplied_audit_failures": 9,
+    "dev_supplied_audit_failures": 8
+  },
+  "test_runs": {
+    "main_cpu_without_large_2d_replay_files": {
+      "passed": 958,
+      "skipped": 230,
+      "seconds": 232.31
+    },
+    "main_cpu_steady_unconfined_file": {
+      "passed": 15,
+      "seconds": 911.96
+    },
+    "main_cpu_transient_500x500": {
+      "periods_per_backend": 52,
+      "passed": [
+        "Picard",
+        "Newton",
+        "FAS"
+      ]
+    },
+    "main_total_cpu_passes_across_three_suite_partitions": 976,
+    "main_supplied_audit_and_targeted_cpu": {
+      "passed": 69,
+      "skipped": 14
+    },
+    "main_classic_3d_fp32_and_input_regressions": {
+      "passed": 7,
+      "skipped": 7
+    },
+    "official_binary_ci_selection": {
+      "passed": 67,
+      "skipped": 16
+    },
+    "main_targeted_cpu_cuda": {
+      "passed": 74
+    },
+    "dev_focused_cpu_including_supplied_audit": {
+      "passed": 78,
+      "skipped": 17
+    },
+    "dev_cpu_without_large_2d_replay_files": {
+      "passed": 1700,
+      "skipped": 611,
+      "seconds": 407.19
+    },
+    "strict_sphinx_main": true
+  },
+  "canterbury_replay_verification": {
+    "raw_result_sha256": "4cc02b3696fb61c0eee966f05b7f4fca7a9dba1db0ffab7a768dc1bc6e8d5368",
+    "policies": {
+      "legacy_archive": {
+        "metrics": {
+          "n_obs": 1826,
+          "observational_weighted_sse": 91806.98276325701,
+          "regularisation_term": 2732.20703125,
+          "rmse_m": 4.018468502576876,
+          "mean_simulated_minus_observed_m": 1.3410317382517076
+        },
+        "solver": {
+          "converged": true,
+          "n_cycles_used": 70,
+          "r_rms_end": 0.0006038365064204933
+        },
+        "budget_percent": -5.4683118393474615e-06
+      },
+      "sea_precedence": {
+        "metrics": {
+          "n_obs": 1826,
+          "observational_weighted_sse": 91805.4142535892,
+          "regularisation_term": 2732.20703125,
+          "rmse_m": 4.018467805141705,
+          "mean_simulated_minus_observed_m": 1.3410365447991957
+        },
+        "solver": {
+          "converged": true,
+          "n_cycles_used": 70,
+          "r_rms_end": 0.0006038809111035473
+        },
+        "budget_percent": -5.468634262193638e-06
+      }
+    }
+  },
+  "persistent_mf6_ensemble_vs_fresh": [
+    {
+      "transmissivity_m2_day": 3000.0,
+      "max_abs_head_error_m": 0.0,
+      "max_abs_package_flow_error_m3_day": {
+        "CHD": 0.0,
+        "GHB": 0.0,
+        "RCHA": 0.0
+      }
+    },
+    {
+      "transmissivity_m2_day": 6000.0,
+      "max_abs_head_error_m": 0.0,
+      "max_abs_package_flow_error_m3_day": {
+        "CHD": 0.0,
+        "GHB": 0.0,
+        "RCHA": 0.0
+      }
+    },
+    {
+      "transmissivity_m2_day": 4500.0,
+      "max_abs_head_error_m": 0.0,
+      "max_abs_package_flow_error_m3_day": {
+        "CHD": 0.0,
+        "GHB": 0.0,
+        "RCHA": 0.0
+      }
+    }
+  ],
+  "refreshed_2d_500x500_picard_classification": {
+    "verdict": "excellent",
+    "cumulative_percent_discrepancy": 0.00020074743660489084,
+    "max_abs_percent_discrepancy": 0.0004429270193607266,
+    "periods": 52
+  },
+  "analytical_closed_8x8_cpu": {
+    "specific_yield": 0.2,
+    "specific_storage_per_m": 0.0,
+    "cell_size_m": 10.0,
+    "acceptance_relative_throughflow": 0.001,
+    "cases": [
+      {
+        "recharge_m_day": 8.64e-05,
+        "accepted_periods": 30,
+        "applied_mm": 2.592,
+        "stored_mm": 2.58946875,
+        "signed_error_mm": -0.00253125,
+        "max_period_error_mm": 8.4375e-05
+      },
+      {
+        "recharge_m_day": 1e-05,
+        "accepted_periods": 30,
+        "applied_mm": 0.3,
+        "stored_mm": 0.2997070313,
+        "signed_error_mm": -0.00029296875,
+        "max_period_error_mm": 9.765625e-06
+      },
+      {
+        "recharge_m_day": 8.64e-05,
+        "accepted_periods": 1,
+        "applied_mm": 0.0864,
+        "stored_mm": 0.0863625,
+        "signed_error_mm": -3.75e-05,
+        "clipped": true
+      }
+    ]
+  },
+  "cuda_steady_2d": [
+    {
+      "measured_git_revision": "4537371a4bc7006aca52bddeb940bd2bd427cc81",
+      "raw_result_sha256": "b7f6f74e64369f17a3bdefa370b7b0a3bd5370d61a91e86db7bc70d09dfc4d07",
+      "shape": [
+        2000,
+        2000
+      ],
+      "precision": "float64",
+      "reference_origin": "archived fixture",
+      "reference_path": "tests/fixtures/unconfined_2d/truth_2000x2000.npz.lzma",
+      "reference_sha256": "3944b207fdf148c8a0ebc9aa7ab83f0363c4cd906315053c7c12c6b78243c15a",
+      "archived_mf6_seconds": 357.4859175190213,
+      "head_gate_m": 0.0005,
+      "timed_repeats": 3,
+      "accepted_endpoints": 4,
+      "median_public_seconds": 14.755925500998273,
+      "worst_head_error_m": 6.806674250015021e-06,
+      "worst_head_rmse_m": 2.6321846905142063e-06,
+      "worst_budget_percent": 8.398459493226367e-06,
+      "worst_chd_net_exchange_error_m3_day": 0.566486582159996,
+      "passed": true
+    },
+    {
+      "measured_git_revision": "4537371a4bc7006aca52bddeb940bd2bd427cc81",
+      "raw_result_sha256": "6cb470015363ab5b471293cbd9b90806700cea41bcbd7f0f65b1cc876bc47b29",
+      "shape": [
+        3000,
+        3000
+      ],
+      "precision": "float64",
+      "reference_origin": "archived fixture",
+      "reference_path": "tests/fixtures/unconfined_2d/truth_3000x3000.npz.lzma",
+      "reference_sha256": "3e890041a9b6aed717023f672110bb946b0b61ea7d52fff1814ee12e2d0bdcd5",
+      "archived_mf6_seconds": 884.5842959290021,
+      "head_gate_m": 0.0005,
+      "timed_repeats": 3,
+      "accepted_endpoints": 4,
+      "median_public_seconds": 48.164807760040276,
+      "worst_head_error_m": 1.6338632235601835e-05,
+      "worst_head_rmse_m": 5.6558022465491975e-06,
+      "worst_budget_percent": 1.4855246827583e-05,
+      "worst_chd_net_exchange_error_m3_day": 1.1536450441926718,
+      "passed": true
+    }
+  ],
+  "cuda_500x500_52_period_2d_backends": {
+    "reference": "DARCY_WARP_PACKAGE/data/working_tests/mf6_transient_2d_unconfined_500x500_52w/mf6_transient_heads.npz.lzma",
+    "reference_sha256": "c66b5c42a44f814b3f6c12ec8b124f5ef6a91571aca66e62f32e50220d47e4c2",
+    "mf6_engine_seconds": 158.6243322470109,
+    "warm_start": "unconfined_steady_mf6",
+    "device": "cuda:0",
+    "warp_version": "1.17.0",
+    "runs": [
+      {
+        "backend": "unconfined_picard_kcycle",
+        "public_seconds": 21.706303665007,
+        "precision": "float64",
+        "accepted_periods": 52,
+        "forced_accepts": 0,
+        "maximum_budget_percent": 0.0004429270248110216,
+        "metrics": {
+          "passed": true,
+          "final_rmse": 3.3027665316112526e-05,
+          "final_max_abs_diff": 0.00011709732643794268,
+          "worst_period_rmse": 3.3027665316112526e-05,
+          "worst_period_max_abs_diff": 0.00011709732643794268,
+          "all_period_percent_within_0_01m_min": 100.0,
+          "criteria": {
+            "final_rmse_max": 0.001,
+            "final_max_abs_diff_max": 0.005,
+            "worst_period_rmse_max": 0.005,
+            "worst_period_max_abs_diff_max": 0.02,
+            "all_period_percent_within_0_01m_min": 99.9
+          },
+          "checks": {
+            "all_required_active_heads_finite": true,
+            "final_rmse_lt_0p001": true,
+            "final_max_abs_lt_0p005": true,
+            "worst_period_rmse_lt_0p005": true,
+            "worst_period_max_abs_lt_0p02": true,
+            "all_period_percent_within_0p01m_ge_99p9": true
+          }
+        },
+        "maximum_storage_rate_l1_difference_m3_day": 154.45168015797677,
+        "face_flow": {
+          "worst_rms_m3_day": 0.01947269540038718,
+          "worst_relative_l2": 1.857260556404864e-06,
+          "worst_cell_face_error_m3_day": 0.8483275680726265,
+          "compared_faces": 497503,
+          "native_record": "FLOW-JA-FACE",
+          "fixed_to_fixed_faces_excluded": true
+        },
+        "passed": true,
+        "budget_endpoints": 52,
+        "max_budget_imbalance_m3_day": 39.20498338341713,
+        "max_budget_head_residual_m": 7.839486914820199e-08
+      },
+      {
+        "backend": "unconfined_semismooth_newton_kcycle",
+        "public_seconds": 254.23959075298626,
+        "precision": "float64",
+        "accepted_periods": 52,
+        "forced_accepts": 0,
+        "maximum_budget_percent": 1.7397852096004518e-08,
+        "metrics": {
+          "passed": true,
+          "final_rmse": 9.3288908750583e-05,
+          "final_max_abs_diff": 0.00015016442397097762,
+          "worst_period_rmse": 0.0002642845529098294,
+          "worst_period_max_abs_diff": 0.0008796076804422626,
+          "all_period_percent_within_0_01m_min": 100.0,
+          "criteria": {
+            "final_rmse_max": 0.001,
+            "final_max_abs_diff_max": 0.005,
+            "worst_period_rmse_max": 0.005,
+            "worst_period_max_abs_diff_max": 0.02,
+            "all_period_percent_within_0_01m_min": 99.9
+          },
+          "checks": {
+            "all_required_active_heads_finite": true,
+            "final_rmse_lt_0p001": true,
+            "final_max_abs_lt_0p005": true,
+            "worst_period_rmse_lt_0p005": true,
+            "worst_period_max_abs_lt_0p02": true,
+            "all_period_percent_within_0p01m_ge_99p9": true
+          }
+        },
+        "maximum_storage_rate_l1_difference_m3_day": 7308.6258993739575,
+        "face_flow": {
+          "worst_rms_m3_day": 0.13544474322112451,
+          "worst_relative_l2": 1.2907358851841341e-05,
+          "worst_cell_face_error_m3_day": 0.9855812592177244,
+          "compared_faces": 497503,
+          "native_record": "FLOW-JA-FACE",
+          "fixed_to_fixed_faces_excluded": true
+        },
+        "passed": true,
+        "budget_endpoints": 52,
+        "max_budget_imbalance_m3_day": 0.0015115607529878616,
+        "max_budget_head_residual_m": null
+      },
+      {
+        "backend": "unconfined_fas",
+        "public_seconds": 86.97951617202489,
+        "precision": "float64",
+        "accepted_periods": 52,
+        "forced_accepts": 0,
+        "maximum_budget_percent": 3.440396555188041e-07,
+        "metrics": {
+          "passed": true,
+          "final_rmse": 5.608037890114549e-07,
+          "final_max_abs_diff": 8.455139948182477e-07,
+          "worst_period_rmse": 8.564354892989111e-07,
+          "worst_period_max_abs_diff": 1.0062649948849867e-06,
+          "all_period_percent_within_0_01m_min": 100.0,
+          "criteria": {
+            "final_rmse_max": 0.001,
+            "final_max_abs_diff_max": 0.005,
+            "worst_period_rmse_max": 0.005,
+            "worst_period_max_abs_diff_max": 0.02,
+            "all_period_percent_within_0_01m_min": 99.9
+          },
+          "checks": {
+            "all_required_active_heads_finite": true,
+            "final_rmse_lt_0p001": true,
+            "final_max_abs_lt_0p005": true,
+            "worst_period_rmse_lt_0p005": true,
+            "worst_period_max_abs_lt_0p02": true,
+            "all_period_percent_within_0p01m_ge_99p9": true
+          }
+        },
+        "maximum_storage_rate_l1_difference_m3_day": 11.577899122523785,
+        "face_flow": {
+          "worst_rms_m3_day": 0.0003404489790844837,
+          "worst_relative_l2": 3.2417792993164765e-08,
+          "worst_cell_face_error_m3_day": 0.012805689089191219,
+          "compared_faces": 497503,
+          "native_record": "FLOW-JA-FACE",
+          "fixed_to_fixed_faces_excluded": true
+        },
+        "passed": true,
+        "budget_endpoints": 52,
+        "max_budget_imbalance_m3_day": 0.032590536400675774,
+        "max_budget_head_residual_m": null
+      }
+    ],
+    "raw_result_sha256": "6f5f28d441e17add30f48a2162c99fd237a98cb1c1cc3d2eb60e34353dab3645",
+    "measured_git_revision": "f26e7a4",
+    "timing": "One synchronized public call per backend with diagnostics, excluding model construction and independent package comparisons.",
+    "reference_origin": "fresh pinned MF6 fixture generated for the CPU replay tests"
+  },
+  "cuda_500x500_52_period_picard_profiles": {
+    "measured_git_revision": "d64da25df9aca076bfcfa8b9be535564ea0563eb",
+    "raw_result_sha256": "43b77fd41425a298224b5fe559aa4f96add7d5d34aac0bac618c48b054fdeb06",
+    "reference_sha256": "8cf76b400ed046c67497b9bea7c313abf90c1b683a6672cf943bcc3f0c223ba4",
+    "reference_origin": "archived validated fixture",
+    "archived_mf6_engine_seconds": 153.29064192599617,
+    "archived_mf6_engine_timing_scope": "saved engine run",
+    "timing": "Synchronized entire public API call, including input validation and session creation. External model construction and independent audit excluded; original solver-reported timer retained separately.",
+    "profiles": {
+      "classic_device_fp64": {
+        "median_public_seconds": 50.445441627991386,
+        "passed": true,
+        "worst_head_error": 0.00011709732660847294,
+        "periods_per_run": 52,
+        "timed_repeats": 3,
+        "max_budget_percent": 0.00044292701818228675
+      },
+      "face_graph_fp64": {
+        "median_public_seconds": 21.3072194569977,
+        "passed": true,
+        "worst_head_error": 0.00011709732632425585,
+        "periods_per_run": 52,
+        "timed_repeats": 3,
+        "max_budget_percent": 0.0004429270256948781
+      },
+      "face_graph_mixed": {
+        "median_public_seconds": 18.30527167802211,
+        "passed": true,
+        "worst_head_error": 0.0001171090207776615,
+        "periods_per_run": 52,
+        "timed_repeats": 3,
+        "max_budget_percent": 0.00043554012817226137
+      }
+    }
+  },
+  "cuda_3d": {
+    "timing": {
+      "warp": "Serial GPU public solve timings, excluding model construction and independent audits; warm-up excluded.",
+      "mf6": "Fresh native references prepared before the GPU matrix. Six large references were generated concurrently; native engine timings reflect that load."
+    },
+    "small": {
+      "measured_git_revision": "11d139d96fe7a6ff712131eb6f1f2f69cef22356",
+      "started_utc": "2026-11-24T23:24:29.086422+00:00",
+      "raw_matrix_sha256": "cf4c36d73626e6d2376d0e97e1fcc3b0ae302557fb83f95c2fb50d3aecf0b423",
+      "passed_cases": 36,
+      "total_cases": 36,
+      "accepted_periods_across_repeats_and_warmups": 756,
+      "worst_head_max_m": 6.85842881842369e-06,
+      "met_preferred_head_accuracy": 21,
+      "worst_intercell_relative_l2": 1.93951389266283e-05,
+      "worst_storage_difference_relative_throughput": 1.5905400803660042e-07,
+      "cases": [
+        {
+          "case": "cartesian_confined_100x100x5_steady_ugly_t_s42_va1",
+          "implementation": "fast",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 0.1591580139938742,
+          "mf6_single_reference_run_seconds": 0.25095274101477116,
+          "median_model_construction_seconds": 0.004507166042458266,
+          "median_extra_audit_seconds": 0.02513703698059544,
+          "median_verified_total_seconds": 0.18904291605576873,
+          "worst_head_rmse_m": 1.7025734306479306e-06,
+          "worst_head_max_m": 4.481469429218343e-06,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": false,
+          "worst_storage_difference_relative_throughput": null,
+          "worst_flux_relative_l2": 1.93951389266283e-05,
+          "worst_ghb_flux_max_error": 0.0,
+          "worst_head_error_in_scaled_eps": 20182744051.5,
+          "reference_reused": false,
+          "geometry_zyx": [
+            5,
+            100,
+            100
+          ],
+          "horizontal_to_vertical_k_ratio": 1.0,
+          "ghb": "off",
+          "formulation": "cartesian",
+          "variant": "confined",
+          "mode": "steady",
+          "periods_per_run": 1,
+          "accepted_endpoints": 2,
+          "evaluated_endpoints": 2,
+          "timed_repeats": 1,
+          "max_physical_head_rms_m": 4.6231226022581026e-14,
+          "max_physical_relative_cell_imbalance": 1.3443504883556137e-09,
+          "max_signed_budget_imbalance_m3_day": 3.204712416661831e-09,
+          "max_matched_state_face_error_m3_day": 1.4210854715202004e-14,
+          "result_sha256": "e90a79a197641b70bcd6b0867c197d315364708bcc80ab58e057680e390d922d",
+          "reference_fingerprint": "2f0202193460f959df683e7c0b0b09413854f4e2873b70b87f6e9797a2762fd7",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "mf6_build_identity": "historical-local-6.6.2",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "97210321d17b9c18c51832ca66fb71090e876e0091b40662727c775fe66db2b1",
+            "reference.npz": "8dd94b57d8e458bc62f3495fa9ef0758ed8c1f2704baba97e670cf1a54ceb085"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "SIMPLE",
+            "linear_acceleration": "CG",
+            "outer_maximum": 10,
+            "outer_dvclose": 0.0001,
+            "inner_maximum": 2000,
+            "inner_dvclose": 0.0001,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        },
+        {
+          "case": "cartesian_confined_100x100x5_transient_ugly_t_s42_va1",
+          "implementation": "fast",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 1.7829161319532432,
+          "mf6_single_reference_run_seconds": 5.939679088012781,
+          "median_model_construction_seconds": 0.005352269974537194,
+          "median_extra_audit_seconds": 0.9688619309454225,
+          "median_verified_total_seconds": 2.763673477980774,
+          "worst_head_rmse_m": 4.780157778239032e-07,
+          "worst_head_max_m": 9.188424000550199e-07,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": true,
+          "worst_storage_difference_relative_throughput": 9.875104660968787e-08,
+          "worst_flux_relative_l2": 3.3385811509492606e-06,
+          "worst_ghb_flux_max_error": 0.0,
+          "worst_head_error_in_scaled_eps": 4138098290.5,
+          "reference_reused": false,
+          "geometry_zyx": [
+            5,
+            100,
+            100
+          ],
+          "horizontal_to_vertical_k_ratio": 1.0,
+          "ghb": "off",
+          "formulation": "cartesian",
+          "variant": "confined",
+          "mode": "transient",
+          "periods_per_run": 20,
+          "accepted_endpoints": 40,
+          "evaluated_endpoints": 40,
+          "timed_repeats": 1,
+          "max_physical_head_rms_m": 1.397630144681311e-11,
+          "max_physical_relative_cell_imbalance": 1.0098927744181066e-06,
+          "max_signed_budget_imbalance_m3_day": 0.000145480549667534,
+          "max_matched_state_face_error_m3_day": 2.842170943040401e-14,
+          "result_sha256": "e13f064ed9d7e6b3796d6a6d18dac918cf4d161cbc7c3ef18a0f3dc990fdc931",
+          "reference_fingerprint": "921f5a847c292999a7a2ced289dce637d32cd8ee06b082b0862207d47b8958ce",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "97210321d17b9c18c51832ca66fb71090e876e0091b40662727c775fe66db2b1",
+            "reference.npz": "6f250e69071631b972d60879bc1a5a601cbf2fea5359e7dfa8a0674e012cd2da"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "COMPLEX",
+            "linear_acceleration": "BICGSTAB",
+            "outer_maximum": 150,
+            "outer_dvclose": 1e-06,
+            "inner_maximum": 500,
+            "inner_dvclose": 1e-08,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        },
+        {
+          "case": "npf_confined_100x100x5_steady_ugly_t_s42_va1",
+          "implementation": "kcycle",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 0.17128016700735316,
+          "mf6_single_reference_run_seconds": 0.3094506149645895,
+          "median_model_construction_seconds": 0.007629655010532588,
+          "median_extra_audit_seconds": 0.021841854031663388,
+          "median_verified_total_seconds": 0.20107865502359346,
+          "worst_head_rmse_m": 5.829320597784653e-07,
+          "worst_head_max_m": 1.6622494882767569e-06,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": false,
+          "worst_storage_difference_relative_throughput": null,
+          "worst_flux_relative_l2": 1.605305928575195e-07,
+          "worst_ghb_flux_max_error": 0.0,
+          "worst_head_error_in_scaled_eps": 369706871.9955433,
+          "reference_reused": false,
+          "geometry_zyx": [
+            5,
+            100,
+            100
+          ],
+          "horizontal_to_vertical_k_ratio": 1.0,
+          "ghb": "off",
+          "formulation": "npf",
+          "variant": "confined",
+          "mode": "steady",
+          "periods_per_run": 1,
+          "accepted_endpoints": 2,
+          "evaluated_endpoints": 2,
+          "timed_repeats": 1,
+          "max_physical_head_rms_m": 3.532881879613156e-12,
+          "max_physical_relative_cell_imbalance": 1.3692749204144901e-08,
+          "max_signed_budget_imbalance_m3_day": 5.1786859012747925e-05,
+          "max_matched_state_face_error_m3_day": 1.8189894035458565e-12,
+          "result_sha256": "a2f5670556140a9937378b4c12b3cc9b9feebb80b2d158a8ddb14c1ce68b1603",
+          "reference_fingerprint": "cc38b14dcdb893a61edac34c32fa040e613599c4035170317bbbeb172a4b854d",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "mf6_build_identity": "historical-local-6.6.2",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "5baeeed7cff0786b2a3f31530c6ec818ceb08b4653e65c4893bc9f54bb1395ee",
+            "reference.npz": "5d109c83ddb966b34112cab268f56a381ae42e323317644c8e75df584270bfba"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "SIMPLE",
+            "linear_acceleration": "CG",
+            "outer_maximum": 10,
+            "outer_dvclose": 0.0001,
+            "inner_maximum": 2000,
+            "inner_dvclose": 0.0001,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        },
+        {
+          "case": "npf_confined_100x100x5_transient_ugly_t_s42_va1",
+          "implementation": "kcycle",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 2.3475451720296405,
+          "mf6_single_reference_run_seconds": 5.311522621952463,
+          "median_model_construction_seconds": 0.008264856005553156,
+          "median_extra_audit_seconds": 0.9342069300473668,
+          "median_verified_total_seconds": 3.2922177190193906,
+          "worst_head_rmse_m": 1.7839173535634426e-07,
+          "worst_head_max_m": 4.464120344493949e-07,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": true,
+          "worst_storage_difference_relative_throughput": 2.9001241849907747e-08,
+          "worst_flux_relative_l2": 2.627963100687144e-08,
+          "worst_ghb_flux_max_error": 0.0,
+          "worst_head_error_in_scaled_eps": 169275815.76591435,
+          "reference_reused": false,
+          "geometry_zyx": [
+            5,
+            100,
+            100
+          ],
+          "horizontal_to_vertical_k_ratio": 1.0,
+          "ghb": "off",
+          "formulation": "npf",
+          "variant": "confined",
+          "mode": "transient",
+          "periods_per_run": 20,
+          "accepted_endpoints": 40,
+          "evaluated_endpoints": 40,
+          "timed_repeats": 1,
+          "max_physical_head_rms_m": 1.3710143222755715e-11,
+          "max_physical_relative_cell_imbalance": 6.7688324764532e-08,
+          "max_signed_budget_imbalance_m3_day": 0.006976436253361355,
+          "max_matched_state_face_error_m3_day": 1.8189894035458565e-12,
+          "result_sha256": "946783af9648fcf24b205de3130fc3c4ebe97d18bd901c83992e330af9b34fdf",
+          "reference_fingerprint": "6eb9900499e0fd927b8c39db97d90a926f484d85787e5f4cd161b07fb8b32954",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "5baeeed7cff0786b2a3f31530c6ec818ceb08b4653e65c4893bc9f54bb1395ee",
+            "reference.npz": "30f4a5afa3b0885c52be502041848e39e1def8f9b2294d11850a39f8ead80f6a"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "COMPLEX",
+            "linear_acceleration": "BICGSTAB",
+            "outer_maximum": 150,
+            "outer_dvclose": 1e-06,
+            "inner_maximum": 500,
+            "inner_dvclose": 1e-08,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        },
+        {
+          "case": "npf_convertible_100x100x5_steady_ugly_t_s42_va1",
+          "implementation": "kcycle",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 0.2379190509673208,
+          "mf6_single_reference_run_seconds": 2.326409915986005,
+          "median_model_construction_seconds": 0.00804856896866113,
+          "median_extra_audit_seconds": 0.02508103399304673,
+          "median_verified_total_seconds": 0.2715017619775608,
+          "worst_head_rmse_m": 5.672601292187124e-07,
+          "worst_head_max_m": 9.319195584112094e-07,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": true,
+          "worst_storage_difference_relative_throughput": null,
+          "worst_flux_relative_l2": 5.04439614626534e-08,
+          "worst_ghb_flux_max_error": 0.0,
+          "worst_head_error_in_scaled_eps": 202712876.42446402,
+          "reference_reused": false,
+          "geometry_zyx": [
+            5,
+            100,
+            100
+          ],
+          "horizontal_to_vertical_k_ratio": 1.0,
+          "ghb": "off",
+          "formulation": "npf",
+          "variant": "convertible",
+          "mode": "steady",
+          "periods_per_run": 1,
+          "accepted_endpoints": 2,
+          "evaluated_endpoints": 2,
+          "timed_repeats": 1,
+          "max_physical_head_rms_m": 6.580796988869969e-14,
+          "max_physical_relative_cell_imbalance": 2.722826532635064e-10,
+          "max_signed_budget_imbalance_m3_day": 6.518753461637328e-06,
+          "max_matched_state_face_error_m3_day": 1.8189894035458565e-12,
+          "result_sha256": "f77e3d13d9ee5ce00d4f89a61244a5468358db4f9296022fd8bce4b24e879b0c",
+          "reference_fingerprint": "4cbd85248f73c08d4e5a9eefc667880a96a44e2b9403bdc4822e1b78bedd7ff4",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "mf6_build_identity": "historical-local-6.6.2",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "f230d7de117029cbe8fc4c7d4e09cedf48c9dc203c5c8e0b9480e5b5c52441b9",
+            "reference.npz": "fdfef26a44fbdc3996025689d0acf2a50eaab054cb534a9ac60ba1ffbf6ee99a"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "COMPLEX",
+            "linear_acceleration": "BICGSTAB",
+            "outer_maximum": 500,
+            "outer_dvclose": 1e-06,
+            "inner_maximum": 500,
+            "inner_dvclose": 1e-08,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        },
+        {
+          "case": "npf_convertible_100x100x5_transient_ugly_t_s42_va1",
+          "implementation": "kcycle",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 1.612079591024667,
+          "mf6_single_reference_run_seconds": 2.5258451179834083,
+          "median_model_construction_seconds": 0.008096370031125844,
+          "median_extra_audit_seconds": 0.958250537107233,
+          "median_verified_total_seconds": 2.5807674340321682,
+          "worst_head_rmse_m": 7.957051906843293e-09,
+          "worst_head_max_m": 8.81963498899907e-08,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": true,
+          "worst_storage_difference_relative_throughput": 1.5905400803660042e-07,
+          "worst_flux_relative_l2": 3.1654881453661665e-07,
+          "worst_ghb_flux_max_error": 0.0,
+          "worst_head_error_in_scaled_eps": 189262324.9913858,
+          "reference_reused": false,
+          "geometry_zyx": [
+            5,
+            100,
+            100
+          ],
+          "horizontal_to_vertical_k_ratio": 1.0,
+          "ghb": "off",
+          "formulation": "npf",
+          "variant": "convertible",
+          "mode": "transient",
+          "periods_per_run": 20,
+          "accepted_endpoints": 40,
+          "evaluated_endpoints": 40,
+          "timed_repeats": 1,
+          "max_physical_head_rms_m": 2.9901866727743686e-11,
+          "max_physical_relative_cell_imbalance": 9.893668767071119e-08,
+          "max_signed_budget_imbalance_m3_day": 0.0015972843050753162,
+          "max_matched_state_face_error_m3_day": 2.2737367544323206e-13,
+          "result_sha256": "87e018ce7f77f4e5b4c2da136b1c2b78d35a32ab2f6b34e8fe357794987900c3",
+          "reference_fingerprint": "3567963e7ecf134708a0c54711a6f70cc19091a027fc487dfe0a444135d2472d",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "f230d7de117029cbe8fc4c7d4e09cedf48c9dc203c5c8e0b9480e5b5c52441b9",
+            "reference.npz": "c092389608486d69c5e7776d70754d4bedfad465b51088679dc3810fe4c139bf"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "COMPLEX",
+            "linear_acceleration": "BICGSTAB",
+            "outer_maximum": 150,
+            "outer_dvclose": 1e-06,
+            "inner_maximum": 500,
+            "inner_dvclose": 1e-08,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        },
+        {
+          "case": "cartesian_confined_100x100x5_steady_ugly_t_s42_va1_ghb",
+          "implementation": "fast",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 0.15373420499963686,
+          "mf6_single_reference_run_seconds": 0.2332691889605485,
+          "median_model_construction_seconds": 0.005389280035160482,
+          "median_extra_audit_seconds": 0.027856281958520412,
+          "median_verified_total_seconds": 0.18728452903451398,
+          "worst_head_rmse_m": 2.4212136878269057e-06,
+          "worst_head_max_m": 6.85842881842369e-06,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": false,
+          "worst_storage_difference_relative_throughput": null,
+          "worst_flux_relative_l2": 8.993101770073815e-06,
+          "worst_ghb_flux_max_error": 0.0009850935189774646,
+          "worst_head_error_in_scaled_eps": 20685292509.0721,
+          "reference_reused": false,
+          "geometry_zyx": [
+            5,
+            100,
+            100
+          ],
+          "horizontal_to_vertical_k_ratio": 1.0,
+          "ghb": "on",
+          "formulation": "cartesian",
+          "variant": "confined",
+          "mode": "steady",
+          "periods_per_run": 1,
+          "accepted_endpoints": 2,
+          "evaluated_endpoints": 2,
+          "timed_repeats": 1,
+          "max_physical_head_rms_m": 2.9903148718244594e-13,
+          "max_physical_relative_cell_imbalance": 3.947918801214079e-09,
+          "max_signed_budget_imbalance_m3_day": 2.1429288514784872e-06,
+          "max_matched_state_face_error_m3_day": 2.842170943040401e-14,
+          "result_sha256": "ac0afd7667440d044e9bea6e2d51eea065be819084f9543dfd5c8dd3e7c15c4d",
+          "reference_fingerprint": "158c3a4213d5ac828135bb1ef6888aca1652b5688ee70109e0b4a7c12e21ca5e",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "mf6_build_identity": "historical-local-6.6.2",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "04be3f868981187b237b94f530eeec938757dbdc0de48b32464a542237d63869",
+            "reference.npz": "8c3f26f3164e042a608a668310d4e6be3d82fd19fc7b5a2e044e9ff44f208d8f"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "SIMPLE",
+            "linear_acceleration": "CG",
+            "outer_maximum": 10,
+            "outer_dvclose": 0.0001,
+            "inner_maximum": 2000,
+            "inner_dvclose": 0.0001,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        },
+        {
+          "case": "cartesian_confined_100x100x5_transient_ugly_t_s42_va1_ghb",
+          "implementation": "fast",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 1.1720332610420883,
+          "mf6_single_reference_run_seconds": 3.6579786899965256,
+          "median_model_construction_seconds": 0.005533799005206674,
+          "median_extra_audit_seconds": 1.009320646931883,
+          "median_verified_total_seconds": 2.192608392040711,
+          "worst_head_rmse_m": 9.540241976545217e-07,
+          "worst_head_max_m": 1.8767401573915876e-06,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": false,
+          "worst_storage_difference_relative_throughput": 4.756527273057339e-08,
+          "worst_flux_relative_l2": 1.5693219192671558e-06,
+          "worst_ghb_flux_max_error": 0.00036353276590261885,
+          "worst_head_error_in_scaled_eps": 5681542210.940032,
+          "reference_reused": false,
+          "geometry_zyx": [
+            5,
+            100,
+            100
+          ],
+          "horizontal_to_vertical_k_ratio": 1.0,
+          "ghb": "on",
+          "formulation": "cartesian",
+          "variant": "confined",
+          "mode": "transient",
+          "periods_per_run": 20,
+          "accepted_endpoints": 40,
+          "evaluated_endpoints": 40,
+          "timed_repeats": 1,
+          "max_physical_head_rms_m": 2.3109090073514878e-10,
+          "max_physical_relative_cell_imbalance": 2.5223361470928254e-06,
+          "max_signed_budget_imbalance_m3_day": 0.021129635033775903,
+          "max_matched_state_face_error_m3_day": 4.263256414560601e-14,
+          "result_sha256": "f0046cd6b85528253609596037ea35faca43936c902a88f63fa7e59e29fd72a7",
+          "reference_fingerprint": "1df10c54f82b15df73dc444f4018da883902740f827d40e90e02e1ba0f06bd83",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "04be3f868981187b237b94f530eeec938757dbdc0de48b32464a542237d63869",
+            "reference.npz": "c16bdc5f916c54d04d24b62c970644f899f801e14a40d34e6c59d452628867cc"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "COMPLEX",
+            "linear_acceleration": "BICGSTAB",
+            "outer_maximum": 150,
+            "outer_dvclose": 1e-06,
+            "inner_maximum": 500,
+            "inner_dvclose": 1e-08,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        },
+        {
+          "case": "npf_confined_100x100x5_steady_ugly_t_s42_va1_ghb",
+          "implementation": "kcycle",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 0.1739647820359096,
+          "mf6_single_reference_run_seconds": 0.2801769500365481,
+          "median_model_construction_seconds": 0.008035066013690084,
+          "median_extra_audit_seconds": 0.029134281969163567,
+          "median_verified_total_seconds": 0.21148636197904125,
+          "worst_head_rmse_m": 8.321603056953227e-07,
+          "worst_head_max_m": 2.574024539292452e-06,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": false,
+          "worst_storage_difference_relative_throughput": null,
+          "worst_flux_relative_l2": 7.668253560144945e-07,
+          "worst_ghb_flux_max_error": 0.0006089849098316336,
+          "worst_head_error_in_scaled_eps": 1730260863.6357405,
+          "reference_reused": false,
+          "geometry_zyx": [
+            5,
+            100,
+            100
+          ],
+          "horizontal_to_vertical_k_ratio": 1.0,
+          "ghb": "on",
+          "formulation": "npf",
+          "variant": "confined",
+          "mode": "steady",
+          "periods_per_run": 1,
+          "accepted_endpoints": 2,
+          "evaluated_endpoints": 2,
+          "timed_repeats": 1,
+          "max_physical_head_rms_m": 1.1592394068496488e-11,
+          "max_physical_relative_cell_imbalance": 5.481740188547969e-08,
+          "max_signed_budget_imbalance_m3_day": 0.0015068001636938666,
+          "max_matched_state_face_error_m3_day": 9.094947017729282e-13,
+          "result_sha256": "dcb8d45869ed62addb4705c9d9f860e393f8199414830335281c0761ff134486",
+          "reference_fingerprint": "7eaf30db8ca963ac9ddafb6c3e2c644bc0c5ee3abaa34fdde7c31806772d6bb0",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "mf6_build_identity": "historical-local-6.6.2",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "42128687e7513614123e5d44e177c41c2777d0bc43220d0b4d41b2c8b19cdb89",
+            "reference.npz": "8b39a370850cc3046d75e8a7345b77e2930cd93d24dcf93a54d4d30ef97b48c0"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "SIMPLE",
+            "linear_acceleration": "CG",
+            "outer_maximum": 10,
+            "outer_dvclose": 0.0001,
+            "inner_maximum": 2000,
+            "inner_dvclose": 0.0001,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        },
+        {
+          "case": "npf_confined_100x100x5_transient_ugly_t_s42_va1_ghb",
+          "implementation": "kcycle",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 2.421359707019292,
+          "mf6_single_reference_run_seconds": 4.760563527001068,
+          "median_model_construction_seconds": 0.008139476994983852,
+          "median_extra_audit_seconds": 0.9941705969977193,
+          "median_verified_total_seconds": 3.425687550974544,
+          "worst_head_rmse_m": 1.614618697172145e-07,
+          "worst_head_max_m": 4.3175378561244315e-07,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": true,
+          "worst_storage_difference_relative_throughput": 2.0115455358471706e-08,
+          "worst_flux_relative_l2": 5.998236196167252e-08,
+          "worst_ghb_flux_max_error": 0.0001389410708725336,
+          "worst_head_error_in_scaled_eps": 276196099.558948,
+          "reference_reused": false,
+          "geometry_zyx": [
+            5,
+            100,
+            100
+          ],
+          "horizontal_to_vertical_k_ratio": 1.0,
+          "ghb": "on",
+          "formulation": "npf",
+          "variant": "confined",
+          "mode": "transient",
+          "periods_per_run": 20,
+          "accepted_endpoints": 40,
+          "evaluated_endpoints": 40,
+          "timed_repeats": 1,
+          "max_physical_head_rms_m": 1.1272337307308411e-11,
+          "max_physical_relative_cell_imbalance": 6.270397810581803e-08,
+          "max_signed_budget_imbalance_m3_day": 0.0010192068135402022,
+          "max_matched_state_face_error_m3_day": 9.094947017729282e-13,
+          "result_sha256": "416832a3e7baa16e484567e32b3e56093e80fb6566fa95da594e57f3658a2873",
+          "reference_fingerprint": "de40e3d6208b656ce3c6683d767b9bf28dc63e967349f15d9f6d62be067d5b5e",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "42128687e7513614123e5d44e177c41c2777d0bc43220d0b4d41b2c8b19cdb89",
+            "reference.npz": "f8d1e7fc7161015ce5352c44517f330f6879ec4743ad8b386f766de46aae350c"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "COMPLEX",
+            "linear_acceleration": "BICGSTAB",
+            "outer_maximum": 150,
+            "outer_dvclose": 1e-06,
+            "inner_maximum": 500,
+            "inner_dvclose": 1e-08,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        },
+        {
+          "case": "npf_convertible_100x100x5_steady_ugly_t_s42_va1_ghb",
+          "implementation": "kcycle",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 0.19685473898425698,
+          "mf6_single_reference_run_seconds": 1.4267582669854164,
+          "median_model_construction_seconds": 0.007869246997870505,
+          "median_extra_audit_seconds": 0.028310993046034127,
+          "median_verified_total_seconds": 0.23337097000330687,
+          "worst_head_rmse_m": 4.838151033100244e-07,
+          "worst_head_max_m": 7.59316064247173e-07,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": true,
+          "worst_storage_difference_relative_throughput": null,
+          "worst_flux_relative_l2": 1.3140825976356322e-07,
+          "worst_ghb_flux_max_error": 0.0005778464592367527,
+          "worst_head_error_in_scaled_eps": 474979428.8039371,
+          "reference_reused": false,
+          "geometry_zyx": [
+            5,
+            100,
+            100
+          ],
+          "horizontal_to_vertical_k_ratio": 1.0,
+          "ghb": "on",
+          "formulation": "npf",
+          "variant": "convertible",
+          "mode": "steady",
+          "periods_per_run": 1,
+          "accepted_endpoints": 2,
+          "evaluated_endpoints": 2,
+          "timed_repeats": 1,
+          "max_physical_head_rms_m": 2.250937654241663e-12,
+          "max_physical_relative_cell_imbalance": 8.022111926397894e-09,
+          "max_signed_budget_imbalance_m3_day": 0.0003577235357214992,
+          "max_matched_state_face_error_m3_day": 9.094947017729282e-13,
+          "result_sha256": "c5e1869f9b2002751a86475e0b9273c730111e2a6002c024bb208859950a42ae",
+          "reference_fingerprint": "1b7b53bae6b73d286fc528e884cb4d47c51de47d658c1fb6b24232464fff8b44",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "mf6_build_identity": "historical-local-6.6.2",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "bc0d3e3b894053f0708bba7b486d4a770cee0bfde83a3a7725ac9d32112479ee",
+            "reference.npz": "6bc6f63066f0c2fcbf790dd34650722efad9ef32749448de6c512cd02942ff13"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "COMPLEX",
+            "linear_acceleration": "BICGSTAB",
+            "outer_maximum": 500,
+            "outer_dvclose": 1e-06,
+            "inner_maximum": 500,
+            "inner_dvclose": 1e-08,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        },
+        {
+          "case": "npf_convertible_100x100x5_transient_ugly_t_s42_va1_ghb",
+          "implementation": "kcycle",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 1.7534925839863718,
+          "mf6_single_reference_run_seconds": 2.9193917230004445,
+          "median_model_construction_seconds": 0.008942201035097241,
+          "median_extra_audit_seconds": 1.0695986329810694,
+          "median_verified_total_seconds": 2.834146289038472,
+          "worst_head_rmse_m": 6.2525358376211056e-09,
+          "worst_head_max_m": 6.822767067982127e-08,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": true,
+          "worst_storage_difference_relative_throughput": 6.012558133413718e-08,
+          "worst_flux_relative_l2": 2.311208263810162e-07,
+          "worst_ghb_flux_max_error": 7.415620348183438e-05,
+          "worst_head_error_in_scaled_eps": 153342450.09093246,
+          "reference_reused": false,
+          "geometry_zyx": [
+            5,
+            100,
+            100
+          ],
+          "horizontal_to_vertical_k_ratio": 1.0,
+          "ghb": "on",
+          "formulation": "npf",
+          "variant": "convertible",
+          "mode": "transient",
+          "periods_per_run": 20,
+          "accepted_endpoints": 40,
+          "evaluated_endpoints": 40,
+          "timed_repeats": 1,
+          "max_physical_head_rms_m": 2.6708676782885542e-11,
+          "max_physical_relative_cell_imbalance": 9.320118277626578e-08,
+          "max_signed_budget_imbalance_m3_day": 0.003605166131519843,
+          "max_matched_state_face_error_m3_day": 2.2737367544323206e-13,
+          "result_sha256": "e7d821530031b51bf63032694c3830bead5da7d197b56394083e16b539c373ee",
+          "reference_fingerprint": "6f7ae4acae5d661d9f1c5c01b344f95cfeceece9cbb048552139490938cb8d3e",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "bc0d3e3b894053f0708bba7b486d4a770cee0bfde83a3a7725ac9d32112479ee",
+            "reference.npz": "650130cf9c870c5fdd06014174dc11bd28947750e3b237e0769be1c2f10059d1"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "COMPLEX",
+            "linear_acceleration": "BICGSTAB",
+            "outer_maximum": 150,
+            "outer_dvclose": 1e-06,
+            "inner_maximum": 500,
+            "inner_dvclose": 1e-08,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        },
+        {
+          "case": "cartesian_confined_100x100x5_steady_ugly_t_s42_va10",
+          "implementation": "fast",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 0.1638002049876377,
+          "mf6_single_reference_run_seconds": 0.21561271604150534,
+          "median_model_construction_seconds": 0.005312731023877859,
+          "median_extra_audit_seconds": 0.026450238015968353,
+          "median_verified_total_seconds": 0.19597222801530734,
+          "worst_head_rmse_m": 1.5590162610481503e-06,
+          "worst_head_max_m": 4.275282260629565e-06,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": false,
+          "worst_storage_difference_relative_throughput": null,
+          "worst_flux_relative_l2": 1.7205206351452393e-05,
+          "worst_ghb_flux_max_error": 0.0,
+          "worst_head_error_in_scaled_eps": 19254159595.875,
+          "reference_reused": false,
+          "geometry_zyx": [
+            5,
+            100,
+            100
+          ],
+          "horizontal_to_vertical_k_ratio": 10.0,
+          "ghb": "off",
+          "formulation": "cartesian",
+          "variant": "confined",
+          "mode": "steady",
+          "periods_per_run": 1,
+          "accepted_endpoints": 2,
+          "evaluated_endpoints": 2,
+          "timed_repeats": 1,
+          "max_physical_head_rms_m": 1.164748095668273e-13,
+          "max_physical_relative_cell_imbalance": 1.405769749273005e-09,
+          "max_signed_budget_imbalance_m3_day": 3.441056083131055e-08,
+          "max_matched_state_face_error_m3_day": 1.4210854715202004e-14,
+          "result_sha256": "f169a170ddcfe350abd9e95041dad2d5ed5d8193f935e0dccb21277552d59086",
+          "reference_fingerprint": "d43646d4698aceeea5088150b78e17549bf00812c7c3b96e0cd8ba51875b8069",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "mf6_build_identity": "historical-local-6.6.2",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "401ca645a0c9c98a5f2ed52095dc8a1e0f120c1d64d8f4fa0bcc7b023afd415e",
+            "reference.npz": "4612c0d20eeb1599368f5805764fcd3df8904e9b1266838485e4367ad8dace30"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "SIMPLE",
+            "linear_acceleration": "CG",
+            "outer_maximum": 10,
+            "outer_dvclose": 0.0001,
+            "inner_maximum": 2000,
+            "inner_dvclose": 0.0001,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        },
+        {
+          "case": "cartesian_confined_100x100x5_transient_ugly_t_s42_va10",
+          "implementation": "fast",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 1.7722246700432152,
+          "mf6_single_reference_run_seconds": 5.768835618975572,
+          "median_model_construction_seconds": 0.005265439976938069,
+          "median_extra_audit_seconds": 0.9829851509421133,
+          "median_verified_total_seconds": 2.7669081509811804,
+          "worst_head_rmse_m": 1.7726407982380515e-07,
+          "worst_head_max_m": 3.266897787845835e-07,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": true,
+          "worst_storage_difference_relative_throughput": 6.274899665306956e-08,
+          "worst_flux_relative_l2": 1.6315517654115407e-06,
+          "worst_ghb_flux_max_error": 0.0,
+          "worst_head_error_in_scaled_eps": 1471279966.0,
+          "reference_reused": false,
+          "geometry_zyx": [
+            5,
+            100,
+            100
+          ],
+          "horizontal_to_vertical_k_ratio": 10.0,
+          "ghb": "off",
+          "formulation": "cartesian",
+          "variant": "confined",
+          "mode": "transient",
+          "periods_per_run": 20,
+          "accepted_endpoints": 40,
+          "evaluated_endpoints": 40,
+          "timed_repeats": 1,
+          "max_physical_head_rms_m": 3.888759377250611e-11,
+          "max_physical_relative_cell_imbalance": 1.1331814894344647e-06,
+          "max_signed_budget_imbalance_m3_day": 0.00014580931029831027,
+          "max_matched_state_face_error_m3_day": 2.842170943040401e-14,
+          "result_sha256": "d44fe25ab47eb8d7c96b41e3c5c1a4e6dc35c1442d6ca4c16db90f32ffb3e6f4",
+          "reference_fingerprint": "5efcbc208f1de19ccc4224be629fec7a62bd11bf3e9c28d10c023839a2d715a8",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "401ca645a0c9c98a5f2ed52095dc8a1e0f120c1d64d8f4fa0bcc7b023afd415e",
+            "reference.npz": "5c7edff85b956e77c4f0c6c6aa5980a957eb263ed1fd756c37036733fe65defa"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "COMPLEX",
+            "linear_acceleration": "BICGSTAB",
+            "outer_maximum": 150,
+            "outer_dvclose": 1e-06,
+            "inner_maximum": 500,
+            "inner_dvclose": 1e-08,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        },
+        {
+          "case": "npf_confined_100x100x5_steady_ugly_t_s42_va10",
+          "implementation": "kcycle",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 0.17238524300046265,
+          "mf6_single_reference_run_seconds": 0.2642515989718959,
+          "median_model_construction_seconds": 0.007929933024570346,
+          "median_extra_audit_seconds": 0.02421857399167493,
+          "median_verified_total_seconds": 0.20490400202106684,
+          "worst_head_rmse_m": 8.546285460405731e-07,
+          "worst_head_max_m": 2.691120897679866e-06,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": false,
+          "worst_storage_difference_relative_throughput": null,
+          "worst_flux_relative_l2": 2.3701777034809835e-07,
+          "worst_ghb_flux_max_error": 0.0,
+          "worst_head_error_in_scaled_eps": 598352036.0080229,
+          "reference_reused": false,
+          "geometry_zyx": [
+            5,
+            100,
+            100
+          ],
+          "horizontal_to_vertical_k_ratio": 10.0,
+          "ghb": "off",
+          "formulation": "npf",
+          "variant": "confined",
+          "mode": "steady",
+          "periods_per_run": 1,
+          "accepted_endpoints": 2,
+          "evaluated_endpoints": 2,
+          "timed_repeats": 1,
+          "max_physical_head_rms_m": 2.270680485249907e-11,
+          "max_physical_relative_cell_imbalance": 1.4453477432711845e-08,
+          "max_signed_budget_imbalance_m3_day": 0.0008693194151583039,
+          "max_matched_state_face_error_m3_day": 1.8189894035458565e-12,
+          "result_sha256": "323f801aceb0afe91e064fef5b6bfb68c2647db5f5ecea91e1554bcd988de75f",
+          "reference_fingerprint": "48e3a23e19536c8f024719d2b89df8db9835939e5e58417e0bd7802ca3434bdb",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "mf6_build_identity": "historical-local-6.6.2",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "16d2f146bf728267c2fb996d2c27e59e1e2fcf61d8a8583c85daa508a712f1dd",
+            "reference.npz": "20de55191f9b9ccb6453824da28c47c70d6f95c5c8f536911a8aefa08511e7fa"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "SIMPLE",
+            "linear_acceleration": "CG",
+            "outer_maximum": 10,
+            "outer_dvclose": 0.0001,
+            "inner_maximum": 2000,
+            "inner_dvclose": 0.0001,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        },
+        {
+          "case": "npf_confined_100x100x5_transient_ugly_t_s42_va10",
+          "implementation": "kcycle",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 2.294569167017471,
+          "mf6_single_reference_run_seconds": 5.052258555951994,
+          "median_model_construction_seconds": 0.007911141961812973,
+          "median_extra_audit_seconds": 0.9143637690576725,
+          "median_verified_total_seconds": 3.2189836259931326,
+          "worst_head_rmse_m": 1.1048571326676672e-07,
+          "worst_head_max_m": 2.5784933121997256e-07,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": true,
+          "worst_storage_difference_relative_throughput": 9.528169527942463e-09,
+          "worst_flux_relative_l2": 3.724897289607038e-08,
+          "worst_ghb_flux_max_error": 0.0,
+          "worst_head_error_in_scaled_eps": 74830418.58092035,
+          "reference_reused": false,
+          "geometry_zyx": [
+            5,
+            100,
+            100
+          ],
+          "horizontal_to_vertical_k_ratio": 10.0,
+          "ghb": "off",
+          "formulation": "npf",
+          "variant": "confined",
+          "mode": "transient",
+          "periods_per_run": 20,
+          "accepted_endpoints": 40,
+          "evaluated_endpoints": 40,
+          "timed_repeats": 1,
+          "max_physical_head_rms_m": 8.177820068619279e-11,
+          "max_physical_relative_cell_imbalance": 6.365191646324349e-08,
+          "max_signed_budget_imbalance_m3_day": 0.0045691981374287455,
+          "max_matched_state_face_error_m3_day": 1.8189894035458565e-12,
+          "result_sha256": "47fd4de09495971e726cd98e782867115cb4f374244d0ed254a3b4e9d249e343",
+          "reference_fingerprint": "0f09ad9c264ae5d7bc68cc58ce4b7aa7014ef7ef84bea412a652fdb02419d43c",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "16d2f146bf728267c2fb996d2c27e59e1e2fcf61d8a8583c85daa508a712f1dd",
+            "reference.npz": "6d48f5386b83ad690cba51f0d80bbcdb89e018b16f5ecba36c5e36a7325e04e4"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "COMPLEX",
+            "linear_acceleration": "BICGSTAB",
+            "outer_maximum": 150,
+            "outer_dvclose": 1e-06,
+            "inner_maximum": 500,
+            "inner_dvclose": 1e-08,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        },
+        {
+          "case": "npf_convertible_100x100x5_steady_ugly_t_s42_va10",
+          "implementation": "kcycle",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 0.1996039699879475,
+          "mf6_single_reference_run_seconds": 2.0768438689992763,
+          "median_model_construction_seconds": 0.007456811028532684,
+          "median_extra_audit_seconds": 0.022588669031392783,
+          "median_verified_total_seconds": 0.22994660801487043,
+          "worst_head_rmse_m": 5.641884399154904e-07,
+          "worst_head_max_m": 9.956079658479666e-07,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": true,
+          "worst_storage_difference_relative_throughput": null,
+          "worst_flux_relative_l2": 6.008427958627815e-08,
+          "worst_ghb_flux_max_error": 0.0,
+          "worst_head_error_in_scaled_eps": 216501562.46699876,
+          "reference_reused": false,
+          "geometry_zyx": [
+            5,
+            100,
+            100
+          ],
+          "horizontal_to_vertical_k_ratio": 10.0,
+          "ghb": "off",
+          "formulation": "npf",
+          "variant": "convertible",
+          "mode": "steady",
+          "periods_per_run": 1,
+          "accepted_endpoints": 2,
+          "evaluated_endpoints": 2,
+          "timed_repeats": 1,
+          "max_physical_head_rms_m": 1.724432826845024e-10,
+          "max_physical_relative_cell_imbalance": 8.295669420894373e-08,
+          "max_signed_budget_imbalance_m3_day": 0.0018414957415665845,
+          "max_matched_state_face_error_m3_day": 1.8189894035458565e-12,
+          "result_sha256": "20cee654682cac5d87bdd9e8737e88dba80b19fef8e7e90030eda0ca0205cd9e",
+          "reference_fingerprint": "73f5d3623bb35acba634007c7c5fe648d0e0dce0ec933e0abec6f296c657e776",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "mf6_build_identity": "historical-local-6.6.2",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "05b954a63dbd91c4ae359824edc2017ec9807645aa7694a54d471e1cc2ef293b",
+            "reference.npz": "8ee0aa050bb829b6aa1edb84c893c36f6bb816a0578165768f4b2f5b3dd82aa5"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "COMPLEX",
+            "linear_acceleration": "BICGSTAB",
+            "outer_maximum": 500,
+            "outer_dvclose": 1e-06,
+            "inner_maximum": 500,
+            "inner_dvclose": 1e-08,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        },
+        {
+          "case": "npf_convertible_100x100x5_transient_ugly_t_s42_va10",
+          "implementation": "kcycle",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 1.6493635849910788,
+          "mf6_single_reference_run_seconds": 2.7875781700131483,
+          "median_model_construction_seconds": 0.007860936049837619,
+          "median_extra_audit_seconds": 0.9223629440530203,
+          "median_verified_total_seconds": 2.5817578510032035,
+          "worst_head_rmse_m": 6.160929254789284e-09,
+          "worst_head_max_m": 6.027078619519344e-08,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": true,
+          "worst_storage_difference_relative_throughput": 6.273508577730262e-08,
+          "worst_flux_relative_l2": 2.2057811800165257e-07,
+          "worst_ghb_flux_max_error": 0.0,
+          "worst_head_error_in_scaled_eps": 127829111.95351166,
+          "reference_reused": false,
+          "geometry_zyx": [
+            5,
+            100,
+            100
+          ],
+          "horizontal_to_vertical_k_ratio": 10.0,
+          "ghb": "off",
+          "formulation": "npf",
+          "variant": "convertible",
+          "mode": "transient",
+          "periods_per_run": 20,
+          "accepted_endpoints": 40,
+          "evaluated_endpoints": 40,
+          "timed_repeats": 1,
+          "max_physical_head_rms_m": 1.357363208025577e-10,
+          "max_physical_relative_cell_imbalance": 7.695575926993432e-08,
+          "max_signed_budget_imbalance_m3_day": 0.002276990577288133,
+          "max_matched_state_face_error_m3_day": 2.2737367544323206e-13,
+          "result_sha256": "ab994e3c7c1c4172d80e59b5e67f5e1984d69d518ae87fc1cc6c0ff5dafdf7e6",
+          "reference_fingerprint": "8a21a295c9842c7998957adb703fdf58bcb535238274180e52ed684d6f5875df",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "05b954a63dbd91c4ae359824edc2017ec9807645aa7694a54d471e1cc2ef293b",
+            "reference.npz": "e91fbaa12aed20b3511211f20b32f45217d34ee2278ae4c8fa7982c648fb2097"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "COMPLEX",
+            "linear_acceleration": "BICGSTAB",
+            "outer_maximum": 150,
+            "outer_dvclose": 1e-06,
+            "inner_maximum": 500,
+            "inner_dvclose": 1e-08,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        },
+        {
+          "case": "cartesian_confined_100x100x5_steady_ugly_t_s42_va10_ghb",
+          "implementation": "fast",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 0.15470698400167748,
+          "mf6_single_reference_run_seconds": 0.20158186403568834,
+          "median_model_construction_seconds": 0.005707379954401404,
+          "median_extra_audit_seconds": 0.029351484030485153,
+          "median_verified_total_seconds": 0.19005030195694417,
+          "worst_head_rmse_m": 2.2754368309861647e-06,
+          "worst_head_max_m": 6.299976290202736e-06,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": false,
+          "worst_storage_difference_relative_throughput": null,
+          "worst_flux_relative_l2": 7.951084574170504e-06,
+          "worst_ghb_flux_max_error": 0.0006129561622003621,
+          "worst_head_error_in_scaled_eps": 18991497037.421295,
+          "reference_reused": false,
+          "geometry_zyx": [
+            5,
+            100,
+            100
+          ],
+          "horizontal_to_vertical_k_ratio": 10.0,
+          "ghb": "on",
+          "formulation": "cartesian",
+          "variant": "confined",
+          "mode": "steady",
+          "periods_per_run": 1,
+          "accepted_endpoints": 2,
+          "evaluated_endpoints": 2,
+          "timed_repeats": 1,
+          "max_physical_head_rms_m": 7.029361351831399e-13,
+          "max_physical_relative_cell_imbalance": 3.985196368941325e-09,
+          "max_signed_budget_imbalance_m3_day": 2.1631708283370576e-06,
+          "max_matched_state_face_error_m3_day": 4.263256414560601e-14,
+          "result_sha256": "18ec8004f96ce7fe3c1a5b48aca262f65a594db0f09c9cc2d49a6eea6e4e9107",
+          "reference_fingerprint": "2f3ba4302f29ea83f2ead6788e3deec7df5d1ae436cdf8b9669e6cbb1ddaa382",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "mf6_build_identity": "historical-local-6.6.2",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "7c6a10563ba26d5ec69ff5dbecf29a0235ebf178718237595efdddc958188166",
+            "reference.npz": "2f249720fc0db555542a9b462d6260a62a4dcddf52b5011a08fcd4120bc69d74"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "SIMPLE",
+            "linear_acceleration": "CG",
+            "outer_maximum": 10,
+            "outer_dvclose": 0.0001,
+            "inner_maximum": 2000,
+            "inner_dvclose": 0.0001,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        },
+        {
+          "case": "cartesian_confined_100x100x5_transient_ugly_t_s42_va10_ghb",
+          "implementation": "fast",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 1.137589232006576,
+          "mf6_single_reference_run_seconds": 3.8990200419793837,
+          "median_model_construction_seconds": 0.005058619019109756,
+          "median_extra_audit_seconds": 0.9281304440810345,
+          "median_verified_total_seconds": 2.07615264802007,
+          "worst_head_rmse_m": 1.0468241198291983e-06,
+          "worst_head_max_m": 1.8524978242506762e-06,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": false,
+          "worst_storage_difference_relative_throughput": 4.8527295931628655e-08,
+          "worst_flux_relative_l2": 1.6983907378288271e-06,
+          "worst_ghb_flux_max_error": 0.0003905266227093307,
+          "worst_head_error_in_scaled_eps": 5584418073.879226,
+          "reference_reused": false,
+          "geometry_zyx": [
+            5,
+            100,
+            100
+          ],
+          "horizontal_to_vertical_k_ratio": 10.0,
+          "ghb": "on",
+          "formulation": "cartesian",
+          "variant": "confined",
+          "mode": "transient",
+          "periods_per_run": 20,
+          "accepted_endpoints": 40,
+          "evaluated_endpoints": 40,
+          "timed_repeats": 1,
+          "max_physical_head_rms_m": 5.972446948738103e-10,
+          "max_physical_relative_cell_imbalance": 2.5211838250104513e-06,
+          "max_signed_budget_imbalance_m3_day": 0.021129243591544878,
+          "max_matched_state_face_error_m3_day": 4.263256414560601e-14,
+          "result_sha256": "da93c80308b7a9aa20022c50dc6943d23f2a91146dfb3913bdc1788456b5afff",
+          "reference_fingerprint": "6cc565bda574692070e1a99fffbe06b228c677b4daf13a01f5b57ea2eb2770e7",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "7c6a10563ba26d5ec69ff5dbecf29a0235ebf178718237595efdddc958188166",
+            "reference.npz": "becfa82a64ffc6a513d6ba7ce20b8e3374540137d757326a025cf372c04b403c"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "COMPLEX",
+            "linear_acceleration": "BICGSTAB",
+            "outer_maximum": 150,
+            "outer_dvclose": 1e-06,
+            "inner_maximum": 500,
+            "inner_dvclose": 1e-08,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        },
+        {
+          "case": "npf_confined_100x100x5_steady_ugly_t_s42_va10_ghb",
+          "implementation": "kcycle",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 0.1744774739490822,
+          "mf6_single_reference_run_seconds": 0.23986783699365333,
+          "median_model_construction_seconds": 0.008281525981146842,
+          "median_extra_audit_seconds": 0.030221751949284226,
+          "median_verified_total_seconds": 0.21339588798582554,
+          "worst_head_rmse_m": 1.2216540144698275e-06,
+          "worst_head_max_m": 4.160729903723848e-06,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": false,
+          "worst_storage_difference_relative_throughput": null,
+          "worst_flux_relative_l2": 7.181723053617658e-07,
+          "worst_ghb_flux_max_error": 0.002439807119571924,
+          "worst_head_error_in_scaled_eps": 2794674246.204065,
+          "reference_reused": false,
+          "geometry_zyx": [
+            5,
+            100,
+            100
+          ],
+          "horizontal_to_vertical_k_ratio": 10.0,
+          "ghb": "on",
+          "formulation": "npf",
+          "variant": "confined",
+          "mode": "steady",
+          "periods_per_run": 1,
+          "accepted_endpoints": 2,
+          "evaluated_endpoints": 2,
+          "timed_repeats": 1,
+          "max_physical_head_rms_m": 7.108637518509575e-11,
+          "max_physical_relative_cell_imbalance": 5.3725930211719265e-08,
+          "max_signed_budget_imbalance_m3_day": 0.001924294354368139,
+          "max_matched_state_face_error_m3_day": 4.547473508864641e-13,
+          "result_sha256": "b757c2026c552962d50e9f8a6338bfb75014e3a28017662d401c964b8fca165a",
+          "reference_fingerprint": "a7eec3d1af5bac85b1ccc83c92f218f13730674fbc5795646b13d62e2d1b2f6b",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "mf6_build_identity": "historical-local-6.6.2",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "372871ca0d74a4b72ea698f3ceb6cf985c1b8a2a7b7c3c78b612be18a0301558",
+            "reference.npz": "a039ab3fdd6c01df9f8c833201ebe179832dd2ce872a4c4eb06f3e5b21c350e3"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "SIMPLE",
+            "linear_acceleration": "CG",
+            "outer_maximum": 10,
+            "outer_dvclose": 0.0001,
+            "inner_maximum": 2000,
+            "inner_dvclose": 0.0001,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        },
+        {
+          "case": "npf_confined_100x100x5_transient_ugly_t_s42_va10_ghb",
+          "implementation": "kcycle",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 2.4172837950172834,
+          "mf6_single_reference_run_seconds": 4.817059448978398,
+          "median_model_construction_seconds": 0.008446655003353953,
+          "median_extra_audit_seconds": 0.978780054138042,
+          "median_verified_total_seconds": 3.4064496500068344,
+          "worst_head_rmse_m": 5.288882102487998e-08,
+          "worst_head_max_m": 1.1866958393724758e-07,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": true,
+          "worst_storage_difference_relative_throughput": 1.1712773570047654e-08,
+          "worst_flux_relative_l2": 3.88905148536379e-08,
+          "worst_ghb_flux_max_error": 7.195483544819581e-05,
+          "worst_head_error_in_scaled_eps": 118378245.49788696,
+          "reference_reused": false,
+          "geometry_zyx": [
+            5,
+            100,
+            100
+          ],
+          "horizontal_to_vertical_k_ratio": 10.0,
+          "ghb": "on",
+          "formulation": "npf",
+          "variant": "confined",
+          "mode": "transient",
+          "periods_per_run": 20,
+          "accepted_endpoints": 40,
+          "evaluated_endpoints": 40,
+          "timed_repeats": 1,
+          "max_physical_head_rms_m": 6.996509125302044e-11,
+          "max_physical_relative_cell_imbalance": 6.266513154112112e-08,
+          "max_signed_budget_imbalance_m3_day": 0.0008650932231570319,
+          "max_matched_state_face_error_m3_day": 9.094947017729282e-13,
+          "result_sha256": "f3df6d9b454f813c32f75154a2dd50c6c741ab95d8a4b17ef02a380ec4f39526",
+          "reference_fingerprint": "d1f6ad5a44ef522407250bc3709b5f5e853d00faaf4160d8ee00fbafc834a99e",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "372871ca0d74a4b72ea698f3ceb6cf985c1b8a2a7b7c3c78b612be18a0301558",
+            "reference.npz": "6656c1db06030012ba9fb1fdffb4556ac77810e4f500e049b0374863cbd4efb6"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "COMPLEX",
+            "linear_acceleration": "BICGSTAB",
+            "outer_maximum": 150,
+            "outer_dvclose": 1e-06,
+            "inner_maximum": 500,
+            "inner_dvclose": 1e-08,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        },
+        {
+          "case": "npf_convertible_100x100x5_steady_ugly_t_s42_va10_ghb",
+          "implementation": "kcycle",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 0.19664838799508289,
+          "mf6_single_reference_run_seconds": 1.586349408957176,
+          "median_model_construction_seconds": 0.008068108989391476,
+          "median_extra_audit_seconds": 0.026526128000114113,
+          "median_verified_total_seconds": 0.23163211497012526,
+          "worst_head_rmse_m": 1.7761725750926734e-07,
+          "worst_head_max_m": 2.837661643440015e-07,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": true,
+          "worst_storage_difference_relative_throughput": null,
+          "worst_flux_relative_l2": 4.8922140480042706e-08,
+          "worst_ghb_flux_max_error": 0.00023876131626821007,
+          "worst_head_error_in_scaled_eps": 177323077.60212025,
+          "reference_reused": false,
+          "geometry_zyx": [
+            5,
+            100,
+            100
+          ],
+          "horizontal_to_vertical_k_ratio": 10.0,
+          "ghb": "on",
+          "formulation": "npf",
+          "variant": "convertible",
+          "mode": "steady",
+          "periods_per_run": 1,
+          "accepted_endpoints": 2,
+          "evaluated_endpoints": 2,
+          "timed_repeats": 1,
+          "max_physical_head_rms_m": 1.6040289389850374e-11,
+          "max_physical_relative_cell_imbalance": 8.064403235167201e-09,
+          "max_signed_budget_imbalance_m3_day": 0.0004155504600068527,
+          "max_matched_state_face_error_m3_day": 9.094947017729282e-13,
+          "result_sha256": "9721539577fa65f18494debf844540c986c86a263223548d6d2b069d90df2960",
+          "reference_fingerprint": "ae079013ac15f3187b702a78e914a1c1f344ebff9d8f24c375a725c6578d9519",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "mf6_build_identity": "historical-local-6.6.2",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "567958bf10e2bb6a875b2e8f98977123d277288fd24120b936cb20bbd9ed0923",
+            "reference.npz": "324ccd277af942078fdd3bd40900cbdd495470c7695db771c53fd1413b03e622"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "COMPLEX",
+            "linear_acceleration": "BICGSTAB",
+            "outer_maximum": 500,
+            "outer_dvclose": 1e-06,
+            "inner_maximum": 500,
+            "inner_dvclose": 1e-08,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        },
+        {
+          "case": "npf_convertible_100x100x5_transient_ugly_t_s42_va10_ghb",
+          "implementation": "kcycle",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 1.7527008180040866,
+          "mf6_single_reference_run_seconds": 3.6685887610074133,
+          "median_model_construction_seconds": 0.007551613030955195,
+          "median_extra_audit_seconds": 0.950687316886615,
+          "median_verified_total_seconds": 2.7127363140461966,
+          "worst_head_rmse_m": 6.828414461446578e-09,
+          "worst_head_max_m": 5.7594430724616785e-08,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": true,
+          "worst_storage_difference_relative_throughput": 5.26590428276995e-08,
+          "worst_flux_relative_l2": 2.0941391272616142e-07,
+          "worst_ghb_flux_max_error": 6.924906921312868e-05,
+          "worst_head_error_in_scaled_eps": 129610114.32070823,
+          "reference_reused": false,
+          "geometry_zyx": [
+            5,
+            100,
+            100
+          ],
+          "horizontal_to_vertical_k_ratio": 10.0,
+          "ghb": "on",
+          "formulation": "npf",
+          "variant": "convertible",
+          "mode": "transient",
+          "periods_per_run": 20,
+          "accepted_endpoints": 40,
+          "evaluated_endpoints": 40,
+          "timed_repeats": 1,
+          "max_physical_head_rms_m": 1.7472573458827486e-10,
+          "max_physical_relative_cell_imbalance": 9.604585369588216e-08,
+          "max_signed_budget_imbalance_m3_day": 0.002745310759880294,
+          "max_matched_state_face_error_m3_day": 2.2737367544323206e-13,
+          "result_sha256": "d52bf9b8c2ed5ddd29a06886577c9f6a7a1abace9b816a0b64a662be85b2eedc",
+          "reference_fingerprint": "bdb07fbfe804884ed2439c0068c2ffc0d290b835dac2996e908d9aced74836c4",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "567958bf10e2bb6a875b2e8f98977123d277288fd24120b936cb20bbd9ed0923",
+            "reference.npz": "4ab9bf68832d9c59ed322469a42f7774c0bcbdb39c1384c46208e8a371bd514f"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "COMPLEX",
+            "linear_acceleration": "BICGSTAB",
+            "outer_maximum": 150,
+            "outer_dvclose": 1e-06,
+            "inner_maximum": 500,
+            "inner_dvclose": 1e-08,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        },
+        {
+          "case": "cartesian_confined_100x100x5_steady_ugly_t_s42_va100",
+          "implementation": "fast",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 0.15866849798476323,
+          "mf6_single_reference_run_seconds": 0.20159060100559145,
+          "median_model_construction_seconds": 0.004678113036789,
+          "median_extra_audit_seconds": 0.021501758019439876,
+          "median_verified_total_seconds": 0.1851238150265999,
+          "worst_head_rmse_m": 1.1028068004601004e-06,
+          "worst_head_max_m": 3.6065406791296883e-06,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": false,
+          "worst_storage_difference_relative_throughput": null,
+          "worst_flux_relative_l2": 1.2365348788868053e-05,
+          "worst_ghb_flux_max_error": 0.0,
+          "worst_head_error_in_scaled_eps": 16242415258.625,
+          "reference_reused": false,
+          "geometry_zyx": [
+            5,
+            100,
+            100
+          ],
+          "horizontal_to_vertical_k_ratio": 100.0,
+          "ghb": "off",
+          "formulation": "cartesian",
+          "variant": "confined",
+          "mode": "steady",
+          "periods_per_run": 1,
+          "accepted_endpoints": 2,
+          "evaluated_endpoints": 2,
+          "timed_repeats": 1,
+          "max_physical_head_rms_m": 3.655584708914478e-13,
+          "max_physical_relative_cell_imbalance": 3.190164619767965e-09,
+          "max_signed_budget_imbalance_m3_day": 5.470641172840122e-07,
+          "max_matched_state_face_error_m3_day": 1.4210854715202004e-14,
+          "result_sha256": "eddf6381750ce3a8916b6cfdf7f532d5b5c4f23ac0be943dd5951e4dbba8261a",
+          "reference_fingerprint": "6abebd620716c58cde8cd5b2fa0fd4c73f2da3c57b2b5b3863ad2bdfbc68efdb",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "mf6_build_identity": "historical-local-6.6.2",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "c4ab2260828a4f2e70dd1e75639e0a7f62cb830c684e711c9df63ff64785734e",
+            "reference.npz": "02c766952828a5b1167d95f14c47cb6e8f7fdd021a34a83c17ae798630888b4b"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "SIMPLE",
+            "linear_acceleration": "CG",
+            "outer_maximum": 10,
+            "outer_dvclose": 0.0001,
+            "inner_maximum": 2000,
+            "inner_dvclose": 0.0001,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        },
+        {
+          "case": "cartesian_confined_100x100x5_transient_ugly_t_s42_va100",
+          "implementation": "fast",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 1.7039278239826672,
+          "mf6_single_reference_run_seconds": 4.6944533080095425,
+          "median_model_construction_seconds": 0.004730585962533951,
+          "median_extra_audit_seconds": 0.8639471069327556,
+          "median_verified_total_seconds": 2.577811685972847,
+          "worst_head_rmse_m": 1.0956796656400827e-07,
+          "worst_head_max_m": 2.3393787740300098e-07,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": true,
+          "worst_storage_difference_relative_throughput": 1.1426368347542484e-08,
+          "worst_flux_relative_l2": 5.790294659505533e-07,
+          "worst_ghb_flux_max_error": 0.0,
+          "worst_head_error_in_scaled_eps": 1053562537.5,
+          "reference_reused": false,
+          "geometry_zyx": [
+            5,
+            100,
+            100
+          ],
+          "horizontal_to_vertical_k_ratio": 100.0,
+          "ghb": "off",
+          "formulation": "cartesian",
+          "variant": "confined",
+          "mode": "transient",
+          "periods_per_run": 20,
+          "accepted_endpoints": 40,
+          "evaluated_endpoints": 40,
+          "timed_repeats": 1,
+          "max_physical_head_rms_m": 1.9215668699630428e-10,
+          "max_physical_relative_cell_imbalance": 1.5191809039104358e-06,
+          "max_signed_budget_imbalance_m3_day": 0.001135231027526464,
+          "max_matched_state_face_error_m3_day": 2.842170943040401e-14,
+          "result_sha256": "9722a8556f282fcac33933b245046c521f548e29065b38d9141b806c0c81a78e",
+          "reference_fingerprint": "2141b7d245c36c91980dd43625e1f863f49d4f3f3c5a5cdfe9f31ae340b84276",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "c4ab2260828a4f2e70dd1e75639e0a7f62cb830c684e711c9df63ff64785734e",
+            "reference.npz": "7ca6da3c522d4b2244ac90c4ea97b163386812ad212c3ccf04db44f43b52f463"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "COMPLEX",
+            "linear_acceleration": "BICGSTAB",
+            "outer_maximum": 150,
+            "outer_dvclose": 1e-06,
+            "inner_maximum": 500,
+            "inner_dvclose": 1e-08,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        },
+        {
+          "case": "npf_confined_100x100x5_steady_ugly_t_s42_va100",
+          "implementation": "kcycle",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 0.1709641659981571,
+          "mf6_single_reference_run_seconds": 0.22216336603742093,
+          "median_model_construction_seconds": 0.007256847980897874,
+          "median_extra_audit_seconds": 0.02114338002866134,
+          "median_verified_total_seconds": 0.19964051997521892,
+          "worst_head_rmse_m": 9.90034817244036e-07,
+          "worst_head_max_m": 3.4885761053260467e-06,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": false,
+          "worst_storage_difference_relative_throughput": null,
+          "worst_flux_relative_l2": 2.6135614042273125e-07,
+          "worst_ghb_flux_max_error": 0.0,
+          "worst_head_error_in_scaled_eps": 773223193.19083,
+          "reference_reused": false,
+          "geometry_zyx": [
+            5,
+            100,
+            100
+          ],
+          "horizontal_to_vertical_k_ratio": 100.0,
+          "ghb": "off",
+          "formulation": "npf",
+          "variant": "confined",
+          "mode": "steady",
+          "periods_per_run": 1,
+          "accepted_endpoints": 2,
+          "evaluated_endpoints": 2,
+          "timed_repeats": 1,
+          "max_physical_head_rms_m": 5.616902261293089e-11,
+          "max_physical_relative_cell_imbalance": 1.4261044633524901e-08,
+          "max_signed_budget_imbalance_m3_day": 0.00038283649506065665,
+          "max_matched_state_face_error_m3_day": 1.8189894035458565e-12,
+          "result_sha256": "eaf63ca385cee5a9efdfee4dd7c2a3afd3c74a21c0b6432237bbdb1924546149",
+          "reference_fingerprint": "9176b6e6cc3c987a7694d0943f49d3feb44e3db5c921293c3a4d2da3914fda51",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "mf6_build_identity": "historical-local-6.6.2",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "43b863a44f74e476526675d939a266a0486023a6c10d4d2021acd0c45b0e7a4c",
+            "reference.npz": "78cab837dcbd31d133672eb875e8fc568d169fe1ae47787a099d627ee8702a4e"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "SIMPLE",
+            "linear_acceleration": "CG",
+            "outer_maximum": 10,
+            "outer_dvclose": 0.0001,
+            "inner_maximum": 2000,
+            "inner_dvclose": 0.0001,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        },
+        {
+          "case": "npf_confined_100x100x5_transient_ugly_t_s42_va100",
+          "implementation": "kcycle",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 2.326707691012416,
+          "mf6_single_reference_run_seconds": 5.053309196955524,
+          "median_model_construction_seconds": 0.007485601003281772,
+          "median_extra_audit_seconds": 0.8724131839117035,
+          "median_verified_total_seconds": 3.2085860410006717,
+          "worst_head_rmse_m": 2.4297718009278485e-08,
+          "worst_head_max_m": 6.255739037897001e-08,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": true,
+          "worst_storage_difference_relative_throughput": 5.56720594265976e-09,
+          "worst_flux_relative_l2": 3.326550371850892e-08,
+          "worst_ghb_flux_max_error": 0.0,
+          "worst_head_error_in_scaled_eps": 35504795.50924311,
+          "reference_reused": false,
+          "geometry_zyx": [
+            5,
+            100,
+            100
+          ],
+          "horizontal_to_vertical_k_ratio": 100.0,
+          "ghb": "off",
+          "formulation": "npf",
+          "variant": "confined",
+          "mode": "transient",
+          "periods_per_run": 20,
+          "accepted_endpoints": 40,
+          "evaluated_endpoints": 40,
+          "timed_repeats": 1,
+          "max_physical_head_rms_m": 1.9022539055717024e-10,
+          "max_physical_relative_cell_imbalance": 6.065260064034919e-08,
+          "max_signed_budget_imbalance_m3_day": 0.0013665281111318248,
+          "max_matched_state_face_error_m3_day": 1.8189894035458565e-12,
+          "result_sha256": "bc59e465e2b1ad0a339abd6784a65ad0740f117b518fa29a744763c62609625a",
+          "reference_fingerprint": "98c41d6f308d42dde03f8c9f56a49313d24efeb3649a64caa7dbcc25731aad00",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "43b863a44f74e476526675d939a266a0486023a6c10d4d2021acd0c45b0e7a4c",
+            "reference.npz": "279ed8e2199711e7e1c5fa2ff69fa5f8e8f6bfe492760916c9714c3a48e6dc64"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "COMPLEX",
+            "linear_acceleration": "BICGSTAB",
+            "outer_maximum": 150,
+            "outer_dvclose": 1e-06,
+            "inner_maximum": 500,
+            "inner_dvclose": 1e-08,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        },
+        {
+          "case": "npf_convertible_100x100x5_steady_ugly_t_s42_va100",
+          "implementation": "kcycle",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 0.1989692080533132,
+          "mf6_single_reference_run_seconds": 2.0728735960437916,
+          "median_model_construction_seconds": 0.007455138023942709,
+          "median_extra_audit_seconds": 0.022731743985787034,
+          "median_verified_total_seconds": 0.22948722203727812,
+          "worst_head_rmse_m": 5.736346438837792e-07,
+          "worst_head_max_m": 8.757146261473281e-07,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": true,
+          "worst_storage_difference_relative_throughput": null,
+          "worst_flux_relative_l2": 5.106839970399872e-08,
+          "worst_ghb_flux_max_error": 0.0,
+          "worst_head_error_in_scaled_eps": 189863395.2619939,
+          "reference_reused": false,
+          "geometry_zyx": [
+            5,
+            100,
+            100
+          ],
+          "horizontal_to_vertical_k_ratio": 100.0,
+          "ghb": "off",
+          "formulation": "npf",
+          "variant": "convertible",
+          "mode": "steady",
+          "periods_per_run": 1,
+          "accepted_endpoints": 2,
+          "evaluated_endpoints": 2,
+          "timed_repeats": 1,
+          "max_physical_head_rms_m": 3.232475087097233e-10,
+          "max_physical_relative_cell_imbalance": 8.564741087413396e-08,
+          "max_signed_budget_imbalance_m3_day": 0.0010457006089349963,
+          "max_matched_state_face_error_m3_day": 1.8189894035458565e-12,
+          "result_sha256": "884fbe5b9ea8e8552a2fcffa3a4ccc61205e0f4f190b4789937d78c356488ba4",
+          "reference_fingerprint": "e6a508b7f74eaabca986e7d69a8ce1534e2132439db2d38aaa80ba18a87e094b",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "mf6_build_identity": "historical-local-6.6.2",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "1107e1af4cfe4c829c6cc98a41ef1a4fa68d7641b4390b1e87478fd68387952a",
+            "reference.npz": "2eb97a413d4c4aabd74fe654b0cd7d1652c0f96589cc029b32c579b9f728d0a6"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "COMPLEX",
+            "linear_acceleration": "BICGSTAB",
+            "outer_maximum": 500,
+            "outer_dvclose": 1e-06,
+            "inner_maximum": 500,
+            "inner_dvclose": 1e-08,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        },
+        {
+          "case": "npf_convertible_100x100x5_transient_ugly_t_s42_va100",
+          "implementation": "kcycle",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 1.6332174059934914,
+          "mf6_single_reference_run_seconds": 3.788523909985088,
+          "median_model_construction_seconds": 0.007534308999311179,
+          "median_extra_audit_seconds": 0.8748667469481006,
+          "median_verified_total_seconds": 2.5176226000185125,
+          "worst_head_rmse_m": 5.528816094783215e-09,
+          "worst_head_max_m": 4.619503987668416e-08,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": true,
+          "worst_storage_difference_relative_throughput": 3.982429902348941e-08,
+          "worst_flux_relative_l2": 1.5162971161198093e-07,
+          "worst_ghb_flux_max_error": 0.0,
+          "worst_head_error_in_scaled_eps": 93749389.1631329,
+          "reference_reused": false,
+          "geometry_zyx": [
+            5,
+            100,
+            100
+          ],
+          "horizontal_to_vertical_k_ratio": 100.0,
+          "ghb": "off",
+          "formulation": "npf",
+          "variant": "convertible",
+          "mode": "transient",
+          "periods_per_run": 20,
+          "accepted_endpoints": 40,
+          "evaluated_endpoints": 40,
+          "timed_repeats": 1,
+          "max_physical_head_rms_m": 4.1131349839700594e-10,
+          "max_physical_relative_cell_imbalance": 9.823903091937136e-08,
+          "max_signed_budget_imbalance_m3_day": 0.004747540873711597,
+          "max_matched_state_face_error_m3_day": 2.2737367544323206e-13,
+          "result_sha256": "2b2f87db77dd9325ffd15b6e1648cb8c97ed0a9c78fa1409fbffd98c7a53c1c4",
+          "reference_fingerprint": "9ce3f7d1ba4e85fd24f9fe5f88ee5e5affb296a5ca6894c62e0754da0ca8d674",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "1107e1af4cfe4c829c6cc98a41ef1a4fa68d7641b4390b1e87478fd68387952a",
+            "reference.npz": "4cc898a70fb3c6b208ee011331c9dade06eb0333b3cb163411020e2c7280e817"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "COMPLEX",
+            "linear_acceleration": "BICGSTAB",
+            "outer_maximum": 150,
+            "outer_dvclose": 1e-06,
+            "inner_maximum": 500,
+            "inner_dvclose": 1e-08,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        },
+        {
+          "case": "cartesian_confined_100x100x5_steady_ugly_t_s42_va100_ghb",
+          "implementation": "fast",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 0.1518179400009103,
+          "mf6_single_reference_run_seconds": 0.1909513979917392,
+          "median_model_construction_seconds": 0.004728820000309497,
+          "median_extra_audit_seconds": 0.024539817997720093,
+          "median_verified_total_seconds": 0.1813558250432834,
+          "worst_head_rmse_m": 2.0233327651650837e-06,
+          "worst_head_max_m": 5.933530851320867e-06,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": false,
+          "worst_storage_difference_relative_throughput": null,
+          "worst_flux_relative_l2": 7.17347154980229e-06,
+          "worst_ghb_flux_max_error": 0.0009203085653339826,
+          "worst_head_error_in_scaled_eps": 17855079877.64309,
+          "reference_reused": false,
+          "geometry_zyx": [
+            5,
+            100,
+            100
+          ],
+          "horizontal_to_vertical_k_ratio": 100.0,
+          "ghb": "on",
+          "formulation": "cartesian",
+          "variant": "confined",
+          "mode": "steady",
+          "periods_per_run": 1,
+          "accepted_endpoints": 2,
+          "evaluated_endpoints": 2,
+          "timed_repeats": 1,
+          "max_physical_head_rms_m": 8.269612348695648e-13,
+          "max_physical_relative_cell_imbalance": 3.8110323735535715e-09,
+          "max_signed_budget_imbalance_m3_day": 3.5007281248486404e-06,
+          "max_matched_state_face_error_m3_day": 2.842170943040401e-14,
+          "result_sha256": "853da90f61563fa7e3105d298effea94e945d6ed08e50b0e5419a523a881702d",
+          "reference_fingerprint": "2913f15391adca2ae102ce93a517e6a9dd9d967bdd58de5823504f5d679fdaf0",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "mf6_build_identity": "historical-local-6.6.2",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "576bcac5439e14833e300ba838e1f171d01e1740704f2d183a7d6cb24b2362c0",
+            "reference.npz": "1c2bfa85cfcc4a1d5248ad5f2a1709c5c65d24c311f97d451374a602410cfe9f"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "SIMPLE",
+            "linear_acceleration": "CG",
+            "outer_maximum": 10,
+            "outer_dvclose": 0.0001,
+            "inner_maximum": 2000,
+            "inner_dvclose": 0.0001,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        },
+        {
+          "case": "cartesian_confined_100x100x5_transient_ugly_t_s42_va100_ghb",
+          "implementation": "fast",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 1.1584065897623077,
+          "mf6_single_reference_run_seconds": 3.6215963060385548,
+          "median_model_construction_seconds": 0.005143782997038215,
+          "median_extra_audit_seconds": 0.9174053499591537,
+          "median_verified_total_seconds": 2.086086441006046,
+          "worst_head_rmse_m": 1.0787556376993875e-06,
+          "worst_head_max_m": 1.872484729270596e-06,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": false,
+          "worst_storage_difference_relative_throughput": 4.949115791537158e-08,
+          "worst_flux_relative_l2": 1.7570991830326192e-06,
+          "worst_ghb_flux_max_error": 0.0004004653605989006,
+          "worst_head_error_in_scaled_eps": 5665672365.173592,
+          "reference_reused": false,
+          "geometry_zyx": [
+            5,
+            100,
+            100
+          ],
+          "horizontal_to_vertical_k_ratio": 100.0,
+          "ghb": "on",
+          "formulation": "cartesian",
+          "variant": "confined",
+          "mode": "transient",
+          "periods_per_run": 20,
+          "accepted_endpoints": 40,
+          "evaluated_endpoints": 40,
+          "timed_repeats": 1,
+          "max_physical_head_rms_m": 7.545741117826261e-10,
+          "max_physical_relative_cell_imbalance": 2.5147078698491326e-06,
+          "max_signed_budget_imbalance_m3_day": 0.021079485748252386,
+          "max_matched_state_face_error_m3_day": 4.263256414560601e-14,
+          "result_sha256": "0a60c847acff6948f630bc57f1816b1c9ffa90aa5ef3cd14facc79ea2a875e64",
+          "reference_fingerprint": "e0cb8fc26785d5d6d20ef2148b0468c63d36e7ff4f5e89b3c178105c9eea682d",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "576bcac5439e14833e300ba838e1f171d01e1740704f2d183a7d6cb24b2362c0",
+            "reference.npz": "74abc392f7dda30e95054e8713361f4f735fabf238fee41ac1233476463cd275"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "COMPLEX",
+            "linear_acceleration": "BICGSTAB",
+            "outer_maximum": 150,
+            "outer_dvclose": 1e-06,
+            "inner_maximum": 500,
+            "inner_dvclose": 1e-08,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        },
+        {
+          "case": "npf_confined_100x100x5_steady_ugly_t_s42_va100_ghb",
+          "implementation": "kcycle",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 0.1688569310354069,
+          "mf6_single_reference_run_seconds": 0.2038555199978873,
+          "median_model_construction_seconds": 0.007624780992045999,
+          "median_extra_audit_seconds": 0.02537986502284184,
+          "median_verified_total_seconds": 0.20216934999916703,
+          "worst_head_rmse_m": 1.2881334250989604e-06,
+          "worst_head_max_m": 4.413485432230857e-06,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": false,
+          "worst_storage_difference_relative_throughput": null,
+          "worst_flux_relative_l2": 7.500859876327539e-07,
+          "worst_ghb_flux_max_error": 0.0023651921137570753,
+          "worst_head_error_in_scaled_eps": 2941500660.5011606,
+          "reference_reused": false,
+          "geometry_zyx": [
+            5,
+            100,
+            100
+          ],
+          "horizontal_to_vertical_k_ratio": 100.0,
+          "ghb": "on",
+          "formulation": "npf",
+          "variant": "confined",
+          "mode": "steady",
+          "periods_per_run": 1,
+          "accepted_endpoints": 2,
+          "evaluated_endpoints": 2,
+          "timed_repeats": 1,
+          "max_physical_head_rms_m": 1.91740217429046e-10,
+          "max_physical_relative_cell_imbalance": 5.633339124079972e-08,
+          "max_signed_budget_imbalance_m3_day": 0.0030069418093087164,
+          "max_matched_state_face_error_m3_day": 4.547473508864641e-13,
+          "result_sha256": "b87886fd8a27514a63e62d5657071a049f51cbff2fe2da45a49d48bb1808cdde",
+          "reference_fingerprint": "ea58d97d9d7c7b39e36883b096f2908bcfa56ffd0e716a1440d36ee6a80f0ba7",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "mf6_build_identity": "historical-local-6.6.2",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "8973797ab4b796f1465da382ab2cc592b8ad78249994c10ac8db0b72051df7d7",
+            "reference.npz": "80b68ba84bd74e9097db722193a398362ec684ec278e36fe7f6dc9e2be83a886"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "SIMPLE",
+            "linear_acceleration": "CG",
+            "outer_maximum": 10,
+            "outer_dvclose": 0.0001,
+            "inner_maximum": 2000,
+            "inner_dvclose": 0.0001,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        },
+        {
+          "case": "npf_confined_100x100x5_transient_ugly_t_s42_va100_ghb",
+          "implementation": "kcycle",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 2.4135288490215316,
+          "mf6_single_reference_run_seconds": 4.756166356033646,
+          "median_model_construction_seconds": 0.008336280006915331,
+          "median_extra_audit_seconds": 0.8949777009547688,
+          "median_verified_total_seconds": 3.3185447590076365,
+          "worst_head_rmse_m": 3.9226457558450675e-08,
+          "worst_head_max_m": 9.317199367586682e-08,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": true,
+          "worst_storage_difference_relative_throughput": 6.7880433973336775e-09,
+          "worst_flux_relative_l2": 5.659655076401086e-08,
+          "worst_ghb_flux_max_error": 6.356628784942586e-05,
+          "worst_head_error_in_scaled_eps": 130984681.47754659,
+          "reference_reused": false,
+          "geometry_zyx": [
+            5,
+            100,
+            100
+          ],
+          "horizontal_to_vertical_k_ratio": 100.0,
+          "ghb": "on",
+          "formulation": "npf",
+          "variant": "confined",
+          "mode": "transient",
+          "periods_per_run": 20,
+          "accepted_endpoints": 40,
+          "evaluated_endpoints": 40,
+          "timed_repeats": 1,
+          "max_physical_head_rms_m": 1.5750918239668631e-10,
+          "max_physical_relative_cell_imbalance": 5.932799775050067e-08,
+          "max_signed_budget_imbalance_m3_day": 0.00022243202608232537,
+          "max_matched_state_face_error_m3_day": 9.094947017729282e-13,
+          "result_sha256": "af857cf88bdfe3e558c9b72e99a3b9b6df0289fbdac4385b1add9c4cb1344437",
+          "reference_fingerprint": "f5cc2abed70deee26fb0366728962e5e5048f20e0e5389c892464774b0c38f2c",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "8973797ab4b796f1465da382ab2cc592b8ad78249994c10ac8db0b72051df7d7",
+            "reference.npz": "94eb0d07dc3945751aae8cf9448f449d2884077fa12febe7b3d1d32d62c87473"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "COMPLEX",
+            "linear_acceleration": "BICGSTAB",
+            "outer_maximum": 150,
+            "outer_dvclose": 1e-06,
+            "inner_maximum": 500,
+            "inner_dvclose": 1e-08,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        },
+        {
+          "case": "npf_convertible_100x100x5_steady_ugly_t_s42_va100_ghb",
+          "implementation": "kcycle",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 0.1978598809801042,
+          "mf6_single_reference_run_seconds": 1.4732171050272882,
+          "median_model_construction_seconds": 0.0073528329958207905,
+          "median_extra_audit_seconds": 0.026412562001496553,
+          "median_verified_total_seconds": 0.231918022967875,
+          "worst_head_rmse_m": 2.6897906789203692e-08,
+          "worst_head_max_m": 7.332990126229788e-08,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": true,
+          "worst_storage_difference_relative_throughput": null,
+          "worst_flux_relative_l2": 7.484718867644306e-09,
+          "worst_ghb_flux_max_error": 2.371679647694691e-05,
+          "worst_head_error_in_scaled_eps": 45424164.04686928,
+          "reference_reused": false,
+          "geometry_zyx": [
+            5,
+            100,
+            100
+          ],
+          "horizontal_to_vertical_k_ratio": 100.0,
+          "ghb": "on",
+          "formulation": "npf",
+          "variant": "convertible",
+          "mode": "steady",
+          "periods_per_run": 1,
+          "accepted_endpoints": 2,
+          "evaluated_endpoints": 2,
+          "timed_repeats": 1,
+          "max_physical_head_rms_m": 1.9609996976246722e-11,
+          "max_physical_relative_cell_imbalance": 4.524667005950345e-09,
+          "max_signed_budget_imbalance_m3_day": 0.0002575124313218824,
+          "max_matched_state_face_error_m3_day": 9.094947017729282e-13,
+          "result_sha256": "90ae6962f61ff023569b47195ffb46307a0b1cd1b2a0cb456405d9c4ef252849",
+          "reference_fingerprint": "304256e30901313a30be425c51a79d3f2c6c8357e5b3e8314447b7cb1764d9a5",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "mf6_build_identity": "historical-local-6.6.2",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "699bd3567d8959c0eda724fdab33349cdbfa6badaeb9ad6235ba2019737f34e3",
+            "reference.npz": "1b234423a1e5d30b4ec12801212695c2b2f971b54216590e715c5374856a6401"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "COMPLEX",
+            "linear_acceleration": "BICGSTAB",
+            "outer_maximum": 500,
+            "outer_dvclose": 1e-06,
+            "inner_maximum": 500,
+            "inner_dvclose": 1e-08,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        },
+        {
+          "case": "npf_convertible_100x100x5_transient_ugly_t_s42_va100_ghb",
+          "implementation": "kcycle",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 1.776554506039247,
+          "mf6_single_reference_run_seconds": 4.807784806005657,
+          "median_model_construction_seconds": 0.0074680239777080715,
+          "median_extra_audit_seconds": 0.9131324611371383,
+          "median_verified_total_seconds": 2.698789720016066,
+          "worst_head_rmse_m": 4.869611981305215e-09,
+          "worst_head_max_m": 4.307706302775216e-08,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": true,
+          "worst_storage_difference_relative_throughput": 2.0043501356161542e-08,
+          "worst_flux_relative_l2": 1.085816930584863e-07,
+          "worst_ghb_flux_max_error": 3.419400707116438e-05,
+          "worst_head_error_in_scaled_eps": 99979198.17973632,
+          "reference_reused": false,
+          "geometry_zyx": [
+            5,
+            100,
+            100
+          ],
+          "horizontal_to_vertical_k_ratio": 100.0,
+          "ghb": "on",
+          "formulation": "npf",
+          "variant": "convertible",
+          "mode": "transient",
+          "periods_per_run": 20,
+          "accepted_endpoints": 40,
+          "evaluated_endpoints": 40,
+          "timed_repeats": 1,
+          "max_physical_head_rms_m": 3.220729728681477e-10,
+          "max_physical_relative_cell_imbalance": 8.902258666920491e-08,
+          "max_signed_budget_imbalance_m3_day": 0.005254481838755066,
+          "max_matched_state_face_error_m3_day": 2.2737367544323206e-13,
+          "result_sha256": "4a11cb4454c62cf5bd51aeb53a0f69e839d7324f1106b7f29443f712c92fc613",
+          "reference_fingerprint": "ecc6dffd5fedb931fe45da59455705449c013d2f543df6a956ae68ade0c22d05",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "699bd3567d8959c0eda724fdab33349cdbfa6badaeb9ad6235ba2019737f34e3",
+            "reference.npz": "39779df2aeae51df3c2fcdcf5bf95a7a0c55915bfd7177b30d1175b39451b21b"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "COMPLEX",
+            "linear_acceleration": "BICGSTAB",
+            "outer_maximum": 150,
+            "outer_dvclose": 1e-06,
+            "inner_maximum": 500,
+            "inner_dvclose": 1e-08,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        }
+      ]
+    },
+    "large": {
+      "measured_git_revision": "f26e7a4bf312c9fcda1efd68bbd18d5d26059aab",
+      "started_utc": "2026-11-24T23:30:24.787531+00:00",
+      "raw_matrix_sha256": "e61a153e29cc90dc2982c96254f0ae539ab485350eaebd2acff70f369c1641a1",
+      "passed_cases": 6,
+      "total_cases": 6,
+      "accepted_periods_across_repeats_and_warmups": 252,
+      "worst_head_max_m": 3.7208896911167244e-05,
+      "met_preferred_head_accuracy": 2,
+      "worst_intercell_relative_l2": 7.756908743986345e-06,
+      "worst_storage_difference_relative_throughput": 3.4489060872047394e-07,
+      "cases": [
+        {
+          "case": "cartesian_confined_500x500x5_steady_ugly_t_s42_va100_ghb",
+          "implementation": "fast",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 0.9403643379919231,
+          "mf6_single_reference_run_seconds": 32.513441821036395,
+          "median_model_construction_seconds": 0.1876551530440338,
+          "median_extra_audit_seconds": 0.8567037350148894,
+          "median_verified_total_seconds": 1.9930428339866921,
+          "worst_head_rmse_m": 1.0661919697198573e-05,
+          "worst_head_max_m": 3.7208896911167244e-05,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": false,
+          "worst_storage_difference_relative_throughput": null,
+          "worst_flux_relative_l2": 7.756908743986345e-06,
+          "worst_ghb_flux_max_error": 0.0014072050635149935,
+          "worst_head_error_in_scaled_eps": 32696803638.509544,
+          "reference_reused": true,
+          "geometry_zyx": [
+            5,
+            500,
+            500
+          ],
+          "horizontal_to_vertical_k_ratio": 100.0,
+          "ghb": "on",
+          "formulation": "cartesian",
+          "variant": "confined",
+          "mode": "steady",
+          "periods_per_run": 1,
+          "accepted_endpoints": 4,
+          "evaluated_endpoints": 4,
+          "timed_repeats": 3,
+          "max_physical_head_rms_m": 2.4708546773027884e-12,
+          "max_physical_relative_cell_imbalance": 2.2483298621849247e-08,
+          "max_signed_budget_imbalance_m3_day": 0.0001451078797838918,
+          "max_matched_state_face_error_m3_day": 5.684341886080802e-14,
+          "result_sha256": "dfe32469c69617e7ac2a48600c811742019e625cda9f9a907ae230fc171419a4",
+          "reference_fingerprint": "600dba30b8553796f9691153d3e05a5fa5bdf8b21ca273c3a5e4a7dd03d183d7",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "mf6_build_identity": "historical-local-6.6.2",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "98f6704464fb34f0d0491096b37be123ddb3583b08994bc564b0a14ecb7c4455",
+            "reference.npz": "7d8ba83637404395dbf3b48e097040d64f4a7d47303e29820ecfd21072bdb972"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "SIMPLE",
+            "linear_acceleration": "CG",
+            "outer_maximum": 10,
+            "outer_dvclose": 0.0001,
+            "inner_maximum": 2000,
+            "inner_dvclose": 0.0001,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        },
+        {
+          "case": "cartesian_confined_500x500x5_transient_ugly_t_s42_va100_ghb",
+          "implementation": "fast",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 12.739376237965189,
+          "mf6_single_reference_run_seconds": 568.6556201389758,
+          "median_model_construction_seconds": 0.19221189199015498,
+          "median_extra_audit_seconds": 31.74194037693087,
+          "median_verified_total_seconds": 44.97320548299467,
+          "worst_head_rmse_m": 6.118121198309989e-07,
+          "worst_head_max_m": 1.5889787983169867e-06,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": false,
+          "worst_storage_difference_relative_throughput": 1.0008371381166696e-07,
+          "worst_flux_relative_l2": 4.628098289768499e-07,
+          "worst_ghb_flux_max_error": 7.369763136466645e-05,
+          "worst_head_error_in_scaled_eps": 2860859012.1670117,
+          "reference_reused": true,
+          "geometry_zyx": [
+            5,
+            500,
+            500
+          ],
+          "horizontal_to_vertical_k_ratio": 100.0,
+          "ghb": "on",
+          "formulation": "cartesian",
+          "variant": "confined",
+          "mode": "transient",
+          "periods_per_run": 20,
+          "accepted_endpoints": 80,
+          "evaluated_endpoints": 80,
+          "timed_repeats": 3,
+          "max_physical_head_rms_m": 5.875396628156392e-12,
+          "max_physical_relative_cell_imbalance": 1.60705092472852e-07,
+          "max_signed_budget_imbalance_m3_day": 0.0009417366215153281,
+          "max_matched_state_face_error_m3_day": 8.526512829121202e-14,
+          "result_sha256": "c554f5aba3e8c751481d76d32e54057d6c8db63a0835cd7b2f4c62ecf1f06ec9",
+          "reference_fingerprint": "1ab4a251dcfd7d418e5a46f4af00ed00c5cf4ab9619efd0231521ffa583fffb2",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "98f6704464fb34f0d0491096b37be123ddb3583b08994bc564b0a14ecb7c4455",
+            "reference.npz": "3d37d432b94ade37f8c6cc0e7f7fb66e2b213df20c355fcc78d709552cc23afc"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "COMPLEX",
+            "linear_acceleration": "BICGSTAB",
+            "outer_maximum": 150,
+            "outer_dvclose": 1e-06,
+            "inner_maximum": 500,
+            "inner_dvclose": 1e-08,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        },
+        {
+          "case": "npf_confined_500x500x5_steady_ugly_t_s42_va100_ghb",
+          "implementation": "kcycle",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 1.7343056320096366,
+          "mf6_single_reference_run_seconds": 36.608880157989915,
+          "median_model_construction_seconds": 0.27279887697659433,
+          "median_extra_audit_seconds": 0.8999311439692974,
+          "median_verified_total_seconds": 2.9171736349817365,
+          "worst_head_rmse_m": 4.533848088012292e-06,
+          "worst_head_max_m": 1.2293812594599274e-05,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": false,
+          "worst_storage_difference_relative_throughput": null,
+          "worst_flux_relative_l2": 4.263070915131187e-06,
+          "worst_ghb_flux_max_error": 0.0024770031823209138,
+          "worst_head_error_in_scaled_eps": 8336389246.88856,
+          "reference_reused": true,
+          "geometry_zyx": [
+            5,
+            500,
+            500
+          ],
+          "horizontal_to_vertical_k_ratio": 100.0,
+          "ghb": "on",
+          "formulation": "npf",
+          "variant": "confined",
+          "mode": "steady",
+          "periods_per_run": 1,
+          "accepted_endpoints": 4,
+          "evaluated_endpoints": 4,
+          "timed_repeats": 3,
+          "max_physical_head_rms_m": 3.559079846756276e-13,
+          "max_physical_relative_cell_imbalance": 2.4161141457597546e-09,
+          "max_signed_budget_imbalance_m3_day": 0.0002329302417627549,
+          "max_matched_state_face_error_m3_day": 2.2737367544323206e-13,
+          "result_sha256": "5b484ebd7e7f8eb95727fe62f50096a3c42fc21b69303532cd8fdfe51d255196",
+          "reference_fingerprint": "9e14a33403b8f4b5e5bfcb74fbd5233e12ac601a32985047151bceb1c5ea009a",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "mf6_build_identity": "historical-local-6.6.2",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "102e2445358201fe3482e93ee102a27bc5de98d1ff3eacd1668ddd1612389fc3",
+            "reference.npz": "69c55bb8ea0502cbbc675c942e8bedb792b64a75387b96f2cb96caaf4c78273d"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "SIMPLE",
+            "linear_acceleration": "CG",
+            "outer_maximum": 10,
+            "outer_dvclose": 0.0001,
+            "inner_maximum": 2000,
+            "inner_dvclose": 0.0001,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        },
+        {
+          "case": "npf_confined_500x500x5_transient_ugly_t_s42_va100_ghb",
+          "implementation": "kcycle",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 5.628930697974283,
+          "mf6_single_reference_run_seconds": 478.3488478809595,
+          "median_model_construction_seconds": 0.2626736249658279,
+          "median_extra_audit_seconds": 29.87113825092092,
+          "median_verified_total_seconds": 35.82306134299142,
+          "worst_head_rmse_m": 6.377759554225321e-07,
+          "worst_head_max_m": 1.5735046536846653e-06,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": false,
+          "worst_storage_difference_relative_throughput": 1.4354943058207848e-07,
+          "worst_flux_relative_l2": 4.481345627554873e-07,
+          "worst_ghb_flux_max_error": 0.0002425969823889318,
+          "worst_head_error_in_scaled_eps": 1304257081.7836905,
+          "reference_reused": true,
+          "geometry_zyx": [
+            5,
+            500,
+            500
+          ],
+          "horizontal_to_vertical_k_ratio": 100.0,
+          "ghb": "on",
+          "formulation": "npf",
+          "variant": "confined",
+          "mode": "transient",
+          "periods_per_run": 20,
+          "accepted_endpoints": 80,
+          "evaluated_endpoints": 80,
+          "timed_repeats": 3,
+          "max_physical_head_rms_m": 4.3601552830569185e-12,
+          "max_physical_relative_cell_imbalance": 2.5055027594720964e-08,
+          "max_signed_budget_imbalance_m3_day": 0.0008548980934655857,
+          "max_matched_state_face_error_m3_day": 3.410605131648481e-13,
+          "result_sha256": "50b1022137c21a2c2c1618ccc5c4ecab72e763745078101d3b08154c41f1d38a",
+          "reference_fingerprint": "3c4638ccaf56a4bcabb8131df3ea4db9986c81b2ad407fc9a58b791f957431fd",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "102e2445358201fe3482e93ee102a27bc5de98d1ff3eacd1668ddd1612389fc3",
+            "reference.npz": "8a237a60382ecfb4b059db079ce9120a25c4f9546bda55b36c56157beaf5e6c6"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "COMPLEX",
+            "linear_acceleration": "BICGSTAB",
+            "outer_maximum": 150,
+            "outer_dvclose": 1e-06,
+            "inner_maximum": 500,
+            "inner_dvclose": 1e-08,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        },
+        {
+          "case": "npf_convertible_500x500x5_steady_ugly_t_s42_va100_ghb",
+          "implementation": "kcycle",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 1.6715787799912505,
+          "mf6_single_reference_run_seconds": 106.6303719659918,
+          "median_model_construction_seconds": 0.25665418000426143,
+          "median_extra_audit_seconds": 0.8417084739776328,
+          "median_verified_total_seconds": 2.7748059870209545,
+          "worst_head_rmse_m": 3.818329090064389e-07,
+          "worst_head_max_m": 6.336689768460246e-07,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": true,
+          "worst_storage_difference_relative_throughput": null,
+          "worst_flux_relative_l2": 1.0359622394108395e-07,
+          "worst_ghb_flux_max_error": 0.0004385071156320919,
+          "worst_head_error_in_scaled_eps": 398478088.6376233,
+          "reference_reused": true,
+          "geometry_zyx": [
+            5,
+            500,
+            500
+          ],
+          "horizontal_to_vertical_k_ratio": 100.0,
+          "ghb": "on",
+          "formulation": "npf",
+          "variant": "convertible",
+          "mode": "steady",
+          "periods_per_run": 1,
+          "accepted_endpoints": 4,
+          "evaluated_endpoints": 4,
+          "timed_repeats": 3,
+          "max_physical_head_rms_m": 2.7875892960471428e-12,
+          "max_physical_relative_cell_imbalance": 1.2997127268627946e-08,
+          "max_signed_budget_imbalance_m3_day": 0.00031324038938210924,
+          "max_matched_state_face_error_m3_day": 3.410605131648481e-13,
+          "result_sha256": "0b3191d7afcdc7b627da5ed14e2d65d1626feabc9258b36cdfd4de5ac68318cc",
+          "reference_fingerprint": "ed59ad3337689d893eaddf63439f8949a73ad5d399e2cfecec0042dbd6633886",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "mf6_build_identity": "historical-local-6.6.2",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "eb4e88c76d1ba686db2c59ba488dca529e1f8451187ac823fe4fd47f442df9ae",
+            "reference.npz": "95c80619df8d92cd259ac48afcd6bf9d59bbf2eaa3f92d435d5e66b539c8d198"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "COMPLEX",
+            "linear_acceleration": "BICGSTAB",
+            "outer_maximum": 500,
+            "outer_dvclose": 1e-06,
+            "inner_maximum": 500,
+            "inner_dvclose": 1e-08,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL",
+            "under_relaxation": "NONE",
+            "backtracking_number": 0,
+            "preconditioner_levels": 8,
+            "preconditioner_drop_tolerance": 0.0001,
+            "number_orthogonalizations": 8,
+            "relaxation_factor": 0.0
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        },
+        {
+          "case": "npf_convertible_500x500x5_transient_ugly_t_s42_va100_ghb",
+          "implementation": "kcycle",
+          "passed": true,
+          "gpu_physical_accepted": true,
+          "reference_available": true,
+          "median_public_solve_seconds": 6.7787805200205185,
+          "mf6_single_reference_run_seconds": 296.6329208930256,
+          "median_model_construction_seconds": 0.25919799599796534,
+          "median_extra_audit_seconds": 30.979488578101154,
+          "median_verified_total_seconds": 38.07545017194934,
+          "worst_head_rmse_m": 3.987530629597737e-08,
+          "worst_head_max_m": 2.1526908855484805e-07,
+          "preferred_head_target_m": 1e-06,
+          "preferred_head_target_met": true,
+          "worst_storage_difference_relative_throughput": 3.4489060872047394e-07,
+          "worst_flux_relative_l2": 2.9511765889398937e-07,
+          "worst_ghb_flux_max_error": 5.421039500674851e-05,
+          "worst_head_error_in_scaled_eps": 488592456.3025532,
+          "reference_reused": true,
+          "geometry_zyx": [
+            5,
+            500,
+            500
+          ],
+          "horizontal_to_vertical_k_ratio": 100.0,
+          "ghb": "on",
+          "formulation": "npf",
+          "variant": "convertible",
+          "mode": "transient",
+          "periods_per_run": 20,
+          "accepted_endpoints": 80,
+          "evaluated_endpoints": 80,
+          "timed_repeats": 3,
+          "max_physical_head_rms_m": 8.373471531631243e-12,
+          "max_physical_relative_cell_imbalance": 5.2205912896649275e-08,
+          "max_signed_budget_imbalance_m3_day": 0.01820828074621833,
+          "max_matched_state_face_error_m3_day": 8.526512829121202e-14,
+          "result_sha256": "94481e26fea802fe3d7127e1d9337034ba2307777857fb894806a8c29cc6d79f",
+          "reference_fingerprint": "915bf3dc48cc8a92ccea7154663f96fbf6dfee1295cc6c74e038e87c5bb82843",
+          "reference_accepted": true,
+          "reference_native_identity": {
+            "mf6_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+            "mf6_version": "mf6: 6.6.2 05/12/2025",
+            "native_success": true
+          },
+          "reference_artifact_sha256": {
+            "inputs.npz": "eb4e88c76d1ba686db2c59ba488dca529e1f8451187ac823fe4fd47f442df9ae",
+            "reference.npz": "66557f445b79d47b14d5332538589a5c6a90ff50c44389ccdeb2ec94e9be8381"
+          },
+          "reference_options": {
+            "pname": "ims",
+            "print_option": "SUMMARY",
+            "complexity": "COMPLEX",
+            "linear_acceleration": "BICGSTAB",
+            "outer_maximum": 150,
+            "outer_dvclose": 1e-06,
+            "inner_maximum": 500,
+            "inner_dvclose": 1e-08,
+            "rcloserecord": [
+              1e-06,
+              "RELATIVE_RCLOSE"
+            ],
+            "scaling_method": "DIAGONAL"
+          },
+          "reference_adapter_sha256": {
+            "npf662_mf6.py": "e2f396b97326be0920b961a11c3eb4b908119905c8ca776985869dd6a62ea0bd",
+            "npf662_transient_mf6.py": "4fdc24e60c0a6cdc4c6c220fcb2a5f965ebad75b7f6436e91d017fcd6b72201d"
+          }
+        }
+      ]
+    }
+  }
+}
