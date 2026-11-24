@@ -91,3 +91,19 @@ def test_persistent_ensemble_matches_fresh_heads_and_packages(tmp_path, pinned_m
         t_memory.unlink()
         r_memory.close()
         r_memory.unlink()
+
+
+def test_replay_keeps_indices_after_a_period_with_no_valid_heads():
+    native = np.zeros((3, 1, 2))
+    warp = native.copy()
+    warp[0] = np.nan
+    warp[1] = 0.5
+    warp[2] = 0.1
+    result = compare_transient(
+        warp_result=dict(heads_per_period=warp, heads_final=warp[-1]),
+        mf6_heads_per_period=native, mf6_heads_final=native[-1], active=np.ones((1, 2)),
+    )
+    assert result["per_period"][0]["n_active"] == 2
+    assert result["per_period"][0]["invalid_warp_active_heads"] == 2
+    assert result["worst_period_number_one_based"] == 2
+    assert not evaluate_head_accuracy(comparison=result)["passed"]
