@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -26,6 +26,7 @@ class CanterburyCaseInputs:
     fixed_sth: np.ndarray
     fixed_wst: np.ndarray
     fixed_sea: np.ndarray
+    boundary_audit: dict = field(default_factory=dict)
 
 
 def _load_npz(path: Path) -> dict:
@@ -35,10 +36,47 @@ def _load_npz(path: Path) -> dict:
         return {k: data[k] for k in data.files}
 
 
+def resolve_fixed_heads(*, active, stages, masks, policy):
+    """Resolve prescribed heads by source and report missing or overlapping stages.
+
+    The prepared archive uses zero background outside each source raster.
+    Explicit source masks take precedence over that encoding and can
+    identify prescribed stages that are exactly zero.
+    """
+    if policy not in {"sea_precedence", "legacy_archive"}:
+        raise ValueError("Unknown Canterbury boundary policy")
+    assigned = {}
+    missing = []
+    for name, stage in stages.items():
+        selected = active & masks.get(name, stage != 0.0)
+        for row, col in np.argwhere(selected & ~np.isfinite(stage)):
+            missing.append(dict(row=int(row), column=int(col), source=name))
+        assigned[name] = selected & np.isfinite(stage)
+    overlaps = []
+    combined_count = sum(assigned.values())
+    for row, col in np.argwhere(combined_count > 1):
+        values = {name: float(stages[name][row, col]) for name in stages if assigned[name][row, col]}
+        overlaps.append(dict(row=int(row), column=int(col), stages=values,
+            selected_source=next(reversed(values)) if policy == "sea_precedence" else "legacy_sum"))
+    if policy == "legacy_archive":
+        fixed = active & np.logical_or.reduce([stage != 0.0 for stage in stages.values()])
+        values = np.where(fixed, np.nan_to_num(sum(stages.values()), nan=0.0), 0.0)
+    else:
+        fixed = combined_count > 0
+        values = np.zeros(active.shape, dtype=np.float32)
+        for name, stage in stages.items():
+            values[assigned[name]] = stage[assigned[name]]
+    return fixed.astype(np.int32), values, dict(
+        policy=policy, missing_stages=missing, overlaps=overlaps,
+        source_precedence=["sea", "south", "north"], west_boundary="no flow",
+    )
+
+
 def load_case_inputs(
     grid_size: int = 100,
     inputs_dir: Path | None = None,
     recharge_floor: float = 1.0e-6,
+    boundary_policy: str = "sea_precedence",
 ) -> CanterburyCaseInputs:
     """
     Load Canterbury case inputs from the prepared npz/csv files.
@@ -77,19 +115,18 @@ def load_case_inputs(
     if fixed_sea.shape != (ny, nx):
         raise ValueError("fixed_sea shape mismatch with grid")
 
-    # Combine boundary value grids (west is no-flow in the original setup)
-    bc_values = fixed_nth + fixed_sth + fixed_sea
-    bc_values = np.nan_to_num(bc_values, nan=0.0).astype(np.float32, copy=False)
-
-    bc_mask = (
-        (fixed_nth != 0.0)
-        | (fixed_sth != 0.0)
-        | (fixed_sea != 0.0)
+    stages = dict(north=fixed_nth, south=fixed_sth, sea=fixed_sea)
+    source_keys = dict(north="fixed_nth_mask", south="fixed_sth_mask", sea="fixed_sea_mask")
+    masks = {name: np.asarray(bc_npz[key], dtype=bool) for name, key in source_keys.items() if key in bc_npz}
+    bc_mask, bc_values, boundary_audit = resolve_fixed_heads(
+        active=active, stages=stages, masks=masks, policy=boundary_policy,
     )
-    bc_mask = (bc_mask & active).astype(np.int32)
-    bc_values = np.where(bc_mask != 0, bc_values, 0.0).astype(np.float32, copy=False)
 
     rch_npz = _load_npz(inputs_dir / f"recharge_{grid_size}.npz")
+    if "x_coords" in rch_npz and "y_coords" in rch_npz:
+        for item in [*boundary_audit["missing_stages"], *boundary_audit["overlaps"]]:
+            item.update(nztm_easting=float(rch_npz["x_coords"][item["column"]]),
+                nztm_northing=float(rch_npz["y_coords"][item["row"]]))
     recharge_grid = np.asarray(rch_npz["grid"], dtype=np.float32)
     if recharge_grid.shape != (ny, nx):
         raise ValueError("recharge grid shape mismatch with model grid")
@@ -128,6 +165,7 @@ def load_case_inputs(
         fixed_sth=fixed_sth,
         fixed_wst=fixed_wst,
         fixed_sea=fixed_sea,
+        boundary_audit=boundary_audit,
     )
 
 
