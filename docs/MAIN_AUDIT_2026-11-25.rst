@@ -1,0 +1,175 @@
+DarcyWarp main numerical audit
+==============================
+
+The repair branch starts at ``f8e7683d13b94f03f1c0f830d807527e4255ce04``.
+The original ``origin/dev`` snapshot was
+``e5535ddb523c9783089fab7bdd1cd1143046e0cc``. The supplied audit test
+reproduced nine failures on main and eight on dev. The existing 2D Newton
+DRN/RIV package code and its regressions supplied the main port. Dev retains
+its persistent spatial-recharge engine and terrain and cuDSS work.
+
+Numerical acceptance
+--------------------
+
+Classic 3D K-cycle and Chebyshev require a head-equivalent row residual at
+the initial state and before declaring convergence. The independent final
+flow check uses the returned head and equation diagonal. It retains the
+existing volumetric tolerance as a cap on the conductance-scaled absolute
+allowance and retains the throughput-relative alternative. The head check
+applies to both branches. A zero-throughflow equilibrium can therefore
+pass at iteration zero. The default 3D NPF solver uses the pinned acceptance tolerances.
+
+Confined 2D recovery applies preconditioned CG to the fine equation with
+its assembled storage diagonal and previous-head forcing. High-accuracy
+linear convergence cannot compensate for a rejected nonlinear timestep.
+The Picard acceptance check recomputes conductances, boundary exchanges
+and convertible storage at the candidate head. The domain flow allowance
+is the greater of ``0.001 * (IN + OUT) / 2`` and a 32-epsilon bound on
+external-flow and storage operands. Established head and update checks
+still apply. In the explicitly frozen ``previous_period`` mode, storage
+uses the tangent computed at the previous accepted head.
+
+The MODFLOW discrepancy is ``200 * (IN - OUT) / (IN + OUT)`` percent.
+For zero inflow and zero outflow it is zero. The fresh replay budgets use
+this convention. Dated reports retain their original classification and
+provenance. Rejected diagnostic trials have their own period state and
+leave the accepted endpoint and clock at the previous accepted period.
+
+The 3D matrix requires a relative L2 intercell-flow difference of at most
+0.01, with a 32-epsilon operand allowance for negligible flow. Its matched
+state reconstruction uses native DATA-SAT for convertible faces and
+requires agreement within the arithmetic allowance at the saved MF6
+heads. It requires native source allocation, CHD and GHB package checks
+and STO agreement within the existing 1% budget scale. Head agreement and the native IMS use the established tolerances. The large steady convertible
+comparison repeats the separately identified original-order ILUT diagnostic
+from the previous main qualification.
+
+Canterbury
+----------
+
+The archived export has 1,826 observations, RMSE 3.995985 m, mean
+simulated-minus-observed residual +1.364346 m and weighted SSE 90,043.49.
+The recorded stage-two observational weighted SSE was 91,807.18.
+An FP64 replay with the archived boundary masks and fitted
+``gh_alpha=2.0`` gives 91,806.98 weighted SSE, 4.018469 m RMSE and
++1.341032 m mean residual. It converges with 32,485 free GHB cells.
+
+The repaired boundary assembly uses source masks when supplied and the
+archive's zero-background convention otherwise. The prepared
+``inputs/fixed_bcs_100.npz`` supplies separate ``fixed_nth``,
+``fixed_sth``, ``fixed_wst`` and ``fixed_sea`` rasters. It has no
+separate CHD source masks. The archive's GHB stage and mask are
+independent of those rasters. West remains no-flow.
+The northern cells ``(58, 834)``, ``(59, 841)``, ``(59, 842)``,
+``(59, 843)`` and ``(60, 852)`` hold missing stages in the input
+raster. They receive no CHD. The last cell retains its independently
+specified zero-stage GHB. The inputs give both southern 1.3 m and sea
+0.1 m at ``(625, 455)``. The replay applies sea precedence as an explicit
+choice pending confirmation of the intended boundary. Indices are
+zero-based, with rows increasing southward.
+
+With the cleaned boundary assembly, the same parameters give observational
+weighted SSE 91,805.41, RMSE 4.018468 m and mean residual +1.341037 m.
+The weighted regularisation term is 2,732.21 and the water-budget
+discrepancy is ``-5.47e-6%``. The near-identical fit provides no basis
+for recalibration from this replay. The five northern stages and ownership
+of the overlap remain field-data questions.
+
+See the :download:`archived-parameter replay JSON
+<../benchmark_results/main_audit_20261125/canterbury_archived_parameter_replay.json>`
+for the controls, source coordinates, water budget and archive hashes.
+
+Qualification
+-------------
+
+The pinned suite ran with Warp 1.17.0 and MF6 6.6.2. The workstation has
+an Intel Core Ultra 9 285K and a GeForce RTX 4070 Ti SUPER (16 GiB,
+NVIDIA driver 595.99.02). The CPU suite ran with CUDA disabled. The CUDA
+runs used FP64, with the named mixed Picard profile using FP32 inner
+corrections and FP64 outer state and acceptance.
+
+The full main CPU suite passed 976 tests across three selections with
+230 CPU-mode skips. The dev integration selection passed 1,700 tests
+with 611 skips and ran separately from the large 2D replays.
+The main CPU tests covered the 2,000² and 3,000² steady unconfined fixtures and
+all 52 periods of each 500² Picard, semismooth Newton and FAS replay.
+The CUDA qualification also covered both steady grids, all three
+transient backends, the three Picard runtime profiles, all 36 cases at
+100 × 100 × 5, and all six 500 × 500 × 5 cases at Kh/Kv=100 with GHB.
+
+The closed analytical 8 × 8 recharge test gave these cumulative balances
+in millimetres.
+
+.. list-table::
+   :header-rows: 1
+
+   * - Recharge (m/day)
+     - Accepted periods
+     - Applied
+     - Stored
+     - Signed error
+   * - 0.0000864
+     - 30
+     - 2.592
+     - 2.589468750
+     - -0.002531250
+   * - 0.0000100
+     - 30
+     - 0.300
+     - 0.299707031
+     - -0.000292969
+   * - 0.0000864, clipped updates
+     - 1
+     - 0.0864
+     - 0.086362500
+     - -0.000037500
+
+The qualification report records measured source revisions, per-case
+head and flow errors, package budgets and timing scopes. The 2D steady
+references and the three Picard profile reference timings come from
+archived fixtures. The 3D native references were regenerated with pinned
+MF6. The six large native reference runs shared the CPU. Their engine wall
+times include that load. The GPU timings are serial synchronized public
+solves with model construction and independent audits timed separately.
+For the 500² transient backends, the independent face comparison
+reconstructs the harmonic Warp fluxes at the accepted heads and
+compares those rates with MF6's saved FLOW-JA-FACE records on the
+matching time grid. It compares active faces with at least one free
+cell and records the maximum RMS, relative L2 and individual face errors.
+
+See the :download:`qualification JSON
+<../benchmark_results/main_audit_20261125/qualification.json>`
+for the numerical results and native reference fingerprints.
+
+Reproduction
+------------
+
+Set ``DARCY_FLOAT=float64`` and ``PYTHONPATH=.:working_tests`` before
+importing Warp or running the commands. Place MF6 6.6.2 on PATH.
+Run the CPU suite with ``DARCYWARP_TEST_CPU_ONLY=1``. Clear that setting
+for the CUDA replays.
+
+.. code-block:: bash
+
+   DARCYWARP_TEST_CPU_ONLY=1 python -m pytest tests
+   python -m pytest -s tests/test_unconfined_solvers_500x500.py
+   python working_tests/benchmark_2d_steady_runtime.py --formulation unconfined \
+     --artifact tests/fixtures/unconfined_2d/truth_2000x2000.npz.lzma \
+     --output /tmp/darcywarp-audit-steady-2000 --device cuda:0 --repeats 3
+   python working_tests/benchmark_2d_steady_runtime.py --formulation unconfined \
+     --artifact tests/fixtures/unconfined_2d/truth_3000x3000.npz.lzma \
+     --output /tmp/darcywarp-audit-steady-3000 --device cuda:0 --repeats 3
+   python working_tests/run_3d_ugly_t_matrix.py --sizes 100 \
+     --vertical-anisotropy 1 10 100 --ghb-modes off on --repeats 1 \
+     --device cuda:0 --mf6 "$(command -v mf6)" --cache /tmp/darcywarp-audit-mf6-cache \
+     --output /tmp/darcywarp-audit-3d-small
+   python working_tests/run_3d_ugly_t_matrix.py --sizes 500 \
+     --vertical-anisotropy 100 --ghb-modes on --repeats 3 --mf6-convertible-ilut \
+     --device cuda:0 --mf6 "$(command -v mf6)" --cache /tmp/darcywarp-audit-mf6-cache \
+     --output /tmp/darcywarp-audit-3d-large
+   python -m DARCY_WARP_PACKAGE.canterbury_case_study.replay_archived_parameters \
+     --output /tmp/darcywarp-canterbury-replay --device cuda:0
+
+The JSON includes the native adapter and executable fingerprints to
+distinguish current references. Use the 3D runner's ``--reference-only``
+switch to prepare references before timing the GPU.
