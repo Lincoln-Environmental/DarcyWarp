@@ -14,13 +14,21 @@ from working_tests.transient_replay_settings import (
 def evaluate_head_accuracy(comparison: dict) -> dict:
     per_period = comparison.get("per_period") or []
     final = comparison.get("final") or {}
-    final_rmse = float(final.get("rmse", math.inf) or math.inf)
-    final_max_abs = float(final.get("max_abs_diff", math.inf) or math.inf)
-    worst_rmse = max((float(row.get("rmse", 0.0) or 0.0) for row in per_period), default=math.inf)
-    worst_max_abs = max((float(row.get("max_abs_diff", 0.0) or 0.0) for row in per_period), default=math.inf)
+    def error_metric(*, row, name):
+        value = row.get(name)
+        return float(value) if value is not None and math.isfinite(value) else math.inf
+
+    final_rmse = error_metric(row=final, name="rmse")
+    final_max_abs = error_metric(row=final, name="max_abs_diff")
+    worst_rmse = max((error_metric(row=row, name="rmse") for row in per_period), default=math.inf)
+    worst_max_abs = max((error_metric(row=row, name="max_abs_diff") for row in per_period), default=math.inf)
     min_percent_within = min((float(row.get("percent_within_0_01m", 0.0) or 0.0) for row in per_period), default=0.0)
     criteria = HEAD_ACCURACY_CRITERIA
     checks = {
+        "all_required_active_heads_finite": all(
+            row.get("invalid_warp_active_heads", 0) == 0 and row.get("invalid_mf6_active_heads", 0) == 0
+            for row in [final, *per_period]
+        ),
         "final_rmse_lt_0p001": final_rmse < criteria["final_rmse_max"],
         "final_max_abs_lt_0p005": final_max_abs < criteria["final_max_abs_diff_max"],
         "worst_period_rmse_lt_0p005": worst_rmse < criteria["worst_period_rmse_max"],

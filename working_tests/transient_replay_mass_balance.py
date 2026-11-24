@@ -135,7 +135,7 @@ def compute_boundary_flux_terms(
     total_out = recharge_out + chd_out + ghb_out
     in_minus_out = total_in - total_out
     throughflow = 0.5 * (total_in + total_out)
-    denom = abs(total_in) + abs(total_out)
+    denom = 0.5 * (total_in + total_out)
     percent_discrepancy = 0.0 if denom == 0.0 else 100.0 * in_minus_out / denom
     imbalance_fraction = 0.0 if throughflow == 0.0 else in_minus_out / throughflow
     return {
@@ -165,7 +165,7 @@ def finalize_mass_balance_row(
     total_out = float(base_terms["recharge_out"] + base_terms["chd_out"] + base_terms["ghb_out"] + storage_out)
     in_minus_out = total_in - total_out
     throughflow = 0.5 * (total_in + total_out)
-    denom = abs(total_in) + abs(total_out)
+    denom = 0.5 * (total_in + total_out)
     percent_discrepancy = 0.0 if denom == 0.0 else 100.0 * in_minus_out / denom
     imbalance_fraction = 0.0 if throughflow == 0.0 else in_minus_out / throughflow
     return {
@@ -210,7 +210,7 @@ def summarize_mass_balance_rows(rows: list[dict]) -> tuple[dict, dict]:
     total_out = float(cumulative["total_out_total"])
     in_minus_out = float(cumulative["in_minus_out_total"])
     throughflow = 0.5 * (total_in + total_out)
-    denom = abs(total_in) + abs(total_out)
+    denom = 0.5 * (total_in + total_out)
     cumulative["throughflow"] = float(throughflow)
     cumulative["percent_discrepancy"] = 0.0 if denom == 0.0 else float(100.0 * in_minus_out / denom)
     cumulative["imbalance_fraction"] = 0.0 if throughflow == 0.0 else float(in_minus_out / throughflow)

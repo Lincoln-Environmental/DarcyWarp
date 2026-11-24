@@ -13,6 +13,7 @@ import warp as wp
 from DARCY_WARP_PACKAGE.unconfined_truth_io import load_truth_artifact, build_solve_kwargs
 from DARCY_WARP_PACKAGE.model_builder import _build_domain, _build_dem, make_ugly_T_field
 from DARCY_WARP_PACKAGE.warped_darcy import WarpDarcySolver
+from DARCY_WARP_PACKAGE.physics.budgets_2d import compute_mass_balance_budget
 
 
 def prepare(*, artifact_path, formulation, confined_controls):
@@ -50,7 +51,18 @@ def benchmark(*, artifact_path, formulation, confined_controls, output, repeats,
             for path in sorted((root/'DARCY_WARP_PACKAGE/solvers').glob('*.py'))},
         formulation=formulation, constructor=constructor,
         controls={name:value for name,value in controls.items() if not isinstance(value,np.ndarray)},
-        mf6_seconds=mf6_seconds, head_gate=head_gate, rows=rows)
+        mf6_seconds=mf6_seconds, head_gate=head_gate, rows=rows, device=device, warp=wp.__version__,
+        reference_origin='archived fixture', precision=str(truth.dtype))
+    if formulation == 'unconfined':
+        minimum_saturation = controls.get('min_saturated_thickness', 0.1)
+        saturation = np.maximum(truth - controls['zbot_field'], minimum_saturation)
+        if controls.get('ztop_field') is not None:
+            saturation = np.minimum(saturation,
+                np.maximum(controls['ztop_field'] - controls['zbot_field'], minimum_saturation))
+        report['reference_head_budget'] = compute_mass_balance_budget(
+            T_field=controls['K_field'] * saturation, R_field=fields['R_field'], head=truth,
+            active=active, bc_mask=fields['bc_mask'], bc_values=fields['bc_values'], dx=constructor['dx'],
+        ).iloc[0].to_dict()
     for repeat in range(repeats+1):
         with WarpDarcySolver(device=device, **constructor) as model:
             started = perf_counter()
@@ -64,11 +76,22 @@ def benchmark(*, artifact_path, formulation, confined_controls, output, repeats,
             head, info = model.solve(**controls)
             wp.synchronize_device(device=device)
             elapsed = perf_counter()-started
+            budget = compute_mass_balance_budget(
+                T_field=model.T_field_host, R_field=model.R_field_host, head=head,
+                active=model.active_host, bc_mask=model.bc_mask_host, bc_values=model.bc_values_host,
+                dx=model.dx, gh_mask=model.gh_mask_host, gh_head=model.gh_head_host,
+                ghb_factor=model.ghb_factor_host,
+            ).iloc[0].to_dict()
         mask = np.asarray(active) != 0
         finite = bool(np.isfinite(head[mask]).all())
-        error = float(np.max(np.abs(head[mask]-truth[mask])))
+        difference = head[mask] - truth[mask]
+        error = float(np.max(np.abs(difference)))
+        native_budget = report.get('reference_head_budget')
+        chd_difference = abs(budget['chd_net_out_positive'] - native_budget['chd_net_out_positive']) if native_budget else None
         row = dict(repeat=repeat, warmup=repeat==0, seconds=elapsed, build_seconds=build_seconds,
             converged=bool(info.get('converged')), maximum_head_error=error,
+            head_rmse=float(np.sqrt(np.mean(difference ** 2))), water_budget=budget,
+            chd_net_exchange_error_m3_day=chd_difference, solved_precision=str(head.dtype),
             passed=bool(info.get('converged') and finite and error <= head_gate),
             iterations=info.get('outer_iterations',info.get('n_cycles_used')))
         rows.append(row)

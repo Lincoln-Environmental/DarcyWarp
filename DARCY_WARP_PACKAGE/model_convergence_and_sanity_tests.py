@@ -10,10 +10,14 @@ import gc
 from DARCY_WARP_PACKAGE.model_builder import (
     _build_domain,
     _build_dem,
-    make_ugly_T_field, compare_head_fields
+    compare_head_fields
 )
 
 from DARCY_WARP_PACKAGE.modflow_truth import make_mf_model
+from DARCY_WARP_PACKAGE.validation.steady_truth_2d import (
+    load_cached_mf6_truth, load_or_run_mf6_truth, save_mf6_truth, steady_transmissivity,
+)
+
 from DARCY_WARP_PACKAGE.CPU_FD import run_fd_truth_forward
 from DARCY_WARP_PACKAGE.project_base import data_store
 
@@ -167,184 +171,6 @@ def build_mf6_truth_path(
     return truth_dir.joinpath(filename)
 
 
-def load_cached_mf6_truth(
-    truth_path: Path,
-    label: str,
-    nx: int,
-    ny: int,
-    dx: float,
-    ghb: bool,
-    isotropic: bool,
-    t_isotropic_value: float,
-    thickness: float,
-    width: float,
-    recharge: float,
-    seed: int,
-) -> tuple[np.ndarray, float | None] | None:
-    """Load a matching MF6 artifact, returning ``None`` for a cache miss."""
-    if not truth_path.exists():
-        return None
-
-    try:
-        with np.load(truth_path, allow_pickle=False) as truth:
-            expected_scalars = {
-                "nx": int(nx),
-                "ny": int(ny),
-                "ghb": int(bool(ghb)),
-                "t_isotropic": int(bool(isotropic)),
-                "seed": int(seed),
-            }
-            for key, expected in expected_scalars.items():
-                if key not in truth.files or int(truth[key]) != expected:
-                    return None
-
-            expected_floats = {
-                "dx": float(dx),
-                "t_isotropic_value": float(t_isotropic_value),
-                "thickness": float(thickness),
-                "width": float(width),
-                "r_truth": float(recharge),
-            }
-            for key, expected in expected_floats.items():
-                if key not in truth.files or not np.isclose(
-                    float(truth[key]),
-                    expected,
-                    rtol=1.0e-6,
-                    atol=1.0e-12,
-                ):
-                    return None
-
-            if "label" not in truth.files or str(truth["label"]) != str(label):
-                return None
-            if "heads" not in truth.files:
-                return None
-
-            heads = np.asarray(truth["heads"], dtype=np.float64)
-            if heads.shape != (int(ny), int(nx)) or not np.all(np.isfinite(heads)):
-                return None
-
-            mf6_seconds = None
-            if "mf6_seconds" in truth.files:
-                candidate_seconds = float(truth["mf6_seconds"])
-                if np.isfinite(candidate_seconds) and candidate_seconds >= 0.0:
-                    mf6_seconds = candidate_seconds
-    except (OSError, ValueError, KeyError, TypeError):
-        return None
-
-    return heads, mf6_seconds
-
-
-def save_mf6_truth(
-    truth_path: Path,
-    heads: np.ndarray,
-    label: str,
-    nx: int,
-    ny: int,
-    dx: float,
-    ghb: bool,
-    isotropic: bool,
-    t_isotropic_value: float,
-    thickness: float,
-    width: float,
-    recharge: float,
-    seed: int,
-    mf6_seconds: float,
-    output_dtype: np.dtype,
-) -> None:
-    """Atomically save one reusable MF6 truth artifact."""
-    truth_path.parent.mkdir(parents=True, exist_ok=True)
-    temporary_path = truth_path.with_name(f".{truth_path.name}.staging.npz")
-    float_dtype = np.dtype(output_dtype)
-    np.savez_compressed(
-        temporary_path,
-        heads=np.asarray(heads, dtype=float_dtype),
-        nx=np.int32(nx),
-        ny=np.int32(ny),
-        dx=np.asarray(dx, dtype=float_dtype),
-        ghb=np.int32(1 if ghb else 0),
-        t_isotropic=np.int32(1 if isotropic else 0),
-        t_isotropic_value=np.asarray(t_isotropic_value, dtype=float_dtype),
-        thickness=np.asarray(thickness, dtype=float_dtype),
-        width=np.asarray(width, dtype=float_dtype),
-        r_truth=np.asarray(recharge, dtype=float_dtype),
-        seed=np.int32(seed),
-        label=np.array(label),
-        mf6_seconds=np.asarray(mf6_seconds, dtype=np.float64),
-    )
-    temporary_path.replace(truth_path)
-
-
-def load_or_run_mf6_truth(
-    truth_path: Path,
-    workspace: Path,
-    label: str,
-    nx: int,
-    ny: int,
-    dx: float,
-    ghb: bool,
-    isotropic: bool,
-    t_isotropic_value: float,
-    thickness: float,
-    width: float,
-    recharge_rate: float,
-    recharge_field: np.ndarray,
-    seed: int,
-    hk_field: np.ndarray,
-    output_dtype: np.dtype,
-    mf6_runner,
-) -> tuple[np.ndarray, float | None, str]:
-    """Load matching MF6 heads or run MF6 once and populate the cache."""
-    cached = load_cached_mf6_truth(
-        truth_path=truth_path,
-        label=label,
-        nx=nx,
-        ny=ny,
-        dx=dx,
-        ghb=ghb,
-        isotropic=isotropic,
-        t_isotropic_value=t_isotropic_value,
-        thickness=thickness,
-        width=width,
-        recharge=recharge_rate,
-        seed=seed,
-    )
-    if cached is not None:
-        heads, mf6_seconds = cached
-        print(f"Loading cached MF6 truth: {truth_path}")
-        return heads, mf6_seconds, "cache"
-
-    print(f"MF6 truth cache miss; running model for {label}: {truth_path}")
-    heads, mf6_seconds = mf6_runner(
-        nx=nx,
-        ny=ny,
-        grid_size=dx,
-        nper=1,
-        workspace=workspace,
-        hk=hk_field,
-        recharge=recharge_field,
-        run=True,
-        use_ghb=ghb,
-    )
-    save_mf6_truth(
-        truth_path=truth_path,
-        heads=heads,
-        label=label,
-        nx=nx,
-        ny=ny,
-        dx=dx,
-        ghb=ghb,
-        isotropic=isotropic,
-        t_isotropic_value=t_isotropic_value,
-        thickness=thickness,
-        width=width,
-        recharge=recharge_rate,
-        seed=seed,
-        mf6_seconds=float(mf6_seconds),
-        output_dtype=output_dtype,
-    )
-    return np.asarray(heads, dtype=np.float64), float(mf6_seconds), "generated"
-
-
 if __name__ == "__main__":
     ghb = bool(DEFAULT_GHB)
     isotropic = bool(DEFAULT_ISOTROPIC)
@@ -403,17 +229,10 @@ if __name__ == "__main__":
         active_mask = (domain == 1)
 
         # 2. Physics common to FD, Warp, and MF6
-        T_field_ugly = make_ugly_T_field(
-            nx=nx_truth,
-            ny=ny_truth,
-            domain=domain,
-            seed=int(DEFAULT_T_SEED),
+        T_field = steady_transmissivity(
+            domain=domain, isotropic=isotropic, isotropic_value=t_isotropic_value, seed=int(DEFAULT_T_SEED),
         )
-
-        # testing overwrite of T_field
-        # T_field = 3000.0 * np.ones_like(T_field)
-
-        R_field_ugly = np.full_like(domain, R_truth, dtype=np.float64)
+        R_field = np.full_like(domain, R_truth, dtype=np.float64)
 
         log_pool("before build")
 
@@ -428,8 +247,8 @@ if __name__ == "__main__":
         ) as single_solver:
 
             single_solver.build_from_truth_inputs(
-                T_truth=T_field_ugly,
-                R_truth=R_field_ugly,
+                T_truth=T_field,
+                R_truth=R_field,
                 width=width,
             )
 
@@ -467,8 +286,8 @@ if __name__ == "__main__":
                 nx=nx_truth,
                 ny=ny_truth,
                 dx=dx_truth,
-                T_truth=T_field_ugly,
-                R_truth=R_field_ugly,
+                T_truth=T_field,
+                R_truth=R_field,
                 use_ghb=ghb,
                 aq_thickness=thickness,
                 width=width
@@ -480,7 +299,7 @@ if __name__ == "__main__":
         ws = data_store.joinpath(
             f"Paper_mf6_truth_{label}_ghb_{ghb}_t_isotropic_{isotropic}"
         )
-        hk_field = T_field_ugly / thickness
+        hk_field = T_field / thickness
         mf6_truth_path = build_mf6_truth_path(
             truth_dir=truth_dir,
             label=label,
@@ -500,11 +319,12 @@ if __name__ == "__main__":
             thickness=thickness,
             width=width,
             recharge_rate=R_truth,
-            recharge_field=R_field_ugly,
+            recharge_field=R_field,
             seed=int(DEFAULT_T_SEED),
             hk_field=hk_field,
             output_dtype=truth_output_dtype,
             mf6_runner=make_mf_model,
+            domain=domain,
         )
 
         if run_fd_reference:

@@ -41,14 +41,33 @@ def ghb_stress_period_data(*, case):
         for k,j,i in np.argwhere(conductance > 0.)]
 
 
-def decode_ghb_budget(*, budget, mapping, shape, kstpkper=None):
-    """Native GHB flux into each canonical cell, including repeated entries."""
+def decode_list_budget(*, budget, mapping, shape, text, kstpkper=None):
+    """Read signed native package inflow into the canonical grid."""
     result = np.zeros(shape=shape, dtype=np.float64)
     names = {name.decode().strip() for name in budget.get_unique_record_names()}
-    if 'GHB' in names:
-        records = budget.get_data(text='GHB', kstpkper=kstpkper)[-1]
+    if text in names:
+        records = budget.get_data(text=text, kstpkper=kstpkper)[-1]
         np.add.at(result.ravel(), mapping[records['node'].astype(int)-1], records['q'])
     return result
+
+
+def decode_ghb_budget(*, budget, mapping, shape, kstpkper=None):
+    return decode_list_budget(budget=budget, mapping=mapping, shape=shape, text='GHB', kstpkper=kstpkper)
+
+
+def native_chd_flow_valid(*, case, reference, flow, chd):
+    """Check native CHD exchanges against native intercell flow into free rows."""
+    fixed, free = (case.fixed != 0).ravel(), reference.free.ravel()
+    left, right = reference.left, reference.right
+    to_right = fixed[left] & free[right]
+    to_left = free[left] & fixed[right]
+    exchanges = np.bincount(left[to_right], weights=flow[to_right], minlength=fixed.size)
+    exchanges -= np.bincount(right[to_left], weights=flow[to_left], minlength=fixed.size)
+    # MF6 suppresses CHD-to-CHD exchange when forming its CHD package budget.
+    magnitude = np.bincount(left[to_right], weights=np.abs(flow[to_right]), minlength=fixed.size)
+    magnitude += np.bincount(right[to_left], weights=np.abs(flow[to_left]), minlength=fixed.size)
+    limit = np.maximum(1e-14, 32. * np.finfo(float).eps * magnitude)
+    return bool(np.all(np.isfinite(chd)) and np.all(np.abs(chd.ravel() - exchanges) <= limit))
 
 
 def run_reference_mf6(*,case,directory,executable,prescribed_state=None,head_tolerance_m=1e-14,
@@ -193,7 +212,9 @@ def run_reference_mf6(*,case,directory,executable,prescribed_state=None,head_tol
     ghb_tolerance=np.maximum(1e-14,16.*np.finfo(float).eps*np.maximum(
         np.abs(ghb_native),np.abs(reference.ghb_conductance*raw)+np.abs(reference.ghb_conductance*reference.ghb_head)))
     ghb_valid=bool(np.all(np.isfinite(ghb_native)) and np.all(np.abs(ghb_native+fields['ghb_outflow'])<=ghb_tolerance))
-    physical=np.where(reference.free,case.source+ghb_native-(reference.incidence@flux).reshape(case.active.shape),0.)
+    chd_native = decode_list_budget(budget=budget, mapping=mapping, shape=case.active.shape, text='CHD')
+    chd_valid = native_chd_flow_valid(case=case, reference=reference, flow=flux, chd=chd_native)
+    physical=np.where(reference.free,realised.reshape(case.active.shape)+ghb_native-(reference.incidence@flux).reshape(case.active.shape),0.)
     native_l1=stable_sum(values=np.abs(physical[reference.free]))
     native_relative=native_l1/max(checks['gross_throughput'],np.finfo(float).tiny)
     native_rms=stable_rms(values=physical[reference.free])
@@ -201,14 +222,14 @@ def run_reference_mf6(*,case,directory,executable,prescribed_state=None,head_tol
         if not np.array_equal(raw[case.active!=0],values[case.active!=0]):raise ValueError('Supplied-head verification advanced a head')
         checks['independent_accepted']=False  # A constitutive check is not a root solve.
     result.update(independent=checks,source_allocation_max_error=source_error,reciprocity_max=reciprocity,saturation_max_error=saturation_error,
-        ghb_flux_max_error=ghb_error,ghb_law_valid=ghb_valid,
+        ghb_flux_max_error=ghb_error,ghb_law_valid=ghb_valid,chd_budget_valid=chd_valid,
         source_allocation_valid=source_allocation_valid,source_allocation_max_tolerance=float(np.max(source_tolerance)),
         native_flux_residual_rms=native_rms,native_flux_residual_relative=native_relative,
         independent_conservation=bool(native and source_allocation_valid and ghb_valid and checks['input_valid'] and
             checks['boundary_condition_valid'] and checks['physical_metrics_valid'] and
             np.all(np.isfinite([native_rms,native_relative])) and (native_rms<=1e-12 or native_relative<=1e-8)))
     fields.update(raw_head=raw,native_saturation=native_sat,active=case.active,flux_native=flux,
-        native_residual=physical,source_realised=realised.reshape(case.active.shape),node_to_user=mapping,ghb_native_inflow=ghb_native)
+        native_residual=physical,source_realised=realised.reshape(case.active.shape),node_to_user=mapping,ghb_native_inflow=ghb_native,chd_native_inflow=chd_native)
     np.savez_compressed(directory/'result.npz',**fields,head=raw)
     atomic_json(path=directory/'summary.json',value=finite_diagnostics(value=result))
     budget.close()

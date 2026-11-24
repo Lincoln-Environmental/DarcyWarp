@@ -11,16 +11,17 @@ def test_native_elapsed_includes_minutes():
 
 
 def test_reference_uses_sanity_gate_and_still_rejects_invalid_physics():
-    physical = dict(input_valid=True, boundary_condition_valid=True, physical_metrics_valid=True)
-    info = dict(passed=False, periods=[dict(source_allocation_valid=True,
+    physical = dict(input_valid=True, boundary_condition_valid=True, physical_metrics_valid=True, relative_cell_imbalance=1e-5)
+    info = dict(passed=False, native_success=True, periods=[dict(source_allocation_valid=True,
+        chd_budget_valid=True, ghb_law_valid=True, storage_difference_relative_throughput=1e-6,
         physical=physical, native_relative_cell_imbalance=1e-5)])
     assert sanity_reference_valid(info=info, mode='transient', gates=dict(budget_percent=1.))
     physical['physical_metrics_valid'] = False
     assert not sanity_reference_valid(info=info, mode='transient', gates=dict(budget_percent=1.))
 
 
-@pytest.mark.parametrize('missing', [False, True])
-def test_bad_reference_does_not_truncate_physically_accepted_gpu_driver_history(missing):
+@pytest.mark.parametrize('reference_state', ['missing', 'uncertified', 'reversed', 'valid', 'zero_flow'])
+def test_history_qualification_enforces_native_face_flows(reference_state):
     import warp as wp
     from DARCY_WARP_PACKAGE.validation.npf662_reference import NPF662LayeredCase
     from DARCY_WARP_PACKAGE.validation.npf662_transient_reference import NPF662TransientReference
@@ -32,28 +33,38 @@ def test_bad_reference_does_not_truncate_physically_accepted_gpu_driver_history(
         fixed=np.array([0, 1]).reshape(shape), values=2.*one,
         source=np.array([.4, 0.]).reshape(shape), initial=np.array([.5, 2.]).reshape(shape),
         dx=1., dy=1., z_interfaces=np.stack([3.*one[0], 0.*one[0]]), cell_type=0)
+    if reference_state == 'zero_flow':
+        case.source.fill(0.)
+        case.initial[:] = case.values
     dt, ss = 7., .2
     old = case.initial.copy()
-    heads, fluxes = [], []
+    heads, fluxes, storage = [], [], []
     for period in range(3):
         capacity = ss*3./dt
         head = old.copy()
-        head[0, 0, 0] = (.4+6.+capacity*old[0, 0, 0])/(3.+capacity)
+        head[0, 0, 0] = (case.source[0, 0, 0]+6.+capacity*old[0, 0, 0])/(3.+capacity)
         checks, fields = NPF662TransientReference(case=case, previous=old, dt=dt, ss=ss, sy=0.).evaluate(head=head)
         assert checks['independent_accepted']
         heads.append(head.copy())
         fluxes.append(fields['flux'].copy())
+        storage.append(fields['storage_rate'].copy())
         old = head.copy()
-    reference = dict(heads=np.stack(arrays=heads), fluxes=np.stack(arrays=fluxes))
+    reference = dict(heads=np.stack(arrays=heads), fluxes=np.stack(arrays=fluxes),
+        storage_rates=np.stack(arrays=storage), saturations=np.ones((3, *shape)))
+    if reference_state == 'reversed':
+        reference['fluxes'] *= -1.
+    native_accepted = reference_state in {'reversed', 'valid', 'zero_flow'}
     row, actual = measure(case=case, family='npf', mode='transient', label='diagonal',
-        reference=None if missing else reference, native_accepted=False, device='cpu', profiles={}, factors=np.ones(3),
+        reference=None if reference_state == 'missing' else reference, native_accepted=native_accepted, device='cpu', profiles={}, factors=np.ones(3),
         dt=dt, ss=ss, sy=0., npf_options=dict(max_outer=30, max_cycles=100, krylov_restart=4),
         kcycle_controls=NPF662KCycleControls(use_cuda_graph=False),
-        gates=dict(rmse=1e-3, maximum=1e-2), progress_every=3)
-    assert not row['accepted']
+        gates=dict(rmse=1e-3, maximum=1e-2, budget_percent=1., flux_relative_l2=1e-2), progress_every=3)
+    assert row['accepted'] is (reference_state in {'valid', 'zero_flow'})
     assert row['gpu_physical_accepted']
     assert len(row['periods']) == 3
     assert all(period['solver_converged'] for period in row['periods'])
-    if missing:
+    if reference_state == 'reversed':
+        assert all(period['flux_relative_l2'] == pytest.approx(2.) and not period['accepted'] for period in row['periods'])
+    if reference_state == 'missing':
         assert all(period['head_max_m'] is None and period['ghb_law_parity'] is None for period in row['periods'])
     np.testing.assert_allclose(actual=actual, desired=reference['heads'], rtol=0., atol=1e-9)
