@@ -263,8 +263,17 @@ def test_solver_selection_validation_and_aliases():
     with pytest.raises(ValueError, match="unknown 2D solver backend"):
         canonical_solver_name("not-a-solver", formulation="confined", default="pcg")
 
-    # Construction remains formulation-neutral; the explicit unconfined
-    # backend simply chooses a K-cycle-capable model preference.
+    with pytest.raises(ValueError, match="nz/dz are 3D-only"):
+        create_solver(dim=2, nx=4, ny=3, dx=1.0, device="cpu", nz=None)
+    with pytest.raises(ValueError, match="nz/dz are 3D-only"):
+        create_solver(dim=2, nx=4, ny=3, dx=1.0, device="cpu", dz=None)
+    with pytest.raises(ValueError, match="requires square cells"):
+        create_solver(dim=2, nx=4, ny=3, dx=1.0, dy=2.0, device="cpu")
+
+    # Construction preserves the explicitly requested unconfined backend as
+    # the solve-time default (previously the factory silently reduced every
+    # non-PCG choice to 'kcycle', which formulation-aware resolution then
+    # mapped to Picard).
     factory_solver = create_solver(
         dim=2,
         nx=4,
@@ -273,7 +282,7 @@ def test_solver_selection_validation_and_aliases():
         device="cpu",
         solver="unconfined_picard_kcycle",
     )
-    assert factory_solver.solver_type == "kcycle"
+    assert factory_solver.solver_type == "unconfined_picard_kcycle"
     factory_solver.close()
 
     newton_factory_solver = create_solver(
@@ -284,7 +293,7 @@ def test_solver_selection_validation_and_aliases():
         device="cpu",
         solver="unconfined_semismooth_newton_kcycle",
     )
-    assert newton_factory_solver.solver_type == "kcycle"
+    assert newton_factory_solver.solver_type == "unconfined_semismooth_newton_kcycle"
     newton_factory_solver.close()
 
     fas_factory_solver = create_solver(
@@ -295,7 +304,7 @@ def test_solver_selection_validation_and_aliases():
         device="cpu",
         solver="unconfined_fas",
     )
-    assert fas_factory_solver.solver_type == "kcycle"
+    assert fas_factory_solver.solver_type == "unconfined_fas"
     fas_factory_solver.close()
 
     solver = _build_solver()
