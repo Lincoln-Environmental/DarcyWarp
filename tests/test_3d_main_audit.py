@@ -21,8 +21,8 @@ def model_fields(*, conductivity, initial=0.0):
 ])
 @pytest.mark.parametrize("conductivity", [0.0864, 1.0e-6], ids=["days", "seconds"])
 def test_two_cell_equilibrium_in_either_time_unit(implementation, solver, formulation, conductivity):
-    if formulation == "mf6_6_6_2_npf" and np.dtype(NP_FLOAT) != np.dtype(np.float64):
-        pytest.skip("Pinned NPF requires FP64")
+    if implementation == "fast" and np.dtype(NP_FLOAT) != np.dtype(np.float64):
+        pytest.skip("Fast 3D requires FP64")
     with create_solver(dim=3, nx=2, ny=1, nz=1, dx=50, dy=10, dz=0.1,
             implementation=implementation, solver=solver, formulation=formulation, device="cpu") as model:
         model.build_from_K_fields(**model_fields(conductivity=conductivity))
@@ -50,6 +50,8 @@ def test_inactive_source_build_and_update_are_rejected():
 
 @pytest.mark.parametrize("implementation", ["classic", "fast"])
 def test_reused_ghb_has_one_public_owner(implementation):
+    if implementation == "fast" and np.dtype(NP_FLOAT) != np.dtype(np.float64):
+        pytest.skip("Fast 3D requires FP64")
     fields = model_fields(conductivity=1.0)
     fields["bc_mask"].fill(0)
     with create_solver(dim=3, nx=2, ny=1, nz=1, dx=1.0, dz=1.0, device="cpu", implementation=implementation) as model:
