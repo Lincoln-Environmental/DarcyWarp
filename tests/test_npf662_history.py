@@ -93,17 +93,24 @@ def test_history_changes_k_between_calls_and_matches_fresh(device):
     np.testing.assert_allclose(actual=updated, desired=fresh, rtol=0., atol=1e-9)
 
 
-def test_history_stops_at_first_failed_step_and_restores_inputs(device):
+@pytest.mark.parametrize("first_step_fails", [False, True])
+def test_history_stops_at_first_failed_step_and_restores_inputs(device, first_step_fails):
     case = make_case(convertible=True)
     case.initial[:] = 4.
     options = history_options(case=case, precision='float64', predictor=True)
     options.update(max_outer=0, max_cycles=0)
     with make_model(case=case, device=device) as model:
-        heads, info = model.solve_transient_npf(source_factors=[0., 1e6, 1.], dt=7.,
+        factors = [1e6, 1., 1.] if first_step_fails else [0., 1e6, 1.]
+        heads, info = model.solve_transient_npf(source_factors=factors, dt=7.,
             head_prev=case.initial, ss=1e-3, sy=.15, **options)
-        assert not info['converged'] and info['accepted_steps'] == 1
-        assert info['returned_steps'] == 2 and heads.shape[0] == 2
-        assert info['periods'][0]['converged'] and not info['periods'][1]['converged']
+        accepted = int(not first_step_fails)
+        assert not info['converged'] and info['accepted_steps'] == accepted
+        assert info['returned_steps'] == accepted + 1 and heads.shape[0] == accepted + 1
+        assert not info['periods'][-1]['converged']
+        backing = heads
+        while isinstance(backing.base, np.ndarray):
+            backing = backing.base
+        assert backing.nbytes == heads.nbytes
         np.testing.assert_array_equal(actual=model._session.rhs, desired=case.source)
         np.testing.assert_array_equal(actual=model._session.initial_head, desired=case.initial)
 

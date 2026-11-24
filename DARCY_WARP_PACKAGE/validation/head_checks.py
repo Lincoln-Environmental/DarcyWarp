@@ -2,12 +2,18 @@
 import numpy as np
 
 
+def invalid_head_values(*, head):
+    """Identify nonfinite heads and reserved dry/inactive marker magnitudes."""
+    head = np.asarray(head)
+    return ~np.isfinite(head) | (np.abs(head) >= 1e20)
+
+
 def inspect_heads(*, head, active, fixed, values, boundary_tolerance_m=1e-10):
     active = np.asarray(active, dtype=bool)
     head = np.asarray(head)
     if head.shape != active.shape:
         raise ValueError('returned head shape differs from canonical domain')
-    invalid = ~np.isfinite(head) | (np.abs(head) >= 1e20)
+    invalid = invalid_head_values(head=head)
     prescribed = active & np.asarray(fixed, dtype=bool)
     error = np.abs(head[prescribed] - np.asarray(values)[prescribed])
     maximum = float(np.max(error)) if error.size and np.all(np.isfinite(error)) else None

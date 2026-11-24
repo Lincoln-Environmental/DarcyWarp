@@ -95,7 +95,8 @@ def solve_transient_history(*, model, source_factors, dt, head_prev, ss, sy, **s
         head_readbacks += 1
         workspace = model._session._npf662_workspace_holder['workspace']
         source = wp.array(data=source_host.ravel(), dtype=wp.float64, device=model.device)
-        history = wp.zeros(shape=(len(factors), workspace.n), dtype=wp.float64, device=model.device)
+        capacity = len(factors) if first_info["converged"] else 1
+        history = wp.empty(shape=(capacity, workspace.n), dtype=wp.float64, device=model.device)
         wp.copy(dest=history.flatten(), src=workspace.head, count=workspace.n)
         nonlinear = NPF662NewtonControls(**first_info['controls'])
         multigrid = NPF662KCycleControls(**first_info['multigrid']['controls'])
@@ -129,7 +130,11 @@ def solve_transient_history(*, model, source_factors, dt, head_prev, ss, sy, **s
         # NumPy retains the owning host Warp array through its base reference.
         # This per-call buffer is never reused, so another 200 MB host copy is
         # unnecessary even after the model/history workspace is closed.
-        heads = history.numpy()[:count].reshape((count, *base.active.shape))
+        if count < capacity:
+            populated = wp.empty(shape=(count, workspace.n), dtype=wp.float64, device=model.device)
+            wp.copy(dest=populated.flatten(), src=history.flatten(), count=count * workspace.n)
+            history = populated
+        heads = history.numpy().reshape((count, *base.active.shape))
         last_previous = initial if count == 1 else heads[-2]
         state = model._session._npf662_workspace_holder['native_state']
         state.refresh(model=model, case=replace(base, source=source_host*factors[count-1], initial=last_previous),

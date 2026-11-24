@@ -121,6 +121,7 @@ class NPF662Case:
         active=self.active.astype(bool)
         if not active.any():raise ValueError('At least one active cell required')
         if np.any(self.fixed.astype(bool)&~active):raise ValueError('Fixed cells must be active')
+        self.validate_active_heads()
         if np.any(self.source[~active]!=0):raise ValueError('Inactive source would be lost')
         for k in (self.kx,self.ky,self.kz):
             if np.any(k[active]<=0):raise ValueError('Positive physical Cartesian K required')
@@ -135,6 +136,14 @@ class NPF662Case:
         if self.ghb_conductance is not None and np.any((np.asarray(self.ghb_conductance)>0.)
                 &(self.cell_types!=0)&(np.asarray(self.ghb_head)<self.bottoms)):
             raise ValueError('Convertible GHB head below cell bottom is invalid for MF6 6.6.2')
+
+    def validate_active_heads(self):
+        active = self.active != 0
+        from DARCY_WARP_PACKAGE.validation.head_checks import invalid_head_values
+        if np.any(invalid_head_values(head=self.values[active & (self.fixed != 0)])):
+            raise ValueError("Invalid active prescribed head")
+        if np.any(invalid_head_values(head=self.initial[active])):
+            raise ValueError("Invalid active initial head")
 
     @property
     def cell_types(self):
@@ -185,6 +194,8 @@ class NPF662LayeredCase:
     cell_type: np.ndarray | int = 0
     ghb_conductance: np.ndarray | None = None
     ghb_head: np.ndarray | None = None
+
+    validate_active_heads = NPF662Case.validate_active_heads
 
     def validate(self):
         from DARCY_WARP_PACKAGE.physics.npf662_layers import layered_geometry

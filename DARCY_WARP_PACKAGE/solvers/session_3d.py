@@ -87,6 +87,8 @@ class ThreeDOperatorSession:
         for name, value in (("faces", self.faces), ("bc_values", (self.bc_values,)), ("rhs", (self.rhs,))):
             if any(not np.all(np.isfinite(item)) for item in value):
                 raise ValueError(f"{name} must contain finite values.")
+        if np.any(self.rhs[self.active == 0] != 0.0):
+            raise ValueError("Inactive source would be lost; rhs must be zero in inactive cells.")
         if any(np.any(item < 0.0) for item in self.faces):
             raise ValueError("face conductances must be non-negative.")
         for name, mask in (("active", self.active), ("bc_mask", self.bc_mask)):
@@ -110,6 +112,8 @@ class ThreeDOperatorSession:
             raise ValueError(f"rhs shape {value.shape} does not match {self.shape}.")
         if not np.all(np.isfinite(value)):
             raise ValueError("rhs must contain finite values.")
+        if np.any(value[self.active == 0] != 0.0):
+            raise ValueError("Inactive source would be lost; rhs must be zero in inactive cells.")
         self.rhs[...] = value
         self.revision += 1
 
