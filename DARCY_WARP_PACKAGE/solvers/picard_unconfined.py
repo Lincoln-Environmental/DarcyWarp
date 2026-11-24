@@ -3,6 +3,9 @@
 
 from __future__ import annotations
 
+from DARCY_WARP_PACKAGE.physics.budgets_2d import evaluate_picard_transient_balance
+from DARCY_WARP_PACKAGE.physics.storage_2d import secant_specific_storage_coeff
+
 from typing import Any
 
 from .base import SolverContext
@@ -146,17 +149,19 @@ def solve_unconfined_picard(*, model: Any, state: dict[str, Any]):
     if storage_reference_mode not in {"previous_period", "current_picard"}:
         raise ValueError("storage_reference must be 'previous_period' or 'current_picard'.")
     storage_mode_2d = None if unconfined_storage_mode_2d is None else str(unconfined_storage_mode_2d).strip().lower()
+    storage_coeff = state["storage_coeff"]
     current_picard_storage = bool(transient) and storage_reference_mode == "current_picard"
-    if current_picard_storage:
+    derived_storage = bool(transient) and (current_picard_storage or storage_coeff is None)
+    if derived_storage:
         if storage_mode_2d != "mf6_convertible_secant_sy":
             raise ValueError(
-                "current_picard storage requires unconfined_storage_mode_2d to be "
+                "Convertible storage requires unconfined_storage_mode_2d to be "
                 "'mf6_convertible_secant_sy'."
             )
         if sy is None or ss is None:
-            raise ValueError("current_picard storage requires sy and ss.")
+            raise ValueError("Convertible storage requires sy and ss.")
         if ztop_arr is None:
-            raise ValueError("current_picard storage requires ztop_field.")
+            raise ValueError("Convertible storage requires ztop_field.")
         sy_f = float(sy)
         ss_f = float(ss)
         if sy_f < 0.0 or ss_f < 0.0 or not np.isfinite(sy_f) or not np.isfinite(ss_f):
@@ -269,11 +274,11 @@ def solve_unconfined_picard(*, model: Any, state: dict[str, Any]):
         head_ref64 = np.asarray(head_ref_arr, dtype=np.float64)
         if ztop_arr is None:
             raise ValueError("ztop_field is required for current Picard storage.")
-        full_thickness = np.maximum(ztop_arr - zbot_arr, min_sat)
+        full_thickness = np.maximum(ztop_arr - zbot_arr, 0.0)
         head_old64 = np.asarray(head_prev, dtype=np.float64)
         sat_ref_zero = np.clip(head_ref64 - zbot_arr, 0.0, full_thickness)
         sat_old_zero = np.clip(head_old64 - zbot_arr, 0.0, full_thickness)
-        sat_ref_ss = np.clip(head_ref64 - zbot_arr, min_sat, full_thickness)
+        sat_ref_ss = np.clip(head_ref64 - zbot_arr, 0.0, full_thickness)
         sy_coeff = np.zeros(shape0, dtype=np.float64)
         ss_coeff = np.zeros(shape0, dtype=np.float64)
         dh_ref = head_ref64 - head_old64
@@ -282,7 +287,11 @@ def solve_unconfined_picard(*, model: Any, state: dict[str, Any]):
         fallback = (~moving) & (head_ref64 < ztop_arr) & (head_ref64 > zbot_arr)
         sy_coeff[fallback] = sy_f
         sy_coeff = np.clip(sy_coeff, 0.0, sy_f)
-        ss_coeff[:, :] = ss_f * sat_ref_ss
+        if ss_f:
+            ss_coeff = secant_specific_storage_coeff(
+                head_ref=head_ref64, head_old=head_old64, bottom=zbot_arr,
+                top=ztop_arr, specific_storage=ss_f,
+            )
         storage = sy_coeff + ss_coeff
         storage = storage.astype(NP_FLOAT, copy=False)
         storage[~free_mask0] = NP_FLOAT(0.0)
@@ -306,6 +315,19 @@ def solve_unconfined_picard(*, model: Any, state: dict[str, Any]):
             "full_thickness": full_thickness.astype(np.float64, copy=False),
             "head_ref": head_ref64.astype(np.float64, copy=False),
         }
+
+    frozen_storage_state = None
+    if derived_storage and not current_picard_storage:
+        frozen_storage_state = _storage_from_picard_head(head_ref_arr=head_prev)
+        storage_coeff = frozen_storage_state["storage"]
+
+    def evaluate_candidate(*, head, tolerance):
+        return evaluate_picard_transient_balance(
+            model=self, head=head, previous=head_prev, conductivity=K_arr,
+            bottom=zbot_arr, top=ztop_arr, min_sat=min_sat, dt=dt,
+            sy=sy_f, ss=ss_f, storage_coeff=None if current_picard_storage else storage_coeff,
+            head_tolerance=tolerance,
+        )
 
     if startup_mode == "confined_pre_solve":
         sat_startup = h_iter.astype(np.float64, copy=False) - zbot_arr
@@ -409,6 +431,7 @@ def solve_unconfined_picard(*, model: Any, state: dict[str, Any]):
     improvement_streak = 0
     minor_increase_count = 0
     final_residual = None
+    candidate_balance = None
     final_h_rms_end = float("nan")
     final_inner_max_cycles = 0
     final_max_abs_head_change = float("nan")
@@ -478,8 +501,11 @@ def solve_unconfined_picard(*, model: Any, state: dict[str, Any]):
         storage_sy_coeff_arr = None
         storage_ss_coeff_arr = None
         storage_reference_head_arr = None
-        if current_picard_storage:
-            storage_state = _storage_from_picard_head(h_iter)
+        if current_picard_storage or frozen_storage_state is not None:
+            storage_state = (
+                _storage_from_picard_head(head_ref_arr=h_iter) if current_picard_storage
+                else frozen_storage_state
+            )
             storage_coeff_inner = storage_state["storage"]
             storage_sy_coeff_arr = np.asarray(storage_state["sy_coeff"], dtype=np.float64)
             storage_ss_coeff_arr = np.asarray(storage_state["ss_coeff"], dtype=np.float64)
@@ -815,6 +841,10 @@ def solve_unconfined_picard(*, model: Any, state: dict[str, Any]):
                 and np.isfinite(float(storage_diag_change_rms))
                 and float(storage_diag_change_rms) <= practical_storage_diag_change_rms_tol_f
             )
+        if transient and (strict_picard_convergence_passed or practical_picard_acceptance_passed):
+            candidate_balance = evaluate_candidate(head=h_iter, tolerance=inner_head_residual_tol_f)
+            strict_picard_convergence_passed &= candidate_balance["accepted"]
+            practical_picard_acceptance_passed &= candidate_balance["accepted"]
         production_acceptance_passed = bool(
             strict_picard_convergence_passed or practical_picard_acceptance_passed
         )
@@ -828,6 +858,9 @@ def solve_unconfined_picard(*, model: Any, state: dict[str, Any]):
         # this is identical to ``and inner_usable_for_picard``.
         if production_acceptance_passed:
             break
+
+    if transient and not production_acceptance_passed:
+        candidate_balance = evaluate_candidate(head=h_iter, tolerance=inner_head_residual_tol_f)
 
     final_sat = h_iter.astype(np.float64, copy=False) - zbot_arr
     final_sat = np.maximum(final_sat, min_sat)
@@ -855,6 +888,9 @@ def solve_unconfined_picard(*, model: Any, state: dict[str, Any]):
             "min_saturated_thickness": float(min_sat),
             "max_head_change_per_outer_iteration": float(max_update_f),
             "final_max_abs_head_change": float(final_max_abs_head_change),
+            "physical_period_balance": candidate_balance,
+            "final_head_residual_rms": final_h_rms_end if candidate_balance is None else candidate_balance["head_residual_rms"],
+            "final_flow_residual_rms": None if candidate_balance is None else candidate_balance["flow_residual_rms"],
             "final_residual": None if final_residual is None else float(final_residual),
             "inner_solve_failures": int(inner_solve_failures),
             "strict_inner_nonconvergence_count": int(strict_inner_nonconvergence_count),

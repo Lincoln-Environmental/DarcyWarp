@@ -22,7 +22,9 @@ def compute_mass_balance_budget(
     gh_alpha: float = 1.0,
     aq_thickness: float = 1.0,
     case: str | None = None,
-) -> pd.DataFrame:
+    *,
+    return_cells: bool = False,
+) -> pd.DataFrame | tuple[dict, np.ndarray, np.ndarray, float]:
     """Compute the MF6-like discrete recharge, CHD, and GHB budget.
 
     This is the original vectorised formulation, retained verbatim in sign and
@@ -87,6 +89,9 @@ def compute_mass_balance_budget(
     chd_in += float(np.sum(np.maximum(-q_int_to_bc_t, 0.0))) + float(np.sum(np.maximum(-q_int_to_bc_b, 0.0)))
     chd_net_out_positive = chd_out - chd_in
 
+    q_gh = np.zeros_like(h_use)
+    c_gh = np.zeros_like(h_use)
+    gh_stage = np.zeros_like(h_use)
     ghb_in = 0.0
     ghb_out = 0.0
     ghb_net_out_positive = 0.0
@@ -110,7 +115,8 @@ def compute_mass_balance_budget(
             c_gh = (float(gh_alpha) * T / float(aq_thickness) * ghw * dx_f).astype(np.float64)
             gh_ok = np.isfinite(ghw) & (ghw > 0.0)
         mask_gh = ghm & cell_is_interior & gh_ok & np.isfinite(ghe) & np.isfinite(h_use)
-        q_gh = np.zeros((ny, nx), dtype=np.float64)
+        c_gh[~mask_gh] = 0.0
+        gh_stage[mask_gh] = ghe[mask_gh]
         q_gh[mask_gh] = c_gh[mask_gh] * (h_use[mask_gh] - ghe[mask_gh])
         ghb_out = float(np.sum(np.maximum(q_gh, 0.0)))
         ghb_in = float(np.sum(np.maximum(-q_gh, 0.0)))
@@ -119,21 +125,102 @@ def compute_mass_balance_budget(
     total_in = rcha_in + chd_in + ghb_in
     total_out = rcha_out + chd_out + ghb_out
     in_minus_out = total_in - total_out
-    denom = abs(total_in) + abs(total_out)
-    percent_discrepancy = 0.0 if denom == 0.0 else 100.0 * in_minus_out / denom
     throughflow = 0.5 * (total_in + total_out)
     imbalance_fraction = 0.0 if throughflow == 0.0 else in_minus_out / throughflow
-    return pd.DataFrame([{
+    row = {
         "case": "" if case is None else str(case),
         "rcha_in": rcha_in, "rcha_out": rcha_out,
         "chd_in": chd_in, "chd_out": chd_out,
         "ghb_in": ghb_in, "ghb_out": ghb_out,
         "total_in": total_in, "total_out": total_out,
-        "in_minus_out": in_minus_out, "percent_discrepancy": percent_discrepancy,
+        "in_minus_out": in_minus_out, "percent_discrepancy": 100.0 * imbalance_fraction,
         "throughflow": throughflow, "imbalance_fraction": imbalance_fraction,
         "chd_net_out_positive": chd_net_out_positive,
         "ghb_net_out_positive": ghb_net_out_positive,
-    }])
+    }
+    if not return_cells:
+        return pd.DataFrame([row])
+
+    residual = r_cell - q_gh
+    residual[:, :-1] -= q_l_to_r
+    residual[:, 1:] += q_l_to_r
+    residual[:-1, :] -= q_t_to_b
+    residual[1:, :] += q_t_to_b
+    diagonal = c_gh.copy()
+    diagonal[:, :-1] += cond_e
+    diagonal[:, 1:] += cond_e
+    diagonal[:-1, :] += cond_s
+    diagonal[1:, :] += cond_s
+    # Only exchanges with external boundaries contribute to domain roundoff.
+    boundary_operand = c_gh * (np.abs(h_use) + np.abs(gh_stage))
+    boundary_scale = np.sum(boundary_operand, dtype=np.float64)
+    for conductance, first, second in (
+        (cond_e, (slice(None), slice(None, -1)), (slice(None), slice(1, None))),
+        (cond_s, (slice(None, -1), slice(None)), (slice(1, None), slice(None))),
+    ):
+        boundary_scale += np.sum(
+            conductance * (bc[first] ^ bc[second]) * (np.abs(h_use[first]) + np.abs(h_use[second])),
+            dtype=np.float64,
+        )
+    residual[~cell_is_interior] = 0.0
+    return row, residual, diagonal, boundary_scale
+
+
+def evaluate_picard_transient_balance(
+    *, model, head, previous, conductivity, bottom, top, min_sat, dt, sy, ss,
+    storage_coeff, head_tolerance, relative_tolerance=1e-3,
+):
+    """Evaluate the returned head with the physical recharge, faces and storage."""
+    from DARCY_WARP_PACKAGE.physics.storage_2d import exact_unconfined_storage_terms
+
+    h = np.asarray(head, dtype=np.float64)
+    old = np.asarray(previous, dtype=np.float64)
+    free = (model.active_host != 0) & (model.bc_mask_host == 0)
+    cap = np.maximum(top - bottom, min_sat) if top is not None else None
+    saturation = np.clip(h - bottom, min_sat, cap)
+    if storage_coeff is None:
+        storage, _, _ = exact_unconfined_storage_terms(
+            head_new=h, head_old=old, bottom=bottom, top=top,
+            specific_yield=sy, specific_storage=ss, dt=dt,
+        )
+        storage_scale = sy + ss * np.maximum(top - bottom, 0.0)
+    else:
+        storage = np.asarray(storage_coeff, dtype=np.float64) * (h - old) / dt
+        storage_scale = storage_coeff
+    area = float(model.dx) ** 2
+    storage_volume = np.where(free, storage * area, 0.0)
+    budget, residual, diagonal, boundary_scale = compute_mass_balance_budget(
+        T_field=conductivity * saturation, R_field=model.R_field_host, head=h,
+        active=model.active_host, bc_mask=model.bc_mask_host, bc_values=model.bc_values_host,
+        dx=model.dx, gh_mask=model.gh_mask_host, gh_head=model.gh_head_host,
+        ghb_factor=model.ghb_factor_host, return_cells=True,
+    )
+    residual -= storage_volume
+    # Use a positive storage sensitivity for the head-equivalent residual.
+    storage_diagonal = np.zeros_like(h)
+    np.divide(storage_volume, h - old, out=storage_diagonal, where=h != old)
+    storage_diagonal[h == old] = np.broadcast_to(storage_scale, h.shape)[h == old] * area / dt
+    diagonal += storage_diagonal
+    equivalent = np.divide(residual, diagonal, out=np.zeros_like(residual), where=diagonal > 0.0)
+    equivalent[(diagonal <= 0.0) & (residual != 0.0)] = np.inf
+    head_rms = float(np.sqrt(np.mean(equivalent[free] ** 2))) if np.any(free) else 0.0
+    flow_rms = float(np.sqrt(np.mean(residual[free] ** 2))) if np.any(free) else 0.0
+    storage_in = float(np.sum(np.maximum(-storage_volume, 0.0)))
+    storage_out = float(np.sum(np.maximum(storage_volume, 0.0)))
+    total_in = budget["total_in"] + storage_in
+    total_out = budget["total_out"] + storage_out
+    throughflow = 0.5 * (total_in + total_out)
+    imbalance = total_in - total_out
+    storage_operand = np.broadcast_to(storage_scale, h.shape)[free] * (np.abs(h[free]) + np.abs(old[free]))
+    eps = np.finfo(np.asarray(head).dtype).eps
+    floor = float(32.0 * eps * (throughflow + boundary_scale + np.sum(storage_operand) * area / dt))
+    return dict(accepted=bool(np.isfinite([head_rms, flow_rms, imbalance, floor]).all()
+                and head_rms <= head_tolerance and abs(imbalance) <= max(floor, relative_tolerance * throughflow)),
+        head_residual_rms=head_rms, flow_residual_rms=flow_rms, total_in=total_in, total_out=total_out,
+        storage_in=storage_in, storage_out=storage_out, in_minus_out=imbalance,
+        percent_discrepancy=100.0 * imbalance / throughflow if throughflow else 0.0,
+        flow_roundoff_floor=floor, relative_tolerance=relative_tolerance,
+    )
 
 
 def add_exact_storage_to_budget(
@@ -156,7 +243,7 @@ def add_exact_storage_to_budget(
     total_in = float(result.iloc[0]["total_in"]) + storage_in
     total_out = float(result.iloc[0]["total_out"]) + storage_out
     imbalance = total_in - total_out
-    denominator = abs(total_in) + abs(total_out)
+    denominator = 0.5 * (total_in + total_out)
     result.loc[result.index[0], "total_in"] = total_in
     result.loc[result.index[0], "total_out"] = total_out
     result.loc[result.index[0], "in_minus_out"] = imbalance

@@ -807,6 +807,8 @@ def solve_multigrid_kcycle_backend(
         raise ValueError(
             f"implementation must be 'classic' or 'fast', got {implementation!r}."
         )
+    if not transient and not unconfined:
+        self._require_grounded_steady_components()
     fast_transient = implementation_mode == "fast" and bool(transient)
     if implementation_mode == "fast" and not fast_transient:
         if bool(unconfined):
@@ -1170,7 +1172,7 @@ def solve_multigrid_kcycle_backend(
     tol_abs = float(max(abs_tol_min, rel_tol * r_rms0))
     thr_rTr = wp.float64((tol_abs * tol_abs) * float(n_free0))
 
-    def pcg_solve_level(level, max_iter_level: int):
+    def pcg_solve_level(level, max_iter_level: int, residual_target_squared=None, recovery_history=None):
         nxL = int(level.nx)
         nyL = int(level.ny)
         dimL = (nyL, nxL)
@@ -1191,7 +1193,9 @@ def solve_multigrid_kcycle_backend(
         ]
         wp.launch(kernel=_ipcga_k, dim=dimL, inputs=_ipcga_in, device=device)
 
-        for _ in range(int(max_iter_level)):
+        iterations = 0
+        for iteration in range(int(max_iter_level)):
+            iterations = iteration + 1
             wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[level.pAp_buf], device=device)
             _aap_k = apply_A_and_pAp_kernel if self._storage_active else apply_A_and_pAp_no_storage_kernel
             _aap_in = [
@@ -1234,6 +1238,17 @@ def solve_multigrid_kcycle_backend(
                 device=device,
             )
 
+
+            if residual_target_squared is not None:
+                residual_squared = float(level.rTr_buf.numpy()[0])
+                if fallback_pcg_history_every_i is not None and (
+                    iterations % fallback_pcg_history_every_i == 0 or
+                    residual_squared <= residual_target_squared or iterations == max_iter_level
+                ):
+                    recovery_history.append(dict(iter=iterations, rms_res_phys=float(np.sqrt(max(residual_squared, 0.) / n_free0))))
+                if not np.isfinite(residual_squared) or residual_squared <= residual_target_squared:
+                    break
+
             wp.launch(
                 kernel=compute_beta_and_update_rho_kernel,
                 dim=1,
@@ -1255,6 +1270,7 @@ def solve_multigrid_kcycle_backend(
                 ],
                 device=device,
             )
+        return iterations
 
     def kcycle(level_id: int):
         level = levels[level_id]
@@ -1466,6 +1482,7 @@ def solve_multigrid_kcycle_backend(
         }
     ]
 
+    fallback_info = {}
     for cyc in range(max_cycles_i):
         n_cycles_used = cyc + 1
 
@@ -1541,23 +1558,28 @@ def solve_multigrid_kcycle_backend(
             and n_cycles_used >= divergence_cycle_start_i
             and r_rms_check > (divergence_residual_factor_f * r_rms0)
         ):
-            fallback_head0 = np.asarray(lvl0.x_wp.numpy(), dtype=NP_FLOAT)
-            head_pcg, info_pcg = self._solve_pcg_device_loop(
-                max_iter=int(fallback_pcg_max_iter_i),
-                rel_tol=float(rel_tol),
-                abs_tol_min=float(abs_tol_min),
-                initial_head=fallback_head0,
-                history_every=fallback_pcg_history_every_i,
+            fallback_info = dict(fallback_from="kcycle", fallback_reason="diverging_residual",
+                fallback_trigger_cycle=n_cycles_used, fallback_trigger_r_rms=r_rms_check,
+                fallback_trigger_threshold=divergence_residual_factor_f * r_rms0,
+                kcycle_history_before_fallback=list(history))
+            if not transient:
+                head_pcg, info_pcg = self._solve_pcg_device_loop(
+                    max_iter=fallback_pcg_max_iter_i, rel_tol=float(rel_tol), abs_tol_min=float(abs_tol_min),
+                    initial_head=np.asarray(lvl0.x_wp.numpy(), dtype=NP_FLOAT),
+                    history_every=fallback_pcg_history_every_i,
+                )
+                info_pcg.update(fallback_info)
+                info_pcg["kcycle_coarsening_diagnostics"] = [dict(item) for item in self._mg_coarsening_diagnostics]
+                return (head_pcg, info_pcg) if return_info else head_pcg
+            # Recover on the already-assembled fine equation, including STO
+            # and previous-head forcing.
+            recovery_history = []
+            fallback_info["fallback_pcg_iterations"] = pcg_solve_level(
+                level=lvl0, max_iter_level=fallback_pcg_max_iter_i,
+                residual_target_squared=float(thr_rTr), recovery_history=recovery_history,
             )
-            info_pcg = dict(info_pcg)
-            info_pcg["fallback_from"] = "kcycle"
-            info_pcg["fallback_reason"] = "diverging_residual"
-            info_pcg["fallback_trigger_cycle"] = int(n_cycles_used)
-            info_pcg["fallback_trigger_r_rms"] = float(r_rms_check)
-            info_pcg["fallback_trigger_threshold"] = float(divergence_residual_factor_f * r_rms0)
-            info_pcg["kcycle_history_before_fallback"] = list(history)
-            info_pcg["kcycle_coarsening_diagnostics"] = [dict(item) for item in self._mg_coarsening_diagnostics]
-            return (head_pcg, info_pcg) if return_info else head_pcg
+            fallback_info["fallback_pcg_history"] = recovery_history
+            break
 
     # Final head pullback
     head_out = lvl0.x_wp.numpy()
@@ -1574,6 +1596,8 @@ def solve_multigrid_kcycle_backend(
     _cr_in += [lvl0.r_wp, lvl0.rTr_buf, nx0, ny0]
     wp.launch(kernel=_cr_k, dim=dim0, inputs=_cr_in, device=device)
     rTr_end = float(lvl0.rTr_buf.numpy()[0])
+    if fallback_info:
+        converged = bool(np.isfinite(rTr_end) and rTr_end <= float(thr_rTr))
     r_rms_end = float(np.sqrt(max(rTr_end, 0.0) / float(n_free0)))
 
     # Head-equivalent residual RMS for reporting
@@ -1653,4 +1677,5 @@ def solve_multigrid_kcycle_backend(
         )
     info["history"] = history
 
+    info.update(fallback_info)
     return (head_out, info) if return_info else head_out
