@@ -33,6 +33,8 @@ def parse_arguments(*, defaults):
     parser.add_argument('--output', type=Path, default=defaults['output'])
     parser.add_argument('--cache', type=Path, default=defaults['cache'])
     parser.add_argument('--retry-failed', action='store_true')
+    parser.add_argument('--mf6-convertible-ilut', action='store_true',
+        help='Label steady convertible comparisons with the archived ILUT strategy.')
     args = parser.parse_args()
     if min(args.sizes) < 2 or min(args.periods, args.repeats) < 1:
         parser.error('Sizes >=2 and positive periods/repeats are required')
@@ -62,7 +64,8 @@ def case_jobs(*, args):
                     variants = ['confined'] if family == 'cartesian' else args.variants
                     for variant in variants:
                         for mode in args.modes:
-                            jobs.append(dict(size=size, ratio=ratio, ghb=ghb, family=family, variant=variant, mode=mode,
+                            jobs.append(dict(mf6_convertible_ilut=getattr(args, 'mf6_convertible_ilut', False) and
+                                variant == 'convertible' and mode == 'steady', size=size, ratio=ratio, ghb=ghb, family=family, variant=variant, mode=mode,
                                 periods=args.periods, repeats=args.repeats, seed=args.seed,
                                 reference_thickness=args.reference_thickness, preferred_head_target=args.preferred_head_target,
                                 mf6_timeout=args.mf6_timeout, device=args.device, gpu_profile=args.gpu_profile))
@@ -78,6 +81,8 @@ def job_command(*, job, root, directory, cache, mf6):
         '--ugly-t-reference-thickness', str(job['reference_thickness']),
         '--preferred-head-target', str(job['preferred_head_target']), '--mf6-timeout', str(job['mf6_timeout']),
         '--allow-missing-reference']
+    if job.get('mf6_convertible_ilut'):
+        command.append('--mf6-convertible-ilut')
     if job['gpu_profile'] == 'roundoff':
         command.append('--gpu-tight')
     if job['ghb'] == 'on':
@@ -130,6 +135,7 @@ def job_summary(*, record):
         if residuals:
             summary['max_physical_head_rms_m'] = max(residuals)
         summary['conductivity'] = case.get('conductivity')
+        summary['max_flux_relative_l2'] = row.get('worst_flux_relative_l2') if len(rows) == 1 else None
     return summary
 
 

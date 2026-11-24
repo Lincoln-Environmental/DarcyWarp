@@ -38,6 +38,9 @@ def parse_arguments(*, defaults):
     parser.add_argument('--cache', type=Path, default=defaults['cache'])
     parser.add_argument('--mf6', type=Path, default=defaults['mf6'])
     parser.add_argument('--cached-only', action='store_true')
+    parser.add_argument('--reference-only', action='store_true', help='Generate and validate MF6 references without running Warp solves.')
+    parser.add_argument('--mf6-convertible-ilut', action='store_true',
+        help='Use the archived original-order ILUT diagnostic for steady convertible MF6 without changing convergence tolerances.')
     parser.add_argument('--allow-missing-reference', action='store_true',
         help='Still measure and independently audit GPU solves when MF6 fails; comparison stays failed/unavailable and no speedup is qualified.')
     parser.add_argument('--compare', action='store_true', help='Compare classic/fast and diagonal/K-cycle; otherwise use the recommended path.')
@@ -74,14 +77,50 @@ def parse_arguments(*, defaults):
 
 
 def sanity_reference_valid(*, info, mode, gates):
-    if mode == 'steady':
-        checks = info.get('independent', {})
-        return bool(info['native_success'] and info.get('ghb_law_valid',True) and checks.get('input_valid')
-            and checks.get('boundary_condition_valid') and checks.get('physical_metrics_valid')
-            and checks['relative_cell_imbalance'] <= gates['budget_percent']/100.)
-    return bool(info.get('native_success',True) and info['periods']) and all(row.get('ghb_law_valid',True) and row['source_allocation_valid'] and row['physical']['input_valid']
-        and row['physical']['boundary_condition_valid'] and row['physical']['physical_metrics_valid']
-        and row['native_relative_cell_imbalance'] <= gates['budget_percent']/100. for row in info['periods'])
+    limit = gates["budget_percent"] / 100.
+
+    def valid_budgets(*, row, physical, native_relative):
+        return bool(row.get("source_allocation_valid") and row.get("chd_budget_valid")
+            and row.get("ghb_law_valid") and physical.get("input_valid")
+            and physical.get("boundary_condition_valid") and physical.get("physical_metrics_valid")
+            and native_relative is not None and native_relative <= limit
+            and physical["relative_cell_imbalance"] <= limit)
+
+    if not info.get("native_success"):
+        return False
+    if mode == "steady":
+        return valid_budgets(row=info, physical=info.get("independent", {}),
+            native_relative=info.get("native_flux_residual_relative"))
+    return bool(info["periods"]) and all(
+        valid_budgets(row=row, physical=row["physical"], native_relative=row["native_relative_cell_imbalance"])
+        and row["storage_difference_relative_throughput"] <= limit for row in info["periods"]
+    )
+
+
+def intercell_flow_agreement(*, auditor, head, candidate_flux, saved_head, saved_flux, saved_sat, relative_limit):
+    """Compare solved flows and independently reconstruct the saved MF6 face law."""
+    from DARCY_WARP_PACKAGE.validation.ghb_mf6_parity import arithmetic_comparison, face_operands
+    from DARCY_WARP_PACKAGE.validation.npf662_metrics import stable_rms
+
+    if candidate_flux.shape != saved_flux.shape or candidate_flux.shape != auditor.c0.shape:
+        return dict(passed=False, relative_l2=None, matched_state=False)
+    if not all(np.isfinite(field).all() for field in (candidate_flux, saved_flux)):
+        return dict(passed=False, relative_l2=None, matched_state=False)
+    edges = auditor.left, auditor.right, 2 - auditor.axes
+    operands, donor, variable = face_operands(case=auditor.case, head=saved_head, edges=edges, c0=auditor.c0)
+    left, right, _ = edges
+    saved = saved_head.ravel()
+    at_saved_head = auditor.c0 * np.where(variable, saved_sat.ravel()[donor], 1.) * (saved[left] - saved[right])
+    matched = arithmetic_comparison(actual=at_saved_head, native=saved_flux, scale=operands, roundoff_factor=32.)
+    native_rms = stable_rms(values=saved_flux)
+    error_rms = stable_rms(values=candidate_flux - saved_flux)
+    candidate = head.ravel()
+    roundoff = 32. * np.finfo(float).eps * stable_rms(values=operands +
+        auditor.c0 * (np.abs(candidate[left]) + np.abs(candidate[right])))
+    return dict(passed=bool(matched["passed"] and error_rms <= max(relative_limit * native_rms, roundoff)),
+        relative_l2=error_rms / native_rms if native_rms else (0. if error_rms == 0. else None),
+        matched_state=matched["passed"], matched_state_max_error=matched["max_absolute"],
+        rms_error=error_rms, roundoff_rms=roundoff)
 
 
 def native_elapsed_seconds(*, text):
@@ -110,10 +149,18 @@ def prepare_reference_with_progress(*, description, interval, **options):
 
 
 def prepare_reference(*, case, family, mode, cache, executable, cached_only, native_options, factors, dt, ss, sy, gates, timeout_seconds):
-    from DARCY_WARP_PACKAGE.validation.npf662_mf6 import run_reference_mf6
-    from DARCY_WARP_PACKAGE.validation.npf662_transient_mf6 import run_transient_mf6
+    import flopy
+    from DARCY_WARP_PACKAGE.validation import npf662_mf6, npf662_transient_mf6
+
+    if not executable.is_file():
+        raise FileNotFoundError('A pinned MF6 executable is required to identify current references.')
+    with executable.open('rb') as stream:
+        executable_sha256 = hashlib.file_digest(stream, 'sha256').hexdigest()
+    adapter_paths = [Path(npf662_mf6.__file__), Path(npf662_transient_mf6.__file__)]
     from DARCY_WARP_PACKAGE.validation.npf662_reference import save_npf662_case
     payload = dict(case_sha256=case.digest(), mode=mode, native_options=native_options,
+                   executable_sha256=executable_sha256, flopy_version=flopy.__version__,
+                   adapters={path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in adapter_paths},
                    factors=factors.tolist(), dt=dt, ss=ss, sy=sy, family=family,
                    acceptance='NPF fixed physical contract' if family == 'npf' else gates)
     fingerprint = hashlib.sha256(json.dumps(obj=payload, sort_keys=True).encode()).hexdigest()
@@ -137,37 +184,26 @@ def prepare_reference(*, case, family, mode, cache, executable, cached_only, nat
             strict_native_npf_audit=manifest['native'].get('passed', manifest['native'].get('independent_conservation')))
     if cached_only:
         raise FileNotFoundError(f'No validated cached reference: {folder}. Run once without --cached-only.')
-    if not executable.is_file():
-        raise FileNotFoundError('MF6 is required on cache miss; supply --mf6 /path/to/mf6 (version 6.6.2).')
     if folder.exists():
         raise ValueError(f'Incomplete cache {folder}; select a new --cache directory.')
     folder.mkdir(parents=True)
     save_npf662_case(case=case, path=folder/'inputs.npz')
     started = perf_counter()
     if mode == 'steady':
-        head, info, fields = run_reference_mf6(case=case, directory=folder/'native', executable=executable,
+        head, info, fields = npf662_mf6.run_reference_mf6(case=case, directory=folder/'native', executable=executable,
             native_solver_options=native_options, replace_native_solver_options=True,
             head_tolerance_m=native_options['outer_dvclose'], source_package='rch', timeout_seconds=timeout_seconds)
         if head is None:
             raise RuntimeError(f'MF6 failed ({info["stop_reason"]}, returncode={info["returncode"]}): {folder}/native')
-        arrays = dict(heads=head[None], fluxes=fields['flux_native'][None],ghb_inflows=fields['ghb_native_inflow'][None])
-        accepted = bool(info['native_success'] and info['independent_conservation'])
-        if family == 'cartesian':
-            checks = info['independent']
-            accepted = bool(info['native_success'] and checks['boundary_condition_valid']
-                and checks['physical_metrics_valid'] and checks['relative_cell_imbalance'] <= gates['budget_percent']/100.)
+        arrays = dict(heads=head[None], fluxes=fields['flux_native'][None],
+            ghb_inflows=fields['ghb_native_inflow'][None], saturations=fields['native_saturation'][None])
+        strict_native_npf_audit = bool(info['independent_conservation'])
     else:
-        checksum = hashlib.sha256(executable.read_bytes()).hexdigest()
-        arrays, info = run_transient_mf6(case=case, directory=folder/'native', executable=executable,
-            source_factors=factors, dt=dt, ss=ss, sy=sy, executable_sha256=checksum,
+        arrays, info = npf662_transient_mf6.run_transient_mf6(case=case, directory=folder/'native', executable=executable,
+            source_factors=factors, dt=dt, ss=ss, sy=sy, executable_sha256=executable_sha256,
             source_package='rch', native_solver_options=native_options, timeout_seconds=timeout_seconds)
-        accepted = bool(info['passed'])
-        if family == 'cartesian':
-            accepted = all(row['source_allocation_valid'] and row['physical']['boundary_condition_valid']
-                and row['physical']['physical_metrics_valid']
-                and row['native_relative_cell_imbalance'] <= gates['budget_percent']/100. for row in info['periods'])
+        strict_native_npf_audit = bool(info['passed'])
     elapsed = perf_counter()-started
-    strict_native_npf_audit = accepted
     accepted = sanity_reference_valid(info=info, mode=mode, gates=gates)
     native_seconds = info.get('seconds')
     if mode == 'transient':
@@ -263,13 +299,26 @@ def measure(*, case, family, mode, label, reference, native_accepted, device, pr
                 relative_tolerance=kwargs.get('final_budget_relative_tol',gates['budget_percent']/100.),
                 head_tolerance_m=kwargs['dh_rms_tol'] if kwargs['dh_rms_tol'] is not None else gates.get('head_residual_rms',1e-6))
             checks, physical = auditor.evaluate(head=head, **tolerances)
-            rmse = maximum = relative_flux = scaled_error = None
+            rmse = maximum = scaled_error = None
+            flow = dict(passed=False, relative_l2=None)
             if reference is not None:
                 delta = head[free]-reference['heads'][period][free]
                 rmse, maximum = float(np.sqrt(np.mean(delta**2))), float(np.max(np.abs(delta)))
-                relative_flux = float(np.linalg.norm(physical['flux']-reference['fluxes'][period])/
-                    max(np.linalg.norm(reference['fluxes'][period]), np.finfo(float).tiny))
+                flow = intercell_flow_agreement(
+                    auditor=auditor, head=head, candidate_flux=physical['flux'],
+                    saved_head=reference['heads'][period], saved_flux=reference['fluxes'][period],
+                    saved_sat=reference['saturations'][period], relative_limit=gates['flux_relative_l2'],
+                )
                 scaled_error = maximum/(np.finfo(float).eps*max(1.,float(np.max(np.abs(reference['heads'][period][free])))))
+            storage_valid = reference is not None
+            storage_relative_error = None
+            if mode == 'transient' and reference is not None:
+                from DARCY_WARP_PACKAGE.validation.npf662_metrics import stable_sum
+                storage_error = stable_sum(values=np.abs(physical['storage_rate'] - reference['storage_rates'][period]))
+                throughput = checks['gross_throughput']
+                storage_relative_error = storage_error / max(throughput, np.finfo(float).tiny)
+                storage_valid = bool(np.isfinite(storage_relative_error)
+                    and storage_relative_error <= gates['budget_percent'] / 100.)
             ghb_error = 0. if reference is not None else None
             ghb_valid = True if reference is not None else None
             if case.ghb_conductance is not None and reference is not None:
@@ -282,9 +331,11 @@ def measure(*, case, family, mode, label, reference, native_accepted, device, pr
                 ghb_bound += 32.*np.finfo(float).eps*case.ghb_conductance*(np.abs(head)+np.abs(case.ghb_head))
                 ghb_valid = bool(np.all(np.isfinite(actual)) and np.all(np.abs(actual-native)<=np.maximum(ghb_bound,1e-14)))
             accepted = bool(reference is not None and info['converged'] and checks['independent_accepted'] and native_accepted
-                            and ghb_valid and rmse <= gates['rmse'] and maximum <= gates['maximum'])
+                            and ghb_valid and storage_valid and flow['passed'] and rmse <= gates['rmse'] and maximum <= gates['maximum'])
             history.append(dict(period=period+1, accepted=accepted, solver_converged=bool(info['converged']),
-                head_rmse_m=rmse, head_max_m=maximum, flux_relative_l2=relative_flux,
+                head_rmse_m=rmse, head_max_m=maximum, flux_relative_l2=flow['relative_l2'],
+                intercell_flow=flow, storage_budget_parity=storage_valid,
+                storage_difference_relative_throughput=storage_relative_error,
                 ghb_flux_max_error=ghb_error,ghb_law_parity=ghb_valid,
                 reference_available=reference is not None, head_error_in_scaled_eps=scaled_error,
                 physical=checks, cycles=info.get('n_cycles_used'), krylov=info.get('krylov_iterations'),
@@ -440,6 +491,11 @@ def run(*, args, root, settings):
                 print(f'Starting {identity}; checking saved MF6 reference.', flush=True)
                 try:
                     native_profile = profiles['mf6']['transient'] if mode == 'transient' else profiles['mf6']['steady_unconfined' if np.any(case.cell_types) else 'steady_confined']
+                    if args.mf6_convertible_ilut and mode == 'steady' and np.any(case.cell_types):
+                        native_profile = dict(native_profile, under_relaxation='NONE', backtracking_number=0,
+                            linear_acceleration='BICGSTAB', preconditioner_levels=8, preconditioner_drop_tolerance=1e-4,
+                            number_orthogonalizations=8, relaxation_factor=0.)
+
                     try:
                         reference, manifest = prepare_reference_with_progress(description=identity,
                             interval=settings['progress_seconds'], case=case, family=family, mode=mode, cache=args.cache,
@@ -459,6 +515,9 @@ def run(*, args, root, settings):
                     row['reference']['native_identity']={key:manifest['native'][key] for key in
                         ('mf6_sha256','mf6_version','mf6_build_identity','native_success','executable_sha256','version')
                         if key in manifest['native']}
+                    if args.reference_only:
+                        row['accepted'] = manifest['accepted']
+                        continue
                     if args.compare:
                         labels = ('classic', 'fast') if family == 'cartesian' else ('diagonal', 'kcycle')
                     else:
@@ -512,6 +571,8 @@ def run(*, args, root, settings):
                 preferred_head_target_met=bool(len(timed) == args.repeats and all(row['accepted'] for row in timed)
                     and maximum_available(values=[period['head_max_m'] for period in periods]) is not None
                     and maximum_available(values=[period['head_max_m'] for period in periods]) <= args.preferred_head_target),
+                worst_storage_difference_relative_throughput=maximum_available(values=[period['storage_difference_relative_throughput'] for period in periods]),
+                worst_flux_relative_l2=maximum_available(values=[period['flux_relative_l2'] for period in periods]),
                 worst_ghb_flux_max_error=maximum_available(values=[period['ghb_flux_max_error'] for period in periods]),
                 worst_head_error_in_scaled_eps=maximum_available(values=[period['head_error_in_scaled_eps'] for period in periods]),
                 reference_reused=case['reference']['reused']))
@@ -540,7 +601,7 @@ if __name__ == "__main__":
         cartesian_top=8., cartesian_dz=10., cartesian_dx=25., kcycle_threshold_cells=50000,
         kcycle=dict(levels=5, pre_sweeps=2, post_sweeps=2, coarse_sweeps=20, cycles=1, omega=.8),
         npf_options=dict(max_outer=80, max_cycles=4000, krylov_restart=48),
-        gates=dict(rmse=1e-3, maximum=1e-2, budget_percent=1.),
+        gates=dict(rmse=1e-3, maximum=1e-2, budget_percent=1., flux_relative_l2=1e-2),
         ghb=dict(conductance_factor=1.,draining_offset=-.5,injecting_offset=1.),
         cartesian_linear_options=dict(linear_acceleration='fgmres',linear_krylov_restart=8,
             linear_kcycle_controls=dict(levels=5,pre_sweeps=2,post_sweeps=2,coarse_sweeps=2,

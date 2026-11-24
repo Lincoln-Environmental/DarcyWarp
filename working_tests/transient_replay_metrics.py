@@ -11,9 +11,11 @@ import numpy as np
 def _head_metrics(warp_heads: np.ndarray, mf6_heads: np.ndarray, active: np.ndarray) -> dict:
     warp_heads = np.asarray(warp_heads, dtype=np.float64)
     mf6_heads = np.asarray(mf6_heads, dtype=np.float64)
-    mask = (np.asarray(active) != 0) & np.isfinite(warp_heads) & np.isfinite(mf6_heads)
-    diff = warp_heads - mf6_heads
-    diff_masked = diff[mask]
+    active_mask = np.asarray(active) != 0
+    invalid_warp = active_mask & ~np.isfinite(warp_heads)
+    invalid_mf6 = active_mask & ~np.isfinite(mf6_heads)
+    mask = active_mask & ~(invalid_warp | invalid_mf6)
+    diff_masked = warp_heads[mask] - mf6_heads[mask]
     abs_diff = np.abs(diff_masked)
     return {
         "rmse": float(np.sqrt(np.mean(diff_masked * diff_masked))) if diff_masked.size else None,
@@ -21,7 +23,10 @@ def _head_metrics(warp_heads: np.ndarray, mf6_heads: np.ndarray, active: np.ndar
         "mean_bias_warp_minus_mf6": float(np.mean(diff_masked)) if diff_masked.size else None,
         "percent_within_0_01m": float(np.mean(abs_diff <= 0.01) * 100.0) if abs_diff.size else None,
         "percent_within_0_1m": float(np.mean(abs_diff <= 0.1) * 100.0) if abs_diff.size else None,
-        "n_active": int(mask.sum()),
+        "n_active": int(active_mask.sum()),
+        "n_valid": int(mask.sum()),
+        "invalid_warp_active_heads": int(invalid_warp.sum()),
+        "invalid_mf6_active_heads": int(invalid_mf6.sum()),
     }
 
 

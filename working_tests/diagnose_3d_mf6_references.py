@@ -36,6 +36,7 @@ def diagnostic_options(*, original, overrides, tolerance_keys):
 
 def baseline_inputs(*, row, attempt, result):
     import numpy as np
+    from DARCY_WARP_PACKAGE.validation.time_grid import same_step_times
     from DARCY_WARP_PACKAGE.validation.npf662_reference import load_npf662_case
     settings = result['settings']
     case_row = result['cases'][0]
@@ -65,7 +66,7 @@ def compare_history(*, heads, reference, case, expected_periods, roundoff_ulps, 
         raise ValueError('Complete matching time histories are required')
     if reference['ghb_inflows'].shape != expected_shape:
         raise ValueError('Native GHB history does not match the requested time grid')
-    if expected_times is not None and not np.array_equal(reference.get('times'), expected_times):
+    if expected_times is not None and not same_step_times(saved=reference.get('times'), expected=expected_times):
         raise ValueError('Native timestamps differ from the measured GPU endpoints')
     free = (case.active != 0) & (case.fixed == 0)
     maximum = rmse = ghb_maximum = 0.

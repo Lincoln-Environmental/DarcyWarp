@@ -16,6 +16,7 @@ from DARCY_WARP_PACKAGE.warped_darcy_3d import WarpDarcySolver3D
 from DARCY_WARP_PACKAGE.solvers.npf662_kernels import ghb_flow_at
 from DARCY_WARP_PACKAGE.solvers.npf662_newton import NPF662NewtonControls
 from DARCY_WARP_PACKAGE.validation.npf662_reference import load_npf662_case, quadratic_saturation_derivative
+from DARCY_WARP_PACKAGE.validation.time_grid import same_step_times
 
 
 @wp.kernel
@@ -49,7 +50,7 @@ def load_reference(*, directory: Path):
     count = len(inputs["factors"]) if transient else 1
     if arrays["heads"].shape != (count, *case.active.shape):
         raise ValueError("Reference head history shape mismatch")
-    if transient and not np.array_equal(arrays["times"], inputs["dt"] * np.arange(1, count + 1)):
+    if transient and not same_step_times(saved=arrays["times"], expected=inputs["dt"] * np.arange(1, count + 1)):
         raise ValueError("Reference time grid mismatch")
     if not manifest["accepted"]:
         raise ValueError("Reference did not pass its original sanity checks")

@@ -9,7 +9,10 @@ from DARCY_WARP_PACKAGE.validation.npf662_reference import NPF662Reference
 from DARCY_WARP_PACKAGE.validation.npf662_transient_reference import NPF662TransientReference
 from DARCY_WARP_PACKAGE.validation.json_output import atomic_json
 from DARCY_WARP_PACKAGE.validation.head_checks import finite_diagnostics
-from DARCY_WARP_PACKAGE.validation.npf662_mf6 import ghb_stress_period_data, decode_ghb_budget
+from DARCY_WARP_PACKAGE.validation.time_grid import same_step_times
+from DARCY_WARP_PACKAGE.validation.npf662_mf6 import (
+    ghb_stress_period_data, decode_ghb_budget, decode_list_budget, native_chd_flow_valid,
+)
 
 
 def run_transient_mf6(*, case, directory, executable, source_factors, dt, ss, sy,
@@ -111,8 +114,8 @@ def run_transient_mf6(*, case, directory, executable, source_factors, dt, ss, sy
         raise RuntimeError('Native transient simulation failed; inspect retained stdout/listing')
     head_file = flopy.utils.HeadFile(str(directory/'transient.hds'), precision='double')
     times = np.asarray(head_file.get_times())
-    if not np.array_equal(times, dt*np.arange(1, count+1)):
-        raise ValueError('Native saved times differ from the requested weekly endpoints')
+    if not same_step_times(saved=times, expected=dt*np.arange(1, count+1)):
+        raise ValueError('Native saved times differ from the requested step endpoints')
     heads = head_file.get_alldata()[:, :, ::-1, :].copy()
     head_file.close()
     grid = MfGrdFile(str(directory/'transient.dis.grb'), verbose=False)
@@ -139,6 +142,7 @@ def run_transient_mf6(*, case, directory, executable, source_factors, dt, ss, sy
     record_names = {value.decode().strip() for value in budget.get_unique_record_names()}
     fluxes = []
     storage_rates = []
+    saturations = []
     ghb_rates = []
     rows = []
     previous = case.initial.copy()
@@ -167,6 +171,13 @@ def run_transient_mf6(*, case, directory, executable, source_factors, dt, ss, sy
         ghb_tolerance = np.maximum(1e-14,16.*np.finfo(float).eps*(
             np.abs(reference.ghb_conductance*head)+np.abs(reference.ghb_conductance*reference.ghb_head)))
         ghb_valid = bool(np.all(np.isfinite(ghb_native)) and np.all(ghb_difference<=ghb_tolerance))
+        chd_native = decode_list_budget(budget=budget, mapping=mapping, shape=case.active.shape,
+            text='CHD', kstpkper=(0, period))
+        chd_valid = native_chd_flow_valid(case=case, reference=reference, flow=flux, chd=chd_native)
+        sat = np.zeros(case.active.size)
+        sat_records = budget.get_data(kstpkper=(0, period), text='DATA-SAT')[0]
+        sat[mapping[sat_records['node'].astype(int) - 1]] = sat_records['sat']
+        saturations.append(sat.reshape(case.active.shape))
         native_residual = np.where(reference.free, realised.reshape(case.active.shape)+ghb_native-storage.reshape(case.active.shape)-divergence, 0.)
         native_relative = float(np.sum(np.abs(native_residual[reference.free]))/max(checks['gross_throughput'], np.finfo(float).tiny))
         source_expected = np.where(reference.free, step_case.source, 0.)
@@ -179,14 +190,14 @@ def run_transient_mf6(*, case, directory, executable, source_factors, dt, ss, sy
         rows.append(dict(period=period+1, time_days=float(times[period]), accepted=accepted,
             physical=checks, native_relative_cell_imbalance=native_relative,
             source_allocation_valid=allocation_valid, storage_difference_relative_throughput=storage_error,
-            ghb_law_valid=ghb_valid,ghb_flux_max_error=float(np.max(ghb_difference))))
+            chd_budget_valid=chd_valid,ghb_law_valid=ghb_valid,ghb_flux_max_error=float(np.max(ghb_difference))))
         fluxes.append(flux)
         storage_rates.append(storage.reshape(case.active.shape))
         ghb_rates.append(ghb_native)
         previous = head.copy()
     budget.close()
     arrays = dict(heads=heads, fluxes=np.asarray(fluxes), storage_rates=np.asarray(storage_rates),
-        ghb_inflows=np.asarray(ghb_rates),times=times)
+        ghb_inflows=np.asarray(ghb_rates), saturations=np.asarray(saturations), times=times)
     temporary = directory/'.decoded.npz.tmp'
     with temporary.open('wb') as stream:
         np.savez_compressed(stream, **arrays)

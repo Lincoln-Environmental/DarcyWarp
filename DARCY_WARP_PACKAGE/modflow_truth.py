@@ -40,6 +40,11 @@ def fill_nan_with_nearest(grid):
     return filled
 
 
+def ghb_conductance_for_k(*, conductivity, grid_size, width, kriv_factor):
+    """Benchmark riverbed conductance scaled by local aquifer conductivity."""
+    return kriv_factor * conductivity * grid_size * width
+
+
 def _make_ghb_spd(
     domain: np.ndarray,
     ghb_mask: np.ndarray,
@@ -83,8 +88,10 @@ def _make_ghb_spd(
 
     # Compute conductance: kriv_factor * hk * grid_size * width
     # For each GHB cell, use the corresponding hk value
-    k_riv = kriv_factor * hk[i_idx, j_idx]  # Use the hk array at specific indices
-    cond = k_riv * grid_size * width  # Conductance for each cell
+    cond = ghb_conductance_for_k(
+        conductivity=hk[i_idx, j_idx], grid_size=grid_size, width=width,
+        kriv_factor=kriv_factor,
+    )
 
     # Prepare the GHB records
     ghb_records = []
@@ -218,6 +225,10 @@ def make_mf_model(
     use_ghb: bool = False,
     kriv_factor: float = 1.0,
     record_full_time: bool = False,
+    *,
+    ghb_width: float | None = None,
+    aquifer_thickness: float = 300.0,
+    executable: Path | None = None,
 ):
     """
     Build a simple steady MF6 model using CHD and optional GHB boundaries.
@@ -244,7 +255,8 @@ def make_mf_model(
 
     domain = _build_domain(nx=nx, ny=ny)
     dem = _build_dem(domain=domain)
-    model_bottom = _model_bottom(dem=dem)
+    if not np.isfinite(aquifer_thickness) or aquifer_thickness <= 0.:
+        raise ValueError('aquifer_thickness must be positive and finite')
     dirichlet_mask = _build_dirichlet_boundary_mask(domain)
     ghb_mask = _build_ghb_boundary_masks(domain)
 
@@ -252,11 +264,12 @@ def make_mf_model(
     nlay = 1
 
     model_top = fill_nan_with_nearest(dem).astype(float)
+    model_bottom = model_top - aquifer_thickness
     perioddata = [(1.0, 1, 1.0) for _ in range(int(nper))]
 
     sim = flopy.mf6.MFSimulation(
         sim_name=name,
-        exe_name=str(require_mf6()),
+        exe_name=str(require_mf6() if executable is None else executable),
         version="mf6",
         sim_ws=str(workspace),
     )
@@ -273,6 +286,7 @@ def make_mf_model(
         sim,
         modelname=name,
         model_nam_file=f"{name}.nam",
+        save_flows=True,
     )
 
     hclose = 1.0e-4
@@ -381,6 +395,7 @@ def make_mf_model(
             hk=hk_arr,
             grid_size=grid_size,
             kriv_factor=kriv_factor,
+            width=ghb_width,
         )
         if ghb_spd[0]:
             flopy.mf6.ModflowGwfghb(
@@ -412,7 +427,7 @@ def make_mf_model(
     engine_time = t_engine_end - t_engine_start
 
     if not ok:
-        warnings.warn("MF6 run failed")
+        raise RuntimeError(f"MF6 run failed in {workspace}")
 
     heads2d = _extract_heads(workspace.joinpath(f"{name}.hds"))
 

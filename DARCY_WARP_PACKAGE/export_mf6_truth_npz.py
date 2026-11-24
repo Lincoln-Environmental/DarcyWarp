@@ -8,7 +8,8 @@ from pathlib import Path
 
 import numpy as np
 
-from DARCY_WARP_PACKAGE.model_builder import _build_domain, _build_dem, make_ugly_T_field
+from DARCY_WARP_PACKAGE.model_builder import _build_domain
+from DARCY_WARP_PACKAGE.validation.steady_truth_2d import load_or_run_mf6_truth, steady_transmissivity
 from DARCY_WARP_PACKAGE.modflow_truth import make_mf_model
 from DARCY_WARP_PACKAGE.project_base import data_store
 from DARCY_WARP_PACKAGE.sanity_case_config import (
@@ -44,53 +45,22 @@ def _run_case_variant(
     out_path: str,
     workspace: str,
     output_dtype: str,
+    overwrite: bool,
 ) -> str:
     domain = _build_domain(nx=nx, ny=ny)
-    _ = _build_dem(domain)
-
-    if isotropic:
-        t_field = np.full_like(domain, t_isotropic_value, dtype=np.float64)
-    else:
-        t_field = make_ugly_T_field(
-            nx=nx,
-            ny=ny,
-            domain=domain,
-            seed=int(seed),
-        )
-
+    t_field = steady_transmissivity(
+        domain=domain, isotropic=isotropic, isotropic_value=t_isotropic_value, seed=seed,
+    )
     r_field = np.full_like(domain, r_truth, dtype=np.float64)
-    hk_field = t_field / thickness
-
-    heads, _ = make_mf_model(
-        nx=nx,
-        ny=ny,
-        grid_size=dx_truth,
-        nper=1,
-        workspace=Path(workspace),
-        hk=hk_field,
-        recharge=r_field,
-        run=True,
-        use_ghb=ghb,
+    _, _, source = load_or_run_mf6_truth(
+        truth_path=Path(out_path), workspace=Path(workspace), label=label, nx=nx, ny=ny,
+        dx=dx_truth, ghb=ghb, isotropic=isotropic, t_isotropic_value=t_isotropic_value,
+        thickness=thickness, width=width, recharge_rate=r_truth, recharge_field=r_field,
+        seed=seed, hk_field=t_field / thickness, output_dtype=np.dtype(output_dtype),
+        mf6_runner=make_mf_model, domain=domain, overwrite=overwrite,
     )
 
-    float_dtype = np.dtype(output_dtype)
-    np.savez_compressed(
-        out_path,
-        heads=np.asarray(heads, dtype=float_dtype),
-        nx=np.int32(nx),
-        ny=np.int32(ny),
-        dx=np.asarray(dx_truth, dtype=float_dtype),
-        ghb=np.int32(1 if ghb else 0),
-        t_isotropic=np.int32(1 if isotropic else 0),
-        t_isotropic_value=np.asarray(t_isotropic_value, dtype=float_dtype),
-        thickness=np.asarray(thickness, dtype=float_dtype),
-        width=np.asarray(width, dtype=float_dtype),
-        r_truth=np.asarray(r_truth, dtype=float_dtype),
-        seed=np.int32(seed),
-        label=np.array(label),
-    )
-
-    return out_path
+    return f"{label}, uniform={isotropic}, GHB={ghb}: {source}"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -165,10 +135,6 @@ def main(argv: list[str] | None = None) -> int:
             for ghb in ghb_flags:
                 out_name = f"mf6_truth_{label}_ghb_{ghb}_t_isotropic_{isotropic}.npz"
                 out_path = out_dir.joinpath(out_name)
-                if out_path.exists() and not args.overwrite:
-                    print(f"Skipping existing {out_path}")
-                    continue
-
                 ws_name = f"Paper_mf6_truth_{label}_ghb_{ghb}_t_isotropic_{isotropic}"
                 ws = data_store.joinpath(ws_name)
 
@@ -188,6 +154,7 @@ def main(argv: list[str] | None = None) -> int:
                         str(out_path),
                         str(ws),
                         output_dtype,
+                        bool(args.overwrite),
                     )
                 )
 
@@ -198,7 +165,7 @@ def main(argv: list[str] | None = None) -> int:
     if int(args.workers) <= 1 or len(jobs) == 1:
         for job in jobs:
             out_path = _run_case_variant(*job)
-            print(f"Wrote {out_path}")
+            print(out_path)
         return 0
 
     ctx = mp.get_context("spawn")
@@ -206,7 +173,7 @@ def main(argv: list[str] | None = None) -> int:
         futures = [pool.submit(_run_case_variant, *job) for job in jobs]
         for fut in as_completed(futures):
             out_path = fut.result()
-            print(f"Wrote {out_path}")
+            print(out_path)
 
     return 0
 

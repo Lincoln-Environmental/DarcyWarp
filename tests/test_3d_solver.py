@@ -916,6 +916,7 @@ class Test3DSparseReference(unittest.TestCase):
         bc_values[:, -1, :] = 5.0
 
         rhs = np.random.rand(nz, ny, nx).astype(np.float64)
+        rhs[active == 0] = 0.0
 
         solver = WarpDarcySolver3D(
             nx=nx,

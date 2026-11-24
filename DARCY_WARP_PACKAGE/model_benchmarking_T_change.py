@@ -431,12 +431,13 @@ def run_mf6_persistent_worker_batch_shm_T(
 
         T0 = np.asarray(T_stack[int(case_start), :, :], dtype=float)
         thickness = 300.0
+        kriv_factor = 1.0
         hk0 = (T0 / float(thickness)).astype(float)
 
         _ = None
         # reuse existing make_mf_model builder if available
         try:
-            from DARCY_WARP_PACKAGE.modflow_truth import make_mf_model
+            from DARCY_WARP_PACKAGE.modflow_truth import make_mf_model, ghb_conductance_for_k
             _ = make_mf_model(
                 nx=int(nx),
                 ny=int(ny),
@@ -447,6 +448,7 @@ def run_mf6_persistent_worker_batch_shm_T(
                 recharge=np.asarray(R_default, dtype=float),
                 run=False,
                 use_ghb=bool(ghb),
+                kriv_factor=kriv_factor,
             )
         except Exception:
             # If builder not available, raise -- persistent approach requires writer
@@ -474,6 +476,11 @@ def run_mf6_persistent_worker_batch_shm_T(
         if npf is None:
             raise RuntimeError("Could not find NPF package in loaded simulation.")
 
+        ghb_package = gwf.get_package("ghb") if ghb else None
+        ghb_records = None if ghb_package is None else ghb_package.stress_period_data.get_data(key=0)
+        if ghb_records is not None:
+            ghb_cells = tuple(np.asarray(list(ghb_records["cellid"]), dtype=int).T[1:])
+
         # Keep timings
         template_build_time = float(time.perf_counter() - t_template0)
 
@@ -495,73 +502,23 @@ def run_mf6_persistent_worker_batch_shm_T(
             if hk_arr.shape != (int(ny), int(nx)):
                 raise ValueError(f"hk has shape {hk_arr.shape}, expected {(int(ny), int(nx))}")
 
-            updated = False
-            update_errors: list[str] = []
-
-            # Try common flopy patterns to set npf k values in-place.
-            try:
-                npf.k.set_data(hk_arr, key=0)
-                updated = True
-            except Exception as exc:
-                update_errors.append(f"npf.k.set_data(array, key=0) failed: {exc}")
-
-            if not updated:
-                try:
-                    npf.k.set_data({0: hk_arr})
-                    updated = True
-                except Exception as exc:
-                    update_errors.append(f"npf.k.set_data({{0: array}}) failed: {exc}")
-
-            if not updated:
-                if hasattr(npf, "k") and hasattr(npf.k, "array"):
-                    try:
-                        npf.k.array[:] = hk_arr
-                        updated = True
-                    except Exception as exc:
-                        update_errors.append(f"npf.k.array[:] assignment failed: {exc}")
-                else:
-                    update_errors.append("npf.k.array assignment path unavailable")
-
-            if not updated:
-                if hasattr(npf, "k"):
-                    try:
-                        npf.k = hk_arr
-                        updated = True
-                    except Exception as exc:
-                        update_errors.append(f"npf.k direct assignment failed: {exc}")
-                else:
-                    update_errors.append("npf.k attribute unavailable")
-
-            if not updated:
-                details = "; ".join(update_errors)
-                if len(details) > 1200:
-                    details = details[:1200] + " ... [truncated]"
-                raise RuntimeError(
-                    "Failed to update MF6 NPF hk in persistent worker "
-                    f"for case_id={int(case_id)}. {details}"
+            npf.k.set_data(hk_arr)
+            npf.k33.set_data(hk_arr)
+            if ghb_records is not None:
+                ghb_records["cond"] = ghb_conductance_for_k(
+                    conductivity=hk_arr[ghb_cells], grid_size=float(dx),
+                    width=float(dx), kriv_factor=kriv_factor,
                 )
+                ghb_package.stress_period_data.set_data(ghb_records, key=0)
 
             t_update1 = time.perf_counter()
             update_times.append(float(t_update1 - t_update0))
 
             # (2) write timing
             t_write0 = time.perf_counter()
-            wrote = False
-            try:
-                npf.write()
-                wrote = True
-            except Exception:
-                wrote = False
-
-            if not wrote:
-                try:
-                    npf.write_file()
-                    wrote = True
-                except Exception:
-                    wrote = False
-
-            if not wrote:
-                sim.write_simulation()
+            npf.write()
+            if ghb_records is not None:
+                ghb_package.write()
 
             t_write1 = time.perf_counter()
             write_times.append(float(t_write1 - t_write0))
