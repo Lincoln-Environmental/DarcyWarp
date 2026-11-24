@@ -5325,11 +5325,11 @@ class WarpDarcySolver:
         positive = active & (self.T_field_host > 0.0)
         fixed = active & (self.bc_mask_host != 0)
         anchored = fixed | (positive & (self.ghb_factor_host > 0.0))
+        if np.any(active & ~positive & ~fixed):
+            raise ValueError("Ungrounded steady active cell with zero transmissivity.")
         cached = getattr(self, "_steady_grounding", None)
         if cached is not None and np.array_equal(cached[0], positive) and np.array_equal(cached[1], anchored):
             return
-        if np.any(active & ~positive & ~fixed):
-            raise ValueError("Ungrounded steady active cell with zero transmissivity.")
         components, count = label(positive)
         has_anchor = np.zeros(count + 1, dtype=bool)
         has_anchor[components[anchored]] = True

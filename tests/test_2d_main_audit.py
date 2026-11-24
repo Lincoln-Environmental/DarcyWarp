@@ -159,3 +159,18 @@ def test_isolated_ghb_cell_retains_steady_equation(implementation):
         head, info = model.solve(implementation=implementation)
     assert info["converged"]
     assert head[3, 3] == pytest.approx(15.0)
+
+
+def test_rebuild_checks_new_ungrounded_cell_with_unchanged_positive_connectivity():
+    shape = (4, 4)
+    active, fixed, transmissivity = (np.zeros(shape) for field in range(3))
+    active[0, 0] = fixed[0, 0] = transmissivity[0, 0] = 1.
+    fields = dict(T_field=transmissivity, R_field=np.zeros(shape), bc_mask=fixed,
+        bc_values=np.zeros(shape))
+    with create_solver(dim=2, nx=4, ny=4, dx=1., device="cpu") as model:
+        model.build_from_fields(active=active.copy(), **fields)
+        assert model.solve()[1]["converged"]
+        active[-1, -1] = 1.
+        model.build_from_fields(active=active, **fields)
+        with pytest.raises(ValueError, match="Ungrounded"):
+            model.solve()

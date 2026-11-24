@@ -31,6 +31,7 @@ from working_tests.transient_replay_mass_balance import (
 )
 from working_tests.transient_replay_settings import default_solve_controls
 from DARCY_WARP_PACKAGE.warped_darcy import WarpDarcySolver
+from DARCY_WARP_PACKAGE.validation.time_grid import same_step_times
 
 
 def timed_solver_factory(*, timing, formulation, device):
@@ -121,6 +122,7 @@ def measure(*, artifact, spatial, initial, mode, controls, device, audit, implem
         audit_seconds = perf_counter() - started
     row = dict(public_seconds=timing['seconds'], reported_history_seconds=result['total_time'], wrapper_seconds=wrapper_seconds,
         audit_seconds=audit_seconds, strict=strict, head_passed=head_passed,
+        accepted_periods=sum(bool(row.get('converged', False)) for row in infos),
         passed=bool(strict and head_passed and time_grid_matched and (budget is None or budget['mass_balance_passed'])),
         time_grid_matched=time_grid_matched, ghb_max_head_error=ghb_head_error,
         outer=sum(info.get('outer_iterations', 0) for info in infos),
@@ -173,7 +175,8 @@ def saved_mf6_runtime(*, workspace, artifact):
         times = reader.get_times()
     np.testing.assert_allclose(actual=heads, desired=artifact['heads_per_period'], rtol=0., atol=1.e-12)
     expected_times = np.arange(1, heads.shape[0] + 1) * float(artifact['dt_days'])
-    np.testing.assert_allclose(actual=times, desired=expected_times, rtol=0., atol=1.e-12)
+    if not same_step_times(saved=times, expected=expected_times):
+        raise ValueError('MF6 saved times differ from the expected replay endpoints')
     matches = re.findall(r'Elapsed run time:\s*([^\n]+)', contents)
     if len(matches) != 1:
         raise ValueError('MF6 final workspace has no unique elapsed engine time')
