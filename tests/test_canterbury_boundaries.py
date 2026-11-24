@@ -28,3 +28,54 @@ def test_archive_boundary_provenance_and_free_zero_stage_ghb():
     assert case.gh_mask[60, 852] == 1 and case.gh_head[60, 852] == 0.0
     assert case.bc_mask[625, 455] == 1
     np.testing.assert_allclose(case.bc_values[625, 455], 0.1)
+
+
+def test_export_rejects_unconverged_head_before_writing(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    import pytest
+
+    pytest.importorskip("torch")
+    from DARCY_WARP_PACKAGE.canterbury_case_study import Canterbury_case_study as study
+
+    shape = (2, 2)
+    ones = np.ones(shape)
+    case = SimpleNamespace(nx=2, ny=2, dx=100., active=ones, model_top=ones, recharge_base=ones,
+        bc_mask=ones, bc_values=ones, gh_mask=ones, gh_head=ones, gh_width=ones,
+        boundary_audit={"policy": "sea_precedence"})
+    fit = dict(pilot_shape=shape, T_min=1., T_max=3., rbf_epsilon=10.,
+        best_params={"r_scale": 0.5}, best_T_pilots=ones, best_logT=np.zeros(shape),
+        hydraulic_settings=dict(use_ghb=True, gh_alpha=2., aq_thickness=300.,
+            perturbation_strength=0., boundary_policy="sea_precedence", solve=dict(max_levels=2)))
+
+    class RejectedSolver:
+        def __init__(self, **constructor):
+            assert constructor["aq_thickness"] == 300.
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def build_from_fields(self, **fields):
+            assert fields["gh_alpha"] == 2.
+
+        def build_hierarchy(self, **controls):
+            pass
+
+        def solve_multigrid_kcycle(self, **controls):
+            return ones, {"converged": False, "r_rms_end": 1.0}
+
+    def no_interpolation_cache(**controls):
+        return None
+
+    def constant_transmissivity(**controls):
+        return ones
+
+    monkeypatch.setattr(study, "WarpDarcySolver", RejectedSolver)
+    monkeypatch.setattr(study, "precompute_rbf_cache", no_interpolation_cache)
+    monkeypatch.setattr(study, "get_T_field_from_pilots_cached", constant_transmissivity)
+    with pytest.raises(RuntimeError, match="final solve did not converge"):
+        study.run_best_solution_and_save_outputs(case=case, outputs=fit, out_dir=tmp_path, device="cpu")
+    assert not (tmp_path / "best_head.npz").exists()

@@ -22,8 +22,26 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install warp-lang==1.17.0 numpy scipy pandas matplotlib flopy pytest
+      - name: Install pinned MODFLOW 6.6.2
+        run: |
+          mf6_dir="$RUNNER_TEMP/darcywarp-mf6"
+          mkdir -p "$mf6_dir"
+          curl -fsSL --retry 3 \
+            https://github.com/MODFLOW-ORG/modflow6/releases/download/6.6.2/mf6.6.2_linux.zip \
+            -o "$mf6_dir/release.zip"
+          unzip -p "$mf6_dir/release.zip" mf6.6.2_linux/bin/mf6 > "$mf6_dir/mf6"
+          printf '%s  %s\n' 9acdb07cae589555355b5d25b5ec1a7af7a0127ff95339ee14971ec7df6641ab "$mf6_dir/mf6" | sha256sum -c
+          chmod +x "$mf6_dir/mf6"
+          printf '%s\n' "$mf6_dir" >> "$GITHUB_PATH"
       - name: Cartesian and NPF contracts
         run: |
           python -m pytest -q -ra tests/test_3d_operator_analytical.py tests/test_3d_budget_acceptance.py \
             tests/test_3d_public_contract.py tests/test_3d_release_contract.py tests/test_3d_session.py \
             tests/test_npf662_transient.py tests/test_npf662_reference_controller.py
+
+      - name: Numerical audit regressions
+        run: |
+          python -m pytest -q -ra tests/test_2d_main_audit.py tests/test_3d_main_audit.py \
+            tests/test_npf662_history.py tests/test_3d_sanity_runner.py tests/test_model_convergence_mf6_cache.py \
+            tests/test_reference_main_audit.py tests/test_canterbury_boundaries.py \
+            tests/test_dynamic_riv_flux_2d.py tests/test_shanz_drn_flux_2d.py

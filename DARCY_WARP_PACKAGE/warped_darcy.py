@@ -7639,9 +7639,8 @@ class WarpDarcySolver:
             transient=bool(transient),
         )
         if backend_name == "confined_pcg":
-            if transient:
-                raise ValueError("confined_pcg is steady only; use confined_kcycle for storage.")
-            self._require_grounded_steady_components()
+            if not transient:
+                self._require_grounded_steady_components()
             head_info = solve_selected(
                 context,
                 solver=backend_name,
