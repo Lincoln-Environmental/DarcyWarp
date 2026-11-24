@@ -12,6 +12,8 @@ def _head_metrics(warp_heads: np.ndarray, mf6_heads: np.ndarray, active: np.ndar
     warp_heads = np.asarray(warp_heads, dtype=np.float64)
     mf6_heads = np.asarray(mf6_heads, dtype=np.float64)
     active_mask = np.asarray(active) != 0
+    if warp_heads.shape != active_mask.shape or mf6_heads.shape != active_mask.shape:
+        raise ValueError("head and active mask shapes must match")
     invalid_warp = active_mask & ~np.isfinite(warp_heads)
     invalid_mf6 = active_mask & ~np.isfinite(mf6_heads)
     mask = active_mask & ~(invalid_warp | invalid_mf6)
@@ -68,8 +70,10 @@ def compare_transient(
         raise ValueError(f"per-period head shape mismatch: warp {warp_hpp.shape}, mf6 {mf6_hpp.shape}")
     per_period = [_head_metrics(warp_hpp[i], mf6_hpp[i], active) for i in range(warp_hpp.shape[0])]
     final = _head_metrics(warp_result["heads_final"], mf6_heads_final, active)
-    max_abs_values = [m["max_abs_diff"] for m in per_period if m["max_abs_diff"] is not None]
-    worst_period = int(np.argmax(max_abs_values)) if max_abs_values else None
+    finite_periods = [index for index, metrics in enumerate(per_period)
+        if metrics["max_abs_diff"] is not None]
+    maximum_errors = [per_period[index]["max_abs_diff"] for index in finite_periods]
+    worst_period = finite_periods[int(np.argmax(maximum_errors))] if finite_periods else None
     return {
         "per_period": per_period,
         "final": final,
