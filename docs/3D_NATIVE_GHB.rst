@@ -74,7 +74,8 @@ Planned boundary and transport work
 The next native 3D boundary extensions are drains (DRN) and rivers (RIV),
 with steady and transient MF6 comparisons covering activation thresholds,
 flow reversal where permitted, changing boundary inputs and water budgets.
-The existing 2D DRN/RIV implementations do not establish 3D support.
+The public 2D semismooth Newton solver accepts DRN and RIV through its
+cell-boundary inputs and reports accepted package fluxes.
 
 Transport follows these boundary extensions. A proposed first scope is
 conservative solute advection and dispersion using the converged flow

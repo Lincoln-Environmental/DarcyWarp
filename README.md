@@ -83,7 +83,7 @@ it shows a numerical solution and its analytical reference, not field observatio
 
 | Formulation | Grid | Supported physics and modes | Solvers |
 | --- | --- | --- | --- |
-| 2D thickness-integrated | Square cells, `(ny, nx)` | Confined or unconfined, steady or transient; general-head exchange | PCG, K-cycle, Picard, semismooth Newton; experimental FAS |
+| 2D thickness-integrated | Square cells, `(ny, nx)` | Confined or unconfined, steady or transient; GHB and 2D Newton DRN/RIV | PCG, K-cycle, Picard, semismooth Newton; experimental FAS |
 | 3D legacy Cartesian | Uniform layers, `(nz, ny, nx)` | Confined or unconfined, steady or transient; native GHB | Classic and fast K-cycle; opt-in confined FGMRES |
 | 3D MF6 6.6.2 NPF/STO | Uniform Cartesian or layered DIS, `(nz, ny, nx)` | Confined or convertible, steady or backward-Euler transient Ss/Sy; native GHB | GMRES or K-cycle-preconditioned FGMRES; opt-in device-resident transient history |
 

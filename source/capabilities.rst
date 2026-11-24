@@ -30,6 +30,9 @@ Model representation
    * - General-head boundaries
      - Head-dependent exchange through the model's conductance
        parameterisation.
+   * - Drains and rivers
+     - Fixed-conductance DRN and RIV cell packages for semismooth Newton
+       unconfined solves, including transient storage and accepted fluxes.
    * - Domain masks
      - Active and inactive cells; unconnected grid faces do not transmit flow.
    * - Repeated scenarios
@@ -43,6 +46,21 @@ A general-head boundary can represent exchange with an external water body
 whose head is prescribed. It does not evolve that water body's flow or stage.
 Similarly, a 2D thickness-integrated model does not resolve vertical gradients
 between multiple aquifer layers or variably saturated soil-water flow.
+
+Use ``use_drn=True`` or ``use_riv=True`` when constructing a 2D model.
+Pass ``drn_mask``, ``drn_elev`` and ``drn_cond``, or ``riv_mask``,
+``riv_stage``, ``riv_rbot`` and ``riv_cond``, to ``build_from_fields()``.
+Select ``solver="unconfined_semismooth_newton_kcycle"`` with
+``formulation="unconfined"``. Conductance is an integrated cell value
+in area per unit time. DRN discharges only above the drain elevation.
+RIV can exchange in either direction and uses the river bottom in the
+flux law when the aquifer head falls below that bottom.
+
+Use ``update_riv_boundary_2d()`` for changing river stages or conductance.
+``accepted_drn_discharge_2d()`` and ``accepted_riv_discharge_2d()``
+return rates for a converged head and its matching solve diagnostics.
+Positive rates leave the aquifer. The Newton budget includes both packages.
+Native 3D Cartesian and NPF/STO currently provide GHB.
 
 Use consistent units
 --------------------
