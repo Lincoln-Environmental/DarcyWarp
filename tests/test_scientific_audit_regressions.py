@@ -65,8 +65,8 @@ def test_transient_riv_is_present_in_accepted_newton_budget(stage):
 
 
 @pytest.mark.parametrize("recharge", [0.0, 0.05])
-def test_isolated_cells_are_pruned_from_transient_domain(recharge):
-    """Pruned cells are outside the model, including its storage/recharge ledger."""
+def test_isolated_cells_retain_transient_storage(recharge):
+    """An isolated cell can balance recharge entirely through storage."""
     shape = (3, 3)
     active = np.zeros(shape, dtype=np.int32)
     active[1, 1] = 1
@@ -75,16 +75,18 @@ def test_isolated_cells_are_pruned_from_transient_domain(recharge):
                           diag_preconditioner_backend="device") as solver:
         solver.build_from_fields(T_field=previous, R_field=active * recharge,
             active=active, bc_mask=np.zeros(shape, dtype=np.int32), bc_values=previous)
-        assert not np.any(solver.active_host)
-        assert not np.any(solver.R_field_host)
+        np.testing.assert_array_equal(solver.active_host, active)
+        np.testing.assert_array_equal(solver.R_field_host, active * recharge)
         head, info = solver.solve(formulation="unconfined",
             solver="unconfined_semismooth_newton_kcycle", initial_head=previous,
             K_field=np.ones(shape), zbot_field=np.zeros(shape), ztop_field=np.full(shape, 10.0),
             transient=True, sy=0.1, ss=1.0e-5, dt=0.04, head_prev=previous,
             return_info=True, newton_fallback_to_picard=False, max_levels=1, min_coarse_cells=1)
         assert info["converged"]
-        assert not np.any(head)
+        delta = head[1, 1] - previous[1, 1]
+        storage = 0.1 * delta + 0.5e-5 * (head[1, 1] ** 2 - previous[1, 1] ** 2)
+        assert storage == pytest.approx(recharge * .04, abs=1e-10)
         budget = info["budget_summary"]
-        assert budget["rcha_in"] == pytest.approx(0.0, abs=1e-12)
+        assert budget["rcha_in"] == pytest.approx(recharge * 100.0, abs=1e-12)
         assert budget["storage_in"] == pytest.approx(0.0, abs=1e-12)
-        assert budget["storage_out"] == pytest.approx(0.0, abs=1e-12)
+        assert budget["storage_out"] == pytest.approx(recharge * 100.0, abs=1e-7)

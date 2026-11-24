@@ -62,7 +62,7 @@ def add_drn_to_budget(budget: pd.DataFrame, discharge: np.ndarray) -> pd.DataFra
     total_in = float(result.loc[row, "total_in"])
     total_out = float(result.loc[row, "total_out"]) + delta
     imbalance = total_in - total_out
-    denominator = abs(total_in) + abs(total_out)
+    denominator = 0.5 * (total_in + total_out)
     result.loc[row, "total_out"] = total_out
     result.loc[row, "in_minus_out"] = imbalance
     result.loc[row, "percent_discrepancy"] = 0.0 if denominator == 0.0 else 100.0 * imbalance / denominator

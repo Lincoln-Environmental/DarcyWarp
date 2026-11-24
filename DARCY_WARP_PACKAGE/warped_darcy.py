@@ -5317,101 +5317,25 @@ class WarpDarcySolver:
         wp.copy(self.ghb_factor_wp, self._stage_G0)
 
 
-    def _prune_isolated_active_host_cells(self) -> None:
-        """
-        Mark active cells with zero coupling as inactive to avoid singular rows.
-        """
-        if self.active_host is None or self.T_field_host is None:
+    def _require_grounded_steady_components(self) -> None:
+        """Reject a steady component without a prescribed or GHB head datum."""
+        from scipy.ndimage import label
+
+        active = self.active_host != 0
+        positive = active & (self.T_field_host > 0.0)
+        fixed = active & (self.bc_mask_host != 0)
+        anchored = fixed | (positive & (self.ghb_factor_host > 0.0))
+        cached = getattr(self, "_steady_grounding", None)
+        if cached is not None and np.array_equal(cached[0], positive) and np.array_equal(cached[1], anchored):
             return
-
-        active = np.asarray(self.active_host, dtype=np.int32)
-        bc_mask = (
-            np.asarray(self.bc_mask_host, dtype=np.int32)
-            if self.bc_mask_host is not None
-            else np.zeros_like(active, dtype=np.int32)
-        )
-        T = np.asarray(self.T_field_host, dtype=np.float64)
-
-        ny, nx = T.shape
-        tiny = np.float64(1.0e-12)
-
-        act = active != 0
-        T_pos = np.isfinite(T) & (T > 0.0)
-
-        sum_T = np.zeros((ny, nx), dtype=np.float64)
-
-        if nx > 1:
-            T_L = T[:, :-1].astype(np.float64, copy=False)
-            T_R = T[:, 1:].astype(np.float64, copy=False)
-            denom_E = T_L + T_R
-            valid_E = act[:, :-1] & act[:, 1:] & T_pos[:, :-1] & T_pos[:, 1:] & (denom_E > tiny)
-            cond_E = np.zeros_like(denom_E, dtype=np.float64)
-            cond_E[valid_E] = 2.0 * T_L[valid_E] * T_R[valid_E] / denom_E[valid_E]
-            sum_T[:, :-1] += cond_E
-            sum_T[:, 1:] += cond_E
-
-        if ny > 1:
-            T_T = T[:-1, :].astype(np.float64, copy=False)
-            T_B = T[1:, :].astype(np.float64, copy=False)
-            denom_S = T_T + T_B
-            valid_S = act[:-1, :] & act[1:, :] & T_pos[:-1, :] & T_pos[1:, :] & (denom_S > tiny)
-            cond_S = np.zeros_like(denom_S, dtype=np.float64)
-            cond_S[valid_S] = 2.0 * T_T[valid_S] * T_B[valid_S] / denom_S[valid_S]
-            sum_T[:-1, :] += cond_S
-            sum_T[1:, :] += cond_S
-
-        if self.use_ghb and self.gh_mask_host is not None and self.ghb_factor_host is not None:
-            gh_mask = np.asarray(self.gh_mask_host, dtype=np.int32)
-            ghb_factor = np.asarray(self.ghb_factor_host, dtype=np.float64)
-            ghb_ok = np.isfinite(ghb_factor) & (ghb_factor > 0.0)
-            gh_on = (gh_mask != 0) & ghb_ok & T_pos & act
-            if np.any(gh_on):
-                C_gh = T * ghb_factor
-                sum_T[gh_on] += C_gh[gh_on]
-
-        isolated = act & (bc_mask == 0) & (sum_T <= tiny)
-        if not np.any(isolated):
-            return
-
-        active = active.copy()
-        active[isolated] = 0
-        self.active_host = active
-
-        if self.T_field_host is not None:
-            T_host = np.asarray(self.T_field_host, dtype=NP_FLOAT).copy()
-            T_host[isolated] = NP_FLOAT(0.0)
-            self.T_field_host = T_host
-
-        if self.R_field_host is not None:
-            R_host = np.asarray(self.R_field_host, dtype=NP_FLOAT).copy()
-            R_host[isolated] = NP_FLOAT(0.0)
-            self.R_field_host = R_host
-
-        if self.bc_values_host is not None:
-            bc_vals = np.asarray(self.bc_values_host, dtype=NP_FLOAT).copy()
-            bc_vals[isolated] = NP_FLOAT(0.0)
-            self.bc_values_host = bc_vals
-
-        if self.gh_mask_host is not None:
-            gh_mask = np.asarray(self.gh_mask_host, dtype=np.int32).copy()
-            gh_mask[isolated] = 0
-            self.gh_mask_host = gh_mask
-
-        if self.gh_head_host is not None:
-            gh_head = np.asarray(self.gh_head_host, dtype=NP_FLOAT).copy()
-            gh_head[isolated] = NP_FLOAT(0.0)
-            self.gh_head_host = gh_head
-
-        if self.gh_width_host is not None:
-            gh_width = np.asarray(self.gh_width_host, dtype=NP_FLOAT).copy()
-            gh_width[isolated] = NP_FLOAT(0.0)
-            self.gh_width_host = gh_width
-        if self.ghb_factor_host is not None:
-            ghb_factor = np.asarray(self.ghb_factor_host, dtype=NP_FLOAT).copy()
-            ghb_factor[isolated] = NP_FLOAT(0.0)
-            self.ghb_factor_host = ghb_factor
-
-        self._n_isolated_pruned = int(np.count_nonzero(isolated))
+        if np.any(active & ~positive & ~fixed):
+            raise ValueError("Ungrounded steady active cell with zero transmissivity.")
+        components, count = label(positive)
+        has_anchor = np.zeros(count + 1, dtype=bool)
+        has_anchor[components[anchored]] = True
+        if not np.all(has_anchor[1:]):
+            raise ValueError("Ungrounded steady active component: prescribe a CHD or GHB head.")
+        self._steady_grounding = positive, anchored
 
     # -------------------------------------------------------------------------
     # Build and upload
@@ -5474,8 +5398,6 @@ class WarpDarcySolver:
 
         self._sanitize_ghb_host_fields()
         self._recompute_ghb_factor_host(gh_alpha=self._gh_alpha_input, aq_thickness=aq_thickness)
-        self._prune_isolated_active_host_cells()
-        self._recompute_ghb_factor_host()
         self._sanitize_drn_riv_host_fields()
         self.n_active = int(np.count_nonzero(self.active_host))
 
@@ -5699,8 +5621,6 @@ class WarpDarcySolver:
 
         self._sanitize_ghb_host_fields()
         self._recompute_ghb_factor_host(gh_alpha=self._gh_alpha_input, aq_thickness=aq_thickness)
-        self._prune_isolated_active_host_cells()
-        self._recompute_ghb_factor_host()
         self._sanitize_drn_riv_host_fields()
         self.n_active = int(np.count_nonzero(self.active_host))
 
@@ -7593,7 +7513,8 @@ class WarpDarcySolver:
         invocation path because their argument mapping predates the registry.
         """
         if args:
-            return self._solve_multigrid_kcycle_backend(*args, **kwargs)
+            result = self._solve_multigrid_kcycle_backend(*args, **kwargs)
+            return self._own_cpu_head(result=result)
         unconfined = bool(kwargs.get("unconfined", False))
         formulation = "unconfined" if unconfined else "confined"
         context = self._make_solver_context(
@@ -7604,12 +7525,22 @@ class WarpDarcySolver:
             "unconfined_picard_kcycle" if unconfined else "confined_kcycle"
         )
         self._require_drn_riv_supported(backend_name)
-        return solve_selected(
+        result = solve_selected(
             context,
             solver=backend_name,
             default=backend_name,
             **kwargs,
         )
+        return self._own_cpu_head(result=result)
+
+    def _own_cpu_head(self, *, result):
+        # Warp's CPU array-to-NumPy conversion aliases the reusable buffer.
+        if self.device_str != "cpu":
+            return result
+        if isinstance(result, tuple):
+            head, info = result
+            return head.copy(), info
+        return result.copy()
 
     def solve_transient_2d_unconfined(
         self,
@@ -7704,6 +7635,9 @@ class WarpDarcySolver:
             transient=bool(transient),
         )
         if backend_name == "confined_pcg":
+            if transient:
+                raise ValueError("confined_pcg is steady only; use confined_kcycle for storage.")
+            self._require_grounded_steady_components()
             head_info = solve_selected(
                 context,
                 solver=backend_name,
@@ -7733,10 +7667,9 @@ class WarpDarcySolver:
             info_out = dict(info) if isinstance(info, dict) else {}
             info_out["formulation"] = form_mode
             info_out["solver_backend"] = backend_name
-            return head, info_out
-        if backend_name == "confined_pcg":
-            return head_info[0]
-        return head_info
+            return self._own_cpu_head(result=(head, info_out))
+        head = head_info[0] if backend_name == "confined_pcg" else head_info
+        return self._own_cpu_head(result=head)
 
     def __enter__(self):
         return self
@@ -7760,6 +7693,7 @@ class WarpDarcySolver:
             session.invalidate()
             self._production_transient_session = None
 
+        self._steady_grounding = None
         # 1) Break graph references first, because graphs can keep arrays alive.
         self._invalidate_kcycle_graph()
         # Drop the fast backend's face-conductance cache (holds strong refs to

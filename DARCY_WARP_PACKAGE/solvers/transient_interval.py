@@ -56,10 +56,9 @@ class _AcceptedBudget:
         total_in, total_out = result['total_in'], result['total_out']
         result['in_minus_out'] = total_in-total_out
         result['throughflow'] = .5*(total_in+total_out)
-        result['percent_discrepancy'] = (100*(total_in-total_out)/(total_in+total_out)
-                                         if total_in+total_out else 0.)
-        result['imbalance_fraction'] = (2*(total_in-total_out)/(total_in+total_out)
-                                       if total_in+total_out else 0.)
+        throughflow = result['throughflow']
+        result['imbalance_fraction'] = (total_in-total_out)/throughflow if throughflow else 0.
+        result['percent_discrepancy'] = 100. * result['imbalance_fraction']
         return result
 
 

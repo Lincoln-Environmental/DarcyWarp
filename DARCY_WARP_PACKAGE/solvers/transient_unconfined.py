@@ -7,6 +7,7 @@ from typing import Any
 
 import numpy as np
 import time
+from DARCY_WARP_PACKAGE.physics.budgets_2d import evaluate_picard_transient_balance
 
 from .context import SolverContext
 from .registry import select_backend
@@ -98,6 +99,7 @@ def _persistent_period_engine(
 
     controls = {} if solve_controls is None else dict(solve_controls)
     save_diagnostics_b = bool(controls.pop("save_transient_diagnostics", save_diagnostics))
+    allow_rejected_trial = bool(controls.get("allow_unaccepted_transient_period", False)) and return_info
     fast_path_controls = dict(controls)
     # Drop keys consumed by this wrapper or the device fast path so the
     # ``**controls`` spread forwarded to ``solve()`` does not inject unexpected
@@ -239,7 +241,7 @@ def _persistent_period_engine(
     def _period_result():
         info_all = {
             "heads_per_period": heads_per_period,
-            "heads_final": heads_per_period[-1],
+            "heads_final": head_prev,
             "period_infos": period_infos,
             "last_info": last_info,
             "period_times": period_times,
@@ -504,7 +506,6 @@ def _persistent_period_engine(
         )
         inner_head_residual_tol_max_f = float(controls.get("inner_head_residual_tol_max", 1.0e-2))
         inner_picard_scale_max_fraction_f = float(controls.get("inner_picard_scale_max_fraction", 0.10))
-        allow_unaccepted_transient_period_b = bool(controls.get("allow_unaccepted_transient_period", False))
         startup_mode = str(controls.get("unconfined_startup_mode", "initial_head")).strip().lower()
         if startup_mode not in {"initial_head", "confined_pre_solve"}:
             raise ValueError("device transient fast path supports startup modes 'initial_head' and 'confined_pre_solve'.")
@@ -912,9 +913,24 @@ def _persistent_period_engine(
                 and np.isfinite(storage_change_rms)
                 and storage_change_rms <= practical_storage_diag_change_rms_tol_f
             )
+            balance = candidate = None
+            if strict or practical:
+                candidate = h_iter_wp.numpy()
+                previous = h_prev_wp.numpy() if adaptive_dt_enabled_b else head_prev
+                counters["device_to_host_full_grid_copies"] += 1 + int(adaptive_dt_enabled_b)
+                balance = evaluate_picard_transient_balance(
+                    model=self, head=candidate, previous=previous, conductivity=k,
+                    bottom=bottom, top=top, min_sat=min_sat_f, dt=substep_dt,
+                    sy=float(sy), ss=float(ss), storage_coeff=None,
+                    head_tolerance=strict_head_residual_tol_f if strict else practical_head_residual_tol_f,
+                )
+                strict &= balance["accepted"]
+                practical &= balance["accepted"]
             return {
-                "head_residual_rms": float(head_rms),
-                "flow_residual_rms": float(flow_rms),
+                "physical_period_balance": balance,
+                "checked_head": candidate,
+                "head_residual_rms": float(head_rms) if balance is None else balance["head_residual_rms"],
+                "flow_residual_rms": float(flow_rms) if balance is None else balance["flow_residual_rms"],
                 "relative_flow_residual_rms": float(relative_flow_rms),
                 "storage_diag_change_max": storage_change_max,
                 "storage_diag_change_rms": storage_change_rms,
@@ -1057,6 +1073,8 @@ def _persistent_period_engine(
             last_head_residual_rms = float("nan")
             last_storage_diag_change_max = float("nan")
             last_storage_diag_change_rms = float("nan")
+            accepted_refresh = None
+            accepted_substep_balances = []
             strict_picard_convergence_passed = False
             practical_picard_acceptance_passed = False
             production_acceptance_passed = False
@@ -1884,8 +1902,10 @@ def _persistent_period_engine(
                             counters["device_to_host_full_grid_copies"] += 1
                             counters["head_downloads"] += 1
                         if not adaptive_dt_enabled_b:
+                            accepted_refresh = refreshed_result
                             break
                         adaptive_dt_substep_dts.append(float(actual_dt_f))
+                        accepted_substep_balances.append(refreshed_result["physical_period_balance"])
                         remaining_dt_f = max(0.0, remaining_dt_f - actual_dt_f)
                         wp.launch(
                             kernel=copy_field_kernel,
@@ -1894,6 +1914,7 @@ def _persistent_period_engine(
                             device=device,
                         )
                         if remaining_dt_f <= max(1.0e-12, period_dt_f * 1.0e-12):
+                            accepted_refresh = refreshed_result
                             break
                         wp.launch(
                             kernel=copy_field_kernel,
@@ -2187,7 +2208,7 @@ def _persistent_period_engine(
                     production_acceptance_passed
                 )
 
-            refreshed_result = evaluate_refreshed_nonlinear_candidate(
+            refreshed_result = accepted_refresh or evaluate_refreshed_nonlinear_candidate(
                 outer_iteration=int(min(max_outer, outer_iter + 1)),
                 info_lin=info_lin,
                 dh_max=last_dh_max,
@@ -2197,7 +2218,10 @@ def _persistent_period_engine(
             )
             strict_picard_convergence_passed = bool(refreshed_result["strict_acceptance_passed"])
             practical_picard_acceptance_passed = bool(refreshed_result["practical_acceptance_passed"])
-            production_acceptance_passed = bool(refreshed_result["production_acceptance_passed"])
+            production_acceptance_passed = bool(refreshed_result["production_acceptance_passed"]
+                and (not adaptive_dt_enabled_b or accepted_refresh is not None))
+            strict_picard_convergence_passed &= production_acceptance_passed
+            practical_picard_acceptance_passed &= production_acceptance_passed
             last_head_residual_rms = float(refreshed_result["head_residual_rms"])
             last_flow_residual_rms = float(refreshed_result["flow_residual_rms"])
             last_storage_diag_change_max = float(refreshed_result["storage_diag_change_max"])
@@ -2208,7 +2232,7 @@ def _persistent_period_engine(
                 if not production_acceptance_passed:
                     outer_iteration_summaries[-1]["termination_reason"] = "max_outer_iterations"
 
-            if (not production_acceptance_passed) and (not allow_unaccepted_transient_period_b):
+            if not production_acceptance_passed and not allow_rejected_trial:
                 if adaptive_dt_enabled_b and actual_dt_f <= dt_min_f + max(
                     1.0e-12,
                     period_dt_f * 1.0e-12,
@@ -2242,13 +2266,17 @@ def _persistent_period_engine(
                     )
                 )
 
-            wp.launch(kernel=copy_field_kernel, dim=dim2d, inputs=[h_iter_wp, h_prev_wp, self.nx, self.ny], device=device)
+            if production_acceptance_passed:
+                wp.launch(kernel=copy_field_kernel, dim=dim2d, inputs=[h_iter_wp, h_prev_wp, self.nx, self.ny], device=device)
 
             period_times[period_index] = time.perf_counter() - period_t0
             counters["device_to_host_full_grid_copies"] += 1
             counters["head_downloads"] += 1
             head_download_t0 = _fast_path_phase_start()
-            head_arr = np.asarray(h_iter_wp.numpy(), dtype=np.float64)
+            checked_head = refreshed_result["checked_head"]
+            if checked_head is not None:
+                counters["device_to_host_full_grid_copies"] -= 1
+            head_arr = np.asarray(h_iter_wp.numpy() if checked_head is None else checked_head, dtype=np.float64)
             head_download_seconds += _fast_path_phase_elapsed(head_download_t0)
             heads_per_period[period_index] = head_arr
             if save_diagnostics_b:
@@ -2276,11 +2304,24 @@ def _persistent_period_engine(
                 sy_terms[period_index] = exact_sy_term
                 ss_terms[period_index] = exact_ss_term
                 sy_crossing_terms[period_index] = exact_sy_term
+            period_balance = refreshed_result["physical_period_balance"]
+            if production_acceptance_passed and adaptive_dt_enabled_b:
+                period_balance = dict(period_balance)
+                for term in ("total_in", "total_out", "storage_in", "storage_out",
+                             "in_minus_out", "flow_roundoff_floor"):
+                    period_balance[term] = sum(
+                        balance[term] * sub_dt for balance, sub_dt in zip(
+                            accepted_substep_balances, adaptive_dt_substep_dts, strict=True
+                        )
+                    ) / period_dt_f
+                total = period_balance["total_in"] + period_balance["total_out"]
+                period_balance["percent_discrepancy"] = 200.0 * period_balance["in_minus_out"] / total if total else 0.0
             info_period = dict(info_lin) if isinstance(info_lin, dict) else {}
             info_period.update(
                 {
                     "solver_type": "kcycle_unconfined_picard_device_fast_path",
                     "converged": bool(production_acceptance_passed),
+                    "physical_period_balance": period_balance,
                     "outer_iterations": int(min(max_outer, outer_iter + 1)),
                     "strict_picard_convergence_passed": bool(strict_picard_convergence_passed),
                     "practical_picard_acceptance_passed": bool(practical_picard_acceptance_passed),
@@ -2386,7 +2427,9 @@ def _persistent_period_engine(
                 info_period["inner_block_counts"] = [int(v) for v in inner_block_counts]
             period_infos.append(info_period)
             last_info = info_period
-            head_prev = head_arr
+            info_period["state"] = "accepted" if production_acceptance_passed else "rejected_trial"
+            if production_acceptance_passed:
+                head_prev = head_arr
             request = yield _period_result()
 
     else:
@@ -2430,6 +2473,10 @@ def _persistent_period_engine(
             counters["head_downloads"] += 1
             head_arr = np.asarray(head, dtype=np.float64)
             info_out = dict(info) if isinstance(info, dict) else {}
+            period_accepted = bool(info_out.get("converged", False))
+            if not period_accepted and not allow_rejected_trial:
+                raise RuntimeError(f"Unconfined transient period {period_index + 1} did not converge.")
+            info_out["state"] = "accepted" if period_accepted else "rejected_trial"
             info_out.setdefault("incremental_picard_enabled", False)
             info_out.setdefault("adaptive_dt_enabled", False)
             storage_ref = info_out.pop("storage_reference_head_last_linearization_array", None)
@@ -2454,17 +2501,16 @@ def _persistent_period_engine(
                 storage_coeff_arr = np.asarray(storage_coeff, dtype=np.float64)
                 sy_coeff_arr = np.asarray(sy_coeff, dtype=np.float64)
                 ss_coeff_arr = np.asarray(ss_coeff, dtype=np.float64)
-                delta_head = head_arr - period_head_old
-
-                exact_storage_term, exact_sy_term, exact_ss_term = exact_unconfined_storage_terms(
-                    head_new=storage_ref_arr,
-                    head_old=period_head_old,
-                    bottom=bottom,
-                    top=top,
-                    specific_yield=float(sy),
-                    specific_storage=float(ss),
-                    dt=dt_f,
-                )
+                if storage_reference == "previous_period":
+                    delta_head = head_arr - period_head_old
+                    exact_sy_term = sy_coeff_arr * delta_head / dt_f
+                    exact_ss_term = ss_coeff_arr * delta_head / dt_f
+                    exact_storage_term = exact_sy_term + exact_ss_term
+                else:
+                    exact_storage_term, exact_sy_term, exact_ss_term = exact_unconfined_storage_terms(
+                        head_new=head_arr, head_old=period_head_old, bottom=bottom, top=top,
+                        specific_yield=float(sy), specific_storage=float(ss), dt=dt_f,
+                    )
                 heads_old_per_period[period_index] = period_head_old
                 storage_reference_heads[period_index] = storage_ref_arr
                 storage_coeffs[period_index] = storage_coeff_arr
@@ -2476,7 +2522,8 @@ def _persistent_period_engine(
                 sy_crossing_terms[period_index] = exact_sy_term
             period_infos.append(info_out)
             last_info = info_out
-            head_prev = head_arr
+            if period_accepted:
+                head_prev = head_arr
             request = yield _period_result()
 
 
@@ -2541,8 +2588,9 @@ class TransientUnconfinedSession:
         names = ('T_wp', 'R_wp', 'active_wp', 'bc_mask_wp', 'bc_values_wp',
                  'gh_head_wp', 'gh_mask_wp', 'ghb_factor_wp', 'mg_levels',
                  'storage_diag_wp', '_storage_active')
-        self._model_workspace = {name: getattr(self.model, name) for name in names
-                                 if hasattr(self.model, name)}
+        if self.workspace['hierarchy'] is not None:
+            self._model_workspace = {name: getattr(self.model, name) for name in names
+                                     if hasattr(self.model, name)}
         self.setup_count += 1
 
     def _advance(self, *, head_prev, recharge, dt, accepted_substep_callback=None):
@@ -2624,12 +2672,15 @@ def solve_transient_unconfined_backend(*, model, initial_head, recharge_rates,
     rates = np.asarray(recharge_rates, dtype=np.float64).reshape(-1)
     if rates.size == 0 or not np.all(np.isfinite(rates)):
         raise ValueError('recharge_rates must contain finite stress-period rates')
+    controls = {} if solve_controls is None else dict(solve_controls)
+    if not return_info:
+        controls["allow_unaccepted_transient_period"] = False
     session = TransientUnconfinedSession(model=model, k_field=k_field,
         zbot_field=zbot_field, ztop_field=ztop_field, sy=sy, ss=ss, active=active,
         bc_mask=bc_mask, bc_values=bc_values, gh_mask=gh_mask, gh_head=gh_head,
         gh_width=gh_width, gh_alpha=gh_alpha, aq_thickness=aq_thickness,
         storage_mode=storage_mode, storage_reference=storage_reference,
-        solve_controls={} if solve_controls is None else solve_controls,
+        solve_controls=controls,
         min_saturated_thickness=min_saturated_thickness,
         save_diagnostics=save_diagnostics)
     previous = np.asarray(initial_head, dtype=np.float64)
@@ -2641,9 +2692,13 @@ def solve_transient_unconfined_backend(*, model, initial_head, recharge_rates,
             heads.append(head)
             periods.append(info)
             results.append(result)
+            if not info["converged"]:
+                break
             previous = head
+        accepted = sum(bool(info["converged"]) for info in periods)
         combined = dict(results[-1])
-        combined.update(heads_per_period=np.stack(heads), heads_final=heads[-1],
+        combined.update(heads_per_period=np.stack(heads), heads_final=previous.copy(),
+            accepted_periods=accepted, accepted_time=accepted * dt, requested_periods=rates.size,
             period_infos=periods, last_info=periods[-1],
             period_times=np.array([result['period_times'][0] for result in results]),
             total_time=time.perf_counter()-started, n_periods=len(heads),
