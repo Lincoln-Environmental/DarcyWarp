@@ -67,6 +67,15 @@ The guide includes the reproducible sanity/convergence command and controls.
 Paired calibration histories at 0.5, 1 and 2 times K show 28–31% less
 Newton/Krylov runtime, measured separately from setup and conductivity updates.
 
+## 2D head-dependent boundaries
+
+The unconfined semismooth Newton solver accepts DRN and RIV cell packages.
+Set `use_drn=True` or `use_riv=True` when constructing the model and supply
+the corresponding masks, conductances and elevations in `build_from_fields()`.
+Use `update_riv_boundary_2d()` to change river stages or conductances and
+`accepted_drn_discharge_2d()` or `accepted_riv_discharge_2d()` for fluxes from
+an accepted solution. Positive rates leave the aquifer.
+
 ## Environment setup
 
 The project uses a dedicated conda environment named **`darcywarp`**, defined in
