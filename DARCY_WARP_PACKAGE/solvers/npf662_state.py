@@ -44,6 +44,7 @@ class NPF662TransientState:
                 value = np.asarray(getattr(case, name))
                 if value.shape != self.shape or not np.isfinite(value).all():
                     raise ValueError(f'Invalid {name}')
+            case.validate_active_heads()
             if np.any(case.source[case.active == 0] != 0.):
                 raise ValueError('Inactive source would be lost')
             types = np.asarray(case.cell_type)

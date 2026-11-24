@@ -58,6 +58,24 @@ def is_3d_budget_conserved(*, budget, absolute_tolerance, relative_tolerance=1e-
                 or budget["relative_cell_imbalance"] <= relative_tolerance)
 
 
+def check_3d_linear_budget(*, budget, free, head_tolerance, flow_tolerance, relative_tolerance):
+    """Check physical row balances using a local head scale and a flow scale.
+
+    The head check uses physical flux differences so an assembled RHS cannot
+    hide forcing lost to rounding. The dimensional flow allowance is capped
+    by conductance times the allowed head residual. This also covers
+    equilibria whose throughput approaches zero as they converge.
+    """
+    residual = budget.pop("cell_residual_field")[free]
+    diagonal = budget.pop("operator_diagonal")[free]
+    equivalent = np.divide(residual, diagonal, out=np.zeros_like(residual), where=diagonal > 0.0)
+    equivalent[(diagonal == 0.0) & (residual != 0.0)] = np.inf
+    budget["head_residual_rms"] = stable_rms(values=equivalent)
+    scaled_flow_tolerance = min(flow_tolerance, head_tolerance * stable_rms(values=diagonal))
+    return bool(budget["head_residual_rms"] <= head_tolerance and is_3d_budget_conserved(
+        budget=budget, absolute_tolerance=scaled_flow_tolerance, relative_tolerance=relative_tolerance))
+
+
 @dataclass(frozen=True)
 class BoundaryInterfaceFluxPlan:
     """Prevalidated sparse boundary-interface flux evaluation plan."""

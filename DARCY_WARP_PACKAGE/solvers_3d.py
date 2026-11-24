@@ -1160,7 +1160,38 @@ def _solve_chebyshev_7point_3d_linear(
     _rTr0, r_rms0 = _compute_rms(x_wp)
     tol_abs = float(max(abs_tol_min, rel_tol * r_rms0))
 
-    converged = r_rms0 <= tol_abs
+    def head_residual_rms() -> float:
+        wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[rTr_buf], device=device)
+        wp.launch(
+            kernel=compute_head_residual_7point_kernel,
+            dim=dim,
+            inputs=[
+                x_wp,
+                b_wp,
+                txp_wp,
+                txm_wp,
+                typ_wp,
+                tym_wp,
+                tzp_wp,
+                tzm_wp,
+                act_wp,
+                bcm_wp,
+                sdiag_wp,
+                M_inv_wp,
+                r_wp,
+                rTr_buf,
+                int(nx),
+                int(ny),
+                int(nz),
+            ],
+            device=device,
+        )
+        hrTr_end = float(rTr_buf.numpy()[0])
+        return float(np.sqrt(max(hrTr_end, 0.0) / float(n_free)))
+
+    head_rms0 = head_residual_rms()
+    head_tolerance = max(float(rel_tol) * head_rms0, np.finfo(NP_FLOAT).eps)
+    converged = r_rms0 <= tol_abs and head_rms0 <= head_tolerance
     n_iter_used = 0
     r_rms_end = float(r_rms0)
 
@@ -1206,7 +1237,7 @@ def _solve_chebyshev_7point_3d_linear(
         x_tmp_wp = x_out
 
         _, r_rms_end = _compute_rms(x_wp)
-        if r_rms_end <= tol_abs:
+        if r_rms_end <= tol_abs and head_residual_rms() <= head_tolerance:
             converged = True
             break
 
@@ -1219,38 +1250,11 @@ def _solve_chebyshev_7point_3d_linear(
             else 0.0
         )
 
-    # Head-equivalent (Jacobi-preconditioned) residual RMS for reporting / inner-usable checks.
-    wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[rTr_buf], device=device)
-    wp.launch(
-        kernel=compute_head_residual_7point_kernel,
-        dim=dim,
-        inputs=[
-            x_wp,
-            b_wp,
-            txp_wp,
-            txm_wp,
-            typ_wp,
-            tym_wp,
-            tzp_wp,
-            tzm_wp,
-            act_wp,
-            bcm_wp,
-            sdiag_wp,
-            M_inv_wp,
-            r_wp,
-            rTr_buf,
-            int(nx),
-            int(ny),
-            int(nz),
-        ],
-        device=device,
-    )
-    hrTr_end = float(rTr_buf.numpy()[0])
-    h_rms_end = float(np.sqrt(max(hrTr_end, 0.0) / float(n_free)))
+    h_rms_end = head_residual_rms()
 
     # Physical water budget of the solved discrete system (host, one pass).
     from DARCY_WARP_PACKAGE.physics.budget_3d import (
-        compute_3d_flow_budget, prepare_3d_budget_source, is_3d_budget_conserved,
+        compute_3d_flow_budget, prepare_3d_budget_source, check_3d_linear_budget,
     )
 
     budget_lin = compute_3d_flow_budget(
@@ -1260,10 +1264,14 @@ def _solve_chebyshev_7point_3d_linear(
         active=act,
         bc_mask=bcm,
         storage_diag=physical_storage,
+        return_field=True,
         head_prev=h_prev_used,
         ghb_conductance=ghb_conductance, ghb_head=ghb_head,
     )
-    budget_acceptance = is_3d_budget_conserved(budget=budget_lin, absolute_tolerance=tol_abs)
+    budget_acceptance = check_3d_linear_budget(
+        budget=budget_lin, free=(act != 0) & (bcm == 0),
+        head_tolerance=head_tolerance, flow_tolerance=tol_abs, relative_tolerance=1e-3,
+    )
     converged = bool(converged and budget_acceptance)
 
     info = {
@@ -1277,6 +1285,7 @@ def _solve_chebyshev_7point_3d_linear(
         "r_rms_start": float(r_rms0),
         "r_rms_end": float(r_rms_end),
         "h_rms_end": float(h_rms_end),
+        "head_residual_tolerance": head_tolerance,
         "tol_abs": float(tol_abs),
         "rel_tol": float(rel_tol),
         "abs_tol_min": float(abs_tol_min),
@@ -3437,7 +3446,37 @@ def solve_multigrid_kcycle_7point_3d(
     r_rms0 = float(np.sqrt(max(rTr0, 0.0) / float(n_free0)))
     tol_abs = float(max(abs_tol_min, rel_tol * r_rms0))
 
-    converged = r_rms0 <= tol_abs
+    def head_residual_rms() -> float:
+        wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[lvl0["rTr_buf"]], device=device)
+        wp.launch(
+            kernel=compute_head_residual_7point_kernel,
+            dim=lvl0["dim"],
+            inputs=[
+                lvl0["x_wp"],
+                lvl0["b_wp"],
+                lvl0["tx_p_wp"],
+                lvl0["tx_m_wp"],
+                lvl0["ty_p_wp"],
+                lvl0["ty_m_wp"],
+                lvl0["tz_p_wp"],
+                lvl0["tz_m_wp"],
+                lvl0["active_wp"],
+                lvl0["bc_mask_wp"],
+                lvl0["storage_wp"],
+                lvl0["M_inv_wp"],
+                lvl0["r_wp"],
+                lvl0["rTr_buf"],
+                int(lvl0["nx"]),
+                int(lvl0["ny"]),
+                int(lvl0["nz"]),
+            ],
+            device=device,
+        )
+        hrTr_end = float(lvl0["rTr_buf"].numpy()[0])
+        return float(np.sqrt(max(hrTr_end, 0.0) / float(n_free0)))
+
+    head_tolerance = float(dh_rms_tol_f) if dh_rms_tol_f is not None else max(float(rel_tol), np.finfo(NP_FLOAT).eps)
+    converged = r_rms0 <= tol_abs and head_residual_rms() <= head_tolerance
     n_cycles_used = 0
     dh_rms_lastcheck = float("nan")
     dh_max_lastcheck = float("nan")
@@ -3491,7 +3530,7 @@ def solve_multigrid_kcycle_7point_3d(
         if dh_max_tol_f is not None:
             dh_ok = dh_ok and (dh_max_lastcheck <= float(dh_max_tol_f))
 
-        if (r_rms_now <= tol_abs) and dh_ok:
+        if (r_rms_now <= tol_abs) and dh_ok and head_residual_rms() <= head_tolerance:
             converged = True
             break
 
@@ -3506,38 +3545,11 @@ def solve_multigrid_kcycle_7point_3d(
     rTr_end = compute_residual_norm(lvl0, lvl0["x_wp"], lvl0["r_wp"], lvl0["rTr_buf"])
     r_rms_end = float(np.sqrt(max(rTr_end, 0.0) / float(n_free0)))
 
-    # Head-equivalent (Jacobi-preconditioned) residual RMS for reporting / inner-usable checks.
-    wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[lvl0["rTr_buf"]], device=device)
-    wp.launch(
-        kernel=compute_head_residual_7point_kernel,
-        dim=lvl0["dim"],
-        inputs=[
-            lvl0["x_wp"],
-            lvl0["b_wp"],
-            lvl0["tx_p_wp"],
-            lvl0["tx_m_wp"],
-            lvl0["ty_p_wp"],
-            lvl0["ty_m_wp"],
-            lvl0["tz_p_wp"],
-            lvl0["tz_m_wp"],
-            lvl0["active_wp"],
-            lvl0["bc_mask_wp"],
-            lvl0["storage_wp"],
-            lvl0["M_inv_wp"],
-            lvl0["r_wp"],
-            lvl0["rTr_buf"],
-            int(lvl0["nx"]),
-            int(lvl0["ny"]),
-            int(lvl0["nz"]),
-        ],
-        device=device,
-    )
-    hrTr_end = float(lvl0["rTr_buf"].numpy()[0])
-    h_rms_end = float(np.sqrt(max(hrTr_end, 0.0) / float(n_free0)))
+    h_rms_end = head_residual_rms()
 
     # Physical water budget of the solved discrete system (host, one pass).
     from DARCY_WARP_PACKAGE.physics.budget_3d import (
-        compute_3d_flow_budget, prepare_3d_budget_source, is_3d_budget_conserved,
+        compute_3d_flow_budget, prepare_3d_budget_source, check_3d_linear_budget,
     )
 
     budget0 = compute_3d_flow_budget(
@@ -3547,11 +3559,14 @@ def solve_multigrid_kcycle_7point_3d(
         active=act0,
         bc_mask=bcm0,
         storage_diag=physical_storage,
+        return_field=True,
         head_prev=h_prev_used,
         ghb_conductance=ghb_conductance, ghb_head=ghb_head,
     )
-    budget_acceptance = is_3d_budget_conserved(budget=budget0, absolute_tolerance=tol_abs,
-                                             relative_tolerance=final_budget_relative_tol)
+    budget_acceptance = check_3d_linear_budget(
+        budget=budget0, free=(act0 != 0) & (bcm0 == 0),
+        head_tolerance=head_tolerance, flow_tolerance=tol_abs, relative_tolerance=final_budget_relative_tol,
+    )
     converged = bool(converged and budget_acceptance)
 
     info = {
@@ -3585,6 +3600,7 @@ def solve_multigrid_kcycle_7point_3d(
         "r_rms_start": float(r_rms0),
         "r_rms_end": float(r_rms_end),
         "h_rms_end": float(h_rms_end),
+        "head_residual_tolerance": head_tolerance,
         "dh_rms_lastcheck": float(dh_rms_lastcheck),
         "dh_max_lastcheck": float(dh_max_lastcheck),
         "converged": bool(converged),

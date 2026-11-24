@@ -25,7 +25,6 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
-from DARCY_WARP_PACKAGE.validation.npf662_metrics import stable_rms
 from DARCY_WARP_PACKAGE.physics.ghb_3d import validate_ghb_fields, add_ghb_linear_terms
 import warp as wp
 
@@ -764,7 +763,7 @@ def solve_fast_confined_kcycle_3d(
         return_info=True,
     )
     from DARCY_WARP_PACKAGE.physics.budget_3d import (
-        compute_3d_flow_budget, prepare_3d_budget_source, is_3d_budget_conserved,
+        compute_3d_flow_budget, prepare_3d_budget_source, check_3d_linear_budget,
     )
 
     info["operator_refreshed_in_place"] = bool(operator_refreshed)
@@ -781,16 +780,12 @@ def solve_fast_confined_kcycle_3d(
         return_field=True,
         ghb_conductance=ghb_conductance, ghb_head=ghb_head,
     )
-    physical = info["budget"].pop("cell_residual_field")
-    diagonal = info["budget"].pop("operator_diagonal")
-    free = (active_work != 0) & (bc_f == 0)
-    head_residual = np.zeros_like(physical)
-    np.divide(physical, diagonal, out=head_residual, where=diagonal > 0.0)
-    head_residual[(diagonal == 0.0) & (physical != 0.0)] = np.inf
-    info["final_physical_head_residual_rms"] = stable_rms(values=head_residual[free])
-    info["final_budget_acceptance"] = is_3d_budget_conserved(
-        budget=info["budget"], absolute_tolerance=info.get("tol_abs", 0.0),
-        relative_tolerance=float(final_budget_relative_tol))
+    info["final_budget_acceptance"] = check_3d_linear_budget(
+        budget=info["budget"], free=(active_work != 0) & (bc_f == 0),
+        head_tolerance=info.get("head_residual_tolerance", max(float(rel_tol), np.finfo(np.float64).eps)),
+        flow_tolerance=info.get("tol_abs", 0.0), relative_tolerance=float(final_budget_relative_tol),
+    )
+    info["final_physical_head_residual_rms"] = info["budget"]["head_residual_rms"]
     info["final_budget_relative_tolerance"] = float(final_budget_relative_tol)
     info["final_physical_acceptance"] = bool(
         np.all(np.isfinite(head[active_work != 0]))

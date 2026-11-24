@@ -84,6 +84,8 @@ class WarpDarcySolver3D:
             raise ValueError("fast 3D applies its diagonal on the selected Warp device; use diag_preconditioner_backend='auto' or 'device'")
         if formulation not in {'legacy','mf6_6_6_2_npf','experimental_transformed_terrain'}:
             raise ValueError('Unknown 3D formulation; choose legacy, mf6_6_6_2_npf, or experimental_transformed_terrain')
+        if formulation == "mf6_6_6_2_npf" and self.solver != "kcycle":
+            raise ValueError("mf6_6_6_2_npf requires solver='kcycle'.")
         self.formulation=formulation
         if formulation=='mf6_6_6_2_npf' and np.dtype(NP_FLOAT)!=np.dtype(np.float64):
             raise ValueError('mf6_6_6_2_npf requires DARCY_FLOAT=float64 before imports')
@@ -476,6 +478,9 @@ class WarpDarcySolver3D:
         if self._rhs is None:
             raise RuntimeError("Solver has not been built. Call build_from_K_fields or build_from_face_conductance first.")
 
+        if {"ghb_head", "ghb_conductance", "ghb_mask"} & kwargs.keys():
+            raise ValueError("GHB is model-owned. Call update_ghb() before solving.")
+
         if self.formulation=='mf6_6_6_2_npf':
             from DARCY_WARP_PACKAGE.solvers.npf662_3d import solve_npf662
             return solve_npf662(model=self,**kwargs)
@@ -549,10 +554,6 @@ class WarpDarcySolver3D:
         """Update the source field in the persistent 3D operator session."""
         if self._session is None:
             raise RuntimeError("Solver has not been built.")
-        if self.formulation == 'mf6_6_6_2_npf':
-            value = np.asarray(rhs)
-            if value.shape == self.shape and np.any(value[self._active == 0] != 0.):
-                raise ValueError('Inactive NPF source would be lost; rhs must be zero in inactive cells')
         self._session.update_rhs(rhs)
         self._rhs = self._session.rhs
 

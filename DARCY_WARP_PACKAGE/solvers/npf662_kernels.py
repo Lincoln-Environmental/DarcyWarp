@@ -121,7 +121,7 @@ def physical_row_metrics_base(i:int,head:wp.array(dtype=wp.float64),source:wp.ar
     storage:wp.array(dtype=wp.float64),storage_tangent:wp.array(dtype=wp.float64),
     ghb_flow:wp.float64,ghb_conductance:wp.float64):
     metrics = NPFRowMetrics(wp.float64(0.))
-    invalid=not wp.isfinite(head[i]) or not wp.isfinite(scale[i]) or scale[i]<=wp.float64(0.)
+    invalid=not wp.isfinite(head[i]) or ((free[i]!=0 or fixed[i]!=0) and wp.abs(head[i])>=wp.float64(1e20)) or not wp.isfinite(scale[i]) or scale[i]<=wp.float64(0.)
     for axis in range(3):
         if not wp.isfinite(flux[i,axis]) or not wp.isfinite(conductance[i,axis]):invalid=True
     if invalid:metrics[6]=wp.float64(1.)

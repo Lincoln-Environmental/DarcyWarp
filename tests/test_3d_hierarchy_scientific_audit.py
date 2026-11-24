@@ -54,7 +54,7 @@ def test_actual_hierarchy_is_symmetric_approximation_not_exact_rap(irregular, an
     bc[active == 0] = 0
     values = np.full(shape, 5.0)
     values[:, :, 0] = 3.0
-    source = np.full(shape, 0.01)
+    source = np.where(active != 0, 0.01, 0.0)
     faces = build_7point_face_conductance_from_k(kx_field=k, ky_field=k, kz_field=k * anisotropy,
                                                active=active, dx=1.0)
     levels = _build_levels(faces=faces, active=active, bc_mask=bc, bc_values=values,
