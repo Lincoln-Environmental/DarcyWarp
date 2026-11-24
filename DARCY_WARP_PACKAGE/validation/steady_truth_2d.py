@@ -3,6 +3,7 @@
 import hashlib
 import inspect
 import json
+from tempfile import NamedTemporaryFile
 from pathlib import Path
 
 import numpy as np
@@ -137,27 +138,33 @@ def save_mf6_truth(
 ) -> None:
     """Atomically save one reusable MF6 truth artifact."""
     truth_path.parent.mkdir(parents=True, exist_ok=True)
-    temporary_path = truth_path.with_name(f".{truth_path.name}.staging.npz")
-    float_dtype = np.dtype(output_dtype)
-    np.savez_compressed(
-        temporary_path,
-        heads=np.asarray(heads, dtype=float_dtype),
-        nx=np.int32(nx),
-        ny=np.int32(ny),
-        dx=np.asarray(dx, dtype=float_dtype),
-        ghb=np.int32(1 if ghb else 0),
-        t_isotropic=np.int32(1 if isotropic else 0),
-        t_isotropic_value=np.asarray(t_isotropic_value, dtype=float_dtype),
-        thickness=np.asarray(thickness, dtype=float_dtype),
-        width=np.asarray(width, dtype=float_dtype),
-        r_truth=np.asarray(recharge, dtype=float_dtype),
-        seed=np.int32(seed),
-        label=np.array(label),
-        mf6_seconds=np.asarray(mf6_seconds, dtype=np.float64),
-        reference_fingerprint=np.array(fingerprint),
-        reference_identity_json=np.array(json.dumps(identity, sort_keys=True)),
-    )
-    temporary_path.replace(truth_path)
+    temporary = NamedTemporaryFile(dir=truth_path.parent, prefix=f".{truth_path.name}.",
+        suffix=".staging.npz", delete=False)
+    temporary_path = Path(temporary.name)
+    try:
+        with temporary:
+            float_dtype = np.dtype(output_dtype)
+            np.savez_compressed(
+                temporary,
+                heads=np.asarray(heads, dtype=float_dtype),
+                nx=np.int32(nx),
+                ny=np.int32(ny),
+                dx=np.asarray(dx, dtype=float_dtype),
+                ghb=np.int32(1 if ghb else 0),
+                t_isotropic=np.int32(1 if isotropic else 0),
+                t_isotropic_value=np.asarray(t_isotropic_value, dtype=float_dtype),
+                thickness=np.asarray(thickness, dtype=float_dtype),
+                width=np.asarray(width, dtype=float_dtype),
+                r_truth=np.asarray(recharge, dtype=float_dtype),
+                seed=np.int32(seed),
+                label=np.array(label),
+                mf6_seconds=np.asarray(mf6_seconds, dtype=np.float64),
+                reference_fingerprint=np.array(fingerprint),
+                reference_identity_json=np.array(json.dumps(identity, sort_keys=True)),
+            )
+        temporary_path.replace(truth_path)
+    finally:
+        temporary_path.unlink(missing_ok=True)
 
 
 def load_or_run_mf6_truth(
