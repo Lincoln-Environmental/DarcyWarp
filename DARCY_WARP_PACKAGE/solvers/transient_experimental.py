@@ -104,7 +104,7 @@ def _merge_timestep_budgets(records: list[dict]) -> dict:
     total_in = merged["rcha_in"] + merged["chd_in"] + merged["ghb_in"] + merged["storage_in"]
     total_out = merged["rcha_out"] + merged["chd_out"] + merged["ghb_out"] + merged["storage_out"]
     imbalance = total_in - total_out
-    denominator = abs(total_in) + abs(total_out)
+    denominator = 0.5 * (total_in + total_out)
     merged["total_in"] = total_in
     merged["total_out"] = total_out
     merged["in_minus_out"] = imbalance

@@ -61,11 +61,11 @@ def native_chd_flow_valid(*, case, reference, flow, chd):
     left, right = reference.left, reference.right
     to_right = fixed[left] & free[right]
     to_left = free[left] & fixed[right]
-    exchanges = np.bincount(left[to_right], weights=flow[to_right], minlength=fixed.size)
-    exchanges -= np.bincount(right[to_left], weights=flow[to_left], minlength=fixed.size)
+    exchanges = (np.bincount(left[to_right], weights=flow[to_right], minlength=fixed.size)
+        - np.bincount(right[to_left], weights=flow[to_left], minlength=fixed.size))
     # MF6 suppresses CHD-to-CHD exchange when forming its CHD package budget.
-    magnitude = np.bincount(left[to_right], weights=np.abs(flow[to_right]), minlength=fixed.size)
-    magnitude += np.bincount(right[to_left], weights=np.abs(flow[to_left]), minlength=fixed.size)
+    magnitude = (np.bincount(left[to_right], weights=np.abs(flow[to_right]), minlength=fixed.size)
+        + np.bincount(right[to_left], weights=np.abs(flow[to_left]), minlength=fixed.size))
     limit = np.maximum(1e-14, 32. * np.finfo(float).eps * magnitude)
     return bool(np.all(np.isfinite(chd)) and np.all(np.abs(chd.ravel() - exchanges) <= limit))
 
@@ -214,7 +214,11 @@ def run_reference_mf6(*,case,directory,executable,prescribed_state=None,head_tol
     ghb_valid=bool(np.all(np.isfinite(ghb_native)) and np.all(np.abs(ghb_native+fields['ghb_outflow'])<=ghb_tolerance))
     chd_native = decode_list_budget(budget=budget, mapping=mapping, shape=case.active.shape, text='CHD')
     chd_valid = native_chd_flow_valid(case=case, reference=reference, flow=flux, chd=chd_native)
-    physical=np.where(reference.free,realised.reshape(case.active.shape)+ghb_native-(reference.incidence@flux).reshape(case.active.shape),0.)
+    # A prescribed-state probe measures faces with all active cells held at
+    # the supplied heads. Apply canonical forcing when reconstructing those
+    # original rows, since the probe has no native source package.
+    row_source = case.source if prescribed_state is not None else realised.reshape(case.active.shape)
+    physical=np.where(reference.free,row_source+ghb_native-(reference.incidence@flux).reshape(case.active.shape),0.)
     native_l1=stable_sum(values=np.abs(physical[reference.free]))
     native_relative=native_l1/max(checks['gross_throughput'],np.finfo(float).tiny)
     native_rms=stable_rms(values=physical[reference.free])

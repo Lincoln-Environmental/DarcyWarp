@@ -36,7 +36,6 @@ def diagnostic_options(*, original, overrides, tolerance_keys):
 
 def baseline_inputs(*, row, attempt, result):
     import numpy as np
-    from DARCY_WARP_PACKAGE.validation.time_grid import same_step_times
     from DARCY_WARP_PACKAGE.validation.npf662_reference import load_npf662_case
     settings = result['settings']
     case_row = result['cases'][0]
@@ -61,6 +60,7 @@ def baseline_inputs(*, row, attempt, result):
 def compare_history(*, heads, reference, case, expected_periods, roundoff_ulps, flux_floor,
                     expected_times=None):
     import numpy as np
+    from DARCY_WARP_PACKAGE.validation.time_grid import same_step_times
     expected_shape = (expected_periods, *case.active.shape)
     if heads.shape != expected_shape or reference['heads'].shape != expected_shape:
         raise ValueError('Complete matching time histories are required')

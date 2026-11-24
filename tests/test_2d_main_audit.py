@@ -144,3 +144,18 @@ def test_water_budget_percent_uses_mean_throughflow(flow, expected):
     budget = compute_mass_balance_budget(T_field=fields, R_field=recharge, head=head,
         active=fields, bc_mask=np.array([[1, 0]]), bc_values=np.zeros_like(fields), dx=1.0)
     assert budget.iloc[0]["percent_discrepancy"] == pytest.approx(expected)
+
+
+@pytest.mark.parametrize("implementation", ["classic", "fast"])
+def test_isolated_ghb_cell_retains_steady_equation(implementation):
+    shape = (8, 8)
+    active = np.zeros(shape, dtype=np.int32)
+    active[3, 3] = 1
+    stage = np.full(shape, 15.0)
+    with create_solver(dim=2, nx=8, ny=8, dx=1., device="cpu", use_ghb=True, aq_thickness=1.) as model:
+        model.build_from_fields(T_field=np.ones(shape), R_field=np.zeros(shape), active=active,
+            bc_mask=np.zeros(shape), bc_values=np.zeros(shape), gh_mask=active, gh_head=stage,
+            gh_width=np.ones(shape))
+        head, info = model.solve(implementation=implementation)
+    assert info["converged"]
+    assert head[3, 3] == pytest.approx(15.0)

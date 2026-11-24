@@ -609,7 +609,7 @@ def dual_annealing_calibration(
             gh_width=case.gh_width,
             gh_alpha=hydraulics["gh_alpha"],
         )
-        solver.build_hierarchy(max_levels=6, min_coarse_n=4)
+        solver.build_hierarchy(max_levels=hydraulics["solve"]["max_levels"], min_coarse_n=4)
         nfev_counter = {"n": 0}
         stagnation_state = {
             "last_meaningful_improve_nfev": 0,
@@ -984,7 +984,7 @@ def lbfgsb_calibration(
             gh_width=case.gh_width,
             gh_alpha=hydraulics["gh_alpha"],
         )
-        solver.build_hierarchy(max_levels=6, min_coarse_n=4)
+        solver.build_hierarchy(max_levels=hydraulics["solve"]["max_levels"], min_coarse_n=4)
 
         last_eval = {"x": None, "f": None}
 

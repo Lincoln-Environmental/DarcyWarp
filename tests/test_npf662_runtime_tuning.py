@@ -20,11 +20,12 @@ def cached_case(*, folder):
     np.savez(file=folder/'reference.npz', heads=np.stack([case.initial, case.initial]))
     (folder/'native').mkdir()
     (folder/'native/stdout.log').write_text('Normal termination of simulation\n')
-    physical = dict(input_valid=True, boundary_condition_valid=True, physical_metrics_valid=True)
+    physical = dict(input_valid=True, boundary_condition_valid=True, physical_metrics_valid=True, relative_cell_imbalance=1e-7)
     manifest = dict(accepted=False, fingerprint='fixture', inputs=dict(
         case_sha256=case.digest(), factors=factors.tolist(), native_options=native_options,
-        mode='transient', family='npf', **options), native=dict(periods=[dict(
-            source_allocation_valid=True, physical=physical, native_relative_cell_imbalance=1e-7)]*2),
+        mode='transient', family='npf', **options), native=dict(native_success=True, periods=[dict(
+            source_allocation_valid=True, chd_budget_valid=True, ghb_law_valid=True,
+            storage_difference_relative_throughput=1e-8, physical=physical, native_relative_cell_imbalance=1e-7)]*2),
         sha256={'reference.npz':hashlib.sha256((folder/'reference.npz').read_bytes()).hexdigest()})
     (folder/'manifest.json').write_text(json.dumps(manifest))
     return case, factors, options, native_options, manifest
