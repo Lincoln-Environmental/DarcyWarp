@@ -211,7 +211,7 @@ class DeviceHistoryReference:
             ss=self.ss, sy=self.sy).evaluate(head=head, **tolerances)
 
 
-def prepare_next_step(*, workspace, sources, index, dt, area):
+def prepare_next_step(*, workspace, sources, index, dt, area, activation_head=None):
     """Freeze the accepted previous head and recompute storage/scaling in place."""
     wp.copy(dest=workspace.storage_previous, src=workspace.head)
     sources.apply(workspace, index)
@@ -220,13 +220,13 @@ def prepare_next_step(*, workspace, sources, index, dt, area):
         inputs=[workspace.storage_previous, workspace.storage_previous, workspace.bottom, workspace.thickness,
             workspace.types, workspace.storage_ss, workspace.storage_sy, workspace.free,
             workspace.storage_rate, workspace.previous_storage_tangent, workspace.storage_factor], device=workspace.device)
-    workspace.refresh_previous_operator()
+    workspace.refresh_previous_operator(activation_head=activation_head)
     workspace.maximum.zero_()
     wp.launch(kernel=kernels.previous_storage_scale, dim=workspace.n,
         inputs=[workspace.principal, workspace.previous_operator_tangent, workspace.scale, workspace.maximum],
         device=workspace.device)
     if workspace.maximum.numpy()[0] != 0.:
-        raise ValueError('Invalid device previous-state storage tangent')
+        raise ValueError('Invalid device previous-state restraint diagonal')
     workspace.faces_changed = False
     workspace.jv_counter.zero_()
     workspace.preconditioner_counter.zero_()
@@ -344,14 +344,23 @@ def solve_transient_history(*, model, dt, head_prev, ss, sy,
         state = model._session._npf662_workspace_holder['native_state']
         reference = DeviceHistoryReference(case=base, workspace=workspace, ss=state.ss, sy=state.sy, sources=sources)
         thresholds = first_info['final_acceptance_thresholds']
+        activation_watch = state.activation_watch_needed()
         for index in range(1, len(factors)):
             if not periods[-1]['converged']:
                 break
             step_start = perf_counter()
             reference.dt = float(times[index])
             reference.index = index
+            step_seeds = []
+            activation_head = None
+            if activation_watch:
+                previous_host = workspace.head.numpy().reshape(base.active.shape)
+                seeded_head, step_seeds = state.seed_unanchored_boundary_components(head=previous_host)
+                if step_seeds:
+                    workspace.head.assign(seeded_head.ravel())
+                    activation_head = workspace.head
             prepare_next_step(workspace=workspace, sources=sources, index=index,
-                dt=reference.dt, area=base.dx*base.dy)
+                dt=reference.dt, area=base.dx*base.dy, activation_head=activation_head)
             head, info = solve_newton_device(model=model, case=base, reference=reference,
                 max_outer=first_info['max_outer'], krylov_budget=first_info['max_krylov_per_outer'],
                 restart=first_info['krylov_restart'], controls=nonlinear,
@@ -364,6 +373,7 @@ def solve_transient_history(*, model, dt, head_prev, ss, sy,
             head_readbacks += int(head is not None)
             wp.copy(dest=history.flatten(), src=workspace.head, dest_offset=index*workspace.n, count=workspace.n)
             periods.append(dict(info, index=index, dt=reference.dt, source_factor=float(factors[index]),
+                active_set_seeds=step_seeds,
                 public_step_seconds=perf_counter()-step_start))
             attach_accepted_exchange_volumes(period=periods[-1])
         count = len(periods)

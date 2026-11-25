@@ -479,8 +479,22 @@ class NPF662Reference:
                 continue
             shift, index, threshold, package = min(positive_shifts)
             candidate.ravel()[component] += shift
+            # The uniform shift addition can round the threshold cell back onto
+            # the boundary value. Enforce the intended active branch explicitly
+            # instead of trusting the representability of the shift.
+            guard = 0
+            while candidate.ravel()[index] <= threshold and guard < 64:
+                candidate.ravel()[index] = np.nextafter(candidate.ravel()[index], np.inf)
+                guard += 1
+            if candidate.ravel()[index] <= threshold:
+                raise ValueError('Unanchored boundary seeding failed to cross the threshold')
+            entered = bool((self.drn_conductance.ravel()[index] > 0. and candidate.ravel()[index] > self.drn_elevation.ravel()[index])
+                           or (self.riv_conductance.ravel()[index] > 0. and candidate.ravel()[index] > self.riv_bottom.ravel()[index]))
+            if not entered:
+                raise ValueError('Unanchored boundary seeding did not enter the intended active branch')
             seeds.append(dict(component=int(label), package=package, cell=int(index),
                 threshold=float(threshold), uniform_shift_m=float(shift),
+                active_branch_verified=entered,
                 component_net_inflow=float(net_need)))
         return candidate, seeds
 
@@ -608,7 +622,7 @@ class NPF662Reference:
         c=self.case;f=self.free.ravel()
         head=np.where(c.fixed,c.values,c.initial).astype(float).copy()
         head, active_set_seeds = self.seed_unanchored_boundary_components(head=head)
-        history=[];reason='outer_budget'
+        history=[];reason='outer_budget';reseeds=0
         for outer in range(max_outer):
             checks,fields=self.evaluate(head=head)
             if checks['independent_accepted']:
@@ -646,10 +660,21 @@ class NPF662Reference:
                 if found:break
             history.append(dict(outer=outer+1,accepted=found,attempts=trials))
             if not found:
+                # General recovery when head-dependent restraint is lost during
+                # the iteration: one fresh active-set seed, then keep iterating.
+                if reseeds < 2:
+                    seeded, recovery_seeds = self.seed_unanchored_boundary_components(head=head)
+                    if recovery_seeds:
+                        head = seeded
+                        active_set_seeds = active_set_seeds + recovery_seeds
+                        reseeds += 1
+                        history[-1]['reseeded_after_failure'] = True
+                        continue
                 reason='line_search_failed';break
         checks,fields=self.evaluate(head=head)
         checks.update(stop_reason='converged' if checks['independent_accepted'] else reason,
-            history=history,outers=len(history),active_set_seeds=active_set_seeds)
+            history=history,outers=len(history),active_set_seeds=active_set_seeds,
+            active_set_reseeds=reseeds)
         return head,checks,fields
 
 

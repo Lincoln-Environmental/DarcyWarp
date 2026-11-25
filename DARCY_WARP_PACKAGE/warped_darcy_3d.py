@@ -426,6 +426,43 @@ class WarpDarcySolver3D:
         self._session.update_riv(riv_conductance=riv_conductance, riv_stage=riv_stage,
             riv_bottom=riv_bottom, riv_mask=riv_mask)
 
+    def _verify_accepted_state(self, *, head, info, package):
+        """Verify accepted-state ownership before releasing package rates.
+
+        Inactive drains and disconnected rivers return identical fluxes for
+        many heads, so ownership is established through the immutable accepted
+        state token (revisions plus digests of the accepted head and boundary
+        fields) rather than by re-deriving fluxes against current fields.
+
+        :param head: Groundwater head returned by the same solve as ``info``.
+        :param info: Converged solve metadata carrying ``accepted_state``.
+        :param package: ``"drn"`` or ``"riv"`` for error messages.
+        :return: The accepted per-cell rate array as an owned copy.
+        :raises RuntimeError: If the solve state is not accepted or unowned.
+        :raises ValueError: If the head or rate array is malformed or unrelated.
+        """
+        import hashlib
+        if self._session is None:
+            raise RuntimeError("The model has not been built")
+        if not isinstance(info, dict) or not info.get("converged", False):
+            raise RuntimeError(f"Accepted {package.upper()} discharge requires a converged solve")
+        accepted = np.asarray(head, dtype=np.float64)
+        if accepted.shape != self.shape or not np.all(np.isfinite(accepted)):
+            raise ValueError(f"head must be a finite field of shape {self.shape}")
+        token = info.get("accepted_state")
+        if not isinstance(token, dict) or token.get("head_sha256") is None:
+            raise RuntimeError("Accepted solve metadata lacks the accepted_state ownership token")
+        supplied = hashlib.sha256(np.ascontiguousarray(accepted).tobytes()).hexdigest()
+        if supplied != token["head_sha256"]:
+            raise ValueError("head does not match the accepted solve state")
+        rate = info.get(f"{package}_discharge_rate_array")
+        if rate is None:
+            raise RuntimeError(f"Accepted solve metadata lacks {package}_discharge_rate_array")
+        rate = np.asarray(rate, dtype=np.float64)
+        if rate.shape != self.shape or not np.all(np.isfinite(rate)):
+            raise ValueError(f"{package}_discharge_rate_array must be a finite field of shape {self.shape}")
+        return rate.copy()
+
     def accepted_drn_discharge(self, *, head, info) -> np.ndarray:
         """Return nonnegative per-cell DRN outflow from a verified accepted solve.
 
@@ -433,27 +470,14 @@ class WarpDarcySolver3D:
         :param info: Converged solve metadata containing accepted per-cell DRN rates.
         :return: Owned (nz, ny, nx) discharge array, positive out of the aquifer.
         :raises RuntimeError: If DRN is disabled or the solve state is not accepted.
-        :raises ValueError: If the head or rate array is malformed or inconsistent.
+        :raises ValueError: If the head or rate array is malformed or unrelated.
         """
-        if self._session is None or self._session.drn_conductance is None:
+        if self._session.drn_conductance is None:
             raise RuntimeError("DRN fields have not been built")
-        if not isinstance(info, dict) or not info.get("converged", False):
-            raise RuntimeError("Accepted DRN discharge requires a converged solve")
-        accepted = np.asarray(head, dtype=np.float64)
-        rate = info.get("drn_discharge_rate_array")
-        if accepted.shape != self.shape or not np.all(np.isfinite(accepted)):
-            raise ValueError(f"head must be a finite field of shape {self.shape}")
-        if rate is None:
-            raise RuntimeError("Accepted solve metadata lacks drn_discharge_rate_array")
-        rate = np.asarray(rate, dtype=np.float64)
-        if rate.shape != self.shape or not np.all(np.isfinite(rate)) or np.any(rate < 0.0):
-            raise ValueError(f"drn_discharge_rate_array must be a finite nonnegative field of shape {self.shape}")
-        from DARCY_WARP_PACKAGE.physics.drn_riv_3d import drn_terms
-        derived = drn_terms(head=accepted, conductance=self._session.drn_conductance,
-            elevation=self._session.drn_elevation).discharge
-        if not np.allclose(derived, rate, rtol=1e-12, atol=1e-12):
-            raise ValueError("Accepted DRN rates do not match the supplied head and current package fields")
-        return rate.copy()
+        rate = self._verify_accepted_state(head=head, info=info, package="drn")
+        if np.any(rate < 0.0):
+            raise ValueError("drn_discharge_rate_array must be nonnegative")
+        return rate
 
     def accepted_riv_discharge(self, *, head, info) -> np.ndarray:
         """Return signed per-cell RIV exchange from a verified accepted solve.
@@ -462,27 +486,11 @@ class WarpDarcySolver3D:
         :param info: Converged solve metadata containing accepted per-cell RIV rates.
         :return: Owned (nz, ny, nx) rates, positive out of the aquifer.
         :raises RuntimeError: If RIV is disabled or the solve state is not accepted.
-        :raises ValueError: If the head or rate array is malformed or inconsistent.
+        :raises ValueError: If the head or rate array is malformed or unrelated.
         """
-        if self._session is None or self._session.riv_conductance is None:
+        if self._session.riv_conductance is None:
             raise RuntimeError("RIV fields have not been built")
-        if not isinstance(info, dict) or not info.get("converged", False):
-            raise RuntimeError("Accepted RIV discharge requires a converged solve")
-        accepted = np.asarray(head, dtype=np.float64)
-        rate = info.get("riv_discharge_rate_array")
-        if accepted.shape != self.shape or not np.all(np.isfinite(accepted)):
-            raise ValueError(f"head must be a finite field of shape {self.shape}")
-        if rate is None:
-            raise RuntimeError("Accepted solve metadata lacks riv_discharge_rate_array")
-        rate = np.asarray(rate, dtype=np.float64)
-        if rate.shape != self.shape or not np.all(np.isfinite(rate)):
-            raise ValueError(f"riv_discharge_rate_array must be a finite field of shape {self.shape}")
-        from DARCY_WARP_PACKAGE.physics.drn_riv_3d import riv_terms
-        derived = riv_terms(head=accepted, conductance=self._session.riv_conductance,
-            stage=self._session.riv_stage, bottom=self._session.riv_bottom).discharge
-        if not np.allclose(derived, rate, rtol=1e-12, atol=1e-12):
-            raise ValueError("Accepted RIV rates do not match the supplied head and current package fields")
-        return rate.copy()
+        return self._verify_accepted_state(head=head, info=info, package="riv")
 
     def _validated_K_fields(self, *, kx_field, ky_field, kz_field, require_nonnegative=True):
         fields = tuple(floating_field(value=value, name=name, dtype=np.float64) for name, value in

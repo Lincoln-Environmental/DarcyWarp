@@ -187,7 +187,18 @@ def physical_row_metrics_base(i:int,head:wp.array(dtype=wp.float64),source:wp.ar
     right:wp.array2d(dtype=wp.int32),flux:wp.array2d(dtype=wp.float64),conductance:wp.array2d(dtype=wp.float64),
     scale:wp.array(dtype=wp.float64),residual:wp.array(dtype=wp.float64),rhs:wp.array(dtype=wp.float64),
     storage:wp.array(dtype=wp.float64),storage_tangent:wp.array(dtype=wp.float64),
-    ghb_flow:wp.float64,ghb_conductance:wp.float64):
+    q_ghb:wp.float64,q_drn:wp.float64,q_riv:wp.float64,boundary_c:wp.float64):
+    """Assemble one physical row with per-package gross exchange accounting.
+
+    The residual uses the signed boundary sum while inflow and outflow keep
+    every package contribution separate, so opposing exchanges cannot mask
+    local equation errors in the throughput metrics.
+
+    :param q_ghb: Signed GHB exchange, positive into the aquifer.
+    :param q_drn: Signed DRN exchange, positive into the aquifer.
+    :param q_riv: Signed RIV exchange, positive into the aquifer.
+    :param boundary_c: Combined active boundary tangent for the row diagonal.
+    """
     metrics = NPFRowMetrics(wp.float64(0.))
     invalid=not wp.isfinite(head[i]) or ((free[i]!=0 or fixed[i]!=0) and wp.abs(head[i])>=wp.float64(1e20)) or not wp.isfinite(scale[i]) or scale[i]<=wp.float64(0.)
     for axis in range(3):
@@ -208,10 +219,10 @@ def physical_row_metrics_base(i:int,head:wp.array(dtype=wp.float64),source:wp.ar
             q=-flux[j,axis];divergence+=q;diagonal+=conductance[j,axis]
             if fixed[j]!=0:
                 inflow+=wp.max(-q,wp.float64(0.));outflow+=wp.max(q,wp.float64(0.))
-    diagonal+=storage_tangent[i]+ghb_conductance
-    r=source[i]-divergence-storage[i]-ghb_flow
-    inflow+=wp.max(-ghb_flow,wp.float64(0.))
-    outflow+=wp.max(ghb_flow,wp.float64(0.))
+    diagonal+=storage_tangent[i]+boundary_c
+    r=source[i]-divergence-storage[i]-q_ghb-q_drn-q_riv
+    inflow+=wp.max(-q_ghb,wp.float64(0.))+wp.max(-q_drn,wp.float64(0.))+wp.max(-q_riv,wp.float64(0.))
+    outflow+=wp.max(q_ghb,wp.float64(0.))+wp.max(q_drn,wp.float64(0.))+wp.max(q_riv,wp.float64(0.))
     equivalent=wp.float64(0.)
     if diagonal>wp.float64(0.):equivalent=r/diagonal
     elif r!=wp.float64(0.):equivalent=wp.float64(wp.inf)
@@ -232,7 +243,7 @@ def physical_row_metrics(i:int,head:wp.array(dtype=wp.float64),source:wp.array(d
     scale:wp.array(dtype=wp.float64),residual:wp.array(dtype=wp.float64),rhs:wp.array(dtype=wp.float64),
     storage:wp.array(dtype=wp.float64),storage_tangent:wp.array(dtype=wp.float64)):
     return physical_row_metrics_base(i,head,source,free,fixed,left,right,flux,conductance,
-        scale,residual,rhs,storage,storage_tangent,wp.float64(0.),wp.float64(0.))
+        scale,residual,rhs,storage,storage_tangent,wp.float64(0.),wp.float64(0.),wp.float64(0.),wp.float64(0.))
 
 
 @wp.func
@@ -337,7 +348,7 @@ def physical_rows_ghb(head:wp.array(dtype=wp.float64),source:wp.array(dtype=wp.f
     i=wp.tid()
     q=ghb_flow_at(i,head,ghb_conductance,ghb_head)
     values=physical_row_metrics_base(i,head,source,free,fixed,left,right,flux,conductance,
-        scale,residual,rhs,storage,storage_tangent,q,ghb_conductance[i])
+        scale,residual,rhs,storage,storage_tangent,q,wp.float64(0.),wp.float64(0.),ghb_conductance[i])
     for metric in range(9):
         if values[metric]!=wp.float64(0.):wp.atomic_add(metrics,i/block_size,metric,values[metric])
 
@@ -394,7 +405,8 @@ def physical_rows_drn_riv(head:wp.array(dtype=wp.float64), source:wp.array(dtype
     boundary_tangent[i] = combined_tangent
     operator_tangent[i] = storage_tangent[i] + combined_tangent
     values = physical_row_metrics_base(i, head, source, free, fixed, left, right, flux, conductance,
-        scale, residual, rhs, storage, storage_tangent, combined_flow, combined_tangent)
+        scale, residual, rhs, storage, storage_tangent,
+        ghb_flow, drain[0], river[0], combined_tangent)
     for metric in range(9):
         if values[metric] != wp.float64(0.0):
             wp.atomic_add(metrics, i / block_size, metric, values[metric])
@@ -452,7 +464,8 @@ def physical_rows_drn_riv_tiled(head:wp.array(dtype=wp.float64), source:wp.array
     boundary_tangent[i] = combined_tangent
     operator_tangent[i] = storage_tangent[i] + combined_tangent
     values = physical_row_metrics_base(i, head, source, free, fixed, left, right, flux, conductance,
-        scale, residual, rhs, storage, storage_tangent, combined_flow, combined_tangent)
+        scale, residual, rhs, storage, storage_tangent,
+        ghb_flow, drain[0], river[0], combined_tangent)
     for metric in range(9):
         wp.tile_store(metrics, wp.tile_sum(wp.tile(values[metric])), offset=(i / block_size) * 9 + metric)
 
@@ -556,7 +569,7 @@ def physical_rows_ghb_tiled(head:wp.array(dtype=wp.float64),source:wp.array(dtyp
     i=wp.tid()
     q=ghb_flow_at(i,head,ghb_conductance,ghb_head)
     values=physical_row_metrics_base(i,head,source,free,fixed,left,right,flux,conductance,
-        scale,residual,rhs,storage,storage_tangent,q,ghb_conductance[i])
+        scale,residual,rhs,storage,storage_tangent,q,wp.float64(0.),wp.float64(0.),ghb_conductance[i])
     for metric in range(9):
         wp.tile_store(metrics,wp.tile_sum(wp.tile(values[metric])),offset=(i/block_size)*9+metric)
 
@@ -566,6 +579,39 @@ def ghb_diagonal(storage:wp.array(dtype=wp.float64),conductance:wp.array(dtype=w
     result:wp.array(dtype=wp.float64)):
     i=wp.tid()
     result[i]=storage[i]+conductance[i]
+
+
+@wp.kernel
+def previous_restraint_diagonal(storage_tangent:wp.array(dtype=wp.float64),
+    ghb_c:wp.array(dtype=wp.float64), drn_c:wp.array(dtype=wp.float64),
+    drn_elevation:wp.array(dtype=wp.float64), riv_c:wp.array(dtype=wp.float64),
+    riv_stage:wp.array(dtype=wp.float64), riv_bottom:wp.array(dtype=wp.float64),
+    previous:wp.array(dtype=wp.float64), has_ghb:int, result:wp.array(dtype=wp.float64)):
+    """Combine every previous-state restraint into one preconditioner diagonal.
+
+    Systems constrained only by an active drain or a connected river must keep
+    a nonsingular approximate preconditioner without touching the physical
+    residual or Newton Jacobian.
+
+    :param storage_tangent: Storage tangent at the previous state.
+    :param ghb_c: Integrated GHB conductances.
+    :param drn_c: Integrated drain conductances.
+    :param drn_elevation: Drain elevations.
+    :param riv_c: Integrated river conductances.
+    :param riv_stage: River stages.
+    :param riv_bottom: Riverbed bottoms.
+    :param previous: Previous accepted heads used to test branch activation.
+    :param has_ghb: One when GHB arrays carry real fields.
+    :param result: Combined previous-state restraint diagonal, written in place.
+    :return: None; ``result`` is modified in place.
+    """
+    i=wp.tid()
+    tangent = storage_tangent[i]
+    if has_ghb != 0:
+        tangent = tangent + ghb_c[i]
+    drain = drn_flow_pair(previous[i], drn_c[i], drn_elevation[i])
+    river = riv_flow_pair(previous[i], riv_c[i], riv_stage[i], riv_bottom[i])
+    result[i] = tangent + drain[1] + river[1]
 
 
 @wp.kernel

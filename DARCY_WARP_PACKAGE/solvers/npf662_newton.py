@@ -80,9 +80,13 @@ class NPF662Workspace:
         self.multigrid=None;self.flexible=None;self.krylov=None;self.diagonal_flexible=None
         self.commit_graph=None;self.commit_graph_failed=False;self.reuse_trial_state=False
         self.ghb_conductance = self.ghb_head = self.ghb_totals = None
-        self.ghb_operator = self.trial_ghb_operator = self.previous_ghb_operator = None
+        self.ghb_operator = self.trial_ghb_operator = None
         self.has_drn_riv = case.drn_conductance is not None or case.riv_conductance is not None
         self.zero = wp.zeros(shape=self.n, dtype=wp.float64, device=self.device)
+        # Combined previous-state restraint diagonal shared by GHB-only and
+        # DRN/RIV workspaces; singular boundary-dominated rows stay nonsingular.
+        self.previous_ghb_operator = wp.zeros(shape=self.n, dtype=wp.float64, device=self.device)
+        self.activation_head = wp.zeros(shape=self.n, dtype=wp.float64, device=self.device)
         self.package_totals = None
         self.boundary_operator = self.trial_boundary_operator = None
         self.boundary_flow = self.trial_boundary_flow = None
@@ -158,7 +162,7 @@ class NPF662Workspace:
                 wp.array(data=anchors.ravel(), dtype=wp.float64, device=self.device))
             self.anchor_revision = model._session.operator_revision
         if conductance is not None and self.ghb_conductance is None:
-            for name in ('ghb_conductance', 'ghb_head', 'ghb_operator', 'trial_ghb_operator', 'previous_ghb_operator'):
+            for name in ('ghb_conductance', 'ghb_head', 'ghb_operator', 'trial_ghb_operator'):
                 setattr(self, name, wp.zeros(shape=self.n, dtype=wp.float64, device=self.device))
             self.ghb_totals = wp.zeros(shape=2, dtype=wp.float64, device=self.device)
             # Existing captured matvec/commit graphs reference the old diagonal.
@@ -217,6 +221,8 @@ class NPF662Workspace:
             for name in ('storage_rate','storage_tangent','trial_storage_rate','trial_storage_tangent'):
                 getattr(self,name).zero_()
             self.previous_storage_tangent.zero_()
+            # Steady solves test boundary activation at the initial guess.
+            wp.copy(dest=self.storage_previous, src=self.head)
         self.refresh_previous_operator()
         self.maximum.zero_()
         wp.launch(kernel=kernels.previous_storage_scale,dim=self.n,
@@ -233,12 +239,39 @@ class NPF662Workspace:
 
     @property
     def previous_operator_tangent(self):
-        return self.previous_storage_tangent if self.ghb_conductance is None else self.previous_ghb_operator
+        """Combined previous-state restraint diagonal for approximate solves."""
+        if self.ghb_conductance is not None or self.has_drn_riv:
+            return self.previous_ghb_operator
+        return self.previous_storage_tangent
 
-    def refresh_previous_operator(self):
-        if self.ghb_conductance is not None:
-            wp.launch(kernel=kernels.ghb_diagonal, dim=self.n,
-                inputs=[self.previous_storage_tangent,self.ghb_conductance,self.previous_ghb_operator],device=self.device)
+    def refresh_previous_operator(self, *, activation_head=None):
+        """Rebuild the previous-state diagonal from storage, GHB, DRN and RIV.
+
+        DRN and RIV derivatives are evaluated at the previous accepted heads so
+        boundary-dominated systems never produce a singular preconditioner.
+        Changing activation is picked up by every refresh, including each
+        accepted step and each rebuilt workspace. A seeded activation head may
+        be supplied when the Newton guess crosses a threshold the previous
+        state has not yet reached.
+
+        :param activation_head: Optional replacement heads for the branch tests.
+        :return: None.
+        """
+        if self.ghb_conductance is not None or self.has_drn_riv:
+            if activation_head is None:
+                wp.copy(dest=self.activation_head, src=self.storage_previous)
+            else:
+                wp.copy(dest=self.activation_head, src=activation_head)
+            has_ghb = int(self.ghb_conductance is not None)
+            wp.launch(kernel=kernels.previous_restraint_diagonal, dim=self.n,
+                inputs=[self.previous_storage_tangent,
+                    self.ghb_conductance if has_ghb else self.zero,
+                    self.drn_conductance if self.has_drn_riv else self.zero,
+                    self.drn_elevation if self.has_drn_riv else self.zero,
+                    self.riv_conductance if self.has_drn_riv else self.zero,
+                    self.riv_stage if self.has_drn_riv else self.zero,
+                    self.riv_bottom if self.has_drn_riv else self.zero,
+                    self.activation_head, has_ghb, self.previous_ghb_operator], device=self.device)
 
     def boundary_budget(self):
         result = dict(ghb_inflow=0.,ghb_outflow=0.,ghb_net=0.,
@@ -431,6 +464,7 @@ class NPF662Workspace:
         self.commit_graph=None
         self._native_state = self._faces_snapshot = self._types_snapshot = None
         self.principal = self.previous_storage_tangent = None
+        self.activation_head = None
         self.ghb_conductance = self.ghb_head = self.ghb_totals = None
         self.ghb_operator = self.trial_ghb_operator = self.previous_ghb_operator = None
         self.drn_conductance = self.drn_elevation = None
@@ -457,6 +491,38 @@ def device_accepted(*,metrics,physical_tolerance=1e-12,relative_tolerance=1e-8):
             (metrics['physical_rms']<=1e-12 or metrics['relative_cell_imbalance']<=1e-8) and metrics['roundoff_accepted'])
     return metrics['finite'] and valid and metrics['head_residual_rms']<=1e-6 and (
         metrics['physical_rms']<=physical_tolerance or metrics['relative_cell_imbalance']<=relative_tolerance)
+
+
+def accepted_state_identity(*, session, head, dt=None):
+    """Bind accepted package exchange to the state that produced it.
+
+    Inactive drains and disconnected rivers return identical fluxes for many
+    different groundwater heads, so per-cell rates are tied to immutable
+    digests of the accepted head and boundary fields plus the owning session
+    revisions instead of being re-derived against later model state.
+
+    :param session: The operator session owning the accepted solve inputs.
+    :param head: Accepted groundwater head grid.
+    :param dt: Optional accepted timestep duration.
+    :return: Mapping of revisions, digests and transient metadata.
+    """
+    import hashlib
+    def digest(field):
+        if field is None:
+            return None
+        return hashlib.sha256(np.ascontiguousarray(field, dtype=np.float64).tobytes()).hexdigest()
+    return dict(
+        revision=int(session.revision),
+        operator_revision=int(session.operator_revision),
+        topology_revision=int(session.topology_revision),
+        head_sha256=digest(np.asarray(head, dtype=np.float64)),
+        drn_conductance_sha256=digest(session.drn_conductance),
+        drn_elevation_sha256=digest(session.drn_elevation),
+        riv_conductance_sha256=digest(session.riv_conductance),
+        riv_stage_sha256=digest(session.riv_stage),
+        riv_bottom_sha256=digest(session.riv_bottom),
+        dt=None if dt is None else float(dt),
+    )
 
 
 def residual_merit(*,candidate,current):
@@ -538,7 +604,7 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
             and not workspace.multigrid.closed and workspace.multigrid.controls == mg_controls
             and not workspace.faces_changed)
         storage_diagonal = None if direct_refresh else getattr(reference,'preconditioner_storage',None)
-        if not direct_refresh and workspace.ghb_conductance is not None:
+        if not direct_refresh and (workspace.ghb_conductance is not None or workspace.has_drn_riv):
             storage_diagonal=workspace.previous_operator_tangent.numpy().reshape(case.active.shape)
         mg_reused=direct_refresh or (workspace.multigrid is not None and workspace.multigrid.compatible(
             faces=model._session.faces,active=case.active,fixed=case.fixed,device=model.device,controls=mg_controls,
@@ -717,6 +783,9 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
             outflow=ghb_budget['riv_outflow'], net=ghb_budget['riv_net'])
         result['drn_discharge_rate_array'] = workspace.drn_rate.numpy().reshape(case.active.shape).copy()
         result['riv_discharge_rate_array'] = workspace.riv_rate.numpy().reshape(case.active.shape).copy()
+        accepted_head = workspace.head.numpy().reshape(case.active.shape) if head is None else head
+        result['accepted_state'] = accepted_state_identity(session=model._session,
+            head=accepted_head, dt=float(reference.dt) if workspace.transient else None)
     result['krylov_workspace_reused']=krylov_reused
     result['npf_preconditioner']=npf_preconditioner
     result.update(accepted_updates=sum(row['accepted'] for row in history),
