@@ -94,12 +94,14 @@ def read_profiles(*, root):
     native = {}
     for label, path, name in (
         ('steady_confined', truth_path, 'make_mf_model'),
-        ('transient', transient_truth_path, 'run_mf6_transient'),
+        ('transient', transient_truth_path, '_write_transient_reference'),
         ('steady_unconfined', unconfined_path, '_build_and_run_mf6'),
     ):
         function = read_function(path=path, name=name)
         candidates = [node for node in ast.walk(node=function) if isinstance(node, ast.Call)
                       and isinstance(node.func, ast.Attribute) and node.func.attr == 'ModflowIms']
+        if not candidates:
+            raise ValueError(f'Missing ModflowIms configuration in {path.name}.{name}')
         call = candidates[0]
         native[label] = call_keywords(node=call, bindings=literal_bindings(node=function))
         if len(native[label]) != len(call.keywords):
