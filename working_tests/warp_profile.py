@@ -1,15 +1,22 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+"""Collect raw Warp GPU activity timing and summarise kernel bottlenecks."""
+
 from __future__ import annotations
 
 import re
 from collections import defaultdict
 from pathlib import Path
 import csv
-import time
 
 import warp as wp
 
 
 def _clean_kernel_name(activity_name: str) -> str:
+    """Normalise Warp timing names across generated kernel variants.
+
+    :param activity_name: Raw name recorded by the Warp timing API.
+    :returns: Name without standard forward/backward suffixes or build hash.
+    """
     # Examples seen in Warp timing:
     # "forward kernel inc_loop"
     # "get_acceleration_a9fb4286_cuda_kernel_forward"
@@ -33,6 +40,11 @@ def _clean_kernel_name(activity_name: str) -> str:
 
 
 def _filter_label(filter_value: int) -> str:
+    """Translate a Warp activity filter into a readable category.
+
+    :param filter_value: Integer activity filter returned by Warp.
+    :returns: Category name, or the original numeric filter if unknown.
+    """
     if filter_value == wp.TIMING_KERNEL:
         return "kernel"
     if filter_value == wp.TIMING_KERNEL_BUILTIN:
@@ -47,6 +59,12 @@ def _filter_label(filter_value: int) -> str:
 
 
 def print_warp_bottlenecks(results: list[wp.TimingResult], indent: str = "", top_k: int = 30) -> None:
+    """Print activity durations, device breakdowns and the longest-running kernels.
+
+    :param results: Raw Warp timing records, with elapsed time in milliseconds.
+    :param indent: Leading indentation for printed lines.
+    :param top_k: Maximum number of kernel rows to display.
+    """
     # Aggregate totals
     total_ms = 0.0
     by_filter_ms = defaultdict(float)
@@ -80,21 +98,22 @@ def print_warp_bottlenecks(results: list[wp.TimingResult], indent: str = "", top
     print(f"{indent}Total recorded GPU time: {total_ms:.3f} ms")
 
     print(f"{indent}\n{indent}By activity type:")
-    for key in sorted(by_filter_ms.keys(), key=lambda k: by_filter_ms[k], reverse=True):
+    for key in sorted(by_filter_ms.keys(), key=by_filter_ms.__getitem__, reverse=True):
         ms = by_filter_ms[key]
         pct = 0.0 if total_ms <= 0.0 else 100.0 * ms / total_ms
         cnt = by_filter_count[key]
         print(f"{indent}  {key:8s}  {ms:12.3f} ms  {pct:6.2f}%  (count={cnt})")
 
     print(f"{indent}\n{indent}By device:")
-    for dev in sorted(by_device_ms.keys(), key=lambda d: by_device_ms[d], reverse=True):
+    for dev in sorted(by_device_ms.keys(), key=by_device_ms.__getitem__, reverse=True):
         ms = by_device_ms[dev]
         pct = 0.0 if total_ms <= 0.0 else 100.0 * ms / total_ms
         print(f"{indent}  {dev:8s}  {ms:12.3f} ms  {pct:6.2f}%")
 
     # Top kernels
     print(f"{indent}\n{indent}Top kernels (kernel + builtin) by total GPU time:")
-    items = sorted(by_kernel_ms.items(), key=lambda kv: kv[1], reverse=True)
+    items = [(name, by_kernel_ms[name]) for name in
+             sorted(by_kernel_ms, key=by_kernel_ms.__getitem__, reverse=True)]
     for i, (kname, ms) in enumerate(items[:top_k], start=1):
         pct = 0.0 if total_ms <= 0.0 else 100.0 * ms / total_ms
         cnt = by_kernel_count[kname]
@@ -106,6 +125,13 @@ def profile_one_solve(
     out_csv: Path | None = None,
     warmup_runs: int = 1,
 ) -> list[wp.TimingResult]:
+    """Profile a callable after warming its runtime and optionally write raw events.
+
+    :param solve_callable: Zero-argument callable executing one complete solve.
+    :param out_csv: Optional output path for raw timing records.
+    :param warmup_runs: Number of untimed runs before collecting activity.
+    :returns: Warp timing records in the order supplied by its timing API.
+    """
     # Warmup to exclude JIT compilation and first time allocations
     for _ in range(warmup_runs):
         solve_callable()
@@ -118,7 +144,7 @@ def profile_one_solve(
     print_warp_bottlenecks(results, indent="", top_k=30)
 
     if out_csv is not None:
-        out_csv.parent.mkdir(exist_ok=True)
+        out_csv.parent.mkdir(parents=True, exist_ok=True)
         with out_csv.open("w", newline="") as f:
             writer = csv.writer(f)
             writer.writerow(["device", "filter", "filter_label", "name", "clean_name", "elapsed_ms"])

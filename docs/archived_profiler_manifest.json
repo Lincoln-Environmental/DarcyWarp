@@ -1,0 +1,26 @@
+{
+  "source_commit": "49d437e3c79e2bc63cd03474824fe10691bd42cf",
+  "description": "Original generated profiling files, retained in Git history. Not required by runtime solvers or tests.",
+  "files": [
+    {
+      "path": "DARCY_WARP_PACKAGE/profiles/darcy_kcycle.qdrep",
+      "git_blob_sha": "763ebbd1e9bfe52a8d92d20de6f5e546a3b0029b",
+      "size_bytes": 6605141
+    },
+    {
+      "path": "DARCY_WARP_PACKAGE/profiles/darcy_kcycle.qdstrm",
+      "git_blob_sha": "3df39e7450aaba47339543fa7824b740541c9b42",
+      "size_bytes": 37627114
+    },
+    {
+      "path": "DARCY_WARP_PACKAGE/profiles/darcy_kcycle.sqlite",
+      "git_blob_sha": "001ed24b0f317115da324b0399dbda5ed3b2f0cc",
+      "size_bytes": 21442560
+    },
+    {
+      "path": "DARCY_WARP_PACKAGE/profiles/darcy_warp_timing.csv",
+      "git_blob_sha": "0d4b5dd2e39af5ae116b61a727a09383c4694891",
+      "size_bytes": 224434
+    }
+  ]
+}

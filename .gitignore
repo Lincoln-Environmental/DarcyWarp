@@ -21,3 +21,9 @@ build/
 
 # Generated example and benchmark outputs
 outputs/
+
+# Generated profiler traces
+DARCY_WARP_PACKAGE/profiles/
+*.qdrep
+*.qdstrm
+*.nsys-rep

@@ -277,3 +277,29 @@ SHA-256; a cached head reference without listing provenance or a changed listing
 is reported as unavailable for budget comparison. The archived budget JSON and
 CSV remain available for reproducing the paper tables. There is no separate GPU
 mass-balance-only driver.
+
+Profiling
+---------
+
+Use the instrumentation in the working_tests directory for benchmark
+diagnostics; the importable solver package does not contain profiling
+products. The launch profiler measures event timing and readback counts.
+The raw Warp timing helper in working_tests/warp_profile.py reports activity
+durations and can write a CSV to an explicitly supplied output path.
+
+Historical profiling products are preserved at Git commit
+``49d437e3c79e2bc63cd03474824fe10691bd42cf``, with their original paths, byte
+counts and Git blob IDs recorded in ``docs/archived_profiler_manifest.json``.
+To retrieve one of the original files from a full checkout:
+
+.. code-block:: bash
+
+   mkdir -p outputs/profiles
+   git show 49d437e3c79e2bc63cd03474824fe10691bd42cf:DARCY_WARP_PACKAGE/profiles/darcy_kcycle.sqlite > outputs/profiles/darcy_kcycle.sqlite
+   git hash-object outputs/profiles/darcy_kcycle.sqlite
+
+The hash should be ``001ed24b0f317115da324b0399dbda5ed3b2f0cc``.
+Use the same procedure for the other manifest entries. These are archival
+measurements; reproduce current performance on the target CUDA device instead
+of interpreting the original data as current benchmarks. A full Git clone
+still contains the original objects; no repository history has been rewritten.
