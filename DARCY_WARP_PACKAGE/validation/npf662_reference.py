@@ -100,10 +100,17 @@ def digest_with_boundary_entries(*, digest, case):
     :param case: Case owning optional ``drn_entries``/``riv_entries``.
     :return: The same digest with entry cells, conductances and levels mixed in.
     """
+    from DARCY_WARP_PACKAGE.physics.drn_riv_3d import BoundaryEntryList, validate_boundary_entries
     for name in ('drn_entries', 'riv_entries'):
         entries = getattr(case, name, None)
         if entries is None:
             continue
+        if not isinstance(entries, BoundaryEntryList):
+            package = 'DRN' if name == 'drn_entries' else 'RIV'
+            entries = validate_boundary_entries(entries=entries, package=package,
+                shape=case.active.shape, active=case.active, fixed=case.fixed)
+            if entries is None:
+                continue
         digest.update(name.encode())
         digest.update(np.ascontiguousarray(entries.cells, dtype=np.int64).tobytes())
         digest.update(np.ascontiguousarray(entries.conductance, dtype=np.float64).tobytes())

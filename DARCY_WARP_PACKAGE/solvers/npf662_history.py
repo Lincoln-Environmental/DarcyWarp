@@ -18,6 +18,7 @@ from .npf662_3d import case_from_model
 from .npf662_newton import NPF662NewtonControls, solve_newton_device
 from .npf662_kcycle import NPF662KCycleControls
 from . import npf662_kernels as kernels
+from DARCY_WARP_PACKAGE.physics.wel import well_cell_volume_rates
 from DARCY_WARP_PACKAGE.validation.npf662_transient_reference import NPF662TransientReference, storage_previous_heads
 
 
@@ -168,7 +169,6 @@ class HistorySources:
 
         :param index: Requested step.
         """
-        from DARCY_WARP_PACKAGE.physics.wel import well_cell_volume_rates
         source = self.base * self.factors[index]
         if self.rates is not None:
             rate = self.rate_at(index)
