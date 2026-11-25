@@ -78,6 +78,9 @@ class NPF662TransientState:
             raise ValueError('Convertible GHB head below cell bottom is invalid for MF6 6.6.2')
         self.case = case
         self._session = model._session
+        self._model = model
+        self._case_top = float(getattr(case, 'top', 0.))
+        self._case_cell_type = case.cell_type
         if not self.refresh_count:
             self.free = (case.active != 0)&(case.fixed == 0)
         self.dt = float(dt)
@@ -124,13 +127,16 @@ class NPF662TransientState:
         """Snapshot every solver-owned input the independent audit may read.
 
         ``case_from_model`` aliases live session arrays for the source,
-        prescribed values and boundary fields. The audit must stay valid for
-        the accepted state even after later model updates, so this snapshot is
-        rebuilt whenever a session revision changes and always owns copies.
+        prescribed values and boundary fields, and update methods replace
+        those arrays with new objects, so a stale case would carry discarded
+        values. The snapshot is therefore rebuilt from the live session
+        whenever a session revision changes and always owns copies.
         """
         revisions = self._input_revisions()
         if self._audit_case is None or revisions != self._audit_revisions:
-            case = self.case
+            from DARCY_WARP_PACKAGE.solvers.npf662_3d import case_from_model
+            case = case_from_model(model=self._model, top=self._case_top,
+                cell_type=self._case_cell_type)
             frozen_inputs = ('source', 'values', 'initial', 'kx', 'ky', 'kz',
                 'ghb_conductance', 'ghb_head', 'drn_conductance', 'drn_elevation', 'drn_mask',
                 'riv_conductance', 'riv_stage', 'riv_bottom', 'riv_mask', 'cell_type')

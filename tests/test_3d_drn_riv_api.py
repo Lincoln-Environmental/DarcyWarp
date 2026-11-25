@@ -356,3 +356,52 @@ def test_transient_history_integrates_only_accepted_drn_volumes(device):
     assert info["periods"][0]["drn_volume_budget"]["outflow"] == 1.0
     assert info["periods"][1]["drn_volume_budget"]["outflow"] == 1.5
     assert info["accepted_exchange_volume_totals"]["drn"]["outflow"] == 2.5
+
+
+def test_transient_state_audit_owns_accepted_inputs(device="cpu"):
+    """Independent audits stay bound to the accepted state after updates.
+
+    The transient state's cached reference must keep using an owned snapshot
+    of the accepted inputs, so later source, well or boundary updates and
+    in-place array mutation cannot silently re-anchor historical fluxes.
+    """
+    import warp as wp
+
+    shape = (1, 1, 1)
+    with WarpDarcySolver3D(nx=1, ny=1, nz=1, dx=1.0, dy=1.0, dz=10.0,
+            device=device, implementation="fast", formulation="mf6_6_6_2_npf") as model:
+        model.build_from_K_fields(kx_field=np.ones(shape), ky_field=np.ones(shape),
+            kz_field=np.ones(shape), active=np.ones(shape, dtype=np.int32),
+            bc_mask=np.zeros(shape, dtype=np.int32), bc_values=np.zeros(shape),
+            rhs=np.full(shape, 1.0), drn_conductance=1.0, drn_elevation=2.0,
+            initial_head=np.zeros(shape))
+        head, info = model.solve(transient=True, dt=1.0, head_prev=np.zeros(shape),
+            ss=1.0, sy=0.0, npf_device_native=True, max_outer=50, max_cycles=100)
+        assert info["converged"]
+        state = model._session._npf662_workspace_holder["native_state"]
+        audit_before = state.independent()
+        checks_before, unused = audit_before.evaluate(head=head)
+        # In-place mutation without a revision bump cannot re-anchor the
+        # audit: its case snapshot owns copies of the accepted inputs.
+        model._session.rhs[...] = -123.0
+        model._session.drn_conductance[...] = 9.0
+        audit_after = state.independent()
+        assert audit_after is audit_before
+        checks_after, unused = audit_after.evaluate(head=head)
+        assert checks_after["physical_rms"] == pytest.approx(
+            checks_before["physical_rms"])
+        case = audit_after.case
+        assert float(case.source.ravel()[0]) == pytest.approx(1.0)
+        assert float(np.asarray(case.drn_conductance).ravel()[0]) == pytest.approx(1.0)
+        # Revision-bumping updates rebuild the audit against the new inputs:
+        # the state tracks the current accepted solve, while per-period
+        # history diagnostics carry their own accepted-state tokens.
+        model.update_rhs(np.full(shape, 50.0))
+        model.update_drn(drn_conductance=4.0, drn_elevation=2.0)
+        audit_next = state.independent()
+        assert audit_next is not audit_after
+        assert float(np.asarray(audit_next.case.source).ravel()[0]) == pytest.approx(50.0)
+        assert float(np.asarray(audit_next.case.drn_conductance).ravel()[0]) == pytest.approx(4.0)
+        head, info = model.solve(transient=True, dt=1.0, head_prev=head,
+            ss=1.0, sy=0.0, npf_device_native=True, max_outer=50, max_cycles=100)
+        assert info["converged"]

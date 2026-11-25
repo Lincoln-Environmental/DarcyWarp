@@ -1,33 +1,66 @@
 {
   "device": "cuda:0",
   "grids": {
+    "large": {
+      "cells": 1012500,
+      "construction_seconds": 0.2653898720018333,
+      "drn_entries": 16688,
+      "history_accepted_steps": 20,
+      "history_converged": true,
+      "history_seconds": 11.574281097011408,
+      "history_steps": 20,
+      "krylov_iterations": 97524,
+      "mempool_high_water_bytes": 1380496972,
+      "newton_iterations": 68,
+      "preconditioner": "diagonal",
+      "pumping_update_seconds": 100.68920474698825,
+      "riv_entries": 224,
+      "shape": [
+        5,
+        450,
+        450
+      ],
+      "stage_update_seconds": 100.01164085000346,
+      "steady_best_seconds": 179.14132906799205,
+      "steady_solve_seconds": [
+        301.90535633600666,
+        179.3106603759952,
+        179.14132906799205
+      ],
+      "total_seconds": 872.9665639160085,
+      "wel_budget": {
+        "inflow": 0.0,
+        "net": -4488000.0,
+        "outflow": 4488000.0
+      },
+      "wel_entries": 1632
+    },
     "small": {
       "cells": 100800,
-      "construction_seconds": 0.03521910699782893,
+      "construction_seconds": 0.0352,
       "drn_entries": 792,
       "history_accepted_steps": 20,
       "history_converged": true,
-      "history_seconds": 16.801192385988543,
+      "history_seconds": 16.801,
       "history_steps": 20,
       "krylov_iterations": 3216,
-      "mempool_high_water_bytes": 137439020,
       "newton_iterations": 9,
       "preconditioner": "diagonal",
-      "pumping_update_seconds": 0.8599719949997962,
+      "pumping_update_seconds": 0.86,
       "riv_entries": 44,
       "shape": [
         10,
         112,
         90
       ],
-      "stage_update_seconds": 1.4636637060029898,
-      "steady_best_seconds": 0.9695598439866444,
+      "stage_update_seconds": 1.4637,
+      "steady_best_seconds": 0.9696,
       "steady_solve_seconds": [
-        1.3125857490085764,
-        0.9695598439866444,
-        0.9990831890027039
+        1.3126,
+        0.9696,
+        0.9991
       ],
-      "total_seconds": 22.44736780600215,
+      "total_seconds": 22.447,
       "wel_budget": {
         "inflow": 0.0,
         "net": -231000.0,
