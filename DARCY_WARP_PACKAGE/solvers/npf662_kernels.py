@@ -176,6 +176,52 @@ def ghb_flow_at(i:int,head:wp.array(dtype=wp.float64),conductance:wp.array(dtype
 
 
 @wp.kernel
+def check_local_balance(head: wp.array(dtype=wp.float64), free: wp.array(dtype=wp.int32),
+                        fixed: wp.array(dtype=wp.int32), source: wp.array(dtype=wp.float64),
+                        left: wp.array2d(dtype=wp.int32), right: wp.array2d(dtype=wp.int32),
+                        flux: wp.array2d(dtype=wp.float64), conductance: wp.array2d(dtype=wp.float64),
+                        storage: wp.array(dtype=wp.float64), tangent: wp.array(dtype=wp.float64),
+                        residual: wp.array(dtype=wp.float64), has_ghb: int,
+                        ghb_c: wp.array(dtype=wp.float64), ghb_head: wp.array(dtype=wp.float64),
+                        component_anchor: wp.array(dtype=wp.float64), has_component_anchor: int,
+                        absolute_tolerance: wp.float64, relative_tolerance: wp.float64,
+                        failed: wp.array(dtype=wp.float64)):
+    i = wp.tid()
+    if free[i] == 0:
+        return
+    throughput = wp.abs(source[i]) + wp.abs(storage[i])
+    anchor = tangent[i]
+    roundoff = wp.float64(0.0)
+    eps = wp.float64(2.220446049250313e-16)
+    if has_ghb != 0:
+        anchor += ghb_c[i]
+        throughput += wp.abs(ghb_flow_at(i, head, ghb_c, ghb_head))
+    for axis in range(3):
+        for side in range(2):
+            j = right[i, axis]
+            owner = i
+            if side == 1:
+                j = left[i, axis]
+                owner = j
+            if j >= 0:
+                c = conductance[owner, axis]
+                q = flux[owner, axis]
+                throughput += wp.abs(q)
+                if fixed[j] != 0:
+                    anchor += c
+                if q != wp.float64(0.0):
+                    roundoff += (eps * wp.abs(head[i]) + eps * wp.abs(head[j])) * c
+    if has_component_anchor != 0 and component_anchor[i] > wp.float64(0.0):
+        anchor = tangent[i] + component_anchor[i]
+    allowance = wp.max(absolute_tolerance, relative_tolerance * throughput)
+    if anchor > wp.float64(0.0):
+        allowance = anchor * wp.float64(1.0e-6)
+    allowance += roundoff
+    if not wp.isfinite(allowance) or wp.abs(residual[i]) > allowance:
+        wp.atomic_max(failed, 0, wp.float64(1.0))
+
+
+@wp.kernel
 def physical_rows_ghb(head:wp.array(dtype=wp.float64),source:wp.array(dtype=wp.float64),
     free:wp.array(dtype=wp.int32),fixed:wp.array(dtype=wp.int32),left:wp.array2d(dtype=wp.int32),
     right:wp.array2d(dtype=wp.int32),flux:wp.array2d(dtype=wp.float64),conductance:wp.array2d(dtype=wp.float64),

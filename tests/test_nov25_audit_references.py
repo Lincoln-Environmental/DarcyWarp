@@ -159,3 +159,42 @@ def test_npf_native_device_reports_chd_budget(native_chd_case):
     np.testing.assert_array_equal(head, expected_head)
     assert info["chd_budget"]["chd_inflow"] == pytest.approx(np.maximum(native, 0.).sum(), abs=1.e-12)
     assert info["chd_budget"]["chd_outflow"] == pytest.approx(np.maximum(-native, 0.).sum(), abs=1.e-12)
+
+
+def test_2d_and_replay_chd_rates_match_native_cells(native_chd_case):
+    from DARCY_WARP_PACKAGE.physics.budgets_2d import compute_mass_balance_budget
+    from working_tests.transient_replay_mass_balance import compute_boundary_flux_terms
+
+    case, head, native = native_chd_case
+    args = dict(T_field=case.kx[0] * case.dz, head=head[0], active=case.active[0],
+                bc_mask=case.fixed[0], bc_values=case.values[0], dx=case.dx)
+    budget = compute_mass_balance_budget(**args, R_field=case.source[0]).iloc[0]
+    replay = compute_boundary_flux_terms(**args, recharge_rate=0.0)
+    gross = (np.maximum(native, 0.0).sum(), np.maximum(-native, 0.0).sum())
+    # The middle fixed cell passes 200 through each of its two faces with
+    # zero net package rate. Two adjacent fixed cells have no free faces.
+    free_rate = 0.0 if case.fixed.all() else 200.0
+    for row in (budget, replay):
+        np.testing.assert_allclose([row["chd_in"], row["chd_out"]], gross, atol=1e-9)
+        np.testing.assert_allclose([row["free_chd_in"], row["free_chd_out"]], free_rate, atol=1e-9)
+    assert budget["free_total_in"] == pytest.approx(free_rate + np.maximum(case.source, 0.0).sum())
+
+
+@pytest.mark.parametrize("location", ["startup", "later", "cumulative"])
+@pytest.mark.parametrize("invalid", [None, np.nan, np.inf, -np.inf, "absent"])
+def test_replay_requires_finite_mass_balance_at_every_period(location, invalid):
+    from working_tests.transient_replay_mass_balance import annotate_mass_balance_classification
+
+    rows = [dict(period=1, percent_discrepancy=0.0), dict(period=2, percent_discrepancy=0.0)]
+    cumulative = dict(percent_discrepancy=0.0)
+    record = {"startup": rows[0], "later": rows[1], "cumulative": cumulative}[location]
+    if invalid == "absent":
+        del record["percent_discrepancy"]
+    else:
+        record["percent_discrepancy"] = invalid
+    result = annotate_mass_balance_classification(dict(per_period=rows, cumulative=cumulative))
+    assert result["mass_balance_class"] == "fail"
+    assert result["mass_balance_passed"] is False
+    assert result["mass_balance_failures"]
+    if location != "cumulative":
+        assert record["mass_balance_class"] == "fail"

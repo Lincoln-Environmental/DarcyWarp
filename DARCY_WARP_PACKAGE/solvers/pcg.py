@@ -9,6 +9,7 @@ import numpy as np
 import warp as wp
 
 from .base import SolverContext
+from .convergence import steady_flow_tolerance
 
 
 class ConfinedPCGBackend:
@@ -63,18 +64,25 @@ def solve_pcg_device_loop(
     model._pcg_initialize_guess_and_upload(initial_head=initial_head)
     model._pcg_reset_work_vectors()
     dim = (ny, nx)
-    wp.launch(kernel=kernels.zero_scalar_kernel, dim=1, inputs=[model.rho_buf], device=device)
-    wp.launch(kernel=kernels.zero_scalar_kernel, dim=1, inputs=[model.rTr_buf], device=device)
-    wp.launch(
-        kernel=kernels.init_pcg_with_A_no_storage_kernel,
-        dim=dim,
-        inputs=[
-            model.x_wp, model.b_wp, model.T_wp, model.active_wp, model.bc_mask_wp,
-            model.gh_mask_wp, model.ghb_factor_wp, model.M_inv_wp, model.Ap_wp,
-            model.r_wp, model.z_wp, model.p_wp, model.rho_buf, model.rTr_buf, nx, ny,
-        ],
-        device=device,
-    )
+    def restart_from_head() -> float:
+        # Reuse the PCG initialisation kernel to check the stored head and,
+        # when recurrence drift is significant, start a fresh Krylov search.
+        model.rho_buf.zero_()
+        model.rTr_buf.zero_()
+        wp.launch(
+            kernel=kernels.init_pcg_with_A_no_storage_kernel,
+            dim=dim,
+            inputs=[
+                model.x_wp, model.b_wp, model.T_wp, model.active_wp, model.bc_mask_wp,
+                model.gh_mask_wp, model.ghb_factor_wp, model.M_inv_wp, model.Ap_wp,
+                model.r_wp, model.z_wp, model.p_wp, model.rho_buf, model.rTr_buf, nx, ny,
+            ],
+            device=device,
+        )
+        squared_norm = float(model.rTr_buf.numpy()[0])
+        return float(np.sqrt(squared_norm / max(model.n_active, 1)))
+
+    r_rms0_scaled = restart_from_head()
     wp.launch(
         kernel=kernels.enforce_constraints_kernel,
         dim=dim,
@@ -84,17 +92,19 @@ def solve_pcg_device_loop(
         ],
         device=device,
     )
-    r_tr0 = float(model.rTr_buf.numpy()[0])
-    r_rms0_scaled = (
-        float(np.sqrt(r_tr0 / float(model.n_active)))
-        if model.n_active > 0 and r_tr0 > 0.0
-        else 0.0
-    )
     r_rms0_phys = r_rms0_scaled * float(model.head_scale)
     abs_tol_scaled = float(abs_tol_min) / float(model.head_scale)
-    tol_abs_scaled = max(abs_tol_scaled, float(rel_tol) * r_rms0_scaled)
+    free = (model.active_host != 0) & (model.bc_mask_host == 0)
+    tol_abs_scaled = steady_flow_tolerance(
+        initial_rms=r_rms0_scaled, relative_tolerance=float(rel_tol),
+        absolute_tolerance=abs_tol_scaled, fine=model, free=free,
+    )
     n_iter_used = 0
-    converged = False
+    r_rms_final_scaled = r_rms0_scaled
+    converged = bool(np.isfinite(r_rms0_scaled) and r_rms0_scaled <= tol_abs_scaled)
+    residual_restarts = 0
+    iterate = model.x_wp
+    krylov_tol = tol_abs_scaled
     history_every_i = None if history_every is None else int(history_every)
     if history_every_i is not None and history_every_i <= 0:
         history_every_i = None
@@ -105,7 +115,7 @@ def solve_pcg_device_loop(
             "rms_res_phys": float(r_rms0_phys),
             "tol_abs_phys": float(tol_abs_scaled * float(model.head_scale)),
         })
-    for iteration in range(int(max_iter)):
+    for iteration in range(0 if converged else int(max_iter)):
         n_iter_used = iteration + 1
         wp.launch(kernel=kernels.zero_scalar_kernel, dim=1, inputs=[model.pAp_buf], device=device)
         wp.launch(
@@ -129,7 +139,7 @@ def solve_pcg_device_loop(
             kernel=kernels.update_x_r_z_rho_rTr_kernel,
             dim=dim,
             inputs=[
-                model.x_wp, model.r_wp, model.z_wp, model.p_wp, model.Ap_wp,
+                iterate, model.r_wp, model.z_wp, model.p_wp, model.Ap_wp,
                 model.M_inv_wp, model.active_wp, model.bc_mask_wp, model.alpha_buf,
                 model.rho_new_buf, model.rTr_buf, nx, ny,
             ],
@@ -138,26 +148,46 @@ def solve_pcg_device_loop(
         wp.launch(
             kernel=kernels.check_convergence_kernel,
             dim=1,
-            inputs=[model.rTr_buf, int(model.n_active), float(tol_abs_scaled), model.converged_flag],
+            inputs=[model.rTr_buf, int(model.n_active), float(krylov_tol), model.converged_flag],
             device=device,
         )
-        if history_every_i is not None and (
-            n_iter_used % history_every_i == 0 or n_iter_used == int(max_iter)
-        ):
-            r_tr_now = float(model.rTr_buf.numpy()[0]) if model.n_active > 0 else 0.0
-            r_rms_now_scaled = (
-                float(np.sqrt(r_tr_now / float(model.n_active)))
-                if model.n_active > 0 and r_tr_now >= 0.0
-                else 0.0
-            )
+        candidate = bool(model.converged_flag.numpy()[0])
+        last_iteration = n_iter_used == int(max_iter)
+        record_history = history_every_i is not None and n_iter_used % history_every_i == 0
+        if candidate or last_iteration:
+            if residual_restarts:
+                wp.launch(
+                    kernel=kernels.add_correction_kernel, dim=dim,
+                    inputs=[model.x_wp, iterate, model.active_wp, model.bc_mask_wp, model.bc_values_wp, nx, ny],
+                    device=device,
+                )
+            r_rms_final_scaled = restart_from_head()
+            converged = bool(np.isfinite(r_rms_final_scaled) and r_rms_final_scaled <= tol_abs_scaled)
+        if history_every_i is not None and (record_history or candidate or last_iteration):
+            if candidate or last_iteration:
+                history_rms = r_rms_final_scaled
+            else:
+                history_rms = float(np.sqrt(float(model.rTr_buf.numpy()[0]) / max(model.n_active, 1)))
             history.append({
                 "iter": int(n_iter_used),
-                "rms_res_phys": float(r_rms_now_scaled * float(model.head_scale)),
-                "tol_abs_phys": float(tol_abs_scaled * float(model.head_scale)),
+                "rms_res_phys": float(history_rms * model.head_scale),
+                "tol_abs_phys": float(tol_abs_scaled * model.head_scale),
             })
-        if int(model.converged_flag.numpy()[0]) == 1:
-            converged = True
+        if converged or last_iteration:
             break
+        if candidate:
+            # Accumulate the restarted correction around zero. Adding tiny
+            # increments one by one to a large FP32 datum loses working bits.
+            if residual_restarts == 0:
+                iterate = wp.zeros_like(model.x_wp)
+            else:
+                iterate.zero_()
+            # A residual below the original tolerance can still move several
+            # head ULPs in a weakly constrained mode. Refine the correction
+            # before rounding it back to the master head.
+            krylov_tol = min(0.1 * krylov_tol, 0.1 * r_rms_final_scaled)
+            residual_restarts += 1
+            continue
         wp.launch(
             kernel=kernels.compute_beta_and_update_rho_kernel,
             dim=1,
@@ -171,12 +201,6 @@ def solve_pcg_device_loop(
             device=device,
         )
     head = model.x_wp.numpy() * float(model.head_scale)
-    r_tr_final = float(model.rTr_buf.numpy()[0]) if model.n_active > 0 else 0.0
-    r_rms_final_scaled = (
-        float(np.sqrt(r_tr_final / float(model.n_active)))
-        if model.n_active > 0 and r_tr_final >= 0.0
-        else 0.0
-    )
     r_rms_final_phys = r_rms_final_scaled * float(model.head_scale)
     tol_abs_phys = float(tol_abs_scaled) * float(model.head_scale)
     info = {
@@ -185,7 +209,7 @@ def solve_pcg_device_loop(
         "max_iter": int(max_iter), "converged": bool(converged), "rel_tol": float(rel_tol),
         "abs_tol_min_phys": float(abs_tol_min), "tol_abs_phys": float(tol_abs_phys),
         "head_scale": float(model.head_scale), "rms_res_initial_phys": float(r_rms0_phys),
-        "rms_res_final_phys": float(r_rms_final_phys),
+        "rms_res_final_phys": float(r_rms_final_phys), "residual_restarts": residual_restarts,
     }
     if history_every_i is not None:
         if not history or int(history[-1]["iter"]) != int(n_iter_used):

@@ -60,6 +60,7 @@ def compute_mass_balance_budget(
     riv_cond: np.ndarray | None = None,
     return_cells: bool = False,
     component_budgets: bool = False,
+    local_flow_scale: bool = False,
 ) -> pd.DataFrame | tuple[dict, np.ndarray, np.ndarray, float]:
     """Compute the MF6-like discrete recharge, CHD, and GHB budget.
 
@@ -104,8 +105,8 @@ def compute_mass_balance_budget(
     bc_r = bc[:, 1:]
     q_int_to_bc_l = np.where(conn_e & (~bc_l) & bc_r, q_l_to_r, 0.0)
     q_int_to_bc_r = np.where(conn_e & bc_l & (~bc_r), -q_l_to_r, 0.0)
-    chd_out = float(np.sum(np.maximum(q_int_to_bc_l, 0.0))) + float(np.sum(np.maximum(q_int_to_bc_r, 0.0)))
-    chd_in = float(np.sum(np.maximum(-q_int_to_bc_l, 0.0))) + float(np.sum(np.maximum(-q_int_to_bc_r, 0.0)))
+    free_chd_out = float(np.sum(np.maximum(q_int_to_bc_l, 0.0))) + float(np.sum(np.maximum(q_int_to_bc_r, 0.0)))
+    free_chd_in = float(np.sum(np.maximum(-q_int_to_bc_l, 0.0))) + float(np.sum(np.maximum(-q_int_to_bc_r, 0.0)))
 
     act_t = act[:-1, :]
     act_b = act[1:, :]
@@ -121,8 +122,18 @@ def compute_mass_balance_budget(
     bc_b = bc[1:, :]
     q_int_to_bc_t = np.where(conn_s & (~bc_t) & bc_b, q_t_to_b, 0.0)
     q_int_to_bc_b = np.where(conn_s & bc_t & (~bc_b), -q_t_to_b, 0.0)
-    chd_out += float(np.sum(np.maximum(q_int_to_bc_t, 0.0))) + float(np.sum(np.maximum(q_int_to_bc_b, 0.0)))
-    chd_in += float(np.sum(np.maximum(-q_int_to_bc_t, 0.0))) + float(np.sum(np.maximum(-q_int_to_bc_b, 0.0)))
+    free_chd_out += float(np.sum(np.maximum(q_int_to_bc_t, 0.0))) + float(np.sum(np.maximum(q_int_to_bc_b, 0.0)))
+    free_chd_in += float(np.sum(np.maximum(-q_int_to_bc_t, 0.0))) + float(np.sum(np.maximum(-q_int_to_bc_b, 0.0)))
+    # MF6 writes one signed rate per prescribed-head cell, including flows
+    # between adjacent prescribed heads. Split signs after summing its faces.
+    face_divergence = np.zeros_like(h_use)
+    face_divergence[:, :-1] += q_l_to_r
+    face_divergence[:, 1:] -= q_l_to_r
+    face_divergence[:-1, :] += q_t_to_b
+    face_divergence[1:, :] -= q_t_to_b
+    chd_rate = face_divergence[bc]
+    chd_in = float(np.sum(np.maximum(chd_rate, 0.0)))
+    chd_out = float(np.sum(np.maximum(-chd_rate, 0.0)))
     chd_net_out_positive = chd_out - chd_in
 
     q_gh = np.zeros_like(h_use)
@@ -198,8 +209,10 @@ def compute_mass_balance_budget(
         riv_in = float(np.sum(np.maximum(-q_riv, 0.0)))
         riv_net_out_positive = riv_out - riv_in
 
-    total_in = rcha_in + chd_in + ghb_in + drn_in + riv_in
-    total_out = rcha_out + chd_out + ghb_out + drn_out + riv_out
+    other_in = rcha_in + ghb_in + drn_in + riv_in
+    other_out = rcha_out + ghb_out + drn_out + riv_out
+    total_in = other_in + chd_in
+    total_out = other_out + chd_out
     in_minus_out = total_in - total_out
     throughflow = 0.5 * (total_in + total_out)
     imbalance_fraction = 0.0 if throughflow == 0.0 else in_minus_out / throughflow
@@ -207,6 +220,8 @@ def compute_mass_balance_budget(
         "case": "" if case is None else str(case),
         "rcha_in": rcha_in, "rcha_out": rcha_out,
         "chd_in": chd_in, "chd_out": chd_out,
+        "free_chd_in": free_chd_in, "free_chd_out": free_chd_out,
+        "free_total_in": other_in + free_chd_in, "free_total_out": other_out + free_chd_out,
         "ghb_in": ghb_in, "ghb_out": ghb_out,
         "drn_in": drn_in, "drn_out": drn_out, "riv_in": riv_in, "riv_out": riv_out,
         "total_in": total_in, "total_out": total_out,
@@ -265,10 +280,7 @@ def compute_mass_balance_budget(
             row["component_gross"] = _component_sum(labels, external_gross)
             row["component_operand"] = _component_sum(labels, component_operand)
 
-    residual[:, :-1] -= q_l_to_r
-    residual[:, 1:] += q_l_to_r
-    residual[:-1, :] -= q_t_to_b
-    residual[1:, :] += q_t_to_b
+    residual -= face_divergence
     diagonal[:, :-1] += cond_e
     diagonal[:, 1:] += cond_e
     diagonal[:-1, :] += cond_s
@@ -283,23 +295,79 @@ def compute_mass_balance_budget(
             conductance * (bc[first] ^ bc[second]) * (np.abs(h_use[first]) + np.abs(h_use[second])),
             dtype=np.float64,
         )
+    if local_flow_scale:
+        # Rates entering and leaving this cell set its physical budget scale.
+        # Throughflow elsewhere must not absorb an unresolved local source.
+        gross = np.abs(r_cell) + np.abs(q_gh)
+        if q_drn is not None:
+            gross += np.abs(q_drn)
+        if q_riv is not None:
+            gross += np.abs(q_riv)
+        operand = boundary_operand.copy()
+        for first, second, transfer, conductance in (
+            (np.s_[:, :-1], np.s_[:, 1:], q_l_to_r, cond_e),
+            (np.s_[:-1, :], np.s_[1:, :], q_t_to_b, cond_s),
+        ):
+            magnitude = np.abs(transfer)
+            gross[first] += magnitude
+            gross[second] += magnitude
+            head_operand = conductance * (np.abs(h_use[first]) + np.abs(h_use[second]))
+            operand[first] += head_operand
+            operand[second] += head_operand
+        row["local_gross_flow"] = gross
+        row["local_head_operand"] = operand
+        row["local_east"] = cond_e
+        row["local_south"] = cond_s
     residual[~cell_is_interior] = 0.0
     return row, residual, diagonal, boundary_scale
 
 
+def _rounded_cell_balances_close(*, residual, free, head, budget, local_limit, roundoff, epsilon):
+    """Cancel unresolvable internal faces before accepting rounded local equations."""
+    if np.any(np.abs(residual[free]) > (local_limit + roundoff)[free]):
+        return False
+    needs_roundoff = free & (np.abs(residual) > local_limit)
+    if not np.any(needs_roundoff):
+        return True
+    # If the heads on both ends of a stiff face round together, the individual
+    # equations can have unrepresentable fluxes. The sum of the adjacent
+    # equations has no such face. Count only roundoff from the group exterior.
+    east = budget["local_east"]
+    south = budget["local_south"]
+    labels, _ = _free_components(needs_roundoff, east, south)
+    grouped_roundoff = roundoff.copy()
+    for first, second, conductance in (
+        (np.s_[:, :-1], np.s_[:, 1:], east),
+        (np.s_[:-1, :], np.s_[1:, :], south),
+    ):
+        internal = needs_roundoff[first] & needs_roundoff[second]
+        operand = 4.0 * epsilon * conductance * (np.abs(head[first]) + np.abs(head[second]))
+        transfer_error = np.where(internal, operand, 0.0)
+        grouped_roundoff[first] -= transfer_error
+        grouped_roundoff[second] -= transfer_error
+    group_residual = _component_sum(labels, residual)
+    group_limit = _component_sum(labels, local_limit + np.maximum(grouped_roundoff, 0.0))
+    return bool(np.all(np.abs(group_residual) <= group_limit))
+
+
 def evaluate_picard_transient_balance(
     *, model, head, previous, conductivity, bottom, top, min_sat, dt, sy, ss,
-    storage_coeff, head_tolerance, relative_tolerance=1e-3,
+    storage_coeff, head_tolerance, relative_tolerance=1e-3, local_head_tolerance=None,
 ):
     """Evaluate the returned head with the physical recharge, faces and storage."""
     from DARCY_WARP_PACKAGE.physics.storage_2d import exact_unconfined_storage_terms
 
     h = np.asarray(head, dtype=np.float64)
-    old = np.asarray(previous, dtype=np.float64)
+    old = h if previous is None else np.asarray(previous, dtype=np.float64)
     free = (model.active_host != 0) & (model.bc_mask_host == 0)
     cap = np.maximum(top - bottom, min_sat) if top is not None else None
     saturation = np.clip(h - bottom, min_sat, cap)
-    if storage_coeff is None:
+    if previous is None:
+        # Steady equations have no storage contribution to scale or residual.
+        storage = np.zeros_like(h)
+        storage_scale = 0.0
+        dt = 1.0
+    elif storage_coeff is None:
         storage, _, _ = exact_unconfined_storage_terms(
             head_new=h, head_old=old, bottom=bottom, top=top,
             specific_yield=sy, specific_storage=ss, dt=dt,
@@ -314,7 +382,7 @@ def evaluate_picard_transient_balance(
         T_field=conductivity * saturation, R_field=model.R_field_host, head=h,
         active=model.active_host, bc_mask=model.bc_mask_host, bc_values=model.bc_values_host,
         dx=model.dx,
-        ghb_factor=model.ghb_factor_host, return_cells=True, component_budgets=True,
+        ghb_factor=model.ghb_factor_host, return_cells=True, component_budgets=True, local_flow_scale=local_head_tolerance is not None,
         **model._head_dependent_boundary_fields(),
     )
     residual -= storage_volume
@@ -329,8 +397,8 @@ def evaluate_picard_transient_balance(
     flow_rms = float(np.sqrt(np.mean(residual[free] ** 2))) if np.any(free) else 0.0
     storage_in = float(np.sum(np.maximum(-storage_volume, 0.0)))
     storage_out = float(np.sum(np.maximum(storage_volume, 0.0)))
-    total_in = budget["total_in"] + storage_in
-    total_out = budget["total_out"] + storage_out
+    total_in = budget["free_total_in"] + storage_in
+    total_out = budget["free_total_out"] + storage_out
     throughflow = 0.5 * (total_in + total_out)
     imbalance = total_in - total_out
     storage_operand = np.where(free, storage_scale * (np.abs(h) + np.abs(old)) * (area / dt), 0.0)
@@ -357,11 +425,48 @@ def evaluate_picard_transient_balance(
         ]
         ratios = np.divide(np.abs(net), component_throughflow, out=np.zeros_like(net), where=component_throughflow > 0)
         worst_component_pct = float(100.0 * np.max(ratios))
-    balance_accepted = bool(components_ok and np.isfinite([imbalance, floor]).all()
+    local_ok = True
+    if local_head_tolerance is not None:
+        # A cell-centred balance is evaluated with physical face differences.
+        # Permit rounding of the represented heads on top of the flux tolerance.
+        local_scale = 0.5 * (budget["local_gross_flow"] + np.abs(storage_volume))
+        field_epsilon = np.finfo(model.T_field_host.dtype).eps
+        local_roundoff = 4.0 * field_epsilon * (budget["local_head_operand"] + storage_operand)
+        local_limit = relative_tolerance * local_scale
+        if previous is not None:
+            # At a pumped or recharged cell, unresolved water over the step
+            # can become a head error even when neighbouring cells are highly
+            # conductive. Bound that additional storage change by hclose.
+            source_cells = (model.R_field_host != 0.0) & (storage_diagonal > 0.0)
+            local_limit[source_cells] = np.minimum(local_limit[source_cells],
+                                                    storage_diagonal[source_cells] * local_head_tolerance)
+        elif np.isfinite(local_head_tolerance):
+            # In a source-free one-face dead end the exact steady solution is
+            # the adjacent head. The flux vanishes at the solution, so a
+            # relative flux check would demand exact equality. Here residual
+            # divided by the face conductance is the actual local head error.
+            east = budget["local_east"] > 0
+            south = budget["local_south"] > 0
+            degree = np.zeros(h.shape, dtype=np.uint8)
+            degree[:, :-1] += east
+            degree[:, 1:] += east
+            degree[:-1, :] += south
+            degree[1:, :] += south
+            dead_end = (degree == 1) & (model.R_field_host == 0.0)
+            for enabled, mask in ((model.use_ghb, model.gh_mask_host), (model.use_drn, model.drn_mask_host),
+                                  (model.use_riv, model.riv_mask_host)):
+                if enabled and mask is not None:
+                    dead_end &= mask == 0
+            local_limit[dead_end] = np.maximum(local_limit[dead_end], diagonal[dead_end] * local_head_tolerance)
+        local_ok = _rounded_cell_balances_close(
+            residual=residual, free=free, head=h, budget=budget,
+            local_limit=local_limit, roundoff=local_roundoff, epsilon=field_epsilon,
+        )
+    balance_accepted = bool(local_ok and components_ok and np.isfinite([imbalance, floor]).all()
                             and abs(imbalance) <= max(floor, relative_tolerance * throughflow))
     return dict(accepted=bool(balance_accepted and np.isfinite([head_rms, flow_rms]).all()
                               and head_rms <= head_tolerance),
-        balance_accepted=balance_accepted,
+        balance_accepted=balance_accepted, local_balance_accepted=local_ok,
         head_residual_rms=head_rms, flow_residual_rms=flow_rms, total_in=total_in, total_out=total_out,
         storage_in=storage_in, storage_out=storage_out, in_minus_out=imbalance,
         percent_discrepancy=discrepancy, component_count=budget["component_count"],
@@ -371,13 +476,27 @@ def evaluate_picard_transient_balance(
 
 
 def evaluate_alternate_transient_balance(*, model, head, previous, conductivity, bottom, top,
-                                         min_sat, dt, sy, ss, budget_percent):
-    """Use the Picard flow test while retaining the backend's own residual gates."""
+                                         min_sat, dt, sy, ss, budget_percent, head_tolerance=np.inf):
+    """Check the nonlinear physical balance using the free-cell exchange rates."""
     return evaluate_picard_transient_balance(
         model=model, head=head, previous=previous, conductivity=conductivity, bottom=bottom, top=top,
         min_sat=min_sat, dt=dt, sy=sy, ss=ss, storage_coeff=None, head_tolerance=np.inf,
-        relative_tolerance=budget_percent / 100.0,
+        relative_tolerance=budget_percent / 100.0, local_head_tolerance=head_tolerance,
     )
+
+
+def check_nonlinear_fallback(head, info, balance_check):
+    """Apply the requesting backend's physical tolerance to a fallback result."""
+    if not info.get("converged", False):
+        return info
+    # The fallback owns its nonlinear head tolerance (the requesting solver
+    # may deliberately have a much tighter tolerance to trigger recovery).
+    balance = balance_check(candidate=head, head_tolerance=info.get("picard_head_tol", np.inf))
+    result = dict(info, physical_period_balance=balance, converged=balance["accepted"])
+    if not balance["accepted"]:
+        result["production_acceptance_passed"] = False
+        result["failure_reason"] = "local_water_balance"
+    return result
 
 
 def correct_closed_component_storage(*, model, head, previous, conductivity, bottom, top, dt, sy, ss):
@@ -452,6 +571,9 @@ def add_exact_storage_to_budget(
     total_out = float(result.iloc[0]["total_out"]) + storage_out
     imbalance = total_in - total_out
     denominator = 0.5 * (total_in + total_out)
+    for key, storage_rate in (("free_total_in", storage_in), ("free_total_out", storage_out)):
+        if key in result:
+            result.loc[result.index[0], key] += storage_rate
     result.loc[result.index[0], "total_in"] = total_in
     result.loc[result.index[0], "total_out"] = total_out
     result.loc[result.index[0], "in_minus_out"] = imbalance

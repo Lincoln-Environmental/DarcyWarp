@@ -101,6 +101,7 @@ def _fallback_to_picard(
     context: SolverContext,
     fallback_kwargs: dict[str, Any],
     newton_info: dict[str, Any],
+    check_balance,
     return_info: bool,
 ):
     from .registry import select_backend
@@ -119,7 +120,8 @@ def _fallback_to_picard(
     fallback_kwargs.setdefault("hclose", 1.0e-6)
     fallback_kwargs.setdefault("max_outer_iterations", 60)
     head, picard_info = backend.solve(context, **fallback_kwargs)
-    merged = dict(picard_info)
+    from DARCY_WARP_PACKAGE.physics.budgets_2d import check_nonlinear_fallback
+    merged = check_nonlinear_fallback(head, picard_info, check_balance)
     merged.update(
         {
             "newton_fallback_used": True,
@@ -329,19 +331,18 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
     budget_percent = float(kwargs.get("newton_transient_budget_percent", 0.1))
     component_balance = None
 
-    def check_component_balance(*, candidate):
+    def check_component_balance(*, candidate, head_tolerance=head_residual_tol):
         return evaluate_alternate_transient_balance(
-            model=model, head=candidate, previous=head_prev,
-            conductivity=np.asarray(K_field), bottom=zbot, top=np.asarray(ztop_field),
+            model=model, head=candidate, previous=head_prev if transient else None,
+            conductivity=np.asarray(K_field), bottom=zbot, top=ztop_field,
             min_sat=min_sat, dt=dt, sy=sy, ss=ss, budget_percent=budget_percent,
+            head_tolerance=head_tolerance,
         )
 
     def attempt_component_acceptance(*, current_norms, current_head_equivalent):
-        if not transient:
-            return current_norms, current_head_equivalent, None
         candidate = operator.head_device.numpy().copy()
         balance = check_component_balance(candidate=candidate)
-        if balance["accepted"] or max_newton == 0:
+        if balance["accepted"] or not transient or max_newton == 0:
             return current_norms, current_head_equivalent, balance
         corrected = correct_closed_component_storage(
             model=model, head=candidate, previous=np.asarray(head_prev), conductivity=np.asarray(K_field),
@@ -684,6 +685,7 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
                 context=context,
                 fallback_kwargs=fallback_kwargs,
                 newton_info=info,
+                check_balance=check_component_balance,
                 return_info=return_info,
             )
         return (head, info) if return_info else head

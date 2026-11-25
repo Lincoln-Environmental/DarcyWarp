@@ -4,6 +4,7 @@ from pathlib import Path
 
 import numpy as np
 
+from DARCY_WARP_PACKAGE.physics.budgets_2d import compute_mass_balance_budget
 from working_tests.transient_replay_storage import _specific_storage_potential
 from working_tests.transient_replay_settings import (
     MASS_BALANCE_ACCEPTABLE_PCT,
@@ -58,100 +59,26 @@ def compute_boundary_flux_terms(
     ghb_alpha: float = 1.0,
     ghb_aq_thickness: float | None = None,
 ) -> dict:
-    T = np.asarray(T_field, dtype=np.float64)
-    h = np.asarray(head, dtype=np.float64)
-    active_i = np.asarray(active, dtype=np.int32) != 0
-    bc_i = np.asarray(bc_mask, dtype=np.int32) != 0
-    bc_v = np.asarray(bc_values, dtype=np.float64)
-    free = active_i & (~bc_i)
-    dx_f = float(dx)
-    tiny = 1.0e-12
-    h_use = np.asarray(h, dtype=np.float64).copy()
-    h_use[~active_i] = 0.0
-    h_use[bc_i] = bc_v[bc_i]
-    recharge_cell = np.zeros_like(h_use, dtype=np.float64)
-    recharge_cell[free] = float(recharge_rate) * dx_f * dx_f
-    recharge_in, recharge_out = _split_signed_flux(recharge_cell)
-
-    chd_in = 0.0
-    chd_out = 0.0
-
-    act_l = active_i[:, :-1]
-    act_r = active_i[:, 1:]
-    conn_e = act_l & act_r
-    T_l = T[:, :-1]
-    T_r = T[:, 1:]
-    denom_e = T_l + T_r
-    cond_e = np.zeros((T.shape[0], T.shape[1] - 1), dtype=np.float64)
-    valid_e = conn_e & (T_l > 0.0) & (T_r > 0.0) & (denom_e > tiny)
-    cond_e[valid_e] = 2.0 * T_l[valid_e] * T_r[valid_e] / denom_e[valid_e]
-    q_l_to_r = cond_e * (h_use[:, :-1] - h_use[:, 1:])
-    bc_l = bc_i[:, :-1]
-    bc_r = bc_i[:, 1:]
-    dom_l = conn_e & (~bc_l) & bc_r
-    dom_r = conn_e & bc_l & (~bc_r)
-    q_int_to_bc_l = np.where(dom_l, q_l_to_r, 0.0)
-    q_int_to_bc_r = np.where(dom_r, -q_l_to_r, 0.0)
-    chd_out += float(np.sum(np.maximum(q_int_to_bc_l, 0.0)))
-    chd_in += float(np.sum(-np.minimum(q_int_to_bc_l, 0.0)))
-    chd_out += float(np.sum(np.maximum(q_int_to_bc_r, 0.0)))
-    chd_in += float(np.sum(-np.minimum(q_int_to_bc_r, 0.0)))
-
-    act_t = active_i[:-1, :]
-    act_b = active_i[1:, :]
-    conn_s = act_t & act_b
-    T_t = T[:-1, :]
-    T_b = T[1:, :]
-    denom_s = T_t + T_b
-    cond_s = np.zeros((T.shape[0] - 1, T.shape[1]), dtype=np.float64)
-    valid_s = conn_s & (T_t > 0.0) & (T_b > 0.0) & (denom_s > tiny)
-    cond_s[valid_s] = 2.0 * T_t[valid_s] * T_b[valid_s] / denom_s[valid_s]
-    q_t_to_b = cond_s * (h_use[:-1, :] - h_use[1:, :])
-    bc_t = bc_i[:-1, :]
-    bc_b = bc_i[1:, :]
-    dom_t = conn_s & (~bc_t) & bc_b
-    dom_b = conn_s & bc_t & (~bc_b)
-    q_int_to_bc_t = np.where(dom_t, q_t_to_b, 0.0)
-    q_int_to_bc_b = np.where(dom_b, -q_t_to_b, 0.0)
-    chd_out += float(np.sum(np.maximum(q_int_to_bc_t, 0.0)))
-    chd_in += float(np.sum(-np.minimum(q_int_to_bc_t, 0.0)))
-    chd_out += float(np.sum(np.maximum(q_int_to_bc_b, 0.0)))
-    chd_in += float(np.sum(-np.minimum(q_int_to_bc_b, 0.0)))
-
-    ghb_in = 0.0
-    ghb_out = 0.0
+    thickness = 1.0
     if ghb_mask is not None and ghb_head is not None and ghb_width is not None:
-        gh_mask_i = (np.asarray(ghb_mask, dtype=np.int32) != 0) & free
-        gh_factor = np.zeros_like(T, dtype=np.float64)
-        thickness = max(float(ghb_aq_thickness or np.nanmedian(np.maximum(T, 1.0))), 1.0e-12)
-        gh_factor[gh_mask_i] = (
-            float(ghb_alpha) * np.asarray(ghb_width, dtype=np.float64)[gh_mask_i] * dx_f / thickness
-        )
-        gh_flux = T * gh_factor * (
-            np.asarray(ghb_head, dtype=np.float64) - h_use
-        )
-        ghb_in, ghb_out = _split_signed_flux(gh_flux[gh_mask_i])
-    total_in = recharge_in + chd_in + ghb_in
-    total_out = recharge_out + chd_out + ghb_out
-    in_minus_out = total_in - total_out
-    throughflow = 0.5 * (total_in + total_out)
-    denom = 0.5 * (total_in + total_out)
-    percent_discrepancy = 0.0 if denom == 0.0 else 100.0 * in_minus_out / denom
-    imbalance_fraction = 0.0 if throughflow == 0.0 else in_minus_out / throughflow
-    return {
-        "recharge_in": recharge_in,
-        "recharge_out": recharge_out,
-        "chd_in": chd_in,
-        "chd_out": chd_out,
-        "ghb_in": ghb_in,
-        "ghb_out": ghb_out,
-        "total_in_without_storage": total_in,
-        "total_out_without_storage": total_out,
-        "in_minus_out_without_storage": in_minus_out,
-        "percent_discrepancy_without_storage": percent_discrepancy,
-        "throughflow_without_storage": throughflow,
-        "imbalance_fraction_without_storage": imbalance_fraction,
+        thickness = max(float(ghb_aq_thickness or np.nanmedian(np.maximum(T_field, 1.0))), 1.0e-12)
+    row = compute_mass_balance_budget(
+        T_field=T_field, R_field=np.broadcast_to(recharge_rate, np.shape(T_field)),
+        head=head, active=active, bc_mask=bc_mask, bc_values=bc_values, dx=dx,
+        gh_mask=ghb_mask, gh_head=ghb_head, gh_width=ghb_width,
+        gh_alpha=ghb_alpha, aq_thickness=thickness,
+    ).iloc[0]
+    terms = {
+        "recharge_in": row["rcha_in"],
+        "recharge_out": row["rcha_out"],
     }
+    for key in ("chd_in", "chd_out", "free_chd_in", "free_chd_out", "ghb_in", "ghb_out"):
+        terms[key] = row[key]
+    for key in (
+        "total_in", "total_out", "in_minus_out", "percent_discrepancy", "throughflow", "imbalance_fraction",
+    ):
+        terms[f"{key}_without_storage"] = row[key]
+    return terms
 
 
 def finalize_mass_balance_row(
@@ -169,6 +96,7 @@ def finalize_mass_balance_row(
     percent_discrepancy = 0.0 if denom == 0.0 else 100.0 * in_minus_out / denom
     imbalance_fraction = 0.0 if throughflow == 0.0 else in_minus_out / throughflow
     return {
+        **{key: float(base_terms[key]) for key in ("free_chd_in", "free_chd_out") if key in base_terms},
         "period": int(period_number),
         "recharge_in": float(base_terms["recharge_in"]),
         "recharge_out": float(base_terms["recharge_out"]),
@@ -203,6 +131,7 @@ def summarize_mass_balance_rows(rows: list[dict]) -> tuple[dict, dict]:
         "total_out",
         "in_minus_out",
     )
+    keys += tuple(key for key in ("free_chd_in", "free_chd_out") if all(key in row for row in rows))
     cumulative = {"n_periods": int(len(rows))}
     for key in keys:
         cumulative[f"{key}_total"] = float(sum(float(row.get(key, 0.0) or 0.0) for row in rows))
@@ -481,8 +410,19 @@ def compute_replay_mass_balance(
     }
 
 
-def classify_period_mass_balance(percent_discrepancy: float, is_startup_period: bool) -> str:
-    value = abs(float(percent_discrepancy or 0.0))
+def _finite_discrepancy(value: object) -> float | None:
+    try:
+        number = float(value)
+    except (ValueError, TypeError, OverflowError):
+        return None
+    return number if np.isfinite(number) else None
+
+
+def classify_period_mass_balance(percent_discrepancy: float | None, is_startup_period: bool) -> str:
+    discrepancy = _finite_discrepancy(percent_discrepancy)
+    if discrepancy is None:
+        return "fail"
+    value = abs(discrepancy)
     if value < MASS_BALANCE_EXCELLENT_PCT:
         return "excellent"
     if value < MASS_BALANCE_GOOD_PCT:
@@ -502,10 +442,25 @@ def classify_replay_mass_balance(
 ) -> dict:
     rows = mass_balance.get("per_period") or []
     cumulative = mass_balance.get("cumulative") or {}
-    cumulative_pct = float(cumulative.get("percent_discrepancy", 0.0) or 0.0)
+    cumulative_pct = _finite_discrepancy(cumulative.get("percent_discrepancy"))
     warnings: list[str] = []
     failures: list[str] = []
     if not rows:
+        failures.append("mass balance has no per-period rows")
+    if cumulative_pct is None:
+        failures.append("cumulative percent discrepancy is missing or nonfinite")
+    startup_pct = 0.0
+    nonstartup_values = []
+    for row in rows:
+        period = row.get("period", 0)
+        value = _finite_discrepancy(row.get("percent_discrepancy"))
+        if value is None:
+            failures.append(f"period {period} percent discrepancy is missing or nonfinite")
+        elif int(period) == int(startup_period):
+            startup_pct = abs(value)
+        else:
+            nonstartup_values.append(abs(value))
+    if failures:
         return {
             "mass_balance_class": "fail",
             "mass_balance_passed": False,
@@ -513,15 +468,8 @@ def classify_replay_mass_balance(
             "startup_percent_discrepancy": None,
             "worst_nonstartup_percent_discrepancy": None,
             "warnings": warnings,
-            "failures": ["mass balance has no per-period rows"],
+            "failures": failures,
         }
-    startup_row = next((row for row in rows if int(row.get("period", 0)) == int(startup_period)), None)
-    startup_pct = abs(float(startup_row.get("percent_discrepancy", 0.0) or 0.0)) if startup_row is not None else 0.0
-    nonstartup_values = [
-        abs(float(row.get("percent_discrepancy", 0.0) or 0.0))
-        for row in rows
-        if int(row.get("period", 0)) != int(startup_period)
-    ]
     worst_nonstartup = max(nonstartup_values) if nonstartup_values else 0.0
     cum_abs = abs(cumulative_pct)
     failed = False
@@ -567,7 +515,7 @@ def classify_replay_mass_balance(
             "warnings": warnings,
             "failures": failures,
         }
-    worst_overall = max(abs(float(row.get("percent_discrepancy", 0.0) or 0.0)) for row in rows)
+    worst_overall = max(startup_pct, worst_nonstartup)
     if worst_overall < MASS_BALANCE_EXCELLENT_PCT:
         overall_class = "excellent"
     elif worst_overall < MASS_BALANCE_GOOD_PCT:
@@ -599,14 +547,14 @@ def annotate_mass_balance_classification(
     mass_balance["mass_balance_failures"] = classification["failures"]
     for row in mass_balance.get("per_period") or []:
         row["mass_balance_class"] = classify_period_mass_balance(
-            row.get("percent_discrepancy", 0.0),
+            row.get("percent_discrepancy"),
             is_startup_period=(int(row.get("period", 0)) == int(startup_period)),
         )
     for variant_key in ("mass_balance_linearized", "mass_balance_volume_sy"):
         variant = mass_balance.get(variant_key) or {}
         for row in variant.get("per_period") or []:
             row["mass_balance_class"] = classify_period_mass_balance(
-                row.get("percent_discrepancy", 0.0),
+                row.get("percent_discrepancy"),
                 is_startup_period=(int(row.get("period", 0)) == int(startup_period)),
             )
     return mass_balance

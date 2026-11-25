@@ -391,7 +391,7 @@ class MixedPrecisionDefectCorrectionSession:
             T_coeff_host=np.asarray(model.T_field_host, dtype=np.float64),
             ghb_factor_host=model.ghb_factor_host,
         )
-        wp.copy(self.b64, wp.array(b64_host, dtype=wp.float64, device=self.device))
+        self.b64.assign(b64_host)
 
     # -- internal steps ------------------------------------------------------
 

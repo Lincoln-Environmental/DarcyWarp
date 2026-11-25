@@ -158,6 +158,18 @@ Prescribed heads supply external exchanges to each adjacent group. The
 period diagnostics report the group count and the largest absolute percentage
 discrepancy alongside the signed domain balance.
 
+Newton and FAS also compare each free-cell residual with its local source,
+face, boundary and storage rates before accepting a steady or transient
+solution. When head rounding obscures an internal exchange, the check sums
+adjacent affected cells and cancels the shared face. A large throughflow
+elsewhere in the model therefore cannot supply the local tolerance. Absolute
+flow-residual tolerances have units of volume per model time and should be
+converted alongside the rates when changing time units. Head tolerances
+are in model length units.
+
+For Newton and FAS, requesting ``return_info=False`` retains the head for
+each stress period and omits the optional diagnostic head and storage histories.
+
 Precision and performance
 -------------------------
 

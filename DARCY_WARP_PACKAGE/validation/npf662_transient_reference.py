@@ -3,7 +3,7 @@ import numpy as np
 from scipy import sparse
 from scipy.sparse.csgraph import connected_components
 from DARCY_WARP_PACKAGE.validation.npf662_reference import NPF662Reference, quadratic_saturation_derivative
-from DARCY_WARP_PACKAGE.validation.npf662_metrics import stable_rms, stable_sum
+from DARCY_WARP_PACKAGE.validation.npf662_metrics import stable_rms, stable_sum, local_balance_valid
 from DARCY_WARP_PACKAGE.validation.head_checks import invalid_head_values
 
 
@@ -105,6 +105,13 @@ class NPF662TransientReference(NPF662Reference):
         checks['independent_accepted'] = bool(checks['input_valid'] and checks['boundary_condition_valid']
             and valid and ungrounded == 0 and hrms <= limits['head_equivalent_rms_m']
             and (rms <= limits['physical_rms_m3_day'] or relative <= limits['relative_cell_imbalance']))
+        checks['local_balance_valid'] = None
+        if checks['independent_accepted'] or roundoff_acceptance:
+            checks['local_balance_valid'] = local_balance_valid(case=self.case, free=self.free, left=self.left,
+                right=self.right, head=head, residual=residual, flux=fields['flux'], conductance=fields['conductance'],
+                ghb_conductance=self.ghb_conductance, ghb_exchange=fields['ghb_outflow'], component_anchor=self.component_anchor,
+                thresholds=limits, storage=storage, tangent=tangent)
+            checks['independent_accepted'] &= checks['local_balance_valid']
         if roundoff_acceptance:
             from .npf662_metrics import apply_roundoff_acceptance
             apply_roundoff_acceptance(checks=checks,certificate=self.certify_roundoff(

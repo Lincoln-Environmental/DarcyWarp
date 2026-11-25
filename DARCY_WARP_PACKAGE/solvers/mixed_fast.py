@@ -26,6 +26,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any
+from weakref import WeakValueDictionary
 
 import numpy as np
 import warp as wp
@@ -74,8 +75,10 @@ def get_mixed_fast_session(
     R_f64: np.ndarray,
     config: MixedFastConfig = MixedFastConfig(),
 ) -> "MixedPrecisionFastSession":
-    """Explicit opt-in session factory (cached on the model per array
-    identity and hierarchy config).
+    """Return a reusable session for explicitly held FP64 forcing arrays.
+
+    Only the last requested tuple is held by the model. Independently retained
+    sessions keep their own forcing fields.
 
     The model must be built under ``DARCY_FLOAT=float32``.  Reusing the
     session keeps FP64 master buffers, face arrays, and the captured
@@ -83,19 +86,20 @@ def get_mixed_fast_session(
     """
     cache = getattr(model, "_mixed_fast_sessions", None)
     if cache is None:
-        cache = {}
+        cache = WeakValueDictionary()
         model._mixed_fast_sessions = cache
     # Hierarchy-affecting config is part of the key: identical arrays with a
     # different max_levels/min_coarse_cells must not return the old session.
     key = (
+        id(model.T_wp),
         id(bc_values_f64),
         id(gh_head_f64),
         id(R_f64),
         int(config.max_levels),
         int(config.min_coarse_cells),
     )
-    entry = cache.get(key)
-    if entry is None:
+    session = cache.get(key)
+    if session is None:
         session = MixedPrecisionFastSession(
             model,
             bc_values_f64=bc_values_f64,
@@ -106,9 +110,12 @@ def get_mixed_fast_session(
         )
         # Hold strong references to the keying arrays so their ids cannot be
         # recycled into a false cache hit.
-        cache[key] = (bc_values_f64, gh_head_f64, R_f64, session)
-        return session
-    return entry[3]
+        session._cache_inputs = (bc_values_f64, gh_head_f64, R_f64)
+        cache[key] = session
+    else:
+        session.set_forcing(bc_values_f64, gh_head_f64, R_f64)
+    model._mixed_fast_retained_session = session
+    return session
 
 
 def solve_mixed_fast(
@@ -128,13 +135,20 @@ def solve_mixed_fast(
     ``model.update_T_in_place`` etc.) is refreshed automatically before
     solving.
     """
-    session = get_mixed_fast_session(
-        model,
-        bc_values_f64=bc_values_f64,
-        gh_head_f64=gh_head_f64,
-        R_f64=R_f64,
-        config=config,
-    )
+    # A one-call solve owns a single workspace independently of explicitly
+    # retained sessions. New forcing arrays never require new device buffers.
+    session = getattr(model, "_mixed_fast_workspace", None)
+    if (session is None or session.T_coeff_wp is not model.T_wp
+            or session._max_levels != int(config.max_levels)
+            or session._min_coarse_cells != int(config.min_coarse_cells)):
+        model._mixed_fast_workspace = None
+        session = MixedPrecisionFastSession(
+            model, bc_values_f64=bc_values_f64, gh_head_f64=gh_head_f64, R_f64=R_f64,
+            max_levels=int(config.max_levels), min_coarse_cells=int(config.min_coarse_cells),
+        )
+        model._mixed_fast_workspace = session
+    else:
+        session.set_forcing(bc_values_f64, gh_head_f64, R_f64)
     return session.solve(
         initial_head_f64,
         inner_kcycles=int(config.inner_kcycles),
@@ -436,6 +450,18 @@ class MixedPrecisionFastSession(MixedPrecisionDefectCorrectionSession):
         self._mg_levels_ref = model.mg_levels
         self._operator_generation_seen = getattr(model, "_operator_generation", 0)
 
+        # Caller-owned arrays may be overwritten in place between solves.
+        # Owned snapshots detect changes while preserving the graph pointers.
+        self._applied_recharge = self._R_f64_host.copy()
+        self._applied_bc = self._bc_values_f64_host.copy()
+        self._applied_gh = None if self._gh_head_f64_host is None else self._gh_head_f64_host.copy()
+
+    def set_forcing(self, bc_values_f64, gh_head_f64, R_f64) -> None:
+        """Use these FP64 fields for the next solve, retaining device buffers."""
+        self._bc_values_f64_host = np.asarray(bc_values_f64, dtype=np.float64)
+        self._gh_head_f64_host = None if gh_head_f64 is None else np.asarray(gh_head_f64, dtype=np.float64)
+        self._R_f64_host = np.asarray(R_f64, dtype=np.float64)
+
     def _ensure_operator_current(self) -> None:
         """Sync cached face arrays and the FP64 RHS with the model operator.
 
@@ -467,6 +493,7 @@ class MixedPrecisionFastSession(MixedPrecisionDefectCorrectionSession):
                 min_coarse_cells=self._min_coarse_cells,
             )
         generation = getattr(model, "_operator_generation", 0)
+        operator_changed = model.mg_levels is not self._mg_levels_ref or generation != self._operator_generation_seen
         if model.mg_levels is not self._mg_levels_ref:
             # Hierarchy rebuilt (new level objects): rebind the face arrays
             # to it. Array pointers change, so captured graphs are invalid.
@@ -480,12 +507,27 @@ class MixedPrecisionFastSession(MixedPrecisionDefectCorrectionSession):
             self._mg_levels_ref = model.mg_levels
             self._correction_graph = None
             self._correction_graph_key = None
-            self.update_rhs_f64()
+            self.n_free = int(np.count_nonzero((model.active_host != 0) & (model.bc_mask_host == 0)))
+            if self.n_free == 0:
+                raise RuntimeError("No free (active, non-Dirichlet) cells.")
         elif generation != self._operator_generation_seen:
             # In-place T/GHB update since the last solve: refill faces in
             # place (captured graphs stay valid) and rebuild the RHS.
             self.refresh_operator_faces()
+        bc_changed = not np.array_equal(self._applied_bc, self._bc_values_f64_host, equal_nan=True)
+        recharge_changed = not np.array_equal(self._applied_recharge, self._R_f64_host, equal_nan=True)
+        gh_changed = (self._applied_gh is None) != (self._gh_head_f64_host is None)
+        if self._applied_gh is not None and self._gh_head_f64_host is not None:
+            gh_changed = not np.array_equal(self._applied_gh, self._gh_head_f64_host, equal_nan=True)
+        if operator_changed or bc_changed or recharge_changed or gh_changed:
             self.update_rhs_f64()
+        if bc_changed:
+            self.bc_values64.assign(self._bc_values_f64_host)
+            np.copyto(self._applied_bc, self._bc_values_f64_host)
+        if recharge_changed:
+            np.copyto(self._applied_recharge, self._R_f64_host)
+        if gh_changed:
+            self._applied_gh = None if self._gh_head_f64_host is None else self._gh_head_f64_host.copy()
         self._operator_generation_seen = generation
 
     def solve(self, initial_head_f64: np.ndarray, **controls: Any):
@@ -579,7 +621,7 @@ class MixedPrecisionFastSession(MixedPrecisionDefectCorrectionSession):
             # Capture once (launches do not execute during capture), restore
             # the level-0 wiring, then replay so this outer step still does
             # its work.
-            with wp.ScopedCapture() as cap:
+            with wp.ScopedCapture(device=self.device) as cap:
                 self._launch_correction_block(solve_controls)
             self._correction_graph = cap.graph
             self._correction_graph_key = key

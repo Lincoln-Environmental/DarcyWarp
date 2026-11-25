@@ -65,3 +65,28 @@ def ghb_flux(*, head, conductance, boundary_head):
     np.subtract(head, boundary_head, out=result, where=conductance > 0.0)
     result *= conductance
     return result
+
+
+def npf_ghb_component_anchor(*, conductance, active, fixed):
+    """Share the GHB head restraint over each connected aquifer without a CHD.
+
+    For a uniform head shift, internal flows cancel and the derivative of the
+    component's external discharge is sum(C_ghb). Dividing that conductance by
+    the number of cells assigns a local flow tolerance whose sum retains the
+    same head tolerance. NPF's saturated Cartesian/layered stencil connects
+    every adjacent pair of active cells. Zero marks CHD-grounded components.
+    """
+    if conductance is None or not np.any(conductance):
+        return None
+    from scipy.ndimage import label
+    labels, count = label(np.asarray(active) != 0)
+    size = np.bincount(labels.ravel(), minlength=count+1)
+    c = np.broadcast_to(conductance, labels.shape)
+    # Scale each summand first so a representable average cannot overflow
+    # from summing many high-conductance cells.
+    average = np.bincount(labels.ravel(), weights=(c / size[labels]).ravel(), minlength=count+1)
+    average[0] = 0.0
+    average[labels[np.asarray(fixed) != 0]] = 0.0
+    if not np.any(average):
+        return None
+    return average[labels]
