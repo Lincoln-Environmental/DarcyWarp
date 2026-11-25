@@ -25,14 +25,16 @@ Verified evidence on this branch:
   its 1e-6 m bound by 1.57e-6 m. The exact same result reproduces at the
   committed pre-integration feature baseline ``ca09497``.
 * The focused physics, public API, independent reference and actual MF6 set
-  passes: 67 passed. This includes CPU/CUDA three-cell roots for active DRN
+  passes: 68 passed. This includes CPU/CUDA three-cell roots for active DRN
   and below-bed RIV, plus package enable/disable updates between solves. The
   broad post-optimization NPF and package regressions report 272 passed,
   4 skipped and the same baseline CUDA failure; six newer CPU/CUDA API
-  parameterizations passed separately. MF6 6.6.2 checks cover confined
-  steady DRN/RIV, transient single-cell activation/leakage, a two-layer
-  steady mixed DRN/RIV case, and a steady convertible-cell mixed package
-  case. Head errors are below 2e-8 m and package-rate errors below 1e-9 L3/T.
+  parameterizations passed separately. Seven actual MF6 6.6.2 comparisons
+  cover confined steady DRN/RIV, transient single-cell activation/leakage,
+  two-layer steady mixed DRN/RIV, a steady convertible-cell mixed package
+  case, and a two-layer STO case with simultaneous DRN/RIV and pumping-driven
+  gaining-to-losing RIV reversal. Head errors are below 2e-8 m and
+  package-rate errors below 1e-9 L3/T.
 * The CUDA benchmark ``working_tests/benchmark_3d_drn_riv.py`` covers
   120,000 and 1,012,500 cells. Paired package cases use zero exchange and
   retain the no-package solution (max head difference 7.11e-15 m). Warm
@@ -45,9 +47,11 @@ Verified evidence on this branch:
   GPU Newton time itself is unchanged in these equivalent-solution cases.
 
 These tests and measurements do not establish matched MF6 accuracy for
-transient multilayer DRN/RIV, drying/rewetting, or performance parity on
-active regional boundary distributions. This branch is a verified NPF implementation
-increment, not completion of the wider qualification matrix.
+drying/rewetting, transient exchange-volume accumulation, or performance
+parity on active regional boundary distributions. The transient multilayer
+case compares heads and period-end DRN/RIV rates; it does not validate gross
+integrated package/storage volumes. This branch is a verified NPF
+implementation increment, not completion of the wider qualification matrix.
 
 Boundary contract
 -----------------
@@ -98,9 +102,9 @@ cell. Reproduce the GPU timing artifact with:
 Remaining implementation and validation
 ----------------------------------------
 
-1. Expand actual MF6 comparison to transient multilayer DRN/RIV, gross
-   package/storage volumes, drying/rewetting and transient flow reversal.
-   Current mixed layered/convertible MF6 checks are steady.
+1. Expand actual MF6 comparison to gross package/storage volumes and
+   drying/rewetting. A transient multilayer gaining-to-losing RIV reversal
+   is now covered, but its integrated exchange volumes are not yet compared.
 2. Add independent multicell and multilayer analytical roots and refinement
    studies for vertical series flow, heterogeneous leakage, simultaneous
    gains/losses, and transient threshold crossings.
