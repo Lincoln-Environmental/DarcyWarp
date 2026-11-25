@@ -108,12 +108,23 @@ def _report_perf(name: str, warp_seconds: float, mf6_engine_time: float | None) 
 
 
 def _check_native_faces(*, loaded_case, heads, backend, period_infos):
-    from working_tests.benchmark_2d_runtime import matching_time_grid
-    assert len(period_infos) == len(heads) and matching_time_grid(infos=period_infos, dt=loaded_case["dt"])
     from working_tests.transient_face_flow_audit import compare_native_face_flows
+
+    assert len(period_infos) == len(heads)
+    step_key = ("adaptive_dt_substep_dts" if backend == "unconfined_picard_kcycle"
+                else "experimental_substep_dts")
+    for period, row in enumerate(period_infos, start=1):
+        assert row["solver_backend"] == backend, (period, row["solver_backend"])
+        assert row["converged"], (period, backend)
+        assert row[step_key] == [loaded_case["dt"]], (period, row[step_key])
+        if backend != "unconfined_picard_kcycle":
+            assert row["experimental_fallback_timestep_count"] == 0, (period, backend)
     folder = loaded_case["folder"]
     report = compare_native_face_flows(native_workspace=folder / "mf6", heads=heads,
         artifact=loaded_case["artifact"])
+    report["solver_backend"] = backend
+    for metrics, row in zip(report["periods"], period_infos, strict=True):
+        metrics["accepted_step_days"] = row[step_key]
     path = folder / f"{backend}_face_flows.json"
     path.write_text(json.dumps(report, indent=2, allow_nan=False) + "\n")
     print(f"{backend}: compared {report['compared_faces']} faces at {len(report['periods'])} endpoints; "
@@ -160,15 +171,22 @@ def test_alternate_nonlinear_backend_500x500(loaded_case, backend):
     dt = loaded_case["dt"]
     rates = loaded_case["rates"]
 
-    # Tighten Newton's head-equivalent acceptance (default 1e-4) so the
-    # per-timestep budget acceptance does not needlessly retry; FAS defaults
-    # (1e-6) are already tight.
-    backend_controls = (
-        {"newton_head_equivalent_rms_tolerance": 1.0e-6}
-        if backend == "unconfined_semismooth_newton_kcycle"
-        else {}
-    )
-    solve_controls = {"save_transient_diagnostics": True, **backend_controls}
+    # This reference uses one backward-Euler step per week. Give Newton
+    # enough Krylov iterations and a tight residual to close the budget
+    # on that step. A different backend or a shorter step cannot qualify it.
+    solve_controls = {
+        "save_transient_diagnostics": True,
+        "experimental_retry_enabled": False,
+    }
+    if backend == "unconfined_semismooth_newton_kcycle":
+        solve_controls.update({
+            "newton_head_equivalent_rms_tolerance": 1.0e-8,
+            "newton_residual_rms_tolerance": 1.0e-7,
+            "newton_fgmres_max_iterations": 240,
+            "newton_fallback_to_picard": False,
+        })
+    else:
+        solve_controls["fas_fallback_enabled"] = False
 
     solver = WarpDarcySolver(
         nx=int(spatial["nx"]),
@@ -215,6 +233,7 @@ def test_alternate_nonlinear_backend_500x500(loaded_case, backend):
     assert len(info["period_infos"]) == N_PERIODS
     assert all(p["converged"] for p in info["period_infos"])
     assert info["transient_replay_counters"]["experimental_forced_accept_count"] == 0
+    assert info["transient_replay_counters"]["experimental_fallback_timestep_count"] == 0
     for period_budget in info["experimental_period_budgets"]:
         assert abs(period_budget["percent_discrepancy"]) < 0.1
 

@@ -143,9 +143,28 @@ times include that load. The GPU timings are serial synchronized public
 solves with model construction and independent audits timed separately.
 For the 500² transient backends, the independent face comparison
 reconstructs the harmonic Warp fluxes at the accepted heads and
-compares those rates with MF6's saved FLOW-JA-FACE records on the
-matching time grid. It compares active faces with at least one free
-cell and records the maximum RMS, relative L2 and individual face errors.
+compares those rates with MF6's saved FLOW-JA-FACE records at each
+stress-period endpoint. The archived CUDA qualification lists these endpoints.
+Its JSON omits the accepted internal timestep durations. The current replay
+also verifies that each named solver accepted exactly one seven-day step
+per period and records the durations in its face-flow reports. It compares
+active faces with at least one free cell and records the maximum RMS, relative
+L2 and individual face errors.
+
+A CPU replay with the historical Newton controls accepted two half-week steps
+after one rejection. Starting week 28 from the native day-189 head reproduced
+the seven-day FGMRES nonconvergence and both accepted 3.5-day steps.
+The fixed-week test disables subdivision and backend
+fallback for Newton and FAS. It gives Newton up to 240 Krylov iterations and
+sets its residual RMS and head-equivalent RMS tolerances to ``1e-7`` and
+``1e-8``, respectively. The FP64 CPU reproduction verified 497,503 faces at
+all 52 seven-day steps for each backend. The worst per-period relative L2
+face errors were ``1.85726e-6`` for Picard, ``3.24424e-8`` for semismooth
+Newton and ``3.24178e-8`` for FAS. Reconstructing flows directly from the
+native heads gave ``6.73139e-10`` on the same records. The
+:download:`fixed-step CPU reports
+<../benchmark_results/main_audit_20261125/followup_fixed_step_cpu.json>`
+record the accepted steps and face-flow errors for each backend and week.
 
 See the :download:`qualification JSON
 <../benchmark_results/main_audit_20261125/qualification.json>`
