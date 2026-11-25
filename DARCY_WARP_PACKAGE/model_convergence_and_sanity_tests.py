@@ -1,4 +1,5 @@
 import time
+import hashlib
 import json
 import os
 import subprocess
@@ -41,21 +42,23 @@ from DARCY_WARP_PACKAGE.sanity_case_config import (
     DEFAULT_ISOTROPIC_T,
 )
 
-# Optional GHB helper: use if available
-try:
-    from DARCY_WARP_PACKAGE.model_builder import _build_ghb_boundary_mask
-except ImportError:
-    _build_ghb_boundary_mask = None
 
 
-def run_solve(solver, check_every_no: int = 5):
+def run_solve(solver, initial_head: np.ndarray, check_every_no: int = 5):
+    """Time two solves with the same initial head and reused runtime state.
+
+    :param solver: Built confined DarcyWarp model.
+    :param initial_head: Starting head grid, shape (ny, nx), in length units.
+    :param check_every_no: K-cycle interval between convergence checks.
+    :returns: Head, diagnostic dictionary, cold and warm solve times in seconds.
+    """
     print(
         "Both timed solves start from the same DEM input; "
         "the second solve only reuses CUDA runtime state."
     )
     kcycle_impl = os.environ.get("DARCY_KCYCLE_IMPL", "classic").strip().lower()
     if kcycle_impl == "mixed":
-        return run_solve_mixed(solver)
+        return run_solve_mixed(solver, initial_head)
     nu_coarse = 10 if kcycle_impl == "fast" else 2
     solve_kwargs = dict(
         max_cycles=200,
@@ -65,7 +68,7 @@ def run_solve(solver, check_every_no: int = 5):
         omega=0.7,
         rel_tol=5.0e-7,
         abs_tol_min=5.0e-7,
-        initial_head=dem,
+        initial_head=initial_head,
         return_info=True,
         max_levels=6,
         check_every_no=int(check_every_no),
@@ -89,12 +92,16 @@ def run_solve(solver, check_every_no: int = 5):
     return heads, info, cold_runtime_seconds, warm_runtime_seconds
 
 
-def run_solve_mixed(solver):
+def run_solve_mixed(solver, initial_head: np.ndarray):
     """Production mixed-precision solve (FP64 master + FP32 fast correction).
 
     Requires the model to have been built under DARCY_FLOAT=float32 (the
     __main__ switch handles the relaunch).  Uses the validated
     MixedFastConfig defaults (k=5 inner cycles, nu_coarse=10).
+
+    :param solver: Built FP32 model with the mixed fast backend.
+    :param initial_head: Starting head grid, shape (ny, nx), in length units.
+    :returns: Head, diagnostics, cold and warm solve times in seconds.
     """
     from DARCY_WARP_PACKAGE.solvers.mixed_fast import (
         MixedFastConfig,
@@ -114,7 +121,7 @@ def run_solve_mixed(solver):
     with wp.ScopedTimer("mixed_fast_solve", use_nvtx=False):
         head1, info1 = solve_mixed_fast(
             solver,
-            dem,
+            initial_head,
             bc_values_f64=bc_values,
             gh_head_f64=gh_head,
             R_f64=R_field,
@@ -127,7 +134,7 @@ def run_solve_mixed(solver):
     with wp.ScopedTimer("mixed_fast_solve", use_nvtx=False):
         heads, info = solve_mixed_fast(
             solver,
-            dem,
+            initial_head,
             bc_values_f64=bc_values,
             gh_head_f64=gh_head,
             R_f64=R_field,
@@ -140,13 +147,20 @@ def run_solve_mixed(solver):
     warm_runtime_seconds = t3 - t2
     return heads, info, cold_runtime_seconds, warm_runtime_seconds
 
-def solve_callable():
-    return run_solve(solver=single_solver)
-
 def _mb(nbytes: int) -> float:
+    """Convert bytes to MiB.
+
+    :param nbytes: Byte count.
+    :returns: Size in binary megabytes.
+    """
     return float(nbytes) / (1024.0 * 1024.0)
 
 def log_pool(tag: str, device: str = "cuda:0") -> None:
+    """Report current and peak Warp memory pool usage.
+
+    :param tag: Description of the memory checkpoint.
+    :param device: CUDA device whose pool is queried.
+    """
     used_cur = wp.get_mempool_used_mem_current(device)
     used_hi = wp.get_mempool_used_mem_high(device)
     thr = wp.get_mempool_release_threshold(device)
@@ -163,7 +177,14 @@ def build_mf6_truth_path(
     ghb: bool,
     isotropic: bool,
 ) -> Path:
-    """Return the canonical saved MF6 truth path for one grid/configuration."""
+    """Return the canonical saved MF6 truth path for one grid/configuration.
+
+    :param truth_dir: Directory containing the reference arrays.
+    :param label: Grid case identifier.
+    :param ghb: Whether general-head boundaries are enabled.
+    :param isotropic: Whether uniform transmissivity is used.
+    :returns: Canonical NPZ path, not necessarily present.
+    """
     filename = (
         f"mf6_truth_{label}_ghb_{bool(ghb)}_"
         f"t_isotropic_{bool(isotropic)}.npz"
@@ -172,6 +193,7 @@ def build_mf6_truth_path(
 
 
 if __name__ == "__main__":
+    data_store.mkdir(parents=True, exist_ok=True)
     ghb = bool(DEFAULT_GHB)
     isotropic = bool(DEFAULT_ISOTROPIC)
 
@@ -255,6 +277,7 @@ if __name__ == "__main__":
             print("Running single case Warp-Kcycles solver...")
             head_k_warp, info_k, cold_runtime, warm_runtime = run_solve(
                 solver=single_solver,
+                initial_head=dem,
                 check_every_no=convergence_check_interval,
             )
 
@@ -269,6 +292,22 @@ if __name__ == "__main__":
             else:
                 head_cpu_warp = np.asarray(head_k_warp)
 
+            bud_k = compute_mass_balance_budget(
+                T_field=single_solver.T_field_host,
+                R_field=single_solver.R_field_host,
+                head=head_cpu_warp,
+                active=single_solver.active_host,
+                bc_mask=single_solver.bc_mask_host,
+                bc_values=single_solver.bc_values_host,
+                dx=float(single_solver.dx),
+                gh_mask=single_solver.gh_mask_host,
+                gh_head=single_solver.gh_head_host,
+                gh_width=single_solver.gh_width_host,
+                gh_alpha=float(single_solver.gh_alpha),
+                aq_thickness=float(single_solver.aq_thickness),
+                case=label,
+            )
+            head_k_warp = head_cpu_warp
             wp.synchronize_device("cuda:0")
             log_pool("after solve")
 
@@ -354,21 +393,6 @@ if __name__ == "__main__":
             active_mask=active_mask,
         )
 
-        bud_k = compute_mass_balance_budget(
-            T_field=single_solver.T_field_host,
-            R_field=single_solver.R_field_host,
-            head=head_k_warp,
-            active=single_solver.active_host,
-            bc_mask=single_solver.bc_mask_host,
-            bc_values=single_solver.bc_values_host,
-            dx=float(single_solver.dx),
-            gh_mask=single_solver.gh_mask_host,
-            gh_head=single_solver.gh_head_host,
-            gh_width=single_solver.gh_width_host,
-            gh_alpha=float(single_solver.gh_alpha),
-            aq_thickness=float(single_solver.aq_thickness),
-        )
-
         print("K-cycle mass balance")
         for k, v in bud_k.items():
             if isinstance(v, (float, int, np.floating, np.integer)):
@@ -400,6 +424,12 @@ if __name__ == "__main__":
         for gate_name, gate_passed in acceptance_gates.items():
             print(f"  {gate_name}: {'PASS' if gate_passed else 'FAIL'}")
 
+        listing_path = ws / "model_truth.lst"
+        listing_digest = None
+        if mf6_source == "generated" and listing_path.is_file():
+            with listing_path.open("rb") as stream:
+                listing_digest = hashlib.file_digest(stream, "sha256").hexdigest()
+
         all_results[label] = {
             "nx": nx_truth,
             "ny": ny_truth,
@@ -407,6 +437,9 @@ if __name__ == "__main__":
             "n_cells_active": n_active,
             "kcycle_implementation": os.environ.get("DARCY_KCYCLE_IMPL", "classic"),
             "diagnostics": info_k,
+            "mass_balance_budget_kcycle": bud_k.iloc[0].to_dict(),
+            "mf6_listing_path": str(listing_path.resolve()) if listing_digest else None,
+            "mf6_listing_sha256": listing_digest,
             "mf_vs_fd": mf_vs_fd,
             "k_cycle_vs_mf": k_cycle_vs_mf,
             "fd_vs_k_cycle": FD_vs_warp_k_cycle,

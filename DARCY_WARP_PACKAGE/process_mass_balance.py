@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import re
 from pathlib import Path
 
@@ -11,6 +12,11 @@ import pandas as pd
 
 
 def _as_float(x: object) -> float:
+    """Convert a reported budget value to float.
+
+    :param x: Numeric field or missing value.
+    :returns: Numeric value, or NaN for missing/unparseable values.
+    """
     if x is None:
         return float("nan")
     if isinstance(x, (np.floating, np.integer)):
@@ -26,6 +32,9 @@ def _as_float(x: object) -> float:
 def _parse_mf6_last_budget(lst_path: Path) -> dict:
     """
     Best-effort parse of the last MF6 volumetric budget block from model_truth.lst.
+
+    :param lst_path: Native MODFLOW listing file.
+    :returns: Last complete budget block, or an empty dictionary if none is found.
 
     Returns keys:
       rcha_in, rcha_out, chd_in, chd_out, ghb_in, ghb_out,
@@ -100,30 +109,16 @@ def _parse_mf6_last_budget(lst_path: Path) -> dict:
     return last
 
 
-if __name__ == "__main__":
+def compare_mass_balance(json_path: Path, mf6_base: Path) -> pd.DataFrame:
+    """Compare reported DarcyWarp budgets with their matching native MF6 listings.
 
-    # Edit these if needed
-    JSON_REL = Path('data/mass_balance_results_ghb_True_t_isotropic_False.json')
-    # MF6_BASE_REL = Path("DARCY_WARP_PACKAGE/data")
-    WRITE_CSV = True
-    OUT_CSV_REL = Path("data/mass_balance_compare_vs_mf6.csv")
-
-    cwd = Path.cwd()
-    here = Path(__file__).resolve()
-
-    json_path = cwd.joinpath(JSON_REL)
-    if not json_path.exists():
-        json_path = here.parent.parent.joinpath(JSON_REL)
-
-    mf6_base = cwd.joinpath('data')
-    if not mf6_base.exists():
-        mf6_base = here.parent.parent.joinpath(cwd)
-
-    if not json_path.exists():
-        raise FileNotFoundError(f"JSON not found: {json_path}")
-    if not mf6_base.exists():
-        raise FileNotFoundError(f"MF6 base not found: {mf6_base}")
-
+    :param json_path: Archived budget JSON or current steady benchmark JSON.
+    :param mf6_base: Directory for archived listing workspaces, used only for
+        records predating explicit listing provenance.
+    :returns: One row per budget with closure and package rates and differences.
+    :raises FileNotFoundError: If the budget JSON is missing.
+    :raises ValueError: If no budget records exist.
+    """
     with json_path.open("r", encoding="utf-8") as f:
         data = json.load(f)
 
@@ -147,16 +142,26 @@ if __name__ == "__main__":
         if bud is None:
             continue
 
-        case = str(bud.get("case", case_key))
-        lst_path = mf6_base.joinpath(f"Paper_mf6_truth_{case}", "model_truth.lst")
+        case = str(bud.get("case") or case_key)
+        if "mf6_listing_path" in payload:
+            listing = payload["mf6_listing_path"]
+            lst_path = Path(listing) if listing else None
+        else:
+            lst_path = mf6_base / f"Paper_mf6_truth_{case}" / "model_truth.lst"
 
         mf6_bud = {}
         mf6_found = False
-        if lst_path.exists():
-            mf6_bud = _parse_mf6_last_budget(lst_path)
-            mf6_found = len(mf6_bud) > 0
+        if lst_path is not None and lst_path.is_file():
+            matches_reference = True
+            if "mf6_listing_path" in payload:
+                with lst_path.open("rb") as stream:
+                    digest = hashlib.file_digest(stream, "sha256").hexdigest()
+                matches_reference = digest == payload.get("mf6_listing_sha256")
+            if matches_reference:
+                mf6_bud = _parse_mf6_last_budget(lst_path)
+                mf6_found = len(mf6_bud) > 0
 
-        row = {"case": case, "mf6_found": bool(mf6_found), "mf6_lst": str(lst_path)}
+        row = {"case": case, "mf6_found": bool(mf6_found), "mf6_lst": str(lst_path) if lst_path is not None else ""}
 
         for k in keys:
             row[f"q_{k}"] = _as_float(bud.get(k, None))
@@ -171,9 +176,8 @@ if __name__ == "__main__":
 
         rows.append(row)
 
-    if len(rows) == 0:
-        print("No mass_balance_budget_kcycle entries found in JSON.")
-
+    if not rows:
+        raise ValueError("No mass_balance_budget_kcycle entries found in JSON.")
 
     df = pd.DataFrame(rows)
 
@@ -187,6 +191,18 @@ if __name__ == "__main__":
             cell_counts.append(float(int(m.group(1)) * int(m.group(2))))
     df["case_cells_nominal"] = cell_counts
     df = df.sort_values(["case_cells_nominal", "case"]).reset_index(drop=True)
+
+    return df
+
+
+if __name__ == "__main__":
+    from DARCY_WARP_PACKAGE.project_base import data_store
+
+    # Set the input and output explicitly; the archived CSV is not overwritten by default.
+    json_path = data_store / "mass_balance_results_ghb_True_t_isotropic_False.json"
+    mf6_base = data_store
+    out_csv = data_store / "mass_balance_compare_recomputed.csv"
+    df = compare_mass_balance(json_path, mf6_base)
 
     show_cols = [
         "case",
@@ -209,14 +225,6 @@ if __name__ == "__main__":
     with pd.option_context("display.max_rows", 200, "display.max_columns", 200, "display.width", 200):
         print(df[show_cols].to_string(index=False))
 
-    if WRITE_CSV:
-        out_csv = cwd.joinpath(OUT_CSV_REL)
-        if not out_csv.parent.exists():
-            out_csv.parent.mkdir(parents=True, exist_ok=True)
-        df.to_csv(out_csv, index=False)
-        print(f"\nWrote: {out_csv}")
-
-
-
-
-
+    out_csv.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(out_csv, index=False)
+    print(f"\nWrote: {out_csv}")

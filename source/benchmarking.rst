@@ -265,3 +265,15 @@ results and retain configuration-specific copies when comparing multiple cases.
 
 See :doc:`validation` for the evidence needed to interpret numerical agreement
 and performance.
+
+Mass-balance reports
+--------------------
+
+The steady convergence benchmark writes its calculated cell-budget totals as
+``mass_balance_budget_kcycle`` in each case of its comparison JSON. Use
+``DARCY_WARP_PACKAGE.process_mass_balance.compare_mass_balance`` to compare
+these results with the native listing. Generated listing paths are qualified by
+SHA-256; a cached head reference without listing provenance or a changed listing
+is reported as unavailable for budget comparison. The archived budget JSON and
+CSV remain available for reproducing the paper tables. There is no separate GPU
+mass-balance-only driver.
