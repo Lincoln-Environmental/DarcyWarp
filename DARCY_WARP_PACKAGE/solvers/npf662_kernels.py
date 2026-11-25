@@ -569,6 +569,18 @@ def ghb_diagonal(storage:wp.array(dtype=wp.float64),conductance:wp.array(dtype=w
 
 
 @wp.kernel
+def add_cell_rates(rates:wp.array(dtype=wp.float64),source:wp.array(dtype=wp.float64)):
+    """Add one dense volumetric rate field into the resident source.
+
+    :param rates: Signed per-cell volumetric rates [L³/T] to add.
+    :param source: Resident cell source, updated in place.
+    :return: None; ``source`` is modified in place.
+    """
+    i=wp.tid()
+    source[i]=source[i]+rates[i]
+
+
+@wp.kernel
 def chd_budget(fixed: wp.array(dtype=wp.int32), left: wp.array2d(dtype=wp.int32),
                right: wp.array2d(dtype=wp.int32), flux: wp.array2d(dtype=wp.float64),
                totals: wp.array(dtype=wp.float64)):

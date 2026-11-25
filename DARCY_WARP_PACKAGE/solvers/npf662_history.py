@@ -21,14 +21,16 @@ from . import npf662_kernels as kernels
 from DARCY_WARP_PACKAGE.validation.npf662_transient_reference import NPF662TransientReference, storage_previous_heads
 
 
-def _history_inputs(*, dt, source_factors, recharge_rates, surface_shape):
-    """Validate and align the timestep, multiplier and surface recharge inputs.
+def _history_inputs(*, dt, source_factors, recharge_rates, wel_rates, surface_shape, model):
+    """Validate and align the timestep, multiplier and source schedule inputs.
 
     :param dt: Positive scalar duration or one duration per step.
     :param source_factors: Optional vector of volumetric source multipliers.
     :param recharge_rates: Optional scalar, horizontal field, period vector or field stack.
+    :param wel_rates: Optional per-step sparse well entries replacing the built wells.
     :param surface_shape: Horizontal (ny, nx) grid dimensions.
-    :return: Timestep vector, multiplier vector and optional areal rate array.
+    :param model: Built 3D model owning the active-cell grid.
+    :return: Timestep vector, multiplier vector, areal rate array and owned well entries.
     """
     times = floating_field(value=dt, name="dt")
     if times.ndim > 1 or times.size == 0 or np.any(times <= 0):
@@ -52,26 +54,44 @@ def _history_inputs(*, dt, source_factors, recharge_rates, surface_shape):
             raise ValueError("Source factors must be a nonempty finite vector")
         steps = factors.size
 
+    wells = None
+    if wel_rates is not None:
+        from DARCY_WARP_PACKAGE.physics.wel import validate_well_entries
+        if isinstance(wel_rates, (str, bytes)) or not isinstance(wel_rates, (list, tuple)):
+            raise ValueError("wel_rates must be None or a per-step sequence of entry values")
+        wells = [validate_well_entries(entries=entries, shape=model.shape, active=model._active)
+                 for entries in wel_rates]
+        steps = len(wells)
+
     if rates is not None and rates.ndim in (1, 3) and rates.shape[0] != steps:
         raise ValueError("recharge_rates and source_factors must cover the same number of steps")
+    if factors.size not in (1, steps):
+        raise ValueError("source_factors must be a scalar or match the number of history steps")
     if times.size not in (1, steps):
         raise ValueError("dt must be a scalar or match the number of history steps")
-    return np.broadcast_to(times, (steps,)), factors, rates
+    return np.broadcast_to(times, (steps,)), np.broadcast_to(factors, (steps,)), rates, wells
 
 
 class HistorySources:
-    """Assemble the same cell rates for the resident solver and its host reference."""
+    """Assemble the same cell rates for the resident solver and its host reference.
 
-    def __init__(self, *, model, original_source, rates, factors):
+    ``source_factors`` scale the built source minus every explicitly replaced
+    component: a recharge schedule excludes the built recharge and a well
+    schedule excludes the built entries. Replaced components enter per step.
+    """
+
+    def __init__(self, *, model, original_source, rates, factors, wells=None):
         """Prepare the static cell source and eligible recharge receivers.
 
         :param model: Built 3D model providing geometry and source fields.
         :param original_source: Snapshot of the complete source before this history.
         :param rates: Validated optional recharge rates in model length per time.
         :param factors: One volumetric source multiplier per step.
+        :param wells: Validated optional per-step well entries replacing the built wells.
         """
         self.rates = rates
         self.factors = factors
+        self.wells = wells
         self.area = model.dx * model.dy
         self.column_count = model.nx * model.ny
         self.receivers = None
@@ -79,6 +99,15 @@ class HistorySources:
         if rates is not None:
             self.base = model._source_with_recharge(0.0)
             self.receivers = surface_recharge_cells(model._active, model._bc_mask)
+        if wells is not None:
+            if rates is not None:
+                # Both components are replaced: the scaling base keeps the
+                # raw volumetric rates alone.
+                self.base = model._assemble_source(rhs=model._volumetric_source, R_field=None,
+                    entries=None, active=model._active, fixed=model._bc_mask,
+                    dtype=self.base.dtype)
+            else:
+                self.base = model._source_without_wells(dtype=self.base.dtype)
 
     def rate_at(self, index):
         """Return the scalar or horizontal field for one zero-based step.
@@ -89,17 +118,30 @@ class HistorySources:
             return self.rates[index]
         return self.rates
 
+    def wells_at(self, index):
+        """Return the sparse well entries replacing the built wells for one step.
+
+        :param index: Requested step.
+        """
+        if self.wells is None:
+            return None
+        return self.wells[index]
+
     def host_source(self, index):
         """Form a volumetric source array for an independent solve or audit.
 
         :param index: Requested step.
         """
+        from DARCY_WARP_PACKAGE.physics.wel import well_cell_volume_rates
         source = self.base * self.factors[index]
         if self.rates is not None:
             rate = self.rate_at(index)
             if rate.ndim == 2:
                 rate = rate.ravel()[self.receivers % self.column_count]
             source.flat[self.receivers] += rate * self.area
+        scheduled = well_cell_volume_rates(entries=self.wells_at(index), shape=source.shape)
+        if scheduled is not None:
+            source += scheduled
         return source
 
     def upload(self, device):
@@ -108,6 +150,11 @@ class HistorySources:
         :param device: Warp device holding the Newton workspace.
         """
         self.device_base = wp.array(self.base.ravel(), dtype=wp.float64, device=device)
+        self.has_scheduled_wells = self.wells is not None
+        if self.has_scheduled_wells:
+            self.device_wells = wp.empty(self.base.size, dtype=wp.float64, device=device)
+            self.host_wells = [well_cell_volume_rates(entries=step, shape=self.base.shape)
+                               for step in self.wells]
         if self.rates is None or not self.receivers.size:
             return
         self.device_receivers = wp.array(self.receivers, dtype=wp.int32, device=device)
@@ -125,6 +172,14 @@ class HistorySources:
         """
         wp.launch(kernel=kernels.scale_period_source, dim=workspace.n,
             inputs=[self.device_base, workspace.source, self.factors[index]], device=workspace.device)
+        if getattr(self, 'has_scheduled_wells', False):
+            scheduled = self.host_wells[index]
+            if scheduled is None:
+                self.device_wells.zero_()
+            else:
+                self.device_wells.assign(scheduled.ravel())
+            wp.launch(kernel=kernels.add_cell_rates, dim=workspace.n,
+                inputs=[self.device_wells, workspace.source], device=workspace.device)
         if self.rates is None or not self.receivers.size:
             return
         scalar_rate = 0.0
@@ -223,7 +278,8 @@ def total_accepted_exchange_volumes(*, periods):
 
 
 def solve_transient_history(*, model, dt, head_prev, ss, sy,
-                            source_factors=None, recharge_rates=None, **solver_options):
+                            source_factors=None, recharge_rates=None, wel_rates=None,
+                            **solver_options):
     """Solve a series of implicit NPF/STO steps using the supplied forcing.
 
     :param model: Built 3D NPF model.
@@ -231,19 +287,23 @@ def solve_transient_history(*, model, dt, head_prev, ss, sy,
     :param head_prev: Initial head field at the start of the history.
     :param ss: Specific storage in inverse model length.
     :param sy: Dimensionless specific yield.
-    :param source_factors: Optional per-step multipliers for the model's cell source.
-        With explicit recharge_rates these multiply only the volumetric rhs.
+    :param source_factors: Optional per-step multipliers for the model's cell
+        source. Explicit recharge_rates or wel_rates components are excluded
+        from the scaling and replaced independently per step.
     :param recharge_rates: Optional replacement for the built areal R_field [L/T].
         Accepts a scalar, (ny, nx) grid, (steps,) rates, or (steps, ny, nx) grids.
+    :param wel_rates: Optional replacement for the built sparse wells. Supply
+        None or one entry value per step in ``build_from_K_fields`` entry form;
+        a step value of None leaves that step without wells.
     :param solver_options: Options forwarded to the NPF solve.
     :return: Head history and per-step diagnostics.
     """
     started = perf_counter()
     if model.formulation != 'mf6_6_6_2_npf' or model._session is None:
         raise ValueError('A built mf6_6_6_2_npf model is required')
-    times, factors, rates = _history_inputs(
+    times, factors, rates, wells = _history_inputs(
         dt=dt, source_factors=source_factors, recharge_rates=recharge_rates,
-        surface_shape=(model.ny, model.nx),
+        wel_rates=wel_rates, surface_shape=(model.ny, model.nx), model=model,
     )
     options = dict(solver_options)
     for name in ('transient', 'npf_device_native', 'return_info'):
@@ -252,7 +312,8 @@ def solve_transient_history(*, model, dt, head_prev, ss, sy,
     if options.setdefault('npf_preconditioner', 'kcycle') != 'kcycle':
         raise ValueError('The NPF history driver currently requires the kcycle preconditioner')
     source_host = model._session.rhs.copy()
-    sources = HistorySources(model=model, original_source=source_host, rates=rates, factors=factors)
+    sources = HistorySources(model=model, original_source=source_host, rates=rates,
+        factors=factors, wells=wells)
     old_initial = None if model._session.initial_head is None else model._session.initial_head.copy()
     types = options.get('npf_cell_type', int(options.get('unconfined', False)))
     case = case_from_model(model=model, top=options.get('top_elevation', 0.), cell_type=types)

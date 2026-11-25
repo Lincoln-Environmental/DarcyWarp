@@ -70,6 +70,7 @@ class Model3DInputs:
     ghb_head: np.ndarray | float | None = None
     ghb_mask: np.ndarray | None = None
     R_field: np.ndarray | float | None = None
+    wel_entries: Any = None
 
     def __post_init__(self) -> None:
         kx = np.asarray(self.kx)
@@ -102,6 +103,9 @@ class Model3DInputs:
             object.__setattr__(self, "rhs", _array("rhs", self.rhs, shape, np.dtype(np.float64)))
         recharge = recharge_depth_rate(R_field=self.R_field, horizontal_shape=shape[1:])
         object.__setattr__(self, "R_field", recharge)
+        from DARCY_WARP_PACKAGE.physics.wel import validate_well_entries
+        object.__setattr__(self, "wel_entries", validate_well_entries(
+            entries=self.wel_entries, shape=shape, active=active))
         if self.initial_head is not None:
             object.__setattr__(
                 self,
@@ -194,6 +198,7 @@ class Model3DInputs:
                 rhs=self.rhs,
                 R_field=self.R_field,
                 initial_head=self.initial_head,
+                wel_entries=self.wel_entries,
                 ghb_conductance=self.ghb_conductance, ghb_head=self.ghb_head, ghb_mask=self.ghb_mask,
             )
         else:
@@ -212,6 +217,7 @@ class Model3DInputs:
                 rhs=self.rhs,
                 R_field=self.R_field,
                 initial_head=self.initial_head,
+                wel_entries=self.wel_entries,
                 ghb_conductance=self.ghb_conductance, ghb_head=self.ghb_head, ghb_mask=self.ghb_mask,
             )
         return instance

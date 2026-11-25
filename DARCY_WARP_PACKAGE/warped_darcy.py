@@ -29,6 +29,10 @@ from DARCY_WARP_PACKAGE.physics.budgets_2d import (
     compute_mass_balance_budget as _physics_compute_mass_balance_budget,
 )
 from DARCY_WARP_PACKAGE.physics.drn_2d import drn_discharge_2d
+from DARCY_WARP_PACKAGE.physics.wel import (
+    validate_well_entries,
+    well_budget,
+)
 from DARCY_WARP_PACKAGE.physics.storage_2d import (
     exact_unconfined_storage_terms as _physics_exact_unconfined_storage_terms,
     secant_specific_storage_coeff as _physics_secant_specific_storage_coeff,
@@ -3834,6 +3838,20 @@ def fill_uniform_recharge_kernel(
 
 
 @wp.kernel
+def add_well_depth_rates_kernel(
+    wells: wp.array(dtype=WP_FLOAT, ndim=2),
+    R: wp.array(dtype=WP_FLOAT, ndim=2),
+):
+    """Add the well depth-rate field into the combined recharge field.
+
+    :param wells: Owned well depth rates [L/T]; zero where no well exists.
+    :param R: Combined recharge field, updated in place.
+    """
+    j, i = wp.tid()
+    R[j, i] = R[j, i] + wells[j, i]
+
+
+@wp.kernel
 def update_unconfined_transmissivity_from_head_kernel(
     head: wp.array(dtype=WP_FLOAT, ndim=2),
     k_field: wp.array(dtype=WP_FLOAT, ndim=2),
@@ -4238,6 +4256,14 @@ class WarpDarcySolver:
         # Host side storage for fields
         self.T_field_host = None
         self.R_field_host = None
+        # Explicit sparse wells (physics.wel.WellEntries). ``R_field_host``
+        # carries the combined recharge-plus-well depth field consumed by the
+        # operators; the physical inputs stay independently owned here.
+        self._recharge_input_host = None
+        self.wel_entries = None
+        self.wel_depth_rate_host = None
+        self.wel_depth_wp = None
+        self._stage_wel = None
         self.active_host = None
         self.bc_mask_host = None
         self.bc_values_host = None
@@ -5225,6 +5251,7 @@ class WarpDarcySolver:
         gh_alpha: float | np.ndarray = 1.0,
         aq_thickness: float | np.ndarray | None = None,
         width: float = None,
+        wel_entries=None,
     ):
         """
         Build FD style inpts from T_truth and R_truth and upload to device.
@@ -5233,6 +5260,11 @@ class WarpDarcySolver:
         :param R_truth: scalar or array recharge
         :param gh_alpha: GHB scaling factor (scalar or grid)
         :param aq_thickness: aquifer thickness (scalar or grid). Uses solver default when None.
+        :param wel_entries: Optional explicit sparse wells: ``(cell, rate)`` pairs
+            with volumetric rates [L³/T] at ``(row, col)`` cells, a cell-to-rate
+            mapping, or an existing :class:`WellEntries` value. Negative rates
+            abstract water; the square cell area is applied once internally.
+            Wells on inactive cells are rejected.
         """
         if width is None:
             width = float(self.dx)
@@ -5267,6 +5299,12 @@ class WarpDarcySolver:
         # vs double-precision modes remain consistent.
         self.T_field_host = np.array(T_field, dtype=NP_FLOAT, order="C", copy=True)
         self.R_field_host = np.array(R_field, dtype=NP_FLOAT, order="C", copy=True)
+        self._recharge_input_host = self.R_field_host
+        self._upload_well_depth_rates(validate_well_entries(
+            entries=wel_entries, shape=(int(self.ny), int(self.nx)), active=np.asarray(active),
+        ))
+        if self.wel_depth_rate_host is not None:
+            self.R_field_host = self.R_field_host + self.wel_depth_rate_host
         self.active_host = np.asarray(active, dtype=np.int32)
         self.bc_mask_host = np.asarray(bc_mask, dtype=np.int32)
         self.bc_values_host = np.array(bc_values, dtype=NP_FLOAT, order="C", copy=True)
@@ -5407,6 +5445,7 @@ class WarpDarcySolver:
         riv_stage: np.ndarray | None = None,
         riv_rbot: np.ndarray | None = None,
         riv_cond: np.ndarray | None = None,
+        wel_entries=None,
     ) -> None:
         """
         Build solver state from explicitly provided fields (no synthetic builder).
@@ -5418,6 +5457,11 @@ class WarpDarcySolver:
 
         :param R_field: Signed surface recharge in length per unit time. Use
             a scalar for uniform recharge or a horizontal ``(ny, nx)`` map.
+        :param wel_entries: Optional explicit sparse wells: ``(cell, rate)`` pairs
+            with volumetric rates [L³/T] at ``(row, col)`` cells, a cell-to-rate
+            mapping, or an existing :class:`WellEntries` value. Negative rates
+            abstract water; the square cell area is applied once internally.
+            Wells on inactive cells are rejected.
         """
         T_field = np.array(T_field, dtype=NP_FLOAT, order="C", copy=True)
         R_field = np.array(R_field, dtype=NP_FLOAT, order="C", copy=True)
@@ -5478,6 +5522,12 @@ class WarpDarcySolver:
 
         self.T_field_host = T_field
         self.R_field_host = R_field
+        self._recharge_input_host = self.R_field_host
+        self._upload_well_depth_rates(validate_well_entries(
+            entries=wel_entries, shape=(int(self.ny), int(self.nx)), active=active,
+        ))
+        if self.wel_depth_rate_host is not None:
+            self.R_field_host = self.R_field_host + self.wel_depth_rate_host
         self.active_host = active
         self.bc_mask_host = bc_mask
         self.bc_values_host = bc_values.copy(order="C")
@@ -7078,9 +7128,95 @@ class WarpDarcySolver:
         self._fast_faces_stale = True  # ghb_factor feeds face conductances
         self._operator_generation = getattr(self, "_operator_generation", 0) + 1
 
+    def _well_depth_rate_host(self, entries):
+        """Convert validated sparse wells into the dense well depth-rate field.
+
+        :param entries: Validated :class:`WellEntries` on this grid, or None.
+        :return: Owned (ny, nx) depth rates [L/T]; every well's volumetric rate
+            is divided once by the square cell area so the operator applies the
+            area exactly once.
+        """
+        area = float(self.dx) * float(self.dx)
+        depth = np.zeros((int(self.ny), int(self.nx)), dtype=NP_FLOAT)
+        if entries is not None and len(entries):
+            rows, columns = (axis.astype(np.int64) for axis in entries.cells.T)
+            np.add.at(depth, (rows, columns), entries.rates / NP_FLOAT(area))
+        if not np.all(np.isfinite(depth)):
+            raise ValueError("Accumulated well depth rates are not representable")
+        return depth
+
+    def _upload_well_depth_rates(self, entries) -> None:
+        """Rebuild the owned well field and mirror it on the device."""
+        if entries is None:
+            self.wel_entries = None
+            self.wel_depth_rate_host = None
+            if self.wel_depth_wp is not None:
+                self.wel_depth_wp.zero_()
+            return
+        self.wel_entries = entries
+        self.wel_depth_rate_host = self._well_depth_rate_host(entries)
+        if self._recharge_input_host is self.R_field_host:
+            # Split the shared buffer so the pure recharge input keeps its own
+            # values once wells are combined into ``R_field_host``.
+            self._recharge_input_host = self.R_field_host.copy()
+        if self.wel_depth_wp is None:
+            self.wel_depth_wp = wp.zeros((int(self.ny), int(self.nx)), dtype=WP_FLOAT, device=self.device_str)
+            self._stage_wel = wp.zeros((int(self.ny), int(self.nx)), dtype=WP_FLOAT, device="cpu")
+        self._stage_wel.numpy()[:, :] = self.wel_depth_rate_host
+        wp.copy(self.wel_depth_wp, self._stage_wel)
+
+    def _refresh_combined_recharge_device(self) -> None:
+        """Recompute the combined depth field and upload it through staging."""
+        np.copyto(self.R_field_host, self._recharge_input_host)
+        if self.wel_depth_rate_host is not None:
+            self.R_field_host += self.wel_depth_rate_host
+        ny0 = int(self.ny)
+        nx0 = int(self.nx)
+        if self._stage_R0 is None or tuple(self._stage_R0.shape) != (ny0, nx0):
+            self._stage_R0 = wp.zeros((ny0, nx0), dtype=WP_FLOAT, device="cpu")
+        self._stage_R0.numpy()[:, :] = self.R_field_host
+        wp.copy(self.R_wp, self._stage_R0)
+
+    def wel_budget(self) -> dict:
+        """
+        Gross physical well budget of the owned sparse entries.
+
+        :return: Mapping with ``inflow``, ``outflow`` and ``net`` volumetric
+            rates [L³/T]. Opposing entries sharing one cell keep separate
+            gross contributions.
+        :raises RuntimeError: If the model has not been built.
+        """
+        if self.R_field_host is None:
+            raise RuntimeError("Call build_from_truth_inputs() once before wel_budget().")
+        rates = None if self.wel_entries is None else self.wel_entries.rates
+        return well_budget(rates=rates)
+
+    def update_wel_in_place(self, wel_entries) -> None:
+        """
+        Replace explicit wells in place (host + device) without reallocating.
+
+        Recharge and other volumetric inputs are retained. A failed update
+        leaves the previous model state unchanged.
+
+        :param wel_entries: Sparse well entries in ``build_from_fields`` form,
+            or None to remove every well.
+        :raises RuntimeError: If the model has not been built.
+        :raises ValueError: If an entry is invalid for this grid.
+        """
+        if self.R_field_host is None or self.R_wp is None or self._recharge_input_host is None:
+            raise RuntimeError("Call build_from_truth_inputs() once before update_wel_in_place().")
+        validated = validate_well_entries(
+            entries=wel_entries, shape=(int(self.ny), int(self.nx)), active=self.active_host,
+        )
+        self._upload_well_depth_rates(validated)
+        self._refresh_combined_recharge_device()
+
     def update_R_in_place(self, R_field=None, *, R_truth=None) -> None:
         """
         Update recharge in place (host + device) without reallocations.
+
+        Explicit wells are retained; ``R_field_host`` continues to hold the
+        combined recharge-plus-well depth field consumed by the operators.
 
         :param R_field: Signed depth rate [L/T], scalar or horizontal field.
         :param R_truth: Existing keyword for the same input.
@@ -7091,26 +7227,18 @@ class WarpDarcySolver:
             R_field = R_truth
         if R_field is None:
             raise TypeError("Supply a recharge rate or field.")
-        if self.R_field_host is None or self.R_wp is None:
+        if self.R_field_host is None or self.R_wp is None or self._recharge_input_host is None:
             raise RuntimeError("Call build_from_truth_inputs() once before update_R_in_place().")
 
         R_arr = np.asarray(R_field, dtype=NP_FLOAT, order="C")
-        if R_arr.shape != tuple(self.R_field_host.shape):
+        if R_arr.shape != tuple(self._recharge_input_host.shape):
             if R_arr.size == 1:
-                self.R_field_host[:, :] = R_arr.reshape(1)[0]
+                self._recharge_input_host[:, :] = R_arr.reshape(1)[0]
             else:
-                raise ValueError(f"R_field shape {R_arr.shape} expected {self.R_field_host.shape}")
+                raise ValueError(f"R_field shape {R_arr.shape} expected {self._recharge_input_host.shape}")
         else:
-            np.copyto(self.R_field_host, R_arr)
-
-        ny0 = int(self.ny)
-        nx0 = int(self.nx)
-
-        if self._stage_R0 is None or tuple(self._stage_R0.shape) != (ny0, nx0):
-            self._stage_R0 = wp.zeros((ny0, nx0), dtype=WP_FLOAT, device="cpu")
-
-        self._stage_R0.numpy()[:, :] = self.R_field_host
-        wp.copy(self.R_wp, self._stage_R0)
+            np.copyto(self._recharge_input_host, R_arr)
+        self._refresh_combined_recharge_device()
 
     def update_uniform_recharge_in_place(self, recharge_rate: float) -> None:
         """
@@ -7118,16 +7246,23 @@ class WarpDarcySolver:
 
         The host mirror is kept in sync for reporting/debug paths, but the
         device field no longer requires staging or uploading a full recharge
-        grid every transient period.
+        grid every transient period. Explicit wells are added on top of the
+        uniform field without an extra upload.
 
         :param recharge_rate: Uniform recharge rate for active cells.
         """
         if self.R_field_host is None or self.R_wp is None or self.active_wp is None:
             raise RuntimeError("Call build_from_truth_inputs() once before update_uniform_recharge_in_place().")
         rate = NP_FLOAT(float(recharge_rate))
+        if self._recharge_input_host is not None:
+            self._recharge_input_host[:, :] = rate
+            if self.active_host is not None:
+                self._recharge_input_host[np.asarray(self.active_host, dtype=np.int32) == 0] = NP_FLOAT(0.0)
         self.R_field_host[:, :] = rate
         if self.active_host is not None:
             self.R_field_host[np.asarray(self.active_host, dtype=np.int32) == 0] = NP_FLOAT(0.0)
+        if self.wel_depth_rate_host is not None:
+            self.R_field_host += self.wel_depth_rate_host
         wp.launch(
             kernel=fill_uniform_recharge_kernel,
             dim=(int(self.ny), int(self.nx)),
@@ -7140,6 +7275,13 @@ class WarpDarcySolver:
             ],
             device=self.device_str,
         )
+        if self.wel_depth_wp is not None:
+            wp.launch(
+                kernel=add_well_depth_rates_kernel,
+                dim=(int(self.ny), int(self.nx)),
+                inputs=[self.wel_depth_wp, self.R_wp],
+                device=self.device_str,
+            )
 
     def update_bc_in_place(self, bc_values) -> None:
         """
@@ -7655,6 +7797,8 @@ class WarpDarcySolver:
         # 6) Drop all device arrays on the solver itself
         self.T_wp = None
         self.R_wp = None
+        self.wel_depth_wp = None
+        self._stage_wel = None
         self.active_wp = None
         self.bc_mask_wp = None
         self.bc_values_wp = None
