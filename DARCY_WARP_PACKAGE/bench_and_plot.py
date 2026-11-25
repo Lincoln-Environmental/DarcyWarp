@@ -4,10 +4,8 @@ import argparse
 from pathlib import Path
 
 from DARCY_WARP_PACKAGE.project_base import data_store
-from DARCY_WARP_PACKAGE.model_benchmarking_recharge_change import (
-    main as bench_recharge_main,
-    _default_workers_arg as _default_workers_arg,
-)
+from DARCY_WARP_PACKAGE.benchmark_support import default_workers_arg
+from DARCY_WARP_PACKAGE.model_benchmarking_recharge_change import main as bench_recharge_main
 from DARCY_WARP_PACKAGE.model_benchmarking_T_change import main as bench_t_main
 from DARCY_WARP_PACKAGE.benchmark_plots import main as plots_main
 
@@ -33,7 +31,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--ny", type=int, default=1000)
     parser.add_argument("--dx", type=float, default=100.0)
     parser.add_argument("--n_cases", type=int, default=48)
-    parser.add_argument("--workers", type=str, default=_default_workers_arg())
+    parser.add_argument("--workers", type=str, default=default_workers_arg())
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--device", type=str, default="cuda:0")
     parser.add_argument("--ghb", action="store_true")

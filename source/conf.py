@@ -3,6 +3,12 @@
 # For the full list of built-in configuration values, see the documentation:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
+import sys
+from pathlib import Path
+
+# Import the package from this checkout when generating the API reference.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
@@ -14,7 +20,9 @@ release = '0.2'
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-extensions = []
+extensions = ['sphinx.ext.autodoc']
+# The offline build has no external Python inventory for this standard type.
+nitpick_ignore = [('py:class', 'pathlib.Path')]
 
 templates_path = []
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']

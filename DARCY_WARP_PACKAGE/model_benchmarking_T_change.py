@@ -10,85 +10,14 @@ from multiprocessing.shared_memory import SharedMemory
 from datetime import datetime, timezone
 from importlib import import_module
 
+from DARCY_WARP_PACKAGE.benchmark_support import (
+    default_workers_arg,
+    effective_worker_count,
+    write_metadata_if_enabled,
+)
+from DARCY_WARP_PACKAGE.model_benchmarking_recharge_change import run_single_fd_case, run_single_mf6_case
 from DARCY_WARP_PACKAGE.project_base import data_store
 from DARCY_WARP_PACKAGE.model_builder import build_base_fields
-
-
-def _write_metadata_if_enabled(out_path: Path, payload: dict, enabled: bool) -> None:
-    if not bool(enabled):
-        return
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    with out_path.open("w", encoding="utf-8") as f:
-        json.dump(payload, f, indent=4)
-    print(f"Saved optional benchmark metadata to {out_path}")
-
-
-def _default_workers_arg() -> str:
-    cpus = os.cpu_count()
-    if not cpus or cpus < 1:
-        cpus = 1
-    candidates = [2, 4, 8, 16, 24]
-    limited = [w for w in candidates if w <= cpus]
-    if not limited:
-        return str(cpus)
-    if cpus < candidates[-1] and limited[-1] != cpus:
-        limited.append(cpus)
-    return ",".join(str(w) for w in limited)
-
-
-def _effective_worker_count(requested_workers: int, n_cases: int) -> int:
-    if int(requested_workers) < 1:
-        raise ValueError("n_workers must be >= 1")
-    cpus = os.cpu_count()
-    if not cpus or cpus < 1:
-        cpus = 1
-    capped = min(int(requested_workers), int(n_cases), int(cpus))
-    return max(1, int(capped))
-
-
-# Reuse the single-case runners from the recharge benchmarking module if present.
-# Note: this import may fail in some environments; we still want this module to run.
-_have_recharge_module = False
-run_single_fd_case = None
-try:
-    from DARCY_WARP_PACKAGE.model_benchmarking_recharge_change import run_single_mf6_case as run_single_mf6_case
-    from DARCY_WARP_PACKAGE.model_benchmarking_recharge_change import run_single_fd_case as _run_single_fd_case
-    run_single_fd_case = _run_single_fd_case
-    _have_recharge_module = True
-except Exception:
-    # Fallback definitions (minimally compatible) if import fails
-    def run_single_mf6_case(
-            case_id: int,
-            nx: int = 100,
-            ny: int = 100,
-            dx: float = 100.0,
-            T_field: np.ndarray | float = 3000.0,
-            R_field: np.ndarray | float = 1.0e-4,
-            base_workspace=None,
-            ghb: bool = False,
-    ) -> float:
-        from DARCY_WARP_PACKAGE.modflow_truth import make_mf_model
-
-        ws_case = Path(base_workspace).joinpath(f"mf6_case_{int(case_id):03d}")
-        ws_case.mkdir(parents=True, exist_ok=True)
-
-        thickness = 300.0
-        hk_field = np.asarray(T_field, dtype=float) / thickness
-
-        _heads, total_time = make_mf_model(
-            nx=nx,
-            ny=ny,
-            grid_size=dx,
-            nper=1,
-            workspace=ws_case,
-            hk=hk_field,
-            recharge=np.asarray(R_field, dtype=float),
-            run=True,
-            use_ghb=ghb,
-            record_full_time=True,
-        )
-
-        return float(total_time)
 
 
 def benchmark_fd_ensemble_persistent(
@@ -133,7 +62,7 @@ def benchmark_fd_ensemble_persistent(
         seen_workers: set[int] = set()
         for n_workers in n_workers_list:
             requested_workers = int(n_workers)
-            n_workers_i = _effective_worker_count(requested_workers, int(n_cases))
+            n_workers_i = effective_worker_count(requested_workers, int(n_cases))
             if n_workers_i != requested_workers:
                 print(
                     f"Adjusted requested FD workers from {requested_workers} to {n_workers_i} "
@@ -261,7 +190,7 @@ def benchmark_mf6_ensemble(
     seen_workers: set[int] = set()
     for n_workers in n_workers_list:
         requested_workers = int(n_workers)
-        n_workers_i = _effective_worker_count(requested_workers, int(n_cases))
+        n_workers_i = effective_worker_count(requested_workers, int(n_cases))
         if n_workers_i != requested_workers:
             print(
                 f"Adjusted requested MF6 workers from {requested_workers} to {n_workers_i} "
@@ -646,7 +575,7 @@ def benchmark_mf6_ensemble_persistent_T(
         seen_workers: set[int] = set()
         for n_workers in n_workers_list:
             requested_workers = int(n_workers)
-            n_workers_i = _effective_worker_count(requested_workers, int(n_cases))
+            n_workers_i = effective_worker_count(requested_workers, int(n_cases))
             if n_workers_i != requested_workers:
                 print(
                     f"Adjusted requested MF6 workers from {requested_workers} to {n_workers_i} "
@@ -1175,7 +1104,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--ny", type=int, default=1000)
     parser.add_argument("--dx", type=float, default=100.0)
     parser.add_argument("--n_cases", type=int, default=48)
-    parser.add_argument("--workers", type=str, default=_default_workers_arg())
+    parser.add_argument("--workers", type=str, default=default_workers_arg())
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--ghb", action="store_true")
     parser.add_argument("--device", type=str, default="cuda:0")
@@ -1232,7 +1161,7 @@ def main(argv: list[str] | None = None) -> int:
 
     n_workers_list: list[int] = []
     for requested in requested_workers_list:
-        effective = _effective_worker_count(int(requested), int(n_cases))
+        effective = effective_worker_count(int(requested), int(n_cases))
         if effective != int(requested):
             print(
                 f"Adjusted requested workers from {int(requested)} to {int(effective)} "
@@ -1410,7 +1339,7 @@ def main(argv: list[str] | None = None) -> int:
         "outputs": written_outputs,
     }
     metadata_path = data_store.joinpath(f"benchmark_metadata_T_{cells}.json")
-    _write_metadata_if_enabled(metadata_path, metadata_payload, bool(args.write_metadata))
+    write_metadata_if_enabled(metadata_path, metadata_payload, bool(args.write_metadata))
 
     return 0
 

@@ -22,41 +22,27 @@ def create_solver(
     device: str = "cuda:0",
     **kwargs: Any,
 ):
-    """
-    Create a structured Warp Darcy solver.
+    """Create a structured groundwater model on a Warp CPU or CUDA device.
 
-    Parameters
-    ----------
-    dim
-        Spatial dimension, either ``2`` or ``3``.
-    solver
-        Solver preference. Accepts canonical backend names
-        ``'confined_pcg'``, ``'confined_kcycle'``, and
-        ``'unconfined_picard_kcycle'``. The experimental
-        ``'unconfined_semismooth_newton_kcycle'`` and ``'unconfined_fas'``
-        backends are explicit-only. Legacy aliases ``'pcg'``, ``'kcycle'``,
-        ``'multigrid'``, and ``'mg'`` remain available. An explicitly
-        requested unconfined backend is preserved and becomes the default
-        backend for later ``solve()`` calls; formulation is still selected
-        at ``solve`` time. For 3D use ``'kcycle'`` or ``'chebyshev'``.
-    nx, ny
-        Number of columns and rows.
-    dx
-        Cell size in the x direction.
-    dy
-        Cell size in the y direction. The current 2D solver uses square
-        cells, so omit this argument or pass the same value as ``dx``. In 3D
-        this defaults to ``dx`` and may differ from it.
-    device
-        Warp device string, e.g. ``'cuda:0'``.
-    **kwargs
-        Extra arguments forwarded to the solver constructor. For 3D, supply
-        ``nz`` and ``dz`` here.
-
-    Returns
-    -------
-    WarpDarcySolver or WarpDarcySolver3D
-        A solver instance exposing ``build_*`` and ``solve`` methods.
+    :param dim: Number of spatial dimensions, either 2 or 3.
+    :param solver: Solver backend. In 2D, ``kcycle`` selects the default
+        backend for the formulation supplied at solve time. An explicit
+        unconfined backend name, such as ``unconfined_picard_kcycle``,
+        becomes the default for later solves. In 3D, choose ``kcycle``
+        or ``chebyshev``. See :doc:`/capabilities` for supported combinations.
+    :param nx: Number of grid columns along the x axis.
+    :param ny: Number of grid rows along the y axis.
+    :param dx: Cell width along the x axis, in model length units.
+    :param dy: Cell width along the y axis, in the same units as ``dx``.
+        Defaults to ``dx``. The 2D solver requires square cells.
+    :param device: Warp execution device, for example ``"cpu"`` or ``"cuda:0"``.
+    :param kwargs: Additional keyword arguments passed to the selected model
+        constructor. A 3D model requires ``nz`` (layer count) and ``dz``
+        (vertical cell thickness, in model length units).
+    :returns: A ``WarpDarcySolver`` for 2D or a ``WarpDarcySolver3D`` for 3D.
+        Use its build methods to supply the groundwater fields before solving.
+    :raises ValueError: If the dimension or backend is unsupported, a required
+        3D argument is missing, or the grid arguments conflict with the dimension.
     """
     if dim == 3:
         solver_norm = str(solver).strip().lower()

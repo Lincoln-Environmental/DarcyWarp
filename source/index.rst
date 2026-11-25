@@ -31,6 +31,7 @@ Public License, version 3 or later (``AGPL-3.0-or-later``).
    :caption: Documentation
 
    quickstart
+   api
    capabilities
    validation
    main_audit
