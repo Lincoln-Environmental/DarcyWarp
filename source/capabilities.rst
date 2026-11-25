@@ -238,3 +238,18 @@ multi-step NPF history, strict and confined performance control files,
 independent MF6 checks and timing boundaries. The fast history is
 opt-in, and its measured runtime is not a library-default guarantee.
 Transformed terrain remains experimental on ``dev``.
+
+Cartesian unconfined storage
+----------------------------
+
+The conservative ``secant_sy`` storage law integrates drainable and elastic
+storage through layer crossings. The former ``phreatic_sy`` option assigned
+specific yield to a single water-table cell and did not conserve storage across
+all layer crossings. It is no longer executable. Existing inputs selecting
+that method must explicitly select ``secant_sy`` and supply their Sy and Ss
+fields; rerun and requalify the model rather than assuming identical heads.
+
+The explicitly selected ``confined_volume`` relation remains available as a
+linear volumetric storage approximation with head-dependent conductance.
+It takes ``storage_coeff`` rather than Sy/Ss and is not a substitute for
+convertible-layer storage. The production MF6 NPF/STO formulation is unchanged.

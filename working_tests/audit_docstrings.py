@@ -18,6 +18,7 @@ ENFORCED_MODULES = {
     "physics/operator_data.py",
     "physics/riv_2d.py",
     "physics/storage_2d.py",
+    "physics/storage_contract_3d.py",
     "process_mass_balance.py",
     "project_base.py",
     "solvers/transient_unconfined.py",

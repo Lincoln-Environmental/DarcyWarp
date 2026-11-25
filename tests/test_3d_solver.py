@@ -204,14 +204,8 @@ class Test3DImports(unittest.TestCase):
         self.assertFalse(bool(kc_info.get("phreatic_storage_active", True)))
         self.assertGreater(float(np.max(np.abs(kc_head - head_prev))), 1.0e-8)
 
-    def test_3d_transient_unconfined_phreatic_sy_reports_storage_mode(self):
-        """
-        Transient unconfined 3D supports explicit phreatic Sy storage.
-
-        This path is distinct from the legacy confined-volume approximation:
-        callers pass sy/ss, the Picard loop builds the storage diagonal from
-        saturated thickness, and the info dict reports the active mode.
-        """
+    def test_3d_transient_unconfined_secant_storage_replaces_phreatic_mode(self):
+        """Reject the retired nonconservative law; keep explicit Sy/Ss storage."""
         from DARCY_WARP_PACKAGE.solvers_3d import (
             solve_chebyshev_7point_3d,
             solve_multigrid_kcycle_7point_3d,
@@ -257,14 +251,19 @@ class Test3DImports(unittest.TestCase):
             "return_info": True,
         }
 
+        for solver in (solve_chebyshev_7point_3d, solve_multigrid_kcycle_7point_3d):
+            with self.assertRaisesRegex(ValueError, "phreatic_sy has been removed.*secant_sy"):
+                solver(**common)
+        common["unconfined_storage_mode"] = "secant_sy"
+
         cheb_head, cheb_info = solve_chebyshev_7point_3d(
             **common,
             max_iter=80,
         )
         self.assertEqual(cheb_head.shape, shape)
         self.assertTrue(np.all(np.isfinite(cheb_head)))
-        self.assertEqual(cheb_info.get("unconfined_storage_mode"), "phreatic_sy")
-        self.assertTrue(bool(cheb_info.get("phreatic_storage_active", False)))
+        self.assertEqual(cheb_info.get("unconfined_storage_mode"), "secant_sy")
+        self.assertFalse(bool(cheb_info.get("phreatic_storage_active", True)))
         self.assertEqual(float(cheb_info.get("sy")), 0.20)
         self.assertEqual(float(cheb_info.get("ss")), 1.0e-5)
 
@@ -277,8 +276,8 @@ class Test3DImports(unittest.TestCase):
         )
         self.assertEqual(kc_head.shape, shape)
         self.assertTrue(np.all(np.isfinite(kc_head)))
-        self.assertEqual(kc_info.get("unconfined_storage_mode"), "phreatic_sy")
-        self.assertTrue(bool(kc_info.get("phreatic_storage_active", False)))
+        self.assertEqual(kc_info.get("unconfined_storage_mode"), "secant_sy")
+        self.assertFalse(bool(kc_info.get("phreatic_storage_active", True)))
         self.assertEqual(float(kc_info.get("sy")), 0.20)
         self.assertEqual(float(kc_info.get("ss")), 1.0e-5)
 
