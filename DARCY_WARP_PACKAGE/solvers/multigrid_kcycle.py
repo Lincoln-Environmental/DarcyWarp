@@ -9,6 +9,7 @@ import numpy as np
 from .convergence import chebyshev_relaxation_sequence as _chebyshev_relaxation_sequence
 
 from .base import SolverContext
+from .classic_kcycle import build_classic_kcycle
 
 
 STEADY_CONFINED_KCYCLE_DEFAULTS = {
@@ -29,6 +30,12 @@ class ConfinedKCycleBackend:
     name = "confined_kcycle"
 
     def solve(self, context: SolverContext, **kwargs: Any):
+        """Solve the confined model using the requested K-cycle controls.
+
+        :param context: Built model and formulation supplied by the registry.
+        :param kwargs: Optional overrides to the confined K-cycle defaults.
+        :returns: Head and optional diagnostics.
+        """
         for control_name, default_value in STEADY_CONFINED_KCYCLE_DEFAULTS.items():
             kwargs.setdefault(control_name, default_value)
         kwargs["unconfined"] = False
@@ -50,39 +57,38 @@ def solve_kcycle_device_buffers(
     return_scalar_info=True,
     fixed_work_no_scalar_reads=False,
 ):
-    from DARCY_WARP_PACKAGE import warped_darcy as kernel_module
+    """Run classic K-cycles directly on caller-owned device buffers.
+
+    :param model: Built model providing grid metadata and execution device.
+    :param x_wp: Writable fine-grid iterate (head or correction).
+    :param rhs_wp: Fine-grid right-hand-side buffer.
+    :param T_wp: Fine-grid transmissivity buffer.
+    :param storage_diag_wp: Optional fine-grid storage diagonal.
+    :param active_wp: Active-cell mask on the device.
+    :param bc_mask_wp: Prescribed-head mask on the device.
+    :param bc_values_wp: Prescribed head or correction values on the device.
+    :param levels: Existing hierarchy with preallocated device buffers.
+    :param solve_controls: Inner K-cycle and convergence controls.
+    :param return_scalar_info: Return convergence and residual statistics.
+    :param fixed_work_no_scalar_reads: Permit fixed-work execution without
+        reading back residual scalars when return_scalar_info is false.
+    :returns: Inner solver diagnostics; the iterate is updated in place.
+    """
+    import warp as wp
+    from DARCY_WARP_PACKAGE.warped_darcy import (
+        WP_FLOAT,
+        check_rtr_converged_kernel,
+        compute_head_residual_kernel,
+        compute_head_residual_no_storage_kernel,
+        compute_residual_kernel,
+        compute_residual_no_storage_kernel,
+        copy_field_kernel,
+        kcycle_check_dh_and_residual_kernel,
+        kcycle_check_dh_and_residual_no_storage_kernel,
+        reset_kcycle_check_buffers_kernel,
+        zero_scalar_kernel,
+    )
     self = model
-    wp = kernel_module.wp
-    np = kernel_module.np
-    WP_FLOAT = kernel_module.WP_FLOAT
-    _chebyshev_relaxation_sequence = kernel_module._chebyshev_relaxation_sequence
-    add_correction_kernel = kernel_module.add_correction_kernel
-    apply_A_and_pAp_kernel = kernel_module.apply_A_and_pAp_kernel
-    apply_A_and_pAp_no_storage_kernel = kernel_module.apply_A_and_pAp_no_storage_kernel
-    axpy_active_scalar_2dmask_kernel = kernel_module.axpy_active_scalar_2dmask_kernel
-    axpy_active_scalar_kernel = kernel_module.axpy_active_scalar_kernel
-    check_rtr_converged_kernel = kernel_module.check_rtr_converged_kernel
-    compute_alpha_kernel = kernel_module.compute_alpha_kernel
-    compute_beta_and_update_rho_kernel = kernel_module.compute_beta_and_update_rho_kernel
-    compute_head_residual_kernel = kernel_module.compute_head_residual_kernel
-    compute_head_residual_no_storage_kernel = kernel_module.compute_head_residual_no_storage_kernel
-    compute_residual_kernel = kernel_module.compute_residual_kernel
-    compute_residual_no_storage_kernel = kernel_module.compute_residual_no_storage_kernel
-    compute_safe_alpha_kernel = kernel_module.compute_safe_alpha_kernel
-    copy_field_kernel = kernel_module.copy_field_kernel
-    dot_active_kernel = kernel_module.dot_active_kernel
-    init_pcg_with_A_kernel = kernel_module.init_pcg_with_A_kernel
-    init_pcg_with_A_no_storage_kernel = kernel_module.init_pcg_with_A_no_storage_kernel
-    jacobi_applyA_fused_kernel = kernel_module.jacobi_applyA_fused_kernel
-    jacobi_applyA_fused_no_storage_kernel = kernel_module.jacobi_applyA_fused_no_storage_kernel
-    kcycle_check_dh_and_residual_kernel = kernel_module.kcycle_check_dh_and_residual_kernel
-    kcycle_check_dh_and_residual_no_storage_kernel = kernel_module.kcycle_check_dh_and_residual_no_storage_kernel
-    prolong_bilinear_any_kernel = kernel_module.prolong_bilinear_any_kernel
-    reset_kcycle_check_buffers_kernel = kernel_module.reset_kcycle_check_buffers_kernel
-    restrict_blockavg_kernel = kernel_module.restrict_blockavg_kernel
-    update_p_kernel = kernel_module.update_p_kernel
-    update_x_r_z_rho_rTr_kernel = kernel_module.update_x_r_z_rho_rTr_kernel
-    zero_scalar_kernel = kernel_module.zero_scalar_kernel
     device = self.device_str
 
     max_cycles_i = int(solve_controls.get("max_cycles", 20))
@@ -205,290 +211,22 @@ def solve_kcycle_device_buffers(
         tol_abs = float("nan")
         thr_rTr = float("nan")
 
-    def pcg_solve_level(level, max_iter_level: int):
-        nxL = int(level.nx)
-        nyL = int(level.ny)
-        dimL = (nyL, nxL)
+    def storage_for_level(level):
+        """Resolve the actual diagonal attached to each supplied level.
 
-        wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[level.rho_buf], device=device)
-        wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[level.rTr_buf], device=device)
-
-        _ipcga_in = [
-            level.x_wp, level.b_wp, level.T_wp, level.active_wp, level.bc_mask_wp,
-            level.gh_mask_wp, level.ghb_factor_wp,
-        ]
+        :param level: Multigrid level whose storage buffer may be used.
+        :returns: Pair of storage-active flag and diagonal buffer.
+        """
         if storage_diag_wp is not None and level is lvl0:
-            _ipcga_k = init_pcg_with_A_kernel
-            _ipcga_in.append(storage_diag_wp)
-        elif getattr(level, "storage_diag_wp", None) is not None:
-            _ipcga_k = init_pcg_with_A_kernel
-            _ipcga_in.append(level.storage_diag_wp)
-        else:
-            _ipcga_k = init_pcg_with_A_no_storage_kernel
+            return True, storage_diag_wp
+        diagonal = getattr(level, "storage_diag_wp", None)
+        return diagonal is not None, diagonal
 
-        _ipcga_in += [
-            level.M_inv_wp, level.Ap_wp, level.r_wp, level.z_wp, level.p_wp,
-            level.rho_buf, level.rTr_buf, nxL, nyL,
-        ]
-        wp.launch(kernel=_ipcga_k, dim=dimL, inputs=_ipcga_in, device=device)
-
-        for _ in range(int(max_iter_level)):
-            wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[level.pAp_buf], device=device)
-
-            _aap_in = [
-                level.T_wp, level.active_wp, level.bc_mask_wp, level.gh_mask_wp,
-                level.ghb_factor_wp,
-            ]
-            if storage_diag_wp is not None and level is lvl0:
-                _aap_k = apply_A_and_pAp_kernel
-                _aap_in.append(storage_diag_wp)
-            elif getattr(level, "storage_diag_wp", None) is not None:
-                _aap_k = apply_A_and_pAp_kernel
-                _aap_in.append(level.storage_diag_wp)
-            else:
-                _aap_k = apply_A_and_pAp_no_storage_kernel
-            _aap_in += [level.p_wp, level.Ap_wp, level.pAp_buf, nxL, nyL]
-            wp.launch(kernel=_aap_k, dim=dimL, inputs=_aap_in, device=device)
-
-            wp.launch(
-                kernel=compute_alpha_kernel,
-                dim=1,
-                inputs=[level.rho_buf, level.pAp_buf, level.alpha_buf],
-                device=device,
-            )
-
-            wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[level.rho_new_buf], device=device)
-            wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[level.rTr_buf], device=device)
-
-            wp.launch(
-                kernel=update_x_r_z_rho_rTr_kernel,
-                dim=dimL,
-                inputs=[
-                    level.x_wp,
-                    level.r_wp,
-                    level.z_wp,
-                    level.p_wp,
-                    level.Ap_wp,
-                    level.M_inv_wp,
-                    level.active_wp,
-                    level.bc_mask_wp,
-                    level.alpha_buf,
-                    level.rho_new_buf,
-                    level.rTr_buf,
-                    nxL,
-                    nyL,
-                ],
-                device=device,
-            )
-
-            wp.launch(
-                kernel=compute_beta_and_update_rho_kernel,
-                dim=1,
-                inputs=[level.rho_buf, level.rho_new_buf, level.beta_buf],
-                device=device,
-            )
-
-            wp.launch(
-                kernel=update_p_kernel,
-                dim=dimL,
-                inputs=[
-                    level.p_wp,
-                    level.z_wp,
-                    level.active_wp,
-                    level.bc_mask_wp,
-                    level.beta_buf,
-                    nxL,
-                    nyL,
-                ],
-                device=device,
-            )
-
-    def kcycle(level_id: int):
-        level = levels[level_id]
-        nxL = int(level.nx)
-        nyL = int(level.ny)
-        dimL = (nyL, nxL)
-
-        x_tmp_wp = level.Ax_wp
-        x_in = level.x_wp
-        x_out = x_tmp_wp
-
-        for omega_step in pre_omegas:
-            _jac_in = [
-                level.T_wp, level.active_wp, level.bc_mask_wp, level.gh_mask_wp,
-                level.ghb_factor_wp,
-            ]
-            if storage_diag_wp is not None and level is lvl0:
-                _jac_k = jacobi_applyA_fused_kernel
-                _jac_in.append(storage_diag_wp)
-            elif getattr(level, "storage_diag_wp", None) is not None:
-                _jac_k = jacobi_applyA_fused_kernel
-                _jac_in.append(level.storage_diag_wp)
-            else:
-                _jac_k = jacobi_applyA_fused_no_storage_kernel
-            _jac_in += [
-                level.b_wp, x_in, level.M_inv_wp, level.bc_values_wp,
-                float(omega_step), nxL, nyL, x_out,
-            ]
-            wp.launch(kernel=_jac_k, dim=dimL, inputs=_jac_in, device=device)
-            tmp = x_in
-            x_in = x_out
-            x_out = tmp
-
-        if x_in is not level.x_wp:
-            wp.launch(kernel=copy_field_kernel, dim=dimL, inputs=[x_in, level.x_wp, nxL, nyL], device=device)
-
-        wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[level.rTr_buf], device=device)
-        _cr_in = [
-            level.x_wp, level.b_wp, level.T_wp, level.active_wp, level.bc_mask_wp,
-            level.gh_mask_wp, level.ghb_factor_wp,
-        ]
-        if storage_diag_wp is not None and level is lvl0:
-            _cr_k = compute_residual_kernel
-            _cr_in.append(storage_diag_wp)
-        elif getattr(level, "storage_diag_wp", None) is not None:
-            _cr_k = compute_residual_kernel
-            _cr_in.append(level.storage_diag_wp)
-        else:
-            _cr_k = compute_residual_no_storage_kernel
-        _cr_in += [level.r_wp, level.rTr_buf, nxL, nyL]
-        wp.launch(kernel=_cr_k, dim=dimL, inputs=_cr_in, device=device)
-
-        if level_id == (len(levels) - 1):
-            pcg_solve_level(level=level, max_iter_level=int(nu_coarse))
-            return
-
-        coarse = levels[level_id + 1]
-        nxC = int(coarse.nx)
-        nyC = int(coarse.ny)
-        dimC = (nyC, nxC)
-
-        wp.launch(
-            kernel=restrict_blockavg_kernel,
-            dim=dimC,
-            inputs=[level.r_wp, level.active_wp,
-                    level.bc_mask_wp,coarse.b_wp,
-                    nxL, nyL, nxC, nyC],
-            device=device,
-        )
-
-        coarse.x_wp.fill_(WP_FLOAT(0.0))
-        kcycle(level_id + 1)
-
-        coarse_is_coarsest = (level_id + 1) == (len(levels) - 1)
-        if coarse_is_coarsest:
-            wp.launch(kernel=copy_field_kernel, dim=dimC, inputs=[coarse.x_wp, coarse.e_wp, nxC, nyC],
-                      device=device)
-            z1_wp = coarse.e_wp
-        else:
-            wp.launch(kernel=copy_field_kernel, dim=dimC, inputs=[coarse.x_wp, coarse.z_wp, nxC, nyC],
-                      device=device)
-            z1_wp = coarse.z_wp
-
-        wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[coarse.rTr_buf], device=device)
-        _ccr_in = [
-            z1_wp, coarse.b_wp, coarse.T_wp, coarse.active_wp, coarse.bc_mask_wp,
-            coarse.gh_mask_wp, coarse.ghb_factor_wp,
-        ]
-        if getattr(coarse, "storage_diag_wp", None) is not None:
-            _ccr_k = compute_residual_kernel
-            _ccr_in.append(coarse.storage_diag_wp)
-        else:
-            _ccr_k = compute_residual_no_storage_kernel
-        _ccr_in += [coarse.r_wp, coarse.rTr_buf, nxC, nyC]
-        wp.launch(kernel=_ccr_k, dim=dimC, inputs=_ccr_in, device=device)
-
-        wp.launch(kernel=copy_field_kernel, dim=dimC, inputs=[coarse.r_wp, coarse.b_wp, nxC, nyC], device=device)
-        r1_wp = coarse.b_wp
-
-        coarse.x_wp.fill_(WP_FLOAT(0.0))
-        kcycle(level_id + 1)
-
-        wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[coarse.rho_buf], device=device)
-        wp.launch(
-            kernel=dot_active_kernel,
-            dim=dimC,
-            inputs=[r1_wp, coarse.x_wp, coarse.active_wp, coarse.bc_mask_wp, coarse.rho_buf, nxC, nyC],
-            device=device,
-        )
-
-        wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[coarse.pAp_buf], device=device)
-        _caap_in = [
-            coarse.T_wp, coarse.active_wp, coarse.bc_mask_wp, coarse.gh_mask_wp,
-            coarse.ghb_factor_wp,
-        ]
-        if getattr(coarse, "storage_diag_wp", None) is not None:
-            _caap_k = apply_A_and_pAp_kernel
-            _caap_in.append(coarse.storage_diag_wp)
-        else:
-            _caap_k = apply_A_and_pAp_no_storage_kernel
-        _caap_in += [coarse.x_wp, coarse.Ax_wp, coarse.pAp_buf, nxC, nyC]
-        wp.launch(kernel=_caap_k, dim=dimC, inputs=_caap_in, device=device)
-
-        wp.launch(
-            kernel=compute_safe_alpha_kernel,
-            dim=1,
-            inputs=[coarse.rho_buf, coarse.pAp_buf, coarse.alpha_buf],
-            device=device,
-        )
-
-        active_is_1d = (len(coarse.active_wp.shape) == 1)
-        if active_is_1d:
-            wp.launch(
-                kernel=axpy_active_scalar_kernel,
-                dim=dimC,
-                inputs=[z1_wp, coarse.x_wp, coarse.active_wp, coarse.bc_mask_wp, coarse.alpha_buf, nxC, nyC],
-                device=device,
-            )
-        else:
-            wp.launch(
-                kernel=axpy_active_scalar_2dmask_kernel,
-                dim=dimC,
-                inputs=[z1_wp, coarse.x_wp, coarse.active_wp, coarse.bc_mask_wp, coarse.alpha_buf, nxC, nyC],
-                device=device,
-            )
-
-        wp.launch(
-            kernel=prolong_bilinear_any_kernel,
-            dim=dimL,
-            inputs=[z1_wp, level.e_wp, nxL, nyL, nxC, nyC],
-            device=device,
-        )
-        wp.launch(
-            kernel=add_correction_kernel,
-            dim=dimL,
-            inputs=[level.x_wp, level.e_wp, level.active_wp, level.bc_mask_wp, level.bc_values_wp, nxL, nyL],
-            device=device,
-        )
-
-        x_tmp_wp = level.Ax_wp
-        x_in = level.x_wp
-        x_out = x_tmp_wp
-
-        for omega_step in post_omegas:
-            _jac_in = [
-                level.T_wp, level.active_wp, level.bc_mask_wp, level.gh_mask_wp,
-                level.ghb_factor_wp,
-            ]
-            if storage_diag_wp is not None and level is lvl0:
-                _jac_k = jacobi_applyA_fused_kernel
-                _jac_in.append(storage_diag_wp)
-            elif getattr(level, "storage_diag_wp", None) is not None:
-                _jac_k = jacobi_applyA_fused_kernel
-                _jac_in.append(level.storage_diag_wp)
-            else:
-                _jac_k = jacobi_applyA_fused_no_storage_kernel
-            _jac_in += [
-                level.b_wp, x_in, level.M_inv_wp, level.bc_values_wp,
-                float(omega_step), nxL, nyL, x_out,
-            ]
-            wp.launch(kernel=_jac_k, dim=dimL, inputs=_jac_in, device=device)
-            tmp = x_in
-            x_in = x_out
-            x_out = tmp
-
-        if x_in is not level.x_wp:
-            wp.launch(kernel=copy_field_kernel, dim=dimL, inputs=[x_in, level.x_wp, nxL, nyL], device=device)
+    kcycle, _ = build_classic_kcycle(
+        levels=levels, device=device, storage_for_level=storage_for_level,
+        pre_omegas=pre_omegas, post_omegas=post_omegas, nu_coarse=nu_coarse,
+        n_free0=n_free0,
+    )
 
     n_cycles_used = 0
     converged = False
@@ -872,32 +610,15 @@ def solve_multigrid_kcycle_backend(
         NP_FLOAT,
         WP_FLOAT,
         _prepare_5point_transient_terms,
-        add_correction_kernel,
-        apply_A_and_pAp_kernel,
-        apply_A_and_pAp_no_storage_kernel,
-        axpy_active_scalar_2dmask_kernel,
-        axpy_active_scalar_kernel,
         check_rtr_converged_kernel,
-        compute_alpha_kernel,
-        compute_beta_and_update_rho_kernel,
         compute_head_residual_kernel,
         compute_head_residual_no_storage_kernel,
         compute_residual_kernel,
         compute_residual_no_storage_kernel,
-        compute_safe_alpha_kernel,
         copy_field_kernel,
-        dot_active_kernel,
-        init_pcg_with_A_kernel,
-        init_pcg_with_A_no_storage_kernel,
-        jacobi_applyA_fused_kernel,
-        jacobi_applyA_fused_no_storage_kernel,
         kcycle_check_dh_and_residual_kernel,
         kcycle_check_dh_and_residual_no_storage_kernel,
-        prolong_bilinear_any_kernel,
         reset_kcycle_check_buffers_kernel,
-        restrict_blockavg_kernel,
-        update_p_kernel,
-        update_x_r_z_rho_rTr_kernel,
         zero_scalar_kernel,
     )
     self = model
@@ -1385,273 +1106,19 @@ def solve_multigrid_kcycle_backend(
         absolute_tolerance=abs_tol_min, fine=lvl0, free=free_mask)
     thr_rTr = wp.float64((tol_abs * tol_abs) * float(n_free0))
 
-    def pcg_solve_level(level, max_iter_level: int, residual_target_squared=None, recovery_history=None):
-        nxL = int(level.nx)
-        nyL = int(level.ny)
-        dimL = (nyL, nxL)
+    def storage_for_level(level):
+        """Resolve the classic solver's global transient-operator policy.
 
-        wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[level.rho_buf], device=device)
-        wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[level.rTr_buf], device=device)
+        :param level: Multigrid level whose storage buffer may be used.
+        :returns: Pair of storage-active flag and diagonal buffer.
+        """
+        return self._storage_active, level.storage_diag_wp if self._storage_active else None
 
-        _ipcga_k = init_pcg_with_A_kernel if self._storage_active else init_pcg_with_A_no_storage_kernel
-        _ipcga_in = [
-            level.x_wp, level.b_wp, level.T_wp, level.active_wp, level.bc_mask_wp,
-            level.gh_mask_wp, level.ghb_factor_wp,
-        ]
-        if self._storage_active:
-            _ipcga_in.append(level.storage_diag_wp)
-        _ipcga_in += [
-            level.M_inv_wp, level.Ap_wp, level.r_wp, level.z_wp, level.p_wp,
-            level.rho_buf, level.rTr_buf, nxL, nyL,
-        ]
-        wp.launch(kernel=_ipcga_k, dim=dimL, inputs=_ipcga_in, device=device)
-
-        iterations = 0
-        for iteration in range(int(max_iter_level)):
-            iterations = iteration + 1
-            wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[level.pAp_buf], device=device)
-            _aap_k = apply_A_and_pAp_kernel if self._storage_active else apply_A_and_pAp_no_storage_kernel
-            _aap_in = [
-                level.T_wp, level.active_wp, level.bc_mask_wp, level.gh_mask_wp,
-                level.ghb_factor_wp,
-            ]
-            if self._storage_active:
-                _aap_in.append(level.storage_diag_wp)
-            _aap_in += [level.p_wp, level.Ap_wp, level.pAp_buf, nxL, nyL]
-            wp.launch(kernel=_aap_k, dim=dimL, inputs=_aap_in, device=device)
-
-            wp.launch(
-                kernel=compute_alpha_kernel,
-                dim=1,
-                inputs=[level.rho_buf, level.pAp_buf, level.alpha_buf],
-                device=device,
-            )
-
-            wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[level.rho_new_buf], device=device)
-            wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[level.rTr_buf], device=device)
-
-            wp.launch(
-                kernel=update_x_r_z_rho_rTr_kernel,
-                dim=dimL,
-                inputs=[
-                    level.x_wp,
-                    level.r_wp,
-                    level.z_wp,
-                    level.p_wp,
-                    level.Ap_wp,
-                    level.M_inv_wp,
-                    level.active_wp,
-                    level.bc_mask_wp,
-                    level.alpha_buf,
-                    level.rho_new_buf,
-                    level.rTr_buf,
-                    nxL,
-                    nyL,
-                ],
-                device=device,
-            )
-
-
-            if residual_target_squared is not None:
-                residual_squared = float(level.rTr_buf.numpy()[0])
-                if fallback_pcg_history_every_i is not None and (
-                    iterations % fallback_pcg_history_every_i == 0 or
-                    residual_squared <= residual_target_squared or iterations == max_iter_level
-                ):
-                    recovery_history.append(dict(iter=iterations, rms_res_phys=float(np.sqrt(max(residual_squared, 0.) / n_free0))))
-                if not np.isfinite(residual_squared) or residual_squared <= residual_target_squared:
-                    break
-
-            wp.launch(
-                kernel=compute_beta_and_update_rho_kernel,
-                dim=1,
-                inputs=[level.rho_buf, level.rho_new_buf, level.beta_buf],
-                device=device,
-            )
-
-            wp.launch(
-                kernel=update_p_kernel,
-                dim=dimL,
-                inputs=[
-                    level.p_wp,
-                    level.z_wp,
-                    level.active_wp,
-                    level.bc_mask_wp,
-                    level.beta_buf,
-                    nxL,
-                    nyL,
-                ],
-                device=device,
-            )
-        return iterations
-
-    def kcycle(level_id: int):
-        level = levels[level_id]
-        nxL = int(level.nx)
-        nyL = int(level.ny)
-        dimL = (nyL, nxL)
-
-        x_tmp_wp = level.Ax_wp
-        x_in = level.x_wp
-        x_out = x_tmp_wp
-
-        for omega_step in pre_omegas:
-            _jac_k = jacobi_applyA_fused_kernel if self._storage_active else jacobi_applyA_fused_no_storage_kernel
-            _jac_in = [
-                level.T_wp, level.active_wp, level.bc_mask_wp, level.gh_mask_wp,
-                level.ghb_factor_wp,
-            ]
-            if self._storage_active:
-                _jac_in.append(level.storage_diag_wp)
-            _jac_in += [
-                level.b_wp, x_in, level.M_inv_wp, level.bc_values_wp,
-                float(omega_step), nxL, nyL, x_out,
-            ]
-            wp.launch(kernel=_jac_k, dim=dimL, inputs=_jac_in, device=device)
-            tmp = x_in
-            x_in = x_out
-            x_out = tmp
-
-        if x_in is not level.x_wp:
-            wp.launch(kernel=copy_field_kernel, dim=dimL, inputs=[x_in, level.x_wp, nxL, nyL], device=device)
-
-        wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[level.rTr_buf], device=device)
-        _cr_k = compute_residual_kernel if self._storage_active else compute_residual_no_storage_kernel
-        _cr_in = [
-            level.x_wp, level.b_wp, level.T_wp, level.active_wp, level.bc_mask_wp,
-            level.gh_mask_wp, level.ghb_factor_wp,
-        ]
-        if self._storage_active:
-            _cr_in.append(level.storage_diag_wp)
-        _cr_in += [level.r_wp, level.rTr_buf, nxL, nyL]
-        wp.launch(kernel=_cr_k, dim=dimL, inputs=_cr_in, device=device)
-
-        if level_id == (len(levels) - 1):
-            pcg_solve_level(level=level, max_iter_level=int(nu_coarse))
-            return
-
-        coarse = levels[level_id + 1]
-        nxC = int(coarse.nx)
-        nyC = int(coarse.ny)
-        dimC = (nyC, nxC)
-
-        wp.launch(
-            kernel=restrict_blockavg_kernel,
-            dim=dimC,
-            inputs=[level.r_wp, level.active_wp,
-                    level.bc_mask_wp,coarse.b_wp,
-                    nxL, nyL, nxC, nyC],
-            device=device,
-        )
-
-        coarse.x_wp.fill_(WP_FLOAT(0.0))
-        kcycle(level_id + 1)
-
-        coarse_is_coarsest = (level_id + 1) == (len(levels) - 1)
-        if coarse_is_coarsest:
-            wp.launch(kernel=copy_field_kernel, dim=dimC, inputs=[coarse.x_wp, coarse.e_wp, nxC, nyC],
-                      device=device)
-            z1_wp = coarse.e_wp
-        else:
-            wp.launch(kernel=copy_field_kernel, dim=dimC, inputs=[coarse.x_wp, coarse.z_wp, nxC, nyC],
-                      device=device)
-            z1_wp = coarse.z_wp
-
-        wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[coarse.rTr_buf], device=device)
-        _ccr_k = compute_residual_kernel if self._storage_active else compute_residual_no_storage_kernel
-        _ccr_in = [
-            z1_wp, coarse.b_wp, coarse.T_wp, coarse.active_wp, coarse.bc_mask_wp,
-            coarse.gh_mask_wp, coarse.ghb_factor_wp,
-        ]
-        if self._storage_active:
-            _ccr_in.append(coarse.storage_diag_wp)
-        _ccr_in += [coarse.r_wp, coarse.rTr_buf, nxC, nyC]
-        wp.launch(kernel=_ccr_k, dim=dimC, inputs=_ccr_in, device=device)
-
-        wp.launch(kernel=copy_field_kernel, dim=dimC, inputs=[coarse.r_wp, coarse.b_wp, nxC, nyC], device=device)
-        r1_wp = coarse.b_wp
-
-        coarse.x_wp.fill_(WP_FLOAT(0.0))
-        kcycle(level_id + 1)
-
-        wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[coarse.rho_buf], device=device)
-        wp.launch(
-            kernel=dot_active_kernel,
-            dim=dimC,
-            inputs=[r1_wp, coarse.x_wp, coarse.active_wp, coarse.bc_mask_wp, coarse.rho_buf, nxC, nyC],
-            device=device,
-        )
-
-        wp.launch(kernel=zero_scalar_kernel, dim=1, inputs=[coarse.pAp_buf], device=device)
-        _caap_k = apply_A_and_pAp_kernel if self._storage_active else apply_A_and_pAp_no_storage_kernel
-        _caap_in = [
-            coarse.T_wp, coarse.active_wp, coarse.bc_mask_wp, coarse.gh_mask_wp,
-            coarse.ghb_factor_wp,
-        ]
-        if self._storage_active:
-            _caap_in.append(coarse.storage_diag_wp)
-        _caap_in += [coarse.x_wp, coarse.Ax_wp, coarse.pAp_buf, nxC, nyC]
-        wp.launch(kernel=_caap_k, dim=dimC, inputs=_caap_in, device=device)
-
-        wp.launch(
-            kernel=compute_safe_alpha_kernel,
-            dim=1,
-            inputs=[coarse.rho_buf, coarse.pAp_buf, coarse.alpha_buf],
-            device=device,
-        )
-
-        active_is_1d = (len(coarse.active_wp.shape) == 1)
-        if active_is_1d:
-            wp.launch(
-                kernel=axpy_active_scalar_kernel,
-                dim=dimC,
-                inputs=[z1_wp, coarse.x_wp, coarse.active_wp, coarse.bc_mask_wp, coarse.alpha_buf, nxC, nyC],
-                device=device,
-            )
-        else:
-            wp.launch(
-                kernel=axpy_active_scalar_2dmask_kernel,
-                dim=dimC,
-                inputs=[z1_wp, coarse.x_wp, coarse.active_wp, coarse.bc_mask_wp, coarse.alpha_buf, nxC, nyC],
-                device=device,
-            )
-
-        wp.launch(
-            kernel=prolong_bilinear_any_kernel,
-            dim=dimL,
-            inputs=[z1_wp, level.e_wp, nxL, nyL, nxC, nyC],
-            device=device,
-        )
-        wp.launch(
-            kernel=add_correction_kernel,
-            dim=dimL,
-            inputs=[level.x_wp, level.e_wp, level.active_wp, level.bc_mask_wp, level.bc_values_wp, nxL, nyL],
-            device=device,
-        )
-
-        x_tmp_wp = level.Ax_wp
-        x_in = level.x_wp
-        x_out = x_tmp_wp
-
-        for omega_step in post_omegas:
-            _jac_k = jacobi_applyA_fused_kernel if self._storage_active else jacobi_applyA_fused_no_storage_kernel
-            _jac_in = [
-                level.T_wp, level.active_wp, level.bc_mask_wp, level.gh_mask_wp,
-                level.ghb_factor_wp,
-            ]
-            if self._storage_active:
-                _jac_in.append(level.storage_diag_wp)
-            _jac_in += [
-                level.b_wp, x_in, level.M_inv_wp, level.bc_values_wp,
-                float(omega_step), nxL, nyL, x_out,
-            ]
-            wp.launch(kernel=_jac_k, dim=dimL, inputs=_jac_in, device=device)
-            tmp = x_in
-            x_in = x_out
-            x_out = tmp
-
-        if x_in is not level.x_wp:
-            wp.launch(kernel=copy_field_kernel, dim=dimL, inputs=[x_in, level.x_wp, nxL, nyL], device=device)
+    kcycle, pcg_solve_level = build_classic_kcycle(
+        levels=levels, device=device, storage_for_level=storage_for_level,
+        pre_omegas=pre_omegas, post_omegas=post_omegas, nu_coarse=nu_coarse,
+        n_free0=n_free0, recovery_history_every=fallback_pcg_history_every_i,
+    )
 
     # Outer cycles
     n_cycles_used = 0

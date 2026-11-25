@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 from DARCY_WARP_PACKAGE.physics.budgets_2d import evaluate_picard_transient_balance
-from DARCY_WARP_PACKAGE.physics.storage_2d import secant_specific_storage_coeff
+from DARCY_WARP_PACKAGE.physics.storage_2d import (
+    secant_specific_storage_coeff, secant_specific_yield_coeff,
+)
 
 from typing import Any
 
@@ -446,6 +448,12 @@ def solve_unconfined_picard(
     def _storage_from_picard_head(
             head_ref_arr: np.ndarray,
     ) -> dict[str, np.ndarray]:
+        """Evaluate secant storage and saturation diagnostics for one iterate.
+
+        :param head_ref_arr: Head grid at the current linearisation, length.
+        :returns: Coefficients, saturation and the reference head; storage
+            entries at inactive and prescribed-head cells are zero.
+        """
         head_ref64 = np.asarray(head_ref_arr, dtype=np.float64)
         if ztop_arr is None:
             raise ValueError("ztop_field is required for current Picard storage.")
@@ -454,14 +462,11 @@ def solve_unconfined_picard(
         sat_ref_zero = np.clip(head_ref64 - zbot_arr, 0.0, full_thickness)
         sat_old_zero = np.clip(head_old64 - zbot_arr, 0.0, full_thickness)
         sat_ref_ss = np.clip(head_ref64 - zbot_arr, 0.0, full_thickness)
-        sy_coeff = np.zeros(shape0, dtype=np.float64)
+        sy_coeff = secant_specific_yield_coeff(
+            head_ref=head_ref64, head_old=head_old64, bottom=zbot_arr,
+            top=ztop_arr, specific_yield=sy_f,
+        )
         ss_coeff = np.zeros(shape0, dtype=np.float64)
-        dh_ref = head_ref64 - head_old64
-        moving = np.abs(dh_ref) > 1.0e-12
-        sy_coeff[moving] = sy_f * ((sat_ref_zero[moving] - sat_old_zero[moving]) / dh_ref[moving])
-        fallback = (~moving) & (head_ref64 < ztop_arr) & (head_ref64 > zbot_arr)
-        sy_coeff[fallback] = sy_f
-        sy_coeff = np.clip(sy_coeff, 0.0, sy_f)
         if ss_f:
             ss_coeff = secant_specific_storage_coeff(
                 head_ref=head_ref64, head_old=head_old64, bottom=zbot_arr,
@@ -497,6 +502,12 @@ def solve_unconfined_picard(
         storage_coeff = frozen_storage_state["storage"]
 
     def evaluate_candidate(*, head, tolerance):
+        """Evaluate the physical residual of a proposed transient head.
+
+        :param head: Candidate head grid, length.
+        :param tolerance: Head-equivalent residual acceptance tolerance.
+        :returns: Local and whole-domain mass-balance acceptance diagnostics.
+        """
         return evaluate_picard_transient_balance(
             model=self, head=head, previous=head_prev, conductivity=K_arr,
             bottom=zbot_arr, top=ztop_arr, min_sat=min_sat, dt=dt,
@@ -626,6 +637,11 @@ def solve_unconfined_picard(
     last_storage_reference_head_array: np.ndarray | None = None
 
     def _to_finite(value):
+        """Convert a diagnostic to a finite scalar or None.
+
+        :param value: Candidate scalar diagnostic.
+        :returns: Finite float, or None if the value cannot be represented.
+        """
         try:
             f = float(value)
             return f if np.isfinite(f) else None
@@ -1139,6 +1155,12 @@ class UnconfinedPicardKCycleBackend:
     name = "unconfined_picard_kcycle"
 
     def solve(self, context: SolverContext, **kwargs: Any):
+        """Dispatch an unconfined solve using the shared K-cycle backend.
+
+        :param context: Built model and formulation supplied by the registry.
+        :param kwargs: Solver controls and physical input fields.
+        :returns: Head and optional diagnostics.
+        """
         kwargs["unconfined"] = True
         from DARCY_WARP_PACKAGE.solvers.multigrid_kcycle import (
             solve_multigrid_kcycle_backend,

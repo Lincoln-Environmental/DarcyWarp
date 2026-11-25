@@ -22,6 +22,9 @@ ENFORCED_MODULES = {
     "project_base.py",
     "solvers/transient_unconfined.py",
     "solvers/device_picard_periods.py",
+    "solvers/classic_kcycle.py",
+    "solvers/multigrid_kcycle.py",
+    "solvers/picard_unconfined.py",
 }
 PARAM_FIELD = re.compile(r"^\s*:param\s+\**([A-Za-z_]\w*)\s*:\s*(.*)$", re.MULTILINE)
 
