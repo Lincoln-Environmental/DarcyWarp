@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from DARCY_WARP_PACKAGE.solvers.session_3d import ThreeDOperatorSession
 from DARCY_WARP_PACKAGE.warped_darcy_3d import WarpDarcySolver3D
@@ -174,3 +175,28 @@ def test_wrapper_preserves_return_info_choice():
         )
     assert isinstance(head, np.ndarray)
     assert head.shape == shape
+
+
+@pytest.mark.parametrize('device', ['cpu', 'cuda:0'])
+@pytest.mark.parametrize('solver', ['kcycle', 'chebyshev'])
+def test_failed_fp32_face_update_preserves_model(device, solver):
+    from DARCY_WARP_PACKAGE.config import NP_FLOAT
+
+    if NP_FLOAT != np.float32:
+        pytest.skip('Exercises the FP32 coefficient conversion')
+    shape = (1, 1, 2)
+    active = np.ones(shape, dtype=int)
+    fixed = np.array([[[1, 0]]])
+    positive = np.array([[[1.0, 0.0]]])
+    negative = np.array([[[0.0, 1.0]]])
+    zero = np.zeros(shape)
+    with WarpDarcySolver3D(nx=2, ny=1, nz=1, dx=1.0, device=device, solver=solver) as model:
+        model.build_from_face_conductance(positive, negative, zero, zero, zero, zero,
+            active, fixed, fixed * 10.0, zero)
+        revision = model._session.operator_revision
+        with pytest.raises(ValueError, match='representable'):
+            model.update_face_conductance(positive * 1.0e-46, negative * 1.0e-46, zero, zero, zero, zero)
+        assert model._session.operator_revision == revision
+        head, info = model.solve()
+    assert info['converged']
+    np.testing.assert_allclose(head, 10.0, rtol=0, atol=1e-4)

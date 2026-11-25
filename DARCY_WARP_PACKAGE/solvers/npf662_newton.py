@@ -9,7 +9,7 @@ from DARCY_WARP_PACKAGE.solvers import npf662_kernels as kernels
 from DARCY_WARP_PACKAGE.validation.head_checks import finite_diagnostics
 from DARCY_WARP_PACKAGE.solvers.work_counters_3d import increment_work
 from DARCY_WARP_PACKAGE.physics.inputs_3d import positive_integer
-from DARCY_WARP_PACKAGE.physics.ghb_3d import validate_ghb_fields
+from DARCY_WARP_PACKAGE.physics.ghb_3d import npf_ghb_component_anchor, validate_ghb_fields
 
 
 @dataclass(frozen=True)
@@ -81,7 +81,11 @@ class NPF662Workspace:
         self.commit_graph=None;self.commit_graph_failed=False;self.reuse_trial_state=False
         self.ghb_conductance = self.ghb_head = self.ghb_totals = None
         self.ghb_operator = self.trial_ghb_operator = self.previous_ghb_operator = None
+        self.component_anchor = None
+        self.anchor_revision = None
         self.roundoff_acceptance = False
+        self.physical_tolerance = 1.0e-12
+        self.relative_tolerance = 1.0e-8
         self.roundoff_partials = self.roundoff_zero = None
         self.device_native = bool(getattr(reference, 'device_storage_state', False))
         self.load(model=model,case=case,reference=reference)
@@ -117,6 +121,11 @@ class NPF662Workspace:
         static_reused = native and getattr(self, '_native_state', None) is reference
         conductance, boundary_head = validate_ghb_fields(conductance=case.ghb_conductance,
             head=case.ghb_head, active=case.active, fixed=case.fixed)
+        if self.anchor_revision != model._session.operator_revision:
+            anchors = npf_ghb_component_anchor(conductance=conductance, active=case.active, fixed=case.fixed)
+            self.component_anchor = (None if anchors is None else
+                wp.array(data=anchors.ravel(), dtype=wp.float64, device=self.device))
+            self.anchor_revision = model._session.operator_revision
         if conductance is not None and self.ghb_conductance is None:
             for name in ('ghb_conductance', 'ghb_head', 'ghb_operator', 'trial_ghb_operator', 'previous_ghb_operator'):
                 setattr(self, name, wp.zeros(shape=self.n, dtype=wp.float64, device=self.device))
@@ -253,10 +262,23 @@ class NPF662Workspace:
             relative_cell_imbalance=float(m[1]/max(m[3],np.finfo(float).tiny)),gross_throughput=float(m[3]),
             residual_l1=float(m[1]),signed_imbalance=float(m[8]),boundary_inflow=float(m[4]),boundary_outflow=float(m[5]),
             scaled_l2=float(np.sqrt(m[7])),finite=bool(m[6]==0 and np.all(np.isfinite(m[[0,1,3,4,5,7,8]]))))
+        roundoff_candidate = (self.roundoff_acceptance and result['finite'] and
+            result['head_residual_rms'] <= 1e-12 and
+            (result['physical_rms'] <= 1e-12 or result['relative_cell_imbalance'] <= 1e-8))
+        if roundoff_candidate or device_accepted(metrics=result, physical_tolerance=self.physical_tolerance,
+                                                 relative_tolerance=self.relative_tolerance):
+            # The extra reduction is needed only when the domain could accept.
+            self.maximum.zero_()
+            wp.launch(kernel=kernels.check_local_balance, dim=self.n,
+                inputs=[head, self.free, self.fixed, self.source, self.left, self.right, q, c,
+                        storage, tangent, r, int(self.ghb_conductance is not None),
+                        self.ghb_conductance, self.ghb_head, self.component_anchor, int(self.component_anchor is not None),
+                        self.physical_tolerance, self.relative_tolerance,
+                        self.maximum], device=self.device)
+            result['local_balance_valid'] = bool(self.maximum.numpy()[0] == 0.0)
         if self.roundoff_acceptance:
             result.update(roundoff_mode=True, roundoff_accepted=False, roundoff_bound_ratio_max=None)
-            if (result['finite'] and result['head_residual_rms'] <= 1e-12 and
-                    (result['physical_rms'] <= 1e-12 or result['relative_cell_imbalance'] <= 1e-8)):
+            if roundoff_candidate:
                 if self.roundoff_partials is None:
                     self.roundoff_partials=wp.zeros(shape=(self.n+255)//256,dtype=wp.float64,device=self.device)
                     self.roundoff_zero=wp.zeros(shape=self.n,dtype=wp.float64,device=self.device)
@@ -338,6 +360,7 @@ class NPF662Workspace:
         self.ghb_operator = self.trial_ghb_operator = self.previous_ghb_operator = None
         self.predictor_increment = self.predictor_older_increment = self.predictor_checkpoint = None
         self.roundoff_partials = self.roundoff_zero = None
+        self.component_anchor = None
         for name in ('head','prescribed','trial','source','bottom','thickness','scale','rhs','trial_rhs','residual','trial_residual','delta',
             'c0','q','c','trial_q','trial_c','dl','dr','trial_dl','trial_dr','free','fixed','types','left','right','metrics','maximum','mode','jv_counter','preconditioner_counter',
             'storage_previous','storage_ss','storage_sy','storage_rate','storage_tangent','trial_storage_rate','trial_storage_tangent','certificate','metric_partials'):
@@ -345,7 +368,7 @@ class NPF662Workspace:
 
 
 def device_accepted(*,metrics,physical_tolerance=1e-12,relative_tolerance=1e-8):
-    valid=all(np.isfinite(metrics[name]) and metrics[name]>=0. for name in
+    valid=metrics.get('local_balance_valid', True) and all(np.isfinite(metrics[name]) and metrics[name]>=0. for name in
         ('head_residual_rms','physical_rms','relative_cell_imbalance','gross_throughput'))
     if metrics.get('roundoff_mode',False):
         return bool(metrics['finite'] and valid and metrics['head_residual_rms']<=1e-12 and
@@ -419,6 +442,8 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
     workspace.device_native=device_native
     workspace.reuse_trial_state=controls.reuse_trial_state
     workspace.roundoff_acceptance=roundoff_acceptance
+    workspace.physical_tolerance = physical_tolerance
+    workspace.relative_tolerance = relative_tolerance
     blocks_start=getattr(workspace.krylov, 'restart_blocks', 0) if method=='gmres' else 0
     graph_start=(getattr(workspace.krylov, 'graph_captures', 0), getattr(workspace.krylov, 'graph_replays', 0))
     mg_reused=False;mg_seconds=0.;linear_history=[];mg_values_refreshed=False

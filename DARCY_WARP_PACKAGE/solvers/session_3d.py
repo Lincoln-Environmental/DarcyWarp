@@ -12,6 +12,7 @@ from typing import Any
 
 import numpy as np
 
+from DARCY_WARP_PACKAGE.config import NP_FLOAT
 from DARCY_WARP_PACKAGE.physics.faces_3d import validate_reciprocal_faces
 from DARCY_WARP_PACKAGE.physics.inputs_3d import binary_mask, floating_field
 from DARCY_WARP_PACKAGE.validation.head_checks import invalid_head_values
@@ -47,11 +48,10 @@ class ThreeDOperatorSession:
         self.z_interfaces = None if z_interfaces is None else np.asarray(z_interfaces,dtype=float).copy()
         self.layer_geometry = None
         self.dz = float(dz) if z_interfaces is None else None
-        values = tuple(floating_field(value=face, name="face") for face in faces)
-        if len(values) != 6:
-            raise ValueError("faces must contain exactly six conductance arrays.")
-        self.faces = values
         self.active = binary_mask(value=active, name="active")
+        if self.active.ndim != 3:
+            raise ValueError("3D session fields must have shape (nz, ny, nx).")
+        self.faces = self._validated_faces(faces)
         self.bc_mask = binary_mask(value=bc_mask, name="bc_mask")
         self.bc_values = floating_field(value=bc_values, name="bc_values")
         self.rhs = floating_field(value=rhs, name="rhs")
@@ -62,11 +62,20 @@ class ThreeDOperatorSession:
         self.ghb_conductance, self.ghb_head = validate_ghb_fields(
             conductance=ghb_conductance, head=ghb_head, mask=ghb_mask,
             active=self.active, fixed=self.bc_mask)
-        self.faces = validate_reciprocal_faces(faces=self.faces, active=self.active, canonicalize=True)
 
     @property
     def shape(self) -> tuple[int, int, int]:
         return tuple(int(value) for value in self.active.shape)
+
+    def _validated_faces(self, faces):
+        """Check input reciprocity and preserve positive connections at execution precision."""
+        if len(faces) != 6 or any(np.asarray(face).dtype.kind not in 'biuf' for face in faces):
+            raise ValueError("faces must contain six real numeric arrays")
+        values = validate_reciprocal_faces(faces=faces, active=self.active, canonicalize=True, copy_arrays=False)
+        stored = tuple(floating_field(value=face, name="face", dtype=NP_FLOAT) for face in values)
+        if any(np.any((face > 0.0) & (narrowed == 0.0)) for face, narrowed in zip(values, stored)):
+            raise ValueError("positive face conductances must remain representable in the model dtype.")
+        return stored
 
     def _validate_prescribed_heads(self, values):
         fixed = (self.active != 0) & (self.bc_mask != 0)
@@ -74,13 +83,8 @@ class ThreeDOperatorSession:
             raise ValueError("Invalid active prescribed head")
 
     def _validate(self) -> None:
-        if self.active.ndim != 3:
-            raise ValueError("3D session fields must have shape (nz, ny, nx).")
         shape = self.shape
-        if len(self.faces) != 6:
-            raise ValueError("faces must contain exactly six conductance arrays.")
         for name, array in (
-            ("faces", self.faces),
             ("bc_mask", (self.bc_mask,)),
             ("bc_values", (self.bc_values,)),
             ("rhs", (self.rhs,)),
@@ -90,13 +94,11 @@ class ThreeDOperatorSession:
                     raise ValueError(f"{name} field shape {item.shape} does not match {shape}.")
         if self.initial_head is not None and self.initial_head.shape != shape:
             raise ValueError("initial_head shape does not match the operator shape.")
-        for name, value in (("faces", self.faces), ("bc_values", (self.bc_values,)), ("rhs", (self.rhs,))):
+        for name, value in (("bc_values", (self.bc_values,)), ("rhs", (self.rhs,))):
             if any(not np.all(np.isfinite(item)) for item in value):
                 raise ValueError(f"{name} must contain finite values.")
         if np.any(self.rhs[self.active == 0] != 0.0):
             raise ValueError("Inactive source would be lost; rhs must be zero in inactive cells.")
-        if any(np.any(item < 0.0) for item in self.faces):
-            raise ValueError("face conductances must be non-negative.")
         for name, mask in (("active", self.active), ("bc_mask", self.bc_mask)):
             if not np.all(np.isfinite(mask)) or np.any((mask != 0) & (mask != 1)):
                 raise ValueError(f"{name} must be a finite binary mask.")
@@ -174,19 +176,7 @@ class ThreeDOperatorSession:
         faces: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray],
     ) -> None:
         self._ensure_open()
-        values = tuple(floating_field(value=face, name="face", dtype=old.dtype)
-                       for face, old in zip(faces, self.faces))
-        if len(faces) != 6:
-            raise ValueError("faces must contain exactly six arrays")
-        if len(values) != 6 or any(value.shape != self.shape for value in values):
-            raise ValueError("faces must contain six arrays matching the session shape.")
-        if any(not np.all(np.isfinite(value)) for value in values):
-            raise ValueError("faces must contain finite values.")
-        if any(np.any((np.asarray(raw) > 0.0) & (stored == 0.0)) for raw, stored in zip(faces, values)):
-            raise ValueError("positive face conductances must remain representable in the stored dtype.")
-        if any(np.any(np.asarray(raw) < 0.0) for raw in faces):
-            raise ValueError("face conductances must be non-negative.")
-        values = validate_reciprocal_faces(faces=values, active=self.active, canonicalize=True)
+        values = self._validated_faces(faces)
         topology_changed = any(not np.array_equal(old > 0.0, value > 0.0)
                                for old, value in zip(self.faces, values))
         for old, value in zip(self.faces, values):

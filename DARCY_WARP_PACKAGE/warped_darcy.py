@@ -3415,20 +3415,18 @@ def init_pcg_with_A_no_storage_kernel(
         if T_s > wp.float64(0.0):
             Ap64 = Ap64 - T_s * hS
 
-    Ap_val = WP_FLOAT(Ap64)
-    Ap[j, i] = Ap_val
-
-    r_val = b[j, i] - Ap_val
+    # Form b - A*x before rounding the work vectors. The norm is the
+    # FP64 residual of the actual stored head, also used on PCG restart.
+    r64 = wp.float64(b[j, i]) - Ap64
+    r_val = WP_FLOAT(r64)
     z_val = M_inv[j, i] * r_val
 
+    Ap[j, i] = WP_FLOAT(Ap64)
     r[j, i] = r_val
     z[j, i] = z_val
     p[j, i] = z_val
 
-    r64 = wp.float64(r_val)
-    z64 = wp.float64(z_val)
-
-    wp.atomic_add(rho_buf, 0, r64 * z64)
+    wp.atomic_add(rho_buf, 0, wp.float64(r_val) * wp.float64(z_val))
     wp.atomic_add(rTr_buf, 0, r64 * r64)
 
 
@@ -5089,80 +5087,48 @@ class WarpDarcySolver:
                 "assemble gated boundary terms."
             )
 
-    def _sanitize_drn_riv_host_fields(self) -> None:
-        """
-        Make DRN/RIV inputs numerically safe (MODFLOW fixed-conductance gated
-        boundaries, nonlinear semismooth-Newton path only):
-          - masks are zeroed on inactive and Dirichlet cells
-          - elevations / stage / rbot must be finite where the mask is set
-          - DRN conductance must be positive on enabled cells. Zero RIV
-            conductance is a closed connection, including after a stage update.
-        """
-        shape = (int(self.ny), int(self.nx))
-
-        def _sanitize(mask_host, fields, *, label):
-            if mask_host is None:
-                return None, {}
-            mask = np.asarray(mask_host, dtype=np.int32)
-            if mask.shape != shape:
-                raise ValueError(f"{label}_mask must have shape {shape}, got {mask.shape}.")
-            mask = mask.copy()
-            if self.active_host is not None:
-                mask[np.asarray(self.active_host, dtype=np.int32) == 0] = 0
-            if self.bc_mask_host is not None:
-                mask[np.asarray(self.bc_mask_host, dtype=np.int32) != 0] = 0
+    def _prepare_drn_riv_host_fields(self, *, active, bc_mask, drn_mask=None, drn_elev=None,
+                                     drn_cond=None, riv_mask=None, riv_stage=None, riv_rbot=None,
+                                     riv_cond=None):
+        """Validate both packages against the proposed grid before changing the live model."""
+        prepared = {}
+        shape = (self.ny, self.nx)
+        for label, enabled, mask, fields in (
+            ("drn", self.use_drn, drn_mask, (("elev", drn_elev), ("cond", drn_cond))),
+            ("riv", self.use_riv, riv_mask, (("stage", riv_stage), ("rbot", riv_rbot), ("cond", riv_cond))),
+        ):
+            if not enabled:
+                continue
+            if mask is None:
+                mask = np.zeros(shape, dtype=np.int32)
+            else:
+                mask = np.array(mask, dtype=np.int32, copy=True)
+                if mask.shape != shape:
+                    raise ValueError(f"{label}_mask must have shape {shape}, got {mask.shape}.")
+            mask[(active == 0) | (bc_mask != 0)] = 0
             on = mask != 0
-            out = {}
-            for name, values in fields.items():
+            prepared[f"{label}_mask_host"] = mask
+            for field, values in fields:
                 if values is None:
                     if np.any(on):
-                        raise ValueError(f"{label}_{name} is required on masked cells (got None).")
-                    out[name] = np.zeros(shape, dtype=NP_FLOAT)
-                    continue
-                arr = np.asarray(values, dtype=NP_FLOAT)
-                if arr.shape != shape:
-                    raise ValueError(f"{label}_{name} must have shape {shape}, got {arr.shape}.")
-                arr = arr.copy()
-                if np.any(~np.isfinite(arr[on])):
-                    raise ValueError(f"{label}_{name} must be finite on masked cells.")
-                arr[~on] = NP_FLOAT(0.0)
-                out[name] = arr
-            if np.any(on):
-                conductance = out["cond"][on]
-                if label == "drn" and np.any(conductance <= 0.0):
-                    raise ValueError("drn_cond must be positive on masked cells.")
-                if label == "riv" and np.any(conductance < 0.0):
+                        raise ValueError(f"{label}_{field} is required on masked cells.")
+                    array = np.zeros(shape, dtype=NP_FLOAT)
+                else:
+                    array = np.array(values, dtype=NP_FLOAT, copy=True)
+                    if array.shape != shape:
+                        raise ValueError(f"{label}_{field} must have shape {shape}, got {array.shape}.")
+                    if np.any(~np.isfinite(array[on])):
+                        raise ValueError(f"{label}_{field} must be finite on masked cells.")
+                    array[~on] = NP_FLOAT(0.0)
+                prepared[f"{label}_{field}_host"] = array
+            cond = prepared[f"{label}_cond_host"][on]
+            if label == "drn" and np.any(cond <= 0.0):
+                raise ValueError("drn_cond must be positive on masked cells.")
+            if label == "riv":
+                if np.any(cond < 0.0):
                     raise ValueError("riv_cond must be non-negative on masked cells.")
-            return mask, out
-
-        if self.use_drn:
-            if self.drn_mask_host is None:
-                self.drn_mask_host = np.zeros(shape, dtype=np.int32)
-            mask, fields = _sanitize(
-                self.drn_mask_host,
-                {"elev": self.drn_elev_host, "cond": self.drn_cond_host},
-                label="drn",
-            )
-            self.drn_mask_host = mask
-            self.drn_elev_host = fields["elev"]
-            self.drn_cond_host = fields["cond"]
-
-        if self.use_riv:
-            if self.riv_mask_host is None:
-                self.riv_mask_host = np.zeros(shape, dtype=np.int32)
-            mask, fields = _sanitize(
-                self.riv_mask_host,
-                {
-                    "stage": self.riv_stage_host,
-                    "rbot": self.riv_rbot_host,
-                    "cond": self.riv_cond_host,
-                },
-                label="riv",
-            )
-            self.riv_mask_host = mask
-            self.riv_stage_host = fields["stage"]
-            self.riv_rbot_host = fields["rbot"]
-            self.riv_cond_host = fields["cond"]
+                self._validate_riv_stage(on, prepared["riv_stage_host"], prepared["riv_rbot_host"])
+        return prepared
 
     def _summarize_grid_to_scalar_for_reporting(self, grid: np.ndarray, mask: np.ndarray) -> float:
         vals = np.asarray(grid, dtype=np.float64)[np.asarray(mask, dtype=bool)]
@@ -5289,6 +5255,12 @@ class WarpDarcySolver:
             width=width
         )
 
+        gated = self._prepare_drn_riv_host_fields(
+            active=active, bc_mask=bc_mask, drn_mask=self.drn_mask_host,
+            drn_elev=self.drn_elev_host, drn_cond=self.drn_cond_host,
+            riv_mask=self.riv_mask_host, riv_stage=self.riv_stage_host,
+            riv_rbot=self.riv_rbot_host, riv_cond=self.riv_cond_host,
+        )
         self._set_ghb_fields(active=active, bc_mask=bc_mask, gh_mask=gh_mask, gh_width=gh_width,
                              gh_head=gh_head, gh_alpha=gh_alpha, aq_thickness=aq_thickness)
         # Keep host arrays in the package float dtype (NP_FLOAT) so single-precision
@@ -5303,7 +5275,8 @@ class WarpDarcySolver:
         self.storage_diag_c_host = None
         self.storage_diag_c_wp = None
 
-        self._sanitize_drn_riv_host_fields()
+        for name, field in gated.items():
+            setattr(self, name, field)
         self.n_active = int(np.count_nonzero(self.active_host))
 
         device = self.device_str
@@ -5479,41 +5452,22 @@ class WarpDarcySolver:
             gh_head = np.zeros((self.ny, self.nx), dtype=NP_FLOAT)
             gh_width = np.zeros((self.ny, self.nx), dtype=NP_FLOAT)
 
-        shape = (self.ny, self.nx)
-        if self.use_drn:
-            if drn_mask is None:
-                raise ValueError("drn_mask is required when use_drn=True.")
-            if np.any(np.asarray(drn_mask, dtype=np.int32) != 0) and (drn_elev is None or drn_cond is None):
-                raise ValueError("drn_elev and drn_cond are required where drn_mask != 0.")
-        else:
-            if drn_mask is not None and np.any(np.asarray(drn_mask, dtype=np.int32) != 0):
-                raise ValueError("drn_mask was provided but the solver was built with use_drn=False.")
-            drn_mask = None
-        if self.use_riv:
-            if riv_mask is None:
-                raise ValueError("riv_mask is required when use_riv=True.")
-            if np.any(np.asarray(riv_mask, dtype=np.int32) != 0) and (
-                riv_stage is None or riv_rbot is None or riv_cond is None
-            ):
-                raise ValueError("riv_stage, riv_rbot and riv_cond are required where riv_mask != 0.")
-            if riv_stage is not None and riv_rbot is not None:
-                enabled = (np.asarray(riv_mask) != 0) & (active != 0) & (bc_mask == 0)
-                self._validate_riv_stage(enabled, riv_stage, riv_rbot)
-        else:
-            if riv_mask is not None and np.any(np.asarray(riv_mask, dtype=np.int32) != 0):
-                raise ValueError("riv_mask was provided but the solver was built with use_riv=False.")
-            riv_mask = None
-
+        if self.use_drn and drn_mask is None:
+            raise ValueError("drn_mask is required when use_drn=True.")
+        if self.use_riv and riv_mask is None:
+            raise ValueError("riv_mask is required when use_riv=True.")
+        if not self.use_drn and drn_mask is not None and np.any(drn_mask):
+            raise ValueError("drn_mask was provided but the solver was built with use_drn=False.")
+        if not self.use_riv and riv_mask is not None and np.any(riv_mask):
+            raise ValueError("riv_mask was provided but the solver was built with use_riv=False.")
+        gated = self._prepare_drn_riv_host_fields(
+            active=active, bc_mask=bc_mask, drn_mask=drn_mask, drn_elev=drn_elev, drn_cond=drn_cond,
+            riv_mask=riv_mask, riv_stage=riv_stage, riv_rbot=riv_rbot, riv_cond=riv_cond,
+        )
         self._set_ghb_fields(active=active, bc_mask=bc_mask, gh_mask=gh_mask, gh_width=gh_width,
                              gh_head=gh_head, gh_alpha=gh_alpha, aq_thickness=aq_thickness)
-
-        self.drn_mask_host = None if drn_mask is None else np.asarray(drn_mask, dtype=np.int32)
-        self.drn_elev_host = None if drn_mask is None else drn_elev
-        self.drn_cond_host = None if drn_mask is None else drn_cond
-        self.riv_mask_host = None if riv_mask is None else np.asarray(riv_mask, dtype=np.int32)
-        self.riv_stage_host = None if riv_mask is None else riv_stage
-        self.riv_rbot_host = None if riv_mask is None else riv_rbot
-        self.riv_cond_host = None if riv_mask is None else riv_cond
+        for name, field in gated.items():
+            setattr(self, name, field)
 
         self.T_field_host = T_field
         self.R_field_host = R_field
@@ -5525,7 +5479,6 @@ class WarpDarcySolver:
         self.storage_diag_c_host = None
         self.storage_diag_c_wp = None
 
-        self._sanitize_drn_riv_host_fields()
         self.n_active = int(np.count_nonzero(self.active_host))
 
         device = self.device_str
@@ -7612,6 +7565,10 @@ class WarpDarcySolver:
         self._fast_face_cache = None
         self._fast_faces_stale = False
         self._transient_face_cache = None
+        self._mixed_fast_workspace = None
+        self._mixed_fast_retained_session = None
+        if getattr(self, "_mixed_fast_sessions", None) is not None:
+            self._mixed_fast_sessions.clear()
 
         # 2) Drop CPU staging buffers you created for kcycle (they are Warp arrays on CPU).
         if hasattr(self, "_kcycle_stage_b"):

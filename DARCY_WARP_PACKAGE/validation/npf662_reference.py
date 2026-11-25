@@ -11,7 +11,8 @@ from scipy import sparse
 from scipy.sparse.csgraph import connected_components
 from scipy.sparse.linalg import spsolve
 from DARCY_WARP_PACKAGE.validation.head_checks import inspect_heads
-from DARCY_WARP_PACKAGE.validation.npf662_metrics import final_tolerances, stable_rms, stable_sum
+from DARCY_WARP_PACKAGE.validation.npf662_metrics import final_tolerances, stable_rms, stable_sum, local_balance_valid
+from DARCY_WARP_PACKAGE.physics.ghb_3d import npf_ghb_component_anchor
 
 
 @dataclass(frozen=True)
@@ -268,6 +269,8 @@ class NPF662Reference:
                                 else np.broadcast_to(case.ghb_conductance, self.shape).copy())
         self.ghb_head = (np.zeros(self.shape) if case.ghb_head is None
                          else np.broadcast_to(case.ghb_head, self.shape).copy())
+        self.component_anchor = npf_ghb_component_anchor(conductance=case.ghb_conductance,
+            active=case.active, fixed=case.fixed)
         ids=np.arange(case.active.size).reshape(self.shape)
         left=[];right=[];conductances=[];axes=[]
         for axis,k,d,width in ((2,case.kx,case.dx,case.dy),
@@ -401,6 +404,12 @@ class NPF662Reference:
         result['independent_accepted']=bool(checks['input_valid'] and checks['boundary_condition_valid'] and
             result['physical_metrics_valid'] and ungrounded==0 and hrms<=head_tolerance_m and
             (rms<=physical_tolerance or relative<=relative_tolerance))
+        result['local_balance_valid'] = None
+        if result['independent_accepted'] or roundoff_acceptance:
+            result['local_balance_valid'] = local_balance_valid(case=c, free=self.free, left=self.left, right=self.right,
+                head=head, residual=residual, flux=flux, conductance=conductance, ghb_conductance=self.ghb_conductance,
+                ghb_exchange=ghb_exchange, thresholds=thresholds, component_anchor=self.component_anchor)
+            result['independent_accepted'] &= result['local_balance_valid']
         if roundoff_acceptance:
             from .npf662_metrics import apply_roundoff_acceptance
             apply_roundoff_acceptance(checks=result,certificate=self.certify_roundoff(

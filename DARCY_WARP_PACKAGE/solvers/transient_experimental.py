@@ -79,6 +79,7 @@ _PICARD_FALLBACK_CONTROL_KEYS = (
 _BUDGET_RATE_KEYS = (
     "rcha_in", "rcha_out", "chd_in", "chd_out", "ghb_in", "ghb_out",
     "drn_in", "drn_out", "riv_in", "riv_out", "storage_in", "storage_out",
+    "free_chd_in", "free_chd_out", "free_total_in", "free_total_out",
 )
 
 
@@ -210,7 +211,7 @@ def solve_transient_unconfined_experimental(
     is_experimental_backend = bool(CAPABILITIES[backend_name].experimental)
 
     controls = dict(solve_controls or {})
-    save_diagnostics_b = bool(controls.pop("save_transient_diagnostics", save_transient_diagnostics))
+    save_diagnostics_b = bool(controls.pop("save_transient_diagnostics", save_transient_diagnostics)) and return_info
     max_dt = controls.pop("experimental_max_dt", None)
     max_dt = None if max_dt is None else float(max_dt)
     if max_dt is not None and (not np.isfinite(max_dt) or max_dt <= 0.0):

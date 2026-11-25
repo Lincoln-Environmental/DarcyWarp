@@ -47,7 +47,9 @@ jobs:
             tests/test_reference_main_audit.py tests/test_transient_artifacts.py tests/test_canterbury_boundaries.py \
             tests/test_transient_reference_consumers.py \
             tests/test_dynamic_riv_flux_2d.py tests/test_shanz_drn_flux_2d.py \
-            tests/test_main_audit_followup.py tests/test_scientific_audit_regressions.py
+            tests/test_main_audit_followup.py tests/test_scientific_audit_regressions.py \
+            tests/test_nov25_audit_references.py tests/test_nov25_audit_regressions.py \
+            tests/test_npf662_local_balance.py tests/test_2d_local_acceptance.py tests/test_confined_steady_acceptance.py
 
       - name: Single-precision transient and boundary regressions
         env:
@@ -55,3 +57,6 @@ jobs:
         run: |
           python -m pytest -q -ra tests/test_transient_period_controls.py tests/test_boundary_head_inputs.py
           python -m pytest -q -ra tests/test_2d_main_audit.py -k 'picard_storage_maps or ghb_picard_periods or fp32'
+          python -m pytest -q -ra tests/test_nov25_audit_regressions.py tests/test_2d_local_acceptance.py \
+            tests/test_confined_steady_acceptance.py
+          python -m pytest -q -ra tests/test_3d_session.py -k failed_fp32_face_update

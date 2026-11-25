@@ -533,6 +533,7 @@ def _run_fallback(
     original_kwargs: dict[str, Any],
     initial_head: np.ndarray,
     fas_info: dict[str, Any],
+    check_balance,
     return_info: bool,
 ):
     from .registry import select_backend
@@ -554,6 +555,10 @@ def _run_fallback(
             # forcing sequence used on the primary path.
             fallback_kwargs["newton_inexact_forcing_enabled"] = False
         elif context.transient:
+            # Match Newton's Picard recovery accuracy: substep head errors feed
+            # the next storage term and accumulate over the stress period.
+            fallback_kwargs.setdefault("hclose", 1.0e-6)
+            fallback_kwargs.setdefault("max_outer_iterations", 60)
             # Recover the FAS convertible storage equation on the Picard leg.
             fallback_kwargs.update(storage_reference="current_picard",
                                    unconfined_storage_mode_2d="mf6_convertible_secant_sy")
@@ -565,6 +570,8 @@ def _run_fallback(
         )
         try:
             head, info = backend.solve(context, **fallback_kwargs)
+            from DARCY_WARP_PACKAGE.physics.budgets_2d import check_nonlinear_fallback
+            info = check_nonlinear_fallback(head, info, check_balance)
             attempts.append({"backend": backend_name, "converged": bool(info.get("converged", False))})
             last_result = (head, info, backend_name)
             if bool(info.get("converged", False)):
@@ -755,20 +762,21 @@ def solve_unconfined_fas(*, context: SolverContext, **kwargs: Any):
     budget_percent = float(kwargs.get("fas_transient_budget_percent", 0.1))
     component_balance = None
 
-    def check_component_balance(*, candidate):
+    def check_component_balance(*, candidate, head_tolerance=head_residual_tolerance):
         return evaluate_alternate_transient_balance(
-            model=model, head=candidate, previous=previous_array,
-            conductivity=np.asarray(K_field), bottom=np.asarray(bottom), top=np.asarray(top),
+            model=model, head=candidate, previous=previous_array if transient else None,
+            conductivity=np.asarray(K_field), bottom=bottom_array, top=top,
             min_sat=min_sat, dt=dt, sy=sy, ss=ss, budget_percent=budget_percent,
+            head_tolerance=head_tolerance,
         )
 
     def attempt_acceptance():
-        if not transient:
-            return True, None
         candidate = fine.head.numpy().copy()
         balance = check_component_balance(candidate=candidate)
         if balance["accepted"]:
             return True, balance
+        if not transient:
+            return False, balance
         # Smoothing need not resolve the nearly constant storage mode when
         # intercell conductance is large relative to the storage diagonal.
         corrected = correct_closed_component_storage(
@@ -968,6 +976,7 @@ def solve_unconfined_fas(*, context: SolverContext, **kwargs: Any):
             original_kwargs=original_kwargs,
             initial_head=initial,
             fas_info=info,
+            check_balance=check_component_balance,
             return_info=return_info,
         )
     return (head, info) if return_info else head

@@ -236,20 +236,13 @@ class WarpDarcySolver3D:
             if a.shape != shape:
                 raise ValueError(f"{name} shape {a.shape} does not match {shape}")
 
-        from DARCY_WARP_PACKAGE.physics.faces_3d import validate_reciprocal_faces
-        validated_faces = validate_reciprocal_faces(
-            faces=(tx_p, tx_m, ty_p, ty_m, tz_p, tz_m), active=active, canonicalize=True)
-        input_faces = tuple(floating_field(value=value, name="face", dtype=NP_FLOAT)
-                            for value in validated_faces)
-        if any(np.any((raw > 0.0) & (stored == 0.0)) for raw, stored in zip(validated_faces, input_faces)):
-            raise ValueError("positive face conductances must remain representable in the model dtype.")
         input_active = binary_mask(value=active, name="active", shape=shape)
         input_bc_mask = binary_mask(value=bc_mask, name="bc_mask", shape=shape)
         input_bc_values = floating_field(value=bc_values, name="bc_values", dtype=NP_FLOAT)
         input_rhs = floating_field(value=rhs, name="rhs", dtype=NP_FLOAT)
         input_initial = None if initial_head is None else floating_field(value=initial_head, name="initial_head", dtype=NP_FLOAT)
         session = ThreeDOperatorSession(
-            faces=input_faces,
+            faces=(tx_p, tx_m, ty_p, ty_m, tz_p, tz_m),
             active=input_active,
             bc_mask=input_bc_mask,
             bc_values=input_bc_values,

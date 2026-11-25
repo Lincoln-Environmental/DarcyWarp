@@ -3,6 +3,39 @@ import math
 import numpy as np
 
 
+def local_balance_valid(*, case, free, left, right, head, residual, flux, conductance, ghb_conductance,
+                        ghb_exchange, component_anchor, thresholds, storage=None, tangent=None):
+    """Check each free control volume at its own physical flow and head scales.
+
+    Internal conductances do not restrain a common head shift. Only an
+    external boundary or a storage tangent can supply that head scale.
+    Relative tolerances use actual local fluxes. A representability allowance
+    applies to differences of distinct stored heads across flowing faces.
+    """
+    head = np.asarray(head, dtype=np.float64).ravel()
+    fixed = case.fixed.ravel() != 0
+    throughput = np.abs(case.source.ravel()) + np.abs(ghb_exchange.ravel())
+    anchor = ghb_conductance.ravel().copy()
+    if component_anchor is not None:
+        shared = component_anchor.ravel()
+        anchor = np.where(shared > 0.0, shared, anchor)
+    if storage is not None:
+        throughput += np.abs(storage.ravel())
+        anchor += tangent.ravel()
+    roundoff = np.zeros_like(head)
+    eps = np.finfo(np.float64).eps
+    for owner, neighbour in ((left, right), (right, left)):
+        throughput += np.bincount(owner, weights=np.abs(flux), minlength=head.size)
+        anchor += np.bincount(owner, weights=conductance * fixed[neighbour], minlength=head.size)
+        allowance = (eps * np.abs(head[owner]) + eps * np.abs(head[neighbour])) * conductance
+        roundoff += np.bincount(owner, weights=np.where(flux != 0.0, allowance, 0.0), minlength=head.size)
+    flow_allowance = np.maximum(thresholds['physical_rms_m3_day'],
+                                throughput * thresholds['relative_cell_imbalance'])
+    allowance = np.where(anchor > 0.0, anchor * thresholds['head_equivalent_rms_m'], flow_allowance) + roundoff
+    free = free.ravel()
+    return bool(np.isfinite(allowance[free]).all() and
+                np.all(np.abs(residual.ravel()[free]) <= allowance[free]))
+
 def componentwise_roundoff(*, head, source, residual, free, left, right,
                           conductance, ghb_conductance, ghb_head,
                           storage=None, tangent=None, previous=None,
@@ -46,7 +79,7 @@ def apply_roundoff_acceptance(*, checks, certificate):
     accepted = bool(checks['input_valid'] and checks['boundary_condition_valid']
         and checks['physical_metrics_valid'] and checks['ungrounded_current_components'] == 0
         and checks['head_residual_rms'] <= min(1e-12, checks['final_acceptance_thresholds']['head_equivalent_rms_m'])
-        and conservation and certificate['roundoff_rows_valid'])
+        and conservation and certificate['roundoff_rows_valid'] and checks.get('local_balance_valid', True))
     checks.update(roundoff_accepted=accepted, independent_accepted=accepted,
         precision_limited=bool(accepted and not checks['requested_thresholds_met']))
 
