@@ -2253,6 +2253,9 @@ def solve_transient_unconfined_backend(
                             accepted_substep_balances, adaptive_dt_substep_dts, strict=True
                         )
                     ) / period_dt_f
+                period_balance["worst_component_percent_discrepancy"] = max(
+                    balance["worst_component_percent_discrepancy"] for balance in accepted_substep_balances
+                )
                 total = period_balance["total_in"] + period_balance["total_out"]
                 period_balance["percent_discrepancy"] = 200.0 * period_balance["in_minus_out"] / total if total else 0.0
             info_period = dict(info_lin) if isinstance(info_lin, dict) else {}

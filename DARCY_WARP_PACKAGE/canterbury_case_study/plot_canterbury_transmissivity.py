@@ -11,7 +11,7 @@ from matplotlib.colors import LogNorm
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from DARCY_WARP_PACKAGE.canterbury_case_study.canterbury_data_prep import load_case_inputs
+from DARCY_WARP_PACKAGE.canterbury_case_study.canterbury_data_prep import fitted_transmissivity_pilots, load_case_inputs
 
 
 DEFAULT_EXTENT = (1490750.0, 1581450.0, 5138850.0, 5201550.0)
@@ -333,16 +333,8 @@ def _extract_pilots(summary: dict) -> tuple[np.ndarray, float, float, float, tup
         raise ValueError("Missing or invalid pilot_shape in results summary.")
     pilot_ny, pilot_nx = int(pilot_shape[0]), int(pilot_shape[1])
 
-    if "best_T_pilots" in summary:
-        T_pilots = np.asarray(summary["best_T_pilots"], dtype=float)
-    elif "best_logT" in summary:
-        logT = np.asarray(summary["best_logT"], dtype=float)
-        T_pilots = np.power(10.0, logT)
-    else:
-        raise ValueError("results summary must include best_T_pilots or best_logT.")
-
-    if T_pilots.shape != (pilot_ny, pilot_nx):
-        T_pilots = T_pilots.reshape(pilot_ny, pilot_nx)
+    strength = summary.get("hydraulic_settings", {}).get("perturbation_strength", 0.0)
+    T_pilots = fitted_transmissivity_pilots(summary, strength)
 
     T_min = float(summary.get("T_min", np.min(T_pilots)))
     T_max = float(summary.get("T_max", np.max(T_pilots)))

@@ -29,6 +29,20 @@ class CanterburyCaseInputs:
     boundary_audit: dict = field(default_factory=dict)
 
 
+def fitted_transmissivity_pilots(fit: dict, perturbation_strength: float) -> np.ndarray:
+    """Recover the exact pilot grid used for the winning hydraulic solve."""
+    pilots = fit.get("best_realised_T_pilots")
+    if pilots is None:
+        if perturbation_strength > 0.0:
+            raise ValueError("Stochastic fit has no saved realised pilot grid and cannot be replayed exactly.")
+        pilots = fit.get("best_T_pilots")
+        if pilots is None:
+            if fit.get("best_logT") is None:
+                raise ValueError("Missing fitted transmissivity pilots and best_logT.")
+            pilots = np.power(10.0, np.asarray(fit["best_logT"], dtype=float))
+    return np.asarray(pilots, dtype=float).reshape(fit["pilot_shape"])
+
+
 def _load_npz(path: Path) -> dict:
     if not path.exists():
         raise FileNotFoundError(f"Missing inputs file: {path}")

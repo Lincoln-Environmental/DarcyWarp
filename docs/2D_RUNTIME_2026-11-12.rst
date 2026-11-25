@@ -206,7 +206,7 @@ replay API, pass its ``runtime.solve_controls`` mapping as
      --output /tmp/2d-steady-unconfined --repeats 3
    python working_tests/benchmark_2d_steady_runtime.py \
      --formulation confined \
-     --artifact DARCY_WARP_PACKAGE/data/mf6_truth_npz/mf6_truth_1000x1000_ghb_True_t_isotropic_False.npz \
+     --artifact DARCY_WARP_PACKAGE/data/mf6_truth_npz/mf6_truth_100x100_ghb_True_t_isotropic_False.npz \
      --output /tmp/2d-steady-confined --repeats 3
 
 Steady runs use the existing fixture controls and existing MF6 head gates

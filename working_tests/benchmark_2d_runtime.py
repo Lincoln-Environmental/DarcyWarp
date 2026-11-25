@@ -72,7 +72,10 @@ def evaluate_heads(*, comparison, finite, gates):
 
 def matching_time_grid(*, infos, dt):
     """A fixed-step MF6 comparison must solve the same backward-Euler steps."""
-    return all(row.get('adaptive_dt_substep_dts', [dt]) == [dt] for row in infos)
+    return all(
+        row.get('experimental_substep_dts', row.get('adaptive_dt_substep_dts', [dt])) == [dt]
+        for row in infos
+    )
 
 
 def measure(*, artifact, spatial, initial, mode, controls, device, audit, implementation):

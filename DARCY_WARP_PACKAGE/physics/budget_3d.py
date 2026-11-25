@@ -58,13 +58,18 @@ def is_3d_budget_conserved(*, budget, absolute_tolerance, relative_tolerance=1e-
                 or budget["relative_cell_imbalance"] <= relative_tolerance)
 
 
-def check_3d_linear_budget(*, budget, free, head_tolerance, flow_tolerance, relative_tolerance):
+def check_3d_linear_budget(*, budget, free, head_tolerance, flow_tolerance, relative_tolerance,
+                           head_spacing=None, roundoff_flow_tolerance=0.0):
     """Check physical row balances using a local head scale and a flow scale.
 
     The head check uses physical flux differences so an assembled RHS cannot
     hide forcing lost to rounding. The dimensional flow allowance is capped
     by conductance times the allowed head residual. This also covers
-    equilibria whose throughput approaches zero as they converge.
+    equilibria whose throughput approaches zero as they converge. When a
+    solver supplies the local spacing of representable heads, each free row
+    can also meet the head check within one spacing. In that case the
+    absolute flow allowance is capped at the requested dimensional tolerance
+    because a large storage RHS can inflate the initial relative residual.
     """
     residual = budget.pop("cell_residual_field")[free]
     diagonal = budget.pop("operator_diagonal")[free]
@@ -72,6 +77,15 @@ def check_3d_linear_budget(*, budget, free, head_tolerance, flow_tolerance, rela
     equivalent[(diagonal == 0.0) & (residual != 0.0)] = np.inf
     budget["head_residual_rms"] = stable_rms(values=equivalent)
     scaled_flow_tolerance = min(flow_tolerance, head_tolerance * stable_rms(values=diagonal))
+    if head_spacing is not None:
+        rows_at_precision = bool(
+            np.all(np.isfinite(head_spacing)) and np.all(np.abs(equivalent) <= head_spacing)
+        )
+        budget["head_roundoff_rows_valid"] = rows_at_precision
+        budget["roundoff_budget_valid"] = bool(rows_at_precision and is_3d_budget_conserved(
+            budget=budget, absolute_tolerance=min(roundoff_flow_tolerance, scaled_flow_tolerance),
+            relative_tolerance=relative_tolerance,
+        ))
     return bool(budget["head_residual_rms"] <= head_tolerance and is_3d_budget_conserved(
         budget=budget, absolute_tolerance=scaled_flow_tolerance, relative_tolerance=relative_tolerance))
 

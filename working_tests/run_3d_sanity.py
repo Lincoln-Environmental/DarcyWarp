@@ -5,6 +5,7 @@ from pathlib import Path
 from time import perf_counter
 import argparse
 import csv
+import errno
 import hashlib
 import json
 import os
@@ -13,6 +14,7 @@ import re
 import shutil
 import sys
 import subprocess
+import tempfile
 import threading
 
 import numpy as np
@@ -148,17 +150,39 @@ def prepare_reference_with_progress(*, description, interval, **options):
         worker.join()
 
 
+def file_sha256(path):
+    with path.open('rb') as stream:
+        return hashlib.file_digest(stream, 'sha256').hexdigest()
+
+
+def load_reference_cache(*, folder, fingerprint, mode, gates):
+    manifest = json.loads(s=(folder/'manifest.json').read_text())
+    if manifest['fingerprint'] != fingerprint:
+        raise ValueError('Reference fingerprint mismatch')
+    for name, digest in manifest['sha256'].items():
+        if file_sha256(folder/name) != digest:
+            raise ValueError(f'Corrupt reference cache: {folder/name}')
+    with np.load(file=folder/'reference.npz', allow_pickle=False) as saved:
+        arrays = {name: saved[name] for name in saved.files}
+    accepted = sanity_reference_valid(info=manifest['native'], mode=mode, gates=gates)
+    seconds = manifest.get('native_single_run_seconds', manifest['native'].get('seconds'))
+    if seconds is None:
+        seconds = native_elapsed_seconds(text=(folder/'native/stdout.log').read_text())
+    return arrays, dict(manifest, reused=True, accepted=accepted, native_single_run_seconds=seconds,
+        acceptance_criteria='2D sanity validity and 1% cellwise imbalance; strict NPF audit retained separately',
+        strict_native_npf_audit=manifest['native'].get('passed', manifest['native'].get('independent_conservation')))
+
+
 def prepare_reference(*, case, family, mode, cache, executable, cached_only, native_options, factors, dt, ss, sy, gates, timeout_seconds):
     import flopy
     from DARCY_WARP_PACKAGE.validation import npf662_mf6, npf662_transient_mf6
 
     if not executable.is_file():
         raise FileNotFoundError('A pinned MF6 executable is required to identify current references.')
-    with executable.open('rb') as stream:
-        executable_sha256 = hashlib.file_digest(stream, 'sha256').hexdigest()
+    executable_sha256 = file_sha256(executable)
     adapter_paths = [Path(npf662_mf6.__file__), Path(npf662_transient_mf6.__file__)]
     from DARCY_WARP_PACKAGE.validation.npf662_reference import save_npf662_case
-    payload = dict(case_sha256=case.digest(), mode=mode, native_options=native_options,
+    payload = dict(cache_schema=2, case_sha256=case.digest(), mode=mode, native_options=native_options,
                    executable_sha256=executable_sha256, flopy_version=flopy.__version__,
                    adapters={path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in adapter_paths},
                    factors=factors.tolist(), dt=dt, ss=ss, sy=sy, family=family,
@@ -167,26 +191,14 @@ def prepare_reference(*, case, family, mode, cache, executable, cached_only, nat
     folder = cache/fingerprint
     manifest_path = folder/'manifest.json'
     if manifest_path.is_file():
-        manifest = json.loads(s=manifest_path.read_text())
-        if manifest['fingerprint'] != fingerprint:
-            raise ValueError('Reference fingerprint mismatch')
-        for name, digest in manifest['sha256'].items():
-            if hashlib.sha256((folder/name).read_bytes()).hexdigest() != digest:
-                raise ValueError(f'Corrupt reference cache: {folder/name}')
-        with np.load(file=folder/'reference.npz', allow_pickle=False) as saved:
-            arrays = {name: saved[name].copy() for name in saved.files}
-        accepted = sanity_reference_valid(info=manifest['native'], mode=mode, gates=gates)
-        seconds = manifest.get('native_single_run_seconds', manifest['native'].get('seconds'))
-        if seconds is None:
-            seconds = native_elapsed_seconds(text=(folder/'native/stdout.log').read_text())
-        return arrays, dict(manifest, reused=True, accepted=accepted, native_single_run_seconds=seconds,
-            acceptance_criteria='2D sanity validity and 1% cellwise imbalance; strict NPF audit retained separately',
-            strict_native_npf_audit=manifest['native'].get('passed', manifest['native'].get('independent_conservation')))
+        return load_reference_cache(folder=folder, fingerprint=fingerprint, mode=mode, gates=gates)
     if cached_only:
         raise FileNotFoundError(f'No validated cached reference: {folder}. Run once without --cached-only.')
-    if folder.exists():
-        raise ValueError(f'Incomplete cache {folder}; select a new --cache directory.')
-    folder.mkdir(parents=True)
+    cache.mkdir(parents=True, exist_ok=True)
+    destination = folder
+    folder = Path(tempfile.mkdtemp(prefix=f".{fingerprint}.attempt-", dir=cache))
+    # Unpublished attempts retain native diagnostics if the process fails. A retry
+    # gets a fresh workspace. Only a complete directory is visible at destination.
     save_npf662_case(case=case, path=folder/'inputs.npz')
     started = perf_counter()
     if mode == 'steady':
@@ -214,9 +226,18 @@ def prepare_reference(*, case, family, mode, cache, executable, cached_only, nat
         acceptance_criteria='2D sanity validity and 1% cellwise imbalance; strict NPF audit retained separately',
         native=info, reference_generation_end_to_end_s=elapsed, reused=False,
         native_single_run_seconds=native_seconds,
-        sha256={name: hashlib.sha256((folder/name).read_bytes()).hexdigest()
+        sha256={name: file_sha256(folder/name)
                 for name in ('inputs.npz', 'reference.npz')})
-    save_json(path=manifest_path, value=manifest)
+    save_json(path=folder/'manifest.json', value=manifest)
+    try:
+        folder.rename(destination)
+    except OSError as error:
+        if error.errno not in (errno.EEXIST, errno.ENOTEMPTY, errno.EACCES) or not manifest_path.is_file():
+            raise
+        # A concurrent producer published first. Return its data and recorded time.
+        cached = load_reference_cache(folder=destination, fingerprint=fingerprint, mode=mode, gates=gates)
+        shutil.rmtree(folder)
+        return cached
     return arrays, manifest
 
 
@@ -505,8 +526,11 @@ def run(*, args, root, settings):
                     except Exception as error:
                         if not args.allow_missing_reference:
                             raise
+                        from DARCY_WARP_PACKAGE.validation.npf662_reference import save_npf662_case
+                        failed_inputs = args.output / f'{identity}_failed_reference_inputs.npz'
+                        save_npf662_case(case=case, path=failed_inputs)
                         reference = None
-                        manifest = dict(accepted=False, reused=False, unavailable=True,
+                        manifest = dict(physical_inputs_file=failed_inputs.name, accepted=False, reused=False, unavailable=True,
                             error=f'{type(error).__name__}: {error}', sha256={}, native={},
                             native_single_run_seconds=None, native_options=native_profile)
                         print(f'  MF6 comparison unavailable: {manifest["error"]}; retaining independent GPU measurements.', flush=True)

@@ -521,17 +521,8 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
             bc_mask=np.asarray(model.bc_mask_host, dtype=np.int32),
             bc_values=np.asarray(model.bc_values_host, dtype=np.float64),
             dx=float(model.dx),
-            gh_mask=np.asarray(model.gh_mask_host, dtype=np.int32) if model.use_ghb else None,
-            gh_head=np.asarray(model.gh_head_host, dtype=np.float64) if model.use_ghb else None,
-            gh_width=np.asarray(model.gh_width_host, dtype=np.float64) if model.use_ghb else None,
-            ghb_factor=np.asarray(model.ghb_factor_host, dtype=np.float64) if model.use_ghb else None,
-            drn_mask=np.asarray(model.drn_mask_host, dtype=np.int32) if model.use_drn else None,
-            drn_elev=np.asarray(model.drn_elev_host, dtype=np.float64) if model.use_drn else None,
-            drn_cond=np.asarray(model.drn_cond_host, dtype=np.float64) if model.use_drn else None,
-            riv_mask=np.asarray(model.riv_mask_host, dtype=np.int32) if model.use_riv else None,
-            riv_stage=np.asarray(model.riv_stage_host, dtype=np.float64) if model.use_riv else None,
-            riv_rbot=np.asarray(model.riv_rbot_host, dtype=np.float64) if model.use_riv else None,
-            riv_cond=np.asarray(model.riv_cond_host, dtype=np.float64) if model.use_riv else None,
+            ghb_factor=model.ghb_factor_host if model.use_ghb else None,
+            **model._head_dependent_boundary_fields(),
             case="unconfined_semismooth_newton_kcycle",
         )
         accepted_drn_flux = np.zeros((ny, nx), dtype=np.float64)
@@ -599,6 +590,15 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
             "active_mask": active.copy(),
         }
 
+        if not converged and fallback_enabled and (model.use_drn or model.use_riv):
+            # Picard cannot assemble these packages. Return the Newton trial and
+            # its diagnostics so the period driver can retry with a shorter step.
+            info["fallback_state"] = "unavailable_for_drn_riv"
+            if not return_info:
+                raise RuntimeError(
+                    f"Newton did not converge ({failure_reason}); Picard cannot recover a DRN/RIV solve."
+                )
+            return head, info
         if not converged and fallback_enabled:
             fallback_kwargs = dict(original_kwargs)
             for key in tuple(fallback_kwargs):
@@ -611,6 +611,13 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
             fallback_kwargs["transient"] = transient
             fallback_kwargs["dt"] = dt
             fallback_kwargs["head_prev"] = head_prev
+            if transient:
+                # Newton uses the convertible Sy/Ss storage potential. Recover
+                # the same timestep with Picard's secant of that potential.
+                fallback_kwargs.update(
+                    sy=sy, ss=ss, storage_reference="current_picard",
+                    unconfined_storage_mode_2d="mf6_convertible_secant_sy",
+                )
             return _fallback_to_picard(
                 context=context,
                 fallback_kwargs=fallback_kwargs,

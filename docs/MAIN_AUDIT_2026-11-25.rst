@@ -79,6 +79,16 @@ See the :download:`archived-parameter replay JSON
 <../benchmark_results/main_audit_20261125/canterbury_archived_parameter_replay.json>`
 for the controls, source coordinates, water budget and archive hashes.
 
+Stochastic calibration exports
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Subsequent fixes retain the winning realised pilot transmissivities for
+both Canterbury optimisers. Replaying a new fit or plotting its parameter
+summary uses that saved grid, including clipping at the transmissivity
+bounds. The archived Canterbury case above has zero perturbation and
+can be replayed from its original pilots. An older fit with nonzero
+perturbation needs the actual winning realisation for an exact replay.
+
 Qualification
 -------------
 
@@ -169,6 +179,14 @@ for the CUDA replays.
      --output /tmp/darcywarp-audit-3d-large
    python -m DARCY_WARP_PACKAGE.canterbury_case_study.replay_archived_parameters \
      --output /tmp/darcywarp-canterbury-replay --device cuda:0
+
+The 500 × 500 replay test writes one ``<backend>_face_flows.json`` next to the
+replay fixture for each backend. Each file records the signed-flow comparison
+over all active faces touching a free cell at all 52 endpoints. The test checks
+the native head, grid and budget time records and uses a 1% relative L2 ceiling
+at each endpoint. The archived results above report the measured errors. When
+the compressed head fixture is present alone, the test generates a fresh matching
+native reference in its temporary directory and prints the output paths.
 
 The JSON includes the native adapter and executable fingerprints to
 distinguish current references. Use the 3D runner's ``--reference-only``

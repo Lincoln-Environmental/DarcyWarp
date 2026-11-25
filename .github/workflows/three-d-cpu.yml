@@ -44,4 +44,5 @@ jobs:
           python -m pytest -q -ra tests/test_2d_main_audit.py tests/test_3d_main_audit.py \
             tests/test_npf662_history.py tests/test_3d_sanity_runner.py tests/test_model_convergence_mf6_cache.py \
             tests/test_reference_main_audit.py tests/test_canterbury_boundaries.py \
-            tests/test_dynamic_riv_flux_2d.py tests/test_shanz_drn_flux_2d.py
+            tests/test_dynamic_riv_flux_2d.py tests/test_shanz_drn_flux_2d.py \
+            tests/test_main_audit_followup.py tests/test_scientific_audit_regressions.py

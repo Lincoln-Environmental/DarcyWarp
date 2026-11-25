@@ -6,12 +6,12 @@ from pathlib import Path
 import json
 
 import numpy as np
-import torch
 from scipy.optimize import dual_annealing, minimize, OptimizeResult
 
 from DARCY_WARP_PACKAGE.canterbury_case_study.canterbury_data_prep import (
     CanterburyCaseInputs,
     export_active_cells_geotiff,
+    fitted_transmissivity_pilots,
     load_case_inputs,
 )
 from DARCY_WARP_PACKAGE.warped_darcy import WarpDarcySolver
@@ -318,7 +318,10 @@ def get_T_field_from_pilots_cached(
         T_max: float,
         rbf_cache: dict,
         perturbation_strength: float = 0.0,
-) -> np.ndarray:
+        *,
+        rng: np.random.Generator | None = None,
+        return_pilots: bool = False,
+) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
     """
     RBF interpolation of pilot-point transmissivity to full grid.
     """
@@ -337,7 +340,8 @@ def get_T_field_from_pilots_cached(
         )
 
     if perturbation_strength > 0.0:
-        perturb = np.random.randn(*T_pilot_raw.shape).astype(np.float32) * perturbation_strength
+        random = np.random if rng is None else rng
+        perturb = random.standard_normal(T_pilot_raw.shape).astype(np.float32) * perturbation_strength
         T_pilot = T_pilot_raw + perturb
     else:
         T_pilot = T_pilot_raw.copy()
@@ -360,7 +364,10 @@ def get_T_field_from_pilots_cached(
             mean_val = float(np.nanmean(T_field))
             T_field[nan_mask] = mean_val
 
-    return np.clip(T_field, T_min, T_max)
+    T_field = np.clip(T_field, T_min, T_max)
+    if return_pilots:
+        return T_field, T_pilot
+    return T_field
 
 
 def _resample_pilot_grid(logT_grid: np.ndarray, ny_new: int, nx_new: int) -> np.ndarray:
@@ -634,12 +641,13 @@ def dual_annealing_calibration(
             logT_flat_full[pilot_active_flat] = logT_active
             logT_grid = logT_flat_full.reshape(pilot_ny, pilot_nx)
             T_pilots = np.power(10.0, logT_grid).reshape(pilot_ny, pilot_nx)
-            T_field = get_T_field_from_pilots_cached(
+            T_field, realised_pilots = get_T_field_from_pilots_cached(
                 T_pilot_raw=T_pilots,
                 T_min=T_min,
                 T_max=T_max,
                 rbf_cache=rbf_cache,
                 perturbation_strength=hydraulics["perturbation_strength"],
+                rng=init_rng, return_pilots=True,
             )
             T_field = np.where(case.active == 1, T_field, 0.0).astype(np.float32, copy=False)
 
@@ -670,6 +678,7 @@ def dual_annealing_calibration(
                 best["wsse"] = phi_obs
                 best["params"] = {"r_scale": float(r_scale)}
                 best["T_pilots"] = T_pilots.copy()
+                best["realised_T_pilots"] = realised_pilots.copy()
                 best["logT"] = logT_flat_full.copy()
                 best["x"] = np.asarray(x, dtype=np.float64).copy()
                 if _is_meaningful_improvement(
@@ -773,6 +782,7 @@ def dual_annealing_calibration(
         "best_objective": best["objective"],
         "best_params": best["params"],
         "best_T_pilots": best["T_pilots"],
+        "best_realised_T_pilots": best["realised_T_pilots"],
         "best_logT": best["logT"],
         "pilot_shape": (pilot_ny, pilot_nx),
         "T_min": float(T_min),
@@ -1005,12 +1015,13 @@ def lbfgsb_calibration(
             logT_flat_full[pilot_active_flat] = logT_active
             logT_grid = logT_flat_full.reshape(pilot_ny, pilot_nx)
             T_pilots = np.power(10.0, logT_grid).reshape(pilot_ny, pilot_nx)
-            T_field = get_T_field_from_pilots_cached(
+            T_field, realised_pilots = get_T_field_from_pilots_cached(
                 T_pilot_raw=T_pilots,
                 T_min=T_min,
                 T_max=T_max,
                 rbf_cache=rbf_cache,
                 perturbation_strength=hydraulics["perturbation_strength"],
+                rng=init_rng, return_pilots=True,
             )
             T_field = np.where(case.active == 1, T_field, 0.0).astype(np.float32, copy=False)
 
@@ -1040,6 +1051,7 @@ def lbfgsb_calibration(
                 best["wsse"] = phi_obs
                 best["params"] = {"r_scale": float(r_scale)}
                 best["T_pilots"] = T_pilots.copy()
+                best["realised_T_pilots"] = realised_pilots.copy()
                 best["logT"] = logT_flat_full.copy()
 
             active_t_vals = T_pilots[pilot_active_mask]
@@ -1110,6 +1122,7 @@ def lbfgsb_calibration(
         "best_objective": best["objective"],
         "best_params": best["params"],
         "best_T_pilots": best["T_pilots"],
+        "best_realised_T_pilots": best["realised_T_pilots"],
         "best_logT": best["logT"],
         "pilot_shape": (pilot_ny, pilot_nx),
         "T_min": float(T_min),
@@ -1410,6 +1423,8 @@ def _summarize_best(best: dict) -> dict:
         summary["pilot_neighbor_buffer"] = int(best["pilot_neighbor_buffer"])
     if best.get("best_T_pilots") is not None:
         summary["best_T_pilots"] = np.asarray(best["best_T_pilots"], dtype=float).tolist()
+    if best.get("best_realised_T_pilots") is not None:
+        summary["best_realised_T_pilots"] = np.asarray(best["best_realised_T_pilots"], dtype=float).tolist()
     if best.get("best_logT") is not None:
         summary["best_logT"] = np.asarray(best["best_logT"], dtype=float).tolist()
     if "optimizer" in best:
@@ -1500,15 +1515,7 @@ def run_best_solution_and_save_outputs(
         raise ValueError("Missing pilot_shape in outputs; cannot rebuild T field.")
     pilot_ny, pilot_nx = int(pilot_shape[0]), int(pilot_shape[1])
 
-    best_T_pilots = best.get("best_T_pilots")
-    if best_T_pilots is None:
-        best_logT = best.get("best_logT")
-        if best_logT is None:
-            raise ValueError("Missing best_logT and best_T_pilots in outputs.")
-        logT_grid = np.asarray(best_logT, dtype=float).reshape(pilot_ny, pilot_nx)
-        best_T_pilots = np.power(10.0, logT_grid)
-    else:
-        best_T_pilots = np.asarray(best_T_pilots, dtype=float).reshape(pilot_ny, pilot_nx)
+    best_T_pilots = fitted_transmissivity_pilots(best, hydraulics["perturbation_strength"])
 
     r_scale = float(best["best_params"]["r_scale"])
 
@@ -1523,7 +1530,6 @@ def run_best_solution_and_save_outputs(
         T_min=t_min,
         T_max=t_max,
         rbf_cache=rbf_cache,
-        perturbation_strength=hydraulics["perturbation_strength"],
     )
     T_field = np.where(case.active == 1, T_field, 0.0).astype(np.float32, copy=False)
 
@@ -1951,6 +1957,8 @@ if __name__ == "__main__":
 
     # Save the full outputs (recoverable)
     out_dir.mkdir(exist_ok=True)
+    import torch
+
     torch.save(outputs, out_dir.joinpath("results.pt"))
     result_dict = _build_results_summary(outputs)
 

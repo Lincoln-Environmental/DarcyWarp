@@ -306,7 +306,9 @@ if __name__ == "__main__":
             ghb=ghb,
             isotropic=isotropic,
         )
+        reference_provenance = {}
         mf_head, t_mf, mf6_source = load_or_run_mf6_truth(
+            provenance=reference_provenance,
             truth_path=mf6_truth_path,
             workspace=ws,
             label=label,
@@ -418,7 +420,9 @@ if __name__ == "__main__":
             },
             "warp_initial_head": "DEM for both timed solves",
             "mf6_result_source": str(mf6_source),
-            "mf6_truth_path": str(mf6_truth_path),
+            "mf6_truth_path": reference_provenance["path"],
+            "mf6_truth_sha256": reference_provenance["sha256"],
+            "mf6_reference_fingerprint": reference_provenance["fingerprint"],
         }
 
     # 7. Save or update JSON log

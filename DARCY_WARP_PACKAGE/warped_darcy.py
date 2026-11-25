@@ -5137,6 +5137,18 @@ class WarpDarcySolver:
                 gh_head[bad_h] = np.float32(0.0)
             self.gh_head_host = gh_head
 
+    def _head_dependent_boundary_fields(self) -> dict:
+        """Return the enabled package fields shared by model builds and budgets."""
+        fields = {}
+        if self.use_ghb:
+            fields.update(gh_mask=self.gh_mask_host, gh_head=self.gh_head_host, gh_width=self.gh_width_host)
+        if self.use_drn:
+            fields.update(drn_mask=self.drn_mask_host, drn_elev=self.drn_elev_host, drn_cond=self.drn_cond_host)
+        if self.use_riv:
+            fields.update(riv_mask=self.riv_mask_host, riv_stage=self.riv_stage_host,
+                          riv_rbot=self.riv_rbot_host, riv_cond=self.riv_cond_host)
+        return fields
+
     def _require_drn_riv_supported(self, backend_name: str) -> None:
         """DRN/RIV gated boundaries are assembled only by the semismooth Newton backend."""
         if not (self.use_drn or self.use_riv):
@@ -5154,8 +5166,8 @@ class WarpDarcySolver:
         boundaries, nonlinear semismooth-Newton path only):
           - masks are zeroed on inactive and Dirichlet cells
           - elevations / stage / rbot must be finite where the mask is set
-          - conductance must be finite and strictly positive where the mask
-            is set; masked-off cells carry zero conductance
+          - DRN conductance must be positive on enabled cells. Zero RIV
+            conductance is a closed connection, including after a stage update.
         """
         shape = (int(self.ny), int(self.nx))
 
@@ -5187,9 +5199,11 @@ class WarpDarcySolver:
                 arr[~on] = NP_FLOAT(0.0)
                 out[name] = arr
             if np.any(on):
-                cond = out.get("cond")
-                if cond is None or np.any(cond[on] <= 0.0):
-                    raise ValueError(f"{label}_cond must be positive on masked cells.")
+                conductance = out["cond"][on]
+                if label == "drn" and np.any(conductance <= 0.0):
+                    raise ValueError("drn_cond must be positive on masked cells.")
+                if label == "riv" and np.any(conductance < 0.0):
+                    raise ValueError("riv_cond must be non-negative on masked cells.")
             return mask, out
 
         if self.use_drn:
@@ -5538,10 +5552,6 @@ class WarpDarcySolver:
         ``unconfined_semismooth_newton_kcycle`` backend and require
         ``use_drn=True`` / ``use_riv=True`` at construction.
         """
-        self._gh_alpha_input = gh_alpha
-        if aq_thickness is not None:
-            self._aq_thickness_input = aq_thickness
-
         T_field = np.asarray(T_field, dtype=NP_FLOAT)
         R_field = np.asarray(R_field, dtype=NP_FLOAT)
         active = np.asarray(active, dtype=np.int32)
@@ -5593,10 +5603,17 @@ class WarpDarcySolver:
                 riv_stage is None or riv_rbot is None or riv_cond is None
             ):
                 raise ValueError("riv_stage, riv_rbot and riv_cond are required where riv_mask != 0.")
+            if riv_stage is not None and riv_rbot is not None:
+                enabled = (np.asarray(riv_mask) != 0) & (active != 0) & (bc_mask == 0)
+                self._validate_riv_stage(enabled, riv_stage, riv_rbot)
         else:
             if riv_mask is not None and np.any(np.asarray(riv_mask, dtype=np.int32) != 0):
                 raise ValueError("riv_mask was provided but the solver was built with use_riv=False.")
             riv_mask = None
+
+        self._gh_alpha_input = gh_alpha
+        if aq_thickness is not None:
+            self._aq_thickness_input = aq_thickness
 
         self.drn_mask_host = None if drn_mask is None else np.asarray(drn_mask, dtype=np.int32)
         self.drn_elev_host = None if drn_mask is None else drn_elev
@@ -6426,6 +6443,13 @@ class WarpDarcySolver:
         if self._fine_level is not None:
             self._fine_level.M_inv_wp = self.M_inv_wp
 
+    @staticmethod
+    def _validate_riv_stage(enabled, stage, bottom) -> None:
+        stage_values = np.asarray(stage, dtype=NP_FLOAT)
+        bed_values = np.asarray(bottom, dtype=NP_FLOAT)
+        if np.any(enabled & (stage_values < bed_values)):
+            raise ValueError("RIV stage must be at or above the river bottom on enabled cells.")
+
     def update_riv_boundary_2d(self, *, mask, stage, bottom, conductance) -> None:
         """Set dynamic RIV fields for the 2D semismooth-Newton backend.
 
@@ -6445,6 +6469,7 @@ class WarpDarcySolver:
             if field.shape != shape or not np.all(np.isfinite(field)):
                 raise ValueError(f"RIV {name} must be a finite scalar or matching grid")
             arrays.append((name, field))
+        self._validate_riv_stage(enabled != 0, arrays[0][1], arrays[1][1])
         if np.any(arrays[2][1] < 0.0):
             raise ValueError("RIV conductance must be non-negative")
         if np.any((enabled != 0) & ((self.active_host == 0) | (self.bc_mask_host != 0))):
@@ -7517,6 +7542,7 @@ class WarpDarcySolver:
         invocation path because their argument mapping predates the registry.
         """
         if args:
+            self._require_drn_riv_supported("kcycle")
             result = self._solve_multigrid_kcycle_backend(*args, **kwargs)
             return self._own_cpu_head(result=result)
         unconfined = bool(kwargs.get("unconfined", False))

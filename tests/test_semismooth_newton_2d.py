@@ -695,3 +695,28 @@ def test_newton_operator_workspace_rebuilds_only_on_structural_change():
         )
     finally:
         solver.close()
+
+
+def test_ghb_newton_recovery_preserves_convertible_storage_law():
+    from DARCY_WARP_PACKAGE import create_solver
+
+    ones = np.ones((4, 4))
+    zeros = np.zeros((4, 4))
+    initial = 10.0 * ones
+    with create_solver(dim=2, nx=4, ny=4, dx=1.0, device="cpu", use_ghb=True) as model:
+        model.build_from_fields(
+            T_field=8.0 * ones, R_field=zeros, active=ones, bc_mask=zeros, bc_values=initial,
+            gh_mask=ones, gh_head=11.0 * ones, gh_width=ones, gh_alpha=0.0125,
+            aq_thickness=1.0,
+        )
+        head, info = model.solve(
+            formulation="unconfined", solver="unconfined_semismooth_newton_kcycle",
+            initial_head=initial, K_field=ones, zbot_field=zeros, ztop_field=8.0 * ones,
+            transient=True, sy=0.4, ss=0.025, dt=1.0, head_prev=initial,
+            newton_max_iterations=1, newton_max_head_change=0.001,
+            newton_fallback_to_picard=True,
+        )
+    # Above top, S=8*0.025=0.2; GHB C=8*0.0125=0.1 m²/day.
+    assert info["newton_fallback_used"]
+    assert info["converged"]
+    np.testing.assert_allclose(head, (0.2 * 10.0 + 0.1 * 11.0) / 0.3, rtol=0.0, atol=2e-5)

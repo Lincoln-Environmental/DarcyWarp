@@ -56,10 +56,14 @@ in area per unit time. DRN discharges only above the drain elevation.
 RIV can exchange in either direction and uses the river bottom in the
 flux law when the aquifer head falls below that bottom.
 
+The river stage must be at or above the river bottom in every enabled cell.
 Use ``update_riv_boundary_2d()`` for changing river stages or conductance.
 ``accepted_drn_discharge_2d()`` and ``accepted_riv_discharge_2d()``
 return rates for a converged head and its matching solve diagnostics.
-Positive rates leave the aquifer. The Newton budget includes both packages.
+Positive rates leave the aquifer. The Newton multi-period driver retains
+GHB, DRN and RIV fields from ``build_from_fields()`` and reports their
+time-weighted mean rates over each stress period. With DRN or RIV enabled,
+timestep retries use Newton because Picard cannot assemble those packages.
 Native 3D Cartesian and NPF/STO currently provide GHB.
 
 Use consistent units
@@ -140,6 +144,12 @@ alternate driver with timestep retries, recorded fallback behaviour and
 per-period diagnostics. FAS remains experimental even though it supports
 multiple periods. Backend status describes implementation maturity; model
 accuracy still requires checks appropriate to the application.
+
+The transient Picard budget checks the water balance of each hydraulically
+connected group of free cells. Positive face conductance defines connectivity.
+Prescribed heads supply external exchanges to each adjacent group. The
+period diagnostics report the group count and the largest absolute percentage
+discrepancy alongside the signed domain balance.
 
 Precision and performance
 -------------------------

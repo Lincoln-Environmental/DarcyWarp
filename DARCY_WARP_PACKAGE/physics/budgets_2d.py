@@ -7,6 +7,28 @@ import numpy as np
 import pandas as pd
 
 
+def _free_components(free, east, south):
+    """Label free cells joined by positive face conductance, excluding CHD cells."""
+    from scipy.ndimage import label
+
+    neighbours_e = free[:, :-1] & free[:, 1:]
+    neighbours_s = free[:-1, :] & free[1:, :]
+    if not (np.any(neighbours_e & (east == 0.0)) or np.any(neighbours_s & (south == 0.0))):
+        return label(free)
+    # Insert face slots so a zero conductance can split adjacent active cells.
+    ny, nx = free.shape
+    grid = np.zeros((2 * ny - 1, 2 * nx - 1), dtype=bool)
+    grid[::2, ::2] = free
+    grid[::2, 1::2] = neighbours_e & (east > 0.0)
+    grid[1::2, ::2] = neighbours_s & (south > 0.0)
+    labels, count = label(grid)
+    return labels[::2, ::2], count
+
+
+def _component_sum(labels, values):
+    return np.bincount(labels.ravel(), weights=values.ravel())[1:]
+
+
 def compute_mass_balance_budget(
     T_field: np.ndarray,
     R_field: np.ndarray,
@@ -31,11 +53,13 @@ def compute_mass_balance_budget(
     riv_rbot: np.ndarray | None = None,
     riv_cond: np.ndarray | None = None,
     return_cells: bool = False,
+    component_budgets: bool = False,
 ) -> pd.DataFrame | tuple[dict, np.ndarray, np.ndarray, float]:
     """Compute the MF6-like discrete recharge, CHD, and GHB budget.
 
-    This is the original vectorised formulation, retained verbatim in sign and
-    interface ordering while moving it out of the model implementation.
+    Optional cell diagnostics include DRN and RIV exchange and their active
+    derivatives. With return_cells, component_budgets also groups external
+    exchange by hydraulically connected free cells for transient acceptance.
     """
     T = np.asarray(T_field, dtype=np.float64)
     R = np.asarray(R_field, dtype=np.float64)
@@ -129,6 +153,7 @@ def compute_mass_balance_budget(
         ghb_in = float(np.sum(np.maximum(-q_gh, 0.0)))
         ghb_net_out_positive = ghb_out - ghb_in
 
+    q_drn = None
     drn_in = 0.0
     drn_out = 0.0
     drn_net_out_positive = 0.0
@@ -146,6 +171,7 @@ def compute_mass_balance_budget(
         drn_out = float(np.sum(q_drn))
         drn_net_out_positive = drn_out
 
+    q_riv = None
     riv_in = 0.0
     riv_out = 0.0
     riv_net_out_positive = 0.0
@@ -189,17 +215,59 @@ def compute_mass_balance_budget(
         return pd.DataFrame([row])
 
     residual = r_cell - q_gh
+    diagonal = c_gh.copy()
+    boundary_operand = c_gh * (np.abs(h_use) + np.abs(gh_stage))
+    if q_drn is not None:
+        residual -= q_drn
+        flowing = mask_drn & (h_use > de)
+        diagonal[flowing] += dc[flowing]
+        boundary_operand[flowing] += dc[flowing] * (np.abs(h_use[flowing]) + np.abs(de[flowing]))
+    if q_riv is not None:
+        residual -= q_riv
+        connected = mask_riv & (h_use > rb)
+        diagonal[connected] += rc[connected]
+        boundary_operand[mask_riv] += rc[mask_riv] * (
+            np.abs(np.maximum(h_use[mask_riv], rb[mask_riv])) + np.abs(rs[mask_riv])
+        )
+
+    if component_budgets:
+        labels, count = _free_components(cell_is_interior, cond_e, cond_s)
+        row["component_count"] = int(count)
+        if count > 1:
+            # Sum each boundary separately. Opposing flows in the same cell
+            # still both contribute to its gross external exchange.
+            external_net = residual.copy()
+            external_gross = np.abs(r_cell) + np.abs(q_gh)
+            if q_drn is not None:
+                external_gross += np.abs(q_drn)
+            if q_riv is not None:
+                external_gross += np.abs(q_riv)
+            component_operand = boundary_operand.copy()
+            for first, second, conductance, out_first, out_second in (
+                (np.s_[:, :-1], np.s_[:, 1:], cond_e, q_int_to_bc_l, q_int_to_bc_r),
+                (np.s_[:-1, :], np.s_[1:, :], cond_s, q_int_to_bc_t, q_int_to_bc_b),
+            ):
+                external_net[first] -= out_first
+                external_net[second] -= out_second
+                external_gross[first] += np.abs(out_first)
+                external_gross[second] += np.abs(out_second)
+                operand = conductance * (np.abs(h_use[first]) + np.abs(h_use[second]))
+                component_operand[first] += np.where(bc[second], operand, 0.0)
+                component_operand[second] += np.where(bc[first], operand, 0.0)
+            row["component_labels"] = labels
+            row["component_net"] = _component_sum(labels, external_net)
+            row["component_gross"] = _component_sum(labels, external_gross)
+            row["component_operand"] = _component_sum(labels, component_operand)
+
     residual[:, :-1] -= q_l_to_r
     residual[:, 1:] += q_l_to_r
     residual[:-1, :] -= q_t_to_b
     residual[1:, :] += q_t_to_b
-    diagonal = c_gh.copy()
     diagonal[:, :-1] += cond_e
     diagonal[:, 1:] += cond_e
     diagonal[:-1, :] += cond_s
     diagonal[1:, :] += cond_s
     # Only exchanges with external boundaries contribute to domain roundoff.
-    boundary_operand = c_gh * (np.abs(h_use) + np.abs(gh_stage))
     boundary_scale = np.sum(boundary_operand, dtype=np.float64)
     for conductance, first, second in (
         (cond_e, (slice(None), slice(None, -1)), (slice(None), slice(1, None))),
@@ -240,7 +308,7 @@ def evaluate_picard_transient_balance(
         T_field=conductivity * saturation, R_field=model.R_field_host, head=h,
         active=model.active_host, bc_mask=model.bc_mask_host, bc_values=model.bc_values_host,
         dx=model.dx, gh_mask=model.gh_mask_host, gh_head=model.gh_head_host,
-        ghb_factor=model.ghb_factor_host, return_cells=True,
+        ghb_factor=model.ghb_factor_host, return_cells=True, component_budgets=True,
     )
     residual -= storage_volume
     # Use a positive storage sensitivity for the head-equivalent residual.
@@ -258,14 +326,28 @@ def evaluate_picard_transient_balance(
     total_out = budget["total_out"] + storage_out
     throughflow = 0.5 * (total_in + total_out)
     imbalance = total_in - total_out
-    storage_operand = np.broadcast_to(storage_scale, h.shape)[free] * (np.abs(h[free]) + np.abs(old[free]))
+    storage_operand = np.where(free, storage_scale * (np.abs(h) + np.abs(old)) * (area / dt), 0.0)
     eps = np.finfo(np.asarray(head).dtype).eps
-    floor = float(32.0 * eps * (throughflow + boundary_scale + np.sum(storage_operand) * area / dt))
-    return dict(accepted=bool(np.isfinite([head_rms, flow_rms, imbalance, floor]).all()
+    floor = float(32.0 * eps * (throughflow + boundary_scale + np.sum(storage_operand)))
+    discrepancy = 100.0 * imbalance / throughflow if throughflow else 0.0
+    worst_component_pct = abs(discrepancy)
+    components_ok = True
+    if budget["component_count"] > 1:
+        labels = budget["component_labels"]
+        net = budget["component_net"] - _component_sum(labels, storage_volume)
+        component_throughflow = 0.5 * (budget["component_gross"] + _component_sum(labels, np.abs(storage_volume)))
+        component_floor = 32.0 * eps * (
+            component_throughflow + budget["component_operand"] + _component_sum(labels, storage_operand)
+        )
+        components_ok = np.all(np.abs(net) <= np.maximum(component_floor, relative_tolerance * component_throughflow))
+        ratios = np.divide(np.abs(net), component_throughflow, out=np.zeros_like(net), where=component_throughflow > 0)
+        worst_component_pct = float(100.0 * np.max(ratios))
+    return dict(accepted=bool(components_ok and np.isfinite([head_rms, flow_rms, imbalance, floor]).all()
                 and head_rms <= head_tolerance and abs(imbalance) <= max(floor, relative_tolerance * throughflow)),
         head_residual_rms=head_rms, flow_residual_rms=flow_rms, total_in=total_in, total_out=total_out,
         storage_in=storage_in, storage_out=storage_out, in_minus_out=imbalance,
-        percent_discrepancy=100.0 * imbalance / throughflow if throughflow else 0.0,
+        percent_discrepancy=discrepancy, component_count=budget["component_count"],
+        worst_component_percent_discrepancy=worst_component_pct,
         flow_roundoff_floor=floor, relative_tolerance=relative_tolerance,
     )
 

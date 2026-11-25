@@ -11,7 +11,7 @@ from DARCY_WARP_PACKAGE.validation.json_output import atomic_json
 from DARCY_WARP_PACKAGE.validation.head_checks import finite_diagnostics
 from DARCY_WARP_PACKAGE.validation.time_grid import same_step_times
 from DARCY_WARP_PACKAGE.validation.npf662_mf6 import (
-    ghb_stress_period_data, decode_ghb_budget, decode_list_budget, native_chd_flow_valid,
+    ghb_stress_period_data, decode_ghb_budget, decode_list_budget, native_chd_flow_valid, validate_mf6_identity,
 )
 
 
@@ -48,7 +48,8 @@ def run_transient_mf6(*, case, directory, executable, source_factors, dt, ss, sy
     executable = Path(executable).resolve()
     version = subprocess.check_output([str(executable), '-v'], text=True).strip()
     checksum = hashlib.sha256(executable.read_bytes()).hexdigest()
-    if version != 'mf6: 6.6.2 05/12/2025' or checksum != executable_sha256:
+    build_identity = validate_mf6_identity(version=version, checksum=checksum)
+    if checksum != executable_sha256:
         raise ValueError('MF6 executable does not match the explicit version/build pin')
     if source_package not in ('wel', 'rch'):
         raise ValueError('Source package must be wel or rch')
@@ -205,7 +206,7 @@ def run_transient_mf6(*, case, directory, executable, source_factors, dt, ss, sy
     result = dict(passed=all(row['accepted'] for row in rows), periods=rows,
         engine_seconds=engine_seconds,native_success=True,
         native_solver_options=ims_options,
-        mf6_version=version, mf6_sha256=checksum, source_package=source_package,
+        mf6_version=version, mf6_sha256=checksum, mf6_build_identity=build_identity, source_package=source_package,
         dt_days=dt, source_factors=factors.tolist(), storage='Default MF6 6.6.2 Ss/Sy, no STO optional formulation flags')
     atomic_json(path=directory/'summary.json', value=finite_diagnostics(value=result))
     return arrays, result

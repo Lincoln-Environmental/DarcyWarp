@@ -7,6 +7,7 @@ cell conductivity and saturation. One equivalent boundary is stored per cell.
 import numpy as np
 
 from DARCY_WARP_PACKAGE.physics.inputs_3d import binary_mask, floating_field
+from DARCY_WARP_PACKAGE.validation.head_checks import invalid_head_values
 
 
 def validate_ghb_fields(*, conductance, head, active, fixed, mask=None):
@@ -35,6 +36,8 @@ def validate_ghb_fields(*, conductance, head, active, fixed, mask=None):
             raise ValueError("Nonzero ghb_conductance outside ghb_mask would be lost")
     c[~selected] = 0.0
     hb[~selected] = 0.0
+    if np.any(invalid_head_values(head=hb[c > 0.0])):
+        raise ValueError("Invalid active GHB head: reserved dry/inactive marker on a conducting boundary")
     with np.errstate(over="ignore", invalid="ignore"):
         forcing = c * hb
     if not np.all(np.isfinite(forcing)):
