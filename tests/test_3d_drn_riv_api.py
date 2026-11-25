@@ -193,6 +193,43 @@ def test_three_cell_boundary_roots_match_closed_form(device, package):
 
 
 @pytest.mark.parametrize("device", ["cpu", "cuda:0"])
+def test_drn_can_be_enabled_and_disabled_between_accepted_solves(device):
+    """Check public DRN updates change the accepted root and can disable it.
+
+    :param device: Warp device identifier.
+    :return: None.
+    """
+    if device.startswith("cuda"):
+        import warp as wp
+        wp.init()
+        if not wp.is_cuda_available():
+            pytest.skip("CUDA is unavailable")
+    shape = (1, 1, 3)
+    mask = np.array([[[0, 1, 0]]], dtype=np.int32)
+    with WarpDarcySolver3D(nx=3, ny=1, nz=1, dx=1.0, dy=1.0, dz=1.0,
+            device=device, implementation="fast", formulation="mf6_6_6_2_npf") as model:
+        model.build_from_K_fields(kx_field=np.ones(shape), ky_field=np.ones(shape),
+            kz_field=np.ones(shape), active=np.ones(shape, dtype=np.int32),
+            bc_mask=np.array([[[1, 0, 1]]], dtype=np.int32), bc_values=np.zeros(shape),
+            rhs=np.array([[[0.0, 4.0, 0.0]]]))
+        no_drain_head, no_drain_info = model.solve(npf_preconditioner="kcycle")
+        assert no_drain_info["converged"]
+        np.testing.assert_allclose(no_drain_head[0, 0, 1], 2.0, rtol=0.0, atol=1e-12)
+
+        model.update_drn(drn_conductance=2.0, drn_elevation=1.0, drn_mask=mask)
+        drain_head, drain_info = model.solve(max_outer=30, max_cycles=100)
+        assert drain_info["converged"]
+        np.testing.assert_allclose(drain_head[0, 0, 1], 1.5, rtol=0.0, atol=1e-12)
+        np.testing.assert_allclose(model.accepted_drn_discharge(head=drain_head,
+            info=drain_info)[0, 0, 1], 1.0, rtol=0.0, atol=1e-12)
+
+        model.update_drn(drn_conductance=None, drn_elevation=None)
+        restored_head, restored_info = model.solve(npf_preconditioner="kcycle")
+        assert restored_info["converged"]
+        np.testing.assert_allclose(restored_head[0, 0, 1], 2.0, rtol=0.0, atol=1e-12)
+
+
+@pytest.mark.parametrize("device", ["cpu", "cuda:0"])
 def test_transient_npf_storage_can_cross_drain_activation(device):
     """Check backward-Euler storage and DRN share one accepted cell balance."""
     if device.startswith("cuda"):

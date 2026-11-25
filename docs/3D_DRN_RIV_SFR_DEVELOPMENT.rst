@@ -25,10 +25,11 @@ Verified evidence on this branch:
   its 1e-6 m bound by 1.57e-6 m. The exact same result reproduces at the
   committed pre-integration feature baseline ``ca09497``.
 * The focused physics, public API, independent reference and actual MF6 set
-  passes: 64 passed. This includes CPU/CUDA three-cell roots for active DRN
-  and below-bed RIV. The broad post-optimization NPF and package regressions
-  report 272 passed, 4 skipped and the same baseline CUDA failure; four newer
-  three-cell CPU/CUDA parameterizations passed separately. A layered mixed
+  passes: 66 passed. This includes CPU/CUDA three-cell roots for active DRN
+  and below-bed RIV, plus package enable/disable updates between solves. The
+  broad post-optimization NPF and package regressions report 272 passed,
+  4 skipped and the same baseline CUDA failure; six newer CPU/CUDA API
+  parameterizations passed separately. A layered mixed
   DRN/RIV actual-MF6 case passes. MF6 6.6.2 checks cover confined steady
   DRN/RIV, transient single-cell activation/leakage, and a two-layer steady
   case with both packages. Head error is below 1e-9 m and package-rate error
