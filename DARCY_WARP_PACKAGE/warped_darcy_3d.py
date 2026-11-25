@@ -19,8 +19,8 @@ from DARCY_WARP_PACKAGE.physics.inputs_3d import binary_mask, floating_field, po
 from DARCY_WARP_PACKAGE.physics.recharge_3d import combine_cell_sources, recharge_depth_rate
 from DARCY_WARP_PACKAGE.physics.wel import (
     combine_volumetric_sources,
+    signed_rate_budget,
     validate_well_entries,
-    well_budget,
     well_cell_volume_rates,
 )
 from DARCY_WARP_PACKAGE.solvers_3d import (
@@ -712,7 +712,34 @@ class WarpDarcySolver3D:
         if self._session is None:
             raise RuntimeError("Build the model before reading the well budget.")
         rates = None if self._wel_entries is None else self._wel_entries.rates
-        return well_budget(rates=rates)
+        return signed_rate_budget(rates=rates)
+
+    def physical_source_budgets(self) -> dict:
+        """Separate gross budgets of every owned physical source component.
+
+        :return: Mapping with ``wel``, ``recharge`` and ``volumetric`` entries.
+            Each carries gross ``inflow``, ``outflow`` and ``net`` rates; the
+            recharge rates include the horizontal cell area conversion once.
+            Components retain their own gross values even when they cancel in
+            the assembled numerical source.
+        :raises RuntimeError: If the model has not been built.
+        """
+        if self._session is None:
+            raise RuntimeError("Build the model before reading source budgets.")
+        wel = self.wel_budget()
+        rate = self._recharge_rate
+        area = self.dx * self.dy
+        if rate is None:
+            recharge = dict(inflow=0., outflow=0., net=0.)
+        else:
+            rates = np.broadcast_to(np.asarray(rate, dtype=np.float64), self.shape[1:]) * area
+            recharge = signed_rate_budget(rates=rates.ravel())
+        source = self._volumetric_source
+        if source is None:
+            volumetric = dict(inflow=0., outflow=0., net=0.)
+        else:
+            volumetric = signed_rate_budget(rates=np.asarray(source, dtype=np.float64).ravel())
+        return dict(wel=wel, recharge=recharge, volumetric=volumetric)
 
     def update_wel(self, entries) -> None:
         """Replace explicit well entries while retaining recharge and other sources.

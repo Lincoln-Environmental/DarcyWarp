@@ -30,8 +30,8 @@ from DARCY_WARP_PACKAGE.physics.budgets_2d import (
 )
 from DARCY_WARP_PACKAGE.physics.drn_2d import drn_discharge_2d
 from DARCY_WARP_PACKAGE.physics.wel import (
+    signed_rate_budget,
     validate_well_entries,
-    well_budget,
 )
 from DARCY_WARP_PACKAGE.physics.storage_2d import (
     exact_unconfined_storage_terms as _physics_exact_unconfined_storage_terms,
@@ -7189,7 +7189,7 @@ class WarpDarcySolver:
         if self.R_field_host is None:
             raise RuntimeError("Call build_from_truth_inputs() once before wel_budget().")
         rates = None if self.wel_entries is None else self.wel_entries.rates
-        return well_budget(rates=rates)
+        return signed_rate_budget(rates=rates)
 
     def update_wel_in_place(self, wel_entries) -> None:
         """

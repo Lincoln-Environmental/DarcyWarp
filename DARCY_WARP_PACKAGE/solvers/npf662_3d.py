@@ -177,6 +177,7 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
         info.update(reference_reused=reference_reused, reference_setup_seconds=reference_seconds,
                     public_total_seconds=perf_counter()-started)
         info['active_set_seeds'] = active_set_seeds
+        info['source_budgets'] = model.physical_source_budgets()
         return (head,info) if return_info else head
     if iteration_overrides:
         raise ValueError('max_outer/krylov_restart require npf_krylov_method=gmres or fgmres; uniform confined default uses the historical direct K-cycle backend')
@@ -201,4 +202,5 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
         max_cycles=max_cycles, rel_tol=rel_tol, nonlinear=None, convergence=thresholds)
     info.update(reference_reused=reference_reused, reference_setup_seconds=reference_seconds,
                 public_total_seconds=perf_counter()-started)
+    info['source_budgets'] = model.physical_source_budgets()
     return (head,info) if return_info else head

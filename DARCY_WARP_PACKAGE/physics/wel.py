@@ -149,12 +149,14 @@ def combine_volumetric_sources(*, rhs, wells, dtype=np.float64):
     return combined
 
 
-def well_budget(*, rates):
-    """Gross-preserving physical budget of signed well rates.
+def signed_rate_budget(*, rates):
+    """Gross-preserving budget of a signed rate array.
 
-    :param rates: One owned entry-rate array [L³/T], or None.
-    :return: Mapping with ``inflow``, ``outflow`` and ``net`` rates [L³/T].
-        Inflow and outflow keep opposing wells in one cell physically separate.
+    :param rates: Owned signed rates [L³/T] (well entries, recharge or raw
+        volumetric sources), or None.
+    :return: Mapping with ``inflow``, ``outflow`` and ``net`` rates. Inflow
+        and outflow keep opposing contributions physically separate instead
+        of cancelling them.
     """
     if rates is None or not len(rates):
         return dict(inflow=0., outflow=0., net=0.)

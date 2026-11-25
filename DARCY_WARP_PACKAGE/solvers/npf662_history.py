@@ -96,6 +96,14 @@ class HistorySources:
         self.column_count = model.nx * model.ny
         self.receivers = None
         self.base = original_source
+        # Physical components kept separate for gross budget reporting; a
+        # scheduled component drops out of the scaled base entirely.
+        self.volumetric = (None if model._volumetric_source is None
+                           else np.array(model._volumetric_source, copy=True))
+        self.built_wells = (None if model._wel_entries is None or wells is not None
+                            else np.array(model._wel_entries.rates, copy=True))
+        self.built_recharge = (None if model._recharge_rate is None or rates is not None
+                               else np.array(model._recharge_rate, copy=True))
         if rates is not None:
             self.base = model._source_with_recharge(0.0)
             self.receivers = surface_recharge_cells(model._active, model._bc_mask)
@@ -126,6 +134,34 @@ class HistorySources:
         if self.wells is None:
             return None
         return self.wells[index]
+
+    def component_budget(self, index):
+        """Separate gross source budgets for one step's physical components.
+
+        ``source_factors`` scale every built component that the step does not
+        explicitly replace, so each gross budget carries that multiplier.
+
+        :param index: Requested step.
+        :return: Mapping with ``wel``, ``recharge`` and ``volumetric`` gross
+            rate budgets in L³/T.
+        """
+        from DARCY_WARP_PACKAGE.physics.wel import signed_rate_budget
+        factor = float(self.factors[index])
+        scheduled = self.wells_at(index)
+        wel = signed_rate_budget(rates=None if scheduled is None else scheduled.rates)
+        if scheduled is None and self.built_wells is not None:
+            wel = {key: value * factor for key, value in wel.items()}
+        rate = self.rate_at(index) if self.rates is not None else self.built_recharge
+        if rate is None:
+            recharge = dict(inflow=0., outflow=0., net=0.)
+        else:
+            rates = np.broadcast_to(np.asarray(rate, dtype=np.float64), self.base.shape[1:]) * self.area
+            recharge = signed_rate_budget(rates=rates.ravel())
+            if self.rates is None:
+                recharge = {key: value * factor for key, value in recharge.items()}
+        volumetric = signed_rate_budget(rates=None if self.volumetric is None
+                                        else self.volumetric.ravel() * factor)
+        return dict(wel=wel, recharge=recharge, volumetric=volumetric)
 
     def host_source(self, index):
         """Form a volumetric source array for an independent solve or audit.
@@ -236,9 +272,13 @@ def prepare_next_step(*, workspace, sources, index, dt, area, activation_head=No
 def attach_accepted_exchange_volumes(*, period):
     """Add backward-Euler gross exchange volumes to an accepted period.
 
+    Physical source components (wells, recharge, raw volumetric rates) and the
+    DRN/RIV packages each keep separate gross volumes so opposing flows never
+    cancel in the reported totals.
+
     :param period: Period diagnostics containing ``dt``, convergence and rate budgets.
-    :return: The same period mapping with DRN/RIV volumes added when accepted.
-    :raises ValueError: If an accepted package budget is nonfinite or malformed.
+    :return: The same period mapping with accepted volumes added when accepted.
+    :raises ValueError: If an accepted budget is nonfinite or malformed.
     """
     if not period.get('converged', False):
         return period
@@ -255,14 +295,28 @@ def attach_accepted_exchange_volumes(*, period):
             outflow=rates[1] * duration,
             net=rates[2] * duration,
         )
+    budgets = period.get('source_budgets')
+    if budgets is not None:
+        volumes = {}
+        for name, budget in budgets.items():
+            rates = tuple(float(budget[key]) for key in ('inflow', 'outflow', 'net'))
+            if not np.isfinite(duration) or duration <= 0. or not np.all(np.isfinite(rates)):
+                raise ValueError(f'Invalid accepted {name} source rate or timestep')
+            volumes[name] = dict(
+                inflow=rates[0] * duration,
+                outflow=rates[1] * duration,
+                net=rates[2] * duration,
+            )
+        period['source_volume_budgets'] = volumes
     return period
 
 
 def total_accepted_exchange_volumes(*, periods):
-    """Sum accepted gross package volumes without cancelling opposing rates.
+    """Sum accepted gross volumes without cancelling opposing rates.
 
     :param periods: Ordered per-period diagnostics.
-    :return: Separate DRN and RIV gross volume totals, or None when disabled.
+    :return: Separate DRN, RIV and physical source gross volume totals, or
+        None when no accepted volumes exist.
     """
     result = {}
     for package in ('drn', 'riv'):
@@ -274,6 +328,19 @@ def total_accepted_exchange_volumes(*, periods):
                 outflow=fsum(row['outflow'] for row in budgets),
                 net=fsum(row['net'] for row in budgets),
             )
+    source_names = ('wel', 'recharge', 'volumetric')
+    source_budgets = [row['source_volume_budgets'] for row in periods
+                      if row.get('converged', False) and 'source_volume_budgets' in row]
+    if source_budgets:
+        result['sources'] = {}
+        for name in source_names:
+            budgets = [row[name] for row in source_budgets if name in row]
+            if budgets:
+                result['sources'][name] = dict(
+                    inflow=fsum(row['inflow'] for row in budgets),
+                    outflow=fsum(row['outflow'] for row in budgets),
+                    net=fsum(row['net'] for row in budgets),
+                )
     return result or None
 
 
@@ -330,6 +397,7 @@ def solve_transient_history(*, model, dt, head_prev, ss, sy,
             dt=float(times[0]), head_prev=initial, ss=ss, sy=sy, **options)
         wp.synchronize_device(device=model.device)
         periods.append(dict(first_info, index=0, dt=float(times[0]), source_factor=float(factors[0]),
+            source_budgets=sources.component_budget(0),
             public_step_seconds=perf_counter()-first_start))
         attach_accepted_exchange_volumes(period=periods[-1])
         head_readbacks += 1
@@ -373,7 +441,7 @@ def solve_transient_history(*, model, dt, head_prev, ss, sy,
             head_readbacks += int(head is not None)
             wp.copy(dest=history.flatten(), src=workspace.head, dest_offset=index*workspace.n, count=workspace.n)
             periods.append(dict(info, index=index, dt=reference.dt, source_factor=float(factors[index]),
-                active_set_seeds=step_seeds,
+                active_set_seeds=step_seeds, source_budgets=sources.component_budget(index),
                 public_step_seconds=perf_counter()-step_start))
             attach_accepted_exchange_volumes(period=periods[-1])
         count = len(periods)
