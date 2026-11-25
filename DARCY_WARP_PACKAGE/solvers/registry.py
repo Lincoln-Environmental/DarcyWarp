@@ -30,7 +30,14 @@ def available_backends() -> tuple[str, ...]:
 
 
 def canonical_solver_name(solver: str | None, *, formulation: str, default: str) -> str:
-    """Resolve compatibility aliases and choose the formulation-safe default."""
+    """Resolve a solver name using the declared formulation.
+
+    :param solver: Canonical name, accepted alias or None.
+    :param formulation: Confined or unconfined flow formulation.
+    :param default: Default backend if solver is None.
+    :returns: Canonical compatible backend name.
+    :raises ValueError: If the name or formulation combination is unsupported.
+    """
     return canonical_name(solver, formulation=formulation, default=default)
 
 
@@ -41,7 +48,16 @@ def select_backend(
     transient: bool,
     default: str,
 ) -> SolverBackend:
-    """Validate the requested formulation/mode and return its backend."""
+    """Validate the requested formulation/mode and select its backend.
+
+    :param solver: Requested solver name, alias or None.
+    :param formulation: Confined or unconfined flow formulation.
+    :param transient: Whether transient storage support is required.
+    :param default: Default backend when no solver is specified.
+    :returns: Registered backend object.
+    :raises ValueError: If the name or formulation is unsupported.
+    :raises NotImplementedError: If transient storage is unsupported.
+    """
     name = canonical_solver_name(solver, formulation=formulation, default=default)
     capability = CAPABILITIES[name]
     if capability.experimental:
@@ -58,7 +74,14 @@ def select_backend(
 
 
 def solve_selected(context: SolverContext, *, solver: str | None, default: str, **kwargs: Any):
-    """Select and invoke a backend without exposing model implementation details."""
+    """Select and invoke a backend using the model's borrowed context.
+
+    :param context: Grid, operator, workspace and formulation context.
+    :param solver: Requested solver name or None.
+    :param default: Default backend if solver is None.
+    :param kwargs: Solver-specific physical fields and controls.
+    :returns: Backend result, typically head or head and diagnostics.
+    """
     backend = select_backend(
         solver=solver,
         formulation=context.formulation,

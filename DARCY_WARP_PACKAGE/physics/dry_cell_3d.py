@@ -10,6 +10,18 @@ def quantify_dry_cell_transmission(*, head, bottoms, tops, actual_faces,
     saturation-independent assumption, not an error against a Richards model.
     Pairwise magnitudes count each internal face once; they cannot cancel in
     a domain residual. Ratios with no recharge/abstraction are undefined.
+
+    :param head: Final hydraulic head grid in length units.
+    :param bottoms: Cell-bottom elevations.
+    :param tops: Cell-top elevations.
+    :param actual_faces: Six face conductances with the numerical floor applied.
+    :param unfloored_faces: Face conductances using physical saturation.
+    :param active: Active-cell mask.
+    :param bc_mask: Prescribed-head mask.
+    :param source: Cell source rate, positive for injection, volume/time.
+    :param budget: Physical budget dictionary containing throughput.
+    :returns: Magnitudes of floor-induced horizontal and vertical dry-interface
+        flow, volume/time, with dimensionless source and throughput ratios.
     """
     act = np.asarray(active) != 0
     free = act & (np.asarray(bc_mask) == 0)

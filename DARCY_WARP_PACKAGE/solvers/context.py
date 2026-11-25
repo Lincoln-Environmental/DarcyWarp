@@ -60,12 +60,15 @@ class SolverContext:
 
     @property
     def formulation(self) -> str:
+        """Return the formulation selected for this backend invocation."""
         return self.convergence.formulation
 
     @property
     def transient(self) -> bool:
+        """Report whether this backend invocation includes transient storage."""
         return self.convergence.transient
 
     @property
     def device(self) -> str:
+        """Return the Warp device identifier supplied by the model."""
         return self.grid.device

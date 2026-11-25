@@ -10,7 +10,12 @@ def chebyshev_update_weights(
     order: int,
     lambda_min_fraction: float,
 ) -> tuple[float, ...]:
-    """Build bounded nonlinear-Picard Chebyshev damping weights."""
+    """Build bounded nonlinear-Picard Chebyshev damping weights.
+
+    :param order: Number of weights; nonpositive order returns an empty tuple.
+    :param lambda_min_fraction: Lower spectral bound relative to the unit upper bound.
+    :returns: Ordered reciprocal Chebyshev roots, used as damping weights.
+    """
     m = int(order)
     if m <= 0:
         return tuple()
@@ -31,7 +36,13 @@ def chebyshev_relaxation_sequence(
     lambda_min: float,
     lambda_max: float,
 ) -> tuple[float, ...]:
-    """Build Chebyshev weighted-Jacobi factors without changing ordering."""
+    """Build the weighted-Jacobi Chebyshev relaxation factors.
+
+    :param order: Number of weights; nonpositive order returns an empty tuple.
+    :param lambda_min: Lower spectral bound of the preconditioned operator.
+    :param lambda_max: Upper spectral bound of the preconditioned operator.
+    :returns: Ordered positive relaxation factors.
+    """
     m = int(order)
     if m <= 0:
         return tuple()
@@ -59,6 +70,12 @@ _NAMES = {
 
 
 def __getattr__(name: str):
+    """Resolve adaptive controller symbols without eager Warp imports.
+
+    :param name: Requested module attribute.
+    :returns: Named adaptive controller object.
+    :raises AttributeError: If the requested symbol is not exported.
+    """
     if name not in _NAMES:
         raise AttributeError(name)
     from DARCY_WARP_PACKAGE import warped_darcy
@@ -67,7 +84,16 @@ def __getattr__(name: str):
 
 
 def steady_flow_tolerance(*, initial_rms, relative_tolerance, absolute_tolerance, fine, free):
-    """Retain the relative flow gate and bound a below-floor start in head units."""
+    """Set a flow-residual gate without accepting inaccurate small-source starts.
+
+    :param initial_rms: Initial flow residual RMS.
+    :param relative_tolerance: Fraction of the initial residual.
+    :param absolute_tolerance: Requested absolute residual floor.
+    :param fine: Fine-grid level with its device inverse diagonal.
+    :param free: Boolean free-cell mask for the fine grid.
+    :returns: Absolute tolerance after adjusting a below-floor start using
+        the largest free-cell inverse diagonal.
+    """
     if 0.0 < initial_rms <= absolute_tolerance:
         inverse_diagonal = float(np.max(fine.M_inv_wp.numpy()[free]))
         absolute_tolerance = absolute_tolerance / max(1.0, inverse_diagonal)

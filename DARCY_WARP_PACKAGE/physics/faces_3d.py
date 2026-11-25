@@ -13,6 +13,16 @@ def validate_reciprocal_faces(*, faces, active, canonicalize=False, copy_arrays=
     is canonicalized to the positive-direction value when requested. Exterior
     slots are unused by the stencil; connections touching inactive cells must
     be exactly zero. Substantial asymmetry is never averaged.
+
+    :param faces: Six face-conductance arrays in +x, -x, +y, -y, +layer,
+        -layer order, all with shape (nz, ny, nx), in volume/time/length.
+    :param active: Exact binary active-cell mask.
+    :param canonicalize: Make accepted reciprocal roundoff differences equal.
+    :param copy_arrays: When canonicalising, copy all six arrays rather than
+        only copying a changed negative-direction array.
+    :returns: Six validated face arrays, borrowed unless copying is required.
+    :raises ValueError: For incompatible shapes, negative/nonfinite conductance,
+        nonreciprocal internal faces or nonzero inactive connections.
     """
     act = binary_mask(value=active, name="active") != 0
     arrays = tuple(np.asarray(face) for face in faces)

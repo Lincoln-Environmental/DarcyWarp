@@ -24,6 +24,13 @@ class SolverResourceOwner:
     closed: bool = False
 
     def refresh(self, *, hierarchy: Any, work: Any, cuda_graph: Any) -> None:
+        """Update model-owned references after a hierarchy or graph rebuild.
+
+        :param hierarchy: Current multigrid hierarchy.
+        :param work: Current persistent solver workspace.
+        :param cuda_graph: Current captured graph, or None.
+        :raises RuntimeError: If the resource owner has been closed.
+        """
         if self.closed:
             raise RuntimeError("cannot refresh resources after close()")
         self.hierarchy = hierarchy
@@ -33,11 +40,22 @@ class SolverResourceOwner:
             self.experimental_workspaces = {}
 
     def get_experimental_workspace(self, name: str) -> Any:
+        """Retrieve an attached backend workspace.
+
+        :param name: Backend workspace identifier.
+        :returns: Workspace object or None.
+        """
         if self.experimental_workspaces is None:
             self.experimental_workspaces = {}
         return self.experimental_workspaces.get(str(name))
 
     def set_experimental_workspace(self, name: str, workspace: Any) -> None:
+        """Attach a workspace, closing a replaced closable workspace.
+
+        :param name: Backend workspace identifier.
+        :param workspace: New model-owned workspace object.
+        :raises RuntimeError: If the resource owner has been closed.
+        """
         if self.closed:
             raise RuntimeError("cannot attach a workspace after close()")
         if self.experimental_workspaces is None:

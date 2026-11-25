@@ -8,6 +8,15 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True, slots=True)
 class SolverCapabilities:
+    """Formulation and runtime support declared for one solver backend.
+
+    :param formulations: Supported flow formulation names.
+    :param supports_transient: Whether storage can be included.
+    :param experimental: Whether production qualification is incomplete.
+    :param production_default: Whether this is the default production backend.
+    :param supports_production_period_driver: Whether multi-period dispatch is supported.
+    """
+
     formulations: frozenset[str]
     supports_transient: bool
     experimental: bool = False
@@ -52,6 +61,14 @@ ALIASES: dict[str, str] = {
 
 
 def canonical_name(solver: str | None, *, formulation: str, default: str) -> str:
+    """Resolve and validate a user-facing solver name.
+
+    :param solver: Backend name or alias, or None to use default.
+    :param formulation: Requested confined or unconfined formulation.
+    :param default: Backend name used when solver is omitted.
+    :returns: Canonical compatible solver name.
+    :raises ValueError: If the name or requested formulation is unsupported.
+    """
     requested = default if solver is None else str(solver)
     name = str(requested).strip().lower()
     if formulation == "unconfined" and name in {"kcycle", "multigrid", "mg"}:

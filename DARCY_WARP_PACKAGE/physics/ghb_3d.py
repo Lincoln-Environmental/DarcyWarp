@@ -11,7 +11,18 @@ from DARCY_WARP_PACKAGE.validation.head_checks import invalid_head_values
 
 
 def validate_ghb_fields(*, conductance, head, active, fixed, mask=None):
-    """Own finite full-grid inputs; validate before conversion or assignment."""
+    """Validate and own the general-head-boundary fields.
+
+    :param conductance: Nonnegative scalar or grid, volume/time/length.
+    :param head: External stage, scalar or grid in length units.
+    :param active: Active-cell mask defining the required shape.
+    :param fixed: Prescribed-head mask; GHB cannot coexist with fixed heads.
+    :param mask: Optional exact binary GHB mask; defaults to positive conductance.
+    :returns: Owned conductance and stage arrays with disabled cells zeroed,
+        or (None, None) if no general-head boundary was supplied.
+    :raises ValueError: For invalid fields, overlapping boundaries, or
+        unrepresentable conductance times stage.
+    """
     shape = np.asarray(active).shape
     if conductance is None and head is None and mask is None:
         return None, None
@@ -46,7 +57,15 @@ def validate_ghb_fields(*, conductance, head, active, fixed, mask=None):
 
 
 def add_ghb_linear_terms(*, rhs, diagonal, conductance, head):
-    """Add the GHB diagonal/forcing while retaining separate physical storage."""
+    """Add the linear GHB term without changing the physical storage inputs.
+
+    :param rhs: Base source and storage forcing, volume/time.
+    :param diagonal: Base operator/storage diagonal, volume/time/length.
+    :param conductance: Validated GHB coefficient grid, or None.
+    :param head: Validated external stage grid in length units.
+    :returns: Effective RHS and diagonal; original objects if no GHB exists.
+    :raises ValueError: If the assembled terms are not finite.
+    """
     if conductance is None:
         return rhs, diagonal
     with np.errstate(over="ignore", invalid="ignore"):
@@ -58,7 +77,14 @@ def add_ghb_linear_terms(*, rhs, diagonal, conductance, head):
 
 
 def ghb_flux(*, head, conductance, boundary_head):
-    """Evaluate physical exchange directly, avoiding C*h minus C*h_boundary."""
+    """Evaluate boundary exchange as conductance times head difference.
+
+    :param head: Aquifer hydraulic head grid, length units.
+    :param conductance: General-head conductance grid, or None.
+    :param boundary_head: External hydraulic head grid, length units.
+    :returns: FP64 cell-volume rates, positive for aquifer outflow,
+        negative for inflow and zero at nonconducting boundaries.
+    """
     if conductance is None:
         return np.zeros_like(a=head, dtype=np.float64)
     result = np.zeros_like(a=conductance, dtype=np.float64)
@@ -75,6 +101,12 @@ def npf_ghb_component_anchor(*, conductance, active, fixed):
     the number of cells assigns a local flow tolerance whose sum retains the
     same head tolerance. NPF's saturated Cartesian/layered stencil connects
     every adjacent pair of active cells. Zero marks CHD-grounded components.
+
+    :param conductance: GHB conductance grid or None.
+    :param active: Active-cell mask defining saturated Cartesian connectivity.
+    :param fixed: Prescribed-head mask.
+    :returns: Mean boundary conductance per active cell in each ungrounded
+        component, or None if no such component has nonzero GHB conductance.
     """
     if conductance is None or not np.any(conductance):
         return None
