@@ -33,7 +33,7 @@ Storage relationships
 .. autofunction:: exact_unconfined_storage_terms
 
 Operator and boundary relationships
-----------------------------------
+-----------------------------------
 
 .. currentmodule:: DARCY_WARP_PACKAGE.physics.operator_data
 

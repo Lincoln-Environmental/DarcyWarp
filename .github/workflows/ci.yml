@@ -32,14 +32,14 @@ jobs:
           python -c "import DARCY_WARP_PACKAGE.factory, DARCY_WARP_PACKAGE.solver_capabilities"
 
       - name: Check explicit solver dependencies
-        run: python -m ruff check --select F821 DARCY_WARP_PACKAGE/solvers/transient_unconfined.py DARCY_WARP_PACKAGE/solvers_3d.py
+        run: python -m ruff check --select F821 DARCY_WARP_PACKAGE/solvers/transient_unconfined.py DARCY_WARP_PACKAGE/solvers_3d.py DARCY_WARP_PACKAGE/solvers/picard_unconfined.py DARCY_WARP_PACKAGE/solvers/multigrid_kcycle.py
 
       - name: Audit parameter documentation
         run: python working_tests/audit_docstrings.py
 
       - name: Unit tests (CPU; GPU-dependent tests self-skip)
         # `python -m pytest` (not bare pytest) so the repo root is importable.
-        run: python -m pytest tests/test_sparse_system_consistency.py tests/test_solver_registry_2d.py tests/test_cleanup_infrastructure.py tests/test_cleanup_transient_controller.py -v
+        run: python -m pytest tests/test_sparse_system_consistency.py tests/test_solver_registry_2d.py tests/test_cleanup_infrastructure.py tests/test_cleanup_transient_controller.py tests/test_cleanup_solver_scope.py -v
 
   documentation:
     runs-on: ubuntu-latest

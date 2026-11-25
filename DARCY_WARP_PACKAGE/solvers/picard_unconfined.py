@@ -8,14 +8,190 @@ from DARCY_WARP_PACKAGE.physics.storage_2d import secant_specific_storage_coeff
 
 from typing import Any
 
+import numpy as np
+from .convergence import chebyshev_update_weights as _chebyshev_update_weights
+
 from .base import SolverContext
 
 
-def solve_unconfined_picard(*, model: Any, state: dict[str, Any]):
-    """Trusted unconfined Picard branch using the extracted K-cycle backend."""
-    from DARCY_WARP_PACKAGE import warped_darcy as kernel_module
-    globals().update(kernel_module.__dict__)
-    globals().update(state)
+def solve_unconfined_picard(
+    *, model: Any,
+    max_cycles,
+    nu_pre,
+    nu_post,
+    nu_coarse,
+    omega,
+    rel_tol,
+    abs_tol_min,
+    initial_head,
+    aq_thickness,
+    gh_alpha,
+    max_levels,
+    return_info,
+    check_every_no,
+    dh_rms_tol,
+    dh_max_tol,
+    dh_max_factor,
+    min_coarse_cells,
+    inner_implementation,
+    fallback_to_pcg,
+    divergence_cycle_start,
+    divergence_residual_factor,
+    fallback_pcg_max_iter,
+    fallback_pcg_history_every,
+    smoother_mode,
+    cheby_lambda_min,
+    cheby_lambda_max,
+    K_field,
+    zbot_field,
+    ztop_field,
+    max_outer_iterations,
+    omega_min,
+    omega_max,
+    chebyshev_enabled,
+    chebyshev_order,
+    chebyshev_lambda_min_fraction,
+    chebyshev_reset_on_residual_increase,
+    chebyshev_rejection_factor,
+    min_saturated_thickness,
+    initial_saturated_thickness,
+    max_head_change_per_outer_iteration,
+    hclose,
+    dry_cell_flag_threshold,
+    unconfined_min_sat,
+    unconfined_max_picard_iter,
+    unconfined_relax,
+    unconfined_head_tol,
+    residual_floor_tol,
+    inner_head_residual_tol,
+    unconfined_inner_max_cycles_early,
+    unconfined_inner_max_cycles_middle,
+    unconfined_inner_max_cycles_late,
+    unconfined_inner_late_dh,
+    unconfined_inner_middle_dh,
+    inner_forcing_eta,
+    inner_head_residual_tol_min,
+    inner_head_residual_tol_max,
+    inner_picard_scale_max_fraction,
+    chebyshev_reset_factor,
+    chebyshev_minor_increase_patience,
+    transmissivity_relaxation_enabled,
+    transmissivity_relaxation_early,
+    transmissivity_relaxation_middle,
+    transmissivity_relaxation_late,
+    transmissivity_relaxation_middle_iteration,
+    transmissivity_relaxation_late_iteration,
+    unconfined_startup_mode,
+    unconfined_pre_solve_iterations,
+    transient,
+    storage_coeff,
+    dt,
+    head_prev,
+    storage_reference,
+    unconfined_storage_mode_2d,
+    sy,
+    ss,
+    accept_on_head_change_only,
+    practical_picard_acceptance_enabled,
+    min_practical_outer_iterations,
+    practical_residual_tol,
+    practical_dh_rms_tol,
+    practical_storage_diag_change_rms_tol,
+    save_transient_diagnostics,
+    dh_rms_tol_f,
+):
+    """Run one unconfined Picard solve using the shared K-cycle backend.
+
+    Spatial inputs use (ny, nx) and consistent length/time units. All controls
+    are local to this call, including recursive confined linear solves.
+
+    :param model: Built 2D model whose operator and head are updated by the solve.
+    :param max_cycles: Maximum number of K-cycles for a fixed-work startup solve.
+    :param nu_pre: Presmoothing sweep count.
+    :param nu_post: Postsmoothing sweep count.
+    :param nu_coarse: Coarsest-grid relaxation sweep count.
+    :param omega: Initial relaxation factor when no Picard override is supplied.
+    :param rel_tol: Relative inner flow-residual tolerance.
+    :param abs_tol_min: Absolute inner flow-residual tolerance floor.
+    :param initial_head: Optional initial hydraulic head grid (ny, nx), length units.
+    :param aq_thickness: Optional aquifer thickness override for GHB conductance.
+    :param gh_alpha: Optional GHB conductance scaling override.
+    :param max_levels: Maximum number of hierarchy levels.
+    :param return_info: Return diagnostics with the computed head.
+    :param check_every_no: K-cycles between inner convergence checks.
+    :param dh_rms_tol: RMS head-change convergence tolerance for the inner solver.
+    :param dh_max_tol: Resolved maximum head-change convergence tolerance.
+    :param dh_max_factor: Multiplier of RMS tolerance when deriving maximum tolerance.
+    :param min_coarse_cells: Minimum cell count used to stop coarsening.
+    :param inner_implementation: Select classic or fast steady inner K-cycle implementation.
+    :param fallback_to_pcg: Permit fine-grid PCG recovery after divergence.
+    :param divergence_cycle_start: First cycle eligible for divergence recovery.
+    :param divergence_residual_factor: Residual growth ratio triggering divergence recovery.
+    :param fallback_pcg_max_iter: Optional iteration cap for PCG recovery.
+    :param fallback_pcg_history_every: Optional residual-history interval for PCG recovery.
+    :param smoother_mode: Normalised inner smoothing method.
+    :param cheby_lambda_min: Lower spectral bound for linear Chebyshev smoothing.
+    :param cheby_lambda_max: Upper spectral bound for linear Chebyshev smoothing.
+    :param K_field: Saturated hydraulic conductivity grid, length/time.
+    :param zbot_field: Cell-bottom elevation grid, length units.
+    :param ztop_field: Optional cell-top elevation grid, length units.
+    :param max_outer_iterations: Default maximum Picard iteration count.
+    :param omega_min: Lower bound for adaptive Picard relaxation.
+    :param omega_max: Upper bound for adaptive Picard relaxation.
+    :param chebyshev_enabled: Enable nonlinear Chebyshev acceleration.
+    :param chebyshev_order: Order of the nonlinear acceleration sequence.
+    :param chebyshev_lambda_min_fraction: Lower spectral fraction for nonlinear acceleration.
+    :param chebyshev_reset_on_residual_increase: Allow acceleration reset after residual growth.
+    :param chebyshev_rejection_factor: Growth factor used to reject accelerated updates.
+    :param min_saturated_thickness: Default positive numerical thickness floor.
+    :param initial_saturated_thickness: Initial thickness above the cell bottom when head is omitted.
+    :param max_head_change_per_outer_iteration: Maximum magnitude of an outer head update.
+    :param hclose: Default nonlinear head-change tolerance.
+    :param dry_cell_flag_threshold: Thickness threshold for dry-cell diagnostics.
+    :param unconfined_min_sat: Optional thickness floor overriding min_saturated_thickness.
+    :param unconfined_max_picard_iter: Optional Picard iteration cap overriding max_outer_iterations.
+    :param unconfined_relax: Optional initial relaxation overriding omega.
+    :param unconfined_head_tol: Optional outer head tolerance overriding hclose.
+    :param residual_floor_tol: Optional practical inner residual acceptance floor.
+    :param inner_head_residual_tol: Optional head-equivalent residual tolerance for inner usability.
+    :param unconfined_inner_max_cycles_early: Inner cycle cap during early outer iterations.
+    :param unconfined_inner_max_cycles_middle: Inner cycle cap during intermediate outer iterations.
+    :param unconfined_inner_max_cycles_late: Inner cycle cap near outer convergence.
+    :param unconfined_inner_late_dh: Head-change threshold for late cycle cap.
+    :param unconfined_inner_middle_dh: Head-change threshold for middle cycle cap.
+    :param inner_forcing_eta: Inexact linear solve forcing factor.
+    :param inner_head_residual_tol_min: Optional lower bound on dynamic inner head tolerance.
+    :param inner_head_residual_tol_max: Upper bound on dynamic inner head tolerance.
+    :param inner_picard_scale_max_fraction: Fraction of maximum Picard update included in inner tolerance scale.
+    :param chebyshev_reset_factor: Residual growth factor triggering reset.
+    :param chebyshev_minor_increase_patience: Number of minor residual increases allowed before reset.
+    :param transmissivity_relaxation_enabled: Enable staged transmissivity under-relaxation.
+    :param transmissivity_relaxation_early: Early transmissivity relaxation factor.
+    :param transmissivity_relaxation_middle: Intermediate transmissivity relaxation factor.
+    :param transmissivity_relaxation_late: Late transmissivity relaxation factor.
+    :param transmissivity_relaxation_middle_iteration: Iteration entering the intermediate relaxation stage.
+    :param transmissivity_relaxation_late_iteration: Iteration entering the late relaxation stage.
+    :param unconfined_startup_mode: Starting-head strategy: initial_head, confined_pre_solve or unconfined_pre_solve.
+    :param unconfined_pre_solve_iterations: Number of warm-start Picard iterations.
+    :param transient: Include storage for one implicit timestep.
+    :param storage_coeff: Optional preassembled effective storage coefficient per unit plan area.
+    :param dt: Timestep duration in model time units.
+    :param head_prev: Previous accepted hydraulic head grid.
+    :param storage_reference: Previous-period or current-Picard storage reference.
+    :param unconfined_storage_mode_2d: Storage constitutive relation for convertible cells.
+    :param sy: Specific yield, dimensionless.
+    :param ss: Specific storage, inverse length.
+    :param accept_on_head_change_only: Allow head-change convergence without the normal inner usability gate.
+    :param practical_picard_acceptance_enabled: Enable practical nonlinear acceptance in addition to strict acceptance.
+    :param min_practical_outer_iterations: Earliest outer iteration eligible for practical acceptance.
+    :param practical_residual_tol: Residual threshold for practical acceptance.
+    :param practical_dh_rms_tol: RMS head-change threshold for practical acceptance.
+    :param practical_storage_diag_change_rms_tol: Storage-diagonal change threshold for practical acceptance.
+    :param save_transient_diagnostics: Return full-grid storage linearisation arrays.
+    :param dh_rms_tol_f: Normalised RMS head-change tolerance, or None to disable it.
+    :returns: Head grid, or (head grid, diagnostics) when return_info is true.
+    """
+    from DARCY_WARP_PACKAGE.warped_darcy import NP_FLOAT
     self = model
     if K_field is None or zbot_field is None:
         raise ValueError("unconfined=True requires K_field and zbot_field.")
@@ -149,7 +325,6 @@ def solve_unconfined_picard(*, model: Any, state: dict[str, Any]):
     if storage_reference_mode not in {"previous_period", "current_picard"}:
         raise ValueError("storage_reference must be 'previous_period' or 'current_picard'.")
     storage_mode_2d = None if unconfined_storage_mode_2d is None else str(unconfined_storage_mode_2d).strip().lower()
-    storage_coeff = state["storage_coeff"]
     current_picard_storage = bool(transient) and storage_reference_mode == "current_picard"
     derived_storage = bool(transient) and (current_picard_storage or storage_coeff is None)
     if derived_storage:
