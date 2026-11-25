@@ -187,7 +187,12 @@ def test_convertible_npf_wel_matches_mf6(tmp_path, device):
             version="mf6", sim_ws=str(workspace))
         flopy.mf6.ModflowTdis(simulation, time_units="DAYS", nper=1,
             perioddata=[(1.0, 1, 1.0)])
-        model = flopy.mf6.ModflowGwf(simulation, modelname=name, save_flows=True)
+        # DarcyWarp implements the MF6 Newton formulation with upstream
+        # saturated thickness; MF6's standard formulation uses arithmetic
+        # mean saturation for horizontal conductances instead, so the
+        # Newton option is required for a matched comparison.
+        model = flopy.mf6.ModflowGwf(simulation, modelname=name, save_flows=True,
+            newtonoptions="under_relaxation")
         flopy.mf6.ModflowIms(simulation, complexity="COMPLEX", linear_acceleration="BICGSTAB",
             outer_maximum=200, outer_dvclose=1.0e-11, inner_maximum=200,
             inner_dvclose=1.0e-12, rcloserecord=[1.0e-12, "strict"])
@@ -230,11 +235,8 @@ def test_convertible_npf_wel_matches_mf6(tmp_path, device):
             npf_roundoff_acceptance=True)
     mf6_heads = run_mf6_convertible(workspace=tmp_path)
     assert info["converged"]
-    # DarcyWarp solves the matched contract with Newton plus quadratic
-    # saturation smoothing; the pinned FloPy has no MF6 NEWTON binding, so
-    # MF6 runs its default Picard with drying/rewetting controls. The two
-    # nonlinear paths converge to slightly different points on the smoothed
-    # constitutive law; the observed difference on this grid is ~4e-4 m,
-    # consistent with the documented convertible envelopes.
-    np.testing.assert_allclose(head, mf6_heads, rtol=0.0, atol=5e-4)
+    # With the MF6 Newton option enabled, upstream saturated thickness
+    # matches DarcyWarp's law and the engines agree to roundoff, including
+    # the partially saturated well cell.
+    np.testing.assert_allclose(head, mf6_heads, rtol=0.0, atol=2e-8)
     assert info["source_budgets"]["wel"]["net"] == pytest.approx(-8.0)

@@ -127,11 +127,17 @@ Validation
   closed-form multi-drain and multi-river roots, dense-CSR equivalence,
   digest sensitivity and replacement updates (``tests/test_3d_wel.py``,
   ``tests/test_2d_wel.py``, ``tests/test_3d_drn_riv_entries.py``).
-* MF6 6.6.2: multilayer confined pumping, two-period pumping schedules
-  and simultaneous recharge with pumping reproduce matched heads,
-  package rates and integrated budgets
-  (``tests/test_3d_wel_mf6.py``), alongside the existing seven DRN/RIV
-  MF6 comparisons.
+* MF6 6.6.2: multilayer confined pumping, two-period pumping schedules,
+  simultaneous recharge with pumping, 2D confined WEL and a convertible
+  multilayer case reproduce matched heads, package rates and integrated
+  budgets (``tests/test_2d_wel_mf6.py``, ``tests/test_3d_wel_mf6.py``),
+  alongside the existing seven DRN/RIV MF6 comparisons. The convertible
+  comparison requires MF6's Newton option (``newtonoptions`` in the GWF
+  name file): DarcyWarp implements the Newton upstream saturated
+  thickness while MF6's standard formulation uses arithmetic mean
+  saturation, a ~4e-4 m head difference on partially saturated cells
+  that collapses to 2e-8 m with the option enabled (verified to roundoff
+  on a single unsaturated layer).
 * Regression: full suite on CPU and CUDA; the merged baseline reported
   1,475 passed, 21 expected FP32/graph skips and the one pre-existing
   CUDA precision case documented above, since resolved.
@@ -161,10 +167,9 @@ Runnable examples
 Remaining limitations
 ---------------------
 
-* MF6 comparisons for WEL cover confined cases and schedules; matched
-  convertible/unconfined WEL comparisons with drying and rewetting are
-  future work, as are storage-volume budget comparisons over longer
-  histories.
+* MF6 comparisons for WEL cover confined and convertible cases and
+  schedules; drying and rewetting regimes and storage-volume budget
+  comparisons over longer histories remain future work.
 * Automatic well index reduction at dry cells is not implemented;
   prescribed-rate wells keep pumping and the budget reports it, as
   specified. An explicit optional flow-reduction mode would need its own
