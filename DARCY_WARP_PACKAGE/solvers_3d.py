@@ -2405,6 +2405,87 @@ def solve_chebyshev_7point_3d(
     return_info: bool = True,
     ghb_conductance=None, ghb_head=None,
 ):
+    """Solve the Cartesian seven-point flow operator with Chebyshev iteration.
+
+    All spatial inputs use (nz, ny, nx) order and consistent length/time units.
+
+    :param tx_p: Cell-face conductance toward increasing x index, volume/time/length.
+    :param tx_m: Cell-face conductance toward decreasing x index, volume/time/length.
+    :param ty_p: Cell-face conductance toward increasing y index, volume/time/length.
+    :param ty_m: Cell-face conductance toward decreasing y index, volume/time/length.
+    :param tz_p: Cell-face conductance toward increasing layer index, volume/time/length.
+    :param tz_m: Cell-face conductance toward decreasing layer index, volume/time/length.
+    :param rhs: Volumetric source rate per cell, positive into the aquifer.
+    :param active: Binary active-cell mask.
+    :param bc_mask: Binary prescribed-head mask.
+    :param bc_values: Prescribed hydraulic heads, length units.
+    :param initial_head: Optional initial head grid for the iteration, length units.
+    :param storage_diag: Optional preassembled transient diagonal, volume/time/length.
+    :param max_iter: Maximum number of Chebyshev iterations for the linear solve.
+    :param cheby_order: Order of the linear Chebyshev smoothing sequence.
+    :param cheby_lambda_min: Lower spectral bound for the diagonally preconditioned linear operator.
+    :param cheby_lambda_max: Upper spectral bound for the diagonally preconditioned linear operator.
+    :param rel_tol: Relative linear residual reduction target.
+    :param abs_tol_min: Absolute lower bound on the linear residual tolerance.
+    :param transient: Include storage and solve one implicit timestep when true.
+    :param storage_coeff: Optional scalar or grid of volumetric storage coefficient for confined storage.
+    :param dt: Positive timestep duration in consistent time units, required for transient flow.
+    :param head_prev: Head at the start of the timestep, length units.
+    :param sy: Specific yield for convertible storage, scalar or grid, dimensionless.
+    :param ss: Specific storage, scalar or grid, inverse-length units.
+    :param unconfined_storage_mode: Constitutive storage relation selected for unconfined transient flow.
+    :param dx: Uniform cell spacing in x, length units.
+    :param dy: Uniform cell spacing in y, length units; defaults to dx.
+    :param dz: Uniform cell spacing in z, length units.
+    :param unconfined: Recompute saturated conductances in an outer Picard iteration when true.
+    :param kx_field: Saturated x-direction hydraulic conductivity, length/time.
+    :param ky_field: Saturated y-direction hydraulic conductivity, length/time.
+    :param kz_field: Saturated z-direction hydraulic conductivity, length/time.
+    :param zbot_field: Cell-bottom elevations, length units.
+    :param unconfined_min_sat: Positive numerical saturated-thickness floor, length units.
+    :param unconfined_max_picard_iter: Maximum number of outer Picard iterations.
+    :param unconfined_relax: Initial outer Picard relaxation factor.
+    :param unconfined_head_tol: Outer head-change convergence tolerance, length units.
+    :param ztop_field: Optional cell-top elevations, length units.
+    :param omega_min: Minimum allowed adaptive outer relaxation factor.
+    :param omega_max: Maximum allowed adaptive outer relaxation factor.
+    :param residual_floor_tol: Optional floor tolerance for outer residual convergence.
+    :param dh_rms_tol: Optional RMS head-change convergence tolerance, length units.
+    :param inner_forcing_eta: Forcing factor for setting the inexact inner solve tolerance.
+    :param inner_head_residual_tol_min: Optional lower bound on inner head-equivalent residual tolerance.
+    :param inner_head_residual_tol_max: Upper bound on inner head-equivalent residual tolerance.
+    :param inner_picard_scale_max_fraction: Limit on inner tolerance as a fraction of the current Picard head-change scale.
+    :param chebyshev_enabled: Enable Chebyshev acceleration of the nonlinear Picard sequence.
+    :param chebyshev_order: Order of the nonlinear Chebyshev acceleration sequence.
+    :param chebyshev_lambda_min_fraction: Lower spectral bound relative to the upper bound for nonlinear acceleration.
+    :param chebyshev_reset_on_residual_increase: Allow resetting nonlinear acceleration when the residual increases.
+    :param chebyshev_reset_factor: Residual growth factor used to trigger an acceleration reset.
+    :param chebyshev_minor_increase_patience: Allowed consecutive minor residual increases before resetting acceleration.
+    :param chebyshev_rejection_factor: Residual growth factor for rejecting an accelerated candidate.
+    :param unconfined_inner_max_cycles_early: Inner cycle cap while outer head changes are large.
+    :param unconfined_inner_max_cycles_middle: Inner cycle cap at intermediate outer head changes.
+    :param unconfined_inner_max_cycles_late: Inner cycle cap near nonlinear convergence.
+    :param unconfined_inner_late_dh: Head-change threshold for switching to the late inner cycle cap.
+    :param unconfined_inner_middle_dh: Head-change threshold for switching to the middle inner cycle cap.
+    :param transmissivity_relaxation_enabled: Blend successive nonlinear transmissivity updates when enabled.
+    :param transmissivity_relaxation_early: Transmissivity relaxation factor in early Picard iterations.
+    :param transmissivity_relaxation_middle: Transmissivity relaxation factor in middle Picard iterations.
+    :param transmissivity_relaxation_late: Transmissivity relaxation factor in late Picard iterations.
+    :param transmissivity_relaxation_middle_iteration: Iteration threshold for the middle relaxation factor.
+    :param transmissivity_relaxation_late_iteration: Iteration threshold for the late relaxation factor.
+    :param unconfined_startup_mode: Strategy for constructing the starting head of the nonlinear solve.
+    :param max_head_change_per_outer_iteration: Limit on outer head change per iteration, length units.
+    :param dry_cell_flag_threshold: Saturated thickness threshold used when reporting dry cells, length units.
+    :param final_head_residual_tol: Optional final nonlinear head-equivalent residual tolerance.
+    :param diag_preconditioner_backend: Backend selection for assembling or applying the diagonal preconditioner.
+    :param device: Warp device identifier, such as cpu or cuda:0.
+    :param return_info: Return convergence diagnostics together with the computed head when true.
+    :param ghb_conductance: Optional general-head boundary conductance grid, volume/time/length.
+    :param ghb_head: Optional external general-head boundary stage grid, length units.
+    :returns: Computed head array, or (head, diagnostics) when return_info is true.
+        Inspect convergence diagnostics before accepting the result.
+    :raises ValueError: If array shapes or solver controls are invalid.
+    """
     (
         txp, txm, typ, tym, tzp, tzm, b, act, bcm, bcv, shape, free, n_free,
     ) = _prepare_7point_arrays(
@@ -2712,6 +2793,101 @@ def solve_multigrid_kcycle_7point_3d(
         vertical faces carry full-thickness harmonic resistance) and the
         volume-conservative secant-Sy/Ss storage (default
         ``unconfined_storage_mode="secant_sy"``).
+
+    All spatial inputs use (nz, ny, nx) order and consistent length/time units.
+
+    :param tx_p: Cell-face conductance toward increasing x index, volume/time/length.
+    :param tx_m: Cell-face conductance toward decreasing x index, volume/time/length.
+    :param ty_p: Cell-face conductance toward increasing y index, volume/time/length.
+    :param ty_m: Cell-face conductance toward decreasing y index, volume/time/length.
+    :param tz_p: Cell-face conductance toward increasing layer index, volume/time/length.
+    :param tz_m: Cell-face conductance toward decreasing layer index, volume/time/length.
+    :param rhs: Volumetric source rate per cell, positive into the aquifer.
+    :param active: Binary active-cell mask.
+    :param bc_mask: Binary prescribed-head mask.
+    :param bc_values: Prescribed hydraulic heads, length units.
+    :param initial_head: Optional initial head grid for the iteration, length units.
+    :param storage_diag: Optional preassembled transient diagonal, volume/time/length.
+    :param max_cycles: Maximum number of multigrid K-cycles for the linear solve.
+    :param nu_pre: Number of presmoothing sweeps per multigrid visit.
+    :param nu_post: Number of postsmoothing sweeps per multigrid visit.
+    :param nu_coarse: Number of smoothing sweeps on the coarsest grid.
+    :param max_levels: Maximum number of multigrid levels including the fine grid.
+    :param min_coarse_n: Minimum horizontal dimension used when stopping coarsening.
+    :param smoother: Multigrid relaxation strategy.
+    :param omega: Relaxation factor for weighted point smoothing.
+    :param line_omega: Relaxation factor for vertical-line smoothing.
+    :param line_sweeps_pre: Number of vertical-line presmoothing sweeps.
+    :param line_sweeps_post: Number of vertical-line postsmoothing sweeps.
+    :param line_sweeps_coarse: Number of vertical-line sweeps on the coarsest level.
+    :param vertical_line_max_nz: Maximum number of layers eligible for vertical-line smoothing.
+    :param cheby_lambda_min: Lower spectral bound for the diagonally preconditioned linear operator.
+    :param cheby_lambda_max: Upper spectral bound for the diagonally preconditioned linear operator.
+    :param rel_tol: Relative linear residual reduction target.
+    :param abs_tol_min: Absolute lower bound on the linear residual tolerance.
+    :param check_every_no: Number of cycles between convergence checks.
+    :param dh_rms_tol: Optional RMS head-change convergence tolerance, length units.
+    :param dh_max_tol: Optional maximum head-change convergence tolerance, length units.
+    :param dh_max_factor: Multiplier of RMS tolerance used for the default maximum tolerance.
+    :param transient: Include storage and solve one implicit timestep when true.
+    :param storage_coeff: Optional scalar or grid of volumetric storage coefficient for confined storage.
+    :param dt: Positive timestep duration in consistent time units, required for transient flow.
+    :param head_prev: Head at the start of the timestep, length units.
+    :param sy: Specific yield for convertible storage, scalar or grid, dimensionless.
+    :param ss: Specific storage, scalar or grid, inverse-length units.
+    :param unconfined_storage_mode: Constitutive storage relation selected for unconfined transient flow.
+    :param dx: Uniform cell spacing in x, length units.
+    :param dy: Uniform cell spacing in y, length units; defaults to dx.
+    :param dz: Uniform cell spacing in z, length units.
+    :param unconfined: Recompute saturated conductances in an outer Picard iteration when true.
+    :param kx_field: Saturated x-direction hydraulic conductivity, length/time.
+    :param ky_field: Saturated y-direction hydraulic conductivity, length/time.
+    :param kz_field: Saturated z-direction hydraulic conductivity, length/time.
+    :param zbot_field: Cell-bottom elevations, length units.
+    :param unconfined_min_sat: Positive numerical saturated-thickness floor, length units.
+    :param unconfined_max_picard_iter: Maximum number of outer Picard iterations.
+    :param unconfined_relax: Initial outer Picard relaxation factor.
+    :param unconfined_head_tol: Outer head-change convergence tolerance, length units.
+    :param ztop_field: Optional cell-top elevations, length units.
+    :param omega_min: Minimum allowed adaptive outer relaxation factor.
+    :param omega_max: Maximum allowed adaptive outer relaxation factor.
+    :param residual_floor_tol: Optional floor tolerance for outer residual convergence.
+    :param inner_forcing_eta: Forcing factor for setting the inexact inner solve tolerance.
+    :param inner_head_residual_tol_min: Optional lower bound on inner head-equivalent residual tolerance.
+    :param inner_head_residual_tol_max: Upper bound on inner head-equivalent residual tolerance.
+    :param inner_picard_scale_max_fraction: Limit on inner tolerance as a fraction of the current Picard head-change scale.
+    :param chebyshev_enabled: Enable Chebyshev acceleration of the nonlinear Picard sequence.
+    :param chebyshev_order: Order of the nonlinear Chebyshev acceleration sequence.
+    :param chebyshev_lambda_min_fraction: Lower spectral bound relative to the upper bound for nonlinear acceleration.
+    :param chebyshev_reset_on_residual_increase: Allow resetting nonlinear acceleration when the residual increases.
+    :param chebyshev_reset_factor: Residual growth factor used to trigger an acceleration reset.
+    :param chebyshev_minor_increase_patience: Allowed consecutive minor residual increases before resetting acceleration.
+    :param chebyshev_rejection_factor: Residual growth factor for rejecting an accelerated candidate.
+    :param unconfined_inner_max_cycles_early: Inner cycle cap while outer head changes are large.
+    :param unconfined_inner_max_cycles_middle: Inner cycle cap at intermediate outer head changes.
+    :param unconfined_inner_max_cycles_late: Inner cycle cap near nonlinear convergence.
+    :param unconfined_inner_late_dh: Head-change threshold for switching to the late inner cycle cap.
+    :param unconfined_inner_middle_dh: Head-change threshold for switching to the middle inner cycle cap.
+    :param transmissivity_relaxation_enabled: Blend successive nonlinear transmissivity updates when enabled.
+    :param transmissivity_relaxation_early: Transmissivity relaxation factor in early Picard iterations.
+    :param transmissivity_relaxation_middle: Transmissivity relaxation factor in middle Picard iterations.
+    :param transmissivity_relaxation_late: Transmissivity relaxation factor in late Picard iterations.
+    :param transmissivity_relaxation_middle_iteration: Iteration threshold for the middle relaxation factor.
+    :param transmissivity_relaxation_late_iteration: Iteration threshold for the late relaxation factor.
+    :param unconfined_startup_mode: Strategy for constructing the starting head of the nonlinear solve.
+    :param max_head_change_per_outer_iteration: Limit on outer head change per iteration, length units.
+    :param dry_cell_flag_threshold: Saturated thickness threshold used when reporting dry cells, length units.
+    :param final_head_residual_tol: Optional final nonlinear head-equivalent residual tolerance.
+    :param final_budget_relative_tol: Relative final water-budget acceptance tolerance.
+    :param diag_preconditioner_backend: Backend selection for assembling or applying the diagonal preconditioner.
+    :param device: Warp device identifier, such as cpu or cuda:0.
+    :param return_info: Return convergence diagnostics together with the computed head when true.
+    :param benchmark_observer: Optional callback for multigrid timing and work diagnostics.
+    :param ghb_conductance: Optional general-head boundary conductance grid, volume/time/length.
+    :param ghb_head: Optional external general-head boundary stage grid, length units.
+    :returns: Computed head array, or (head, diagnostics) when return_info is true.
+        Inspect convergence diagnostics before accepting the result.
+    :raises ValueError: If array shapes or solver controls are invalid.
     """
     (
         txp0, txm0, typ0, tym0, tzp0, tzm0, b0, act0, bcm0, bcv0, shape0, free0, n_free0,

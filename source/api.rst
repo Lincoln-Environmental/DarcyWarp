@@ -68,3 +68,12 @@ Benchmark budgets
 .. currentmodule:: DARCY_WARP_PACKAGE.process_mass_balance
 
 .. autofunction:: compare_mass_balance
+
+Cartesian 3D solvers
+--------------------
+
+.. currentmodule:: DARCY_WARP_PACKAGE.solvers_3d
+
+.. autofunction:: solve_chebyshev_7point_3d
+
+.. autofunction:: solve_multigrid_kcycle_7point_3d
