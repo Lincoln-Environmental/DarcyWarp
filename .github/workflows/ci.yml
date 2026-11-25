@@ -32,7 +32,7 @@ jobs:
           python -c "import DARCY_WARP_PACKAGE.factory, DARCY_WARP_PACKAGE.solver_capabilities"
 
       - name: Check explicit solver dependencies
-        run: python -m ruff check --select F821 DARCY_WARP_PACKAGE/solvers/transient_unconfined.py DARCY_WARP_PACKAGE/solvers_3d.py DARCY_WARP_PACKAGE/solvers/picard_unconfined.py DARCY_WARP_PACKAGE/solvers/multigrid_kcycle.py
+        run: python -m ruff check --select F821 DARCY_WARP_PACKAGE/solvers/transient_unconfined.py DARCY_WARP_PACKAGE/solvers/device_picard_periods.py DARCY_WARP_PACKAGE/solvers_3d.py DARCY_WARP_PACKAGE/solvers/picard_unconfined.py DARCY_WARP_PACKAGE/solvers/multigrid_kcycle.py
 
       - name: Audit parameter documentation
         run: python working_tests/audit_docstrings.py

@@ -21,6 +21,7 @@ ENFORCED_MODULES = {
     "process_mass_balance.py",
     "project_base.py",
     "solvers/transient_unconfined.py",
+    "solvers/device_picard_periods.py",
 }
 PARAM_FIELD = re.compile(r"^\s*:param\s+\**([A-Za-z_]\w*)\s*:\s*(.*)$", re.MULTILINE)
 

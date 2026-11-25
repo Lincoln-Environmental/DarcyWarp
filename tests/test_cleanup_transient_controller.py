@@ -71,3 +71,30 @@ def test_result_keeps_accepted_head_after_rejected_trial():
     assert info["accepted_periods"] == 1 and info["n_periods"] == 2
     np.testing.assert_array_equal(info["storage_terms_per_period"][:, :, 0], 0.0)
     np.testing.assert_array_equal(info["heads_old_per_period"], heads[:2])
+
+
+def test_device_selection_preserves_precision_and_graph_controls(monkeypatch):
+    """Default FP64 graphs, explicit opt-outs and FP32 GHB fallback stay intact.
+
+    :param monkeypatch: Pytest fixture isolating process environment overrides.
+    """
+    from DARCY_WARP_PACKAGE.solvers.device_picard_periods import select_device_picard_options
+
+    for name in ("DARCY_TRANSIENT_FACE_OPERATOR", "DARCY_TRANSIENT_FACE_GRAPHS", "DARCY_TRANSIENT_MIXED"):
+        monkeypatch.delenv(name, raising=False)
+    controls = {"use_device_transient_fast_path": True}
+    common = dict(fast_path_controls=controls, fp64_fields=True, use_ghb=False,
+                  storage_mode="mf6_convertible_secant_sy", storage_reference="current_picard")
+    options = select_device_picard_options(**common)
+    assert options.enabled and options.face_operator and options.face_graphs
+    assert not options.incremental and not options.mixed_precision
+    disabled = dict(controls, transient_face_graphs_enabled=False)
+    assert not select_device_picard_options(**dict(common, fast_path_controls=disabled)).face_graphs
+    options = select_device_picard_options(**dict(common, fp64_fields=False, use_ghb=True))
+    assert not options.enabled and not options.face_operator
+    with pytest.raises(ValueError, match="require DARCY_FLOAT"):
+        select_device_picard_options(**dict(common, fp64_fields=False,
+            fast_path_controls=dict(controls, transient_face_operator_enabled=True)))
+    with pytest.raises(ValueError, match="requires transient_face_operator_enabled"):
+        select_device_picard_options(**dict(common, fast_path_controls=dict(controls,
+            transient_face_operator_enabled=False, transient_mixed_precision_enabled=True)))
