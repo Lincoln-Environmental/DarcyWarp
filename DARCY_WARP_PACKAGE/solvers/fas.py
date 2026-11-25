@@ -555,9 +555,13 @@ def _run_fallback(
             # forcing sequence used on the primary path.
             fallback_kwargs["newton_inexact_forcing_enabled"] = False
         elif context.transient:
-            # Match Newton's Picard recovery accuracy: substep head errors feed
-            # the next storage term and accumulate over the stress period.
-            fallback_kwargs.setdefault("hclose", 1.0e-6)
+            # Substep errors feed the next storage term. Recover to a micrometre
+            # when representable, or one head ULP at the current field precision.
+            if "hclose" not in fallback_kwargs:
+                field_dtype = context.model.T_field_host.dtype
+                live_heads = initial_head[context.model.active_host != 0]
+                largest_head = field_dtype.type(np.max(np.abs(live_heads), initial=0.0))
+                fallback_kwargs["hclose"] = max(1.0e-6, float(np.spacing(largest_head)))
             fallback_kwargs.setdefault("max_outer_iterations", 60)
             # Recover the FAS convertible storage equation on the Picard leg.
             fallback_kwargs.update(storage_reference="current_picard",

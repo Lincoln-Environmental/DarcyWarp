@@ -59,4 +59,6 @@ jobs:
           python -m pytest -q -ra tests/test_2d_main_audit.py -k 'picard_storage_maps or ghb_picard_periods or fp32'
           python -m pytest -q -ra tests/test_nov25_audit_regressions.py tests/test_2d_local_acceptance.py \
             tests/test_confined_steady_acceptance.py
+          python -m pytest -q -ra tests/test_fas_transient_multistep.py \
+            -k 'test_04_recharge_change_between_periods or test_05_negative_withdrawal_change_between_periods'
           python -m pytest -q -ra tests/test_3d_session.py -k failed_fp32_face_update
