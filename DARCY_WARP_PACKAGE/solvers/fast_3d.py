@@ -948,7 +948,7 @@ def solve_fast_unconfined_kcycle_3d(
                           head_residual_tol_override=None):
         faces_i = (txp_i, txm_i, typ_i, tym_i, tzp_i, tzm_i)
         if storage_diag_iter is not None:
-            # Secant / phreatic path: Picard-built storage + RHS, no extra
+            # Secant storage path: Picard-built storage + RHS, no extra
             # confined term.
             rhs_i = np.asarray(rhs_eff_iter, dtype=np.float64)
             storage_i = np.asarray(storage_diag_iter, dtype=np.float64)
@@ -956,23 +956,23 @@ def solve_fast_unconfined_kcycle_3d(
             transient_i = False
         else:
             # Steady or legacy confined-volume transient inner system.
-            legacy_transient = bool(transient) and storage_coeff is not None
+            volume_transient = bool(transient) and storage_coeff is not None
             rhs_i, storage_i, _, dt_i = _prepare_7point_transient_terms(
                 rhs=np.asarray(b0, dtype=np.float64),
                 storage_diag=storage_diag,
                 active=act0,
                 bc_mask=bcm0,
                 bc_values=bcv0,
-                transient=legacy_transient,
-                storage_coeff=storage_coeff if legacy_transient else None,
-                dt=dt if legacy_transient else None,
-                head_prev=head_prev if legacy_transient else None,
+                transient=volume_transient,
+                storage_coeff=storage_coeff if volume_transient else None,
+                dt=dt if volume_transient else None,
+                head_prev=head_prev if volume_transient else None,
                 initial_head=h0,
                 dx=float(dx),
                 dy=dy,
                 dz=float(dz),
             )
-            transient_i = legacy_transient
+            transient_i = volume_transient
         # Singular-row detection on this iteration's operator.
         ghb_c, ghb_h = validate_ghb_fields(conductance=ghb_conductance,
             head=ghb_head, active=act0, fixed=bcm0)
@@ -1108,7 +1108,7 @@ def solve_fast_unconfined_kcycle_3d(
         dry_cell_flag_threshold=dry_cell_flag_threshold,
         final_head_residual_tol=final_head_residual_tol,
         final_budget_relative_tol=final_budget_relative_tol,
-        legacy_storage_coeff=storage_coeff,
+        volume_storage_coeff=storage_coeff,
         return_info=return_info,
         ghb_conductance=ghb_conductance, ghb_head=ghb_head,
     )
