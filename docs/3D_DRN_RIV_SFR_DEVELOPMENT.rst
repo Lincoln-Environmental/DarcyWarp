@@ -4,11 +4,42 @@
 Status
 ------
 
-This branch starts with the structured-grid DRN/RIV reference physics in
-``DARCY_WARP_PACKAGE.physics.drn_riv_3d`` and its isolated analytical tests.
-The public 3D solve API does not yet accept DRN/RIV. Do not advertise these
-packages as supported until the residual, linearisation, convergence
-criteria, and accepted budgets are all integrated and tested.
+Native DRN/RIV is implemented for the fast ``mf6_6_6_2_npf`` 3D solver path.
+The public builders accept scalar or ``(nz, ny, nx)`` fields and masks;
+``update_drn`` and ``update_riv`` validate before changing owned state. The
+NPF Newton residual, trial evaluation, Jacobian action, diagonal/K-cycle
+preconditioner, roundoff audit, accepted per-cell rates, separate gross
+budgets and transient accepted exchange volumes include both packages.
+CPU and CUDA tests cover steady, STO, convertible and layered NPF cases.
+
+The legacy Cartesian classic/fast session explicitly rejects solves with DRN
+or RIV. Terrain sessions also reject cell DRN/RIV. Do not describe either
+legacy path as package-capable. The current cell-based representation allows
+one DRN and one RIV per cell; it is not yet a multi-reach exchange map for SFR.
+
+Verified evidence on this branch:
+
+* ``DARCY_FLOAT=float64 PYTHONPATH=.:working_tests python -m pytest -q``:
+  1,442 passed, 21 skipped, 1 failed in 1,278 s. The failure is the existing
+  CUDA ``test_common_head_shift_with_opposing_large_wells`` case, exceeding
+  its 1e-6 m bound by 1.57e-6 m. The exact same result reproduces at the
+  committed pre-integration feature baseline ``ca09497``.
+* The focused analytical, API, and actual MF6 tests pass: 59 passed. MF6
+  6.6.2 checks cover confined steady DRN/RIV and two transient single-cell
+  periods covering DRN activation and RIV leakage below the bed. Head error
+  is below 1e-9 m and package-rate error below 1e-11 L3/T in those cases.
+* The CUDA benchmark ``working_tests/benchmark_3d_drn_riv.py`` covers
+  120,000 and 1,012,500 cells. Paired package cases use zero exchange and
+  retain the no-package solution (max head difference 7.11e-15 m). Warm
+  solve medians are 0.176 s without packages and 0.221-0.228 s with packages
+  at 120k cells; at 1.0125M cells they are 0.828 s and 1.455-1.505 s. The
+  large-grid package handling cost is material and remains an optimization
+  target. Parameter updates take 1-13 ms.
+
+These tests and measurements do not establish matched MF6 accuracy for
+layered or convertible DRN/RIV, nor performance parity on active regional
+boundary distributions. This branch is a verified NPF implementation
+increment, not completion of the wider qualification matrix.
 
 Boundary contract
 -----------------
@@ -23,75 +54,72 @@ For head h, drain elevation e, stage s, riverbed bottom b, and conductance C:
   At an activation threshold choose the zero derivative, consistently with 2D.
 * For RIV below the bed bottom, the RHS is C(s - b), not C s. That branch
   has no head restraint.
-* The physical discharge must be evaluated from head differences directly,
-  rather than recovering it from diagonal times head minus RHS.
+* Physical discharge is evaluated from head differences directly, rather
+  than recovered from diagonal times head minus RHS.
 * DRN, RIV, GHB, recharge, prescribed-head exchange and physical storage
   retain distinct budget terms. Opposite signs may cancel in a net total,
   but not in the gross flow ledger.
 * The first representation allows one drain and one river entry per
-  structured cell, with independently validated masks. Multiple reaches
-  sharing a groundwater cell at different stages/bottoms will require
-  an entry-based exchange representation; do not average away thresholds.
+  structured cell. Multiple reaches sharing a groundwater cell at different
+  stages/bottoms require an entry-based exchange representation; do not
+  average away thresholds.
 
-Integration order
------------------
+Public API and runnable examples
+--------------------------------
 
-1. Add owned DRN/RIV fields to ``ThreeDOperatorSession`` and the public
-   build/update API. Validate before mutation; unsupported formulations
-   must raise rather than silently ignoring boundaries. Reuse the existing
-   3D input helpers. A boundary update may change both forcing and
-   operator/topological restraint; invalidate or refresh affected caches.
-2. Extend the pinned NPF case and independent steady/transient reference
-   evaluation. Use the physical flux laws in cell residuals, local and
-   domain budgets, and analytical reference acceptance. Do not introduce
-   a boundary term into physical storage. Include the package state in
-   the appropriate cache compatibility/revision contracts.
-3. Extend ``npf662_kernels.py``, ``npf662_newton.py``,
-   ``npf662_state.py`` and their preconditioner assembly as required.
-   Evaluate the same branches for accepted/trial heads, residual,
-   Jacobian action, diagonal and line-search acceptance. Support both
-   host-audited and device-native NPF paths. Ensure graph replay uses live
-   boundary values and does not retain stale active branches.
-4. Treat grounding separately from the existence of a boundary entry.
-   An inactive drain or disconnected RIV is not a linear head anchor.
-   Check compatible source balances and non-unique components; do not
-   pin a cell or add an artificial conductance to disguise a singular
-   system. Allow legitimate threshold crossings during nonlinear solves.
-5. Add accepted per-cell DRN/RIV rates and gross inflow/outflow budgets.
-   Match the accepted head, fields and timestep; reject stale or failed
-   nonlinear states. Preserve previous-time heads across trial solves.
-   Extend the Cartesian classic/fast backends only when the same
-   convergence and conservation requirements are satisfied.
-6. Run independent analytical and pinned MF6 6.6.2 checks before
-   promoting the capability. Analytical correctness is the primary
-   acceptance target; MF6 comparisons are the production interoperability
-   target. Run actual CUDA tests rather than extrapolating CPU results.
+The public entry points are ``WarpDarcySolver3D.build_from_K_fields``,
+``build_from_layers``, ``update_drn``, ``update_riv``,
+``accepted_drn_discharge`` and ``accepted_riv_discharge``. Conductance is
+integrated [L2/T]; accepted rates are [L3/T], positive out of the aquifer.
+Budget ``net`` is inflow minus outflow. Storage remains a separate term.
 
-Minimum validation matrix
--------------------------
+Run manual CUDA examples from the repository root with:
 
-* Single-cell steady and backward-Euler roots, with and without GHB.
-* Connected multilayer flow, convertible cells, drying/rewetting and
-  thresholds crossed in both directions; no-source closed components,
-  inactive drains and disconnected rivers with/without an independent anchor.
-* Simultaneous gains and losses (including different layers and co-located
-  DRN/RIV/GHB), local residuals and separate gross budgets.
-* Changing conductance, stage, bed bottom and masks between timesteps;
-  no-boundary to boundary and boundary to no-boundary changes after a
-  cached solve; invalid update atomicity and input ownership.
-* CPU/CUDA, eager/device-native and graph replay where supported,
-  independently checked heads and exchange/physical storage volumes.
-* Existing no-package GHB, NPF/STO, Cartesian and 2D regressions.
+.. code-block:: console
+
+   DARCY_FLOAT=float64 PYTHONPATH=.:working_tests python working_tests/example_3d_drn_riv.py
+
+The script solves isolated DRN and RIV cells, then a two-layer transient case
+where accepted RIV exchange reverses after pumping in the stream-connected
+cell. Reproduce the GPU timing artifact with:
+
+.. code-block:: console
+
+   DARCY_FLOAT=float64 PYTHONPATH=.:working_tests python working_tests/benchmark_3d_drn_riv.py
+
+Remaining implementation and validation
+----------------------------------------
+
+1. Expand actual MF6 comparison to multilayer and convertible DRN/RIV,
+   gross package and storage budgets, drying/rewetting and flow reversal.
+   Current MF6 regressions are confined steady and single-cell transient.
+2. Add independent multicell and multilayer analytical roots and refinement
+   studies for vertical series flow, heterogeneous leakage, simultaneous
+   gains/losses, and transient threshold crossings.
+3. Profile package kernels and reduce measured 1M-cell overhead without
+   relaxing acceptance tests. Compare active sparse/distributed cases against
+   equally accurate MF6 results before making regional performance claims.
+4. Extend native DRN/RIV to legacy Cartesian confined/unconfined solvers only
+   with matching residual, Jacobian, budgets and acceptance. Their explicit
+   rejection remains intentional until those pieces are integrated.
+5. Preserve the accepted-state safeguards:
+
+   * Inactive drains and disconnected rivers do not restrain groundwater head.
+   * Check compatible source balances and non-unique components; do not pin
+     cells or add artificial conductance to disguise singular systems.
+   * Only accepted per-cell rates enter transient exchange volumes. Rejected
+     trials do not update previous heads or accepted budgets.
+   * Keep storage separate from boundary conductance and report gross flows.
 
 SFR follow-on
 -------------
 
-Extract only the needed reach-network, Manning rating and conservative
-routing logic from Overlander. Keep its hillslope and 2D hydraulic code
-outside DarcyWarp. Standardise on seconds and integrated SI conductance.
-Start with equilibrium streamflow routing for MF6 comparison, then add
-implicit channel storage and explicit kinematic routing as justified.
-For coupled solves, hold the accepted previous-time states fixed during
-iterations; require identical accepted exchange volumes in both budgets.
-Losing-stream water availability is a constraint on SFR exchange, not a
-change to the ordinary prescribed-stage RIV law.
+Do not implement SFR as part of this task. Extract only the needed reach
+network, Manning rating and conservative routing logic from Overlander. Keep
+its hillslope and 2D hydraulic code outside DarcyWarp. Standardise on seconds
+and integrated SI conductance. Start with equilibrium routing for MF6
+comparison, then add implicit channel storage and explicit kinematic routing
+as justified. Hold accepted previous-time states fixed during coupling
+iterations and require identical accepted exchange volumes in channel and
+aquifer budgets. Losing-stream water availability is an SFR constraint, not
+a change to ordinary prescribed-stage RIV.
