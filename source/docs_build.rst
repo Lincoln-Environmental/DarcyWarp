@@ -7,7 +7,7 @@ install it with:
 
 .. code-block:: bash
 
-   python -m pip install sphinx
+   python -m pip install sphinx numpy scipy pandas warp-lang==1.17.0
 
 Build HTML
 ----------
@@ -61,3 +61,19 @@ build. For the project conda environment:
 
 If a Make invocation selects the wrong Python interpreter, use the direct
 ``python -m sphinx`` command above.
+
+Audit function documentation
+----------------------------
+
+Run the AST-based audit without importing solver modules:
+
+.. code-block:: bash
+
+   python working_tests/audit_docstrings.py
+   python working_tests/audit_docstrings.py --strict
+
+The default command reports repository-wide coverage and enforces complete
+parameter fields in the modules already audited. The strict command additionally
+requires complete coverage throughout the package. Each missing field is
+reported by file, line and function. The audit checks presence and argument-name
+consistency; scientific accuracy still requires human review.

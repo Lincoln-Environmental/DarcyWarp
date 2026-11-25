@@ -210,13 +210,13 @@ def _assemble_transient_result(
 
 
 def _run_host_picard_periods(
-    *, self, rates, head_prev, k, bottom, top, sy, ss, dt_f, storage_reference,
+    *, model, rates, head_prev, k, bottom, top, sy, ss, dt_f, storage_reference,
     storage_mode, controls, allow_rejected_trial, heads_per_period, period_times,
     period_infos, counters, histories,
 ):
     """Advance the host-controlled Picard path through requested periods.
 
-    :param self: Built 2D model (updated with each period's recharge and solve).
+    :param model: Built 2D model (updated with each period's recharge and solve).
     :param rates: Uniform recharge rates, length per time, in period order.
     :param head_prev: Last accepted head (initial head on entry).
     :param k: Hydraulic conductivity grid, length per time.
@@ -241,14 +241,14 @@ def _run_host_picard_periods(
     accepted_periods = 0
     last_info = {}
     for period_index in range(int(rates.size)):
-        self.update_uniform_recharge_in_place(float(rates[period_index]))
+        model.update_uniform_recharge_in_place(float(rates[period_index]))
         counters["R_device_updates"] += 1
         if save_diagnostics_b:
             period_head_old = np.asarray(head_prev, dtype=np.float64).copy()
         else:
             period_head_old = head_prev
         period_t0 = time.perf_counter()
-        head, info = self.solve(
+        head, info = model.solve(
             formulation="unconfined",
             initial_head=head_prev,
             K_field=k,
@@ -1047,6 +1047,11 @@ def solve_transient_unconfined_backend(
             )
 
         def _fast_path_head_residual_check() -> tuple[float, float, float, bool]:
+            """Reduce free-cell residuals and detect nonfinite candidate heads.
+
+            :returns: Head-equivalent RMS, absolute flow RMS, relative flow
+                RMS and whether any candidate head is nonfinite.
+            """
             wp.launch(kernel=zero_int_scalar_kernel, dim=1, inputs=[head_nonfinite_flag_buf], device=device)
             if transient_face_operator_enabled_b:
                 fl0 = face_levels[0]
@@ -1558,6 +1563,11 @@ def solve_transient_unconfined_backend(
                         )
 
                         def _run_adaptive_block(block_cycles: int) -> dict[str, Any]:
+                            """Advance the inner solve while retaining a rollback snapshot.
+
+                            :param block_cycles: Number of K-cycles in this inner block.
+                            :returns: Inner solve convergence and residual diagnostics.
+                            """
                             nonlocal inner_solver_seconds
                             if use_correction_form:
                                 # Snapshot the running correction so a divergent
@@ -1653,6 +1663,7 @@ def solve_transient_unconfined_backend(
                             }
 
                         def _rollback_adaptive_block() -> None:
+                            """Restore the saved inner iterate after a rejected block."""
                             if use_correction_form:
                                 wp.launch(
                                     kernel=copy_field_kernel,
@@ -2697,7 +2708,7 @@ def solve_transient_unconfined_backend(
 
     else:
         head_prev, last_info, accepted_periods = _run_host_picard_periods(
-            self=self, rates=rates, head_prev=head_prev, k=k, bottom=bottom, top=top,
+            model=self, rates=rates, head_prev=head_prev, k=k, bottom=bottom, top=top,
             sy=sy, ss=ss, dt_f=dt_f, storage_reference=storage_reference,
             storage_mode=storage_mode, controls=controls, allow_rejected_trial=allow_rejected_trial,
             heads_per_period=heads_per_period, period_times=period_times,

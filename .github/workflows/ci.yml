@@ -21,7 +21,7 @@ jobs:
           python -c "import sys; sys.modules['warp'] = None; import DARCY_WARP_PACKAGE; import DARCY_WARP_PACKAGE.factory; assert callable(DARCY_WARP_PACKAGE.create_solver)"
 
       - name: Install dependencies
-        run: python -m pip install numpy scipy pandas pytest warp-lang==1.17.0
+        run: python -m pip install numpy scipy pandas pytest ruff warp-lang==1.17.0
 
       - name: Byte-compile package (syntax check)
         run: python -m compileall -q DARCY_WARP_PACKAGE tests working_tests
@@ -31,9 +31,15 @@ jobs:
           python -c "import DARCY_WARP_PACKAGE; assert callable(DARCY_WARP_PACKAGE.create_solver)"
           python -c "import DARCY_WARP_PACKAGE.factory, DARCY_WARP_PACKAGE.solver_capabilities"
 
+      - name: Check explicit solver dependencies
+        run: python -m ruff check --select F821 DARCY_WARP_PACKAGE/solvers/transient_unconfined.py DARCY_WARP_PACKAGE/solvers_3d.py
+
+      - name: Audit parameter documentation
+        run: python working_tests/audit_docstrings.py
+
       - name: Unit tests (CPU; GPU-dependent tests self-skip)
         # `python -m pytest` (not bare pytest) so the repo root is importable.
-        run: python -m pytest tests/test_sparse_system_consistency.py tests/test_solver_registry_2d.py -v
+        run: python -m pytest tests/test_sparse_system_consistency.py tests/test_solver_registry_2d.py tests/test_cleanup_infrastructure.py tests/test_cleanup_transient_controller.py -v
 
   documentation:
     runs-on: ubuntu-latest
@@ -42,6 +48,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: python -m pip install sphinx
+      - run: python -m pip install sphinx numpy scipy pandas warp-lang==1.17.0
       - name: Build the HTML manual and API reference
         run: python -m sphinx -b html -n -W --keep-going source build/html

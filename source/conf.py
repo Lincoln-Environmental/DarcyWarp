@@ -21,8 +21,14 @@ release = '0.2'
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
 extensions = ['sphinx.ext.autodoc']
-# The offline build has no external Python inventory for this standard type.
-nitpick_ignore = [('py:class', 'pathlib.Path')]
+# The offline build has no external inventories for these types.
+nitpick_ignore = [
+    ('py:class', 'pathlib.Path'),
+    ('py:class', 'numpy.ndarray'),
+    ('py:class', 'numpy.dtype'),
+    ('py:class', 'pandas.DataFrame'),
+    ('py:class', 'typing.Any'),
+]
 
 templates_path = []
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
