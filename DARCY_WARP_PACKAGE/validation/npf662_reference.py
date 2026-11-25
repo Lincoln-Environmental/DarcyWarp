@@ -312,7 +312,8 @@ def load_npf662_case(*,path):
         if schema not in (1,2):raise ValueError('Unsupported NPF input schema')
         cls=NPF662Case if schema==1 else NPF662LayeredCase
         optional_fields = {'ghb_conductance', 'ghb_head', 'drn_conductance', 'drn_elevation',
-                           'drn_mask', 'riv_conductance', 'riv_stage', 'riv_bottom', 'riv_mask'}
+                           'drn_mask', 'riv_conductance', 'riv_stage', 'riv_bottom', 'riv_mask',
+                           'drn_entries', 'riv_entries'}
         missing=set(cls.__dataclass_fields__)-set(saved.files)-optional_fields
         implicit=bool(schema==1 and missing=={'cell_type'})
         if missing and not implicit:raise ValueError(f'Missing NPF input fields: {sorted(missing)}')
