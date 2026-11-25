@@ -5391,7 +5391,7 @@ class WarpDarcySolver:
     def build_from_fields(
         self,
         T_field: np.ndarray,
-        R_field: np.ndarray,
+        R_field: float | np.ndarray,
         active: np.ndarray,
         bc_mask: np.ndarray,
         bc_values: np.ndarray,
@@ -5415,6 +5415,9 @@ class WarpDarcySolver:
         (fixed per-cell conductance [L^2/T]); they are only assembled by the
         ``unconfined_semismooth_newton_kcycle`` backend and require
         ``use_drn=True`` / ``use_riv=True`` at construction.
+
+        :param R_field: Signed surface recharge in length per unit time. Use
+            a scalar for uniform recharge or a horizontal ``(ny, nx)`` map.
         """
         T_field = np.array(T_field, dtype=NP_FLOAT, order="C", copy=True)
         R_field = np.array(R_field, dtype=NP_FLOAT, order="C", copy=True)
@@ -5424,7 +5427,11 @@ class WarpDarcySolver:
 
         if T_field.shape != (self.ny, self.nx):
             raise ValueError(f"T_field shape {T_field.shape} expected {(self.ny, self.nx)}")
-        if R_field.shape != (self.ny, self.nx):
+        if R_field.ndim == 0:
+            if not np.isfinite(R_field):
+                raise ValueError("Uniform recharge must be finite.")
+            R_field = np.full((self.ny, self.nx), R_field, dtype=NP_FLOAT)
+        elif R_field.shape != (self.ny, self.nx):
             raise ValueError(f"R_field shape {R_field.shape} expected {(self.ny, self.nx)}")
         if active.shape != (self.ny, self.nx):
             raise ValueError(f"active shape {active.shape} expected {(self.ny, self.nx)}")
@@ -7071,19 +7078,28 @@ class WarpDarcySolver:
         self._fast_faces_stale = True  # ghb_factor feeds face conductances
         self._operator_generation = getattr(self, "_operator_generation", 0) + 1
 
-    def update_R_in_place(self, R_truth) -> None:
+    def update_R_in_place(self, R_field=None, *, R_truth=None) -> None:
         """
         Update recharge in place (host + device) without reallocations.
+
+        :param R_field: Signed depth rate [L/T], scalar or horizontal field.
+        :param R_truth: Existing keyword for the same input.
         """
+        if R_truth is not None:
+            if R_field is not None:
+                raise TypeError("Supply recharge once, using R_field or R_truth.")
+            R_field = R_truth
+        if R_field is None:
+            raise TypeError("Supply a recharge rate or field.")
         if self.R_field_host is None or self.R_wp is None:
             raise RuntimeError("Call build_from_truth_inputs() once before update_R_in_place().")
 
-        R_arr = np.asarray(R_truth, dtype=NP_FLOAT, order="C")
+        R_arr = np.asarray(R_field, dtype=NP_FLOAT, order="C")
         if R_arr.shape != tuple(self.R_field_host.shape):
             if R_arr.size == 1:
                 self.R_field_host[:, :] = R_arr.reshape(1)[0]
             else:
-                raise ValueError(f"R_truth shape {R_arr.shape} expected {self.R_field_host.shape}")
+                raise ValueError(f"R_field shape {R_arr.shape} expected {self.R_field_host.shape}")
         else:
             np.copyto(self.R_field_host, R_arr)
 

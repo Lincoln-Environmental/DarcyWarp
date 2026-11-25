@@ -492,3 +492,15 @@ def predict_timestep_head(head: wp.array(dtype=wp.float64), increment: wp.array(
 def scale_period_source(base: wp.array(dtype=wp.float64), source: wp.array(dtype=wp.float64), factor: wp.float64):
     i = wp.tid()
     source[i] = base[i]*factor
+
+
+@wp.kernel
+def add_surface_recharge(receivers: wp.array(dtype=wp.int32), rates: wp.array(dtype=wp.float64),
+    column_count: int, area: wp.float64, uniform: int, scalar_rate: wp.float64,
+    source: wp.array(dtype=wp.float64)):
+    """Add areal recharge to the single eligible source cell in each column."""
+    cell = receivers[wp.tid()]
+    rate = scalar_rate
+    if uniform == 0:
+        rate = rates[cell % column_count]
+    source[cell] += rate * area

@@ -11,9 +11,10 @@ remains experimental development on ``dev``.
 
 Set ``DARCY_FLOAT=float64`` before importing the package. Qualification uses
 Python 3.12, warp-lang 1.17.0 and an NVIDIA CUDA device. K, head, source and
-time must use consistent units; the tests use m/day, m, m3/day and days.
-Cell arrays are ``(nz, ny, nx)``. Convert recharge to a volumetric source by
-multiplying by ``dx*dy`` once, in the intended receiving layer.
+time must use consistent units. For metre/day models, supply surface
+recharge as ``R_field`` in m/day just as in 2D. It may be a scalar or a
+``(ny, nx)`` map. The solver applies ``dx * dy`` once. Additional well
+rates use ``rhs`` in m³/day with shape ``(nz, ny, nx)``.
 
 NPF steady and transient flow
 -----------------------------
@@ -102,7 +103,8 @@ thickness, while storage remains physical and unfloored. Vertical K remains
 saturated. These laws differ from matched NPF and are not interchangeable.
 
 Keep ``head_prev`` fixed within a step. Advance it only after convergence.
-Use ``update_rhs(rhs=...)``, ``update_initial_head(initial_head=...)`` and
+Use ``update_R_in_place(rate)`` to replace surface recharge. Use
+``update_rhs(rhs=...)``, ``update_initial_head(initial_head=...)`` and
 ``update_boundary_values(bc_values=...)`` for repeated scenarios. Change
 physical conductivity with ``update_K_fields()``. Returned heads own their
 storage. Compatible workspaces and graphs are reused; changing the timestep

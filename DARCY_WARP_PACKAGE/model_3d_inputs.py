@@ -17,6 +17,7 @@ import numpy as np
 
 from DARCY_WARP_PACKAGE.physics.inputs_3d import binary_mask, floating_field
 from DARCY_WARP_PACKAGE.physics.ghb_3d import validate_ghb_fields
+from DARCY_WARP_PACKAGE.physics.recharge_3d import recharge_depth_rate
 
 
 FaceConductance = tuple[
@@ -40,8 +41,16 @@ def _array(name: str, value: np.ndarray, shape: tuple[int, int, int], dtype: np.
 class Model3DInputs:
     """Validated fields and grid information for one structured 3D model.
 
-    Arrays use the solver's ``(nz, ny, nx)`` order.  Conductivity may be zero
+    Cell arrays use the solver's ``(nz, ny, nx)`` order. Conductivity may be zero
     in inactive cells, but all values must be finite and non-negative.
+
+    :param R_field: Surface recharge in model length per unit time. Supply a
+        uniform scalar or a horizontal ``(ny, nx)`` field. Positive adds water.
+    :param rhs: Optional additional volumetric rates per cell, in model
+        volume per unit time, such as injection or pumping from a well.
+    :param dx: Required column width in model length units.
+    :param dy: Required row height in model length units.
+    :param dz: Required layer thickness in model length units.
     """
 
     kx: np.ndarray
@@ -50,16 +59,17 @@ class Model3DInputs:
     active: np.ndarray
     bc_mask: np.ndarray
     bc_values: np.ndarray
-    rhs: np.ndarray
-    initial_head: np.ndarray | None
-    dx: float
-    dy: float
-    dz: float
+    rhs: np.ndarray | None = None
+    initial_head: np.ndarray | None = None
+    dx: float | None = None
+    dy: float | None = None
+    dz: float | None = None
     named_masks: Mapping[str, np.ndarray] = field(default_factory=dict)
     metadata: Mapping[str, Any] = field(default_factory=dict)
     ghb_conductance: np.ndarray | float | None = None
     ghb_head: np.ndarray | float | None = None
     ghb_mask: np.ndarray | None = None
+    R_field: np.ndarray | float | None = None
 
     def __post_init__(self) -> None:
         kx = np.asarray(self.kx)
@@ -88,7 +98,10 @@ class Model3DInputs:
         if self.ghb_mask is not None:
             object.__setattr__(self, "ghb_mask", binary_mask(value=self.ghb_mask,name="ghb_mask",shape=shape))
         object.__setattr__(self, "bc_values", _array("bc_values", self.bc_values, shape, np.dtype(np.float64)))
-        object.__setattr__(self, "rhs", _array("rhs", self.rhs, shape, np.dtype(np.float64)))
+        if self.rhs is not None:
+            object.__setattr__(self, "rhs", _array("rhs", self.rhs, shape, np.dtype(np.float64)))
+        recharge = recharge_depth_rate(R_field=self.R_field, horizontal_shape=shape[1:])
+        object.__setattr__(self, "R_field", recharge)
         if self.initial_head is not None:
             object.__setattr__(
                 self,
@@ -97,6 +110,8 @@ class Model3DInputs:
             )
 
         for name, spacing in (("dx", self.dx), ("dy", self.dy), ("dz", self.dz)):
+            if spacing is None:
+                raise ValueError(f"{name} is required.")
             spacing_value = float(spacing)
             if not np.isfinite(spacing_value) or spacing_value <= 0.0:
                 raise ValueError(f"{name} must be finite and > 0; got {spacing!r}.")
@@ -177,6 +192,7 @@ class Model3DInputs:
                 bc_mask=self.bc_mask,
                 bc_values=self.bc_values,
                 rhs=self.rhs,
+                R_field=self.R_field,
                 initial_head=self.initial_head,
                 ghb_conductance=self.ghb_conductance, ghb_head=self.ghb_head, ghb_mask=self.ghb_mask,
             )
@@ -194,6 +210,7 @@ class Model3DInputs:
                 bc_mask=self.bc_mask,
                 bc_values=self.bc_values,
                 rhs=self.rhs,
+                R_field=self.R_field,
                 initial_head=self.initial_head,
                 ghb_conductance=self.ghb_conductance, ghb_head=self.ghb_head, ghb_mask=self.ghb_mask,
             )

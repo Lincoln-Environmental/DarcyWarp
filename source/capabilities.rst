@@ -221,8 +221,12 @@ Use ``WarpDarcySolver3D`` or ``create_solver(dim=3, ...)`` from
 ``DARCY_WARP_PACKAGE``. Fields use ``(nz, ny, nx)`` order. Legacy Cartesian
 models use uniform layer thickness. The explicit ``mf6_6_6_2_npf`` formulation
 supports both uniform grids and conventional layered DIS interfaces, with
-confined or convertible cells and backward Euler Ss/Sy storage. 3D source
-arrays contain volumetric rates per cell.
+confined or convertible cells and backward Euler Ss/Sy storage. As in 2D,
+pass surface recharge as ``R_field`` in length per unit time, positive into
+the aquifer. In 3D a scalar specifies uniform recharge and a ``(ny, nx)``
+array specifies spatial recharge. The solver applies the horizontal cell area.
+Use the optional ``(nz, ny, nx)`` volumetric ``rhs`` for additional cell
+sources or sinks such as screened wells.
 
 Both formulations also support cell-based general-head boundaries through
 ``ghb_conductance`` and ``ghb_head`` build inputs and ``update_ghb()``.

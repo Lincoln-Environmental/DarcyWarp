@@ -16,6 +16,7 @@ import numpy as np
 
 from DARCY_WARP_PACKAGE.config import NP_FLOAT
 from DARCY_WARP_PACKAGE.physics.inputs_3d import binary_mask, floating_field, positive_integer
+from DARCY_WARP_PACKAGE.physics.recharge_3d import combine_cell_sources, recharge_depth_rate
 from DARCY_WARP_PACKAGE.solvers_3d import (
     solve_chebyshev_7point_3d,
     solve_multigrid_kcycle_7point_3d,
@@ -96,6 +97,8 @@ class WarpDarcySolver3D:
         self._tz_p: np.ndarray | None = None
         self._tz_m: np.ndarray | None = None
         self._rhs: np.ndarray | None = None
+        self._volumetric_source: np.ndarray | None = None
+        self._recharge_rate: np.ndarray | None = None
         self._active: np.ndarray | None = None
         self._bc_mask: np.ndarray | None = None
         self._bc_values: np.ndarray | None = None
@@ -119,36 +122,40 @@ class WarpDarcySolver3D:
         active: np.ndarray,
         bc_mask: np.ndarray,
         bc_values: np.ndarray,
-        rhs: np.ndarray,
+        rhs: np.ndarray | None = None,
         initial_head: np.ndarray | None = None,
-        *, ghb_conductance=None, ghb_head=None, ghb_mask=None,
+        *, R_field: float | np.ndarray | None = None,
+        ghb_conductance=None, ghb_head=None, ghb_mask=None,
     ) -> "WarpDarcySolver3D":
         """
         Build face conductances from cell-centered hydraulic conductivity fields.
 
-        Parameters
-        ----------
-        kx_field, ky_field, kz_field
-            Cell-centered K values, shape (nz, ny, nx).
-        active
-            Active-cell mask, shape (nz, ny, nx).
-        bc_mask
-            Dirichlet-cell mask, shape (nz, ny, nx).
-        bc_values
-            Prescribed heads on Dirichlet cells, shape (nz, ny, nx).
-        rhs
-            Volumetric cell injection [m³/day] in metre/day units, shape
-            (nz, ny, nx). Multiply recharge [m/day] by dx*dy once.
-        initial_head
-            Optional initial guess, shape (nz, ny, nx).
+        :param kx_field: Cell-centred east-west conductivity [L/T].
+        :param ky_field: Cell-centred north-south conductivity [L/T].
+        :param kz_field: Cell-centred vertical conductivity [L/T].
+        :param active: Active-cell mask of shape (nz, ny, nx), top layer first.
+        :param bc_mask: Fixed-head mask of the same shape.
+        :param bc_values: Prescribed heads [L] at fixed-head cells.
+        :param rhs: Optional 3D volumetric rates [L³/T], e.g. signed well rates.
+        :param initial_head: Optional initial heads [L].
+        :param R_field: Signed areal recharge [L/T], scalar or (ny, nx). Positive
+            adds water. Recharge acts on the highest active cell of each column
+            unless it has a prescribed head. Cell area is applied internally.
+        :param ghb_conductance: Optional GHB conductance [L²/T] per cell.
+        :param ghb_head: Optional GHB external head [L] per cell.
+        :param ghb_mask: Optional mask selecting GHB cells.
+        :return: The built solver.
         """
         active = binary_mask(value=active, name="active", shape=self.shape)
         fields = self._validated_K_fields(kx_field=kx_field, ky_field=ky_field, kz_field=kz_field)
+        volumetric, rate, source = self._prepare_sources(
+            rhs=rhs, R_field=R_field, active=active, bc_mask=bc_mask,
+        )
         if self.formulation == 'mf6_6_6_2_npf':
             from DARCY_WARP_PACKAGE.validation.npf662_reference import NPF662Case
             case = NPF662Case(kx=fields[0], ky=fields[1], kz=fields[2], active=active,
                 fixed=np.asarray(bc_mask), values=floating_field(value=bc_values, name="bc_values", dtype=NP_FLOAT),
-                source=floating_field(value=rhs, name="rhs", dtype=NP_FLOAT),
+                source=source,
                 initial=np.zeros(self.shape) if initial_head is None else floating_field(value=initial_head, name="initial_head", dtype=NP_FLOAT),
                 dx=self.dx, dy=self.dy, dz=self.dz)
             case.validate()
@@ -171,29 +178,39 @@ class WarpDarcySolver3D:
             active=active,
             bc_mask=bc_mask,
             bc_values=bc_values,
-            rhs=rhs,
+            rhs=source,
             initial_head=initial_head,
             ghb_conductance=ghb_conductance, ghb_head=ghb_head, ghb_mask=ghb_mask,
         )
         self._kx_field, self._ky_field, self._kz_field = fields
+        self._store_source_components(volumetric, rate)
         return self
 
     def build_from_face_conductance(
         self, tx_p, tx_m, ty_p, ty_m, tz_p, tz_m, active, bc_mask,
-        bc_values, rhs, initial_head=None,
-        *, ghb_conductance=None, ghb_head=None, ghb_mask=None,
+        bc_values, rhs=None, initial_head=None,
+        *, R_field=None, ghb_conductance=None, ghb_head=None, ghb_mask=None,
     ) -> "WarpDarcySolver3D":
         """Build independent reciprocal faces for legacy confined flow.
 
         Physical NPF conductivity/geometry must enter through its K or layered
         builder. Reject an incompatible replacement before changing the model.
+
+        :param rhs: Optional 3D volumetric rates [L³/T], e.g. signed well rates.
+        :param R_field: Signed surface recharge [L/T], scalar or (ny, nx), with
+            the same receiving cells and sign as in :meth:`build_from_K_fields`.
         """
         if self.formulation == 'mf6_6_6_2_npf':
             raise ValueError('mf6_6_6_2_npf requires physical K/geometry; use build_from_K_fields or build_from_layers, not arbitrary faces')
-        return self._build_from_face_conductance(tx_p=tx_p, tx_m=tx_m, ty_p=ty_p, ty_m=ty_m,
+        volumetric, rate, source = self._prepare_sources(
+            rhs=rhs, R_field=R_field, active=active, bc_mask=bc_mask,
+        )
+        self._build_from_face_conductance(tx_p=tx_p, tx_m=tx_m, ty_p=ty_p, ty_m=ty_m,
             tz_p=tz_p, tz_m=tz_m, active=active, bc_mask=bc_mask, bc_values=bc_values,
-            rhs=rhs, initial_head=initial_head,
+            rhs=source, initial_head=initial_head,
             ghb_conductance=ghb_conductance, ghb_head=ghb_head, ghb_mask=ghb_mask)
+        self._store_source_components(volumetric, rate)
+        return self
 
     def _build_from_face_conductance(
         self,
@@ -239,14 +256,13 @@ class WarpDarcySolver3D:
         input_active = binary_mask(value=active, name="active", shape=shape)
         input_bc_mask = binary_mask(value=bc_mask, name="bc_mask", shape=shape)
         input_bc_values = floating_field(value=bc_values, name="bc_values", dtype=NP_FLOAT)
-        input_rhs = floating_field(value=rhs, name="rhs", dtype=NP_FLOAT)
         input_initial = None if initial_head is None else floating_field(value=initial_head, name="initial_head", dtype=NP_FLOAT)
         session = ThreeDOperatorSession(
             faces=(tx_p, tx_m, ty_p, ty_m, tz_p, tz_m),
             active=input_active,
             bc_mask=input_bc_mask,
             bc_values=input_bc_values,
-            rhs=input_rhs,
+            rhs=rhs,
             initial_head=input_initial,
             dx=self.dx,
             dy=self.dy,
@@ -271,22 +287,30 @@ class WarpDarcySolver3D:
         return self
 
     def build_from_layers(self, *, z_interfaces, kx_field, ky_field, kz_field,
-                          active, bc_mask, bc_values, rhs, initial_head=None,
-                          ghb_conductance=None, ghb_head=None, ghb_mask=None):
+                          active, bc_mask, bc_values, rhs=None, initial_head=None,
+                          R_field=None, ghb_conductance=None, ghb_head=None, ghb_mask=None):
         """Build conventional layered DIS/NPF connections (not terrain metrics).
 
         Interfaces (nz+1,ny,nx) are authoritative. Constructor dz is unused;
         solve-time top/geometry overrides are rejected. Recalling this builder
         closes the previous session and all geometry-dependent workspaces.
+
+        :param rhs: Optional 3D volumetric rates [L³/T], e.g. signed well rates.
+        :param R_field: Signed surface recharge [L/T], scalar or (ny, nx). Uses
+            the horizontal cell area and the same receiving cells as the
+            Cartesian :meth:`build_from_K_fields` interface.
         """
         if self.formulation!='mf6_6_6_2_npf':
             raise ValueError('build_from_layers requires formulation=mf6_6_6_2_npf')
         from DARCY_WARP_PACKAGE.physics.npf662_layers import build_layered_dis_faces
         from DARCY_WARP_PACKAGE.validation.npf662_reference import NPF662LayeredCase
+        volumetric, rate, source = self._prepare_sources(
+            rhs=rhs, R_field=R_field, active=active, bc_mask=bc_mask,
+        )
         initial=np.zeros(self.shape) if initial_head is None else np.asarray(initial_head,dtype=NP_FLOAT)
         case=NPF662LayeredCase(kx=np.asarray(kx_field,dtype=NP_FLOAT),ky=np.asarray(ky_field,dtype=NP_FLOAT),
             kz=np.asarray(kz_field,dtype=NP_FLOAT),active=np.asarray(active),fixed=np.asarray(bc_mask),
-            values=np.asarray(bc_values,dtype=NP_FLOAT),source=np.asarray(rhs,dtype=NP_FLOAT),initial=initial,
+            values=np.asarray(bc_values,dtype=NP_FLOAT),source=source,initial=initial,
             dx=self.dx,dy=self.dy,z_interfaces=np.asarray(z_interfaces,dtype=NP_FLOAT))
         if case.active.shape!=self.shape:raise ValueError(f'Layered cell shape must be {self.shape}')
         case.validate()
@@ -306,6 +330,7 @@ class WarpDarcySolver3D:
         self._tx_p,self._tx_m,self._ty_p,self._ty_m,self._tz_p,self._tz_m=session.faces
         self._active,self._bc_mask,self._bc_values=session.active,session.bc_mask,session.bc_values
         self._rhs,self._initial_head=session.rhs,session.initial_head
+        self._store_source_components(volumetric, rate)
         if previous is not None:
             previous.close()
         return self
@@ -357,16 +382,30 @@ class WarpDarcySolver3D:
         self._kx_field, self._ky_field, self._kz_field = fields
         self._tx_p, self._tx_m, self._ty_p, self._ty_m, self._tz_p, self._tz_m = self._session.faces
 
-    def solve_transient_npf(self, *, source_factors, dt, head_prev, ss, sy, **solver_options):
+    def solve_transient_npf(self, *, dt, head_prev, ss, sy, source_factors=None,
+                            recharge_rates=None, **solver_options):
         """Solve an NPF/STO history with intermediate heads retained on the GPU.
 
-        K, geometry, cell types, storage fields and prescribed heads stay fixed
-        within a call. Source factors and dt vary per step. Update physical K
-        between calls with update_K_fields. A failed step stops the history.
+        K, geometry, cell types, storage and prescribed heads stay fixed within
+        a call. A failed step stops the history.
+
+        :param dt: Time step durations in model time units.
+        :param head_prev: Heads [L] at the start of the history.
+        :param ss: Specific storage [1/L].
+        :param sy: Specific yield.
+        :param source_factors: Optional multipliers on the built cell sources per
+            step. When recharge_rates is supplied they scale only volumetric rhs.
+        :param recharge_rates: Optional areal recharge [L/T] replacing R_field
+            for this call. Supply a scalar, (ny, nx) map, (nstep,) vector, or
+            (nstep, ny, nx) stack.
+        :param solver_options: Additional options for the transient NPF solver.
+        :return: History results and diagnostics from the transient solver.
         """
         from DARCY_WARP_PACKAGE.solvers.npf662_history import solve_transient_history
-        return solve_transient_history(model=self, source_factors=source_factors, dt=dt,
-            head_prev=head_prev, ss=ss, sy=sy, **solver_options)
+        return solve_transient_history(
+            model=self, source_factors=source_factors, recharge_rates=recharge_rates,
+            dt=dt, head_prev=head_prev, ss=ss, sy=sy, **solver_options,
+        )
 
     def solve(self, **kwargs: Any) -> tuple[np.ndarray, dict[str, Any]]:
         """Solve and time the public call, including independent acceptance.
@@ -459,12 +498,73 @@ class WarpDarcySolver3D:
             return solve_multigrid_kcycle_7point_3d(**common)
         return solve_chebyshev_7point_3d(**common)
 
+    def _prepare_sources(self, *, rhs, R_field, active, bc_mask):
+        """Own the inputs separately so updating one preserves the other."""
+        active = np.asarray(active)
+        fixed = np.asarray(bc_mask)
+        if active.shape != self.shape or fixed.shape != self.shape:
+            raise ValueError(f"active and bc_mask must have shape {self.shape}")
+        volumetric = None if rhs is None else floating_field(value=rhs, name="rhs", dtype=NP_FLOAT)
+        rate = recharge_depth_rate(R_field=R_field, horizontal_shape=self.shape[1:])
+        if rate is None and volumetric is not None:
+            source = volumetric
+        else:
+            source = combine_cell_sources(
+                rhs=volumetric, R_field=rate, active=active, bc_mask=fixed,
+                dx=self.dx, dy=self.dy, dtype=NP_FLOAT,
+            )
+        return volumetric, rate, source
+
+    def _store_source_components(self, volumetric, rate):
+        """Share the session array when it contains only volumetric sources."""
+        if volumetric is not None and rate is None:
+            volumetric = self._rhs
+        self._volumetric_source = volumetric
+        self._recharge_rate = rate
+
+    def _source_with_recharge(self, R_field):
+        """Assemble a replacement recharge rate with the current volumetric sources."""
+        return combine_cell_sources(
+            rhs=self._volumetric_source, R_field=R_field,
+            active=self._active, bc_mask=self._bc_mask,
+            dx=self.dx, dy=self.dy, dtype=NP_FLOAT if R_field is not None else self._session.rhs.dtype,
+        )
+
+    def update_R_in_place(self, R_field) -> None:
+        """Replace surface recharge while retaining wells and other cell rates.
+
+        :param R_field: Signed recharge [L/T], scalar or (ny, nx), or None to clear.
+        """
+        if self._session is None:
+            raise RuntimeError("Build the model before updating recharge.")
+        rate = recharge_depth_rate(R_field=R_field, horizontal_shape=self.shape[1:])
+        volumetric = self._volumetric_source
+        if volumetric is self._rhs and rate is not None:
+            # The first recharge update makes the combined source differ from
+            # the raw rates. Preserve the latter before overwriting the session.
+            volumetric = volumetric.copy()
+        self._session.update_rhs(self._source_with_recharge(rate))
+        self._store_source_components(volumetric, rate)
+
     def update_rhs(self, rhs: np.ndarray) -> None:
-        """Update the source field in the persistent 3D operator session."""
+        """Replace volumetric cell sources while retaining surface recharge.
+
+        :param rhs: Signed 3D cell source rates [L³/T], e.g. injection or pumping.
+        """
         if self._session is None:
             raise RuntimeError("Solver has not been built.")
-        self._session.update_rhs(rhs)
-        self._rhs = self._session.rhs
+        if self._recharge_rate is None:
+            self._session.update_rhs(rhs)
+            self._volumetric_source = self._rhs
+            return
+        volumetric = floating_field(value=rhs, name="rhs", dtype=self._session.rhs.dtype)
+        source = combine_cell_sources(
+            rhs=volumetric, R_field=self._recharge_rate,
+            active=self._active, bc_mask=self._bc_mask,
+            dx=self.dx, dy=self.dy, dtype=NP_FLOAT,
+        )
+        self._session.update_rhs(source)
+        self._volumetric_source = volumetric
 
     def update_initial_head(self, initial_head: np.ndarray | None) -> None:
         """Update the persistent initial guess without rebuilding faces."""
@@ -512,6 +612,8 @@ class WarpDarcySolver3D:
         self._tz_p = None
         self._tz_m = None
         self._rhs = None
+        self._volumetric_source = None
+        self._recharge_rate = None
         self._active = None
         self._bc_mask = None
         self._bc_values = None
