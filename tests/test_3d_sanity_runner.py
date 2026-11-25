@@ -68,3 +68,66 @@ def test_history_qualification_enforces_native_face_flows(reference_state):
     if reference_state == 'missing':
         assert all(period['head_max_m'] is None and period['ghb_law_parity'] is None for period in row['periods'])
     np.testing.assert_allclose(actual=actual, desired=reference['heads'], rtol=0., atol=1e-9)
+
+
+def test_native_cache_retry_after_timeout_and_transient_build_pin(tmp_path, pinned_mf6):
+    from dataclasses import replace
+    from pathlib import Path
+    from test_3d_ghb_mf6 import ghb_case
+    from run_3d_sanity import prepare_reference
+    from sanity_3d_controls import read_profiles
+
+    initial = ghb_case(convertible=False)
+    source = initial.source.copy()
+    source[1:] = 0.
+    case = replace(initial, source=source)
+    profiles = read_profiles(root=Path(__file__).resolve().parents[1])['mf6']
+    options = dict(case=case, family='npf', mode='steady', cache=tmp_path/'cache',
+        cached_only=False, executable=pinned_mf6, native_options=profiles['steady_confined'],
+        factors=np.ones(2), dt=.1, ss=.001, sy=.1, gates={'budget_percent': 1.})
+    with pytest.raises(RuntimeError, match='wall_timeout'):
+        prepare_reference(timeout_seconds=1e-8, **options)
+    _, manifest = prepare_reference(timeout_seconds=20, **options)
+    assert manifest['accepted'] and not manifest['reused']
+    _, cached = prepare_reference(timeout_seconds=20, **options)
+    assert cached['reused'] and cached['native_single_run_seconds'] == manifest['native_single_run_seconds']
+    binary = tmp_path/'mf6'
+    binary.write_bytes(pinned_mf6.read_bytes() + b'\n')
+    binary.chmod(0o755)
+    options.update(mode='transient', executable=binary, native_options=profiles['transient'])
+    with pytest.raises(ValueError, match='pinned MF6 contract'):
+        prepare_reference(timeout_seconds=20, **options)
+
+
+def test_concurrent_native_cache_publishers_return_same_manifest(tmp_path, pinned_mf6, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from dataclasses import replace
+    from pathlib import Path
+    from threading import Barrier
+    from DARCY_WARP_PACKAGE.validation import npf662_mf6
+    from test_3d_ghb_mf6 import ghb_case
+    from run_3d_sanity import prepare_reference
+    from sanity_3d_controls import read_profiles
+
+    initial = ghb_case(convertible=False)
+    source = initial.source.copy()
+    source[1:] = 0.
+    options = dict(case=replace(initial, source=source), family='npf', mode='steady',
+        cache=tmp_path, cached_only=False, executable=pinned_mf6,
+        native_options=read_profiles(root=Path(__file__).resolve().parents[1])['mf6']['steady_confined'],
+        factors=np.ones(1), dt=1., ss=.001, sy=.1, gates={'budget_percent': 1.}, timeout_seconds=20)
+    both_writing = Barrier(2)
+    original = npf662_mf6.run_reference_mf6
+
+    def concurrent_solve(**kwargs):
+        both_writing.wait(timeout=10)
+        return original(**kwargs)
+
+    monkeypatch.setattr(npf662_mf6, 'run_reference_mf6', concurrent_solve)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        outcomes = [pool.submit(prepare_reference, **options) for _ in range(2)]
+        first, second = [future.result() for future in outcomes]
+    np.testing.assert_array_equal(first[0]['heads'], second[0]['heads'])
+    assert {first[1]['reused'], second[1]['reused']} == {True, False}
+    assert first[1]['native_single_run_seconds'] == second[1]['native_single_run_seconds']
+    assert list(tmp_path.glob('*.attempt-*')) == []

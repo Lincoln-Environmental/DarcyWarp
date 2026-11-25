@@ -17,6 +17,7 @@ The MF6 truth artifact is generated on first use by
 
 from __future__ import annotations
 
+import json
 import os
 import time
 from pathlib import Path
@@ -54,13 +55,21 @@ ALTERNATE_NONLINEAR_BACKENDS = (
 
 
 @pytest.fixture(scope="module")
-def case_artifact() -> Path:
+def case_artifact(tmp_path_factory) -> Path:
     setup = build_case_setup(
         nx=GRID_NX,
         ny=GRID_NY,
         n_periods=N_PERIODS,
         t_field_kind=T_FIELD_KIND,
     )
+    original = setup["artifact_path"]
+    if original.is_file():
+        from working_tests.run_2d_transient_vs_mf6 import MF6_MODEL_NAME
+        base = original.parent / "mf6" / MF6_MODEL_NAME
+        if not all(base.with_suffix(ext).is_file() for ext in (".cbb", ".hds", ".dis.grb")):
+            # A portable heads-only copy cannot verify native flows. Generate a
+            # matching complete run without replacing the existing head fixture.
+            setup["artifact_path"] = tmp_path_factory.mktemp("mf6_face_reference") / original.name
     return ensure_case_artifact(setup)
 
 
@@ -75,6 +84,7 @@ def loaded_case(case_artifact):
     )
     return {
         "artifact": artifact,
+        "folder": case_artifact.parent,
         "spatial": spatial,
         "warm_head": warm_head,
         "sy": float(artifact["sy"]),
@@ -97,7 +107,33 @@ def _report_perf(name: str, warp_seconds: float, mf6_engine_time: float | None) 
         print(f"\n[{name}] warp total {warp_seconds:.2f} s")
 
 
-def test_picard_production_replay_500x500(case_artifact):
+def _check_native_faces(*, loaded_case, heads, backend, period_infos):
+    from working_tests.transient_face_flow_audit import compare_native_face_flows
+
+    assert len(period_infos) == len(heads)
+    step_key = ("adaptive_dt_substep_dts" if backend == "unconfined_picard_kcycle"
+                else "experimental_substep_dts")
+    for period, row in enumerate(period_infos, start=1):
+        assert row["solver_backend"] == backend, (period, row["solver_backend"])
+        assert row["converged"], (period, backend)
+        assert row[step_key] == [loaded_case["dt"]], (period, row[step_key])
+        if backend != "unconfined_picard_kcycle":
+            assert row["experimental_fallback_timestep_count"] == 0, (period, backend)
+    folder = loaded_case["folder"]
+    report = compare_native_face_flows(native_workspace=folder / "mf6", heads=heads,
+        artifact=loaded_case["artifact"])
+    report["solver_backend"] = backend
+    for metrics, row in zip(report["periods"], period_infos, strict=True):
+        metrics["accepted_step_days"] = row[step_key]
+    path = folder / f"{backend}_face_flows.json"
+    path.write_text(json.dumps(report, indent=2, allow_nan=False) + "\n")
+    print(f"{backend}: compared {report['compared_faces']} faces at {len(report['periods'])} endpoints; "
+          f"max relative L2 {report['worst_relative_l2']:.6g}. {path}")
+    assert len(report["periods"]) == N_PERIODS
+    assert report["worst_relative_l2"] <= 0.01
+
+
+def test_picard_production_replay_500x500(case_artifact, loaded_case):
     """Production backend: full acceptance, head accuracy, mass balance, runtime."""
     summary = run_production_replay(
         artifact_path=case_artifact,
@@ -117,6 +153,9 @@ def test_picard_production_replay_500x500(case_artifact):
         "excellent", "good", "acceptable",
     }
     assert production.get("production_acceptance_passed", False), production
+    with np.load(case_artifact.parent / "warp_transient_heads.npz") as saved:
+        _check_native_faces(loaded_case=loaded_case, heads=saved["heads_per_period"], backend="unconfined_picard_kcycle",
+            period_infos=json.loads(str(saved["period_infos"])))
     assert np.isfinite(warp_total) and warp_total > 0.0
 
 
@@ -132,15 +171,22 @@ def test_alternate_nonlinear_backend_500x500(loaded_case, backend):
     dt = loaded_case["dt"]
     rates = loaded_case["rates"]
 
-    # Tighten Newton's head-equivalent acceptance (default 1e-4) so the
-    # per-timestep budget acceptance does not needlessly retry; FAS defaults
-    # (1e-6) are already tight.
-    backend_controls = (
-        {"newton_head_equivalent_rms_tolerance": 1.0e-6}
-        if backend == "unconfined_semismooth_newton_kcycle"
-        else {}
-    )
-    solve_controls = {"save_transient_diagnostics": True, **backend_controls}
+    # This reference uses one backward-Euler step per week. Give Newton
+    # enough Krylov iterations and a tight residual to close the budget
+    # on that step. A different backend or a shorter step cannot qualify it.
+    solve_controls = {
+        "save_transient_diagnostics": True,
+        "experimental_retry_enabled": False,
+    }
+    if backend == "unconfined_semismooth_newton_kcycle":
+        solve_controls.update({
+            "newton_head_equivalent_rms_tolerance": 1.0e-8,
+            "newton_residual_rms_tolerance": 1.0e-7,
+            "newton_fgmres_max_iterations": 240,
+            "newton_fallback_to_picard": False,
+        })
+    else:
+        solve_controls["fas_fallback_enabled"] = False
 
     solver = WarpDarcySolver(
         nx=int(spatial["nx"]),
@@ -187,6 +233,7 @@ def test_alternate_nonlinear_backend_500x500(loaded_case, backend):
     assert len(info["period_infos"]) == N_PERIODS
     assert all(p["converged"] for p in info["period_infos"])
     assert info["transient_replay_counters"]["experimental_forced_accept_count"] == 0
+    assert info["transient_replay_counters"]["experimental_fallback_timestep_count"] == 0
     for period_budget in info["experimental_period_budgets"]:
         assert abs(period_budget["percent_discrepancy"]) < 0.1
 
@@ -202,4 +249,5 @@ def test_alternate_nonlinear_backend_500x500(loaded_case, backend):
           f"retries {info['transient_replay_counters']['experimental_retry_count']}, "
           f"fallbacks {info['transient_replay_counters']['experimental_fallback_timestep_count']}")
     assert accuracy["passed"], accuracy["checks"]
+    _check_native_faces(loaded_case=loaded_case, heads=heads, backend=backend, period_infos=info["period_infos"])
     assert np.isfinite(warp_total) and warp_total > 0.0

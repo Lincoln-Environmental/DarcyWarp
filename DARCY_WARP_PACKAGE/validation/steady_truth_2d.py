@@ -9,10 +9,11 @@ from pathlib import Path
 import numpy as np
 
 from DARCY_WARP_PACKAGE.model_builder import (
-    _build_domain, _build_dem, _build_dirichlet_boundary_mask, _build_ghb_boundary_masks,
+    steady_domain_2d, _build_dem, _build_dirichlet_boundary_mask, _build_ghb_boundary_masks,
     make_ugly_T_field,
 )
 from DARCY_WARP_PACKAGE.project_base import require_mf6
+from DARCY_WARP_PACKAGE.validation.head_checks import invalid_head_values
 
 
 def steady_transmissivity(*, domain, isotropic, isotropic_value, seed):
@@ -33,7 +34,7 @@ def steady_reference_fingerprint(*, executable, runner, domain, conductivity, re
     with Path(executable).open("rb") as stream:
         binary_sha256 = hashlib.file_digest(stream, "sha256").hexdigest()
     adapter_file = Path(inspect.getfile(runner))
-    identity = dict(executable_sha256=binary_sha256, reference_adapter=runner.__qualname__,
+    identity = dict(reference_schema=2, executable_sha256=binary_sha256, reference_adapter=runner.__qualname__,
         reference_adapter_sha256=hashlib.sha256(adapter_file.read_bytes()).hexdigest(),
         flopy_version=flopy.__version__)
     digest.update(json.dumps(identity, sort_keys=True).encode())
@@ -61,6 +62,7 @@ def load_cached_mf6_truth(
     recharge: float,
     seed: int,
     fingerprint: str,
+    active: np.ndarray | None = None,
 ) -> tuple[np.ndarray, float | None] | None:
     """Load a matching MF6 artifact, returning ``None`` for a cache miss."""
     if not truth_path.exists():
@@ -103,7 +105,10 @@ def load_cached_mf6_truth(
                 return None
 
             heads = np.asarray(truth["heads"], dtype=np.float64)
-            if heads.shape != (int(ny), int(nx)) or not np.all(np.isfinite(heads)):
+            if heads.shape != (int(ny), int(nx)):
+                return None
+            checked = heads if active is None else heads[active != 0]
+            if np.any(invalid_head_values(head=checked)):
                 return None
 
             mf6_seconds = None
@@ -188,9 +193,17 @@ def load_or_run_mf6_truth(
     domain: np.ndarray | None = None,
     executable: Path | None = None,
     overwrite: bool = False,
+    provenance: dict | None = None,
 ) -> tuple[np.ndarray, float | None, str]:
     """Load a current reference or create it alongside any historical artifact."""
-    domain = _build_domain(nx=nx, ny=ny) if domain is None else domain
+    domain = steady_domain_2d(domain=domain, nx=nx, ny=ny)
+    parameters = inspect.signature(mf6_runner).parameters
+    supports_domain = "domain" in parameters or any(
+        parameter.kind == inspect.Parameter.VAR_KEYWORD for parameter in parameters.values()
+    )
+    if not supports_domain and not np.array_equal(domain, steady_domain_2d(domain=None, nx=nx, ny=ny)):
+        raise ValueError("The supplied MF6 writer cannot represent a custom domain")
+    domain_option = {"domain": domain} if supports_domain else {}
     executable = require_mf6() if executable is None else executable
     fingerprint, identity = steady_reference_fingerprint(
         executable=executable, runner=mf6_runner, domain=domain, conductivity=hk_field,
@@ -219,10 +232,13 @@ def load_or_run_mf6_truth(
         recharge=recharge_rate,
         seed=seed,
         fingerprint=fingerprint,
+        active=domain,
     )
     if cached is not None:
         heads, mf6_seconds = cached
         print(f"Loading cached MF6 truth: {truth_path}")
+        if provenance is not None:
+            record_reference(provenance, truth_path, fingerprint)
         return heads, mf6_seconds, "cache"
 
     print(f"MF6 truth cache miss; running model for {label}: {truth_path}")
@@ -239,7 +255,10 @@ def load_or_run_mf6_truth(
         ghb_width=width,
         aquifer_thickness=thickness,
         executable=executable,
+        **domain_option,
     )
+    if np.shape(heads) != (ny, nx) or np.any(invalid_head_values(head=np.asarray(heads)[domain != 0])):
+        raise ValueError("MF6 returned invalid heads on the requested active domain")
     save_mf6_truth(
         truth_path=truth_path,
         heads=heads,
@@ -259,4 +278,12 @@ def load_or_run_mf6_truth(
         fingerprint=fingerprint,
         identity=identity,
     )
+    if provenance is not None:
+        record_reference(provenance, truth_path, fingerprint)
     return np.asarray(heads, dtype=output_dtype).astype(np.float64), float(mf6_seconds), "generated"
+
+
+def record_reference(provenance, path, fingerprint):
+    with path.open("rb") as stream:
+        digest = hashlib.file_digest(stream, "sha256").hexdigest()
+    provenance.update(path=str(path.resolve()), sha256=digest, fingerprint=fingerprint)

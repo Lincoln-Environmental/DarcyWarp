@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import json
 import sys
 from pathlib import Path
 
@@ -939,6 +940,8 @@ def test_compare_storage_budgets_available_with_synthetic_budget_artifacts(tmp_p
         heads_new_per_period=np.asarray([[[9.5, 9.5], [9.5, 9.5]]], dtype=np.float64),
     )
 
+    sidecar = artifact_path.with_name("mf6_storage_budget_terms.npz")
+    artifact["native_output_sha256"] = json.dumps({sidecar.name: artifact_helpers.file_sha256(sidecar)})
     storage_budget = analysis.compare_storage_budgets(
         artifact=artifact,
         artifact_path=artifact_path,

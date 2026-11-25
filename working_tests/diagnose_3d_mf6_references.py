@@ -50,7 +50,11 @@ def baseline_inputs(*, row, attempt, result):
     fingerprint = hashlib.sha256(json.dumps(obj=payload, sort_keys=True).encode()).hexdigest()
     command = attempt['command']
     cache = Path(command[command.index('--cache') + 1])
-    case_path = cache / fingerprint / 'inputs.npz'
+    if reference.get('physical_inputs_file'):
+        case_path = Path(attempt['output']) / reference['physical_inputs_file']
+    else:
+        # Older campaigns placed the failed native attempt directly in the cache.
+        case_path = cache / reference.get('fingerprint', fingerprint) / 'inputs.npz'
     case = load_npf662_case(path=case_path)
     if case.digest() != case_row['case_sha256']:
         raise ValueError('Saved physical inputs do not match the measured GPU case')

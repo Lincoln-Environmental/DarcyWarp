@@ -107,3 +107,23 @@ def test_replay_keeps_indices_after_a_period_with_no_valid_heads():
     assert result["per_period"][0]["invalid_warp_active_heads"] == 2
     assert result["worst_period_number_one_based"] == 2
     assert not evaluate_head_accuracy(comparison=result)["passed"]
+
+
+def test_face_flow_report_matches_native_and_detects_head_perturbation(tmp_path, pinned_mf6):
+    from working_tests.run_2d_transient_warp_replay import build_case_setup, ensure_case_artifact
+    from working_tests.transient_artifacts import load_transient_artifact
+    from working_tests.transient_face_flow_audit import compare_native_face_flows
+
+    setup = build_case_setup(nx=16, ny=12, n_periods=2, t_field_kind='homogeneous')
+    setup['artifact_path'] = tmp_path/'case.npz.lzma'
+    artifact = load_transient_artifact(ensure_case_artifact(setup))
+    heads = artifact['heads_per_period'].copy()
+    options = dict(native_workspace=tmp_path/'mf6', heads=heads, artifact=artifact)
+    report = compare_native_face_flows(**options)
+    assert report['compared_faces'] == 315 and len(report['periods']) == 2
+    assert report['worst_relative_l2'] < 1e-7
+    heads[-1, 4, 5] += 100.
+    assert compare_native_face_flows(**options)['worst_relative_l2'] > 0.01
+    artifact['dt_days'] *= 2
+    with pytest.raises(ValueError, match='times differ'):
+        compare_native_face_flows(**options)

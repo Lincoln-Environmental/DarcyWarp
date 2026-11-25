@@ -131,10 +131,14 @@ def solve_transient_history(*, model, source_factors, dt, head_prev, ss, sy, **s
         # This per-call buffer is never reused, so another 200 MB host copy is
         # unnecessary even after the model/history workspace is closed.
         if count < capacity:
-            populated = wp.empty(shape=(count, workspace.n), dtype=wp.float64, device=model.device)
-            wp.copy(dest=populated.flatten(), src=history.flatten(), count=count * workspace.n)
-            history = populated
-        heads = history.numpy().reshape((count, *base.active.shape))
+            # A contiguous device view copies just the populated prefix to host.
+            # On CPU the view still owns the entire history, so detach its prefix.
+            prefix = history[:count].numpy()
+            if history.device.is_cpu:
+                prefix = prefix.copy()
+        else:
+            prefix = history.numpy()
+        heads = prefix.reshape((count, *base.active.shape))
         last_previous = initial if count == 1 else heads[-2]
         state = model._session._npf662_workspace_holder['native_state']
         state.refresh(model=model, case=replace(base, source=source_host*factors[count-1], initial=last_previous),

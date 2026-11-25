@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import gc
+from functools import partial
 
 import numpy as np
 from DARCY_WARP_PACKAGE.validation.npf662_metrics import stable_rms
@@ -902,6 +903,38 @@ def _choose_horizontal_coarsening(ny: int, nx: int, min_coarse_n: int) -> tuple[
     return fy, fx
 
 
+def _evaluate_classic_linear_budget(*, head, free, source, head_prev, extra_storage_diag,
+                                    head_tolerance, flow_tolerance, relative_tolerance, roundoff_flow_tolerance,
+                                    require_roundoff=False, require_head_tolerance=False, **physical_fields):
+    """Evaluate the original conservation equations at the returned precision."""
+    from DARCY_WARP_PACKAGE.physics.budget_3d import (
+        compute_3d_flow_budget, prepare_3d_budget_source, check_3d_linear_budget,
+    )
+
+    forcing = prepare_3d_budget_source(source=source, head_prev=head_prev, extra_storage_diag=extra_storage_diag)
+    budget = compute_3d_flow_budget(head=head, source=forcing, head_prev=head_prev, return_field=True,
+                                    **physical_fields)
+    accepted = check_3d_linear_budget(
+        budget=budget, free=free, head_spacing=np.spacing(np.abs(head[free])),
+        head_tolerance=head_tolerance, flow_tolerance=flow_tolerance, relative_tolerance=relative_tolerance,
+        roundoff_flow_tolerance=roundoff_flow_tolerance,
+    )
+    if require_roundoff or not accepted:
+        accepted = budget["roundoff_budget_valid"]
+    if require_head_tolerance:
+        accepted = bool(accepted and budget["head_residual_rms"] <= head_tolerance)
+    return budget, accepted
+
+
+def _roundoff_warm_start(*, head, free, head_residual_rms, evaluate_budget):
+    """Certify a candidate when its corrections are within the stored head precision."""
+    if head_residual_rms <= stable_rms(values=np.spacing(np.abs(head[free]))):
+        budget, accepted = evaluate_budget(head=head, require_roundoff=True)
+        if accepted:
+            return budget
+    return None
+
+
 def _solve_chebyshev_7point_3d_linear(
     tx_p: np.ndarray,
     tx_m: np.ndarray,
@@ -1191,7 +1224,21 @@ def _solve_chebyshev_7point_3d_linear(
 
     head_rms0 = head_residual_rms()
     head_tolerance = max(float(rel_tol) * head_rms0, np.finfo(NP_FLOAT).eps)
+    evaluate_budget = partial(
+        _evaluate_classic_linear_budget, free=free, head_tolerance=head_tolerance,
+        flow_tolerance=tol_abs, relative_tolerance=1e-3, roundoff_flow_tolerance=abs_tol_min,
+        source=b, extra_storage_diag=storage_diag,
+        faces=(txp, txm, typ, tym, tzp, tzm), active=act, bc_mask=bcm,
+        storage_diag=physical_storage, head_prev=h_prev_used,
+        ghb_conductance=ghb_conductance, ghb_head=ghb_head,
+    )
     converged = r_rms0 <= tol_abs and head_rms0 <= head_tolerance
+    budget_lin = None
+    if not converged:
+        budget_lin = _roundoff_warm_start(head=x0, free=free, head_residual_rms=head_rms0,
+                                          evaluate_budget=evaluate_budget)
+    roundoff_accepted = budget_lin is not None
+    converged = converged or roundoff_accepted
     n_iter_used = 0
     r_rms_end = float(r_rms0)
 
@@ -1252,27 +1299,17 @@ def _solve_chebyshev_7point_3d_linear(
 
     h_rms_end = head_residual_rms()
 
-    # Physical water budget of the solved discrete system (host, one pass).
-    from DARCY_WARP_PACKAGE.physics.budget_3d import (
-        compute_3d_flow_budget, prepare_3d_budget_source, check_3d_linear_budget,
-    )
-
-    budget_lin = compute_3d_flow_budget(
-        head=head_out,
-        source=prepare_3d_budget_source(source=b, head_prev=h_prev_used, extra_storage_diag=storage_diag),
-        faces=(txp, txm, typ, tym, tzp, tzm),
-        active=act,
-        bc_mask=bcm,
-        storage_diag=physical_storage,
-        return_field=True,
-        head_prev=h_prev_used,
-        ghb_conductance=ghb_conductance, ghb_head=ghb_head,
-    )
-    budget_acceptance = check_3d_linear_budget(
-        budget=budget_lin, free=(act != 0) & (bcm == 0),
-        head_tolerance=head_tolerance, flow_tolerance=tol_abs, relative_tolerance=1e-3,
-    )
-    converged = bool(converged and budget_acceptance)
+    if budget_lin is None:
+        budget_lin, budget_acceptance = evaluate_budget(head=head_out, require_roundoff=not converged)
+        roundoff_accepted = bool(
+            budget_acceptance and budget_lin["head_roundoff_rows_valid"]
+            and (not converged or budget_lin["head_residual_rms"] > head_tolerance)
+        )
+    else:
+        budget_acceptance = True
+    finite_residuals = np.isfinite(r_rms_end) and np.isfinite(h_rms_end)
+    converged = bool(finite_residuals and budget_acceptance and (converged or roundoff_accepted))
+    roundoff_accepted = bool(converged and roundoff_accepted)
 
     info = {
         "solver_type": "chebyshev_7point_3d",
@@ -1286,6 +1323,7 @@ def _solve_chebyshev_7point_3d_linear(
         "r_rms_end": float(r_rms_end),
         "h_rms_end": float(h_rms_end),
         "head_residual_tolerance": head_tolerance,
+        "roundoff_accepted": roundoff_accepted,
         "tol_abs": float(tol_abs),
         "rel_tol": float(rel_tol),
         "abs_tol_min": float(abs_tol_min),
@@ -3476,8 +3514,24 @@ def solve_multigrid_kcycle_7point_3d(
         return float(np.sqrt(max(hrTr_end, 0.0) / float(n_free0)))
 
     head_tolerance = float(dh_rms_tol_f) if dh_rms_tol_f is not None else max(float(rel_tol), np.finfo(NP_FLOAT).eps)
-    converged = r_rms0 <= tol_abs and head_residual_rms() <= head_tolerance
+    evaluate_budget = partial(
+        _evaluate_classic_linear_budget, free=free0, head_tolerance=head_tolerance,
+        flow_tolerance=tol_abs, relative_tolerance=final_budget_relative_tol, roundoff_flow_tolerance=abs_tol_min,
+        source=b0, extra_storage_diag=storage_diag, require_head_tolerance=True,
+        faces=(txp0, txm0, typ0, tym0, tzp0, tzm0), active=act0, bc_mask=bcm0,
+        storage_diag=physical_storage, head_prev=h_prev_used,
+        ghb_conductance=ghb_conductance, ghb_head=ghb_head,
+    )
+    head_rms0 = head_residual_rms()
+    converged = r_rms0 <= tol_abs and head_rms0 <= head_tolerance
+    budget0 = None
+    if not converged and head_rms0 <= head_tolerance:
+        budget0 = _roundoff_warm_start(head=x0, free=free0, head_residual_rms=head_rms0,
+                                       evaluate_budget=evaluate_budget)
+    roundoff_accepted = budget0 is not None
+    converged = converged or roundoff_accepted
     n_cycles_used = 0
+    dh_ok = True
     dh_rms_lastcheck = float("nan")
     dh_max_lastcheck = float("nan")
 
@@ -3547,27 +3601,15 @@ def solve_multigrid_kcycle_7point_3d(
 
     h_rms_end = head_residual_rms()
 
-    # Physical water budget of the solved discrete system (host, one pass).
-    from DARCY_WARP_PACKAGE.physics.budget_3d import (
-        compute_3d_flow_budget, prepare_3d_budget_source, check_3d_linear_budget,
-    )
-
-    budget0 = compute_3d_flow_budget(
-        head=head_out,
-        source=prepare_3d_budget_source(source=b0, head_prev=h_prev_used, extra_storage_diag=storage_diag),
-        faces=(txp0, txm0, typ0, tym0, tzp0, tzm0),
-        active=act0,
-        bc_mask=bcm0,
-        storage_diag=physical_storage,
-        return_field=True,
-        head_prev=h_prev_used,
-        ghb_conductance=ghb_conductance, ghb_head=ghb_head,
-    )
-    budget_acceptance = check_3d_linear_budget(
-        budget=budget0, free=(act0 != 0) & (bcm0 == 0),
-        head_tolerance=head_tolerance, flow_tolerance=tol_abs, relative_tolerance=final_budget_relative_tol,
-    )
-    converged = bool(converged and budget_acceptance)
+    if budget0 is None:
+        budget0, budget_acceptance = evaluate_budget(head=head_out, require_roundoff=not converged)
+        roundoff_accepted = bool(not converged and dh_ok and h_rms_end <= head_tolerance
+                                 and budget_acceptance and budget0["head_roundoff_rows_valid"])
+    else:
+        budget_acceptance = True
+    finite_residuals = np.isfinite(r_rms_end) and np.isfinite(h_rms_end)
+    converged = bool(finite_residuals and budget_acceptance and (converged or roundoff_accepted))
+    roundoff_accepted = bool(converged and roundoff_accepted)
 
     info = {
         "solver_type": "kcycle_7point_3d",
@@ -3601,6 +3643,7 @@ def solve_multigrid_kcycle_7point_3d(
         "r_rms_end": float(r_rms_end),
         "h_rms_end": float(h_rms_end),
         "head_residual_tolerance": head_tolerance,
+        "roundoff_accepted": roundoff_accepted,
         "dh_rms_lastcheck": float(dh_rms_lastcheck),
         "dh_max_lastcheck": float(dh_max_lastcheck),
         "converged": bool(converged),

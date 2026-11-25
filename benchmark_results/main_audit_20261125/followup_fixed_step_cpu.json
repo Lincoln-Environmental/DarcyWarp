@@ -1,0 +1,1475 @@
+{
+  "solver_commit": "cef3b811763cd760917d61518054e42b83083a1b",
+  "verification_sources_sha256": {
+    "tests/test_unconfined_solvers_500x500.py": "0dda5baf4abad219950a76230e140420b0732f2e681f6fd7a197711bf3c2ac17",
+    "working_tests/transient_face_flow_audit.py": "282af6f71c701a99714cfc4438be32ba6fc41cb654772d6de4144e25dac62ad8"
+  },
+  "environment": {
+    "device": "CPU",
+    "precision": "float64",
+    "architecture": "x86_64",
+    "python": "3.12.14",
+    "warp": "1.17.0",
+    "flopy": "3.12.0"
+  },
+  "reference": {
+    "version": "mf6: 6.6.2 05/12/2025",
+    "executable_sha256": "9acdb07cae589555355b5d25b5ec1a7af7a0127ff95339ee14971ec7df6641ab",
+    "grid_cells": [
+      500,
+      500
+    ],
+    "periods": 52,
+    "period_length_days": 7.0,
+    "files_sha256": {
+      "mf6_transient_heads.npz.lzma": "d034b482cbf47d2a668feffba5fb356ef3ab56e17a677bc3fdea90fc29c06273",
+      "mf6/tr2d_truth.hds": "12683ec29156750477b86d44fadf56a1a3d8e9fb88e7369e6743faa9f2226023",
+      "mf6/tr2d_truth.dis.grb": "f32c3ae1381a29653b351f59c2f0387fce8e7ca203fa981a6784f68d3eb311c3",
+      "mf6/tr2d_truth.cbb": "619ade98719fa36187dc50f9356a523222bad365ab6efafb2d77e69a1bb3f940"
+    }
+  },
+  "comparison": {
+    "ceiling_relative_l2": 0.01,
+    "accepted_steps_per_period": 1,
+    "fixed_to_fixed_faces_excluded": true
+  },
+  "runs": [
+    {
+      "compared_faces": 497503,
+      "periods": [
+        {
+          "time_days": 7.0,
+          "rms_m3_day": 0.0038760982081073865,
+          "relative_l2": 3.696934766963627e-07,
+          "max_face_error_m3_day": 0.1139220320583263,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 14.0,
+          "rms_m3_day": 0.0031180977068989003,
+          "relative_l2": 2.97454716469189e-07,
+          "max_face_error_m3_day": 0.06837316118617309,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 21.0,
+          "rms_m3_day": 0.00930107399975723,
+          "relative_l2": 8.874473966128015e-07,
+          "max_face_error_m3_day": 0.16904447612614604,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 28.0,
+          "rms_m3_day": 0.012077066001556034,
+          "relative_l2": 1.1525060399572844e-06,
+          "max_face_error_m3_day": 0.18002624087966979,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 35.0,
+          "rms_m3_day": 0.013505157670456732,
+          "relative_l2": 1.288982370239845e-06,
+          "max_face_error_m3_day": 0.1733299319894286,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 42.0,
+          "rms_m3_day": 0.014209651924581316,
+          "relative_l2": 1.3564037811916295e-06,
+          "max_face_error_m3_day": 0.16039834235562012,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 49.0,
+          "rms_m3_day": 0.014448234330916545,
+          "relative_l2": 1.3793378633431122e-06,
+          "max_face_error_m3_day": 0.14371722939540632,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 56.0,
+          "rms_m3_day": 0.014482552086914076,
+          "relative_l2": 1.382747472169291e-06,
+          "max_face_error_m3_day": 0.1287583062367048,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 63.0,
+          "rms_m3_day": 0.015223175602797135,
+          "relative_l2": 1.4535702812815919e-06,
+          "max_face_error_m3_day": 0.3586222078166834,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 70.0,
+          "rms_m3_day": 0.016557278767188023,
+          "relative_l2": 1.5810423207952229e-06,
+          "max_face_error_m3_day": 0.8483275680659652,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 77.0,
+          "rms_m3_day": 0.014602514900567475,
+          "relative_l2": 1.3944291313419214e-06,
+          "max_face_error_m3_day": 0.526804944160908,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 84.0,
+          "rms_m3_day": 0.012626123872073411,
+          "relative_l2": 1.2057116212885376e-06,
+          "max_face_error_m3_day": 0.2909676380502546,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 91.0,
+          "rms_m3_day": 0.01253371917382337,
+          "relative_l2": 1.1968736542991437e-06,
+          "max_face_error_m3_day": 0.4578140937665012,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 98.0,
+          "rms_m3_day": 0.010364493806522733,
+          "relative_l2": 9.896960209339315e-07,
+          "max_face_error_m3_day": 0.22277711313023474,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 105.0,
+          "rms_m3_day": 0.010228833298951568,
+          "relative_l2": 9.766880337178024e-07,
+          "max_face_error_m3_day": 0.2955472520116018,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 112.0,
+          "rms_m3_day": 0.011006431142966488,
+          "relative_l2": 1.0508562981293172e-06,
+          "max_face_error_m3_day": 0.38488772486380185,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 119.0,
+          "rms_m3_day": 0.008134919207093055,
+          "relative_l2": 7.766200126043601e-07,
+          "max_face_error_m3_day": 0.1646943862833723,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 126.0,
+          "rms_m3_day": 0.00810720753847408,
+          "relative_l2": 7.73886406697763e-07,
+          "max_face_error_m3_day": 0.19379399547324283,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 133.0,
+          "rms_m3_day": 0.00843015615813744,
+          "relative_l2": 8.04609059048639e-07,
+          "max_face_error_m3_day": 0.22300252242348506,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 140.0,
+          "rms_m3_day": 0.009212515262335269,
+          "relative_l2": 8.791530345266992e-07,
+          "max_face_error_m3_day": 0.2622848946994054,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 147.0,
+          "rms_m3_day": 0.006194609776259595,
+          "relative_l2": 5.91060144679999e-07,
+          "max_face_error_m3_day": 0.10492457670261501,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 154.0,
+          "rms_m3_day": 0.006039375382376953,
+          "relative_l2": 5.761515181558687e-07,
+          "max_face_error_m3_day": 0.10984586864287849,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 161.0,
+          "rms_m3_day": 0.006173680879109906,
+          "relative_l2": 5.888604672976192e-07,
+          "max_face_error_m3_day": 0.1268257904011989,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 168.0,
+          "rms_m3_day": 0.006239536069458894,
+          "relative_l2": 5.950339749157588e-07,
+          "max_face_error_m3_day": 0.1338569290965097,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 175.0,
+          "rms_m3_day": 0.00644044314739755,
+          "relative_l2": 6.140805401740607e-07,
+          "max_face_error_m3_day": 0.14442449522175593,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 182.0,
+          "rms_m3_day": 0.006641840327727175,
+          "relative_l2": 6.331669160329883e-07,
+          "max_face_error_m3_day": 0.15297033440947416,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 189.0,
+          "rms_m3_day": 0.006879240236298666,
+          "relative_l2": 6.556797082761575e-07,
+          "max_face_error_m3_day": 0.16072555596474558,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 196.0,
+          "rms_m3_day": 0.007012610604855687,
+          "relative_l2": 6.682745997556259e-07,
+          "max_face_error_m3_day": 0.1651268449240888,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 203.0,
+          "rms_m3_day": 0.007130497100940947,
+          "relative_l2": 6.793954596460181e-07,
+          "max_face_error_m3_day": 0.16826992708229227,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 210.0,
+          "rms_m3_day": 0.007144632563870433,
+          "relative_l2": 6.80636259748932e-07,
+          "max_face_error_m3_day": 0.16869083370329463,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 217.0,
+          "rms_m3_day": 0.00716542726018479,
+          "relative_l2": 6.825200444607956e-07,
+          "max_face_error_m3_day": 0.16862492151994957,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 224.0,
+          "rms_m3_day": 0.0069312343982113715,
+          "relative_l2": 6.601289465778123e-07,
+          "max_face_error_m3_day": 0.16351991484043538,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 231.0,
+          "rms_m3_day": 0.006715732128047199,
+          "relative_l2": 6.395345471976049e-07,
+          "max_face_error_m3_day": 0.15828589189914055,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 238.0,
+          "rms_m3_day": 0.0063988180738986065,
+          "relative_l2": 6.092999904960513e-07,
+          "max_face_error_m3_day": 0.1509215134246915,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 245.0,
+          "rms_m3_day": 0.005866142110062641,
+          "relative_l2": 5.585392061403177e-07,
+          "max_face_error_m3_day": 0.13947027351969155,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 252.0,
+          "rms_m3_day": 0.005350631161289779,
+          "relative_l2": 5.094307386107849e-07,
+          "max_face_error_m3_day": 0.12790186554047978,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 259.0,
+          "rms_m3_day": 0.00483127022530992,
+          "relative_l2": 4.599707348975956e-07,
+          "max_face_error_m3_day": 0.11589764892778476,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 266.0,
+          "rms_m3_day": 0.004245008467527848,
+          "relative_l2": 4.0415321270467337e-07,
+          "max_face_error_m3_day": 0.10212110026623122,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 273.0,
+          "rms_m3_day": 0.0036647128495106134,
+          "relative_l2": 3.4891200480173414e-07,
+          "max_face_error_m3_day": 0.08770590077256202,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 280.0,
+          "rms_m3_day": 0.007767982865019319,
+          "relative_l2": 7.396094660844793e-07,
+          "max_face_error_m3_day": 0.22423498679563636,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 287.0,
+          "rms_m3_day": 0.006171779944495217,
+          "relative_l2": 5.876684171953313e-07,
+          "max_face_error_m3_day": 0.18764936331717763,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 294.0,
+          "rms_m3_day": 0.004664245508325303,
+          "relative_l2": 4.441606587126719e-07,
+          "max_face_error_m3_day": 0.148871361361671,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 301.0,
+          "rms_m3_day": 0.003461272296397103,
+          "relative_l2": 3.296398510882164e-07,
+          "max_face_error_m3_day": 0.11408187275446835,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 308.0,
+          "rms_m3_day": 0.00587417431449929,
+          "relative_l2": 5.595048071695826e-07,
+          "max_face_error_m3_day": 0.2343249599871342,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 315.0,
+          "rms_m3_day": 0.0036744352408932405,
+          "relative_l2": 3.5003189274485806e-07,
+          "max_face_error_m3_day": 0.1619372383938753,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 322.0,
+          "rms_m3_day": 0.005001090063166664,
+          "relative_l2": 4.764834006790252e-07,
+          "max_face_error_m3_day": 0.2753756841775612,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 329.0,
+          "rms_m3_day": 0.006222525786813808,
+          "relative_l2": 5.929539015424969e-07,
+          "max_face_error_m3_day": 0.3639656929310675,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 336.0,
+          "rms_m3_day": 0.010414817202469145,
+          "relative_l2": 9.926153184090012e-07,
+          "max_face_error_m3_day": 0.31568437053763887,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 343.0,
+          "rms_m3_day": 0.01334880002270198,
+          "relative_l2": 1.2724756934323963e-06,
+          "max_face_error_m3_day": 0.20172102164360695,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 350.0,
+          "rms_m3_day": 0.015907935580773858,
+          "relative_l2": 1.5167037080462621e-06,
+          "max_face_error_m3_day": 0.21665783516073134,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 357.0,
+          "rms_m3_day": 0.017904065061975703,
+          "relative_l2": 1.7073351708349452e-06,
+          "max_face_error_m3_day": 0.22493112512893276,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 364.0,
+          "rms_m3_day": 0.019472695404790057,
+          "relative_l2": 1.8572605568248003e-06,
+          "max_face_error_m3_day": 0.22845254722051322,
+          "accepted_step_days": [
+            7.0
+          ]
+        }
+      ],
+      "native_record": "FLOW-JA-FACE",
+      "fixed_to_fixed_faces_excluded": true,
+      "worst_rms_m3_day": 0.019472695404790057,
+      "worst_relative_l2": 1.8572605568248003e-06,
+      "worst_cell_face_error_m3_day": 0.8483275680659652,
+      "solver_backend": "unconfined_picard_kcycle"
+    },
+    {
+      "compared_faces": 497503,
+      "periods": [
+        {
+          "time_days": 7.0,
+          "rms_m3_day": 0.000267250070632907,
+          "relative_l2": 2.5489707033989226e-08,
+          "max_face_error_m3_day": 0.011679270524837193,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 14.0,
+          "rms_m3_day": 0.0002672635292210421,
+          "relative_l2": 2.5495928857875752e-08,
+          "max_face_error_m3_day": 0.011711407991469969,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 21.0,
+          "rms_m3_day": 0.00026725115632457485,
+          "relative_l2": 2.5499350174850266e-08,
+          "max_face_error_m3_day": 0.011721853443077634,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 28.0,
+          "rms_m3_day": 0.00026724834129273966,
+          "relative_l2": 2.5503324024954753e-08,
+          "max_face_error_m3_day": 0.011726288785666839,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 35.0,
+          "rms_m3_day": 0.0002672522928466154,
+          "relative_l2": 2.5507550692209977e-08,
+          "max_face_error_m3_day": 0.011728431254368843,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 42.0,
+          "rms_m3_day": 0.00026724736272193547,
+          "relative_l2": 2.5510500555079923e-08,
+          "max_face_error_m3_day": 0.011729994528650423,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 49.0,
+          "rms_m3_day": 0.0002672822398065447,
+          "relative_l2": 2.5516786696588237e-08,
+          "max_face_error_m3_day": 0.011733994329006237,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 56.0,
+          "rms_m3_day": 0.0002672823895104524,
+          "relative_l2": 2.551926250518298e-08,
+          "max_face_error_m3_day": 0.011733510847761863,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 63.0,
+          "rms_m3_day": 0.0002672781042723746,
+          "relative_l2": 2.5520792727124628e-08,
+          "max_face_error_m3_day": 0.011731800965208095,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 70.0,
+          "rms_m3_day": 0.0002672661515439456,
+          "relative_l2": 2.5521047416586562e-08,
+          "max_face_error_m3_day": 0.011730870043493269,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 77.0,
+          "rms_m3_day": 0.00026727608331080324,
+          "relative_l2": 2.5522833513086902e-08,
+          "max_face_error_m3_day": 0.01173043136554952,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 84.0,
+          "rms_m3_day": 0.00026728597353806524,
+          "relative_l2": 2.5524049008822526e-08,
+          "max_face_error_m3_day": 0.011731750552144149,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 91.0,
+          "rms_m3_day": 0.0002672921079986483,
+          "relative_l2": 2.552433779861645e-08,
+          "max_face_error_m3_day": 0.011733424992144137,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 98.0,
+          "rms_m3_day": 0.0002672846150098775,
+          "relative_l2": 2.552276308618713e-08,
+          "max_face_error_m3_day": 0.011733306193036697,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 105.0,
+          "rms_m3_day": 0.0002672733344376046,
+          "relative_l2": 2.5520277811529193e-08,
+          "max_face_error_m3_day": 0.011735275511227883,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 112.0,
+          "rms_m3_day": 0.0002675133356446879,
+          "relative_l2": 2.554125582981973e-08,
+          "max_face_error_m3_day": 0.011816652149263973,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 119.0,
+          "rms_m3_day": 0.00026982745138294447,
+          "relative_l2": 2.5759739385156945e-08,
+          "max_face_error_m3_day": 0.011969102571356416,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 126.0,
+          "rms_m3_day": 0.00026784499638515124,
+          "relative_l2": 2.5567570685811515e-08,
+          "max_face_error_m3_day": 0.011601167111166433,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 133.0,
+          "rms_m3_day": 0.00027157028519313837,
+          "relative_l2": 2.5919794074502504e-08,
+          "max_face_error_m3_day": 0.011429005743821108,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 140.0,
+          "rms_m3_day": 0.00027734637602747715,
+          "relative_l2": 2.646724604044036e-08,
+          "max_face_error_m3_day": 0.012264032149460036,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 147.0,
+          "rms_m3_day": 0.0002865453220056189,
+          "relative_l2": 2.7340789105247502e-08,
+          "max_face_error_m3_day": 0.012325130256385819,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 154.0,
+          "rms_m3_day": 0.00027613963456739435,
+          "relative_l2": 2.634349739929459e-08,
+          "max_face_error_m3_day": 0.011980429834238748,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 161.0,
+          "rms_m3_day": 0.0003124547908100326,
+          "relative_l2": 2.9802686230245e-08,
+          "max_face_error_m3_day": 0.01261579119545786,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 168.0,
+          "rms_m3_day": 0.0002885171677843651,
+          "relative_l2": 2.7514468266076697e-08,
+          "max_face_error_m3_day": 0.012075126083118448,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 175.0,
+          "rms_m3_day": 0.000282860479982858,
+          "relative_l2": 2.697005661977713e-08,
+          "max_face_error_m3_day": 0.011995075129107136,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 182.0,
+          "rms_m3_day": 0.0002756149995634113,
+          "relative_l2": 2.6274389427503093e-08,
+          "max_face_error_m3_day": 0.011745469022571342,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 189.0,
+          "rms_m3_day": 0.0002789137963658373,
+          "relative_l2": 2.6584057301906974e-08,
+          "max_face_error_m3_day": 0.012030388581024454,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 196.0,
+          "rms_m3_day": 0.0002735238879613613,
+          "relative_l2": 2.6065765953753968e-08,
+          "max_face_error_m3_day": 0.01170896010216893,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 203.0,
+          "rms_m3_day": 0.00027122115275066437,
+          "relative_l2": 2.5842015939455963e-08,
+          "max_face_error_m3_day": 0.011739903811076147,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 210.0,
+          "rms_m3_day": 0.00027135740011211554,
+          "relative_l2": 2.5850970531569272e-08,
+          "max_face_error_m3_day": 0.011596379087905007,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 217.0,
+          "rms_m3_day": 0.00029454031616098214,
+          "relative_l2": 2.8055503514595157e-08,
+          "max_face_error_m3_day": 0.012365722478307362,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 224.0,
+          "rms_m3_day": 0.0002772886359918639,
+          "relative_l2": 2.6408896981256794e-08,
+          "max_face_error_m3_day": 0.011970020414764804,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 231.0,
+          "rms_m3_day": 0.0002927051105933029,
+          "relative_l2": 2.7874106172865686e-08,
+          "max_face_error_m3_day": 0.012302232325282603,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 238.0,
+          "rms_m3_day": 0.000340707513536748,
+          "relative_l2": 3.244241082687848e-08,
+          "max_face_error_m3_day": 0.012799659567235722,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 245.0,
+          "rms_m3_day": 0.0003032105367936807,
+          "relative_l2": 2.8869906206945534e-08,
+          "max_face_error_m3_day": 0.012137806151713448,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 252.0,
+          "rms_m3_day": 0.00028903076496202955,
+          "relative_l2": 2.7518464950657176e-08,
+          "max_face_error_m3_day": 0.011880763835733887,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 259.0,
+          "rms_m3_day": 0.0002936986792967093,
+          "relative_l2": 2.7962169585721023e-08,
+          "max_face_error_m3_day": 0.012167868023652773,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 266.0,
+          "rms_m3_day": 0.0002951108951280634,
+          "relative_l2": 2.8096532028737667e-08,
+          "max_face_error_m3_day": 0.012162779427626447,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 273.0,
+          "rms_m3_day": 0.00029302686780135584,
+          "relative_l2": 2.7898663852748248e-08,
+          "max_face_error_m3_day": 0.01209425331762759,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 280.0,
+          "rms_m3_day": 0.0002914063542666596,
+          "relative_l2": 2.774554241917122e-08,
+          "max_face_error_m3_day": 0.01206341315582904,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 287.0,
+          "rms_m3_day": 0.00029008342755053524,
+          "relative_l2": 2.7621345909338382e-08,
+          "max_face_error_m3_day": 0.012041958221743698,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 294.0,
+          "rms_m3_day": 0.00028889775079749084,
+          "relative_l2": 2.751077640870047e-08,
+          "max_face_error_m3_day": 0.01202444111982004,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 301.0,
+          "rms_m3_day": 0.000287828389483134,
+          "relative_l2": 2.74118010151768e-08,
+          "max_face_error_m3_day": 0.012009880562573017,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 308.0,
+          "rms_m3_day": 0.00028689620376343627,
+          "relative_l2": 2.732636053515366e-08,
+          "max_face_error_m3_day": 0.01199696720141219,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 315.0,
+          "rms_m3_day": 0.00028595077968599414,
+          "relative_l2": 2.724007529957842e-08,
+          "max_face_error_m3_day": 0.011984310746129267,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 322.0,
+          "rms_m3_day": 0.00028541054125847537,
+          "relative_l2": 2.7192748694945372e-08,
+          "max_face_error_m3_day": 0.01197402211255394,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 329.0,
+          "rms_m3_day": 0.0002846974342310535,
+          "relative_l2": 2.7129249467181493e-08,
+          "max_face_error_m3_day": 0.011964860238094843,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 336.0,
+          "rms_m3_day": 0.00028396905862487743,
+          "relative_l2": 2.706452087113068e-08,
+          "max_face_error_m3_day": 0.011956202375358771,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 343.0,
+          "rms_m3_day": 0.0002833631136897718,
+          "relative_l2": 2.70116170721217e-08,
+          "max_face_error_m3_day": 0.011947942285814861,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 350.0,
+          "rms_m3_day": 0.00028279063843759613,
+          "relative_l2": 2.69619906204201e-08,
+          "max_face_error_m3_day": 0.011940660258233038,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 357.0,
+          "rms_m3_day": 0.00028220721685730114,
+          "relative_l2": 2.6911335785256908e-08,
+          "max_face_error_m3_day": 0.011934354265349612,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 364.0,
+          "rms_m3_day": 0.0002816846103500243,
+          "relative_l2": 2.6866425288970078e-08,
+          "max_face_error_m3_day": 0.011928224913845042,
+          "accepted_step_days": [
+            7.0
+          ]
+        }
+      ],
+      "native_record": "FLOW-JA-FACE",
+      "fixed_to_fixed_faces_excluded": true,
+      "worst_rms_m3_day": 0.000340707513536748,
+      "worst_relative_l2": 3.244241082687848e-08,
+      "worst_cell_face_error_m3_day": 0.012799659567235722,
+      "solver_backend": "unconfined_semismooth_newton_kcycle"
+    },
+    {
+      "compared_faces": 497503,
+      "periods": [
+        {
+          "time_days": 7.0,
+          "rms_m3_day": 0.00026725381453882453,
+          "relative_l2": 2.5490064119264356e-08,
+          "max_face_error_m3_day": 0.011678126904143937,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 14.0,
+          "rms_m3_day": 0.00026726966781897096,
+          "relative_l2": 2.549651445687812e-08,
+          "max_face_error_m3_day": 0.01170952014967952,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 21.0,
+          "rms_m3_day": 0.00026725534050622547,
+          "relative_l2": 2.549974940198392e-08,
+          "max_face_error_m3_day": 0.011720512058673194,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 28.0,
+          "rms_m3_day": 0.00026725053690852173,
+          "relative_l2": 2.5503533551047423e-08,
+          "max_face_error_m3_day": 0.011725223183475464,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 35.0,
+          "rms_m3_day": 0.00026725818378925403,
+          "relative_l2": 2.5508112945638675e-08,
+          "max_face_error_m3_day": 0.01172619860017221,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 42.0,
+          "rms_m3_day": 0.0002672513371816328,
+          "relative_l2": 2.551087994313181e-08,
+          "max_face_error_m3_day": 0.011728437900501376,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 49.0,
+          "rms_m3_day": 0.00026728579467723523,
+          "relative_l2": 2.5517126071464805e-08,
+          "max_face_error_m3_day": 0.011731548140687664,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 56.0,
+          "rms_m3_day": 0.00026728359229078396,
+          "relative_l2": 2.55193773427788e-08,
+          "max_face_error_m3_day": 0.011732733813005325,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 63.0,
+          "rms_m3_day": 0.00026728343725221116,
+          "relative_l2": 2.5521301941575235e-08,
+          "max_face_error_m3_day": 0.011735177208265668,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 70.0,
+          "rms_m3_day": 0.00026726998600844014,
+          "relative_l2": 2.5521413566769134e-08,
+          "max_face_error_m3_day": 0.011746474683377528,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 77.0,
+          "rms_m3_day": 0.0002672793216494625,
+          "relative_l2": 2.5523142749803612e-08,
+          "max_face_error_m3_day": 0.011749896484161582,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 84.0,
+          "rms_m3_day": 0.0002672906940123167,
+          "relative_l2": 2.5524499783004742e-08,
+          "max_face_error_m3_day": 0.011760676547055482,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 91.0,
+          "rms_m3_day": 0.0002672989128433037,
+          "relative_l2": 2.5524987608874415e-08,
+          "max_face_error_m3_day": 0.011771568966878476,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 98.0,
+          "rms_m3_day": 0.00026728947541284725,
+          "relative_l2": 2.552322720161516e-08,
+          "max_face_error_m3_day": 0.011780126018720694,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 105.0,
+          "rms_m3_day": 0.00026727496208012603,
+          "relative_l2": 2.552043322504776e-08,
+          "max_face_error_m3_day": 0.011759886018808174,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 112.0,
+          "rms_m3_day": 0.000267537576814515,
+          "relative_l2": 2.554357029357787e-08,
+          "max_face_error_m3_day": 0.011841260616620275,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 119.0,
+          "rms_m3_day": 0.00026989666871546635,
+          "relative_l2": 2.5766347387558336e-08,
+          "max_face_error_m3_day": 0.011995213198360943,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 126.0,
+          "rms_m3_day": 0.00026779446509842615,
+          "relative_l2": 2.55627471413637e-08,
+          "max_face_error_m3_day": 0.011628744986637685,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 133.0,
+          "rms_m3_day": 0.00027139981893450313,
+          "relative_l2": 2.5903524067946616e-08,
+          "max_face_error_m3_day": 0.011469792383195454,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 140.0,
+          "rms_m3_day": 0.0002777151948118821,
+          "relative_l2": 2.6502442525251162e-08,
+          "max_face_error_m3_day": 0.012308489836641456,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 147.0,
+          "rms_m3_day": 0.00028684614271961,
+          "relative_l2": 2.736949198422718e-08,
+          "max_face_error_m3_day": 0.012359373371282345,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 154.0,
+          "rms_m3_day": 0.00027625073200353317,
+          "relative_l2": 2.6354096004687027e-08,
+          "max_face_error_m3_day": 0.01201255715204752,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 161.0,
+          "rms_m3_day": 0.0003129363095199534,
+          "relative_l2": 2.984861463796298e-08,
+          "max_face_error_m3_day": 0.012646714889569921,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 168.0,
+          "rms_m3_day": 0.00028864017668998914,
+          "relative_l2": 2.752619902253819e-08,
+          "max_face_error_m3_day": 0.012106295415833301,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 175.0,
+          "rms_m3_day": 0.00028296395359351617,
+          "relative_l2": 2.6979922576089844e-08,
+          "max_face_error_m3_day": 0.012030354148009792,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 182.0,
+          "rms_m3_day": 0.00027546303313611347,
+          "relative_l2": 2.625990246163747e-08,
+          "max_face_error_m3_day": 0.011782813393665492,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 189.0,
+          "rms_m3_day": 0.00027913207368569716,
+          "relative_l2": 2.6604861926326664e-08,
+          "max_face_error_m3_day": 0.012063182684642015,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 196.0,
+          "rms_m3_day": 0.0002733996819537132,
+          "relative_l2": 2.6053929602824855e-08,
+          "max_face_error_m3_day": 0.011744840452138305,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 203.0,
+          "rms_m3_day": 0.0002711736520939121,
+          "relative_l2": 2.583749006558338e-08,
+          "max_face_error_m3_day": 0.011773431694791725,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 210.0,
+          "rms_m3_day": 0.00027124127408795353,
+          "relative_l2": 2.583990773974078e-08,
+          "max_face_error_m3_day": 0.011623594459479136,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 217.0,
+          "rms_m3_day": 0.00029477453452888457,
+          "relative_l2": 2.8077813242273583e-08,
+          "max_face_error_m3_day": 0.012396191577636273,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 224.0,
+          "rms_m3_day": 0.00027740185672812153,
+          "relative_l2": 2.641968009448924e-08,
+          "max_face_error_m3_day": 0.012003321656038679,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 231.0,
+          "rms_m3_day": 0.00029263787554510153,
+          "relative_l2": 2.7867703425512543e-08,
+          "max_face_error_m3_day": 0.012322988541882296,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 238.0,
+          "rms_m3_day": 0.00034044897454050724,
+          "relative_l2": 3.241779256048411e-08,
+          "max_face_error_m3_day": 0.012805689089191219,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 245.0,
+          "rms_m3_day": 0.00030344748602141255,
+          "relative_l2": 2.889246710490365e-08,
+          "max_face_error_m3_day": 0.012137638202830203,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 252.0,
+          "rms_m3_day": 0.0002893424951625658,
+          "relative_l2": 2.7548144616760002e-08,
+          "max_face_error_m3_day": 0.011880321796979842,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 259.0,
+          "rms_m3_day": 0.0002936402362529211,
+          "relative_l2": 2.795660539896532e-08,
+          "max_face_error_m3_day": 0.012167391885213874,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 266.0,
+          "rms_m3_day": 0.00029508310944780864,
+          "relative_l2": 2.809388664604219e-08,
+          "max_face_error_m3_day": 0.012162259384695062,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 273.0,
+          "rms_m3_day": 0.00029307120514207607,
+          "relative_l2": 2.7902885146768692e-08,
+          "max_face_error_m3_day": 0.012093627989088418,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 280.0,
+          "rms_m3_day": 0.0002914240054013107,
+          "relative_l2": 2.774722302873254e-08,
+          "max_face_error_m3_day": 0.012062538039344872,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 287.0,
+          "rms_m3_day": 0.00029008473115243316,
+          "relative_l2": 2.7621470036522255e-08,
+          "max_face_error_m3_day": 0.012041057958640522,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 294.0,
+          "rms_m3_day": 0.0002889195079476396,
+          "relative_l2": 2.7512848270081806e-08,
+          "max_face_error_m3_day": 0.01202293301366808,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 301.0,
+          "rms_m3_day": 0.00028782412710083826,
+          "relative_l2": 2.7411395080322523e-08,
+          "max_face_error_m3_day": 0.012008720288577024,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 308.0,
+          "rms_m3_day": 0.00028688980493932746,
+          "relative_l2": 2.732575105837319e-08,
+          "max_face_error_m3_day": 0.011995695678706397,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 315.0,
+          "rms_m3_day": 0.0002859436593320483,
+          "relative_l2": 2.723939700460102e-08,
+          "max_face_error_m3_day": 0.011982994472191422,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 322.0,
+          "rms_m3_day": 0.000285402432654775,
+          "relative_l2": 2.719197614035885e-08,
+          "max_face_error_m3_day": 0.011972673874879547,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 329.0,
+          "rms_m3_day": 0.00028468809869738117,
+          "relative_l2": 2.712835987004624e-08,
+          "max_face_error_m3_day": 0.011963509874476586,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 336.0,
+          "rms_m3_day": 0.00028395824535745637,
+          "relative_l2": 2.706349028032188e-08,
+          "max_face_error_m3_day": 0.011954875035144141,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 343.0,
+          "rms_m3_day": 0.0002833528435003774,
+          "relative_l2": 2.701063806529344e-08,
+          "max_face_error_m3_day": 0.011946651608241154,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 350.0,
+          "rms_m3_day": 0.0002827803216101268,
+          "relative_l2": 2.6961006987415143e-08,
+          "max_face_error_m3_day": 0.011939425423406647,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 357.0,
+          "rms_m3_day": 0.0002821962148684115,
+          "relative_l2": 2.6910286633429356e-08,
+          "max_face_error_m3_day": 0.011933217899468218,
+          "accepted_step_days": [
+            7.0
+          ]
+        },
+        {
+          "time_days": 364.0,
+          "rms_m3_day": 0.00028167400800884363,
+          "relative_l2": 2.6865414062240777e-08,
+          "max_face_error_m3_day": 0.011927291441907073,
+          "accepted_step_days": [
+            7.0
+          ]
+        }
+      ],
+      "native_record": "FLOW-JA-FACE",
+      "fixed_to_fixed_faces_excluded": true,
+      "worst_rms_m3_day": 0.00034044897454050724,
+      "worst_relative_l2": 3.241779256048411e-08,
+      "worst_cell_face_error_m3_day": 0.012805689089191219,
+      "solver_backend": "unconfined_fas"
+    }
+  ]
+}

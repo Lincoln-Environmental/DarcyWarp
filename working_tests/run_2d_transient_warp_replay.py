@@ -11,7 +11,10 @@ The K-cycle tuning sweep lives in ``working_tests/optimize_2d_transient_kcycle.p
 
 from __future__ import annotations
 
+import hashlib
 import json
+import lzma
+import zipfile
 import sys
 from pathlib import Path
 
@@ -21,12 +24,15 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from DARCY_WARP_PACKAGE import project_base
 from DARCY_WARP_PACKAGE.project_base import data_store  # noqa: E402
 from working_tests.transient_artifacts import (  # noqa: E402
     FORMULATION_CONFINED,
     FORMULATION_UNCONFINED,
     WARM_START_CONFINED_STEADY_MF6,
+    ARTIFACT_SCHEMA_VERSION,
     validate_transient_artifact,
+    pinned_mf6_executable,
 )
 from working_tests.transient_replay_settings import (  # noqa: E402
     default_solve_controls,
@@ -178,45 +184,69 @@ def case_setup_mismatches(artifact: dict, case_setup: dict) -> list[str]:
 
     # annual_recharge_m is only recorded in the provenance JSON block.
     provenance = artifact.get("provenance")
-    if provenance is not None and "annual_recharge_m" in case_setup:
+    if "annual_recharge_m" in case_setup:
         try:
             provenance_data = json.loads(str(np.asarray(provenance).reshape(())))
         except (TypeError, ValueError, json.JSONDecodeError):
             provenance_data = {}
         recorded_recharge = provenance_data.get("annual_recharge_m")
-        if recorded_recharge is not None and float(recorded_recharge) != float(case_setup["annual_recharge_m"]):
+        if recorded_recharge is None or not np.isclose(float(recorded_recharge),
+                float(case_setup["annual_recharge_m"]), rtol=4 * np.finfo(float).eps, atol=0.):
             mismatches.append(
                 f"annual_recharge_m: artifact={recorded_recharge} "
                 f"requested={case_setup['annual_recharge_m']}"
             )
+    if case_setup.get("warm_start_mode") in {"confined_steady_mf6", "unconfined_steady_mf6"}:
+        if str(artifact.get("warm_start_source")) != "native_steady":
+            mismatches.append("warm start lacks native steady provenance")
     return mismatches
 
 
-def ensure_case_artifact(case_setup: dict) -> Path:
-    """
-    Return the case artifact path, generating the MF6 truth when missing.
+def ensure_case_artifact(case_setup: dict, *, executable: str | Path | None = None) -> Path:
+    """Reuse completed pinned truth; isolate variants from already published native files."""
+    from filelock import FileLock
 
-    An existing artifact is reused only when it is internally valid AND its
-    recorded physics match the requested setup (the path does not encode dx,
-    storage, recharge, or the initial saturated thickness); otherwise it is
-    regenerated on this automatic path.
+    original = Path(case_setup["artifact_path"])
+    original.parent.mkdir(parents=True, exist_ok=True)
+    identity = None
+    if executable is not None or project_base.MF6 is not None:
+        identity = pinned_mf6_executable(executable)
+    expected_sha = identity["mf6_sha256"] if identity else None
 
-    The generator is imported lazily so the replay stays Flopy-free until a
-    truth artifact actually has to be built.
-    """
-    artifact_path = Path(case_setup["artifact_path"])
-    if artifact_path.exists():
+    def reusable(path):
+        if not path.is_file():
+            return False
         try:
-            artifact = validate_transient_artifact(artifact_path)
+            artifact = validate_transient_artifact(path, expected_mf6_sha256=expected_sha, verify_native_files=True)
             mismatches = case_setup_mismatches(artifact, case_setup)
             if mismatches:
-                raise ValueError(
-                    "requested case differs from the artifact's recorded physics: "
-                    + "; ".join(mismatches)
-                )
-            return artifact_path
-        except (OSError, ValueError) as exc:
-            print(f"Existing MF6 artifact failed validation and will be regenerated: {exc}")
+                raise ValueError(", ".join(mismatches))
+        except (OSError, ValueError, EOFError, lzma.LZMAError, zipfile.BadZipFile) as exc:
+            print(f"Skipping cached transient reference {path}: {exc}")
+            return False
+        return True
+
+    # FloPy writes model inputs and native outputs under fixed filenames.
+    # A process-level writer lock covers all siblings through final NPZ publication.
+    with FileLock(str(original.parent / ".mf6-generation.lock")):
+        if reusable(original):
+            return original
+        if identity is None:
+            identity = pinned_mf6_executable(executable)
+        path = original
+        if original.exists():
+            # Keep previously published siblings coherent for readers, including
+            # offline consumers using the legacy schema-2 opt-in.
+            settings = {key: value for key, value in case_setup.items() if key != "artifact_path"}
+            settings.update(mf6_sha256=identity["mf6_sha256"], schema=ARTIFACT_SCHEMA_VERSION)
+            key = hashlib.sha256(json.dumps(settings, sort_keys=True).encode()).hexdigest()
+            path = original.parent / "qualified" / key / original.name
+            if reusable(path):
+                return path
+        return _generate_case_artifact(case_setup, path, original.parent, identity)
+
+
+def _generate_case_artifact(case_setup, artifact_path, warm_directory, identity):
     from working_tests import run_2d_transient_vs_mf6 as truth_generator
 
     print(f"MF6 truth artifact missing; generating (this can take a while):")
@@ -235,13 +265,20 @@ def ensure_case_artifact(case_setup: dict) -> Path:
         t_field_seed=case_setup["t_field_seed"],
         ghb_conductance_mode=case_setup["ghb_conductance_mode"],
         out_path=artifact_path,
+        dt_days=case_setup["dt_days"],
+        executable=identity["mf6_executable"],
+        warm_start_workspace=warm_directory,
         reuse_existing_warm_start=True,
         warm_start_mode=case_setup["warm_start_mode"],
         formulation=case_setup["formulation"],
     )
     if not artifact_path.exists():
         raise RuntimeError(f"MF6 truth generation did not produce {artifact_path}")
-    validate_transient_artifact(artifact_path)
+    artifact = validate_transient_artifact(artifact_path, expected_mf6_sha256=identity["mf6_sha256"],
+                                          verify_native_files=True)
+    mismatches = case_setup_mismatches(artifact, case_setup)
+    if mismatches:
+        raise ValueError(f"Generated MF6 reference differs from requested physics: {mismatches}")
     return artifact_path
 
 
@@ -336,7 +373,16 @@ def run_configured_replay(
         t_field_kind=t_field_kind,
         t_field_seed=t_field_seed,
     )
-    selected_artifact_path = artifact_path or ensure_case_artifact(case_setup)
+    if artifact_path is None:
+        selected_artifact_path = ensure_case_artifact(case_setup)
+    else:
+        # Explicit portable head bundles need no live executable. The shared
+        # reader validates provenance; the replay checks any sidecars it uses.
+        artifact = validate_transient_artifact(artifact_path)
+        mismatches = case_setup_mismatches(artifact, case_setup)
+        if mismatches:
+            raise ValueError(f"Configured replay differs from its explicit artifact: {mismatches}")
+        selected_artifact_path = artifact_path
     return run_production_replay(
         formulation=formulation,
         artifact_path=selected_artifact_path,

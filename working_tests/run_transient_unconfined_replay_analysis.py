@@ -30,6 +30,7 @@ from working_tests.transient_artifacts import (  # noqa: E402
     WARM_START_UNCONFINED_STEADY_MF6,
     default_artifact_path,
     load_transient_artifact,
+    verify_transient_sidecars,
 )
 from working_tests.transient_replay_settings import (  # noqa: E402
     STORAGE_REFERENCE_CURRENT_PICARD,
@@ -75,6 +76,12 @@ def load_npz_dict(path: Path) -> dict:
 def mf6_storage_budget_artifact_path(artifact_path: Path) -> Path:
     """:param artifact_path: MF6 heads artifact. :return: sibling storage-budget artifact path."""
     return artifact_path.with_name("mf6_storage_budget_terms.npz")
+
+
+def load_verified_mf6_budget(*, artifact, artifact_path, budget_path):
+    """Check the native storage file against the heads artifact before decoding it."""
+    verify_transient_sidecars(artifact, artifact_path=artifact_path, storage_budget_path=budget_path)
+    return load_npz_dict(budget_path)
 
 
 def warp_storage_budget_artifact_path(workspace: Path) -> Path:
@@ -175,10 +182,11 @@ def compare_storage_budgets(
             "available": False,
             "storage_budget_diagnostics_available": False,
             "mf6_storage_budget_artifact": str(mf6_path),
+            "mf6_storage_budget_verified": False,
             "warp_storage_budget_artifact": str(warp_path),
         }
 
-    mf6_budget = load_npz_dict(mf6_path)
+    mf6_budget = load_verified_mf6_budget(artifact=artifact, artifact_path=artifact_path, budget_path=mf6_path)
     warp_budget = load_npz_dict(warp_path)
     free = free_mask_from_artifact(artifact=artifact)
     top = np.asarray(artifact["top"], dtype=np.float64)
@@ -198,6 +206,7 @@ def compare_storage_budgets(
             "available": False,
             "storage_budget_diagnostics_available": False,
             "mf6_storage_budget_artifact": str(mf6_path),
+            "mf6_storage_budget_verified": True,
             "warp_storage_budget_artifact": str(warp_path),
             "reason": {
                 "missing_mf6_keys": missing_mf6,
@@ -222,6 +231,7 @@ def compare_storage_budgets(
             "available": False,
             "storage_budget_diagnostics_available": False,
             "mf6_storage_budget_artifact": str(mf6_path),
+            "mf6_storage_budget_verified": True,
             "warp_storage_budget_artifact": str(warp_path),
             "reason": {
                 "mf6_total_shape": list(mf6_total.shape),
@@ -329,6 +339,7 @@ def compare_storage_budgets(
         "available": True,
         "storage_budget_diagnostics_available": True,
         "mf6_storage_budget_artifact": str(mf6_path),
+        "mf6_storage_budget_verified": True,
         "warp_storage_budget_artifact": str(warp_path),
         "mf6_budget_record_names": [
             scalar_string(name) for name in np.asarray(mf6_budget.get("unique_record_names", []), dtype=object)
@@ -370,7 +381,7 @@ def _record_key_from_budget_name(record_name: str) -> str | None:
     return None
 
 
-def mf6_mass_balance_from_budget_artifact(artifact_path: Path) -> dict:
+def mf6_mass_balance_from_budget_artifact(artifact_path: Path, *, artifact: dict | None = None) -> dict:
     """
     Derive period-wise MF6 gross IN/OUT totals from the saved budget artifact.
 
@@ -384,7 +395,13 @@ def mf6_mass_balance_from_budget_artifact(artifact_path: Path) -> dict:
             "mf6_mass_balance_available": False,
             "reason": f"missing budget artifact: {budget_path}",
         }
-    budget = load_npz_dict(budget_path)
+    if artifact is None:
+        artifact = load_transient_artifact(artifact_path)
+    budget = load_verified_mf6_budget(artifact=artifact, artifact_path=artifact_path, budget_path=budget_path)
+    evidence = {
+        "verified_storage_budget": str(budget_path),
+        "mf6_storage_budget_available": "storage_total_per_period" in budget,
+    }
     record_names = [scalar_string(name) for name in np.asarray(budget.get("unique_record_names", []), dtype=object)]
     period_count = int(np.asarray(budget.get("period_count", 0)).reshape(())) if "period_count" in budget else 0
     if period_count < 1:
@@ -393,6 +410,7 @@ def mf6_mass_balance_from_budget_artifact(artifact_path: Path) -> dict:
             "mf6_mass_balance_available": False,
             "reason": "budget artifact missing period_count",
             "record_names": record_names,
+            **evidence,
         }
 
     per_package: dict[str, np.ndarray] = {}
@@ -416,6 +434,7 @@ def mf6_mass_balance_from_budget_artifact(artifact_path: Path) -> dict:
             "mf6_mass_balance_available": False,
             "reason": "no package budget arrays found",
             "record_names": record_names,
+            **evidence,
         }
 
     rows: list[dict] = []
@@ -449,13 +468,14 @@ def mf6_mass_balance_from_budget_artifact(artifact_path: Path) -> dict:
         "mf6_mass_balance_available": True,
         "record_names": record_names,
         "rows": rows,
-    }
+        **evidence,    }
 
 
 def compare_mass_balance(
     *,
     artifact_path: Path,
     workspace: Path,
+    artifact: dict | None = None,
 ) -> dict:
     """
     Compare Warp and MF6 per-period gross mass-balance summaries.
@@ -473,15 +493,14 @@ def compare_mass_balance(
             "mf6_mass_balance_available": False,
             "reason": "Warp mass balance missing from replay summary",
         }
-    mf6_mass_balance = mf6_mass_balance_from_budget_artifact(artifact_path=artifact_path)
+    mf6_mass_balance = mf6_mass_balance_from_budget_artifact(artifact_path=artifact_path, artifact=artifact)
     out = {
         "available": bool(mf6_mass_balance.get("available", False)),
         "warp_mass_balance_available": True,
         "warp_storage_budget_available": bool(warp_mass_balance.get("warp_storage_budget_available", False)),
         "mf6_mass_balance_available": bool(mf6_mass_balance.get("mf6_mass_balance_available", False)),
-        "mf6_storage_budget_available": "storage_total_per_period" in load_npz_dict(mf6_storage_budget_artifact_path(artifact_path=artifact_path))
-        if mf6_storage_budget_artifact_path(artifact_path=artifact_path).exists()
-        else False,
+        "mf6_storage_budget_available": bool(mf6_mass_balance.get("mf6_storage_budget_available", False)),
+        "verified_storage_budget": mf6_mass_balance.get("verified_storage_budget"),
         "storage_budget_comparison_available": False,
         "mf6_budget_record_names": mf6_mass_balance.get("record_names", []),
         "rows": [],
@@ -1050,6 +1069,7 @@ def run_optional_replay_variants(
 ) -> dict:
     """:param artifact_path: MF6 artifact. :param output_dir: output directory. :param device: Warp device. :param allow_warm_start_mismatch: permit current diagnostic mismatch. :return: variant summary."""
     variants = _replay_variant_configs(variant_set=variant_set)
+    artifact = load_transient_artifact(artifact_path)
     results: dict[str, Any] = {}
     for name, cfg in variants.items():
         workspace = output_dir.joinpath(f"replay_{name}")
@@ -1076,6 +1096,7 @@ def run_optional_replay_variants(
         )
         comparison = summary.get("comparison", {}) if isinstance(summary, dict) else {}
         variant_rows, variant_pattern, variant_worst_cells, variant_picard, variant_storage = variant_diagnostics_from_workspace(
+            artifact=artifact,
             artifact_path=artifact_path,
             workspace=workspace,
             worst_period_number=comparison.get(
@@ -1105,7 +1126,7 @@ def run_optional_replay_variants(
             "storage_budget": variant_storage,
             "mass_balance": summary.get("mass_balance", {}) if isinstance(summary, dict) else {},
             "mf6_mass_balance_comparison": compare_mass_balance(
-                artifact_path=artifact_path,
+                artifact=artifact, artifact_path=artifact_path,
                 workspace=workspace,
             ),
             # Captured so full per-variant metrics can be reported without
@@ -1125,9 +1146,11 @@ def variant_diagnostics_from_workspace(
     artifact_path: Path,
     workspace: Path,
     worst_period_number: int | None,
+    artifact: dict | None = None,
 ) -> tuple[list[dict], dict, list[dict], list[dict], dict]:
     """:param artifact_path: MF6 artifact. :param workspace: variant workspace. :param worst_period_number: one-based replay summary worst period. :return: diagnostics."""
-    artifact = load_transient_artifact(artifact_path)
+    if artifact is None:
+        artifact = load_transient_artifact(artifact_path)
     warp = load_warp_npz(workspace.joinpath("warp_transient_heads.npz"))
     period_rows, pattern = period_error_table(artifact=artifact, warp=warp)
     if worst_period_number is None:
@@ -1861,7 +1884,7 @@ def main(*, args: argparse.Namespace) -> int:
     replay_summary = load_workspace_replay_summary(workspace=warp_npz_path.parent)
     mass_balance = replay_summary.get("mass_balance", {}) if isinstance(replay_summary, dict) else {}
     mf6_mass_balance_comparison = compare_mass_balance(
-        artifact_path=args.artifact,
+        artifact=artifact, artifact_path=args.artifact,
         workspace=warp_npz_path.parent,
     )
     default_final = period_rows[-1]

@@ -39,6 +39,7 @@ from working_tests.transient_artifacts import (
     select_artifact_warm_start,
     spatial_fields_from_artifact,
     validate_warm_start_comparability,
+    verify_transient_sidecars,
     validate_warm_start_head,
 )
 from working_tests.transient_replay_mass_balance import (
@@ -562,6 +563,32 @@ def run_warp_transient_replay(
     }
 
 
+def verify_replay_reference_files(*, artifact, artifact_path, native_workspace=None):
+    """Verify available reference files and identify exactly which copies were checked."""
+    directory = Path(artifact_path).parent
+    saved_workspace = directory / str(artifact.get("mf6_native_workspace", "mf6"))
+    storage = directory / "mf6_storage_budget_terms.npz"
+    storage = storage if storage.exists() else None
+    requested = Path(native_workspace) if native_workspace is not None else None
+    if requested is not None and requested.resolve() == saved_workspace.resolve():
+        saved_workspace = None  # The full requested workspace is checked below.
+    verified = verify_transient_sidecars(
+        artifact, artifact_path=artifact_path, native_workspace=saved_workspace,
+        storage_budget_path=storage, existing_native_only=True,
+    )
+    if requested is not None:
+        verified.extend(verify_transient_sidecars(
+            artifact, artifact_path=artifact_path, native_workspace=requested,
+        ))
+    return {
+        "mf6_version": str(artifact["mf6_version"]) if "mf6_version" in artifact else None,
+        "mf6_sha256": str(artifact["mf6_sha256"]) if "mf6_sha256" in artifact else None,
+        "case_fingerprint": str(artifact["case_fingerprint"]) if "case_fingerprint" in artifact else None,
+        "mf6_heads_sha256": str(artifact["mf6_heads_sha256"]) if "mf6_heads_sha256" in artifact else None,
+        "verified_sidecars": [str(path) for path in verified],
+    }
+
+
 def run_replay_from_artifact(
     artifact_path: str | Path,
     workspace: str | Path | None = None,
@@ -604,6 +631,7 @@ def run_replay_from_artifact(
     replay_runner = run_warp_transient_replay if run_warp_transient_replay_fn is None else run_warp_transient_replay_fn
 
     artifact = artifact_loader(artifact_path)
+    verified_reference = verify_replay_reference_files(artifact=artifact, artifact_path=artifact_path)
     spatial = spatial_fields_from_artifact(artifact)
     spatial["workspace"] = workspace
     formulation = str(formulation).strip().lower()
@@ -868,6 +896,7 @@ def run_replay_from_artifact(
     summary = {
         "artifact_path": str(artifact_path),
         "artifact_formulation": artifact_mode,
+        "reference_verification": verified_reference,
         "grid": {"nx": spatial["nx"], "ny": spatial["ny"], "dx": spatial["dx"]},
         "n_periods": n_periods,
         "dt": dt,

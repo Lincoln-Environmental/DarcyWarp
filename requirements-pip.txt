@@ -2,3 +2,4 @@ warp-lang==1.17.0
 nvtx
 flopy
 pytest
+filelock>=3

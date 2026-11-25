@@ -94,11 +94,21 @@ def test_history_changes_k_between_calls_and_matches_fresh(device):
 
 
 @pytest.mark.parametrize("first_step_fails", [False, True])
-def test_history_stops_at_first_failed_step_and_restores_inputs(device, first_step_fails):
+def test_history_stops_at_first_failed_step_and_restores_inputs(device, first_step_fails, monkeypatch):
     case = make_case(convertible=True)
     case.initial[:] = 4.
     options = history_options(case=case, precision='float64', predictor=True)
     options.update(max_outer=0, max_cycles=0)
+    allocations = []
+    warp_empty = wp.empty
+
+    def record_empty(*args, **kwargs):
+        array = warp_empty(*args, **kwargs)
+        if array.device == wp.get_device(device) and array.ndim == 2 and array.shape[1] == case.active.size:
+            allocations.append(array.shape)
+        return array
+
+    monkeypatch.setattr(wp, "empty", record_empty)
     with make_model(case=case, device=device) as model:
         factors = [1e6, 1., 1.] if first_step_fails else [0., 1e6, 1.]
         heads, info = model.solve_transient_npf(source_factors=factors, dt=7.,
@@ -106,6 +116,9 @@ def test_history_stops_at_first_failed_step_and_restores_inputs(device, first_st
         accepted = int(not first_step_fails)
         assert not info['converged'] and info['accepted_steps'] == accepted
         assert info['returned_steps'] == accepted + 1 and heads.shape[0] == accepted + 1
+        if not first_step_fails:
+            assert (len(factors), case.active.size) in allocations
+            assert (accepted + 1, case.active.size) not in allocations
         assert not info['periods'][-1]['converged']
         backing = heads
         while isinstance(backing.base, np.ndarray):

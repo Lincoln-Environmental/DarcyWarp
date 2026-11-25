@@ -77,7 +77,7 @@ _PICARD_FALLBACK_CONTROL_KEYS = (
 
 _BUDGET_RATE_KEYS = (
     "rcha_in", "rcha_out", "chd_in", "chd_out", "ghb_in", "ghb_out",
-    "storage_in", "storage_out",
+    "drn_in", "drn_out", "riv_in", "riv_out", "storage_in", "storage_out",
 )
 
 
@@ -101,8 +101,11 @@ def _merge_timestep_budgets(records: list[dict]) -> dict:
     if total_weight > 0.0:
         for key in _BUDGET_RATE_KEYS:
             merged[key] /= total_weight
-    total_in = merged["rcha_in"] + merged["chd_in"] + merged["ghb_in"] + merged["storage_in"]
-    total_out = merged["rcha_out"] + merged["chd_out"] + merged["ghb_out"] + merged["storage_out"]
+    packages = ("rcha", "chd", "ghb", "drn", "riv", "storage")
+    total_in = sum(merged[f"{package}_in"] for package in packages)
+    total_out = sum(merged[f"{package}_out"] for package in packages)
+    for package in ("chd", "ghb", "drn", "riv"):
+        merged[f"{package}_net_out_positive"] = merged[f"{package}_out"] - merged[f"{package}_in"]
     imbalance = total_in - total_out
     denominator = 0.5 * (total_in + total_out)
     merged["total_in"] = total_in
@@ -139,13 +142,6 @@ def _timestep_budget_summary(
     thickness = np.clip(head_arr - bottom, min_sat, np.maximum(top - bottom, min_sat))
     t_field = np.asarray(k * thickness, dtype=np.float64)
     t_field[np.asarray(active, dtype=np.int32) == 0] = 0.0
-    ghb_kwargs: dict[str, Any] = {}
-    if bool(getattr(model, "use_ghb", False)):
-        ghb_kwargs = {
-            "gh_mask": np.asarray(model.gh_mask_host, dtype=np.int32),
-            "gh_head": np.asarray(model.gh_head_host, dtype=np.float64),
-            "ghb_factor": np.asarray(model.ghb_factor_host, dtype=np.float64),
-        }
     budget = compute_mass_balance_budget(
         T_field=t_field,
         R_field=np.asarray(model.R_field_host, dtype=np.float64),
@@ -154,7 +150,8 @@ def _timestep_budget_summary(
         bc_mask=np.asarray(model.bc_mask_host, dtype=np.int32),
         bc_values=np.asarray(model.bc_values_host, dtype=np.float64),
         dx=float(model.dx),
-        **ghb_kwargs,
+        ghb_factor=model.ghb_factor_host if model.use_ghb else None,
+        **model._head_dependent_boundary_fields(),
     )
     storage_term, _, _ = exact_unconfined_storage_terms(
         head_new=head_arr,
@@ -167,7 +164,9 @@ def _timestep_budget_summary(
     )
     # exact_unconfined_storage_terms is per unit plan area; budgets are
     # area-integrated.
-    budget = add_exact_storage_to_budget(budget, storage_term * float(model.dx) ** 2)
+    free_cells = (model.active_host != 0) & (model.bc_mask_host == 0)
+    storage_volume_rate = np.where(free_cells, storage_term * float(model.dx) ** 2, 0.0)
+    budget = add_exact_storage_to_budget(budget, storage_volume_rate)
     return dict(budget.iloc[0])
 
 
@@ -284,6 +283,8 @@ def solve_transient_unconfined_experimental(
     sy_f = float(sy)
     ss_f = float(ss)
     min_sat = float(controls.get("min_saturated_thickness", min_saturated_thickness))
+    if not np.isfinite(min_sat) or min_sat <= 0.0:
+        raise ValueError("min_saturated_thickness must be positive and finite.")
     thickness = np.clip(h0 - bottom, min_sat, np.maximum(top - bottom, min_sat))
     initial_T = np.asarray(k * thickness, dtype=NP_FLOAT)
     initial_T[active_i == 0] = 0.0
@@ -294,11 +295,15 @@ def solve_transient_unconfined_experimental(
         active=active_i,
         bc_mask=bc_i,
         bc_values=bc_v,
+        gh_alpha=model._gh_alpha_input,
+        aq_thickness=model._aq_thickness_input,
+        **model._head_dependent_boundary_fields(),
     )
 
     ny, nx = h0.shape
     heads_per_period = np.zeros((n_periods, ny, nx), dtype=np.float64)
     if save_diagnostics_b:
+        non_storage_cells = (active_i == 0) | (bc_i != 0)
         heads_old_per_period = np.zeros_like(heads_per_period)
         storage_reference_heads = np.zeros_like(heads_per_period)
         storage_coeffs = np.zeros_like(heads_per_period)
@@ -395,6 +400,7 @@ def solve_transient_unconfined_experimental(
                 K_field=k,
                 zbot_field=bottom,
                 ztop_field=top,
+                min_saturated_thickness=min_sat,
                 transient=True,
                 storage_coeff=sy_f,
                 sy=sy_f,
@@ -606,6 +612,8 @@ def solve_transient_unconfined_experimental(
                 specific_storage=ss_f,
                 dt=period_dt,
             )
+            for term in (exact_storage_term, exact_sy_term, exact_ss_term):
+                term[non_storage_cells] = 0.0
             heads_old_per_period[period_index] = period_head_old
             storage_reference_heads[period_index] = head_accepted
             storage_coeffs[period_index] = 0.0

@@ -8,6 +8,7 @@ import os
 import time
 import warnings
 
+from DARCY_WARP_PACKAGE.validation.head_checks import invalid_head_values
 from DARCY_WARP_PACKAGE.model_builder import (
     _build_domain,
     _build_dirichlet_boundary_mask,
@@ -4829,13 +4830,13 @@ class WarpDarcySolver:
         R0 = self.R_field_host
         active0 = np.asarray(self.active_host, dtype=np.int32)
         bc_mask0 = np.asarray(self.bc_mask_host, dtype=np.int32)
-        bc_values0 = np.asarray(self.bc_values_host, dtype=np.float32)
+        bc_values0 = np.asarray(self.bc_values_host, dtype=NP_FLOAT)
 
         if self.use_ghb:
             gh_mask0 = np.asarray(self.gh_mask_host, dtype=np.int32)
-            gh_head0 = np.asarray(self.gh_head_host, dtype=np.float32)
-            gh_width0 = np.asarray(self.gh_width_host, dtype=np.float32)
-            ghb_factor0 = np.asarray(self.ghb_factor_host, dtype=np.float32)
+            gh_head0 = np.asarray(self.gh_head_host, dtype=NP_FLOAT)
+            gh_width0 = np.asarray(self.gh_width_host, dtype=NP_FLOAT)
+            ghb_factor0 = np.asarray(self.ghb_factor_host, dtype=NP_FLOAT)
         else:
             gh_mask0 = None
             gh_head0 = None
@@ -5028,7 +5029,7 @@ class WarpDarcySolver:
         )
 
         if self.use_ghb:
-            gh_mask_c, gh_width_c, gh_head_c = self._mg_sanitize_ghb_level_host(
+            gh_mask_c, gh_width_c, gh_head_c = self._prepare_ghb_fields(
                 active=active_c,
                 bc_mask=bc_mask_c,
                 gh_mask=gh_mask_c,
@@ -5047,95 +5048,42 @@ class WarpDarcySolver:
 
         return T_c, R_c, active_c, bc_mask_c, bc_values_c, gh_mask_c, gh_head_c, gh_width_c, ghb_factor_c, storage_diag_c
 
-    def _mg_sanitize_ghb_level_host(
-        self,
-        active: np.ndarray,
-        bc_mask: np.ndarray,
-        gh_mask: np.ndarray,
-        gh_width: np.ndarray,
-        gh_head: np.ndarray,
-        dx: float,
-    ):
+    @staticmethod
+    def _prepare_ghb_fields(*, active, bc_mask, gh_mask, gh_width, gh_head, dx):
+        """Own GHB fields at model precision, including valid zero-metre stages.
+
+        A positive-width boundary needs a stage even when transmissivity
+        temporarily vanishes during an unconfined solve.
         """
-        Same idea as _sanitize_ghb_host_fields, but operates on a provided level.
-        """
-        dx_f = float(dx)
-        eps = np.float32(max(1.0e-8 * dx_f, 1.0e-12))
+        mask = np.asarray(gh_mask, dtype=np.int32).copy()
+        width = np.asarray(gh_width, dtype=NP_FLOAT).copy()
+        raw_head = np.asarray(gh_head)
+        if mask.shape != width.shape or mask.shape != raw_head.shape:
+            raise ValueError("GHB mask, width and head must have the same shape")
+        mask[(np.asarray(active) == 0) | (np.asarray(bc_mask) != 0) | (width == 0)] = 0
+        conducting = mask != 0
+        if np.any(invalid_head_values(head=raw_head[conducting])):
+            raise ValueError("Invalid active GHB head on a conducting boundary")
+        head = np.zeros(mask.shape, dtype=NP_FLOAT)
+        head[conducting] = raw_head[conducting]
+        if np.any(invalid_head_values(head=head[conducting])):
+            raise ValueError("Invalid active GHB head in the model precision")
 
-        gh_mask2 = np.asarray(gh_mask, dtype=np.int32).copy()
-        gh_width2 = np.asarray(gh_width, dtype=np.float32).copy()
-        gh_head2 = np.asarray(gh_head, dtype=np.float32).copy()
+        width[~np.isfinite(width) | ~conducting] = dx
+        width[conducting] = np.maximum(width[conducting], max(1e-8 * dx, 1e-12))
+        return mask, width, head
 
-        gh_mask2[np.asarray(active, dtype=np.int32) == 0] = 0
-        gh_mask2[np.asarray(bc_mask, dtype=np.int32) != 0] = 0
-
-        bad_w = ~np.isfinite(gh_width2)
-        if np.any(bad_w):
-            gh_width2[bad_w] = np.float32(dx_f)
-
-        gh_width2[gh_mask2 == 0] = np.float32(dx_f)
-
-        on = gh_mask2 != 0
-        if np.any(on):
-            gh_width2[on] = np.maximum(gh_width2[on], eps)
-
-        bad_h = ~np.isfinite(gh_head2)
-        if np.any(bad_h):
-            gh_head2[bad_h] = np.float32(0.0)
-
-        return gh_mask2, gh_width2, gh_head2
-
-    # -------------------------------------------------------------------------
-    # GHB sanitization
-    # -------------------------------------------------------------------------
-    def _sanitize_ghb_host_fields(self) -> None:
-        """
-        Make GHB inputs numerically safe:
-          - gh_mask is zeroed on inactive and Dirichlet cells
-          - gh_width is finite and strictly positive where gh_mask != 0
-          - gh_width is set to dx where gh_mask == 0
-          - gh_head is finite
-        """
-        if self.gh_mask_host is None or self.gh_width_host is None:
-            return
-
-        dx = float(self.dx)
-        eps = np.float32(max(1.0e-8 * dx, 1.0e-12))
-
-        gh_mask = np.asarray(self.gh_mask_host, dtype=np.int32)
-        gh_width = np.asarray(self.gh_width_host, dtype=np.float32)
-
-        if gh_mask.shape != gh_width.shape:
-            raise RuntimeError(f"GHB arrays shape mismatch: mask {gh_mask.shape} width {gh_width.shape}")
-
-        if self.active_host is not None:
-            gh_mask = gh_mask.copy()
-            gh_mask[self.active_host == 0] = 0
-
-        if self.bc_mask_host is not None:
-            gh_mask = gh_mask.copy()
-            gh_mask[self.bc_mask_host != 0] = 0
-
-        gh_width = gh_width.copy()
-        bad_w = ~np.isfinite(gh_width)
-        if np.any(bad_w):
-            gh_width[bad_w] = np.float32(dx)
-
-        gh_width[gh_mask == 0] = np.float32(dx)
-
-        gh_on = gh_mask != 0
-        if np.any(gh_on):
-            gh_width[gh_on] = np.maximum(gh_width[gh_on], eps)
-
-        self.gh_mask_host = gh_mask
-        self.gh_width_host = gh_width
-
-        if self.gh_head_host is not None:
-            gh_head = np.asarray(self.gh_head_host, dtype=np.float32).copy()
-            bad_h = ~np.isfinite(gh_head)
-            if np.any(bad_h):
-                gh_head[bad_h] = np.float32(0.0)
-            self.gh_head_host = gh_head
+    def _head_dependent_boundary_fields(self) -> dict:
+        """Return the enabled package fields shared by model builds and budgets."""
+        fields = {}
+        if self.use_ghb:
+            fields.update(gh_mask=self.gh_mask_host, gh_head=self.gh_head_host, gh_width=self.gh_width_host)
+        if self.use_drn:
+            fields.update(drn_mask=self.drn_mask_host, drn_elev=self.drn_elev_host, drn_cond=self.drn_cond_host)
+        if self.use_riv:
+            fields.update(riv_mask=self.riv_mask_host, riv_stage=self.riv_stage_host,
+                          riv_rbot=self.riv_rbot_host, riv_cond=self.riv_cond_host)
+        return fields
 
     def _require_drn_riv_supported(self, backend_name: str) -> None:
         """DRN/RIV gated boundaries are assembled only by the semismooth Newton backend."""
@@ -5154,8 +5102,8 @@ class WarpDarcySolver:
         boundaries, nonlinear semismooth-Newton path only):
           - masks are zeroed on inactive and Dirichlet cells
           - elevations / stage / rbot must be finite where the mask is set
-          - conductance must be finite and strictly positive where the mask
-            is set; masked-off cells carry zero conductance
+          - DRN conductance must be positive on enabled cells. Zero RIV
+            conductance is a closed connection, including after a stage update.
         """
         shape = (int(self.ny), int(self.nx))
 
@@ -5187,9 +5135,11 @@ class WarpDarcySolver:
                 arr[~on] = NP_FLOAT(0.0)
                 out[name] = arr
             if np.any(on):
-                cond = out.get("cond")
-                if cond is None or np.any(cond[on] <= 0.0):
-                    raise ValueError(f"{label}_cond must be positive on masked cells.")
+                conductance = out["cond"][on]
+                if label == "drn" and np.any(conductance <= 0.0):
+                    raise ValueError("drn_cond must be positive on masked cells.")
+                if label == "riv" and np.any(conductance < 0.0):
+                    raise ValueError("riv_cond must be non-negative on masked cells.")
             return mask, out
 
         if self.use_drn:
@@ -5230,72 +5180,41 @@ class WarpDarcySolver:
             return 1.0
         return float(np.median(vals))
 
-    def _recompute_ghb_factor_host(
-        self,
-        *,
-        gh_alpha: float | np.ndarray | None = None,
-        aq_thickness: float | np.ndarray | None = None,
-    ) -> None:
-        """
-        Refresh ghb_factor_host from raw gh_width and scalar-or-grid gh_alpha/aq_thickness.
-        """
-        if gh_alpha is not None:
-            self._gh_alpha_input = gh_alpha
-        if aq_thickness is not None:
-            self._aq_thickness_input = aq_thickness
-
-        shape = (int(self.ny), int(self.nx))
-        gh_alpha_grid, _ = _normalize_scalar_or_grid_to_shape(
-            self._gh_alpha_input,
-            shape=shape,
-            name="gh_alpha",
-        )
-        aq_thickness_grid, _ = _normalize_scalar_or_grid_to_shape(
-            self._aq_thickness_input,
-            shape=shape,
-            name="aq_thickness",
-        )
-        self.gh_alpha_host = gh_alpha_grid.astype(NP_FLOAT, copy=False)
-        self.aq_thickness_host = aq_thickness_grid.astype(NP_FLOAT, copy=False)
-
-        if (
-            (not self.use_ghb)
-            or self.gh_mask_host is None
-            or self.gh_width_host is None
-            or self.active_host is None
-            or self.bc_mask_host is None
-        ):
-            self.ghb_factor_host = np.zeros(shape, dtype=NP_FLOAT)
-            self.gh_alpha = float(
-                self._summarize_grid_to_scalar_for_reporting(self.gh_alpha_host, np.ones(shape, dtype=bool))
-            )
-            self.aq_thickness = float(
-                self._summarize_grid_to_scalar_for_reporting(self.aq_thickness_host, np.ones(shape, dtype=bool))
-            )
-            return
-
-        ghb_factor, gh_alpha_full, aq_thickness_full, _ = _compute_ghb_factor_from_raw_fields(
-            gh_mask=self.gh_mask_host,
-            gh_width=self.gh_width_host,
-            gh_alpha=self.gh_alpha_host,
-            aq_thickness=self.aq_thickness_host,
+    def _recompute_ghb_factor_host(self, *, gh_mask, gh_width, gh_alpha, aq_thickness):
+        """Validate the replacement factor before changing the model inputs."""
+        if gh_alpha is None:
+            gh_alpha = self._gh_alpha_input
+        if aq_thickness is None:
+            aq_thickness = self._aq_thickness_input
+        factor, alpha_grid, thickness_grid, _ = _compute_ghb_factor_from_raw_fields(
+            gh_mask=gh_mask, gh_width=gh_width, gh_alpha=gh_alpha, aq_thickness=aq_thickness,
             dx=float(self.dx),
-            active=self.active_host,
-            bc_mask=self.bc_mask_host,
         )
-        self.ghb_factor_host = np.asarray(ghb_factor, dtype=NP_FLOAT)
-        self.gh_alpha_host = np.asarray(gh_alpha_full, dtype=NP_FLOAT)
-        self.aq_thickness_host = np.asarray(aq_thickness_full, dtype=NP_FLOAT)
+        conducting = gh_mask != 0
+        with np.errstate(over="ignore", under="ignore"):
+            stored_factor = np.asarray(factor, dtype=NP_FLOAT)
+            stored_alpha = np.array(alpha_grid, dtype=NP_FLOAT, copy=True)
+            stored_thickness = np.array(thickness_grid, dtype=NP_FLOAT, copy=True)
+        for name, field in (("conductance factor", stored_factor), ("gh_alpha", stored_alpha),
+                            ("aq_thickness", stored_thickness)):
+            used = field[conducting]
+            if np.any(~np.isfinite(used) | (used <= 0)):
+                raise ValueError(f"Active GHB {name} must be positive and representable")
+        self.ghb_factor_host = stored_factor
+        self.gh_alpha_host = stored_alpha
+        self.aq_thickness_host = stored_thickness
+        self._gh_alpha_input = stored_alpha if np.ndim(gh_alpha) else float(gh_alpha)
+        self._aq_thickness_input = stored_thickness if np.ndim(aq_thickness) else float(aq_thickness)
+        self.gh_alpha = self._summarize_grid_to_scalar_for_reporting(self.gh_alpha_host, conducting)
+        self.aq_thickness = self._summarize_grid_to_scalar_for_reporting(self.aq_thickness_host, conducting)
 
-        gh_on = (
-            (np.asarray(self.gh_mask_host, dtype=np.int32) != 0)
-            & (np.asarray(self.active_host, dtype=np.int32) != 0)
-            & (np.asarray(self.bc_mask_host, dtype=np.int32) == 0)
-            & np.isfinite(np.asarray(self.gh_width_host, dtype=np.float64))
-            & (np.asarray(self.gh_width_host, dtype=np.float64) > 0.0)
+    def _set_ghb_fields(self, *, active, bc_mask, gh_mask, gh_width, gh_head, gh_alpha, aq_thickness):
+        mask, width, head = self._prepare_ghb_fields(
+            active=active, bc_mask=bc_mask, gh_mask=gh_mask, gh_width=gh_width, gh_head=gh_head, dx=self.dx,
         )
-        self.gh_alpha = float(self._summarize_grid_to_scalar_for_reporting(self.gh_alpha_host, gh_on))
-        self.aq_thickness = float(self._summarize_grid_to_scalar_for_reporting(self.aq_thickness_host, gh_on))
+        self._recompute_ghb_factor_host(gh_mask=mask, gh_width=width, gh_alpha=gh_alpha,
+                                        aq_thickness=aq_thickness)
+        self.gh_mask_host, self.gh_width_host, self.gh_head_host = mask, width, head
 
     def _upload_ghb_factor_to_device(self, device: str) -> None:
         """
@@ -5358,10 +5277,6 @@ class WarpDarcySolver:
         """
         if width is None:
             width = float(self.dx)
-        self._gh_alpha_input = gh_alpha
-        if aq_thickness is not None:
-            self._aq_thickness_input = aq_thickness
-
         (
             T_field,
             R_field,
@@ -5381,23 +5296,20 @@ class WarpDarcySolver:
             width=width
         )
 
+        self._set_ghb_fields(active=active, bc_mask=bc_mask, gh_mask=gh_mask, gh_width=gh_width,
+                             gh_head=gh_head, gh_alpha=gh_alpha, aq_thickness=aq_thickness)
         # Keep host arrays in the package float dtype (NP_FLOAT) so single-precision
         # vs double-precision modes remain consistent.
         self.T_field_host = np.asarray(T_field, dtype=NP_FLOAT)
         self.R_field_host = np.asarray(R_field, dtype=NP_FLOAT)
         self.active_host = np.asarray(active, dtype=np.int32)
         self.bc_mask_host = np.asarray(bc_mask, dtype=np.int32)
-        self.bc_values_host = np.asarray(bc_values, dtype=NP_FLOAT)
-        self.gh_mask_host = np.asarray(gh_mask, dtype=np.int32)
-        self.gh_head_host = np.asarray(gh_head, dtype=NP_FLOAT)
-        self.gh_width_host = np.asarray(gh_width, dtype=NP_FLOAT)
+        self.bc_values_host = np.array(bc_values, dtype=NP_FLOAT, order="C", copy=True)
         self.storage_diag_host = None
         self.storage_diag_wp = None
         self.storage_diag_c_host = None
         self.storage_diag_c_wp = None
 
-        self._sanitize_ghb_host_fields()
-        self._recompute_ghb_factor_host(gh_alpha=self._gh_alpha_input, aq_thickness=aq_thickness)
         self._sanitize_drn_riv_host_fields()
         self.n_active = int(np.count_nonzero(self.active_host))
 
@@ -5538,10 +5450,6 @@ class WarpDarcySolver:
         ``unconfined_semismooth_newton_kcycle`` backend and require
         ``use_drn=True`` / ``use_riv=True`` at construction.
         """
-        self._gh_alpha_input = gh_alpha
-        if aq_thickness is not None:
-            self._aq_thickness_input = aq_thickness
-
         T_field = np.asarray(T_field, dtype=NP_FLOAT)
         R_field = np.asarray(R_field, dtype=NP_FLOAT)
         active = np.asarray(active, dtype=np.int32)
@@ -5563,7 +5471,7 @@ class WarpDarcySolver:
             if gh_mask is None or gh_head is None or gh_width is None:
                 raise ValueError("gh_mask, gh_head, gh_width are required when use_ghb=True.")
             gh_mask = np.asarray(gh_mask, dtype=np.int32)
-            gh_head = np.asarray(gh_head, dtype=NP_FLOAT)
+            gh_head = np.asarray(gh_head)
             gh_width = np.asarray(gh_width, dtype=NP_FLOAT)
             if gh_mask.shape != (self.ny, self.nx):
                 raise ValueError(f"gh_mask shape {gh_mask.shape} expected {(self.ny, self.nx)}")
@@ -5593,10 +5501,16 @@ class WarpDarcySolver:
                 riv_stage is None or riv_rbot is None or riv_cond is None
             ):
                 raise ValueError("riv_stage, riv_rbot and riv_cond are required where riv_mask != 0.")
+            if riv_stage is not None and riv_rbot is not None:
+                enabled = (np.asarray(riv_mask) != 0) & (active != 0) & (bc_mask == 0)
+                self._validate_riv_stage(enabled, riv_stage, riv_rbot)
         else:
             if riv_mask is not None and np.any(np.asarray(riv_mask, dtype=np.int32) != 0):
                 raise ValueError("riv_mask was provided but the solver was built with use_riv=False.")
             riv_mask = None
+
+        self._set_ghb_fields(active=active, bc_mask=bc_mask, gh_mask=gh_mask, gh_width=gh_width,
+                             gh_head=gh_head, gh_alpha=gh_alpha, aq_thickness=aq_thickness)
 
         self.drn_mask_host = None if drn_mask is None else np.asarray(drn_mask, dtype=np.int32)
         self.drn_elev_host = None if drn_mask is None else drn_elev
@@ -5610,17 +5524,12 @@ class WarpDarcySolver:
         self.R_field_host = R_field
         self.active_host = active
         self.bc_mask_host = bc_mask
-        self.bc_values_host = bc_values
-        self.gh_mask_host = gh_mask
-        self.gh_head_host = gh_head
-        self.gh_width_host = gh_width
+        self.bc_values_host = bc_values.copy(order="C")
         self.storage_diag_host = None
         self.storage_diag_wp = None
         self.storage_diag_c_host = None
         self.storage_diag_c_wp = None
 
-        self._sanitize_ghb_host_fields()
-        self._recompute_ghb_factor_host(gh_alpha=self._gh_alpha_input, aq_thickness=aq_thickness)
         self._sanitize_drn_riv_host_fields()
         self.n_active = int(np.count_nonzero(self.active_host))
 
@@ -5772,7 +5681,6 @@ class WarpDarcySolver:
             raise RuntimeError("_build_two_level_cache called before build_from_truth_inputs.")
 
         device = self.device_str
-        self._sanitize_ghb_host_fields()
 
         (
             T_c_host,
@@ -6426,6 +6334,13 @@ class WarpDarcySolver:
         if self._fine_level is not None:
             self._fine_level.M_inv_wp = self.M_inv_wp
 
+    @staticmethod
+    def _validate_riv_stage(enabled, stage, bottom) -> None:
+        stage_values = np.asarray(stage, dtype=NP_FLOAT)
+        bed_values = np.asarray(bottom, dtype=NP_FLOAT)
+        if np.any(enabled & (stage_values < bed_values)):
+            raise ValueError("RIV stage must be at or above the river bottom on enabled cells.")
+
     def update_riv_boundary_2d(self, *, mask, stage, bottom, conductance) -> None:
         """Set dynamic RIV fields for the 2D semismooth-Newton backend.
 
@@ -6445,6 +6360,7 @@ class WarpDarcySolver:
             if field.shape != shape or not np.all(np.isfinite(field)):
                 raise ValueError(f"RIV {name} must be a finite scalar or matching grid")
             arrays.append((name, field))
+        self._validate_riv_stage(enabled != 0, arrays[0][1], arrays[1][1])
         if np.any(arrays[2][1] < 0.0):
             raise ValueError("RIV conductance must be non-negative")
         if np.any((enabled != 0) & ((self.active_host == 0) | (self.bc_mask_host != 0))):
@@ -6935,8 +6851,8 @@ class WarpDarcySolver:
             raise RuntimeError("Call build_from_truth_inputs() once before update_ghb_factor_in_place().")
 
         device = self.device_str
-        self._sanitize_ghb_host_fields()
-        self._recompute_ghb_factor_host(gh_alpha=gh_alpha, aq_thickness=aq_thickness)
+        self._recompute_ghb_factor_host(gh_mask=self.gh_mask_host, gh_width=self.gh_width_host,
+                                        gh_alpha=gh_alpha, aq_thickness=aq_thickness)
         self._upload_ghb_factor_to_device(device=device)
 
         if self._fine_level is not None:
@@ -7517,6 +7433,7 @@ class WarpDarcySolver:
         invocation path because their argument mapping predates the registry.
         """
         if args:
+            self._require_drn_riv_supported("kcycle")
             result = self._solve_multigrid_kcycle_backend(*args, **kwargs)
             return self._own_cpu_head(result=result)
         unconfined = bool(kwargs.get("unconfined", False))

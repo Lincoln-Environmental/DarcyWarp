@@ -36,7 +36,8 @@ def prepare(*, artifact_path, formulation, confined_controls):
         aq_thickness=float(artifact['thickness']), solver_type='kcycle')
     controls = dict(confined_controls, implementation='fast', initial_head=_build_dem(domain=domain),
         solver='confined_kcycle', return_info=True)
-    return constructor, fields, controls, artifact['heads'], domain == 1, float(artifact['mf6_seconds'])
+    native_seconds = float(artifact['mf6_seconds']) if 'mf6_seconds' in artifact else None
+    return constructor, fields, controls, artifact['heads'], domain == 1, native_seconds
 
 
 def benchmark(*, artifact_path, formulation, confined_controls, output, repeats, device, head_gate):

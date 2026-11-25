@@ -79,6 +79,16 @@ See the :download:`archived-parameter replay JSON
 <../benchmark_results/main_audit_20261125/canterbury_archived_parameter_replay.json>`
 for the controls, source coordinates, water budget and archive hashes.
 
+Stochastic calibration exports
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Subsequent fixes retain the winning realised pilot transmissivities for
+both Canterbury optimisers. Replaying a new fit or plotting its parameter
+summary uses that saved grid, including clipping at the transmissivity
+bounds. The archived Canterbury case above has zero perturbation and
+can be replayed from its original pilots. An older fit with nonzero
+perturbation needs the actual winning realisation for an exact replay.
+
 Qualification
 -------------
 
@@ -133,9 +143,36 @@ times include that load. The GPU timings are serial synchronized public
 solves with model construction and independent audits timed separately.
 For the 500² transient backends, the independent face comparison
 reconstructs the harmonic Warp fluxes at the accepted heads and
-compares those rates with MF6's saved FLOW-JA-FACE records on the
-matching time grid. It compares active faces with at least one free
-cell and records the maximum RMS, relative L2 and individual face errors.
+compares those rates with MF6's saved FLOW-JA-FACE records at each
+stress-period endpoint. The archived CUDA qualification lists these endpoints.
+Its JSON omits the accepted internal timestep durations. The current replay
+also verifies that each named solver accepted exactly one seven-day step
+per period and records the durations in its face-flow reports. It compares
+active faces with at least one free cell and records the maximum RMS, relative
+L2 and individual face errors.
+
+A CPU replay with the historical Newton controls accepted two half-week steps
+after one rejection. Starting week 28 from the native day-189 head reproduced
+the seven-day FGMRES nonconvergence and both accepted 3.5-day steps.
+The fixed-week test disables subdivision and backend
+fallback for Newton and FAS. It gives Newton up to 240 Krylov iterations and
+sets its residual RMS and head-equivalent RMS tolerances to ``1e-7`` and
+``1e-8``, respectively. The FP64 CPU reproduction verified 497,503 faces at
+all 52 seven-day steps for each backend. The worst per-period relative L2
+face errors were ``1.85726e-6`` for Picard, ``3.24424e-8`` for semismooth
+Newton and ``3.24178e-8`` for FAS. Reconstructing flows directly from the
+native heads gave ``6.73139e-10`` on the same records. The
+:download:`fixed-step CPU reports
+<../benchmark_results/main_audit_20261125/followup_fixed_step_cpu.json>`
+record the accepted steps and face-flow errors for each backend and week.
+
+The follow-up 4 × 4 test starts every cell at 0.25 m, with a 0.5 m GHB
+stage, a 1 m minimum saturated thickness, and a one-day timestep. Both
+the Newton and FAS period drivers reproduce the direct solve at 0.375 m
+and the analytical GHB inflow of 0.400 m³/day. In a separate 4 × 4 test,
+raising the prescribed edge from 5 to 6 m gives 2.076623 m³/day of
+free-cell storage. The published storage maps now sum to that budget even
+when the boundary and bottom were built from the same input array.
 
 See the :download:`qualification JSON
 <../benchmark_results/main_audit_20261125/qualification.json>`
@@ -169,6 +206,14 @@ for the CUDA replays.
      --output /tmp/darcywarp-audit-3d-large
    python -m DARCY_WARP_PACKAGE.canterbury_case_study.replay_archived_parameters \
      --output /tmp/darcywarp-canterbury-replay --device cuda:0
+
+The 500 × 500 replay test writes one ``<backend>_face_flows.json`` next to the
+replay fixture for each backend. Each file records the signed-flow comparison
+over all active faces touching a free cell at all 52 endpoints. The test checks
+the native head, grid and budget time records and uses a 1% relative L2 ceiling
+at each endpoint. The archived results above report the measured errors. When
+the compressed head fixture is present alone, the test generates a fresh matching
+native reference in its temporary directory and prints the output paths.
 
 The JSON includes the native adapter and executable fingerprints to
 distinguish current references. Use the 3D runner's ``--reference-only``

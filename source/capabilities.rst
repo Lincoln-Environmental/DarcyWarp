@@ -43,7 +43,9 @@ Model representation
        paths have additional requirements.
 
 A general-head boundary can represent exchange with an external water body
-whose head is prescribed. It does not evolve that water body's flow or stage.
+whose head is prescribed. A conducting GHB requires a finite stage with
+absolute value below ``1e20``. A stage of zero metres is valid. The solver
+does not evolve the external water body's flow or stage.
 Similarly, a 2D thickness-integrated model does not resolve vertical gradients
 between multiple aquifer layers or variably saturated soil-water flow.
 
@@ -56,10 +58,14 @@ in area per unit time. DRN discharges only above the drain elevation.
 RIV can exchange in either direction and uses the river bottom in the
 flux law when the aquifer head falls below that bottom.
 
+The river stage must be at or above the river bottom in every enabled cell.
 Use ``update_riv_boundary_2d()`` for changing river stages or conductance.
 ``accepted_drn_discharge_2d()`` and ``accepted_riv_discharge_2d()``
 return rates for a converged head and its matching solve diagnostics.
-Positive rates leave the aquifer. The Newton budget includes both packages.
+Positive rates leave the aquifer. The Newton multi-period driver retains
+GHB, DRN and RIV fields from ``build_from_fields()`` and reports their
+time-weighted mean rates over each stress period. With DRN or RIV enabled,
+timestep retries use Newton because Picard cannot assemble those packages.
 Native 3D Cartesian and NPF/STO currently provide GHB.
 
 Use consistent units
@@ -141,6 +147,17 @@ per-period diagnostics. FAS remains experimental even though it supports
 multiple periods. Backend status describes implementation maturity; model
 accuracy still requires checks appropriate to the application.
 
+Picard, Newton and FAS use the selected ``min_saturated_thickness`` for each
+period, including retries and supported Picard fallbacks. Storage-rate and
+storage-coefficient maps are zero on prescribed-head and inactive cells.
+The head history still records changes to prescribed heads.
+
+The transient Picard budget checks the water balance of each hydraulically
+connected group of free cells. Positive face conductance defines connectivity.
+Prescribed heads supply external exchanges to each adjacent group. The
+period diagnostics report the group count and the largest absolute percentage
+discrepancy alongside the signed domain balance.
+
 Precision and performance
 -------------------------
 
@@ -159,7 +176,11 @@ confined steady mixed implementation.
 The transient unconfined device path has a separate mixed correction option,
 ``transient_mixed_precision_enabled``. It runs under ``DARCY_FLOAT=float64``
 and retains FP64 heads, storage and acceptance with FP32 inner corrections.
-GHB requires the face operator. The :doc:`release_2d` documents the explicit
+With ``DARCY_FLOAT=float32``, a device fast-path request uses the classic
+operator for models without GHB. An FP32 model with GHB uses host Picard
+when operator and device-only iteration settings are left at their defaults.
+Explicit face, face-graph and mixed requests require FP64 model fields.
+Device-side GHB also requires FP64 faces. The :doc:`release_2d` documents the explicit
 runtime profile, unchanged 1e-6 m head-residual gate and GHB-specific damping;
 its benchmarks require matching MF6 timesteps as well as heads and budgets.
 
@@ -193,6 +214,8 @@ arrays contain volumetric rates per cell.
 
 Both formulations also support cell-based general-head boundaries through
 ``ghb_conductance`` and ``ghb_head`` build inputs and ``update_ghb()``.
+Active prescribed heads must be finite with absolute value below ``1e20``
+at construction and on update.
 The :doc:`native_3d_ghb` page covers steady/transient GHB, budgets, the
 Cartesian FGMRES option, explicit FP64 roundoff checks and MF6 benchmarks.
 

@@ -14,6 +14,7 @@ from DARCY_WARP_PACKAGE.model_builder import (
     _build_dem,
     _model_bottom,
     _create_chd_single_period,
+    steady_domain_2d,
 )
 
 
@@ -228,6 +229,7 @@ def make_mf_model(
     *,
     ghb_width: float | None = None,
     aquifer_thickness: float = 300.0,
+    domain: np.ndarray | None = None,
     executable: Path | None = None,
 ):
     """
@@ -253,7 +255,7 @@ def make_mf_model(
 
     name = "model_truth"
 
-    domain = _build_domain(nx=nx, ny=ny)
+    domain = steady_domain_2d(domain=domain, nx=nx, ny=ny)
     dem = _build_dem(domain=domain)
     if not np.isfinite(aquifer_thickness) or aquifer_thickness <= 0.:
         raise ValueError('aquifer_thickness must be positive and finite')

@@ -23,6 +23,16 @@ def _build_domain(nx: int = 3000, ny: int = 333):
     return domain
 
 
+def steady_domain_2d(*, domain, nx, ny):
+    """Return the active-cell mask shared by the steady reference writer and cache."""
+    if domain is None:
+        return _build_domain(nx=nx, ny=ny)
+    mask = np.asarray(domain)
+    if mask.shape != (ny, nx) or not np.all((mask == 0) | (mask == 1)) or not np.any(mask):
+        raise ValueError("domain must be a non-empty binary active-cell mask of shape (ny, nx)")
+    return mask.astype(np.int8, copy=False)
+
+
 def _build_dirichlet_boundary_mask(domain: np.ndarray):
     """
     Build a mask for Dirichlet boundary conditions where boundaries are

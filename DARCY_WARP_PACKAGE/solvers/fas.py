@@ -553,6 +553,10 @@ def _run_fallback(
             # full-accuracy inner solve rather than the inexact-Newton
             # forcing sequence used on the primary path.
             fallback_kwargs["newton_inexact_forcing_enabled"] = False
+        elif context.transient:
+            # Recover the FAS convertible storage equation on the Picard leg.
+            fallback_kwargs.update(storage_reference="current_picard",
+                                   unconfined_storage_mode_2d="mf6_convertible_secant_sy")
         backend = select_backend(
             solver=backend_name,
             formulation="unconfined",
@@ -903,6 +907,8 @@ def solve_unconfined_fas(*, context: SolverContext, **kwargs: Any):
         "budget_summary": dict(budget.iloc[0]),
     }
     if not converged and fallback_enabled:
+        if transient:
+            original_kwargs.update(sy=sy, ss=ss, head_prev=previous_array)
         return _run_fallback(
             context=context,
             order=fallback_order,

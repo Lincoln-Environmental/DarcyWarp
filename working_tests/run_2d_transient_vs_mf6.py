@@ -26,6 +26,7 @@ Usage:
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import lzma
@@ -33,6 +34,8 @@ import os
 import sys
 import tempfile
 import time
+import zipfile
+from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -55,9 +58,17 @@ from DARCY_WARP_PACKAGE.model_builder import (  # noqa: E402
     _model_bottom,
     make_ugly_T_field,
 )
-from DARCY_WARP_PACKAGE.project_base import data_store, require_mf6  # noqa: E402
+from DARCY_WARP_PACKAGE.validation.head_checks import invalid_head_values
+from DARCY_WARP_PACKAGE.project_base import data_store  # noqa: E402
 from working_tests.transient_artifacts import (  # noqa: E402
     ARTIFACT_SCHEMA_VERSION,
+    MF6_MODEL_NAME,
+    NATIVE_OUTPUT_NAMES,
+    file_sha256,
+    head_history_sha256,
+    _fingerprint_value,
+    _load_compressed_npz,
+    pinned_mf6_executable,
     all_active_transient_heads_finite,
     compute_transient_case_fingerprint,
 )
@@ -75,7 +86,6 @@ DEFAULT_K = 100.0
 DEFAULT_SY = 0.10           # specific yield (unconfined storage)
 DEFAULT_SS = 1.0e-5         # specific storage (1/m), confined/saturated portion
 DEFAULT_INIT_SAT_THICKNESS = 100.0
-MF6_MODEL_NAME = "tr2d_truth"
 FORMULATION_CONFINED = "confined"
 FORMULATION_UNCONFINED = "unconfined"
 FORMULATION_MODES = {FORMULATION_CONFINED, FORMULATION_UNCONFINED}
@@ -368,7 +378,8 @@ def _validate_mf6_transient_outputs(
         active=active,
     ):
         raise FloatingPointError("MF6 transient heads contain non-finite active-cell values.")
-    if not np.isfinite(initial_head[active]).all():
+    active = np.asarray(active) != 0
+    if np.any(invalid_head_values(head=initial_head[active])):
         raise FloatingPointError("MF6 transient warm-start head contains non-finite active-cell values.")
     if float(np.max(np.abs(heads_per_period[-1][active] - initial_head[active]))) <= 1.0e-12:
         raise RuntimeError("MF6 transient response is indistinguishable from its initial condition.")
@@ -378,40 +389,45 @@ def _validate_mf6_transient_outputs(
     return discrepancy, tolerance
 
 
-def _load_mf6_last_head(
-    *,
-    hds_path: Path,
-    case: TransientCase,
-    label: str,
-) -> np.ndarray | None:
-    """
-    Load a completed MF6 head file when it matches the requested case shape.
-    """
-    if not hds_path.exists():
-        return None
-    if not _mf6_normal_termination(hds_path.parent):
-        print(
-            f"Existing {label} warm-start workspace did not terminate normally; "
-            "recomputing warm start."
-        )
-        return None
-    heads = flopy.utils.HeadFile(str(hds_path)).get_alldata()
-    if heads.size == 0:
-        return None
-    head = np.asarray(heads[-1, 0, :, :], dtype=np.float64)
-    if head.shape != (case.ny, case.nx):
-        print(
-            f"Existing {label} warm-start head has shape {head.shape}; "
-            f"expected {(case.ny, case.nx)}. Recomputing warm start."
-        )
-        return None
-    head[case.active == 0] = 0.0
-    head[case.bc_mask != 0] = case.bc_values[case.bc_mask != 0]
-    if not np.all(np.isfinite(head)):
-        print(f"Existing {label} warm-start head contains non-finite values. Recomputing warm start.")
-        return None
-    print(f"Reusing existing {label} warm-start head: {hds_path}")
-    return head
+def _steady_warm_start(*, case, mode, transmissivity_mode, directory, identity, reuse):
+    """Compute only in private workspaces; atomically cache a completed, keyed head."""
+    digest = hashlib.sha256(b"darcywarp-steady-transient-initial-state-v1")
+    for key in ("nx", "ny", "dx", "active", "bc_mask", "bc_values", "top", "bottom",
+                "hydraulic_conductivity", "initial_head", "steady_recharge_rate"):
+        _fingerprint_value(digest, key, getattr(case, key))
+    for key, value in (("mode", mode), ("transmissivity_mode", transmissivity_mode),
+                       ("mf6_sha256", identity["mf6_sha256"]), ("flopy", flopy.__version__)):
+        _fingerprint_value(digest, key, value)
+    fingerprint = digest.hexdigest()
+    directory.mkdir(parents=True, exist_ok=True)
+    cache = directory / f"{fingerprint}.npz.lzma"
+    if reuse and cache.is_file():
+        try:
+            saved = _load_compressed_npz(cache)
+            head = saved["head"]
+            if (str(saved["input_sha256"]) == fingerprint
+                    and head.shape == (case.ny, case.nx)
+                    and not np.any(invalid_head_values(head=head[case.active != 0]))
+                    and hashlib.sha256(head.tobytes()).hexdigest() == str(saved["head_sha256"])):
+                return head, 0.0, fingerprint
+        except (OSError, EOFError, ValueError, KeyError, lzma.LZMAError, zipfile.BadZipFile):
+            pass  # An interrupted or damaged entry is replaced only after a verified solve.
+
+    with tempfile.TemporaryDirectory(dir=directory, prefix="native-") as workspace:
+        kwargs = dict(case=case, recharge_rate=case.steady_recharge_rate,
+                      mf6_workspace=workspace, executable=identity["mf6_executable"])
+        if mode == WARM_START_CONFINED_STEADY_MF6:
+            head, elapsed = run_mf6_confined_steady_warm_start(
+                **kwargs, transmissivity_mode=transmissivity_mode)
+        else:
+            head, elapsed = run_mf6_unconfined_steady_warm_start(**kwargs)
+        if not _mf6_normal_termination(Path(workspace)):
+            raise RuntimeError("Native steady warm start lacks normal termination")
+        if np.any(invalid_head_values(head=head[case.active != 0])):
+            raise ValueError("Native steady warm start contains invalid active heads")
+        _save_compressed_npz(cache, {"head": head, "input_sha256": fingerprint,
+                                    "head_sha256": hashlib.sha256(head.tobytes()).hexdigest()})
+    return head, elapsed, fingerprint
 
 
 def _transient_failure_message(*, mf6_ws: Path, name: str) -> str:
@@ -630,6 +646,7 @@ def run_mf6_confined_steady_warm_start(
     recharge_rate: float | None = None,
     mf6_workspace: str | Path | None = None,
     transmissivity_mode: str = "initial_saturated_thickness",
+    *, executable: str | Path | None = None,
 ) -> tuple[np.ndarray, float]:
     """
     Run the matching confined steady MF6 problem used as transient warm start.
@@ -656,7 +673,7 @@ def run_mf6_confined_steady_warm_start(
     name = "tr2d_c_ss"
     sim = flopy.mf6.MFSimulation(
         sim_name=name,
-        exe_name=str(require_mf6()),
+        exe_name=pinned_mf6_executable(executable)["mf6_executable"],
         version="mf6",
         sim_ws=str(mf6_ws),
     )
@@ -745,6 +762,8 @@ def run_mf6_confined_steady_warm_start(
     hds_path = mf6_ws.joinpath(f"{name}.hds")
     heads = flopy.utils.HeadFile(str(hds_path)).get_alldata()
     confined_head = np.asarray(heads[-1, 0, :, :], dtype=np.float64)
+    if np.any(invalid_head_values(head=confined_head[case.active != 0])):
+        raise ValueError("Native steady warm start contains invalid active heads")
     confined_head[case.active == 0] = 0.0
     confined_head[case.bc_mask != 0] = case.bc_values[case.bc_mask != 0]
     if not np.all(np.isfinite(confined_head)):
@@ -756,6 +775,7 @@ def run_mf6_unconfined_steady_warm_start(
     case: TransientCase,
     recharge_rate: float | None = None,
     mf6_workspace: str | Path | None = None,
+    *, executable: str | Path | None = None,
 ) -> tuple[np.ndarray, float]:
     """
     Run a steady unconfined MF6 solve used as the transient initial condition.
@@ -774,7 +794,7 @@ def run_mf6_unconfined_steady_warm_start(
     name = "tr2d_u_ss"
     sim = flopy.mf6.MFSimulation(
         sim_name=name,
-        exe_name=str(require_mf6()),
+        exe_name=pinned_mf6_executable(executable)["mf6_executable"],
         version="mf6",
         sim_ws=str(mf6_ws),
     )
@@ -858,6 +878,8 @@ def run_mf6_unconfined_steady_warm_start(
     hds_path = mf6_ws.joinpath(f"{name}.hds")
     heads = flopy.utils.HeadFile(str(hds_path)).get_alldata()
     unconfined_head = np.asarray(heads[-1, 0, :, :], dtype=np.float64)
+    if np.any(invalid_head_values(head=unconfined_head[case.active != 0])):
+        raise ValueError("Native steady warm start contains invalid active heads")
     unconfined_head[case.active == 0] = 0.0
     unconfined_head[case.bc_mask != 0] = case.bc_values[case.bc_mask != 0]
     if not np.all(np.isfinite(unconfined_head)):
@@ -875,6 +897,7 @@ def run_mf6_transient(
     confined_steady_head: np.ndarray | None = None,
     unconfined_steady_head: np.ndarray | None = None,
     formulation: str = FORMULATION_UNCONFINED,
+    *, executable: str | Path | None = None,
 ) -> Path:
     """
     Run MODFLOW 6 for one transient case and write the truth artifact.
@@ -909,91 +932,74 @@ def run_mf6_transient(
     mf6_ws.mkdir(parents=True, exist_ok=True)
     warm_start_ws = Path(warm_start_workspace) if warm_start_workspace is not None else out_path.parent
 
+    # Direct callers can choose separate output or raw model workspaces.
+    # Serialize both sets of fixed sibling filenames through atomic publication.
+    from filelock import FileLock
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    roots = {out_path.parent.resolve(), mf6_ws.resolve()}
+    with ExitStack() as locks:
+        for root in sorted(roots):
+            locks.enter_context(FileLock(str(root / ".native-transient-write.lock")))
+        return _write_transient_reference(case, out_path, mf6_ws, warm_start_ws,
+            reuse_existing_warm_start, warm_start_mode, confined_steady_head,
+            unconfined_steady_head, formulation, executable)
+
+
+def _write_transient_reference(case, out_path, mf6_ws, warm_start_ws, reuse_existing_warm_start,
+                               warm_start_mode, confined_steady_head, unconfined_steady_head,
+                               formulation, executable):
+
     warm_start_mode = str(warm_start_mode).strip().lower()
     if warm_start_mode not in WARM_START_MODES:
         raise ValueError(f"warm_start_mode must be one of {sorted(WARM_START_MODES)}.")
+    identity = pinned_mf6_executable(executable)
     confined_steady_engine_time = float("nan")
     unconfined_steady_engine_time = float("nan")
     warm_start_transmissivity_mode = "not_used"
-    if warm_start_mode == WARM_START_CONFINED_STEADY_MF6:
-        confined_workspace = warm_start_ws.joinpath("mf6_confined_steady_warm_start")
-        if confined_steady_head is None:
-            if bool(reuse_existing_warm_start):
-                confined_steady_head = _load_mf6_last_head(
-                    hds_path=confined_workspace.joinpath("tr2d_c_ss.hds"),
-                    case=case,
-                    label="confined steady",
-                )
-                if confined_steady_head is not None:
-                    confined_steady_engine_time = 0.0
-                    warm_start_transmissivity_mode = "reused_existing"
-        if confined_steady_head is None:
-            warm_start_transmissivity_mode = (
-                "full_thickness"
-                if formulation == FORMULATION_CONFINED
-                else "initial_saturated_thickness"
-            )
-            confined_steady_head, confined_steady_engine_time = run_mf6_confined_steady_warm_start(
-                case=case,
-                recharge_rate=float(case.steady_recharge_rate),
-                mf6_workspace=confined_workspace,
-                transmissivity_mode=warm_start_transmissivity_mode,
-            )
-        else:
-            confined_steady_head = np.asarray(confined_steady_head, dtype=np.float64)
-            if warm_start_transmissivity_mode == "not_used":
-                warm_start_transmissivity_mode = "provided"
-        if confined_steady_head.shape != (case.ny, case.nx):
-            raise ValueError(
-                f"confined_steady_head shape {confined_steady_head.shape} expected {(case.ny, case.nx)}."
-            )
-        if not np.all(np.isfinite(confined_steady_head)):
-            raise ValueError("confined_steady_head must be finite.")
-        transient_initial_head = confined_steady_head.copy()
-        unconfined_steady_head = np.full((case.ny, case.nx), np.nan, dtype=np.float64)
-    elif warm_start_mode == WARM_START_UNCONFINED_STEADY_MF6:
-        if formulation != FORMULATION_UNCONFINED:
-            raise ValueError("warm_start_mode='unconfined_steady_mf6' requires formulation='unconfined'.")
-        unconfined_workspace = warm_start_ws.joinpath("mf6_unconfined_steady_warm_start")
-        if unconfined_steady_head is None:
-            if bool(reuse_existing_warm_start):
-                unconfined_steady_head = _load_mf6_last_head(
-                    hds_path=unconfined_workspace.joinpath("tr2d_u_ss.hds"),
-                    case=case,
-                    label="unconfined steady",
-                )
-                if unconfined_steady_head is not None:
-                    unconfined_steady_engine_time = 0.0
-            if unconfined_steady_head is None:
-                unconfined_steady_head, unconfined_steady_engine_time = run_mf6_unconfined_steady_warm_start(
-                    case=case,
-                    recharge_rate=float(case.steady_recharge_rate),
-                    mf6_workspace=unconfined_workspace,
-                )
-        else:
-            unconfined_steady_head = np.asarray(unconfined_steady_head, dtype=np.float64)
-        if unconfined_steady_head.shape != (case.ny, case.nx):
-            raise ValueError(
-                f"unconfined_steady_head shape {unconfined_steady_head.shape} expected {(case.ny, case.nx)}."
-            )
-        if not np.all(np.isfinite(unconfined_steady_head)):
-            raise ValueError("unconfined_steady_head must be finite.")
-        transient_initial_head = unconfined_steady_head.copy()
-        confined_steady_head = np.full((case.ny, case.nx), np.nan, dtype=np.float64)
-        warm_start_transmissivity_mode = "not_used"
+    warm_fingerprint = ""
+    warm_source = "artifact_initial"
+    if warm_start_mode == WARM_START_ARTIFACT_INITIAL:
+        transient_initial_head = np.array(case.initial_head, dtype=np.float64, copy=True)
     else:
-        transient_initial_head = np.asarray(case.initial_head, dtype=np.float64).copy()
-        confined_steady_head = np.full((case.ny, case.nx), np.nan, dtype=np.float64)
-        unconfined_steady_head = np.full((case.ny, case.nx), np.nan, dtype=np.float64)
-        warm_start_transmissivity_mode = "not_used"
-
+        if warm_start_mode == WARM_START_CONFINED_STEADY_MF6:
+            supplied = confined_steady_head
+            folder = "mf6_confined_steady_warm_start"
+            warm_start_transmissivity_mode = ("full_thickness" if formulation == FORMULATION_CONFINED
+                                              else "initial_saturated_thickness")
+        else:
+            if formulation != FORMULATION_UNCONFINED:
+                raise ValueError("unconfined_steady_mf6 requires formulation='unconfined'")
+            supplied = unconfined_steady_head
+            folder = "mf6_unconfined_steady_warm_start"
+        if supplied is None:
+            head, elapsed, warm_fingerprint = _steady_warm_start(case=case, mode=warm_start_mode,
+                transmissivity_mode=warm_start_transmissivity_mode, directory=warm_start_ws / folder,
+                identity=identity, reuse=reuse_existing_warm_start)
+            warm_source = "native_steady"
+        else:
+            head = np.asarray(supplied, dtype=np.float64)
+            elapsed = float("nan")
+            warm_source = "supplied_head"
+            warm_start_transmissivity_mode = "supplied_head"
+        transient_initial_head = head.copy()
+        if warm_start_mode == WARM_START_CONFINED_STEADY_MF6:
+            confined_steady_engine_time = elapsed
+        else:
+            unconfined_steady_engine_time = elapsed
+    if (transient_initial_head.shape != (case.ny, case.nx)
+            or np.any(invalid_head_values(head=transient_initial_head[case.active != 0]))):
+        raise ValueError("Invalid active initial head or warm-start shape")
+    recorded_warm_mode = WARM_START_ARTIFACT_INITIAL if warm_source == "supplied_head" else warm_start_mode
+    missing_head = np.full((case.ny, case.nx), np.nan, dtype=np.float64)
+    confined_steady_head = (transient_initial_head if warm_start_mode == WARM_START_CONFINED_STEADY_MF6 else missing_head)
+    unconfined_steady_head = (transient_initial_head if warm_start_mode == WARM_START_UNCONFINED_STEADY_MF6 else missing_head)
     transient_initial_head[case.active == 0] = 0.0
     transient_initial_head[case.bc_mask != 0] = case.bc_values[case.bc_mask != 0]
 
     name = MF6_MODEL_NAME
     sim = flopy.mf6.MFSimulation(
         sim_name=name,
-        exe_name=str(require_mf6()),
+        exe_name=identity["mf6_executable"],
         version="mf6",
         sim_ws=str(mf6_ws),
     )
@@ -1197,7 +1203,7 @@ def run_mf6_transient(
         "initial_saturated_thickness": np.asarray(case.initial_saturated_thickness, dtype=np.float64),
         "t_field_kind": np.asarray(case.t_field_kind),
         "t_field_seed": np.asarray(case.t_field_seed, dtype=np.int32),
-        "warm_start_mode": np.asarray(warm_start_mode),
+        "warm_start_mode": np.asarray(recorded_warm_mode),
         "ghb_mask": np.asarray(ghb_mask, dtype=np.int32),
         "ghb_head": np.asarray(ghb_head, dtype=np.float64),
         "ghb_width": np.asarray(ghb_width, dtype=np.float64),
@@ -1216,6 +1222,16 @@ def run_mf6_transient(
         "mf6_budget_discrepancy_max": np.asarray(budget_discrepancy, dtype=np.float64),
         "mf6_budget_discrepancy_tol": np.asarray(budget_tolerance, dtype=np.float64),
         "ghb_fixed_point_converged": np.asarray(int(fixed_point_converged), dtype=np.int8),
+        **identity,
+        "mf6_native_workspace": np.asarray("mf6" if mf6_ws.resolve() == (out_path.parent / "mf6").resolve()
+                                           else str(mf6_ws.resolve())),
+        "mf6_heads_sha256": np.asarray(head_history_sha256(heads_per_period)),
+        "native_output_sha256": np.asarray(json.dumps({
+            **{filename: file_sha256(mf6_ws / filename) for filename in NATIVE_OUTPUT_NAMES},
+            mf6_storage_budget_path.name: file_sha256(mf6_storage_budget_path),
+        }, sort_keys=True)),
+        "warm_start_fingerprint": np.asarray(warm_fingerprint),
+        "warm_start_source": np.asarray(warm_source),
         "artifact_schema_version": np.asarray(ARTIFACT_SCHEMA_VERSION, dtype=np.int32),
         "engine_time": np.asarray(engine_time, dtype=np.float64),
         "confined_steady_engine_time": np.asarray(confined_steady_engine_time, dtype=np.float64),
@@ -1226,7 +1242,9 @@ def run_mf6_transient(
         "provenance": np.asarray(json.dumps({
             "kind": f"2d_{formulation}_transient_mf6_truth",
             "formulation": formulation,
-            "warm_start_mode": warm_start_mode,
+            "warm_start_mode": recorded_warm_mode,
+            "requested_warm_start_mode": warm_start_mode,
+            "warm_start_source": warm_source,
             "confined_steady_transmissivity_mode": warm_start_transmissivity_mode,
             "n_weeks": case.n_weeks,
             "recharge_schedule_weeks": case.recharge_schedule_weeks,
@@ -1285,6 +1303,8 @@ def main(
     reuse_existing_warm_start: bool = False,
     warm_start_mode: str = WARM_START_UNCONFINED_STEADY_MF6,
     formulation: str = FORMULATION_UNCONFINED,
+    *, executable: str | Path | None = None,
+    dt_days: float = DT_DAYS,
 ) -> Path:
     """
     Build the default transient MF6 case and write its truth file.
@@ -1305,6 +1325,7 @@ def main(
         sy=sy,
         ss=ss,
         n_weeks=n_weeks,
+        dt_days=dt_days,
         annual_recharge_m=annual_recharge_m,
         recharge_schedule_weeks=recharge_schedule_weeks,
         t_field_kind=t_field_kind,
@@ -1319,6 +1340,7 @@ def main(
     print(f"Transient 2D {formulation} MF6 truth: {nx}x{ny}, {n_weeks} weekly steps, {k_desc}")
     return run_mf6_transient(
         case=case,
+        executable=executable,
         out_path=out_path,
         mf6_workspace=mf6_workspace,
         warm_start_workspace=warm_start_workspace,

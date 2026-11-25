@@ -291,14 +291,19 @@ def _discover_truth_fixtures() -> list[tuple[int, Path]]:
 
 
 def _head_metrics(heads_warp, heads_truth, active) -> dict[str, float]:
+    from DARCY_WARP_PACKAGE.validation.head_checks import invalid_head_values
+
     heads_warp = np.asarray(heads_warp, dtype=np.float64)
     heads_truth = np.asarray(heads_truth, dtype=np.float64)
-    mask = (np.asarray(active) != 0) & np.isfinite(heads_truth) & np.isfinite(heads_warp)
+    mask = np.asarray(active) != 0
+    assert np.any(mask), "Empty active domain in steady MF6 qualification"
+    assert not np.any(mask & invalid_head_values(head=heads_truth)), "Invalid reference head at an active cell"
+    assert not np.any(mask & invalid_head_values(head=heads_warp)), "Invalid Warp head at an active cell"
     diff = (heads_warp - heads_truth)[mask]
     abs_diff = np.abs(diff)
     return {
-        "max_abs_diff": float(np.max(abs_diff)) if abs_diff.size else float("nan"),
-        "rmse": float(np.sqrt(np.mean(diff * diff))) if diff.size else float("nan"),
+        "max_abs_diff": float(np.max(abs_diff)),
+        "rmse": float(np.sqrt(np.mean(diff * diff))),
         "n_active": int(mask.sum()),
     }
 
@@ -339,6 +344,7 @@ def test_unconfined_warp_matches_mf6_truth_all_grids(nx: int, fixture_path: Path
         )
         heads, info = solver.solve(**build_solve_kwargs(artifact))
 
+    assert info["converged"], "Steady Warp solve did not converge"
     assert heads.shape == artifact["heads"].shape
     metrics = _head_metrics(heads, artifact["heads"], artifact["active"])
     original = artifact["provenance"].get("original_warp_vs_mf6_max_abs_diff")
