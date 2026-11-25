@@ -2306,5 +2306,11 @@ def run_device_picard_periods(
         if not production_acceptance_passed:
             break
         accepted_periods += 1
-        head_prev = head_arr
+        # head_arr may be a view of the live h_iter_wp buffer (warp's
+        # .numpy() copies on CUDA but views host memory on the CPU
+        # device). Own the accepted head here so the next fixed-step
+        # period cannot compare its candidate against itself in the
+        # physical budget check, and heads_final cannot pick up a later
+        # rejected trial.
+        head_prev = head_arr.copy()
     return head_prev, last_info, accepted_periods
