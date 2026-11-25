@@ -146,7 +146,21 @@ Validation
   nonzero recharge, gaining/losing rivers, extensive drainage and
   multi-entry cells at ~100k and 1M+ cells, separating construction
   from warm solves and recording update, stage-update and 20-step
-  history timings (``benchmark_results/wel_boundaries_3d/``).
+  history timings (``benchmark_results/wel_boundaries_3d/``). Recorded
+  CUDA runs (RTX 4070 Ti SUPER, diagonal-preconditioner default path):
+  the 100,800-cell grid builds in 0.035 s, warm steady solves take
+  0.97-1.0 s (9 Newton outers, 3,216 Krylov), pumping and stage updates
+  re-solve in 0.86 s and 1.46 s, and a 20-step device-resident history
+  runs in 16.8 s with 20/20 accepted steps. The 1,012,500-cell grid
+  (1,632 well entries, 16,688 drains, 224 river entries) builds in
+  0.27 s, warm steady solves take 179 s (68 outers, 97,524 Krylov on
+  the default diagonal path), parameter updates re-solve in about
+  100 s, the 20-step history runs in 11.6 s (fully accepted), and peak
+  mempool use is 1.29 GB. Each history step costs about 0.58 s because
+  warm Newton starts reuse the resident workspace from the previous
+  accepted head, far below the cold steady cost; the kcycle
+  preconditioner path remains the tuned qualification choice for large
+  heterogeneous grids.
 * Regional MF6 parity: ``working_tests/mf6_parity_3d_wel_boundaries.py``
   solves the matched MF6 twin of the small benchmark grid (100,800
   heterogeneous cells, 84 well entries including shared cells, 792
