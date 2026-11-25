@@ -94,11 +94,6 @@ except OSError as e:
 
 print(f"cuda_device_found = {cuda_device_found}")
 
-# Optional GHB helper: use if available
-try:
-    from legacy_code.model_builder import _build_ghb_boundary_mask
-except ImportError:
-    _build_ghb_boundary_mask = None
 
 
 

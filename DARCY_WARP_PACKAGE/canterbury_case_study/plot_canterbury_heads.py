@@ -9,21 +9,15 @@ from matplotlib.colors import BoundaryNorm, ListedColormap
 
 from DARCY_WARP_PACKAGE.canterbury_case_study.canterbury_data_prep import load_case_inputs
 
+from DARCY_WARP_PACKAGE.canterbury_case_study.map_helpers import (
+    _add_basemap,
+    _build_edges,
+    _set_map_aspect,
+)
+
 DEFAULT_EXTENT = (1490750.0, 1581450.0, 5138850.0, 5201550.0)
 COLORBAR_LABEL_SIZE = 8
 COLORBAR_TICK_SIZE = 7
-
-
-def _set_map_aspect(ax, lat_edges: np.ndarray) -> None:
-    mean_lat = float(np.nanmean(lat_edges))
-    if not np.isfinite(mean_lat):
-        ax.set_aspect("equal", adjustable="box")
-        return
-    cos_lat = float(np.cos(np.deg2rad(mean_lat)))
-    if cos_lat <= 0.0 or not np.isfinite(cos_lat):
-        ax.set_aspect("equal", adjustable="box")
-        return
-    ax.set_aspect(1.0 / cos_lat, adjustable="box")
 
 
 def _default_out_dir() -> Path:
@@ -42,38 +36,6 @@ def _load_head(head_path: Path) -> np.ndarray:
     if head.ndim != 2:
         raise ValueError(f"Expected 2D head array, got shape {head.shape}")
     return head
-
-
-def _build_edges(extent: tuple[float, float, float, float], nx: int, ny: int) -> tuple[np.ndarray, np.ndarray]:
-    xmin, xmax, ymin, ymax = [float(v) for v in extent]
-    x_edges = np.linspace(xmin, xmax, nx + 1)
-    # Row 0 is north, so y edges run from north (max) to south (min).
-    y_edges = np.linspace(ymax, ymin, ny + 1)
-    return x_edges, y_edges
-
-
-def _add_basemap(ax, crs: str, provider: str, zoom: int | None) -> None:
-    if provider == "none":
-        return
-    try:
-        import contextily as cx
-    except Exception as exc:
-        raise RuntimeError("contextily is required for basemap tiles. Install with `pip install contextily`.") from exc
-
-    if provider == "opentopo":
-        source = cx.providers.OpenTopoMap
-    else:
-        source = cx.providers.OpenStreetMap.Mapnik
-
-    zoom_value = "auto" if zoom is None else zoom
-    cx.add_basemap(
-        ax,
-        crs=crs,
-        source=source,
-        zoom=zoom_value,
-        attribution_size=6,
-        zorder=0,
-    )
 
 
 def _plot_overlays(

@@ -1,27 +1,14 @@
-from shutil import which
-import warnings
-import platform
-os_type = platform.system()
-import socket
+# SPDX-License-Identifier: AGPL-3.0-or-later
+"""Paths for benchmark inputs and the optional native MODFLOW executable.
+
+Importing this module does not create directories or access network shares.
+"""
+
 from pathlib import Path
+from shutil import which
 
-print('running on host:', socket.gethostname())
-project_name = 'canterbury_nn'
-proj_root = Path(__file__).parent  # base of git repo
-home = Path.home()
-
-data_store = proj_root.joinpath("data")
-# make sure the wq_data store exists else create it
-if not data_store.exists():
-    data_store.mkdir(exist_ok=True)
-
-# get opperating system type eg windows or linux
-if os_type == "Windows":
-    unc = Path(r"\\DS1621\Environment_Moulding_Storage\PINN")
-    print(unc.exists())  # should be True
-else:
-    unc = home.joinpath('mnt','unbacked','PINN')
-    print(unc.exists())
+proj_root = Path(__file__).parent
+data_store = proj_root / "data"
 
 _MF6_ERROR = (
     "mf6 not found. Either add /bin/modflow to PATH for your Python environment/IDE, "
@@ -29,15 +16,28 @@ _MF6_ERROR = (
     "Tried '/bin/modflow/mf6' and PATH."
 )
 
-MF6: Path | None = Path("/bin/modflow/mf6")
-if not MF6.exists():
+
+def find_mf6() -> Path | None:
+    """Locate MODFLOW 6 at the installed path or on the process PATH.
+
+    :returns: Executable path, or None when neither location exists.
+    """
+    installed = Path("/bin/modflow/mf6")
+    if installed.exists():
+        return installed
     found = which("mf6")
-    if found is None:
-        MF6 = None
-    else:
-        MF6 = Path(found)
+    return None if found is None else Path(found)
+
+
+MF6 = find_mf6()
+
 
 def require_mf6() -> Path:
+    """Return the native MODFLOW executable selected for this process.
+
+    :returns: Path to MODFLOW 6.
+    :raises RuntimeError: If the executable was not found.
+    """
     if MF6 is None:
         raise RuntimeError(_MF6_ERROR)
     return MF6
