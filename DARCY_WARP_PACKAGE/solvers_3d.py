@@ -2230,6 +2230,107 @@ def _picard_unconfined_7point_3d(
     return (h_iter, info_out) if return_info else h_iter
 
 
+def _prepare_7point_arrays(
+    *, tx_p, tx_m, ty_p, ty_m, tz_p, tz_m, rhs, active, bc_mask, bc_values,
+):
+    """Normalise the Cartesian operator inputs and identify free cells.
+
+    :param tx_p: Conductance toward increasing x index, volume/time/length.
+    :param tx_m: Conductance toward decreasing x index, volume/time/length.
+    :param ty_p: Conductance toward increasing y index, volume/time/length.
+    :param ty_m: Conductance toward decreasing y index, volume/time/length.
+    :param tz_p: Conductance toward increasing layer index, volume/time/length.
+    :param tz_m: Conductance toward decreasing layer index, volume/time/length.
+    :param rhs: Source rate array, positive into the aquifer, volume/time.
+    :param active: Binary active-cell array.
+    :param bc_mask: Binary prescribed-head array.
+    :param bc_values: Prescribed hydraulic heads, length.
+    :returns: Six conductance arrays, source, active and prescribed-head masks,
+        prescribed heads, common shape (nz, ny, nx), free-cell mask and count.
+    :raises ValueError: For non-3D arrays, mismatched shapes or non-binary masks.
+    """
+    txp = np.asarray(tx_p, dtype=NP_FLOAT)
+    txm = np.asarray(tx_m, dtype=NP_FLOAT)
+    typ = np.asarray(ty_p, dtype=NP_FLOAT)
+    tym = np.asarray(ty_m, dtype=NP_FLOAT)
+    tzp = np.asarray(tz_p, dtype=NP_FLOAT)
+    tzm = np.asarray(tz_m, dtype=NP_FLOAT)
+    b = np.asarray(rhs, dtype=NP_FLOAT)
+    act = binary_mask(value=active, name="active")
+    bcm = binary_mask(value=bc_mask, name="bc_mask")
+    bcv = np.asarray(bc_values, dtype=NP_FLOAT)
+
+    shape = txp.shape
+    if txp.ndim != 3:
+        raise ValueError("7-point arrays must be 3D with shape (nz, ny, nx).")
+    for name, arr in (
+        ("tx_m", txm),
+        ("ty_p", typ),
+        ("ty_m", tym),
+        ("tz_p", tzp),
+        ("tz_m", tzm),
+        ("rhs", b),
+        ("active", act),
+        ("bc_mask", bcm),
+        ("bc_values", bcv),
+    ):
+        if arr.shape != shape:
+            raise ValueError(f"{name} shape {arr.shape} expected {shape}")
+
+    free = (act != 0) & (bcm == 0)
+    n_free = int(np.count_nonzero(free))
+    return txp, txm, typ, tym, tzp, tzm, b, act, bcm, bcv, shape, free, n_free
+
+
+def _prepare_unconfined_7point_fields(
+    *, shape, kx_field, ky_field, kz_field, zbot_field, unconfined_min_sat,
+    unconfined_max_picard_iter, unconfined_relax, unconfined_head_tol,
+):
+    """Validate nonlinear Cartesian field inputs and basic Picard controls.
+
+    :param shape: Expected grid shape (nz, ny, nx).
+    :param kx_field: Saturated conductivity along x, length/time.
+    :param ky_field: Saturated conductivity along y, length/time.
+    :param kz_field: Saturated conductivity along z, length/time.
+    :param zbot_field: Bottom elevations, length.
+    :param unconfined_min_sat: Strictly positive numerical thickness floor.
+    :param unconfined_max_picard_iter: Maximum number of outer iterations.
+    :param unconfined_relax: Initial Picard relaxation in (0, 1].
+    :param unconfined_head_tol: Nonnegative head-change tolerance, length.
+    :returns: Three conductivity arrays, bottom array, thickness floor,
+        iteration limit, relaxation and head tolerance.
+    :raises ValueError: If the required fields or controls are invalid.
+    """
+    if kx_field is None or ky_field is None or kz_field is None or zbot_field is None:
+        raise ValueError("unconfined=True requires kx_field, ky_field, kz_field, and zbot_field.")
+
+    kx = np.asarray(kx_field, dtype=np.float64)
+    ky = np.asarray(ky_field, dtype=np.float64)
+    kz = np.asarray(kz_field, dtype=np.float64)
+    zbot = np.asarray(zbot_field, dtype=NP_FLOAT)
+    for name, arr in (("kx_field", kx), ("ky_field", ky), ("kz_field", kz), ("zbot_field", zbot)):
+        if arr.shape != shape:
+            raise ValueError(f"{name} shape {arr.shape} expected {shape}")
+        if not np.all(np.isfinite(arr)):
+            raise ValueError(f"{name} must be finite.")
+    if np.any(kx < NP_FLOAT(0.0)) or np.any(ky < NP_FLOAT(0.0)) or np.any(kz < NP_FLOAT(0.0)):
+        raise ValueError("Unconfined K fields must be >= 0.")
+
+    min_sat = float(unconfined_min_sat)
+    if min_sat <= 0.0:
+        raise ValueError("unconfined_min_sat must be positive.")
+    n_pic = int(unconfined_max_picard_iter)
+    if n_pic < 1:
+        raise ValueError("unconfined_max_picard_iter must be >= 1.")
+    pic_relax = float(unconfined_relax)
+    if pic_relax <= 0.0 or pic_relax > 1.0:
+        raise ValueError("unconfined_relax must be in (0, 1].")
+    pic_tol = float(unconfined_head_tol)
+    if pic_tol < 0.0:
+        raise ValueError("unconfined_head_tol must be >= 0.")
+    return kx, ky, kz, zbot, min_sat, n_pic, pic_relax, pic_tol
+
+
 def solve_chebyshev_7point_3d(
     tx_p: np.ndarray,
     tx_m: np.ndarray,
@@ -2304,36 +2405,12 @@ def solve_chebyshev_7point_3d(
     return_info: bool = True,
     ghb_conductance=None, ghb_head=None,
 ):
-    txp = np.asarray(tx_p, dtype=NP_FLOAT)
-    txm = np.asarray(tx_m, dtype=NP_FLOAT)
-    typ = np.asarray(ty_p, dtype=NP_FLOAT)
-    tym = np.asarray(ty_m, dtype=NP_FLOAT)
-    tzp = np.asarray(tz_p, dtype=NP_FLOAT)
-    tzm = np.asarray(tz_m, dtype=NP_FLOAT)
-    b = np.asarray(rhs, dtype=NP_FLOAT)
-    act = binary_mask(value=active, name="active")
-    bcm = binary_mask(value=bc_mask, name="bc_mask")
-    bcv = np.asarray(bc_values, dtype=NP_FLOAT)
-
-    shape = txp.shape
-    if txp.ndim != 3:
-        raise ValueError("7-point arrays must be 3D with shape (nz, ny, nx).")
-    for name, arr in (
-        ("tx_m", txm),
-        ("ty_p", typ),
-        ("ty_m", tym),
-        ("tz_p", tzp),
-        ("tz_m", tzm),
-        ("rhs", b),
-        ("active", act),
-        ("bc_mask", bcm),
-        ("bc_values", bcv),
-    ):
-        if arr.shape != shape:
-            raise ValueError(f"{name} shape {arr.shape} expected {shape}")
-
-    free = (act != 0) & (bcm == 0)
-    n_free = int(np.count_nonzero(free))
+    (
+        txp, txm, typ, tym, tzp, tzm, b, act, bcm, bcv, shape, free, n_free,
+    ) = _prepare_7point_arrays(
+        tx_p=tx_p, tx_m=tx_m, ty_p=ty_p, ty_m=ty_m, tz_p=tz_p, tz_m=tz_m,
+        rhs=rhs, active=active, bc_mask=bc_mask, bc_values=bc_values,
+    )
 
     if bool(unconfined):
         from DARCY_WARP_PACKAGE.physics.storage_contract_3d import validate_unconfined_storage_inputs
@@ -2345,33 +2422,12 @@ def solve_chebyshev_7point_3d(
             head_prev = np.asarray(initial_head, dtype=NP_FLOAT).copy()
 
     if bool(unconfined):
-        if kx_field is None or ky_field is None or kz_field is None or zbot_field is None:
-            raise ValueError("unconfined=True requires kx_field, ky_field, kz_field, and zbot_field.")
-
-        kx = np.asarray(kx_field, dtype=np.float64)
-        ky = np.asarray(ky_field, dtype=np.float64)
-        kz = np.asarray(kz_field, dtype=np.float64)
-        zbot = np.asarray(zbot_field, dtype=NP_FLOAT)
-        for name, arr in (("kx_field", kx), ("ky_field", ky), ("kz_field", kz), ("zbot_field", zbot)):
-            if arr.shape != shape:
-                raise ValueError(f"{name} shape {arr.shape} expected {shape}")
-            if not np.all(np.isfinite(arr)):
-                raise ValueError(f"{name} must be finite.")
-        if np.any(kx < NP_FLOAT(0.0)) or np.any(ky < NP_FLOAT(0.0)) or np.any(kz < NP_FLOAT(0.0)):
-            raise ValueError("Unconfined K fields must be >= 0.")
-
-        min_sat = float(unconfined_min_sat)
-        if min_sat <= 0.0:
-            raise ValueError("unconfined_min_sat must be positive.")
-        n_pic = int(unconfined_max_picard_iter)
-        if n_pic < 1:
-            raise ValueError("unconfined_max_picard_iter must be >= 1.")
-        pic_relax = float(unconfined_relax)
-        if pic_relax <= 0.0 or pic_relax > 1.0:
-            raise ValueError("unconfined_relax must be in (0, 1].")
-        pic_tol = float(unconfined_head_tol)
-        if pic_tol < 0.0:
-            raise ValueError("unconfined_head_tol must be >= 0.")
+        kx, ky, kz, zbot, min_sat, n_pic, pic_relax, pic_tol = _prepare_unconfined_7point_fields(
+            shape=shape, kx_field=kx_field, ky_field=ky_field, kz_field=kz_field,
+            zbot_field=zbot_field, unconfined_min_sat=unconfined_min_sat,
+            unconfined_max_picard_iter=unconfined_max_picard_iter,
+            unconfined_relax=unconfined_relax, unconfined_head_tol=unconfined_head_tol,
+        )
 
         def _inner_solve_cheb(txp_i, txm_i, typ_i, tym_i, tzp_i, tzm_i, h0, mcycles,
                               storage_diag_iter=None, rhs_eff_iter=None,
@@ -2638,7 +2694,7 @@ def solve_multigrid_kcycle_7point_3d(
     ghb_conductance=None, ghb_head=None,
 ):
     """
-    3D multilevel K-cycle prototype for a fixed 7-point operator.
+    Solve the Cartesian seven-point flow operator using a multilevel K-cycle.
 
     Notes:
       - Coarse operators are built by conservative horizontal semi-coarsening
@@ -2657,37 +2713,12 @@ def solve_multigrid_kcycle_7point_3d(
         volume-conservative secant-Sy/Ss storage (default
         ``unconfined_storage_mode="secant_sy"``).
     """
-    txp0 = np.asarray(tx_p, dtype=NP_FLOAT)
-    txm0 = np.asarray(tx_m, dtype=NP_FLOAT)
-    typ0 = np.asarray(ty_p, dtype=NP_FLOAT)
-    tym0 = np.asarray(ty_m, dtype=NP_FLOAT)
-    tzp0 = np.asarray(tz_p, dtype=NP_FLOAT)
-    tzm0 = np.asarray(tz_m, dtype=NP_FLOAT)
-    b0 = np.asarray(rhs, dtype=NP_FLOAT)
-    act0 = binary_mask(value=active, name="active")
-    bcm0 = binary_mask(value=bc_mask, name="bc_mask")
-    bcv0 = np.asarray(bc_values, dtype=NP_FLOAT)
-
-    shape0 = txp0.shape
-    if txp0.ndim != 3:
-        raise ValueError("7-point arrays must be 3D with shape (nz, ny, nx).")
-
-    for name, arr in (
-        ("tx_m", txm0),
-        ("ty_p", typ0),
-        ("ty_m", tym0),
-        ("tz_p", tzp0),
-        ("tz_m", tzm0),
-        ("rhs", b0),
-        ("active", act0),
-        ("bc_mask", bcm0),
-        ("bc_values", bcv0),
-    ):
-        if arr.shape != shape0:
-            raise ValueError(f"{name} shape {arr.shape} expected {shape0}")
-
-    free0 = (act0 != 0) & (bcm0 == 0)
-    n_free0 = int(np.count_nonzero(free0))
+    (
+        txp0, txm0, typ0, tym0, tzp0, tzm0, b0, act0, bcm0, bcv0, shape0, free0, n_free0,
+    ) = _prepare_7point_arrays(
+        tx_p=tx_p, tx_m=tx_m, ty_p=ty_p, ty_m=ty_m, tz_p=tz_p, tz_m=tz_m,
+        rhs=rhs, active=active, bc_mask=bc_mask, bc_values=bc_values,
+    )
 
     if bool(unconfined):
         from DARCY_WARP_PACKAGE.physics.storage_contract_3d import validate_unconfined_storage_inputs
@@ -2699,33 +2730,12 @@ def solve_multigrid_kcycle_7point_3d(
             head_prev = np.asarray(initial_head, dtype=NP_FLOAT).copy()
 
     if bool(unconfined):
-        if kx_field is None or ky_field is None or kz_field is None or zbot_field is None:
-            raise ValueError("unconfined=True requires kx_field, ky_field, kz_field, and zbot_field.")
-
-        kx = np.asarray(kx_field, dtype=np.float64)
-        ky = np.asarray(ky_field, dtype=np.float64)
-        kz = np.asarray(kz_field, dtype=np.float64)
-        zbot = np.asarray(zbot_field, dtype=NP_FLOAT)
-        for name, arr in (("kx_field", kx), ("ky_field", ky), ("kz_field", kz), ("zbot_field", zbot)):
-            if arr.shape != shape0:
-                raise ValueError(f"{name} shape {arr.shape} expected {shape0}")
-            if not np.all(np.isfinite(arr)):
-                raise ValueError(f"{name} must be finite.")
-        if np.any(kx < NP_FLOAT(0.0)) or np.any(ky < NP_FLOAT(0.0)) or np.any(kz < NP_FLOAT(0.0)):
-            raise ValueError("Unconfined K fields must be >= 0.")
-
-        min_sat = float(unconfined_min_sat)
-        if min_sat <= 0.0:
-            raise ValueError("unconfined_min_sat must be positive.")
-        n_pic = int(unconfined_max_picard_iter)
-        if n_pic < 1:
-            raise ValueError("unconfined_max_picard_iter must be >= 1.")
-        pic_relax = float(unconfined_relax)
-        if pic_relax <= 0.0 or pic_relax > 1.0:
-            raise ValueError("unconfined_relax must be in (0, 1].")
-        pic_tol = float(unconfined_head_tol)
-        if pic_tol < 0.0:
-            raise ValueError("unconfined_head_tol must be >= 0.")
+        kx, ky, kz, zbot, min_sat, n_pic, pic_relax, pic_tol = _prepare_unconfined_7point_fields(
+            shape=shape0, kx_field=kx_field, ky_field=ky_field, kz_field=kz_field,
+            zbot_field=zbot_field, unconfined_min_sat=unconfined_min_sat,
+            unconfined_max_picard_iter=unconfined_max_picard_iter,
+            unconfined_relax=unconfined_relax, unconfined_head_tol=unconfined_head_tol,
+        )
 
         def _inner_solve_kc(txp_i, txm_i, typ_i, tym_i, tzp_i, tzm_i, h0, mcycles,
                             storage_diag_iter=None, rhs_eff_iter=None,
