@@ -33,4 +33,4 @@ jobs:
 
       - name: Unit tests (CPU; GPU-dependent tests self-skip)
         # `python -m pytest` (not bare pytest) so the repo root is importable.
-        run: python -m pytest tests/test_sparse_system_consistency.py tests/test_solver_registry_2d.py -v
+        run: python -m pytest tests/test_sparse_system_consistency.py tests/test_solver_registry_2d.py tests/test_2d_transient_accepted_state.py -v
