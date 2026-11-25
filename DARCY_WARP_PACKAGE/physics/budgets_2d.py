@@ -7,6 +7,12 @@ import numpy as np
 import pandas as pd
 
 
+def modflow_percent_discrepancy(*, inflow, outflow):
+    """Signed percent imbalance relative to the mean of gross flow rates."""
+    mean_flow = 0.5 * (inflow + outflow)
+    return 0.0 if mean_flow == 0.0 else 100.0 * (inflow - outflow) / mean_flow
+
+
 def _free_components(free, east, south):
     """Label free cells joined by positive face conductance, excluding CHD cells."""
     from scipy.ndimage import label
@@ -65,7 +71,7 @@ def compute_mass_balance_budget(
     R = np.asarray(R_field, dtype=np.float64)
     h = np.asarray(head, dtype=np.float64)
     act = np.asarray(active, dtype=np.int32) != 0
-    bc = np.asarray(bc_mask, dtype=np.int32) != 0
+    bc = act & (np.asarray(bc_mask, dtype=np.int32) != 0)
     bc_v = np.asarray(bc_values, dtype=np.float64)
     ny, nx = T.shape
     if h.shape != (ny, nx):
@@ -74,7 +80,6 @@ def compute_mass_balance_budget(
         raise ValueError("R_field shape mismatch")
 
     dx_f = float(dx)
-    tiny = 1.0e-12
     h_use = np.array(h, copy=True)
     h_use[~act] = 0.0
     h_use[bc] = bc_v[bc]
@@ -90,10 +95,10 @@ def compute_mass_balance_budget(
     conn_e = act_l & act_r
     t_l = T[:, :-1]
     t_r = T[:, 1:]
-    denom_e = t_l + t_r
     cond_e = np.zeros((ny, nx - 1), dtype=np.float64)
-    valid_e = conn_e & (t_l > 0.0) & (t_r > 0.0) & (denom_e > tiny)
-    cond_e[valid_e] = 2.0 * t_l[valid_e] * t_r[valid_e] / denom_e[valid_e]
+    valid_e = conn_e & (t_l > 0.0) & (t_r > 0.0)
+    smaller = np.minimum(t_l[valid_e], t_r[valid_e])
+    cond_e[valid_e] = smaller * (2.0 / (1.0 + smaller / np.maximum(t_l[valid_e], t_r[valid_e])))
     q_l_to_r = cond_e * (h_use[:, :-1] - h_use[:, 1:])
     bc_l = bc[:, :-1]
     bc_r = bc[:, 1:]
@@ -107,10 +112,10 @@ def compute_mass_balance_budget(
     conn_s = act_t & act_b
     t_t = T[:-1, :]
     t_b = T[1:, :]
-    denom_s = t_t + t_b
     cond_s = np.zeros((ny - 1, nx), dtype=np.float64)
-    valid_s = conn_s & (t_t > 0.0) & (t_b > 0.0) & (denom_s > tiny)
-    cond_s[valid_s] = 2.0 * t_t[valid_s] * t_b[valid_s] / denom_s[valid_s]
+    valid_s = conn_s & (t_t > 0.0) & (t_b > 0.0)
+    smaller = np.minimum(t_t[valid_s], t_b[valid_s])
+    cond_s[valid_s] = smaller * (2.0 / (1.0 + smaller / np.maximum(t_t[valid_s], t_b[valid_s])))
     q_t_to_b = cond_s * (h_use[:-1, :] - h_use[1:, :])
     bc_t = bc[:-1, :]
     bc_b = bc[1:, :]
@@ -205,7 +210,8 @@ def compute_mass_balance_budget(
         "ghb_in": ghb_in, "ghb_out": ghb_out,
         "drn_in": drn_in, "drn_out": drn_out, "riv_in": riv_in, "riv_out": riv_out,
         "total_in": total_in, "total_out": total_out,
-        "in_minus_out": in_minus_out, "percent_discrepancy": 100.0 * imbalance_fraction,
+        "in_minus_out": in_minus_out,
+        "percent_discrepancy": modflow_percent_discrepancy(inflow=total_in, outflow=total_out),
         "throughflow": throughflow, "imbalance_fraction": imbalance_fraction,
         "chd_net_out_positive": chd_net_out_positive,
         "ghb_net_out_positive": ghb_net_out_positive,
@@ -307,8 +313,9 @@ def evaluate_picard_transient_balance(
     budget, residual, diagonal, boundary_scale = compute_mass_balance_budget(
         T_field=conductivity * saturation, R_field=model.R_field_host, head=h,
         active=model.active_host, bc_mask=model.bc_mask_host, bc_values=model.bc_values_host,
-        dx=model.dx, gh_mask=model.gh_mask_host, gh_head=model.gh_head_host,
+        dx=model.dx,
         ghb_factor=model.ghb_factor_host, return_cells=True, component_budgets=True,
+        **model._head_dependent_boundary_fields(),
     )
     residual -= storage_volume
     # Use a positive storage sensitivity for the head-equivalent residual.
@@ -329,27 +336,99 @@ def evaluate_picard_transient_balance(
     storage_operand = np.where(free, storage_scale * (np.abs(h) + np.abs(old)) * (area / dt), 0.0)
     eps = np.finfo(np.asarray(head).dtype).eps
     floor = float(32.0 * eps * (throughflow + boundary_scale + np.sum(storage_operand)))
-    discrepancy = 100.0 * imbalance / throughflow if throughflow else 0.0
+    discrepancy = modflow_percent_discrepancy(inflow=total_in, outflow=total_out)
     worst_component_pct = abs(discrepancy)
     components_ok = True
+    component_balances = []
     if budget["component_count"] > 1:
         labels = budget["component_labels"]
-        net = budget["component_net"] - _component_sum(labels, storage_volume)
+        storage_net = _component_sum(labels, storage_volume)
+        net = budget["component_net"] - storage_net
         component_throughflow = 0.5 * (budget["component_gross"] + _component_sum(labels, np.abs(storage_volume)))
         component_floor = 32.0 * eps * (
             component_throughflow + budget["component_operand"] + _component_sum(labels, storage_operand)
         )
-        components_ok = np.all(np.abs(net) <= np.maximum(component_floor, relative_tolerance * component_throughflow))
+        limits = np.maximum(component_floor, relative_tolerance * component_throughflow)
+        components_ok = np.all(np.abs(net) <= limits)
+        component_balances = [
+            dict(external_net=float(external), storage_uptake=float(uptake),
+                 imbalance=float(imbalance), tolerance=float(limit))
+            for external, uptake, imbalance, limit in zip(budget["component_net"], storage_net, net, limits, strict=True)
+        ]
         ratios = np.divide(np.abs(net), component_throughflow, out=np.zeros_like(net), where=component_throughflow > 0)
         worst_component_pct = float(100.0 * np.max(ratios))
-    return dict(accepted=bool(components_ok and np.isfinite([head_rms, flow_rms, imbalance, floor]).all()
-                and head_rms <= head_tolerance and abs(imbalance) <= max(floor, relative_tolerance * throughflow)),
+    balance_accepted = bool(components_ok and np.isfinite([imbalance, floor]).all()
+                            and abs(imbalance) <= max(floor, relative_tolerance * throughflow))
+    return dict(accepted=bool(balance_accepted and np.isfinite([head_rms, flow_rms]).all()
+                              and head_rms <= head_tolerance),
+        balance_accepted=balance_accepted,
         head_residual_rms=head_rms, flow_residual_rms=flow_rms, total_in=total_in, total_out=total_out,
         storage_in=storage_in, storage_out=storage_out, in_minus_out=imbalance,
         percent_discrepancy=discrepancy, component_count=budget["component_count"],
-        worst_component_percent_discrepancy=worst_component_pct,
+        worst_component_percent_discrepancy=worst_component_pct, component_balances=component_balances,
         flow_roundoff_floor=floor, relative_tolerance=relative_tolerance,
     )
+
+
+def evaluate_alternate_transient_balance(*, model, head, previous, conductivity, bottom, top,
+                                         min_sat, dt, sy, ss, budget_percent):
+    """Use the Picard flow test while retaining the backend's own residual gates."""
+    return evaluate_picard_transient_balance(
+        model=model, head=head, previous=previous, conductivity=conductivity, bottom=bottom, top=top,
+        min_sat=min_sat, dt=dt, sy=sy, ss=ss, storage_coeff=None, head_tolerance=np.inf,
+        relative_tolerance=budget_percent / 100.0,
+    )
+
+
+def correct_closed_component_storage(*, model, head, previous, conductivity, bottom, top, dt, sy, ss):
+    """Resolve the constant-head mode of a closed component from exact storage."""
+    from scipy.optimize import brentq
+    from DARCY_WARP_PACKAGE.physics.storage_2d import exact_unconfined_storage_terms
+
+    active = model.active_host != 0
+    fixed = active & (model.bc_mask_host != 0)
+    positive = active & (conductivity > 0.0)
+    east = positive[:, :-1] & positive[:, 1:]
+    south = positive[:-1, :] & positive[1:, :]
+    labels, count = _free_components(active & ~fixed, east, south)
+    anchored = np.zeros(active.shape, dtype=bool)
+    anchored[:, :-1] |= east & fixed[:, 1:]
+    anchored[:, 1:] |= east & fixed[:, :-1]
+    anchored[:-1, :] |= south & fixed[1:, :]
+    anchored[1:, :] |= south & fixed[:-1, :]
+    for enabled, mask in ((model.use_ghb, model.gh_mask_host),
+                          (model.use_drn, model.drn_mask_host), (model.use_riv, model.riv_mask_host)):
+        if enabled and mask is not None:
+            anchored |= mask != 0
+    closed = np.setdiff1d(np.arange(1, count + 1), np.unique(labels[anchored]))
+    adjusted = np.array(head, dtype=np.float64, copy=True)
+    for label in closed:
+        selected = labels == label
+        current = adjusted[selected]
+        old, lower, upper = previous[selected], bottom[selected], top[selected]
+        source = np.sum(model.R_field_host[selected], dtype=np.float64)
+        def defect(offset):
+            terms, _, _ = exact_unconfined_storage_terms(
+                head_new=current + offset, head_old=old, bottom=lower, top=upper,
+                specific_yield=sy, specific_storage=ss, dt=dt,
+            )
+            return float(np.sum(terms) - source)
+
+        at_zero = defect(0.0)
+        if at_zero == 0.0:
+            continue
+        # Beyond the bottom and top, the storage law has reached its end
+        # segments. Expand only if confined specific storage can add capacity.
+        span = max(1.0, float(np.max(np.maximum(np.abs(lower - current), np.abs(upper - current)))))
+        direction = -np.sign(at_zero)
+        endpoint = direction * span
+        for _ in range(32 if ss > 0.0 else 1):
+            if direction * defect(endpoint) >= 0.0:
+                left, right = sorted((0.0, endpoint))
+                adjusted[selected] += brentq(f=defect, a=left, b=right, xtol=np.finfo(float).eps)
+                break
+            endpoint *= 2.0
+    return adjusted
 
 
 def add_exact_storage_to_budget(
@@ -377,7 +456,7 @@ def add_exact_storage_to_budget(
     result.loc[result.index[0], "total_out"] = total_out
     result.loc[result.index[0], "in_minus_out"] = imbalance
     result.loc[result.index[0], "percent_discrepancy"] = (
-        0.0 if denominator == 0.0 else 100.0 * imbalance / denominator
+        modflow_percent_discrepancy(inflow=total_in, outflow=total_out)
     )
     result.loc[result.index[0], "throughflow"] = 0.5 * (total_in + total_out)
     result.loc[result.index[0], "imbalance_fraction"] = (

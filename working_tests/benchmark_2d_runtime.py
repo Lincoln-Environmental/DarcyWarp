@@ -100,6 +100,9 @@ def measure(*, artifact, spatial, initial, mode, controls, device, audit, implem
     infos = result['period_infos']
     active = np.asarray(spatial['active']) != 0
     heads = result['heads_per_period']
+    complete = heads.shape == artifact['heads_per_period'].shape and len(infos) == heads.shape[0]
+    if not complete:
+        raise RuntimeError("The timed replay did not return a complete head history")
     finite = bool(np.isfinite(heads[:, active]).all())
     comparison = compare_transient(warp_result=result,
         mf6_heads_per_period=artifact['heads_per_period'],

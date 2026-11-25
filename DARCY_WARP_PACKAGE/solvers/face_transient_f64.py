@@ -106,7 +106,6 @@ def face_build_storage_f64_kernel(
         diag[j, i] = wp.float64(1.0)
         return
 
-    tiny = wp.float64(1.0e-12)
     T_c = wp.float64(T_field[j, i])
 
     t_e = wp.float64(0.0)
@@ -117,22 +116,22 @@ def face_build_storage_f64_kernel(
     if i + 1 < nx and active[j, i + 1] != 0:
         T_nb = wp.float64(T_field[j, i + 1])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            t_e = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            t_e = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if i - 1 >= 0 and active[j, i - 1] != 0:
         T_nb = wp.float64(T_field[j, i - 1])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            t_w = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            t_w = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if j - 1 >= 0 and active[j - 1, i] != 0:
         T_nb = wp.float64(T_field[j - 1, i])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            t_n = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            t_n = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if j + 1 < ny and active[j + 1, i] != 0:
         T_nb = wp.float64(T_field[j + 1, i])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            t_s = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            t_s = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     C_gh = wp.float64(0.0)
     if gh_mask[j, i] != 0:
@@ -141,7 +140,7 @@ def face_build_storage_f64_kernel(
             C_gh = T_c * ghbf
 
     sum_T = t_e + t_w + t_n + t_s + C_gh + wp.float64(storage_diag[j, i])
-    if sum_T < tiny:
+    if sum_T <= 0.0:
         Te[j, i] = wp.float64(0.0)
         Tw[j, i] = wp.float64(0.0)
         Tn[j, i] = wp.float64(0.0)
@@ -177,8 +176,8 @@ def face_dual_residual_f64_kernel(
     ``b - A h`` and head-equivalent residual ``r / diag``, both summed as rTr
     over free cells only) with per-block partial reductions instead of
     per-thread atomics.  ``diag`` already carries the storage term; the
-    face build maps tiny-diagonal cells to the identity row (diag = 1), which
-    reproduces the classic ``diagA < tiny`` branch."""
+    face build maps zero-diagonal cells to the identity row (diag = 1), which
+    reproduces the classic ``diagA <= 0.0`` branch."""
     t = wp.tid()
     n = nx * ny
     if t >= n:

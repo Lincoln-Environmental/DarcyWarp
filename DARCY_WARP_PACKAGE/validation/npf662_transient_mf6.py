@@ -1,7 +1,5 @@
 """Live MF6 NPF/STO histories, with native face/source/storage budget decoding."""
 from dataclasses import replace
-from pathlib import Path
-import hashlib
 import subprocess
 from time import perf_counter
 import numpy as np
@@ -11,7 +9,7 @@ from DARCY_WARP_PACKAGE.validation.json_output import atomic_json
 from DARCY_WARP_PACKAGE.validation.head_checks import finite_diagnostics
 from DARCY_WARP_PACKAGE.validation.time_grid import same_step_times
 from DARCY_WARP_PACKAGE.validation.npf662_mf6 import (
-    ghb_stress_period_data, decode_ghb_budget, decode_list_budget, native_chd_flow_valid, validate_mf6_identity,
+    ghb_stress_period_data, decode_ghb_budget, decode_list_budget, native_chd_flow_valid, pinned_native_executable,
 )
 
 
@@ -45,12 +43,9 @@ def run_transient_mf6(*, case, directory, executable, source_factors, dt, ss, sy
     factors = np.asarray(source_factors, dtype=float)
     if factors.ndim != 1 or not factors.size or not np.isfinite(factors).all():
         raise ValueError('Finite nonempty source schedule required')
-    executable = Path(executable).resolve()
-    version = subprocess.check_output([str(executable), '-v'], text=True).strip()
-    checksum = hashlib.sha256(executable.read_bytes()).hexdigest()
-    build_identity = validate_mf6_identity(version=version, checksum=checksum)
-    if checksum != executable_sha256:
-        raise ValueError('MF6 executable does not match the explicit version/build pin')
+    executable, version, checksum, build_identity = pinned_native_executable(
+        executable=executable, expected_sha256=executable_sha256,
+    )
     if source_package not in ('wel', 'rch'):
         raise ValueError('Source package must be wel or rch')
     if source_package == 'rch' and (np.any(case.source[1:]) or np.any(case.source < 0.) or np.any(factors < 0.)):

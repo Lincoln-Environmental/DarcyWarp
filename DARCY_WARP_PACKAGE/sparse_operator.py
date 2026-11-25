@@ -39,7 +39,6 @@ def build_sparse_system_fd_like(
     n_cells = int(nx * ny)
     dx_f = float(dx)
     dx2 = dx_f * dx_f
-    tiny = 1.0e-12
 
     if gh_mask is None:
         gh_mask = np.zeros((ny, nx), dtype=np.int32)
@@ -60,7 +59,7 @@ def build_sparse_system_fd_like(
     def harmonic(a_val: float, b_val: float) -> float:
         if a_val <= 0.0 or b_val <= 0.0:
             return 0.0
-        return 2.0 * a_val * b_val / (a_val + b_val)
+        return min(a_val, b_val) * (2.0 / (1.0 + min(a_val, b_val) / max(a_val, b_val)))
 
     A = lil_matrix((n_cells, n_cells), dtype=np.float64)
     b = np.zeros(n_cells, dtype=np.float64)
@@ -102,7 +101,7 @@ def build_sparse_system_fd_like(
                     C_gh = float(gh_alpha) * T_c / float(aq_thickness) * width * dx_f
 
             diag = T_e + T_w + T_n + T_s + C_gh
-            if diag < tiny:
+            if diag <= 0.0:
                 A[k, k] = 1.0
                 b[k] = 0.0
                 continue

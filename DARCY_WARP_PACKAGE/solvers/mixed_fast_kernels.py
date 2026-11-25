@@ -88,7 +88,6 @@ def _mf3_build_faces_f32(
         diag[j, i] = wp.float32(1.0)
         return
 
-    tiny = wp.float32(1.0e-12)
     T_c = wp.float32(T_field[j, i])
 
     t_e = wp.float32(0.0)
@@ -99,22 +98,22 @@ def _mf3_build_faces_f32(
     if i + 1 < nx and active[j, i + 1] != 0:
         T_nb = wp.float32(T_field[j, i + 1])
         if T_c > wp.float32(0.0) and T_nb > wp.float32(0.0):
-            t_e = wp.float32(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            t_e = wp.min(T_c, T_nb) * (wp.float32(2.0) / (wp.float32(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if i - 1 >= 0 and active[j, i - 1] != 0:
         T_nb = wp.float32(T_field[j, i - 1])
         if T_c > wp.float32(0.0) and T_nb > wp.float32(0.0):
-            t_w = wp.float32(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            t_w = wp.min(T_c, T_nb) * (wp.float32(2.0) / (wp.float32(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if j - 1 >= 0 and active[j - 1, i] != 0:
         T_nb = wp.float32(T_field[j - 1, i])
         if T_c > wp.float32(0.0) and T_nb > wp.float32(0.0):
-            t_n = wp.float32(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            t_n = wp.min(T_c, T_nb) * (wp.float32(2.0) / (wp.float32(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if j + 1 < ny and active[j + 1, i] != 0:
         T_nb = wp.float32(T_field[j + 1, i])
         if T_c > wp.float32(0.0) and T_nb > wp.float32(0.0):
-            t_s = wp.float32(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            t_s = wp.min(T_c, T_nb) * (wp.float32(2.0) / (wp.float32(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     C_gh = wp.float32(0.0)
     if gh_mask[j, i] != 0:
@@ -123,7 +122,7 @@ def _mf3_build_faces_f32(
             C_gh = T_c * ghbf
 
     sum_T = t_e + t_w + t_n + t_s + C_gh
-    if sum_T < tiny:
+    if sum_T <= 0.0:
         Te[j, i] = wp.float32(0.0)
         Tw[j, i] = wp.float32(0.0)
         Tn[j, i] = wp.float32(0.0)

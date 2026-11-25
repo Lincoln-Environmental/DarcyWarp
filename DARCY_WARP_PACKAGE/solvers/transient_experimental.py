@@ -32,6 +32,7 @@ import warp as wp
 
 from DARCY_WARP_PACKAGE.physics.budgets_2d import (
     add_exact_storage_to_budget,
+    evaluate_alternate_transient_balance,
     compute_mass_balance_budget,
 )
 from DARCY_WARP_PACKAGE.physics.storage_2d import exact_unconfined_storage_terms
@@ -220,6 +221,8 @@ def solve_transient_unconfined_experimental(
     max_growth_steps = int(controls.pop("experimental_dt_max_growth_steps", 2))
     max_retries = int(controls.pop("experimental_max_retries", 16))
     budget_tol_pct = float(controls.pop("experimental_budget_max_percent_discrepancy", 0.1))
+    if not np.isfinite(budget_tol_pct) or budget_tol_pct < 0.0:
+        raise ValueError("experimental_budget_max_percent_discrepancy must be finite and nonnegative.")
     retry_enabled = bool(controls.pop("experimental_retry_enabled", True))
     allow_unaccepted = bool(controls.pop("allow_unaccepted_transient_period", False))
     prefix = _BACKEND_CONTROL_PREFIX[backend_name]
@@ -363,9 +366,10 @@ def solve_transient_unconfined_experimental(
             counters["bc_device_updates"] += 1
 
         period_dt = float(dt_array[period_index])
-        dt_min = max(period_dt * dt_min_fraction, 1.0e-12)
+        cap = min(period_dt, max_dt) if max_dt is not None else period_dt
+        dt_min = min(cap, max(period_dt * dt_min_fraction, 1.0e-12))
         remaining_dt = period_dt
-        current_dt = min(period_dt, max_dt) if max_dt is not None else period_dt
+        current_dt = cap
         growth_steps = 0
         retries_for_timestep = 0
         retries_this_period = 0
@@ -377,10 +381,13 @@ def solve_transient_unconfined_experimental(
         timestep_index = 0
         period_solve_seconds = 0.0
 
-        while remaining_dt > max(1.0e-12, period_dt * 1.0e-12):
+        while remaining_dt > 0.0:
             dt_try = min(current_dt, remaining_dt)
-            if remaining_dt - dt_try < dt_min:
+            if remaining_dt <= cap and remaining_dt - dt_try < dt_min:
                 dt_try = remaining_dt  # absorb sliver
+            next_remaining = remaining_dt - dt_try
+            if next_remaining == remaining_dt:
+                raise ValueError("experimental_max_dt cannot advance the period in the selected time units.")
             at_dt_min = dt_try <= dt_min + max(1.0e-12, period_dt * 1.0e-12)
             attempt_kwargs = dict(backend_kwargs)
             if not fallback_explicitly_configured:
@@ -392,6 +399,7 @@ def solve_transient_unconfined_experimental(
                 for _picard_key in _PICARD_FALLBACK_CONTROL_KEYS:
                     if _picard_key in controls and _picard_key not in attempt_kwargs:
                         attempt_kwargs[_picard_key] = controls[_picard_key]
+            attempt_kwargs[f"{prefix}transient_budget_percent"] = budget_tol_pct
             solve_t0 = time.perf_counter()
             head_trial, info = model.solve(
                 formulation="unconfined",
@@ -445,14 +453,21 @@ def solve_transient_unconfined_experimental(
                 )
             _pct_raw = budget_summary.get("percent_discrepancy")
             pct_discrepancy = abs(float(_pct_raw)) if _pct_raw is not None else np.inf
-            budget_ok = bool(converged and pct_discrepancy <= budget_tol_pct)
+            balance = info.get("physical_period_balance")
+            if converged and (fallback_used or balance is None):
+                balance = evaluate_alternate_transient_balance(
+                    model=model, head=head_trial, previous=head_accepted, conductivity=k,
+                    bottom=bottom, top=top, min_sat=min_sat, dt=dt_try, sy=sy_f, ss=ss_f,
+                    budget_percent=budget_tol_pct,
+                )
+            budget_ok = bool(converged and balance["accepted"])
             accepted = bool(converged and budget_ok)
             failure_reason = None
             if not accepted:
                 failure_reason = (
                     info.get("fas_failure_reason")
                     or info.get("newton_failure_reason")
-                    or ("budget_discrepancy" if converged else "nonconvergence")
+                    or ("component_water_balance" if converged else "nonconvergence")
                 )
 
             cycle_history = info.get("fas_cycle_history") or []
@@ -487,6 +502,7 @@ def solve_transient_unconfined_experimental(
                 "storage_in": budget_summary.get("storage_in"),
                 "storage_out": budget_summary.get("storage_out"),
                 "budget_summary": budget_summary,
+                "physical_period_balance": balance,
                 "budget_percent_discrepancy": None if not np.isfinite(pct_discrepancy) else float(pct_discrepancy),
                 "previous_head": head_accepted.copy() if save_diagnostics_b else None,
                 "accepted_head": np.asarray(head_trial, dtype=np.float64).copy() if (accepted and save_diagnostics_b) else None,
@@ -494,7 +510,7 @@ def solve_transient_unconfined_experimental(
 
             if accepted:
                 simulation_time += dt_try
-                remaining_dt = max(0.0, remaining_dt - dt_try)
+                remaining_dt = next_remaining
                 record["simulation_time"] = float(simulation_time)
                 timestep_records.append(record)
                 timestep_index += 1
@@ -507,9 +523,8 @@ def solve_transient_unconfined_experimental(
                 if (
                     grow_factor > 1.0
                     and growth_steps < max_growth_steps
-                    and current_dt < (min(period_dt, max_dt) if max_dt is not None else period_dt) - 1.0e-12
+                    and current_dt < cap - 1.0e-12
                 ):
-                    cap = min(period_dt, max_dt) if max_dt is not None else period_dt
                     current_dt = min(cap, current_dt * grow_factor)
                     growth_steps += 1
                 continue
@@ -525,7 +540,7 @@ def solve_transient_unconfined_experimental(
                 current_dt = max(dt_min, dt_try * shrink_factor)
                 growth_steps = 0
                 continue
-            if allow_unaccepted:
+            if allow_unaccepted and (balance is None or balance["accepted"]):
                 # Forced acceptance at dt_min, explicitly flagged.
                 record_forced = dict(record)
                 record_forced.update(
@@ -537,7 +552,7 @@ def solve_transient_unconfined_experimental(
                     }
                 )
                 simulation_time += dt_try
-                remaining_dt = max(0.0, remaining_dt - dt_try)
+                remaining_dt = next_remaining
                 timestep_records.append(record_forced)
                 timestep_index += 1
                 counters["experimental_timestep_count"] += 1

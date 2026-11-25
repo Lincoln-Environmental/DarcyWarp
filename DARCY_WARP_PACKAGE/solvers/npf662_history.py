@@ -15,7 +15,7 @@ from .npf662_3d import case_from_model
 from .npf662_newton import NPF662NewtonControls, solve_newton_device
 from .npf662_kcycle import NPF662KCycleControls
 from . import npf662_kernels as kernels
-from DARCY_WARP_PACKAGE.validation.npf662_transient_reference import NPF662TransientReference
+from DARCY_WARP_PACKAGE.validation.npf662_transient_reference import NPF662TransientReference, storage_previous_heads
 
 
 class DeviceHistoryReference:
@@ -74,12 +74,12 @@ def solve_transient_history(*, model, source_factors, dt, head_prev, ss, sy, **s
             raise ValueError(f'The NPF history driver requires {name}=True')
     if options.setdefault('npf_preconditioner', 'kcycle') != 'kcycle':
         raise ValueError('The NPF history driver currently requires the kcycle preconditioner')
-    initial = np.asarray(head_prev, dtype=float).copy()
     source_host = model._session.rhs.copy()
     old_initial = None if model._session.initial_head is None else model._session.initial_head.copy()
     types = options.get('npf_cell_type', int(options.get('unconfined', False)))
-    base = replace(case_from_model(model=model, top=options.get('top_elevation', 0.), cell_type=types),
-        source=source_host, initial=initial)
+    case = case_from_model(model=model, top=options.get('top_elevation', 0.), cell_type=types)
+    initial = storage_previous_heads(case=case, previous=head_prev, ss=ss, sy=sy)
+    base = replace(case, source=source_host, initial=initial)
     periods = []
     workspace = None
     head_readbacks = 0

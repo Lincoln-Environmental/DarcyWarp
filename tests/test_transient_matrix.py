@@ -64,18 +64,24 @@ def test_matrix_persists_parity_for_reference_and_graph_rows(tmp_path):
             "variant": "classic_device_fp64",
             "completed": True,
             "head_artifact_path": str(classic_path),
+            "repeats": 1,
+            "head_history_shape": list(heads.shape),
         },
         "graph": {
             "case_label": "100x100",
             "variant": "face_graph_fp64",
             "completed": True,
             "head_artifact_path": str(graph_path),
+            "repeats": 1,
+            "head_history_shape": list(heads.shape),
         },
         "eager": {
             "case_label": "100x100",
             "variant": "face_eager_fp64",
             "completed": True,
             "head_artifact_path": str(eager_path),
+            "repeats": 1,
+            "head_history_shape": list(heads.shape),
         },
     }
 

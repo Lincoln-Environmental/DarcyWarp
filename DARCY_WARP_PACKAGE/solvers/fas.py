@@ -748,9 +748,57 @@ def solve_unconfined_fas(*, context: SolverContext, **kwargs: Any):
         workspace=workspace,
         head_equivalent=True,
     )
+    from DARCY_WARP_PACKAGE.physics.budgets_2d import (
+        correct_closed_component_storage, evaluate_alternate_transient_balance,
+    )
+
+    budget_percent = float(kwargs.get("fas_transient_budget_percent", 0.1))
+    component_balance = None
+
+    def check_component_balance(*, candidate):
+        return evaluate_alternate_transient_balance(
+            model=model, head=candidate, previous=previous_array,
+            conductivity=np.asarray(K_field), bottom=np.asarray(bottom), top=np.asarray(top),
+            min_sat=min_sat, dt=dt, sy=sy, ss=ss, budget_percent=budget_percent,
+        )
+
+    def attempt_acceptance():
+        if not transient:
+            return True, None
+        candidate = fine.head.numpy().copy()
+        balance = check_component_balance(candidate=candidate)
+        if balance["accepted"]:
+            return True, balance
+        # Smoothing need not resolve the nearly constant storage mode when
+        # intercell conductance is large relative to the storage diagonal.
+        corrected = correct_closed_component_storage(
+            model=model, head=candidate, previous=previous_array, conductivity=np.asarray(K_field),
+            bottom=np.asarray(bottom), top=np.asarray(top), dt=dt, sy=sy, ss=ss,
+        )
+        if not np.array_equal(corrected, candidate):
+            fine.nonlinear_operator.operator.set_head(corrected)
+            wp.copy(fine.head, fine.nonlinear_operator.operator.head_device)
+            fine.nonlinear_operator.evaluate(head=fine.head, state=fine)
+            fine.nonlinear_operator.refresh_frozen_diagonal(head=fine.head, state=fine)
+            workspace.kernel_launches += 4
+            rms, _ = _norm(level=fine, value=fine.defect, workspace=workspace)
+            equivalent, _ = _norm(level=fine, value=fine.defect, workspace=workspace, head_equivalent=True)
+            corrected_balance = check_component_balance(candidate=corrected)
+            if rms <= residual_tolerance and equivalent <= head_residual_tolerance and corrected_balance["accepted"]:
+                return True, corrected_balance
+            fine.nonlinear_operator.operator.set_head(candidate)
+            wp.copy(fine.head, fine.nonlinear_operator.operator.head_device)
+            fine.nonlinear_operator.evaluate(head=fine.head, state=fine)
+            fine.nonlinear_operator.refresh_frozen_diagonal(head=fine.head, state=fine)
+            workspace.kernel_launches += 4
+        return False, balance
+
     initial_residual = residual_rms
     if residual_rms <= residual_tolerance and head_equivalent_rms <= head_residual_tolerance:
-        converged = True
+        converged, component_balance = attempt_acceptance()
+        if converged and transient:
+            residual_rms, residual_max = _norm(level=fine, value=fine.defect, workspace=workspace)
+            head_equivalent_rms, _ = _norm(level=fine, value=fine.defect, workspace=workspace, head_equivalent=True)
 
     for cycle_index in range(max_cycles):
         if converged:
@@ -808,13 +856,17 @@ def solve_unconfined_fas(*, context: SolverContext, **kwargs: Any):
             failure_reason = "nonfinite_fine_residual"
             break
         if residual_rms <= residual_tolerance and head_equivalent_rms <= head_residual_tolerance:
-            converged = True
-            break
+            converged, component_balance = attempt_acceptance()
+            if converged:
+                residual_rms, residual_max = _norm(level=fine, value=fine.defect, workspace=workspace)
+                head_equivalent_rms, _ = _norm(level=fine, value=fine.defect, workspace=workspace, head_equivalent=True)
+                break
         if len(cycle_history) >= 5 and residual_rms > 10.0 * initial_residual:
             failure_reason = "fas_residual_divergence"
             break
     if not converged and failure_reason is None:
-        failure_reason = "fas_cycle_limit"
+        failure_reason = ("component_water_balance" if component_balance is not None
+                          and not component_balance["accepted"] else "fas_cycle_limit")
 
     try:
         wp.synchronize_device(model.device_str)
@@ -905,6 +957,7 @@ def solve_unconfined_fas(*, context: SolverContext, **kwargs: Any):
         "dry_mask": head <= bottom_array + min_sat,
         "budget": budget,
         "budget_summary": dict(budget.iloc[0]),
+        "physical_period_balance": component_balance,
     }
     if not converged and fallback_enabled:
         if transient:

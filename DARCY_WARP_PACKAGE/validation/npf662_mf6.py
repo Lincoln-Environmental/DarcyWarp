@@ -1,6 +1,7 @@
 """Pinned DIS/NPF writer and physical-flow decoder for Cartesian contract v1."""
 from pathlib import Path
 import hashlib
+import shutil
 import subprocess
 from time import perf_counter
 import numpy as np
@@ -30,6 +31,25 @@ def validate_mf6_identity(*, version: str, checksum: str) -> str:
     return MF6_BUILDS[checksum]
 
 
+def pinned_native_executable(*, executable, expected_sha256=None):
+    """Resolve the executable and check its digest before invoking it."""
+    path = Path(executable).expanduser()
+    if not path.is_file() and not path.is_absolute() and path.parent == Path("."):
+        candidate = shutil.which(str(path))
+        if candidate is not None:
+            path = Path(candidate)
+    path = path.resolve(strict=True)
+    if not path.is_file():
+        raise FileNotFoundError(f"Pinned local MF6 unavailable: {path}")
+    with path.open("rb") as binary:
+        checksum = hashlib.file_digest(binary, "sha256").hexdigest()
+    if checksum not in MF6_BUILDS or (expected_sha256 is not None and checksum != expected_sha256):
+        raise ValueError(f"Native executable differs from the pinned MF6 contract: sha256={checksum}")
+    version = subprocess.check_output([str(path), "-v"], text=True).strip()
+    build = validate_mf6_identity(version=version, checksum=checksum)
+    return path, version, checksum, build
+
+
 def ghb_stress_period_data(*, case):
     """Map independent cell conductance/head inputs into MF6 row ordering."""
     if case.ghb_conductance is None:
@@ -55,19 +75,17 @@ def decode_ghb_budget(*, budget, mapping, shape, kstpkper=None):
     return decode_list_budget(budget=budget, mapping=mapping, shape=shape, text='GHB', kstpkper=kstpkper)
 
 
-def native_chd_flow_valid(*, case, reference, flow, chd):
-    """Check native CHD exchanges against native intercell flow into free rows."""
-    fixed, free = (case.fixed != 0).ravel(), reference.free.ravel()
+def native_chd_flow_valid(*, case, reference, flow, chd, prescribed=None):
+    """Check each native CHD rate against all incident native face flows."""
+    fixed = (case.fixed if prescribed is None else prescribed).ravel() != 0
     left, right = reference.left, reference.right
-    to_right = fixed[left] & free[right]
-    to_left = free[left] & fixed[right]
-    exchanges = (np.bincount(left[to_right], weights=flow[to_right], minlength=fixed.size)
-        - np.bincount(right[to_left], weights=flow[to_left], minlength=fixed.size))
-    # MF6 suppresses CHD-to-CHD exchange when forming its CHD package budget.
-    magnitude = (np.bincount(left[to_right], weights=np.abs(flow[to_right]), minlength=fixed.size)
-        + np.bincount(right[to_left], weights=np.abs(flow[to_left]), minlength=fixed.size))
+    count = fixed.size
+    exchange = np.bincount(left, weights=flow, minlength=count) - np.bincount(right, weights=flow, minlength=count)
+    magnitude = (np.bincount(left, weights=np.abs(flow), minlength=count)
+                 + np.bincount(right, weights=np.abs(flow), minlength=count))
     limit = np.maximum(1e-14, 32. * np.finfo(float).eps * magnitude)
-    return bool(np.all(np.isfinite(chd)) and np.all(np.abs(chd.ravel() - exchanges) <= limit))
+    expected = np.where(fixed, exchange, 0.0)
+    return bool(np.all(np.isfinite(chd)) and np.all(np.abs(chd.ravel() - expected) <= limit))
 
 
 def run_reference_mf6(*,case,directory,executable,prescribed_state=None,head_tolerance_m=1e-14,
@@ -75,7 +93,6 @@ def run_reference_mf6(*,case,directory,executable,prescribed_state=None,head_tol
                       replace_native_solver_options=False):
     import flopy
     from flopy.mf6.utils.binarygrid_util import MfGrdFile
-    if not executable.is_file():raise FileNotFoundError(f'Pinned local MF6 unavailable: {executable}; live parity unverified')
     reference=NPF662Reference(case=case)
     if source_package not in ('wel','rch'):raise ValueError('source_package must be wel or rch')
     if source_package=='rch' and (np.any(case.source[1:]!=0.) or np.any(case.source<0.) or np.any(case.source[case.fixed!=0]!=0.)):
@@ -88,9 +105,7 @@ def run_reference_mf6(*,case,directory,executable,prescribed_state=None,head_tol
             raise ValueError('Supplied all-CHD state is below a convertible bottom; do not retype cells to force native evaluation')
     if not np.isfinite(head_tolerance_m) or head_tolerance_m<=0.:raise ValueError('Positive finite native head-change tolerance required')
     newton=bool(np.any(case.cell_types[case.active!=0]))
-    version=subprocess.check_output([str(executable),'-v'],text=True).strip()
-    checksum=hashlib.sha256(executable.read_bytes()).hexdigest()
-    build_identity = validate_mf6_identity(version=version, checksum=checksum)
+    executable, version, checksum, build_identity = pinned_native_executable(executable=executable)
     directory.mkdir(parents=True,exist_ok=False)
     nz,ny,nx=case.active.shape
     reverse=(slice(None),slice(None,None,-1),slice(None))
@@ -213,7 +228,7 @@ def run_reference_mf6(*,case,directory,executable,prescribed_state=None,head_tol
         np.abs(ghb_native),np.abs(reference.ghb_conductance*raw)+np.abs(reference.ghb_conductance*reference.ghb_head)))
     ghb_valid=bool(np.all(np.isfinite(ghb_native)) and np.all(np.abs(ghb_native+fields['ghb_outflow'])<=ghb_tolerance))
     chd_native = decode_list_budget(budget=budget, mapping=mapping, shape=case.active.shape, text='CHD')
-    chd_valid = native_chd_flow_valid(case=case, reference=reference, flow=flux, chd=chd_native)
+    chd_valid = native_chd_flow_valid(case=case, reference=reference, flow=flux, chd=chd_native, prescribed=fixed)
     # A prescribed-state probe measures faces with all active cells held at
     # the supplied heads. Apply canonical forcing when reconstructing those
     # original rows, since the probe has no native source package.

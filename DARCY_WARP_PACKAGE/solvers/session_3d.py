@@ -276,6 +276,13 @@ class ThreeDOperatorSession:
         if isinstance(result, tuple) and len(result) == 2 and isinstance(result[1], dict):
             result[1].setdefault("session_revision", int(self.revision))
             result[1].setdefault("session_backend", "classic_3d")
+            if "budget" not in result[1] and result[1].get("converged"):
+                from DARCY_WARP_PACKAGE.physics.budget_3d import compute_3d_flow_budget
+
+                result[1]["budget"] = compute_3d_flow_budget(
+                    head=result[0], source=self.rhs, faces=self.faces, active=self.active,
+                    bc_mask=self.bc_mask, ghb_conductance=self.ghb_conductance, ghb_head=self.ghb_head,
+                )
         return result
 
     def _ensure_open(self) -> None:

@@ -28,6 +28,7 @@ from DARCY_WARP_PACKAGE.kernels_3d import (
     restrict_blockavg_xy_3d_kernel,
     zero_scalar_kernel,
 )
+from DARCY_WARP_PACKAGE.validation.head_checks import invalid_head_values
 from DARCY_WARP_PACKAGE.config import NP_FLOAT, WP_FLOAT
 from DARCY_WARP_PACKAGE.warped_darcy import (
     _chebyshev_relaxation_sequence,
@@ -573,6 +574,8 @@ def _prepare_7point_transient_terms(
 
     h_prev[bcm != 0] = bcv[bcm != 0]
     h_prev[act == 0] = NP_FLOAT(0.0)
+    if np.any(invalid_head_values(head=h_prev[free & (Scoeff > 0.0)])):
+        raise ValueError("Invalid head_prev on active free storage cells.")
     if not np.all(np.isfinite(h_prev)):
         raise ValueError("head_prev contains non-finite values.")
 
@@ -1626,6 +1629,8 @@ def _picard_unconfined_7point_3d(
             raise ValueError(f"head_prev shape {h_prev_storage.shape} expected {shape}.")
         h_prev_storage[bc_mask0] = bcv[bc_mask0]
         h_prev_storage[~active_mask] = NP_FLOAT(0.0)
+        if np.any(invalid_head_values(head=h_prev_storage[active_mask & ~bc_mask0])):
+            raise ValueError("Invalid head_prev on active free storage cells.")
         if not np.all(np.isfinite(h_prev_storage)):
             raise ValueError("head_prev contains non-finite values.")
 
@@ -2343,9 +2348,9 @@ def solve_chebyshev_7point_3d(
         if kx_field is None or ky_field is None or kz_field is None or zbot_field is None:
             raise ValueError("unconfined=True requires kx_field, ky_field, kz_field, and zbot_field.")
 
-        kx = np.asarray(kx_field, dtype=NP_FLOAT)
-        ky = np.asarray(ky_field, dtype=NP_FLOAT)
-        kz = np.asarray(kz_field, dtype=NP_FLOAT)
+        kx = np.asarray(kx_field, dtype=np.float64)
+        ky = np.asarray(ky_field, dtype=np.float64)
+        kz = np.asarray(kz_field, dtype=np.float64)
         zbot = np.asarray(zbot_field, dtype=NP_FLOAT)
         for name, arr in (("kx_field", kx), ("ky_field", ky), ("kz_field", kz), ("zbot_field", zbot)):
             if arr.shape != shape:
@@ -2697,9 +2702,9 @@ def solve_multigrid_kcycle_7point_3d(
         if kx_field is None or ky_field is None or kz_field is None or zbot_field is None:
             raise ValueError("unconfined=True requires kx_field, ky_field, kz_field, and zbot_field.")
 
-        kx = np.asarray(kx_field, dtype=NP_FLOAT)
-        ky = np.asarray(ky_field, dtype=NP_FLOAT)
-        kz = np.asarray(kz_field, dtype=NP_FLOAT)
+        kx = np.asarray(kx_field, dtype=np.float64)
+        ky = np.asarray(ky_field, dtype=np.float64)
+        kz = np.asarray(kz_field, dtype=np.float64)
         zbot = np.asarray(zbot_field, dtype=NP_FLOAT)
         for name, arr in (("kx_field", kx), ("ky_field", ky), ("kz_field", kz), ("zbot_field", zbot)):
             if arr.shape != shape0:

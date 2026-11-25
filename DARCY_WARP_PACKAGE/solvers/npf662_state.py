@@ -6,7 +6,7 @@ when an independent audit or an uncertified grounding case requires it.
 """
 import numpy as np
 
-from DARCY_WARP_PACKAGE.validation.npf662_transient_reference import NPF662TransientReference
+from DARCY_WARP_PACKAGE.validation.npf662_transient_reference import NPF662TransientReference, storage_previous_heads
 from DARCY_WARP_PACKAGE.physics.ghb_3d import validate_ghb_fields
 
 
@@ -65,10 +65,6 @@ class NPF662TransientState:
         if not self.refresh_count:
             self.free = (case.active != 0)&(case.fixed == 0)
         self.dt = float(dt)
-        self.previous = np.asarray(previous, dtype=float).copy()
-        if self.previous.shape != self.shape or np.any(
-                (~np.isfinite(self.previous)|(np.abs(self.previous) >= 1e20))&(case.active != 0)):
-            raise ValueError('Invalid previous transient head')
         ss_owned = np.array(ss, dtype=float, copy=True)
         sy_owned = np.array(sy, dtype=float, copy=True)
         if any(np.any(~np.isfinite(value)) or np.any(value < 0.) for value in (ss_owned, sy_owned)):
@@ -77,6 +73,7 @@ class NPF662TransientState:
             raise ValueError('Specific yield must not exceed one')
         self.ss = np.broadcast_to(ss_owned, self.shape)
         self.sy = np.broadcast_to(sy_owned, self.shape)
+        self.previous = storage_previous_heads(case=case, previous=previous, ss=self.ss, sy=self.sy)
         self.ss_scalar = float(ss_owned) if ss_owned.ndim == 0 else None
         self.sy_scalar = float(sy_owned) if sy_owned.ndim == 0 else None
         # Filled by the persistent device storage kernel during workspace load.
