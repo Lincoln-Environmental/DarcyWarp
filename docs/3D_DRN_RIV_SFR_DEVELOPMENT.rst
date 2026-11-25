@@ -34,7 +34,9 @@ Verified evidence on this branch:
   two-layer steady mixed DRN/RIV, a steady convertible-cell mixed package
   case, and a two-layer STO case with simultaneous DRN/RIV and pumping-driven
   gaining-to-losing RIV reversal. Head errors are below 2e-8 m and
-  package-rate errors below 1e-9 L3/T.
+  package-rate errors below 1e-9 L3/T. In the two one-day transient periods,
+  accepted gross package volumes also match MF6 period-end rates integrated
+  over each period within 1e-9 L3.
 * The CUDA benchmark ``working_tests/benchmark_3d_drn_riv.py`` covers
   120,000 and 1,012,500 cells. Paired package cases use zero exchange and
   retain the no-package solution (max head difference 7.11e-15 m). Warm
@@ -47,11 +49,11 @@ Verified evidence on this branch:
   GPU Newton time itself is unchanged in these equivalent-solution cases.
 
 These tests and measurements do not establish matched MF6 accuracy for
-drying/rewetting, transient exchange-volume accumulation, or performance
-parity on active regional boundary distributions. The transient multilayer
-case compares heads and period-end DRN/RIV rates; it does not validate gross
-integrated package/storage volumes. This branch is a verified NPF
-implementation increment, not completion of the wider qualification matrix.
+drying/rewetting, storage-volume budgets, or performance parity on active
+regional boundary distributions. Transient gross DRN/RIV volume parity is
+checked for the two one-day multilayer periods, with no timestep subdivision.
+This branch is a verified NPF implementation increment, not completion of the
+wider qualification matrix.
 
 Boundary contract
 -----------------
@@ -102,9 +104,9 @@ cell. Reproduce the GPU timing artifact with:
 Remaining implementation and validation
 ----------------------------------------
 
-1. Expand actual MF6 comparison to gross package/storage volumes and
-   drying/rewetting. A transient multilayer gaining-to-losing RIV reversal
-   is now covered, but its integrated exchange volumes are not yet compared.
+1. Expand actual MF6 comparison to storage volumes and drying/rewetting.
+   A transient multilayer gaining-to-losing RIV reversal and gross DRN/RIV
+   exchange volumes over two one-day periods are now covered.
 2. Add independent multicell and multilayer analytical roots and refinement
    studies for vertical series flow, heterogeneous leakage, simultaneous
    gains/losses, and transient threshold crossings.

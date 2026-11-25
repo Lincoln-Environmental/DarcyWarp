@@ -437,3 +437,18 @@ def test_transient_layered_npf_mixed_drn_riv_matches_mf6(tmp_path):
     assert rates[1][1] < 0.0
     np.testing.assert_allclose(heads, mf6_heads, rtol=0.0, atol=2e-8)
     np.testing.assert_allclose(rates, -mf6_rates, rtol=1e-9, atol=1e-9)
+    for period_index, (mf6_drn_rate, mf6_riv_rate) in enumerate(mf6_rates):
+        duration = 1.0
+        period = info["periods"][period_index]
+        drn_volume = period["drn_volume_budget"]
+        riv_volume = period["riv_volume_budget"]
+        np.testing.assert_allclose(drn_volume["inflow"], max(mf6_drn_rate, 0.0) * duration,
+            rtol=1e-9, atol=1e-9)
+        np.testing.assert_allclose(drn_volume["outflow"], max(-mf6_drn_rate, 0.0) * duration,
+            rtol=1e-9, atol=1e-9)
+        np.testing.assert_allclose(riv_volume["inflow"], max(mf6_riv_rate, 0.0) * duration,
+            rtol=1e-9, atol=1e-9)
+        np.testing.assert_allclose(riv_volume["outflow"], max(-mf6_riv_rate, 0.0) * duration,
+            rtol=1e-9, atol=1e-9)
+        np.testing.assert_allclose(riv_volume["net"], mf6_riv_rate * duration,
+            rtol=1e-9, atol=1e-9)
