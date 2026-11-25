@@ -153,7 +153,9 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
             final_acceptance_thresholds=thresholds,
             effective_options=dict(xt3d=False,newton=unconfined,cell_type=case.cell_types.tolist(),saturation_epsilon=1e-6,
                 conductance_floor_m=0.,variablecv=False,perched=False,thickstrt=False,rewet=False,storage=bool(transient),
-                packages=['CHD','WEL_SOURCE']+(['GHB'] if case.ghb_conductance is not None else [])+(['STO'] if transient else [])))
+                packages=['CHD','WEL_SOURCE']+(['GHB'] if case.ghb_conductance is not None else [])
+                +(['DRN'] if case.drn_conductance is not None else [])
+                +(['RIV'] if case.riv_conductance is not None else [])+(['STO'] if transient else [])))
         if transient:
             info.update(dt=float(dt),storage_formulation='MF6 6.6.2 default SsTerms/SyTerms; Newton saturation smoothing',
                 storage_previous_fixed=True,
