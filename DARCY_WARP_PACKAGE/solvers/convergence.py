@@ -64,3 +64,11 @@ def __getattr__(name: str):
     from DARCY_WARP_PACKAGE import warped_darcy
 
     return getattr(warped_darcy, name)
+
+
+def steady_flow_tolerance(*, initial_rms, relative_tolerance, absolute_tolerance, fine, free):
+    """Retain the relative flow gate and bound a below-floor start in head units."""
+    if 0.0 < initial_rms <= absolute_tolerance:
+        inverse_diagonal = float(np.max(fine.M_inv_wp.numpy()[free]))
+        absolute_tolerance = absolute_tolerance / max(1.0, inverse_diagonal)
+    return max(absolute_tolerance, relative_tolerance * initial_rms)

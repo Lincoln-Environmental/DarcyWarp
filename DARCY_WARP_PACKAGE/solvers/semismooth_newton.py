@@ -322,6 +322,57 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
         ss=ss,
     )
     operator = operator_workspace.operator
+    from DARCY_WARP_PACKAGE.physics.budgets_2d import (
+        correct_closed_component_storage, evaluate_alternate_transient_balance,
+    )
+
+    budget_percent = float(kwargs.get("newton_transient_budget_percent", 0.1))
+    component_balance = None
+
+    def check_component_balance(*, candidate):
+        return evaluate_alternate_transient_balance(
+            model=model, head=candidate, previous=head_prev,
+            conductivity=np.asarray(K_field), bottom=zbot, top=np.asarray(ztop_field),
+            min_sat=min_sat, dt=dt, sy=sy, ss=ss, budget_percent=budget_percent,
+        )
+
+    def attempt_component_acceptance(*, current_norms, current_head_equivalent):
+        if not transient:
+            return current_norms, current_head_equivalent, None
+        candidate = operator.head_device.numpy().copy()
+        balance = check_component_balance(candidate=candidate)
+        if balance["accepted"] or max_newton == 0:
+            return current_norms, current_head_equivalent, balance
+        corrected = correct_closed_component_storage(
+            model=model, head=candidate, previous=np.asarray(head_prev), conductivity=np.asarray(K_field),
+            bottom=zbot, top=np.asarray(ztop_field), dt=dt, sy=sy, ss=ss,
+        )
+        if np.array_equal(corrected, candidate):
+            return current_norms, current_head_equivalent, balance
+        operator.set_head(corrected)
+        operator.residual_device(operator.head_device, reduce=True)
+        corrected_norms = operator.current_reduced_norms()
+        transmissivity, storage = operator.freeze_picard_device(operator.head_device)
+        preconditioner.freeze(transmissivity=transmissivity, storage_diagonal=storage)
+        corrected_equivalent = _head_equivalent_rms(residual=operator.residual_device_array,
+            diagonal_inverse=preconditioner.fine_diagonal_inverse, operator=operator, vectors=vector_workspace)
+        corrected_balance = check_component_balance(candidate=corrected)
+        if (corrected_norms.rms <= residual_tol and corrected_equivalent <= head_residual_tol
+                and corrected_balance["accepted"]):
+            return corrected_norms, corrected_equivalent, corrected_balance
+
+        operator.set_head(candidate)
+        operator.residual_device(operator.head_device, reduce=True)
+        transmissivity, storage = operator.freeze_picard_device(operator.head_device)
+        preconditioner.freeze(transmissivity=transmissivity, storage_diagonal=storage)
+        return current_norms, current_head_equivalent, balance
+
+    def apply_jacobian(vector, out):
+        return operator.jacobian_vector_device(operator.head_device, vector, out=out)
+
+    def apply_preconditioner(rhs, out):
+        return preconditioner.apply(rhs, out)
+
     history: list[dict[str, Any]] = []
     failure_reason: str | None = None
     converged = False
@@ -355,7 +406,10 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
         initial_residual = norms.rms
 
         if norms.rms <= residual_tol and head_equivalent <= head_residual_tol:
-            converged = True
+            norms, head_equivalent, component_balance = attempt_component_acceptance(
+                current_norms=norms, current_head_equivalent=head_equivalent,
+            )
+            converged = component_balance is None or component_balance["accepted"]
 
         previous_backtracks = 0
         for newton_iteration in range(max_newton):
@@ -397,10 +451,12 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
             )
             result = krylov.solve(
                 rhs=fgmres_workspace.rhs,
-                apply_jacobian=lambda vector, out: operator.jacobian_vector_device(operator.head_device, vector, out=out),
-                apply_preconditioner=lambda rhs, out: preconditioner.apply(rhs, out),
+                apply_jacobian=apply_jacobian,
+                apply_preconditioner=apply_preconditioner,
                 relative_tolerance=iteration_rtol,
-                absolute_tolerance=krylov_atol,
+                absolute_tolerance=(min(krylov_atol, iteration_rtol * norms.l2)
+                                    if component_balance is not None and not component_balance["accepted"]
+                                    else krylov_atol),
                 max_iterations=max_krylov,
             )
             total_fgmres_iterations += result.iterations
@@ -490,11 +546,16 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
             )
             history[-1]["head_equivalent_residual_rms"] = float(head_equivalent)
             if norms.rms <= residual_tol and head_equivalent <= head_residual_tol:
-                converged = True
-                break
+                norms, head_equivalent, component_balance = attempt_component_acceptance(
+                    current_norms=norms, current_head_equivalent=head_equivalent,
+                )
+                converged = component_balance is None or component_balance["accepted"]
+                if converged:
+                    break
 
         if not converged and failure_reason is None:
-            failure_reason = "newton_iteration_limit"
+            failure_reason = ("component_water_balance" if component_balance is not None
+                              and not component_balance["accepted"] else "newton_iteration_limit")
 
         try:
             wp.synchronize_device(model.device_str)
@@ -582,6 +643,7 @@ def solve_semismooth_newton(*, context: SolverContext, **kwargs: Any):
             "transmissivity_array": transmissivity,
             "budget": budget,
             "budget_summary": dict(budget.iloc[0]),
+            "physical_period_balance": component_balance,
             "drn_discharge_rate_array": accepted_drn_flux,
             "riv_discharge_rate_array": accepted_riv_flux,
             "drn_out_rate": float(accepted_drn_flux.sum()),

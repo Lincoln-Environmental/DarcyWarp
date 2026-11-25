@@ -207,6 +207,13 @@ class NPF662Workspace:
         inflow,outflow=self.ghb_totals.numpy()
         return dict(ghb_inflow=float(inflow),ghb_outflow=float(outflow),ghb_net=float(inflow-outflow))
 
+    def chd_budget(self):
+        totals = wp.zeros(shape=2, dtype=wp.float64, device=self.device)
+        wp.launch(kernel=kernels.chd_budget, dim=self.n,
+                  inputs=[self.fixed, self.left, self.right, self.q, totals], device=self.device)
+        inflow, outflow = totals.numpy()
+        return dict(chd_inflow=float(inflow), chd_outflow=float(outflow))
+
     def evaluate(self,*,trial,linearize=False):
         head=self.trial if trial else self.head
         q=self.trial_q if trial else self.q;c=self.trial_c if trial else self.c
@@ -541,6 +548,12 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
     seconds=perf_counter()-start
     head=None if device_sequence else workspace.head.numpy().reshape(case.active.shape).copy()
     device_passed=device_accepted(metrics=current,physical_tolerance=physical_tolerance,relative_tolerance=relative_tolerance)
+    ghb_budget = workspace.boundary_budget()
+    chd_budget = workspace.chd_budget()
+    current = dict(current, **chd_budget, **ghb_budget,
+                   free_boundary_inflow=current['boundary_inflow'], free_boundary_outflow=current['boundary_outflow'],
+                   boundary_inflow=chd_budget['chd_inflow'] + ghb_budget['ghb_inflow'],
+                   boundary_outflow=chd_budget['chd_outflow'] + ghb_budget['ghb_outflow'])
     certificate=workspace.final_certificate() if device_native else None
     independent_performed=not device_native or not certificate['all_free_cells_storage_anchored']
     if independent_performed:
@@ -586,7 +599,8 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
         result.update(roundoff_accepted=converged,requested_thresholds_met=requested_met,
             precision_limited=bool(converged and not requested_met),
             roundoff_bound_ratio_max=current.get('roundoff_bound_ratio_max'))
-    result['ghb_budget']=workspace.boundary_budget()
+    result['ghb_budget']=ghb_budget
+    result['chd_budget']=chd_budget
     result['krylov_workspace_reused']=krylov_reused
     result['npf_preconditioner']=npf_preconditioner
     result.update(accepted_updates=sum(row['accepted'] for row in history),

@@ -1169,7 +1169,10 @@ def solve_multigrid_kcycle_backend(
     wp.launch(kernel=_cr_k, dim=dim0, inputs=_cr_in, device=device)
     rTr0 = float(lvl0.rTr_buf.numpy()[0])
     r_rms0 = float(np.sqrt(max(rTr0, 0.0) / float(n_free0)))
-    tol_abs = float(max(abs_tol_min, rel_tol * r_rms0))
+    from DARCY_WARP_PACKAGE.solvers.convergence import steady_flow_tolerance
+
+    tol_abs = steady_flow_tolerance(initial_rms=r_rms0, relative_tolerance=rel_tol,
+        absolute_tolerance=abs_tol_min, fine=lvl0, free=free_mask)
     thr_rTr = wp.float64((tol_abs * tol_abs) * float(n_free0))
 
     def pcg_solve_level(level, max_iter_level: int, residual_target_squared=None, recovery_history=None):

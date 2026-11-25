@@ -363,10 +363,18 @@ class NPF662Reference:
         scaled[(diagonal<=0)&(residual!=0)]=np.inf
         boundary=self.free.ravel()[self.left]&c.fixed.ravel()[self.right].astype(bool)
         reverse=self.free.ravel()[self.right]&c.fixed.ravel()[self.left].astype(bool)
-        chd_exchange=np.concatenate([flux[boundary],-flux[reverse]])
-        exchange=np.concatenate([chd_exchange,ghb_exchange[self.free]])
-        inflow=stable_sum(values=np.maximum(-exchange,0.));outflow=stable_sum(values=np.maximum(exchange,0.))
-        throughput=stable_sum(values=np.concatenate([np.abs(c.source[self.free]),np.abs(exchange)]))
+        free_exchange=np.concatenate([flux[boundary],-flux[reverse],ghb_exchange[self.free]])
+        free_in=stable_sum(values=np.maximum(-free_exchange,0.))
+        free_out=stable_sum(values=np.maximum(free_exchange,0.))
+        fixed=(c.active!=0)&(c.fixed!=0)
+        chd_rate=divergence[fixed]
+        chd_in=stable_sum(values=np.maximum(chd_rate,0.))
+        chd_out=stable_sum(values=np.maximum(-chd_rate,0.))
+        ghb_in=stable_sum(values=np.maximum(-ghb_exchange[self.free],0.))
+        ghb_out=stable_sum(values=np.maximum(ghb_exchange[self.free],0.))
+        inflow=stable_sum(values=[chd_in,ghb_in])
+        outflow=stable_sum(values=[chd_out,ghb_out])
+        throughput=stable_sum(values=np.concatenate([np.abs(c.source[self.free]),np.abs(free_exchange)]))
         rms=stable_rms(values=residual[self.free]);hrms=stable_rms(values=scaled[self.free])
         l1=stable_sum(values=np.abs(residual[self.free]));relative=l1/max(throughput,np.finfo(float).tiny)
         active=c.active!=0
@@ -382,10 +390,8 @@ class NPF662Reference:
         result=dict(**checks,head_residual_rms=hrms,physical_rms=rms,
             physical_max=float(np.abs(residual).max()),residual_l1=l1,relative_cell_imbalance=relative,
             gross_throughput=throughput,signed_imbalance=stable_sum(values=residual[self.free]),boundary_inflow=inflow,boundary_outflow=outflow,
-            ghb_inflow=stable_sum(values=np.maximum(-ghb_exchange[self.free],0.)),
-            ghb_outflow=stable_sum(values=np.maximum(ghb_exchange[self.free],0.)),
-            chd_inflow=stable_sum(values=np.maximum(-chd_exchange,0.)),
-            chd_outflow=stable_sum(values=np.maximum(chd_exchange,0.)),
+            free_boundary_inflow=free_in,free_boundary_outflow=free_out,
+            ghb_inflow=ghb_in,ghb_outflow=ghb_out,chd_inflow=chd_in,chd_outflow=chd_out,
             fixed_cell_source_total=stable_sum(values=c.source[c.fixed!=0]),free_cells=int(self.free.sum()),
             fixed_reservoir_required_inflow=stable_sum(values=(divergence-c.source)[c.fixed!=0]),
             ungrounded_current_components=ungrounded,physical_metrics_valid=metrics_valid,
@@ -400,6 +406,7 @@ class NPF662Reference:
             apply_roundoff_acceptance(checks=result,certificate=self.certify_roundoff(
                 head=head,residual=residual,conductance=conductance))
         return result,dict(flux=flux,residual=residual,fixed_reservoir_required_inflow=np.where(c.fixed,divergence-c.source,0.),
+            chd_cell_rate=np.where(fixed,divergence,0.),
             principal_diagonal=diagonal,saturation=saturation,ghb_outflow=ghb_exchange,
             conductance=conductance,dflux_left=dl,dflux_right=dr)
 

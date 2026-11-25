@@ -4,7 +4,23 @@ from scipy import sparse
 from scipy.sparse.csgraph import connected_components
 from DARCY_WARP_PACKAGE.validation.npf662_reference import NPF662Reference, quadratic_saturation_derivative
 from DARCY_WARP_PACKAGE.validation.npf662_metrics import stable_rms, stable_sum
-from DARCY_WARP_PACKAGE.validation.head_checks import inspect_heads
+from DARCY_WARP_PACKAGE.validation.head_checks import invalid_head_values
+
+
+def storage_previous_heads(*, case, previous, ss, sy):
+    """Own the previous state and validate only cells used by STO."""
+    head = np.array(previous, dtype=float, copy=True)
+    if head.shape != case.active.shape:
+        raise ValueError("Invalid previous transient head shape")
+    free = (case.active != 0) & (case.fixed == 0)
+    contributing = free & ((np.asarray(ss) > 0.0) | ((case.cell_types != 0) & (np.asarray(sy) > 0.0)))
+    invalid = invalid_head_values(head=head)
+    if np.any(contributing & invalid):
+        raise ValueError("Invalid previous transient head on an active free storage cell")
+    head[free & invalid] = case.initial[free & invalid]
+    head[case.fixed != 0] = case.values[case.fixed != 0]
+    head[case.active == 0] = 0.0
+    return head
 
 
 class NPF662TransientReference(NPF662Reference):
@@ -13,16 +29,13 @@ class NPF662TransientReference(NPF662Reference):
         if np.ndim(dt) != 0 or not np.isfinite(dt) or dt <= 0.:
             raise ValueError('Positive finite transient dt required')
         self.dt = float(dt)
-        self.previous = np.asarray(previous, dtype=float).copy()
-        if not inspect_heads(head=self.previous, active=case.active,
-                fixed=np.zeros_like(case.fixed), values=self.previous)['input_valid']:
-            raise ValueError('Invalid previous transient head')
         self.ss = np.broadcast_to(np.asarray(ss, dtype=float), self.shape).copy()
         self.sy = np.broadcast_to(np.asarray(sy, dtype=float), self.shape).copy()
         if any(np.any(~np.isfinite(value)) or np.any(value < 0.) for value in (self.ss, self.sy)):
             raise ValueError('Finite nonnegative Ss and Sy required')
         if np.any(self.sy > 1.):
             raise ValueError('Specific yield must not exceed one')
+        self.previous = storage_previous_heads(case=case, previous=previous, ss=self.ss, sy=self.sy)
         self.preconditioner_storage = self.storage(head=self.previous)[1]
 
     def storage(self, *, head):

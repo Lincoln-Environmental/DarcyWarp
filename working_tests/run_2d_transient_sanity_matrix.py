@@ -313,8 +313,20 @@ def _apply_case_parity(rows: dict, *, label: str, variants: tuple[str, ...]) -> 
     histories = {}
     for variant, row in selected.items():
         paths = row.get("head_artifact_paths") or [row.get("head_artifact_path", "")]
-        loaded = [_load_head_history(Path(path)) for path in paths if path and Path(path).exists()]
-        if loaded:
+        count = int(row.get("repeats", 0))
+        if count < 1 or len(paths) != count or not all(paths):
+            continue
+        resolved = [Path(path).resolve() for path in paths]
+        if len(set(resolved)) != count:
+            continue
+        try:
+            loaded = [_load_head_history(path) for path in resolved]
+        except (OSError, KeyError, ValueError):
+            continue
+        expected = tuple(row.get("head_history_shape", ()))
+        if not expected:
+            continue
+        if all(history.shape == expected and np.isfinite(history).all() for history in loaded):
             histories[variant] = loaded
     reference_variant = "classic_device_fp64" if "classic_device_fp64" in histories else "face_graph_fp64"
     if reference_variant not in histories:
@@ -349,6 +361,9 @@ def _apply_case_parity(rows: dict, *, label: str, variants: tuple[str, ...]) -> 
             comparator = reference
             tolerance = HEAD_PARITY_TOLERANCES["face_fp64_vs_classic"]
             label_name = "reference_self" if variant == reference_variant else "face_fp64_vs_classic"
+        if any(history.shape != comparator.shape for history in histories[variant]):
+            row["head_parity"] = {"comparison": "head_history_shape_mismatch", "passed": False}
+            continue
         differences = [np.abs(history - comparator) for history in histories[variant]]
         max_abs = float(max(float(np.max(diff)) for diff in differences))
         rmse = float(np.sqrt(np.mean(np.concatenate([diff.reshape(-1) for diff in differences]) ** 2)))
@@ -493,6 +508,7 @@ def run_variant(
         mempool=mempool,
         head_artifact_paths=head_artifact_paths,
     )
+    row["head_history_shape"] = list(np.shape(artifact["heads_per_period"]))
     row["repeat_wall_times_s"] = wall_times
     return row
 

@@ -79,6 +79,7 @@ def build_case_setup(
     ny: int = 1000,
     n_periods: int = 30,
     dx: float = 100.0,
+    hydraulic_conductivity: float = 100.0,
     t_field_kind: str = "ugly_t",
     t_field_seed: int = 42,
     ghb_conductance_mode: str = "none",
@@ -105,6 +106,7 @@ def build_case_setup(
         "nx": int(nx),
         "ny": int(ny),
         "dx": float(dx),
+        "hydraulic_conductivity": float(hydraulic_conductivity),
         "n_periods": int(n_periods),
         "dt_days": 7.0,
         "sy": 0.10,
@@ -144,6 +146,39 @@ def _artifact_scalar(artifact: dict, name: str) -> object:
     if value is None:
         return None
     return np.asarray(value).reshape(())
+
+
+def _requested_transient_case(*, setup):
+    from working_tests.run_2d_transient_vs_mf6 import build_transient_unconfined_case
+
+    fields = ("nx", "ny", "dx", "hydraulic_conductivity", "initial_saturated_thickness",
+              "sy", "ss", "annual_recharge_m", "recharge_schedule_weeks", "dt_days",
+              "t_field_kind", "t_field_seed", "ghb_conductance_mode")
+    return build_transient_unconfined_case(n_weeks=setup["n_periods"],
+        **{key: setup[key] for key in fields if key in setup})
+
+
+def _physical_reference_mismatches(*, artifact, setup):
+    from working_tests.run_2d_transient_vs_mf6 import steady_warm_start_fingerprint
+
+    case = _requested_transient_case(setup=setup)
+    fields = ("active", "bc_mask", "bc_values", "top", "bottom", "recharge_depths",
+              "recharge_rates", "steady_recharge_rate", "ghb_mask", "ghb_head",
+              "ghb_width", "ghb_alpha", "ghb_aq_thickness")
+    expected = {field: getattr(case, field) for field in fields}
+    expected.update(k_field=case.hydraulic_conductivity, raw_initial_head=case.initial_head)
+    mismatches = [f"{field} differs from requested physical inputs" for field, value in expected.items()
+                  if not np.array_equal(artifact.get(field), value)]
+    mode = setup.get("warm_start_mode")
+    if mode == "artifact_initial" and not np.array_equal(artifact.get("initial_head"), case.initial_head):
+        mismatches.append("initial head differs from the requested starting state")
+    if mode in {"confined_steady_mf6", "unconfined_steady_mf6"}:
+        transmissivity_mode = "full_thickness" if mode == "confined_steady_mf6" else "not_used"
+        fingerprint = steady_warm_start_fingerprint(case=case, mode=mode,
+            transmissivity_mode=transmissivity_mode, mf6_sha256=str(artifact.get("mf6_sha256", "")))
+        if str(artifact.get("warm_start_fingerprint")) != fingerprint:
+            mismatches.append("warm-start fingerprint differs from requested physical inputs")
+    return mismatches
 
 
 def case_setup_mismatches(artifact: dict, case_setup: dict) -> list[str]:
@@ -199,12 +234,15 @@ def case_setup_mismatches(artifact: dict, case_setup: dict) -> list[str]:
     if case_setup.get("warm_start_mode") in {"confined_steady_mf6", "unconfined_steady_mf6"}:
         if str(artifact.get("warm_start_source")) != "native_steady":
             mismatches.append("warm start lacks native steady provenance")
+    if not mismatches and all(key in case_setup for key in ("nx", "ny", "n_periods")):
+        mismatches.extend(_physical_reference_mismatches(artifact=artifact, setup=case_setup))
     return mismatches
 
 
 def ensure_case_artifact(case_setup: dict, *, executable: str | Path | None = None) -> Path:
     """Reuse completed pinned truth; isolate variants from already published native files."""
     from filelock import FileLock
+    from working_tests.run_2d_transient_vs_mf6 import _budget_gate_from_artifact
 
     original = Path(case_setup["artifact_path"])
     original.parent.mkdir(parents=True, exist_ok=True)
@@ -219,9 +257,12 @@ def ensure_case_artifact(case_setup: dict, *, executable: str | Path | None = No
         try:
             artifact = validate_transient_artifact(path, expected_mf6_sha256=expected_sha, verify_native_files=True)
             mismatches = case_setup_mismatches(artifact, case_setup)
+            discrepancy, limit = _budget_gate_from_artifact(path.parent / "mf6_storage_budget_terms.npz")
+            if not np.isfinite(discrepancy) or discrepancy > limit:
+                mismatches.append(f"native budget {discrepancy:.6g}% exceeds {limit:g}%")
             if mismatches:
                 raise ValueError(", ".join(mismatches))
-        except (OSError, ValueError, EOFError, lzma.LZMAError, zipfile.BadZipFile) as exc:
+        except (OSError, ValueError, KeyError, EOFError, lzma.LZMAError, zipfile.BadZipFile) as exc:
             print(f"Skipping cached transient reference {path}: {exc}")
             return False
         return True
@@ -251,26 +292,11 @@ def _generate_case_artifact(case_setup, artifact_path, warm_directory, identity)
 
     print(f"MF6 truth artifact missing; generating (this can take a while):")
     print(f"  {artifact_path}")
-    truth_generator.main(
-        nx=case_setup["nx"],
-        ny=case_setup["ny"],
-        dx=case_setup["dx"],
-        sy=case_setup["sy"],
-        ss=case_setup["ss"],
-        n_weeks=case_setup["n_periods"],
-        annual_recharge_m=case_setup["annual_recharge_m"],
-        recharge_schedule_weeks=case_setup["recharge_schedule_weeks"],
-        initial_saturated_thickness=case_setup["initial_saturated_thickness"],
-        t_field_kind=case_setup["t_field_kind"],
-        t_field_seed=case_setup["t_field_seed"],
-        ghb_conductance_mode=case_setup["ghb_conductance_mode"],
-        out_path=artifact_path,
-        dt_days=case_setup["dt_days"],
-        executable=identity["mf6_executable"],
-        warm_start_workspace=warm_directory,
-        reuse_existing_warm_start=True,
-        warm_start_mode=case_setup["warm_start_mode"],
-        formulation=case_setup["formulation"],
+    truth_generator.run_mf6_transient(
+        case=_requested_transient_case(setup=case_setup),
+        out_path=artifact_path, executable=identity["mf6_executable"],
+        warm_start_workspace=warm_directory, reuse_existing_warm_start=True,
+        warm_start_mode=case_setup["warm_start_mode"], formulation=case_setup["formulation"],
     )
     if not artifact_path.exists():
         raise RuntimeError(f"MF6 truth generation did not produce {artifact_path}")

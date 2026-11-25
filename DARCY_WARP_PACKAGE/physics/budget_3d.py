@@ -194,8 +194,8 @@ def compute_3d_flow_budget(
     storage_change = s * (h - hp)
     div = storage_change + ghb_q
     diag_c = np.zeros(shape, dtype=np.float64) if ghb_c is None else ghb_c.copy()
-    bc_in = 0.0
-    bc_out = 0.0
+    free_chd_in = 0.0
+    free_chd_out = 0.0
     fluxes_finite = bool(np.all(np.isfinite(ghb_q)))
     for face, axis in ((tx_p, 2), (ty_p, 1), (tz_p, 0)):
         here, there = [slice(None)] * 3, [slice(None)] * 3
@@ -210,18 +210,25 @@ def compute_3d_flow_budget(
         div[there] -= q
         diag_c[here] += c
         diag_c[there] += c
-        # Gross exchanges are accumulated before opposing boundaries cancel.
+        # Keep throughput across the free-domain interface for closure.
         into_here = -q[free[here] & bcm[there]]
         into_there = q[bcm[here] & free[there]]
         exchange = np.concatenate((into_here, into_there))
-        bc_in = stable_sum(values=[bc_in, stable_sum(values=np.maximum(exchange, 0.))])
-        bc_out = stable_sum(values=[bc_out, stable_sum(values=np.minimum(exchange, 0.))])
+        free_chd_in = stable_sum(values=[free_chd_in, stable_sum(values=np.maximum(exchange, 0.))])
+        free_chd_out = stable_sum(values=[free_chd_out, stable_sum(values=np.minimum(exchange, 0.))])
 
-    chd_in, chd_out = bc_in, bc_out
+    # Prescribed-cell divergence includes all incident faces. Split signs
+    # after summing the faces of each cell, as a CHD package budget does.
+    fixed = act & bcm
+    chd_rate = div[fixed] - storage_change[fixed] - ghb_q[fixed]
+    chd_in = stable_sum(values=np.maximum(chd_rate, 0.0))
+    chd_out = stable_sum(values=np.minimum(chd_rate, 0.0))
     ghb_in = stable_sum(values=np.maximum(-ghb_q[free], 0.0))
     ghb_out = stable_sum(values=np.minimum(-ghb_q[free], 0.0))
     bc_in = stable_sum(values=[chd_in, ghb_in])
     bc_out = stable_sum(values=[chd_out, ghb_out])
+    free_bc_in = stable_sum(values=[free_chd_in, ghb_in])
+    free_bc_out = stable_sum(values=[free_chd_out, ghb_out])
     residual = src - div
     residual[~free] = 0.0
     source_free = src[free]
@@ -231,7 +238,7 @@ def compute_3d_flow_budget(
     bc_net = bc_in + bc_out
     domain_imbalance = stable_sum(values=residual[free])
     throughput = max(
-        stable_sum(values=[stable_sum(values=np.abs(source_free)), abs(bc_in), abs(bc_out),
+        stable_sum(values=[stable_sum(values=np.abs(source_free)), abs(free_bc_in), abs(free_bc_out),
                            stable_sum(values=np.abs(storage_free))]),
         np.finfo(np.float64).tiny,
     )
@@ -248,6 +255,9 @@ def compute_3d_flow_budget(
         "boundary_inflow": bc_in,
         "boundary_outflow": bc_out,
         "boundary_net": bc_net,
+        "free_boundary_inflow": free_bc_in,
+        "free_boundary_outflow": free_bc_out,
+        "free_boundary_net": stable_sum(values=[free_bc_in, free_bc_out]),
         "chd_inflow": chd_in,
         "chd_outflow": -chd_out,
         "ghb_inflow": ghb_in,
@@ -268,6 +278,8 @@ def compute_3d_flow_budget(
         result["relative_cell_imbalance"] = float("inf")
         result["relative_imbalance"] = float("inf")
     if return_field:
+        result["chd_cell_rate"] = np.zeros_like(h)
+        result["chd_cell_rate"][fixed] = chd_rate
         result["cell_residual_field"] = residual
         result["operator_diagonal"] = diag_c + s
     return result

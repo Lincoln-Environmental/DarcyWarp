@@ -352,11 +352,14 @@ def _budget_gate_from_artifact(budget_path: Path) -> tuple[float, float]:
     """Return max absolute parsed budget discrepancy and its row tolerance."""
     with np.load(budget_path, allow_pickle=True) as budget:
         if "mf6_mass_balance_json" not in budget.files:
-            raise RuntimeError(f"MF6 budget artifact {budget_path} has no parsed mass-balance rows.")
+            raise ValueError(f"MF6 budget artifact {budget_path} has no parsed mass-balance rows.")
         rows = json.loads(str(np.asarray(budget["mf6_mass_balance_json"]).reshape(())))
-    discrepancies = [abs(float(row["percent_discrepancy"])) for row in rows]
-    if not discrepancies:
-        raise RuntimeError(f"MF6 budget artifact {budget_path} has no period rows.")
+    from DARCY_WARP_PACKAGE.physics.budgets_2d import modflow_percent_discrepancy
+
+    discrepancies = [abs(modflow_percent_discrepancy(inflow=float(row["total_in"]), outflow=float(row["total_out"])))
+                     for row in rows]
+    if not discrepancies or not np.isfinite(discrepancies).all():
+        raise ValueError(f"MF6 budget artifact {budget_path} has missing or nonfinite period totals.")
     return float(max(discrepancies)), 1.0
 
 
@@ -389,16 +392,22 @@ def _validate_mf6_transient_outputs(
     return discrepancy, tolerance
 
 
-def _steady_warm_start(*, case, mode, transmissivity_mode, directory, identity, reuse):
-    """Compute only in private workspaces; atomically cache a completed, keyed head."""
+def steady_warm_start_fingerprint(*, case, mode, transmissivity_mode, mf6_sha256):
+    """Hash the physical steady equation used to initialise the history."""
     digest = hashlib.sha256(b"darcywarp-steady-transient-initial-state-v1")
     for key in ("nx", "ny", "dx", "active", "bc_mask", "bc_values", "top", "bottom",
                 "hydraulic_conductivity", "initial_head", "steady_recharge_rate"):
         _fingerprint_value(digest, key, getattr(case, key))
     for key, value in (("mode", mode), ("transmissivity_mode", transmissivity_mode),
-                       ("mf6_sha256", identity["mf6_sha256"]), ("flopy", flopy.__version__)):
+                       ("mf6_sha256", mf6_sha256), ("flopy", flopy.__version__)):
         _fingerprint_value(digest, key, value)
-    fingerprint = digest.hexdigest()
+    return digest.hexdigest()
+
+
+def _steady_warm_start(*, case, mode, transmissivity_mode, directory, identity, reuse):
+    """Compute in private workspaces and atomically cache a completed head."""
+    fingerprint = steady_warm_start_fingerprint(case=case, mode=mode,
+        transmissivity_mode=transmissivity_mode, mf6_sha256=identity["mf6_sha256"])
     directory.mkdir(parents=True, exist_ok=True)
     cache = directory / f"{fingerprint}.npz.lzma"
     if reuse and cache.is_file():
@@ -564,6 +573,8 @@ def save_mf6_storage_budget_terms(
             package_terms[package_key][period_index] += arr
         per_record_arrays.setdefault(record_name, record_arrays)
 
+    from DARCY_WARP_PACKAGE.physics.budgets_2d import modflow_percent_discrepancy
+
     mass_balance_rows = []
     for period_index in range(nper):
         row = {"period": int(period_index + 1)}
@@ -578,11 +589,10 @@ def save_mf6_storage_budget_terms(
             total_in += gross_in
             total_out += gross_out
         in_minus_out = total_in - total_out
-        denom = abs(total_in) + abs(total_out)
         row["total_in"] = float(total_in)
         row["total_out"] = float(total_out)
         row["in_minus_out"] = float(in_minus_out)
-        row["percent_discrepancy"] = 0.0 if denom == 0.0 else float(100.0 * in_minus_out / denom)
+        row["percent_discrepancy"] = modflow_percent_discrepancy(inflow=total_in, outflow=total_out)
         mass_balance_rows.append(row)
 
     out_arrays: dict[str, np.ndarray] = {

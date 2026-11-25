@@ -1463,27 +1463,26 @@ def jacobi_applyA_fused_kernel(
     T_n = wp.float64(0.0)
     T_s = wp.float64(0.0)
 
-    tiny = wp.float64(1.0e-12)
 
     if i + 1 < nx and active[j, i + 1] != 0:
         T_nb = wp.float64(T_field[j, i + 1])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_e = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_e = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if i - 1 >= 0 and active[j, i - 1] != 0:
         T_nb = wp.float64(T_field[j, i - 1])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_w = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_w = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if j - 1 >= 0 and active[j - 1, i] != 0:
         T_nb = wp.float64(T_field[j - 1, i])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_n = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_n = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if j + 1 < ny and active[j + 1, i] != 0:
         T_nb = wp.float64(T_field[j + 1, i])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_s = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_s = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     C_gh = wp.float64(0.0)
     if gh_mask[j, i] != 0:
@@ -1495,7 +1494,7 @@ def jacobi_applyA_fused_kernel(
     sum_T = T_e + T_w + T_n + T_s + C_gh + s_diag
 
     Ah = WP_FLOAT(0.0)
-    if sum_T < tiny:
+    if sum_T <= 0.0:
         Ah = WP_FLOAT(hC)
     else:
         val = sum_T * hC
@@ -1675,7 +1674,6 @@ def compute_head_residual_kernel(
         r[j, i] = WP_FLOAT(0.0)
         return
 
-    tiny = wp.float64(1.0e-12)
 
     T_c = wp.float64(T_field[j, i])
     hC = wp.float64(x[j, i])
@@ -1694,25 +1692,25 @@ def compute_head_residual_kernel(
         T_nb = wp.float64(T_field[j, i + 1])
         hE = wp.float64(x[j, i + 1])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_e = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_e = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if i - 1 >= 0 and active[j, i - 1] != 0:
         T_nb = wp.float64(T_field[j, i - 1])
         hW = wp.float64(x[j, i - 1])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_w = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_w = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if j - 1 >= 0 and active[j - 1, i] != 0:
         T_nb = wp.float64(T_field[j - 1, i])
         hN = wp.float64(x[j - 1, i])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_n = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_n = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if j + 1 < ny and active[j + 1, i] != 0:
         T_nb = wp.float64(T_field[j + 1, i])
         hS = wp.float64(x[j + 1, i])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_s = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_s = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     C_gh = wp.float64(0.0)
     if gh_mask[j, i] != 0:
@@ -1724,7 +1722,7 @@ def compute_head_residual_kernel(
 
     # Apply A in the same flux-integrated form as your operator
     Ax64 = wp.float64(0.0)
-    if diagA < tiny:
+    if diagA <= 0.0:
         # Identity-row semantics: Ax = hC
         Ax64 = hC
         rh64 = wp.float64(b[j, i]) - Ax64  # metres if b was built consistently for identity rows
@@ -1767,7 +1765,6 @@ def compute_dual_residual_kernel(
     if active[j, i] == 0 or bc_mask[j, i] != 0:
         return
 
-    tiny = wp.float64(1.0e-12)
     T_c = wp.float64(T_field[j, i])
     hC = wp.float64(x[j, i])
 
@@ -1784,22 +1781,22 @@ def compute_dual_residual_kernel(
         T_nb = wp.float64(T_field[j, i + 1])
         hE = wp.float64(x[j, i + 1])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_e = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_e = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
     if i - 1 >= 0 and active[j, i - 1] != 0:
         T_nb = wp.float64(T_field[j, i - 1])
         hW = wp.float64(x[j, i - 1])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_w = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_w = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
     if j - 1 >= 0 and active[j - 1, i] != 0:
         T_nb = wp.float64(T_field[j - 1, i])
         hN = wp.float64(x[j - 1, i])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_n = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_n = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
     if j + 1 < ny and active[j + 1, i] != 0:
         T_nb = wp.float64(T_field[j + 1, i])
         hS = wp.float64(x[j + 1, i])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_s = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_s = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     C_gh = wp.float64(0.0)
     if gh_mask[j, i] != 0:
@@ -1812,7 +1809,7 @@ def compute_dual_residual_kernel(
     flow_residual = wp.float64(0.0)
     head_residual = wp.float64(0.0)
 
-    if diagA < tiny:
+    if diagA <= 0.0:
         Ax64 = hC
         flow_residual = wp.float64(b[j, i]) - Ax64
         head_residual = flow_residual
@@ -1888,7 +1885,6 @@ def compute_residual_kernel(
         r[j, i] = WP_FLOAT(0.0)
         return
 
-    tiny = wp.float64(1.0e-12)
 
     T_c = wp.float64(T_field[j, i])
     hC = wp.float64(x[j, i])
@@ -1907,25 +1903,25 @@ def compute_residual_kernel(
         T_nb = wp.float64(T_field[j, i + 1])
         hE = wp.float64(x[j, i + 1])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_e = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_e = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if i - 1 >= 0 and active[j, i - 1] != 0:
         T_nb = wp.float64(T_field[j, i - 1])
         hW = wp.float64(x[j, i - 1])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_w = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_w = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if j - 1 >= 0 and active[j - 1, i] != 0:
         T_nb = wp.float64(T_field[j - 1, i])
         hN = wp.float64(x[j - 1, i])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_n = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_n = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if j + 1 < ny and active[j + 1, i] != 0:
         T_nb = wp.float64(T_field[j + 1, i])
         hS = wp.float64(x[j + 1, i])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_s = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_s = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     C_gh = wp.float64(0.0)
     if gh_mask[j, i] != 0:
@@ -1936,7 +1932,7 @@ def compute_residual_kernel(
     sum_T = T_e + T_w + T_n + T_s + C_gh + wp.float64(storage_diag[j, i])
 
     Ax64 = wp.float64(0.0)
-    if sum_T < tiny:
+    if sum_T <= 0.0:
         Ax64 = hC
     else:
         Ax64 = sum_T * hC
@@ -1989,7 +1985,6 @@ def kcycle_check_dh_and_residual_kernel(
     wp.atomic_add(dh2_buf, 0, dh * dh)
     wp.atomic_max(dh_max_buf, 0, abs_dh)
 
-    tiny = wp.float64(1.0e-12)
 
     T_c = wp.float64(T_field[j, i])
     hC = x_new
@@ -2008,25 +2003,25 @@ def kcycle_check_dh_and_residual_kernel(
         T_nb = wp.float64(T_field[j, i + 1])
         hE = wp.float64(x[j, i + 1])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_e = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_e = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if i - 1 >= 0 and active[j, i - 1] != 0:
         T_nb = wp.float64(T_field[j, i - 1])
         hW = wp.float64(x[j, i - 1])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_w = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_w = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if j - 1 >= 0 and active[j - 1, i] != 0:
         T_nb = wp.float64(T_field[j - 1, i])
         hN = wp.float64(x[j - 1, i])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_n = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_n = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if j + 1 < ny and active[j + 1, i] != 0:
         T_nb = wp.float64(T_field[j + 1, i])
         hS = wp.float64(x[j + 1, i])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_s = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_s = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     C_gh = wp.float64(0.0)
     if use_ghb != 0 and gh_mask[j, i] != 0:
@@ -2037,7 +2032,7 @@ def kcycle_check_dh_and_residual_kernel(
     sum_T = T_e + T_w + T_n + T_s + C_gh + wp.float64(storage_diag[j, i])
 
     Ax64 = wp.float64(0.0)
-    if sum_T < tiny:
+    if sum_T <= 0.0:
         Ax64 = hC
     else:
         Ax64 = sum_T * hC
@@ -2089,7 +2084,6 @@ def kcycle_check_dh_and_dual_residual_kernel(
     wp.atomic_add(dh2_buf, 0, dh * dh)
     wp.atomic_max(dh_max_buf, 0, abs_dh)
 
-    tiny = wp.float64(1.0e-12)
     T_c = wp.float64(T_field[j, i])
     hC = x_new
 
@@ -2106,22 +2100,22 @@ def kcycle_check_dh_and_dual_residual_kernel(
         T_nb = wp.float64(T_field[j, i + 1])
         hE = wp.float64(x[j, i + 1])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_e = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_e = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
     if i - 1 >= 0 and active[j, i - 1] != 0:
         T_nb = wp.float64(T_field[j, i - 1])
         hW = wp.float64(x[j, i - 1])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_w = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_w = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
     if j - 1 >= 0 and active[j - 1, i] != 0:
         T_nb = wp.float64(T_field[j - 1, i])
         hN = wp.float64(x[j - 1, i])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_n = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_n = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
     if j + 1 < ny and active[j + 1, i] != 0:
         T_nb = wp.float64(T_field[j + 1, i])
         hS = wp.float64(x[j + 1, i])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_s = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_s = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     C_gh = wp.float64(0.0)
     if use_ghb != 0 and gh_mask[j, i] != 0:
@@ -2134,7 +2128,7 @@ def kcycle_check_dh_and_dual_residual_kernel(
     flow_residual = wp.float64(0.0)
     head_residual = wp.float64(0.0)
 
-    if diagA < tiny:
+    if diagA <= 0.0:
         Ax64 = hC
         flow_residual = wp.float64(b[j, i]) - Ax64
         head_residual = flow_residual
@@ -2308,29 +2302,28 @@ def build_diag_preconditioner_kernel(
         M_inv_out[j, i] = WP_FLOAT(1.0)
         return
 
-    tiny = wp.float64(1.0e-12)
     T_c = wp.float64(T_field[j, i])
     diagonal = wp.float64(0.0)
 
     if i + 1 < nx and active[j, i + 1] != 0:
         T_nb = wp.float64(T_field[j, i + 1])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            diagonal = diagonal + wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            diagonal = diagonal + wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if i - 1 >= 0 and active[j, i - 1] != 0:
         T_nb = wp.float64(T_field[j, i - 1])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            diagonal = diagonal + wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            diagonal = diagonal + wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if j - 1 >= 0 and active[j - 1, i] != 0:
         T_nb = wp.float64(T_field[j - 1, i])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            diagonal = diagonal + wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            diagonal = diagonal + wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if j + 1 < ny and active[j + 1, i] != 0:
         T_nb = wp.float64(T_field[j + 1, i])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            diagonal = diagonal + wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            diagonal = diagonal + wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     diagonal = diagonal + wp.float64(storage_diag[j, i])
 
@@ -2339,7 +2332,7 @@ def build_diag_preconditioner_kernel(
         if T_c > wp.float64(0.0) and ghbf > wp.float64(0.0) and not wp.isnan(ghbf):
             diagonal = diagonal + T_c * ghbf
 
-    if diagonal > tiny:
+    if diagonal > 0.0:
         M_inv_out[j, i] = WP_FLOAT(wp.float64(1.0) / diagonal)
     else:
         M_inv_out[j, i] = WP_FLOAT(1.0)
@@ -2401,7 +2394,6 @@ def build_diag_preconditioner(
         thickness_f = 1.0
 
     ny, nx = T_field.shape
-    tiny = np.float64(1.0e-12)
 
     if assume_finite_T:
         T_pos = T_field > NP_FLOAT(0.0)
@@ -2421,7 +2413,7 @@ def build_diag_preconditioner(
             & (active[:, 1:] != 0)
             & T_pos[:, :-1]
             & T_pos[:, 1:]
-            & (denom_E > tiny)
+            & (denom_E > 0.0)
         )
         cond_E = np.zeros_like(denom_E, dtype=np.float64)
         cond_E[valid_E] = 2.0 * T_L[valid_E] * T_R[valid_E] / denom_E[valid_E]
@@ -2439,7 +2431,7 @@ def build_diag_preconditioner(
             & (active[1:, :] != 0)
             & T_pos[:-1, :]
             & T_pos[1:, :]
-            & (denom_S > tiny)
+            & (denom_S > 0.0)
         )
         cond_S = np.zeros_like(denom_S, dtype=np.float64)
         cond_S[valid_S] = 2.0 * T_T[valid_S] * T_B[valid_S] / denom_S[valid_S]
@@ -2477,7 +2469,7 @@ def build_diag_preconditioner(
             sum_T[on] += sd[on]
 
     M_inv = np.ones((ny, nx), dtype=np.float64)
-    valid_sum = np.isfinite(sum_T) & (sum_T > tiny)
+    valid_sum = np.isfinite(sum_T) & (sum_T > 0.0)
     M_inv[valid_sum] = 1.0 / sum_T[valid_sum]
 
     # Enforce identity-like behavior for inactive/Dirichlet cells
@@ -2529,31 +2521,30 @@ def apply_A_kernel(
     T_n = WP_FLOAT(0.0)
     T_s = WP_FLOAT(0.0)
 
-    tiny = WP_FLOAT(1.0e-12)
 
     # East neighbor
     if i + 1 < nx and active[j, i + 1] != 0:
         T_nb = T_field[j, i + 1]
         if T_c > WP_FLOAT(0.0) and T_nb > WP_FLOAT(0.0):
-            T_e = WP_FLOAT(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_e = wp.min(T_c, T_nb) * (WP_FLOAT(2.0) / (WP_FLOAT(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     # West neighbor
     if i - 1 >= 0 and active[j, i - 1] != 0:
         T_nb = T_field[j, i - 1]
         if T_c > WP_FLOAT(0.0) and T_nb > WP_FLOAT(0.0):
-            T_w = WP_FLOAT(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_w = wp.min(T_c, T_nb) * (WP_FLOAT(2.0) / (WP_FLOAT(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     # North neighbor
     if j - 1 >= 0 and active[j - 1, i] != 0:
         T_nb = T_field[j - 1, i]
         if T_c > WP_FLOAT(0.0) and T_nb > WP_FLOAT(0.0):
-            T_n = WP_FLOAT(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_n = wp.min(T_c, T_nb) * (WP_FLOAT(2.0) / (WP_FLOAT(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     # South neighbor
     if j + 1 < ny and active[j + 1, i] != 0:
         T_nb = T_field[j + 1, i]
         if T_c > WP_FLOAT(0.0) and T_nb > WP_FLOAT(0.0):
-            T_s = WP_FLOAT(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_s = wp.min(T_c, T_nb) * (WP_FLOAT(2.0) / (WP_FLOAT(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     C_gh = WP_FLOAT(0.0)
     if gh_mask[j, i] != 0:
@@ -2564,7 +2555,7 @@ def apply_A_kernel(
     sum_T = wp.float64(T_e) + wp.float64(T_w) + wp.float64(T_n) + wp.float64(T_s) + wp.float64(C_gh) + wp.float64(storage_diag[j, i])
 
     # Mirror FD behavior: if isolated, treat as identity with b = 0
-    if sum_T < wp.float64(tiny):
+    if sum_T <= 0.0:
         Ah[j, i] = hC
         return
 
@@ -2605,7 +2596,6 @@ def apply_A_and_pAp_kernel(
         Ap[j, i] = p[j, i]
         return
 
-    tiny = wp.float64(1.0e-12)
 
     T_c = wp.float64(T_field[j, i])
     pC = wp.float64(p[j, i])
@@ -2624,25 +2614,25 @@ def apply_A_and_pAp_kernel(
         T_nb = wp.float64(T_field[j, i + 1])
         pE = wp.float64(p[j, i + 1])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_e = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_e = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if i - 1 >= 0 and active[j, i - 1] != 0:
         T_nb = wp.float64(T_field[j, i - 1])
         pW = wp.float64(p[j, i - 1])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_w = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_w = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if j - 1 >= 0 and active[j - 1, i] != 0:
         T_nb = wp.float64(T_field[j - 1, i])
         pN = wp.float64(p[j - 1, i])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_n = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_n = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if j + 1 < ny and active[j + 1, i] != 0:
         T_nb = wp.float64(T_field[j + 1, i])
         pS = wp.float64(p[j + 1, i])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_s = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_s = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     C_gh = wp.float64(0.0)
     if gh_mask[j, i] != 0:
@@ -2653,7 +2643,7 @@ def apply_A_and_pAp_kernel(
     sum_T = T_e + T_w + T_n + T_s + C_gh + wp.float64(storage_diag[j, i])
 
     val64 = wp.float64(0.0)
-    if sum_T < tiny:
+    if sum_T <= 0.0:
         val64 = pC
     else:
         val64 = sum_T * pC
@@ -2744,7 +2734,6 @@ def init_pcg_with_A_kernel(
         p[j, i] = WP_FLOAT(0.0)
         return
 
-    tiny = wp.float64(1.0e-12)
 
     T_c = wp.float64(T_field[j, i])
     hC = wp.float64(x[j, i])
@@ -2763,25 +2752,25 @@ def init_pcg_with_A_kernel(
         T_nb = wp.float64(T_field[j, i + 1])
         hE = wp.float64(x[j, i + 1])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_e = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_e = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if i - 1 >= 0 and active[j, i - 1] != 0:
         T_nb = wp.float64(T_field[j, i - 1])
         hW = wp.float64(x[j, i - 1])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_w = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_w = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if j - 1 >= 0 and active[j - 1, i] != 0:
         T_nb = wp.float64(T_field[j - 1, i])
         hN = wp.float64(x[j - 1, i])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_n = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_n = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if j + 1 < ny and active[j + 1, i] != 0:
         T_nb = wp.float64(T_field[j + 1, i])
         hS = wp.float64(x[j + 1, i])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_s = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_s = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     C_gh = wp.float64(0.0)
     if gh_mask[j, i] != 0:
@@ -2792,7 +2781,7 @@ def init_pcg_with_A_kernel(
     sum_T = T_e + T_w + T_n + T_s + C_gh + wp.float64(storage_diag[j, i])
 
     Ap64 = wp.float64(0.0)
-    if sum_T < tiny:
+    if sum_T <= 0.0:
         Ap64 = hC
     else:
         Ap64 = sum_T * hC
@@ -2873,27 +2862,26 @@ def jacobi_applyA_fused_no_storage_kernel(
     T_n = wp.float64(0.0)
     T_s = wp.float64(0.0)
 
-    tiny = wp.float64(1.0e-12)
 
     if i + 1 < nx and active[j, i + 1] != 0:
         T_nb = wp.float64(T_field[j, i + 1])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_e = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_e = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if i - 1 >= 0 and active[j, i - 1] != 0:
         T_nb = wp.float64(T_field[j, i - 1])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_w = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_w = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if j - 1 >= 0 and active[j - 1, i] != 0:
         T_nb = wp.float64(T_field[j - 1, i])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_n = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_n = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if j + 1 < ny and active[j + 1, i] != 0:
         T_nb = wp.float64(T_field[j + 1, i])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_s = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_s = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     C_gh = wp.float64(0.0)
     if gh_mask[j, i] != 0:
@@ -2904,7 +2892,7 @@ def jacobi_applyA_fused_no_storage_kernel(
     sum_T = T_e + T_w + T_n + T_s + C_gh
 
     Ah = WP_FLOAT(0.0)
-    if sum_T < tiny:
+    if sum_T <= 0.0:
         Ah = WP_FLOAT(hC)
     else:
         val = sum_T * hC
@@ -2944,7 +2932,6 @@ def compute_head_residual_no_storage_kernel(
         r[j, i] = WP_FLOAT(0.0)
         return
 
-    tiny = wp.float64(1.0e-12)
 
     T_c = wp.float64(T_field[j, i])
     hC = wp.float64(x[j, i])
@@ -2963,25 +2950,25 @@ def compute_head_residual_no_storage_kernel(
         T_nb = wp.float64(T_field[j, i + 1])
         hE = wp.float64(x[j, i + 1])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_e = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_e = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if i - 1 >= 0 and active[j, i - 1] != 0:
         T_nb = wp.float64(T_field[j, i - 1])
         hW = wp.float64(x[j, i - 1])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_w = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_w = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if j - 1 >= 0 and active[j - 1, i] != 0:
         T_nb = wp.float64(T_field[j - 1, i])
         hN = wp.float64(x[j - 1, i])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_n = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_n = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if j + 1 < ny and active[j + 1, i] != 0:
         T_nb = wp.float64(T_field[j + 1, i])
         hS = wp.float64(x[j + 1, i])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_s = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_s = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     C_gh = wp.float64(0.0)
     if gh_mask[j, i] != 0:
@@ -2992,7 +2979,7 @@ def compute_head_residual_no_storage_kernel(
     diagA = T_e + T_w + T_n + T_s + C_gh
 
     Ax64 = wp.float64(0.0)
-    if diagA < tiny:
+    if diagA <= 0.0:
         Ax64 = hC
         rh64 = wp.float64(b[j, i]) - Ax64
     else:
@@ -3035,7 +3022,6 @@ def compute_residual_no_storage_kernel(
         r[j, i] = WP_FLOAT(0.0)
         return
 
-    tiny = wp.float64(1.0e-12)
 
     T_c = wp.float64(T_field[j, i])
     hC = wp.float64(x[j, i])
@@ -3054,25 +3040,25 @@ def compute_residual_no_storage_kernel(
         T_nb = wp.float64(T_field[j, i + 1])
         hE = wp.float64(x[j, i + 1])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_e = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_e = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if i - 1 >= 0 and active[j, i - 1] != 0:
         T_nb = wp.float64(T_field[j, i - 1])
         hW = wp.float64(x[j, i - 1])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_w = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_w = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if j - 1 >= 0 and active[j - 1, i] != 0:
         T_nb = wp.float64(T_field[j - 1, i])
         hN = wp.float64(x[j - 1, i])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_n = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_n = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if j + 1 < ny and active[j + 1, i] != 0:
         T_nb = wp.float64(T_field[j + 1, i])
         hS = wp.float64(x[j + 1, i])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_s = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_s = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     C_gh = wp.float64(0.0)
     if gh_mask[j, i] != 0:
@@ -3083,7 +3069,7 @@ def compute_residual_no_storage_kernel(
     sum_T = T_e + T_w + T_n + T_s + C_gh
 
     Ax64 = wp.float64(0.0)
-    if sum_T < tiny:
+    if sum_T <= 0.0:
         Ax64 = hC
     else:
         Ax64 = sum_T * hC
@@ -3134,7 +3120,6 @@ def kcycle_check_dh_and_residual_no_storage_kernel(
     wp.atomic_add(dh2_buf, 0, dh * dh)
     wp.atomic_max(dh_max_buf, 0, abs_dh)
 
-    tiny = wp.float64(1.0e-12)
 
     T_c = wp.float64(T_field[j, i])
     hC = x_new
@@ -3153,25 +3138,25 @@ def kcycle_check_dh_and_residual_no_storage_kernel(
         T_nb = wp.float64(T_field[j, i + 1])
         hE = wp.float64(x[j, i + 1])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_e = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_e = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if i - 1 >= 0 and active[j, i - 1] != 0:
         T_nb = wp.float64(T_field[j, i - 1])
         hW = wp.float64(x[j, i - 1])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_w = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_w = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if j - 1 >= 0 and active[j - 1, i] != 0:
         T_nb = wp.float64(T_field[j - 1, i])
         hN = wp.float64(x[j - 1, i])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_n = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_n = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if j + 1 < ny and active[j + 1, i] != 0:
         T_nb = wp.float64(T_field[j + 1, i])
         hS = wp.float64(x[j + 1, i])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_s = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_s = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     C_gh = wp.float64(0.0)
     if use_ghb != 0 and gh_mask[j, i] != 0:
@@ -3182,7 +3167,7 @@ def kcycle_check_dh_and_residual_no_storage_kernel(
     sum_T = T_e + T_w + T_n + T_s + C_gh
 
     Ax64 = wp.float64(0.0)
-    if sum_T < tiny:
+    if sum_T <= 0.0:
         Ax64 = hC
     else:
         Ax64 = sum_T * hC
@@ -3220,36 +3205,35 @@ def build_diag_preconditioner_no_storage_kernel(
         M_inv_out[j, i] = WP_FLOAT(1.0)
         return
 
-    tiny = wp.float64(1.0e-12)
     T_c = wp.float64(T_field[j, i])
     diagonal = wp.float64(0.0)
 
     if i + 1 < nx and active[j, i + 1] != 0:
         T_nb = wp.float64(T_field[j, i + 1])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            diagonal = diagonal + wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            diagonal = diagonal + wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if i - 1 >= 0 and active[j, i - 1] != 0:
         T_nb = wp.float64(T_field[j, i - 1])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            diagonal = diagonal + wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            diagonal = diagonal + wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if j - 1 >= 0 and active[j - 1, i] != 0:
         T_nb = wp.float64(T_field[j - 1, i])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            diagonal = diagonal + wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            diagonal = diagonal + wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if j + 1 < ny and active[j + 1, i] != 0:
         T_nb = wp.float64(T_field[j + 1, i])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            diagonal = diagonal + wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            diagonal = diagonal + wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if use_ghb != 0 and gh_mask[j, i] != 0:
         ghbf = wp.float64(ghb_factor[j, i])
         if T_c > wp.float64(0.0) and ghbf > wp.float64(0.0) and not wp.isnan(ghbf):
             diagonal = diagonal + T_c * ghbf
 
-    if diagonal > tiny:
+    if diagonal > 0.0:
         M_inv_out[j, i] = WP_FLOAT(wp.float64(1.0) / diagonal)
     else:
         M_inv_out[j, i] = WP_FLOAT(1.0)
@@ -3276,7 +3260,6 @@ def apply_A_and_pAp_no_storage_kernel(
         Ap[j, i] = p[j, i]
         return
 
-    tiny = wp.float64(1.0e-12)
 
     T_c = wp.float64(T_field[j, i])
     pC = wp.float64(p[j, i])
@@ -3295,25 +3278,25 @@ def apply_A_and_pAp_no_storage_kernel(
         T_nb = wp.float64(T_field[j, i + 1])
         pE = wp.float64(p[j, i + 1])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_e = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_e = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if i - 1 >= 0 and active[j, i - 1] != 0:
         T_nb = wp.float64(T_field[j, i - 1])
         pW = wp.float64(p[j, i - 1])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_w = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_w = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if j - 1 >= 0 and active[j - 1, i] != 0:
         T_nb = wp.float64(T_field[j - 1, i])
         pN = wp.float64(p[j - 1, i])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_n = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_n = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if j + 1 < ny and active[j + 1, i] != 0:
         T_nb = wp.float64(T_field[j + 1, i])
         pS = wp.float64(p[j + 1, i])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_s = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_s = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     C_gh = wp.float64(0.0)
     if gh_mask[j, i] != 0:
@@ -3324,7 +3307,7 @@ def apply_A_and_pAp_no_storage_kernel(
     sum_T = T_e + T_w + T_n + T_s + C_gh
 
     val64 = wp.float64(0.0)
-    if sum_T < tiny:
+    if sum_T <= 0.0:
         val64 = pC
     else:
         val64 = sum_T * pC
@@ -3372,7 +3355,6 @@ def init_pcg_with_A_no_storage_kernel(
         p[j, i] = WP_FLOAT(0.0)
         return
 
-    tiny = wp.float64(1.0e-12)
 
     T_c = wp.float64(T_field[j, i])
     hC = wp.float64(x[j, i])
@@ -3391,25 +3373,25 @@ def init_pcg_with_A_no_storage_kernel(
         T_nb = wp.float64(T_field[j, i + 1])
         hE = wp.float64(x[j, i + 1])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_e = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_e = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if i - 1 >= 0 and active[j, i - 1] != 0:
         T_nb = wp.float64(T_field[j, i - 1])
         hW = wp.float64(x[j, i - 1])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_w = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_w = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if j - 1 >= 0 and active[j - 1, i] != 0:
         T_nb = wp.float64(T_field[j - 1, i])
         hN = wp.float64(x[j - 1, i])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_n = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_n = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     if j + 1 < ny and active[j + 1, i] != 0:
         T_nb = wp.float64(T_field[j + 1, i])
         hS = wp.float64(x[j + 1, i])
         if T_c > wp.float64(0.0) and T_nb > wp.float64(0.0):
-            T_s = wp.float64(2.0) * T_c * T_nb / (T_c + T_nb + tiny)
+            T_s = wp.min(T_c, T_nb) * (wp.float64(2.0) / (wp.float64(1.0) + wp.min(T_c, T_nb) / wp.max(T_c, T_nb)))
 
     C_gh = wp.float64(0.0)
     if gh_mask[j, i] != 0:
@@ -3420,7 +3402,7 @@ def init_pcg_with_A_no_storage_kernel(
     sum_T = T_e + T_w + T_n + T_s + C_gh
 
     Ap64 = wp.float64(0.0)
-    if sum_T < tiny:
+    if sum_T <= 0.0:
         Ap64 = hC
     else:
         Ap64 = sum_T * hC
@@ -5049,6 +5031,12 @@ class WarpDarcySolver:
         return T_c, R_c, active_c, bc_mask_c, bc_values_c, gh_mask_c, gh_head_c, gh_width_c, ghb_factor_c, storage_diag_c
 
     @staticmethod
+    def _validate_prescribed_heads(*, active, mask, values):
+        fixed = (active != 0) & (mask != 0)
+        if np.any(invalid_head_values(head=values[fixed])):
+            raise ValueError("Invalid active prescribed head")
+
+    @staticmethod
     def _prepare_ghb_fields(*, active, bc_mask, gh_mask, gh_width, gh_head, dx):
         """Own GHB fields at model precision, including valid zero-metre stages.
 
@@ -5056,12 +5044,16 @@ class WarpDarcySolver:
         temporarily vanishes during an unconfined solve.
         """
         mask = np.asarray(gh_mask, dtype=np.int32).copy()
-        width = np.asarray(gh_width, dtype=NP_FLOAT).copy()
+        raw_width = np.asarray(gh_width)
         raw_head = np.asarray(gh_head)
-        if mask.shape != width.shape or mask.shape != raw_head.shape:
+        if mask.shape != raw_width.shape or mask.shape != raw_head.shape:
             raise ValueError("GHB mask, width and head must have the same shape")
-        mask[(np.asarray(active) == 0) | (np.asarray(bc_mask) != 0) | (width == 0)] = 0
-        conducting = mask != 0
+        enabled = (mask != 0) & (np.asarray(active) != 0) & (np.asarray(bc_mask) == 0)
+        selected_width = raw_width[enabled]
+        if np.any(invalid_head_values(head=selected_width) | (selected_width < 0.0)):
+            raise ValueError("Invalid active GHB width; expected a finite nonnegative width")
+        conducting = enabled & (raw_width > 0.0)
+        mask[~conducting] = 0
         if np.any(invalid_head_values(head=raw_head[conducting])):
             raise ValueError("Invalid active GHB head on a conducting boundary")
         head = np.zeros(mask.shape, dtype=NP_FLOAT)
@@ -5069,8 +5061,9 @@ class WarpDarcySolver:
         if np.any(invalid_head_values(head=head[conducting])):
             raise ValueError("Invalid active GHB head in the model precision")
 
-        width[~np.isfinite(width) | ~conducting] = dx
-        width[conducting] = np.maximum(width[conducting], max(1e-8 * dx, 1e-12))
+        width = np.full(mask.shape, dx, dtype=NP_FLOAT)
+        width[enabled & ~conducting] = 0.0
+        width[conducting] = np.maximum(raw_width[conducting], max(1e-8 * dx, 1e-12))
         return mask, width, head
 
     def _head_dependent_boundary_fields(self) -> dict:
@@ -5300,8 +5293,8 @@ class WarpDarcySolver:
                              gh_head=gh_head, gh_alpha=gh_alpha, aq_thickness=aq_thickness)
         # Keep host arrays in the package float dtype (NP_FLOAT) so single-precision
         # vs double-precision modes remain consistent.
-        self.T_field_host = np.asarray(T_field, dtype=NP_FLOAT)
-        self.R_field_host = np.asarray(R_field, dtype=NP_FLOAT)
+        self.T_field_host = np.array(T_field, dtype=NP_FLOAT, order="C", copy=True)
+        self.R_field_host = np.array(R_field, dtype=NP_FLOAT, order="C", copy=True)
         self.active_host = np.asarray(active, dtype=np.int32)
         self.bc_mask_host = np.asarray(bc_mask, dtype=np.int32)
         self.bc_values_host = np.array(bc_values, dtype=NP_FLOAT, order="C", copy=True)
@@ -5450,8 +5443,8 @@ class WarpDarcySolver:
         ``unconfined_semismooth_newton_kcycle`` backend and require
         ``use_drn=True`` / ``use_riv=True`` at construction.
         """
-        T_field = np.asarray(T_field, dtype=NP_FLOAT)
-        R_field = np.asarray(R_field, dtype=NP_FLOAT)
+        T_field = np.array(T_field, dtype=NP_FLOAT, order="C", copy=True)
+        R_field = np.array(R_field, dtype=NP_FLOAT, order="C", copy=True)
         active = np.asarray(active, dtype=np.int32)
         bc_mask = np.asarray(bc_mask, dtype=np.int32)
         bc_values = np.asarray(bc_values, dtype=NP_FLOAT)
@@ -5467,12 +5460,14 @@ class WarpDarcySolver:
         if bc_values.shape != (self.ny, self.nx):
             raise ValueError(f"bc_values shape {bc_values.shape} expected {(self.ny, self.nx)}")
 
+        self._validate_prescribed_heads(active=active, mask=bc_mask, values=bc_values)
+
         if self.use_ghb:
             if gh_mask is None or gh_head is None or gh_width is None:
                 raise ValueError("gh_mask, gh_head, gh_width are required when use_ghb=True.")
             gh_mask = np.asarray(gh_mask, dtype=np.int32)
             gh_head = np.asarray(gh_head)
-            gh_width = np.asarray(gh_width, dtype=NP_FLOAT)
+            gh_width = np.asarray(gh_width)
             if gh_mask.shape != (self.ny, self.nx):
                 raise ValueError(f"gh_mask shape {gh_mask.shape} expected {(self.ny, self.nx)}")
             if gh_head.shape != (self.ny, self.nx):
@@ -7194,6 +7189,7 @@ class WarpDarcySolver:
         bc_arr = np.asarray(bc_values, dtype=NP_FLOAT, order="C")
         if bc_arr.shape != tuple(self.bc_values_host.shape):
             raise ValueError(f"bc_values shape {bc_arr.shape} expected {self.bc_values_host.shape}")
+        self._validate_prescribed_heads(active=self.active_host, mask=self.bc_mask_host, values=bc_arr)
         np.copyto(self.bc_values_host, bc_arr)
 
         if self._stage_bc_values is None or tuple(self._stage_bc_values.shape) != tuple(self.bc_values_host.shape):

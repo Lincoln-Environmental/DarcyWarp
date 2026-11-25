@@ -331,7 +331,7 @@ class WarpDarcySolver3D:
                                  ghb_head=ghb_head, ghb_mask=ghb_mask)
 
     def _validated_K_fields(self, *, kx_field, ky_field, kz_field, require_nonnegative=True):
-        fields = tuple(floating_field(value=value, name=name, dtype=NP_FLOAT) for name, value in
+        fields = tuple(floating_field(value=value, name=name, dtype=np.float64) for name, value in
                        (("kx", kx_field), ("ky", ky_field), ("kz", kz_field)))
         if any(value.shape != self.shape for value in fields):
             raise ValueError("conductivity fields must match the model shape")

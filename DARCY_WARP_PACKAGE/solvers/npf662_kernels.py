@@ -213,6 +213,23 @@ def ghb_diagonal(storage:wp.array(dtype=wp.float64),conductance:wp.array(dtype=w
 
 
 @wp.kernel
+def chd_budget(fixed: wp.array(dtype=wp.int32), left: wp.array2d(dtype=wp.int32),
+               right: wp.array2d(dtype=wp.int32), flux: wp.array2d(dtype=wp.float64),
+               totals: wp.array(dtype=wp.float64)):
+    i = wp.tid()
+    if fixed[i] != 0:
+        rate = wp.float64(0.0)
+        for axis in range(3):
+            if right[i, axis] >= 0:
+                rate += flux[i, axis]
+            j = left[i, axis]
+            if j >= 0:
+                rate -= flux[j, axis]
+        wp.atomic_add(totals, 0, wp.max(rate, wp.float64(0.0)))
+        wp.atomic_add(totals, 1, wp.max(-rate, wp.float64(0.0)))
+
+
+@wp.kernel
 def ghb_budget(head:wp.array(dtype=wp.float64),conductance:wp.array(dtype=wp.float64),
     boundary_head:wp.array(dtype=wp.float64),result:wp.array(dtype=wp.float64)):
     i=wp.tid()

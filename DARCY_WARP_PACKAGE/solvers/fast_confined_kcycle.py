@@ -317,7 +317,8 @@ def solve_confined_kcycle_fast_backend(
 
     active_host_i32 = np.asarray(self.active_host, dtype=np.int32)
     bc_host_i32 = np.asarray(self.bc_mask_host, dtype=np.int32)
-    n_free0 = int(np.count_nonzero((active_host_i32 != 0) & (bc_host_i32 == 0)))
+    free_mask = (active_host_i32 != 0) & (bc_host_i32 == 0)
+    n_free0 = int(np.count_nonzero(free_mask))
     if n_free0 <= 0:
         head_out = lvl0.x_wp.numpy()
         info = {"solver_type": "kcycle", "implementation": "fast",
@@ -345,7 +346,10 @@ def solve_confined_kcycle_fast_backend(
     launch_combine_partials(partials=f0.partials, out=lvl0.rTr_buf, n_partials=f0.n_partials, device=device)
     rTr0 = float(lvl0.rTr_buf.numpy()[0])
     r_rms0 = float(np.sqrt(max(rTr0, 0.0) / float(n_free0)))
-    tol_abs = float(max(abs_tol_min, rel_tol * r_rms0))
+    from DARCY_WARP_PACKAGE.solvers.convergence import steady_flow_tolerance
+
+    tol_abs = steady_flow_tolerance(initial_rms=r_rms0, relative_tolerance=rel_tol,
+        absolute_tolerance=abs_tol_min, fine=lvl0, free=free_mask)
     thr_rTr = wp.float64((tol_abs * tol_abs) * float(n_free0))
 
     def smooth(fl, level, omegas) -> None:
