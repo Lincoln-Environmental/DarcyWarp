@@ -205,7 +205,6 @@ class ThreeDOperatorSession:
         if not np.array_equal(previous, current):
             self.topology_revision += 1
             self._fast_workspace_holder.clear()
-        self._npf662_workspace_holder.clear()
 
     def update_riv(self, *, riv_conductance, riv_stage, riv_bottom, riv_mask=None):
         """Replace owned RIV fields after validating the complete update.
@@ -228,7 +227,6 @@ class ThreeDOperatorSession:
         if not np.array_equal(previous, current):
             self.topology_revision += 1
             self._fast_workspace_holder.clear()
-        self._npf662_workspace_holder.clear()
 
     def update_face_conductance(
         self,

@@ -17,7 +17,9 @@ class NPF662TransientState:
         self.device = model.device
         self.shape = case.active.shape
         self.structure_names = tuple(name for name in case.__dataclass_fields__
-            if name not in ('source', 'values', 'initial', 'kx', 'ky', 'kz', 'cell_type', 'ghb_conductance', 'ghb_head'))
+            if name not in ('source', 'values', 'initial', 'kx', 'ky', 'kz', 'cell_type',
+                'ghb_conductance', 'ghb_head', 'drn_conductance', 'drn_elevation', 'drn_mask',
+                'riv_conductance', 'riv_stage', 'riv_bottom', 'riv_mask'))
         self.structure = tuple(np.asarray(getattr(case, name)).copy() for name in self.structure_names)
         self.material = tuple(np.asarray(getattr(case, name)).copy() for name in ('kx', 'ky', 'kz'))
         self.operator_revision = model._session.operator_revision
@@ -58,6 +60,11 @@ class NPF662TransientState:
             raise ValueError('Positive finite transient dt required')
         validate_ghb_fields(conductance=case.ghb_conductance,head=case.ghb_head,
             active=case.active,fixed=case.fixed)
+        from DARCY_WARP_PACKAGE.physics.drn_riv_3d import validate_drn_fields, validate_riv_fields
+        validate_drn_fields(conductance=case.drn_conductance, elevation=case.drn_elevation,
+            mask=case.drn_mask, active=case.active, fixed=case.fixed)
+        validate_riv_fields(conductance=case.riv_conductance, stage=case.riv_stage,
+            bottom=case.riv_bottom, mask=case.riv_mask, active=case.active, fixed=case.fixed)
         if case.ghb_conductance is not None and np.any((np.asarray(case.ghb_conductance)>0.)
                 &(case.cell_types!=0)&(np.asarray(case.ghb_head)<case.bottoms)):
             raise ValueError('Convertible GHB head below cell bottom is invalid for MF6 6.6.2')

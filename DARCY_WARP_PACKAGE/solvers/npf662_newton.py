@@ -81,6 +81,27 @@ class NPF662Workspace:
         self.commit_graph=None;self.commit_graph_failed=False;self.reuse_trial_state=False
         self.ghb_conductance = self.ghb_head = self.ghb_totals = None
         self.ghb_operator = self.trial_ghb_operator = self.previous_ghb_operator = None
+        self.has_drn_riv = case.drn_conductance is not None or case.riv_conductance is not None
+        self.zero = wp.zeros(shape=self.n, dtype=wp.float64, device=self.device)
+        self.package_totals = None
+        self.boundary_operator = self.trial_boundary_operator = None
+        self.boundary_flow = self.trial_boundary_flow = None
+        self.boundary_tangent = self.trial_boundary_tangent = None
+        self.drn_conductance = self.drn_elevation = None
+        self.riv_conductance = self.riv_stage = self.riv_bottom = None
+        self.drn_rate = self.trial_drn_rate = None
+        self.riv_rate = self.trial_riv_rate = None
+        self.drn_tangent = self.trial_drn_tangent = None
+        self.riv_tangent = self.trial_riv_tangent = None
+        if self.has_drn_riv:
+            for name in ('boundary_operator', 'trial_boundary_operator', 'boundary_flow',
+                         'trial_boundary_flow', 'boundary_tangent', 'trial_boundary_tangent',
+                         'drn_rate', 'trial_drn_rate', 'riv_rate', 'trial_riv_rate',
+                         'drn_tangent', 'trial_drn_tangent', 'riv_tangent', 'trial_riv_tangent'):
+                setattr(self, name, wp.zeros(shape=self.n, dtype=wp.float64, device=self.device))
+            self.package_totals = wp.zeros(shape=4, dtype=wp.float64, device=self.device)
+            for name in ('drn_conductance', 'drn_elevation', 'riv_conductance', 'riv_stage', 'riv_bottom'):
+                setattr(self, name, wp.zeros(shape=self.n, dtype=wp.float64, device=self.device))
         self.component_anchor = None
         self.anchor_revision = None
         self.roundoff_acceptance = False
@@ -113,7 +134,8 @@ class NPF662Workspace:
         return reused
 
     def compatible(self,*,model,case,restart):
-        return not self.closed and self.device==model.device and self.shape==case.active.shape and self.restart==restart and np.array_equal(
+        package_mode = case.drn_conductance is not None or case.riv_conductance is not None
+        return not self.closed and self.device==model.device and self.shape==case.active.shape and self.restart==restart and self.has_drn_riv==package_mode and np.array_equal(
             self.active_snapshot,case.active) and np.array_equal(self.fixed_snapshot,case.fixed)
 
     def load(self,*,model,case,reference=None):
@@ -121,6 +143,18 @@ class NPF662Workspace:
         static_reused = native and getattr(self, '_native_state', None) is reference
         conductance, boundary_head = validate_ghb_fields(conductance=case.ghb_conductance,
             head=case.ghb_head, active=case.active, fixed=case.fixed)
+        if self.has_drn_riv:
+            from DARCY_WARP_PACKAGE.physics.drn_riv_3d import validate_drn_fields, validate_riv_fields
+            drn_c, drn_e = validate_drn_fields(conductance=case.drn_conductance,
+                elevation=case.drn_elevation, mask=case.drn_mask, active=case.active, fixed=case.fixed)
+            riv_c, riv_s, riv_b = validate_riv_fields(conductance=case.riv_conductance,
+                stage=case.riv_stage, bottom=case.riv_bottom, mask=case.riv_mask,
+                active=case.active, fixed=case.fixed)
+            self.drn_conductance.assign(np.zeros(self.shape).ravel() if drn_c is None else drn_c.ravel())
+            self.drn_elevation.assign(np.zeros(self.shape).ravel() if drn_e is None else drn_e.ravel())
+            self.riv_conductance.assign(np.zeros(self.shape).ravel() if riv_c is None else riv_c.ravel())
+            self.riv_stage.assign(np.zeros(self.shape).ravel() if riv_s is None else riv_s.ravel())
+            self.riv_bottom.assign(np.zeros(self.shape).ravel() if riv_b is None else riv_b.ravel())
         if self.anchor_revision != model._session.operator_revision:
             anchors = npf_ghb_component_anchor(conductance=conductance, active=case.active, fixed=case.fixed)
             self.component_anchor = (None if anchors is None else
@@ -196,6 +230,8 @@ class NPF662Workspace:
 
     @property
     def operator_tangent(self):
+        if self.has_drn_riv:
+            return self.boundary_operator
         return self.storage_tangent if self.ghb_conductance is None else self.ghb_operator
 
     @property
@@ -208,13 +244,24 @@ class NPF662Workspace:
                 inputs=[self.previous_storage_tangent,self.ghb_conductance,self.previous_ghb_operator],device=self.device)
 
     def boundary_budget(self):
-        if self.ghb_conductance is None:
-            return dict(ghb_inflow=0.,ghb_outflow=0.,ghb_net=0.)
-        self.ghb_totals.zero_()
-        wp.launch(kernel=kernels.ghb_budget,dim=self.n,
-            inputs=[self.head,self.ghb_conductance,self.ghb_head,self.ghb_totals],device=self.device)
-        inflow,outflow=self.ghb_totals.numpy()
-        return dict(ghb_inflow=float(inflow),ghb_outflow=float(outflow),ghb_net=float(inflow-outflow))
+        result = dict(ghb_inflow=0.,ghb_outflow=0.,ghb_net=0.,
+                      drn_inflow=0.,drn_outflow=0.,drn_net=0.,
+                      riv_inflow=0.,riv_outflow=0.,riv_net=0.)
+        if self.ghb_conductance is not None:
+            self.ghb_totals.zero_()
+            wp.launch(kernel=kernels.ghb_budget,dim=self.n,
+                inputs=[self.head,self.ghb_conductance,self.ghb_head,self.ghb_totals],device=self.device)
+            inflow,outflow=self.ghb_totals.numpy()
+            result.update(ghb_inflow=float(inflow),ghb_outflow=float(outflow),ghb_net=float(inflow-outflow))
+        if self.has_drn_riv:
+            self.package_totals.zero_()
+            wp.launch(kernel=kernels.drn_riv_budget,dim=self.n,inputs=[self.head,
+                self.drn_conductance,self.drn_elevation,self.riv_conductance,self.riv_stage,
+                self.riv_bottom,self.drn_rate,self.riv_rate,self.package_totals],device=self.device)
+            drn_in,drn_out,riv_in,riv_out=self.package_totals.numpy()
+            result.update(drn_inflow=float(drn_in),drn_outflow=float(drn_out),drn_net=float(drn_in-drn_out),
+                          riv_inflow=float(riv_in),riv_outflow=float(riv_out),riv_net=float(riv_in-riv_out))
+        return result
 
     def chd_budget(self):
         totals = wp.zeros(shape=2, dtype=wp.float64, device=self.device)
@@ -235,7 +282,7 @@ class NPF662Workspace:
         if self.transient:
             wp.launch(kernel=kernels.storage_terms,dim=self.n,inputs=[head,self.storage_previous,self.bottom,
                 self.thickness,self.types,self.storage_ss,self.storage_sy,self.free,storage,tangent,self.storage_factor],device=self.device)
-        if self.ghb_conductance is not None:
+        if self.ghb_conductance is not None and not self.has_drn_riv:
             wp.launch(kernel=kernels.ghb_diagonal,dim=self.n,
                 inputs=[tangent,self.ghb_conductance,self.trial_ghb_operator if trial else self.ghb_operator],device=self.device)
         wp.launch(kernel=kernels.physical_faces,dim=(self.n,3),inputs=[head,self.bottom,self.types,self.right,
@@ -244,10 +291,25 @@ class NPF662Workspace:
         block_size=self.metric_block_size if (getattr(self,'device_native',False) or
             getattr(self,'device_tiled',False)) else self.n
         tiled = getattr(self,'device_tiled',False)
-        row_kernel=kernels.physical_rows_tiled if tiled else kernels.physical_rows
         row_inputs=[head,self.source,self.free,self.fixed,self.left,self.right,q,c,self.scale,r,rhs,
             self.metric_partials.flatten() if tiled else self.metric_partials,storage,tangent,block_size]
-        if self.ghb_conductance is not None:
+        if self.has_drn_riv:
+            row_kernel = kernels.physical_rows_drn_riv_tiled if tiled else kernels.physical_rows_drn_riv
+            row_inputs.extend((
+                self.zero if self.ghb_conductance is None else self.ghb_conductance,
+                self.zero if self.ghb_head is None else self.ghb_head,
+                self.drn_conductance, self.drn_elevation, self.riv_conductance,
+                self.riv_stage, self.riv_bottom,
+                self.trial_drn_rate if trial else self.drn_rate,
+                self.trial_riv_rate if trial else self.riv_rate,
+                self.trial_drn_tangent if trial else self.drn_tangent,
+                self.trial_riv_tangent if trial else self.riv_tangent,
+                self.trial_boundary_flow if trial else self.boundary_flow,
+                self.trial_boundary_tangent if trial else self.boundary_tangent,
+                self.trial_boundary_operator if trial else self.boundary_operator))
+        else:
+            row_kernel=kernels.physical_rows_tiled if tiled else kernels.physical_rows
+        if self.ghb_conductance is not None and not self.has_drn_riv:
             row_kernel=kernels.physical_rows_ghb_tiled if tiled else kernels.physical_rows_ghb
             row_inputs.extend((self.ghb_conductance,self.ghb_head))
         wp.launch(kernel=row_kernel,dim=self.n,inputs=row_inputs,
@@ -269,12 +331,20 @@ class NPF662Workspace:
                                                  relative_tolerance=self.relative_tolerance):
             # The extra reduction is needed only when the domain could accept.
             self.maximum.zero_()
-            wp.launch(kernel=kernels.check_local_balance, dim=self.n,
-                inputs=[head, self.free, self.fixed, self.source, self.left, self.right, q, c,
-                        storage, tangent, r, int(self.ghb_conductance is not None),
-                        self.ghb_conductance, self.ghb_head, self.component_anchor, int(self.component_anchor is not None),
-                        self.physical_tolerance, self.relative_tolerance,
-                        self.maximum], device=self.device)
+            if self.has_drn_riv:
+                wp.launch(kernel=kernels.check_local_balance_drn_riv, dim=self.n,
+                    inputs=[head, self.free, self.fixed, self.source, self.left, self.right, q, c,
+                        storage, tangent, r,
+                        self.trial_boundary_flow if trial else self.boundary_flow,
+                        self.trial_boundary_tangent if trial else self.boundary_tangent,
+                        self.physical_tolerance, self.relative_tolerance, self.maximum], device=self.device)
+            else:
+                wp.launch(kernel=kernels.check_local_balance, dim=self.n,
+                    inputs=[head, self.free, self.fixed, self.source, self.left, self.right, q, c,
+                            storage, tangent, r, int(self.ghb_conductance is not None),
+                            self.ghb_conductance, self.ghb_head, self.component_anchor, int(self.component_anchor is not None),
+                            self.physical_tolerance, self.relative_tolerance,
+                            self.maximum], device=self.device)
             result['local_balance_valid'] = bool(self.maximum.numpy()[0] == 0.0)
         if self.roundoff_acceptance:
             result.update(roundoff_mode=True, roundoff_accepted=False, roundoff_bound_ratio_max=None)
@@ -283,11 +353,19 @@ class NPF662Workspace:
                     self.roundoff_partials=wp.zeros(shape=(self.n+255)//256,dtype=wp.float64,device=self.device)
                     self.roundoff_zero=wp.zeros(shape=self.n,dtype=wp.float64,device=self.device)
                 self.roundoff_partials.zero_();self.maximum.zero_()
-                wp.launch(kernel=kernels.roundoff_rows,dim=self.n,inputs=[head,self.source,r,self.free,
-                    self.left,self.right,c,self.roundoff_zero if self.ghb_conductance is None else self.ghb_conductance,
-                    self.roundoff_zero if self.ghb_head is None else self.ghb_head,storage,tangent,
-                    self.storage_previous,self.previous_storage_tangent,self.types,self.bottom,self.thickness,
-                    self.roundoff_partials],device=self.device)
+                if self.has_drn_riv:
+                    wp.launch(kernel=kernels.roundoff_rows_drn_riv,dim=self.n,inputs=[head,self.source,r,self.free,
+                        self.left,self.right,c,self.roundoff_zero if self.ghb_conductance is None else self.ghb_conductance,
+                        self.roundoff_zero if self.ghb_head is None else self.ghb_head,storage,tangent,
+                        self.storage_previous,self.previous_storage_tangent,self.types,self.bottom,self.thickness,
+                        self.drn_conductance,self.drn_elevation,self.riv_conductance,self.riv_stage,self.riv_bottom,
+                        self.roundoff_partials],device=self.device)
+                else:
+                    wp.launch(kernel=kernels.roundoff_rows,dim=self.n,inputs=[head,self.source,r,self.free,
+                        self.left,self.right,c,self.roundoff_zero if self.ghb_conductance is None else self.ghb_conductance,
+                        self.roundoff_zero if self.ghb_head is None else self.ghb_head,storage,tangent,
+                        self.storage_previous,self.previous_storage_tangent,self.types,self.bottom,self.thickness,
+                        self.roundoff_partials],device=self.device)
                 wp.launch(kernel=kernels.combine_roundoff,dim=self.roundoff_partials.size,
                     inputs=[self.roundoff_partials,self.maximum],device=self.device)
                 ratio=float(self.maximum.numpy()[0])
@@ -314,6 +392,12 @@ class NPF662Workspace:
             wp.copy(dest=getattr(self,current),src=getattr(self,trial))
         if self.ghb_conductance is not None:
             wp.copy(dest=self.ghb_operator,src=self.trial_ghb_operator)
+        if self.has_drn_riv:
+            for current, trial in (('boundary_operator','trial_boundary_operator'),
+                ('boundary_flow','trial_boundary_flow'),('boundary_tangent','trial_boundary_tangent'),
+                ('drn_rate','trial_drn_rate'),('riv_rate','trial_riv_rate'),
+                ('drn_tangent','trial_drn_tangent'),('riv_tangent','trial_riv_tangent')):
+                wp.copy(dest=getattr(self,current),src=getattr(self,trial))
 
     def accept_trial(self,*,metrics):
         """Commit the evaluated state into stable buffers referenced by graphs."""
@@ -358,6 +442,13 @@ class NPF662Workspace:
         self.principal = self.previous_storage_tangent = None
         self.ghb_conductance = self.ghb_head = self.ghb_totals = None
         self.ghb_operator = self.trial_ghb_operator = self.previous_ghb_operator = None
+        self.drn_conductance = self.drn_elevation = None
+        self.riv_conductance = self.riv_stage = self.riv_bottom = None
+        self.drn_rate = self.trial_drn_rate = self.riv_rate = self.trial_riv_rate = None
+        self.boundary_operator = self.trial_boundary_operator = None
+        self.boundary_flow = self.trial_boundary_flow = None
+        self.boundary_tangent = self.trial_boundary_tangent = None
+        self.package_totals = None
         self.predictor_increment = self.predictor_older_increment = self.predictor_checkpoint = None
         self.roundoff_partials = self.roundoff_zero = None
         self.component_anchor = None
@@ -577,14 +668,16 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
     chd_budget = workspace.chd_budget()
     current = dict(current, **chd_budget, **ghb_budget,
                    free_boundary_inflow=current['boundary_inflow'], free_boundary_outflow=current['boundary_outflow'],
-                   boundary_inflow=chd_budget['chd_inflow'] + ghb_budget['ghb_inflow'],
-                   boundary_outflow=chd_budget['chd_outflow'] + ghb_budget['ghb_outflow'])
+                   boundary_inflow=chd_budget['chd_inflow'] + ghb_budget['ghb_inflow'] +
+                       ghb_budget['drn_inflow'] + ghb_budget['riv_inflow'],
+                   boundary_outflow=chd_budget['chd_outflow'] + ghb_budget['ghb_outflow'] +
+                       ghb_budget['drn_outflow'] + ghb_budget['riv_outflow'])
     certificate=workspace.final_certificate() if device_native else None
     independent_performed=not device_native or not certificate['all_free_cells_storage_anchored']
     if independent_performed:
         if head is None:
             head=workspace.head.numpy().reshape(case.active.shape).copy()
-        checks,unused=reference.evaluate(head=head,physical_tolerance=physical_tolerance,relative_tolerance=relative_tolerance,
+        checks,accepted_fields=reference.evaluate(head=head,physical_tolerance=physical_tolerance,relative_tolerance=relative_tolerance,
             **(dict(roundoff_acceptance=True) if roundoff_acceptance else {}))
         accepted=checks['independent_accepted']
     else:
@@ -626,6 +719,13 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
             roundoff_bound_ratio_max=current.get('roundoff_bound_ratio_max'))
     result['ghb_budget']=ghb_budget
     result['chd_budget']=chd_budget
+    if converged and workspace.has_drn_riv:
+        result['drn_budget'] = dict(inflow=ghb_budget['drn_inflow'],
+            outflow=ghb_budget['drn_outflow'], net=ghb_budget['drn_net'])
+        result['riv_budget'] = dict(inflow=ghb_budget['riv_inflow'],
+            outflow=ghb_budget['riv_outflow'], net=ghb_budget['riv_net'])
+        result['drn_discharge_rate_array'] = workspace.drn_rate.numpy().reshape(case.active.shape).copy()
+        result['riv_discharge_rate_array'] = workspace.riv_rate.numpy().reshape(case.active.shape).copy()
     result['krylov_workspace_reused']=krylov_reused
     result['npf_preconditioner']=npf_preconditioner
     result.update(accepted_updates=sum(row['accepted'] for row in history),

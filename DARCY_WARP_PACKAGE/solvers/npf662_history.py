@@ -6,6 +6,7 @@ and timestep lengths vary per step. All existing physical acceptance gates
 remain mandatory; a failed step stops the history.
 """
 from dataclasses import replace
+from math import fsum
 from time import perf_counter
 
 import numpy as np
@@ -58,6 +59,50 @@ def prepare_next_step(*, workspace, source, factor, dt, area):
     workspace.residual_evaluations = workspace.candidate_evaluations = 0
 
 
+def attach_accepted_exchange_volumes(*, period):
+    """Add backward-Euler gross exchange volumes to an accepted period.
+
+    :param period: Period diagnostics containing ``dt``, convergence and rate budgets.
+    :return: The same period mapping with DRN/RIV volumes added when accepted.
+    :raises ValueError: If an accepted package budget is nonfinite or malformed.
+    """
+    if not period.get('converged', False):
+        return period
+    duration = float(period['dt'])
+    for package in ('drn', 'riv'):
+        budget = period.get(f'{package}_budget')
+        if budget is None:
+            continue
+        rates = tuple(float(budget[key]) for key in ('inflow', 'outflow', 'net'))
+        if not np.isfinite(duration) or duration <= 0. or not np.all(np.isfinite(rates)):
+            raise ValueError(f'Invalid accepted {package.upper()} rate or timestep')
+        period[f'{package}_volume_budget'] = dict(
+            inflow=rates[0] * duration,
+            outflow=rates[1] * duration,
+            net=rates[2] * duration,
+        )
+    return period
+
+
+def total_accepted_exchange_volumes(*, periods):
+    """Sum accepted gross package volumes without cancelling opposing rates.
+
+    :param periods: Ordered per-period diagnostics.
+    :return: Separate DRN and RIV gross volume totals, or None when disabled.
+    """
+    result = {}
+    for package in ('drn', 'riv'):
+        budgets = [row[f'{package}_volume_budget'] for row in periods
+                   if row.get('converged', False) and f'{package}_volume_budget' in row]
+        if budgets:
+            result[package] = dict(
+                inflow=fsum(row['inflow'] for row in budgets),
+                outflow=fsum(row['outflow'] for row in budgets),
+                net=fsum(row['net'] for row in budgets),
+            )
+    return result or None
+
+
 def solve_transient_history(*, model, source_factors, dt, head_prev, ss, sy, **solver_options):
     started = perf_counter()
     if model.formulation != 'mf6_6_6_2_npf' or model._session is None:
@@ -92,6 +137,7 @@ def solve_transient_history(*, model, source_factors, dt, head_prev, ss, sy, **s
         wp.synchronize_device(device=model.device)
         periods.append(dict(first_info, index=0, dt=float(times[0]), source_factor=float(factors[0]),
             public_step_seconds=perf_counter()-first_start))
+        attach_accepted_exchange_volumes(period=periods[-1])
         head_readbacks += 1
         workspace = model._session._npf662_workspace_holder['workspace']
         source = wp.array(data=source_host.ravel(), dtype=wp.float64, device=model.device)
@@ -124,6 +170,7 @@ def solve_transient_history(*, model, source_factors, dt, head_prev, ss, sy, **s
             wp.copy(dest=history.flatten(), src=workspace.head, dest_offset=index*workspace.n, count=workspace.n)
             periods.append(dict(info, index=index, dt=reference.dt, source_factor=reference.factor,
                 public_step_seconds=perf_counter()-step_start))
+            attach_accepted_exchange_volumes(period=periods[-1])
         count = len(periods)
         # One transfer for the output history. Internal acceptance has already
         # checked every step; this download is inside the public driver timer.
@@ -164,6 +211,7 @@ def solve_transient_history(*, model, source_factors, dt, head_prev, ss, sy, **s
         formulation='mf6_6_6_2_npf', device=model.device, precision='float64',
         numerical_seconds=sum(row['seconds'] for row in periods),
         solver_head_readbacks=head_readbacks, output_history_readbacks=1,
+        accepted_exchange_volume_totals=total_accepted_exchange_volumes(periods=periods),
         fixed_inputs_within_history=['geometry', 'conductivity', 'cell_type', 'Ss', 'Sy', 'prescribed_heads', 'GHB conductance/head'],
         final_acceptance_thresholds=thresholds,
         timing='Entire public history call, including setup, all source/timestep updates, acceptance and output download')

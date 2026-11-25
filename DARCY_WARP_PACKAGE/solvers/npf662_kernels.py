@@ -108,6 +108,74 @@ def roundoff_rows(head:wp.array(dtype=wp.float64), source:wp.array(dtype=wp.floa
 
 
 @wp.kernel
+def roundoff_rows_drn_riv(head:wp.array(dtype=wp.float64), source:wp.array(dtype=wp.float64),
+    residual:wp.array(dtype=wp.float64), free:wp.array(dtype=wp.int32),
+    left:wp.array2d(dtype=wp.int32), right:wp.array2d(dtype=wp.int32),
+    conductance:wp.array2d(dtype=wp.float64), ghb_conductance:wp.array(dtype=wp.float64),
+    ghb_head:wp.array(dtype=wp.float64), storage:wp.array(dtype=wp.float64),
+    tangent:wp.array(dtype=wp.float64), previous:wp.array(dtype=wp.float64),
+    previous_tangent:wp.array(dtype=wp.float64), types:wp.array(dtype=wp.int32),
+    bottom:wp.array(dtype=wp.float64), thickness:wp.array(dtype=wp.float64),
+    drn_c:wp.array(dtype=wp.float64), drn_elevation:wp.array(dtype=wp.float64),
+    riv_c:wp.array(dtype=wp.float64), riv_stage:wp.array(dtype=wp.float64),
+    riv_bottom:wp.array(dtype=wp.float64), partials:wp.array(dtype=wp.float64)):
+    """Reduce equation-row rounding bounds including DRN and RIV terms.
+
+    :param head: Current groundwater heads.
+    :param source: Cell source rates.
+    :param residual: Independently evaluated physical residuals.
+    :param free: Free-cell indicators.
+    :param left: Neighbor indices on negative coordinate faces.
+    :param right: Neighbor indices on positive coordinate faces.
+    :param conductance: Integrated intercell conductances.
+    :param ghb_conductance: Integrated GHB conductances.
+    :param ghb_head: GHB reference heads.
+    :param storage: Physical storage residual contribution.
+    :param tangent: Current storage tangent.
+    :param previous: Previous accepted heads.
+    :param previous_tangent: Previous-state storage tangent.
+    :param types: Cell formulation codes.
+    :param bottom: Cell bottoms.
+    :param thickness: Cell thicknesses.
+    :param drn_c: Integrated drain conductance per cell.
+    :param drn_elevation: Drain elevation per cell.
+    :param riv_c: Integrated river conductance per cell.
+    :param riv_stage: River stage per cell.
+    :param riv_bottom: Riverbed bottom per cell.
+    :param partials: Per-block maximum scaled row errors, updated in place.
+    :return: None; this Warp kernel updates ``partials`` in place.
+    """
+    i=wp.tid()
+    if free[i]==0:return
+    scale=wp.abs(source[i])+wp.abs(storage[i])
+    coordinates=wp.abs(head[i])+wp.abs(previous[i])
+    if types[i]!=0:coordinates+=wp.float64(2.)*(wp.abs(bottom[i])+thickness[i])
+    scale+=(wp.abs(tangent[i])+wp.abs(previous_tangent[i]))*coordinates
+    for axis in range(3):
+        j=right[i,axis]
+        if j>=0:scale+=conductance[i,axis]*(wp.abs(head[i])+wp.abs(head[j]))
+        j=left[i,axis]
+        if j>=0:scale+=conductance[j,axis]*(wp.abs(head[i])+wp.abs(head[j]))
+    if ghb_conductance[i]>wp.float64(0.):
+        scale+=ghb_conductance[i]*(wp.abs(head[i])+wp.abs(ghb_head[i]))
+    drain=drn_flow_pair(head[i],drn_c[i],drn_elevation[i])
+    river=wp.float64(0.)
+    if riv_c[i]>wp.float64(0.):
+        reference_head=wp.max(head[i],riv_bottom[i])
+        river=riv_c[i]*(wp.abs(reference_head)+wp.abs(riv_stage[i]))
+    if drain[1]>wp.float64(0.):
+        scale+=drn_c[i]*(wp.abs(head[i])+wp.abs(drn_elevation[i]))
+    scale+=river
+    allowance=wp.float64(7.105427357601002e-15)*scale
+    ratio=wp.float64(0.)
+    if not wp.isfinite(allowance) or allowance<wp.float64(0.) or not wp.isfinite(residual[i]):
+        ratio=wp.float64(wp.inf)
+    elif allowance>wp.float64(0.):ratio=wp.abs(residual[i])/allowance
+    elif residual[i]!=wp.float64(0.):ratio=wp.float64(wp.inf)
+    wp.atomic_max(partials,i/256,ratio)
+
+
+@wp.kernel
 def combine_roundoff(partials:wp.array(dtype=wp.float64), maximum:wp.array(dtype=wp.float64)):
     i=wp.tid()
     wp.atomic_max(maximum,0,partials[i])
@@ -175,6 +243,44 @@ def ghb_flow_at(i:int,head:wp.array(dtype=wp.float64),conductance:wp.array(dtype
     return value
 
 
+@wp.func
+def drn_flow_pair(head: wp.float64, conductance: wp.float64, elevation: wp.float64):
+    """Evaluate drain discharge and its active-branch derivative.
+
+    :param head: Groundwater head.
+    :param conductance: Integrated drain conductance, in L²/T.
+    :param elevation: Drain elevation.
+    :return: ``(discharge, derivative)`` with discharge positive out of the aquifer.
+    """
+    flow = wp.float64(0.0)
+    tangent = wp.float64(0.0)
+    if conductance > wp.float64(0.0) and head > elevation:
+        flow = conductance * (head - elevation)
+        tangent = conductance
+    return wp.vec2d(flow, tangent)
+
+
+@wp.func
+def riv_flow_pair(head: wp.float64, conductance: wp.float64, stage: wp.float64,
+    bottom: wp.float64):
+    """Evaluate river exchange and its active-branch derivative.
+
+    :param head: Groundwater head.
+    :param conductance: Integrated river conductance, in L²/T.
+    :param stage: River stage.
+    :param bottom: Riverbed bottom elevation.
+    :return: ``(discharge, derivative)`` with discharge positive out of the aquifer.
+    """
+    flow = wp.float64(0.0)
+    tangent = wp.float64(0.0)
+    if conductance > wp.float64(0.0):
+        reference_head = wp.max(head, bottom)
+        flow = conductance * (reference_head - stage)
+        if head > bottom:
+            tangent = conductance
+    return wp.vec2d(flow, tangent)
+
+
 @wp.kernel
 def check_local_balance(head: wp.array(dtype=wp.float64), free: wp.array(dtype=wp.int32),
                         fixed: wp.array(dtype=wp.int32), source: wp.array(dtype=wp.float64),
@@ -234,6 +340,230 @@ def physical_rows_ghb(head:wp.array(dtype=wp.float64),source:wp.array(dtype=wp.f
         scale,residual,rhs,storage,storage_tangent,q,ghb_conductance[i])
     for metric in range(9):
         if values[metric]!=wp.float64(0.):wp.atomic_add(metrics,i/block_size,metric,values[metric])
+
+
+@wp.kernel
+def physical_rows_drn_riv(head:wp.array(dtype=wp.float64), source:wp.array(dtype=wp.float64),
+    free:wp.array(dtype=wp.int32), fixed:wp.array(dtype=wp.int32),
+    left:wp.array2d(dtype=wp.int32), right:wp.array2d(dtype=wp.int32),
+    flux:wp.array2d(dtype=wp.float64), conductance:wp.array2d(dtype=wp.float64),
+    scale:wp.array(dtype=wp.float64), residual:wp.array(dtype=wp.float64), rhs:wp.array(dtype=wp.float64),
+    metrics:wp.array2d(dtype=wp.float64), storage:wp.array(dtype=wp.float64),
+    storage_tangent:wp.array(dtype=wp.float64), block_size:int,
+    ghb_c:wp.array(dtype=wp.float64), ghb_head:wp.array(dtype=wp.float64),
+    drn_c:wp.array(dtype=wp.float64), drn_elevation:wp.array(dtype=wp.float64),
+    riv_c:wp.array(dtype=wp.float64), riv_stage:wp.array(dtype=wp.float64),
+    riv_bottom:wp.array(dtype=wp.float64), drn_rate:wp.array(dtype=wp.float64),
+    riv_rate:wp.array(dtype=wp.float64), drn_tangent:wp.array(dtype=wp.float64),
+    riv_tangent:wp.array(dtype=wp.float64), boundary_flow:wp.array(dtype=wp.float64),
+    boundary_tangent:wp.array(dtype=wp.float64), operator_tangent:wp.array(dtype=wp.float64)):
+    """Evaluate physical rows and boundary terms for a DRN/RIV NPF state.
+
+    :param head: Current or trial groundwater heads.
+    :param source: Cell source rates.
+    :param free: Free-cell indicators.
+    :param fixed: Prescribed-head indicators.
+    :param left: Neighbor indices on negative coordinate faces.
+    :param right: Neighbor indices on positive coordinate faces.
+    :param flux: Physical intercell fluxes.
+    :param conductance: Integrated intercell conductances.
+    :param scale: Fixed equation row scales.
+    :param residual: Physical residual output.
+    :param rhs: Assembled right-hand-side values.
+    :param metrics: Per-block physical solver metrics.
+    :param storage: Storage residual contribution.
+    :param storage_tangent: Storage tangent contribution.
+    :param block_size: Number of rows per metric block.
+    :param ghb_c: Integrated GHB conductances.
+    :param ghb_head: GHB reference heads.
+    :param drn_c: Integrated drain conductances.
+    :param drn_elevation: Drain elevations.
+    :param riv_c: Integrated river conductances.
+    :param riv_stage: River stages.
+    :param riv_bottom: Riverbed bottoms.
+    :param drn_rate: Drain discharge output, positive out of aquifer.
+    :param riv_rate: River discharge output, positive out of aquifer.
+    :param drn_tangent: Drain Jacobian diagonal output.
+    :param riv_tangent: River Jacobian diagonal output.
+    :param boundary_flow: Combined GHB/DRN/RIV discharge output.
+    :param boundary_tangent: Combined boundary tangent output.
+    :param operator_tangent: Storage plus boundary diagonal output.
+    :return: None; outputs are written in place.
+    """
+    i = wp.tid()
+    drain = drn_flow_pair(head[i], drn_c[i], drn_elevation[i])
+    river = riv_flow_pair(head[i], riv_c[i], riv_stage[i], riv_bottom[i])
+    ghb_flow = ghb_flow_at(i, head, ghb_c, ghb_head)
+    combined_flow = ghb_flow + drain[0] + river[0]
+    combined_tangent = ghb_c[i] + drain[1] + river[1]
+    drn_rate[i] = drain[0]
+    riv_rate[i] = river[0]
+    drn_tangent[i] = drain[1]
+    riv_tangent[i] = river[1]
+    boundary_flow[i] = combined_flow
+    boundary_tangent[i] = combined_tangent
+    operator_tangent[i] = storage_tangent[i] + combined_tangent
+    values = physical_row_metrics_base(i, head, source, free, fixed, left, right, flux, conductance,
+        scale, residual, rhs, storage, storage_tangent, combined_flow, combined_tangent)
+    for metric in range(9):
+        if values[metric] != wp.float64(0.0):
+            wp.atomic_add(metrics, i / block_size, metric, values[metric])
+
+
+@wp.kernel
+def physical_rows_drn_riv_tiled(head:wp.array(dtype=wp.float64), source:wp.array(dtype=wp.float64),
+    free:wp.array(dtype=wp.int32), fixed:wp.array(dtype=wp.int32),
+    left:wp.array2d(dtype=wp.int32), right:wp.array2d(dtype=wp.int32),
+    flux:wp.array2d(dtype=wp.float64), conductance:wp.array2d(dtype=wp.float64),
+    scale:wp.array(dtype=wp.float64), residual:wp.array(dtype=wp.float64), rhs:wp.array(dtype=wp.float64),
+    metrics:wp.array(dtype=wp.float64), storage:wp.array(dtype=wp.float64),
+    storage_tangent:wp.array(dtype=wp.float64), block_size:int,
+    ghb_c:wp.array(dtype=wp.float64), ghb_head:wp.array(dtype=wp.float64),
+    drn_c:wp.array(dtype=wp.float64), drn_elevation:wp.array(dtype=wp.float64),
+    riv_c:wp.array(dtype=wp.float64), riv_stage:wp.array(dtype=wp.float64),
+    riv_bottom:wp.array(dtype=wp.float64), drn_rate:wp.array(dtype=wp.float64),
+    riv_rate:wp.array(dtype=wp.float64), drn_tangent:wp.array(dtype=wp.float64),
+    riv_tangent:wp.array(dtype=wp.float64), boundary_flow:wp.array(dtype=wp.float64),
+    boundary_tangent:wp.array(dtype=wp.float64), operator_tangent:wp.array(dtype=wp.float64)):
+    """Tiled equivalent of :func:`physical_rows_drn_riv`.
+
+    :param head: Current or trial groundwater heads.
+    :param source: Cell source rates.
+    :param free: Free-cell indicators.
+    :param fixed: Prescribed-head indicators.
+    :param left: Neighbor indices on negative coordinate faces.
+    :param right: Neighbor indices on positive coordinate faces.
+    :param flux: Physical intercell fluxes.
+    :param conductance: Integrated intercell conductances.
+    :param scale: Fixed equation row scales.
+    :param residual: Physical residual output.
+    :param rhs: Assembled right-hand-side values.
+    :param metrics: Per-block physical solver metrics.
+    :param storage: Storage residual contribution.
+    :param storage_tangent: Storage tangent contribution.
+    :param block_size: Number of rows per metric block.
+    :param ghb_c: Integrated GHB conductances.
+    :param ghb_head: GHB reference heads.
+    :param drn_c: Integrated drain conductances.
+    :param drn_elevation: Drain elevations.
+    :param riv_c: Integrated river conductances.
+    :param riv_stage: River stages.
+    :param riv_bottom: Riverbed bottoms.
+    :param drn_rate: Drain discharge output, positive out of aquifer.
+    :param riv_rate: River discharge output, positive out of aquifer.
+    :param drn_tangent: Drain Jacobian diagonal output.
+    :param riv_tangent: River Jacobian diagonal output.
+    :param boundary_flow: Combined GHB/DRN/RIV discharge output.
+    :param boundary_tangent: Combined boundary tangent output.
+    :param operator_tangent: Storage plus boundary diagonal output.
+    :return: None; outputs are written in place.
+    """
+    i = wp.tid()
+    drain = drn_flow_pair(head[i], drn_c[i], drn_elevation[i])
+    river = riv_flow_pair(head[i], riv_c[i], riv_stage[i], riv_bottom[i])
+    ghb_flow = ghb_flow_at(i, head, ghb_c, ghb_head)
+    combined_flow = ghb_flow + drain[0] + river[0]
+    combined_tangent = ghb_c[i] + drain[1] + river[1]
+    drn_rate[i] = drain[0]
+    riv_rate[i] = river[0]
+    drn_tangent[i] = drain[1]
+    riv_tangent[i] = river[1]
+    boundary_flow[i] = combined_flow
+    boundary_tangent[i] = combined_tangent
+    operator_tangent[i] = storage_tangent[i] + combined_tangent
+    values = physical_row_metrics_base(i, head, source, free, fixed, left, right, flux, conductance,
+        scale, residual, rhs, storage, storage_tangent, combined_flow, combined_tangent)
+    for metric in range(9):
+        wp.tile_store(metrics, wp.tile_sum(wp.tile(values[metric])), offset=(i / block_size) * 9 + metric)
+
+
+@wp.kernel
+def check_local_balance_drn_riv(head: wp.array(dtype=wp.float64), free: wp.array(dtype=wp.int32),
+    fixed: wp.array(dtype=wp.int32), source: wp.array(dtype=wp.float64),
+    left: wp.array2d(dtype=wp.int32), right: wp.array2d(dtype=wp.int32),
+    flux: wp.array2d(dtype=wp.float64), conductance: wp.array2d(dtype=wp.float64),
+    storage: wp.array(dtype=wp.float64), storage_tangent: wp.array(dtype=wp.float64),
+    residual: wp.array(dtype=wp.float64), boundary_flow: wp.array(dtype=wp.float64),
+    boundary_tangent: wp.array(dtype=wp.float64), absolute_tolerance: wp.float64,
+    relative_tolerance: wp.float64, failed: wp.array(dtype=wp.float64)):
+    """Check independently assembled cell balances including package flow.
+
+    :param head: Accepted or trial groundwater heads.
+    :param free: Free-cell indicators.
+    :param fixed: Prescribed-head indicators.
+    :param source: Cell source rates.
+    :param left: Neighbor indices on negative coordinate faces.
+    :param right: Neighbor indices on positive coordinate faces.
+    :param flux: Physical intercell fluxes.
+    :param conductance: Integrated intercell conductances.
+    :param storage: Physical storage residual contribution.
+    :param storage_tangent: Storage tangent contribution.
+    :param residual: Independently evaluated physical residuals.
+    :param boundary_flow: Combined accepted DRN/RIV/GHB exchange rates.
+    :param boundary_tangent: Combined active boundary tangent.
+    :param absolute_tolerance: Absolute cell balance tolerance.
+    :param relative_tolerance: Throughput-relative balance tolerance.
+    :param failed: Scalar failure flag, updated in place.
+    :return: None; ``failed`` is set when any free-cell balance fails.
+    """
+    i = wp.tid()
+    if free[i] == 0:
+        return
+    throughput = wp.abs(source[i]) + wp.abs(storage[i]) + wp.abs(boundary_flow[i])
+    anchor = storage_tangent[i] + boundary_tangent[i]
+    roundoff = wp.float64(0.0)
+    eps = wp.float64(2.220446049250313e-16)
+    for axis in range(3):
+        for side in range(2):
+            j = right[i, axis]
+            owner = i
+            if side == 1:
+                j = left[i, axis]
+                owner = j
+            if j >= 0:
+                c = conductance[owner, axis]
+                q = flux[owner, axis]
+                throughput += wp.abs(q)
+                if fixed[j] != 0:
+                    anchor += c
+                if q != wp.float64(0.0):
+                    roundoff += (eps * wp.abs(head[i]) + eps * wp.abs(head[j])) * c
+    allowance = wp.max(absolute_tolerance, relative_tolerance * throughput)
+    if anchor > wp.float64(0.0):
+        allowance = anchor * wp.float64(1.0e-6)
+    allowance += roundoff
+    if not wp.isfinite(allowance) or wp.abs(residual[i]) > allowance:
+        wp.atomic_max(failed, 0, wp.float64(1.0))
+
+
+@wp.kernel
+def drn_riv_budget(head: wp.array(dtype=wp.float64), drn_c: wp.array(dtype=wp.float64),
+    drn_elevation: wp.array(dtype=wp.float64), riv_c: wp.array(dtype=wp.float64),
+    riv_stage: wp.array(dtype=wp.float64), riv_bottom: wp.array(dtype=wp.float64),
+    drn_rate: wp.array(dtype=wp.float64), riv_rate: wp.array(dtype=wp.float64),
+    totals: wp.array(dtype=wp.float64)):
+    """Evaluate accepted package rates and accumulate gross exchange totals.
+
+    :param head: Accepted groundwater heads.
+    :param drn_c: Integrated drain conductances.
+    :param drn_elevation: Drain elevations.
+    :param riv_c: Integrated river conductances.
+    :param riv_stage: River stages.
+    :param riv_bottom: Riverbed bottoms.
+    :param drn_rate: Per-cell drain discharge output, positive out of aquifer.
+    :param riv_rate: Per-cell river discharge output, positive out of aquifer.
+    :param totals: Gross inflow/outflow totals, accumulated in place.
+    :return: None; outputs are written in place.
+    """
+    i = wp.tid()
+    drain = drn_flow_pair(head[i], drn_c[i], drn_elevation[i])[0]
+    river = riv_flow_pair(head[i], riv_c[i], riv_stage[i], riv_bottom[i])[0]
+    drn_rate[i] = drain
+    riv_rate[i] = river
+    wp.atomic_add(totals, 0, wp.max(-drain, wp.float64(0.0)))
+    wp.atomic_add(totals, 1, wp.max(drain, wp.float64(0.0)))
+    wp.atomic_add(totals, 2, wp.max(-river, wp.float64(0.0)))
+    wp.atomic_add(totals, 3, wp.max(river, wp.float64(0.0)))
 
 
 @wp.kernel

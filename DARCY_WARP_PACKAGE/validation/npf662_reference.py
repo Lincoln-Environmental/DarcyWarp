@@ -402,6 +402,74 @@ class NPF662Reference:
                 np.abs(self.case.bottoms)+self.case.thicknesses,0.) if storage is not None else None,
             boundary_row_scale=boundary_row_scale)
 
+    def seed_unanchored_boundary_components(self, *, head):
+        """Move only unanchored initial guesses to a needed switching threshold.
+
+        A positive component imbalance cannot be corrected while every DRN is
+        inactive and every RIV is disconnected. A uniform head shift leaves
+        confined intercell flows unchanged and opens the nearest available
+        monotone boundary branch without pinning any groundwater cell.
+
+        :param head: Initial total-head field for this solve.
+        :return: A copied head field and component/threshold seed records.
+        """
+        candidate = np.asarray(head, dtype=np.float64).copy()
+        if not np.any(self.drn_conductance > 0.) and not np.any(self.riv_conductance > 0.):
+            return candidate, []
+        n = self.case.active.size
+        graph = sparse.coo_matrix((np.ones(self.left.size), (self.left, self.right)),
+            shape=(n, n)).tocsr()
+        unused, labels = connected_components(csgraph=graph, directed=False)
+        checks, fields = self.evaluate(head=candidate)
+        from DARCY_WARP_PACKAGE.physics.drn_riv_3d import drn_terms, riv_terms
+        drain = drn_terms(head=candidate, conductance=self.drn_conductance,
+                          elevation=self.drn_elevation)
+        river = riv_terms(head=candidate, conductance=self.riv_conductance,
+                          stage=self.riv_stage, bottom=self.riv_bottom)
+        package_tangent = drain.diagonal + river.diagonal
+        storage_tangent = np.zeros(self.shape)
+        if hasattr(self, 'storage'):
+            unused_storage, storage_tangent = self.storage(head=candidate)
+        seeds = []
+        active = self.case.active.ravel() != 0
+        for label in np.unique(labels[active]):
+            component = (labels == label) & active
+            if np.any(self.case.fixed.ravel()[component] != 0) or np.any(self.ghb_conductance.ravel()[component] > 0.):
+                continue
+            if np.any(package_tangent.ravel()[component] > 0.) or np.any(storage_tangent.ravel()[component] > 0.):
+                continue
+            free_component = component & self.free.ravel()
+            net_need = stable_sum(values=fields['residual'].ravel()[free_component])
+            if not np.isfinite(net_need) or net_need <= 0.:
+                continue
+            threshold_candidates = []
+            drain_selected = free_component & (self.drn_conductance.ravel() > 0.)
+            river_selected = free_component & (self.riv_conductance.ravel() > 0.)
+            drain_heads = np.flatnonzero(drain_selected)
+            river_heads = np.flatnonzero(river_selected)
+            for index in drain_heads:
+                elevation = self.drn_elevation.ravel()[index]
+                if candidate.ravel()[index] <= elevation:
+                    threshold_candidates.append((index, elevation, 'DRN'))
+            for index in river_heads:
+                bottom = self.riv_bottom.ravel()[index]
+                if candidate.ravel()[index] <= bottom:
+                    threshold_candidates.append((index, bottom, 'RIV'))
+            if not threshold_candidates:
+                continue
+            shifts = [(float(np.nextafter(threshold, np.inf) - candidate.ravel()[index]),
+                       int(index), float(threshold), package)
+                      for index, threshold, package in threshold_candidates]
+            positive_shifts = [record for record in shifts if record[0] > 0. and np.isfinite(record[0])]
+            if not positive_shifts:
+                continue
+            shift, index, threshold, package = min(positive_shifts)
+            candidate.ravel()[component] += shift
+            seeds.append(dict(component=int(label), package=package, cell=int(index),
+                threshold=float(threshold), uniform_shift_m=float(shift),
+                component_net_inflow=float(net_need)))
+        return candidate, seeds
+
     def evaluate(self,*,head,physical_tolerance=1e-12,relative_tolerance=1e-8,
                  head_tolerance_m=1e-6,boundary_tolerance_m=1e-10,roundoff_acceptance=False):
         c=self.case
@@ -525,6 +593,7 @@ class NPF662Reference:
         linear_controls.validate()
         c=self.case;f=self.free.ravel()
         head=np.where(c.fixed,c.values,c.initial).astype(float).copy()
+        head, active_set_seeds = self.seed_unanchored_boundary_components(head=head)
         history=[];reason='outer_budget'
         for outer in range(max_outer):
             checks,fields=self.evaluate(head=head)
@@ -565,7 +634,8 @@ class NPF662Reference:
             if not found:
                 reason='line_search_failed';break
         checks,fields=self.evaluate(head=head)
-        checks.update(stop_reason='converged' if checks['independent_accepted'] else reason,history=history,outers=len(history))
+        checks.update(stop_reason='converged' if checks['independent_accepted'] else reason,
+            history=history,outers=len(history),active_set_seeds=active_set_seeds)
         return head,checks,fields
 
 

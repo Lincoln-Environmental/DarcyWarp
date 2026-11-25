@@ -103,8 +103,7 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
     if unconfined and top_elevation is None and not layered:raise ValueError('Matched unconfined mode requires explicit flat top_elevation')
     types=int(unconfined) if npf_cell_type is None else npf_cell_type
     case=case_from_model(model=model,top=0. if top_elevation is None else top_elevation,cell_type=types)
-    if case.drn_conductance is not None or case.riv_conductance is not None:
-        raise ValueError('The native NPF Newton device workspace does not yet assemble DRN/RIV; solve is rejected to prevent boundary terms being ignored')
+    has_drn_riv = case.drn_conductance is not None or case.riv_conductance is not None
     if transient:
         if npf_device_native:
             from .npf662_state import NPF662TransientState
@@ -126,8 +125,12 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
         reference, reference_reused = independent_reference(model=model, case=case)
     reference_seconds = perf_counter()-started
     reference.check_components()
+    active_set_seeds = []
+    if hasattr(reference, 'seed_unanchored_boundary_components'):
+        seeded_head, active_set_seeds = reference.seed_unanchored_boundary_components(head=case.initial)
+        case.initial = seeded_head
     if not unconfined and np.any(case.cell_types):raise ValueError('Convertible cell types require unconfined=True')
-    if transient or unconfined or layered or preconditioner_selected or npf_krylov_method is not None or npf_newton_controls is not None or npf_final_relative_tolerance is not None or npf_roundoff_acceptance:
+    if transient or unconfined or layered or has_drn_riv or preconditioner_selected or npf_krylov_method is not None or npf_newton_controls is not None or npf_final_relative_tolerance is not None or npf_roundoff_acceptance:
         if model.implementation!='fast' or model.solver!='kcycle':
             raise ValueError('Matched Newton requires implementation=fast and solver=kcycle; legacy backends remain separate')
         if unconfined and not np.any(case.cell_types[case.active!=0]):raise ValueError('unconfined=True requires convertible active cells')
@@ -168,6 +171,7 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
                 default_relative_cell_imbalance=1e-8)
         info.update(reference_reused=reference_reused, reference_setup_seconds=reference_seconds,
                     public_total_seconds=perf_counter()-started)
+        info['active_set_seeds'] = active_set_seeds
         return (head,info) if return_info else head
     if iteration_overrides:
         raise ValueError('max_outer/krylov_restart require npf_krylov_method=gmres or fgmres; uniform confined default uses the historical direct K-cycle backend')
