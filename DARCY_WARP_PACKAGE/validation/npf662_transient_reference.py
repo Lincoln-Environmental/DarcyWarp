@@ -63,7 +63,9 @@ class NPF662TransientReference(NPF662Reference):
         n = self.case.active.size
         graph = sparse.coo_matrix((np.ones(self.left.size), (self.left, self.right)), shape=(n, n)).tocsr()
         unused, labels = connected_components(csgraph=graph, directed=False)
-        anchors = (self.case.fixed != 0)|(self.ghb_conductance > 0.)|((self.ss > 0.)|((self.sy > 0.)&(self.case.cell_types != 0)))
+        potential_boundary = (self.drn_conductance > 0.) | (self.riv_conductance > 0.)
+        anchors = ((self.case.fixed != 0)|(self.ghb_conductance > 0.)|potential_boundary|
+                   ((self.ss > 0.)|((self.sy > 0.)&(self.case.cell_types != 0))))
         for label in np.unique(labels[self.case.active.ravel() != 0]):
             if not np.any(anchors.ravel()[labels == label]):
                 raise ValueError('Ungrounded transient component without boundary or storage')
@@ -88,7 +90,13 @@ class NPF662TransientReference(NPF662Reference):
             shape=(self.case.active.size, self.case.active.size)).tocsr()
         unused, labels = connected_components(csgraph=graph, directed=False)
         active_labels = set(labels[self.case.active.ravel() != 0])
-        anchors = (self.case.fixed != 0)|(self.ghb_conductance > 0.)|((tangent > 0.)&self.free)
+        from DARCY_WARP_PACKAGE.physics.drn_riv_3d import drn_terms, riv_terms
+        drain = drn_terms(head=head, conductance=self.drn_conductance,
+                          elevation=self.drn_elevation)
+        river = riv_terms(head=head, conductance=self.riv_conductance,
+                          stage=self.riv_stage, bottom=self.riv_bottom)
+        boundary_tangent = self.ghb_conductance + drain.diagonal + river.diagonal
+        anchors = (self.case.fixed != 0)|(boundary_tangent > 0.)|((tangent > 0.)&self.free)
         grounded = set(labels[anchors.ravel()&(self.case.active.ravel() != 0)])
         ungrounded = len(active_labels-grounded)
         valid = bool(all(np.isfinite(fields[name]).all() for name in
@@ -107,9 +115,13 @@ class NPF662TransientReference(NPF662Reference):
             and (rms <= limits['physical_rms_m3_day'] or relative <= limits['relative_cell_imbalance']))
         checks['local_balance_valid'] = None
         if checks['independent_accepted'] or roundoff_acceptance:
+            from DARCY_WARP_PACKAGE.physics.ghb_3d import npf_ghb_component_anchor
+            component_anchor = npf_ghb_component_anchor(conductance=boundary_tangent,
+                active=self.case.active, fixed=self.case.fixed)
             checks['local_balance_valid'] = local_balance_valid(case=self.case, free=self.free, left=self.left,
                 right=self.right, head=head, residual=residual, flux=fields['flux'], conductance=fields['conductance'],
-                ghb_conductance=self.ghb_conductance, ghb_exchange=fields['ghb_outflow'], component_anchor=self.component_anchor,
+                ghb_conductance=boundary_tangent, ghb_exchange=(fields['ghb_outflow']+
+                    fields['drn_outflow']+fields['riv_outflow']), component_anchor=component_anchor,
                 thresholds=limits, storage=storage, tangent=tangent)
             checks['independent_accepted'] &= checks['local_balance_valid']
         if roundoff_acceptance:

@@ -122,6 +122,8 @@ class WarpDarcySolver3D:
         rhs: np.ndarray,
         initial_head: np.ndarray | None = None,
         *, ghb_conductance=None, ghb_head=None, ghb_mask=None,
+        drn_conductance=None, drn_elevation=None, drn_mask=None,
+        riv_conductance=None, riv_stage=None, riv_bottom=None, riv_mask=None,
     ) -> "WarpDarcySolver3D":
         """
         Build face conductances from cell-centered hydraulic conductivity fields.
@@ -150,7 +152,10 @@ class WarpDarcySolver3D:
                 fixed=np.asarray(bc_mask), values=floating_field(value=bc_values, name="bc_values", dtype=NP_FLOAT),
                 source=floating_field(value=rhs, name="rhs", dtype=NP_FLOAT),
                 initial=np.zeros(self.shape) if initial_head is None else floating_field(value=initial_head, name="initial_head", dtype=NP_FLOAT),
-                dx=self.dx, dy=self.dy, dz=self.dz)
+                dx=self.dx, dy=self.dy, dz=self.dz,
+                drn_conductance=drn_conductance, drn_elevation=drn_elevation,
+                drn_mask=drn_mask, riv_conductance=riv_conductance, riv_stage=riv_stage,
+                riv_bottom=riv_bottom, riv_mask=riv_mask)
             case.validate()
         tx_p, tx_m, ty_p, ty_m, tz_p, tz_m = build_7point_face_conductance_from_k(
             kx_field=fields[0],
@@ -174,6 +179,8 @@ class WarpDarcySolver3D:
             rhs=rhs,
             initial_head=initial_head,
             ghb_conductance=ghb_conductance, ghb_head=ghb_head, ghb_mask=ghb_mask,
+            drn_conductance=drn_conductance, drn_elevation=drn_elevation, drn_mask=drn_mask,
+            riv_conductance=riv_conductance, riv_stage=riv_stage, riv_bottom=riv_bottom, riv_mask=riv_mask,
         )
         self._kx_field, self._ky_field, self._kz_field = fields
         return self
@@ -182,6 +189,8 @@ class WarpDarcySolver3D:
         self, tx_p, tx_m, ty_p, ty_m, tz_p, tz_m, active, bc_mask,
         bc_values, rhs, initial_head=None,
         *, ghb_conductance=None, ghb_head=None, ghb_mask=None,
+        drn_conductance=None, drn_elevation=None, drn_mask=None,
+        riv_conductance=None, riv_stage=None, riv_bottom=None, riv_mask=None,
     ) -> "WarpDarcySolver3D":
         """Build independent reciprocal faces for legacy confined flow.
 
@@ -193,7 +202,9 @@ class WarpDarcySolver3D:
         return self._build_from_face_conductance(tx_p=tx_p, tx_m=tx_m, ty_p=ty_p, ty_m=ty_m,
             tz_p=tz_p, tz_m=tz_m, active=active, bc_mask=bc_mask, bc_values=bc_values,
             rhs=rhs, initial_head=initial_head,
-            ghb_conductance=ghb_conductance, ghb_head=ghb_head, ghb_mask=ghb_mask)
+            ghb_conductance=ghb_conductance, ghb_head=ghb_head, ghb_mask=ghb_mask,
+            drn_conductance=drn_conductance, drn_elevation=drn_elevation, drn_mask=drn_mask,
+            riv_conductance=riv_conductance, riv_stage=riv_stage, riv_bottom=riv_bottom, riv_mask=riv_mask)
 
     def _build_from_face_conductance(
         self,
@@ -209,6 +220,8 @@ class WarpDarcySolver3D:
         rhs: np.ndarray,
         initial_head: np.ndarray | None = None,
         *, ghb_conductance=None, ghb_head=None, ghb_mask=None,
+        drn_conductance=None, drn_elevation=None, drn_mask=None,
+        riv_conductance=None, riv_stage=None, riv_bottom=None, riv_mask=None,
     ) -> "WarpDarcySolver3D":
         """
         Build from reciprocal, nonnegative finite internal conductances.
@@ -252,6 +265,8 @@ class WarpDarcySolver3D:
             dy=self.dy,
             dz=self.dz,
             ghb_conductance=ghb_conductance, ghb_head=ghb_head, ghb_mask=ghb_mask,
+            drn_conductance=drn_conductance, drn_elevation=drn_elevation, drn_mask=drn_mask,
+            riv_conductance=riv_conductance, riv_stage=riv_stage, riv_bottom=riv_bottom, riv_mask=riv_mask,
         )
         previous = self._session
         self._session = session
@@ -272,7 +287,9 @@ class WarpDarcySolver3D:
 
     def build_from_layers(self, *, z_interfaces, kx_field, ky_field, kz_field,
                           active, bc_mask, bc_values, rhs, initial_head=None,
-                          ghb_conductance=None, ghb_head=None, ghb_mask=None):
+                          ghb_conductance=None, ghb_head=None, ghb_mask=None,
+                          drn_conductance=None, drn_elevation=None, drn_mask=None,
+                          riv_conductance=None, riv_stage=None, riv_bottom=None, riv_mask=None):
         """Build conventional layered DIS/NPF connections (not terrain metrics).
 
         Interfaces (nz+1,ny,nx) are authoritative. Constructor dz is unused;
@@ -287,14 +304,19 @@ class WarpDarcySolver3D:
         case=NPF662LayeredCase(kx=np.asarray(kx_field,dtype=NP_FLOAT),ky=np.asarray(ky_field,dtype=NP_FLOAT),
             kz=np.asarray(kz_field,dtype=NP_FLOAT),active=np.asarray(active),fixed=np.asarray(bc_mask),
             values=np.asarray(bc_values,dtype=NP_FLOAT),source=np.asarray(rhs,dtype=NP_FLOAT),initial=initial,
-            dx=self.dx,dy=self.dy,z_interfaces=np.asarray(z_interfaces,dtype=NP_FLOAT))
+            dx=self.dx,dy=self.dy,z_interfaces=np.asarray(z_interfaces,dtype=NP_FLOAT),
+            drn_conductance=drn_conductance,drn_elevation=drn_elevation,
+            drn_mask=drn_mask,riv_conductance=riv_conductance,riv_stage=riv_stage,
+            riv_bottom=riv_bottom,riv_mask=riv_mask)
         if case.active.shape!=self.shape:raise ValueError(f'Layered cell shape must be {self.shape}')
         case.validate()
         faces,unused=build_layered_dis_faces(z_interfaces=case.z_interfaces,kx=case.kx,ky=case.ky,kz=case.kz,
             active=case.active,dx=self.dx,dy=self.dy)
         session=ThreeDOperatorSession(faces=faces,active=case.active,bc_mask=case.fixed,bc_values=case.values,
             rhs=case.source,initial_head=case.initial,dx=self.dx,dy=self.dy,dz=self.dz,z_interfaces=case.z_interfaces,
-            ghb_conductance=ghb_conductance,ghb_head=ghb_head,ghb_mask=ghb_mask)
+            ghb_conductance=ghb_conductance,ghb_head=ghb_head,ghb_mask=ghb_mask,
+            drn_conductance=drn_conductance,drn_elevation=drn_elevation,drn_mask=drn_mask,
+            riv_conductance=riv_conductance,riv_stage=riv_stage,riv_bottom=riv_bottom,riv_mask=riv_mask)
         # The layered contract already enforces positive active K; finite
         # inactive conductivity markers remain compatible with that schema.
         fields = self._validated_K_fields(kx_field=case.kx, ky_field=case.ky, kz_field=case.kz,
@@ -322,6 +344,99 @@ class WarpDarcySolver3D:
             raise ValueError("Terrain uses contact exchange; update_contacts is required")
         self._session.update_ghb(ghb_conductance=ghb_conductance,
                                  ghb_head=ghb_head, ghb_mask=ghb_mask)
+
+    def update_drn(self, *, drn_conductance, drn_elevation, drn_mask=None):
+        """Update the model-owned native 3D DRN package.
+
+        :param drn_conductance: Integrated conductance [L2/T], scalar or full grid; None disables DRN.
+        :param drn_elevation: Drain activation elevation [L], scalar or full grid.
+        :param drn_mask: Optional binary mask using the model's (nz, ny, nx) layout.
+        :return: None.
+        :raises RuntimeError: If the model has not been built.
+        :raises ValueError: If a field is invalid for the current grid or boundary conditions.
+        """
+        if self._session is None:
+            raise RuntimeError("Build the model before updating DRN")
+        if self.geometry == "terrain":
+            raise ValueError("Terrain sessions do not support cell DRN; use a supported Cartesian NPF model")
+        self._session.update_drn(drn_conductance=drn_conductance,
+            drn_elevation=drn_elevation, drn_mask=drn_mask)
+
+    def update_riv(self, *, riv_conductance, riv_stage, riv_bottom, riv_mask=None):
+        """Update the model-owned native 3D RIV package.
+
+        :param riv_conductance: Integrated conductance [L2/T], scalar or full grid; None disables RIV.
+        :param riv_stage: River surface elevation [L], scalar or full grid.
+        :param riv_bottom: Riverbed bottom elevation [L], scalar or full grid.
+        :param riv_mask: Optional binary mask using the model's (nz, ny, nx) layout.
+        :return: None.
+        :raises RuntimeError: If the model has not been built.
+        :raises ValueError: If a field is invalid for the current grid or boundary conditions.
+        """
+        if self._session is None:
+            raise RuntimeError("Build the model before updating RIV")
+        if self.geometry == "terrain":
+            raise ValueError("Terrain sessions do not support cell RIV; use a supported Cartesian NPF model")
+        self._session.update_riv(riv_conductance=riv_conductance, riv_stage=riv_stage,
+            riv_bottom=riv_bottom, riv_mask=riv_mask)
+
+    def accepted_drn_discharge(self, *, head, info) -> np.ndarray:
+        """Return nonnegative per-cell DRN outflow from a verified accepted solve.
+
+        :param head: Groundwater head returned by the same solve as ``info``.
+        :param info: Converged solve metadata containing accepted per-cell DRN rates.
+        :return: Owned (nz, ny, nx) discharge array, positive out of the aquifer.
+        :raises RuntimeError: If DRN is disabled or the solve state is not accepted.
+        :raises ValueError: If the head or rate array is malformed or inconsistent.
+        """
+        if self._session is None or self._session.drn_conductance is None:
+            raise RuntimeError("DRN fields have not been built")
+        if not isinstance(info, dict) or not info.get("converged", False):
+            raise RuntimeError("Accepted DRN discharge requires a converged solve")
+        accepted = np.asarray(head, dtype=np.float64)
+        rate = info.get("drn_discharge_rate_array")
+        if accepted.shape != self.shape or not np.all(np.isfinite(accepted)):
+            raise ValueError(f"head must be a finite field of shape {self.shape}")
+        if rate is None:
+            raise RuntimeError("Accepted solve metadata lacks drn_discharge_rate_array")
+        rate = np.asarray(rate, dtype=np.float64)
+        if rate.shape != self.shape or not np.all(np.isfinite(rate)) or np.any(rate < 0.0):
+            raise ValueError(f"drn_discharge_rate_array must be a finite nonnegative field of shape {self.shape}")
+        from DARCY_WARP_PACKAGE.physics.drn_riv_3d import drn_terms
+        derived = drn_terms(head=accepted, conductance=self._session.drn_conductance,
+            elevation=self._session.drn_elevation).discharge
+        if not np.allclose(derived, rate, rtol=1e-12, atol=1e-12):
+            raise ValueError("Accepted DRN rates do not match the supplied head and current package fields")
+        return rate.copy()
+
+    def accepted_riv_discharge(self, *, head, info) -> np.ndarray:
+        """Return signed per-cell RIV exchange from a verified accepted solve.
+
+        :param head: Groundwater head returned by the same solve as ``info``.
+        :param info: Converged solve metadata containing accepted per-cell RIV rates.
+        :return: Owned (nz, ny, nx) rates, positive out of the aquifer.
+        :raises RuntimeError: If RIV is disabled or the solve state is not accepted.
+        :raises ValueError: If the head or rate array is malformed or inconsistent.
+        """
+        if self._session is None or self._session.riv_conductance is None:
+            raise RuntimeError("RIV fields have not been built")
+        if not isinstance(info, dict) or not info.get("converged", False):
+            raise RuntimeError("Accepted RIV discharge requires a converged solve")
+        accepted = np.asarray(head, dtype=np.float64)
+        rate = info.get("riv_discharge_rate_array")
+        if accepted.shape != self.shape or not np.all(np.isfinite(accepted)):
+            raise ValueError(f"head must be a finite field of shape {self.shape}")
+        if rate is None:
+            raise RuntimeError("Accepted solve metadata lacks riv_discharge_rate_array")
+        rate = np.asarray(rate, dtype=np.float64)
+        if rate.shape != self.shape or not np.all(np.isfinite(rate)):
+            raise ValueError(f"riv_discharge_rate_array must be a finite field of shape {self.shape}")
+        from DARCY_WARP_PACKAGE.physics.drn_riv_3d import riv_terms
+        derived = riv_terms(head=accepted, conductance=self._session.riv_conductance,
+            stage=self._session.riv_stage, bottom=self._session.riv_bottom).discharge
+        if not np.allclose(derived, rate, rtol=1e-12, atol=1e-12):
+            raise ValueError("Accepted RIV rates do not match the supplied head and current package fields")
+        return rate.copy()
 
     def _validated_K_fields(self, *, kx_field, ky_field, kz_field, require_nonnegative=True):
         fields = tuple(floating_field(value=value, name=name, dtype=np.float64) for name, value in

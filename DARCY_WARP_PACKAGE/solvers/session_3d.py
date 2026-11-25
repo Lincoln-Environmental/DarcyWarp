@@ -17,6 +17,7 @@ from DARCY_WARP_PACKAGE.physics.faces_3d import validate_reciprocal_faces
 from DARCY_WARP_PACKAGE.physics.inputs_3d import binary_mask, floating_field
 from DARCY_WARP_PACKAGE.validation.head_checks import invalid_head_values
 from DARCY_WARP_PACKAGE.physics.ghb_3d import validate_ghb_fields
+from DARCY_WARP_PACKAGE.physics.drn_riv_3d import validate_drn_fields, validate_riv_fields
 
 
 class ThreeDOperatorSession:
@@ -38,6 +39,13 @@ class ThreeDOperatorSession:
         ghb_conductance=None,
         ghb_head=None,
         ghb_mask=None,
+        drn_conductance=None,
+        drn_elevation=None,
+        drn_mask=None,
+        riv_conductance=None,
+        riv_stage=None,
+        riv_bottom=None,
+        riv_mask=None,
     ) -> None:
         self._closed = False
         self.revision = 0
@@ -61,6 +69,12 @@ class ThreeDOperatorSession:
         self._validate()
         self.ghb_conductance, self.ghb_head = validate_ghb_fields(
             conductance=ghb_conductance, head=ghb_head, mask=ghb_mask,
+            active=self.active, fixed=self.bc_mask)
+        self.drn_conductance, self.drn_elevation = validate_drn_fields(
+            conductance=drn_conductance, elevation=drn_elevation, mask=drn_mask,
+            active=self.active, fixed=self.bc_mask)
+        self.riv_conductance, self.riv_stage, self.riv_bottom = validate_riv_fields(
+            conductance=riv_conductance, stage=riv_stage, bottom=riv_bottom, mask=riv_mask,
             active=self.active, fixed=self.bc_mask)
 
     @property
@@ -171,6 +185,51 @@ class ThreeDOperatorSession:
         self.topology_revision += int(topology_changed)
         self.revision += 1
 
+    def update_drn(self, *, drn_conductance, drn_elevation, drn_mask=None):
+        """Replace owned DRN fields after validating the complete update.
+
+        :param drn_conductance: Integrated conductance [L2/T], scalar or grid; None disables DRN.
+        :param drn_elevation: Activation elevation [L], scalar or grid; None disables DRN.
+        :param drn_mask: Optional binary (nz, ny, nx) selection mask.
+        :return: None.
+        :raises ValueError: If any field is invalid or selects an unusable cell.
+        """
+        self._ensure_open()
+        conductance, elevation = validate_drn_fields(conductance=drn_conductance,
+            elevation=drn_elevation, mask=drn_mask, active=self.active, fixed=self.bc_mask)
+        previous = np.zeros(self.shape, dtype=bool) if self.drn_conductance is None else self.drn_conductance > 0.
+        current = np.zeros(self.shape, dtype=bool) if conductance is None else conductance > 0.
+        self.drn_conductance, self.drn_elevation = conductance, elevation
+        self.operator_revision += 1
+        self.revision += 1
+        if not np.array_equal(previous, current):
+            self.topology_revision += 1
+            self._fast_workspace_holder.clear()
+        self._npf662_workspace_holder.clear()
+
+    def update_riv(self, *, riv_conductance, riv_stage, riv_bottom, riv_mask=None):
+        """Replace owned RIV fields after validating the complete update.
+
+        :param riv_conductance: Integrated conductance [L2/T], scalar or grid; None disables RIV.
+        :param riv_stage: River surface elevation [L], scalar or grid.
+        :param riv_bottom: Riverbed bottom [L], scalar or grid.
+        :param riv_mask: Optional binary (nz, ny, nx) selection mask.
+        :return: None.
+        :raises ValueError: If any field is invalid or selects an unusable cell.
+        """
+        self._ensure_open()
+        conductance, stage, bottom = validate_riv_fields(conductance=riv_conductance,
+            stage=riv_stage, bottom=riv_bottom, mask=riv_mask, active=self.active, fixed=self.bc_mask)
+        previous = np.zeros(self.shape, dtype=bool) if self.riv_conductance is None else self.riv_conductance > 0.
+        current = np.zeros(self.shape, dtype=bool) if conductance is None else conductance > 0.
+        self.riv_conductance, self.riv_stage, self.riv_bottom = conductance, stage, bottom
+        self.operator_revision += 1
+        self.revision += 1
+        if not np.array_equal(previous, current):
+            self.topology_revision += 1
+            self._fast_workspace_holder.clear()
+        self._npf662_workspace_holder.clear()
+
     def update_face_conductance(
         self,
         faces: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray],
@@ -192,6 +251,8 @@ class ThreeDOperatorSession:
         self._ensure_open()
         if self.z_interfaces is not None:
             raise ValueError('Layered NPF uses its diagonal-preconditioned GMRES path, not the legacy session backend')
+        if self.drn_conductance is not None or self.riv_conductance is not None:
+            raise ValueError('The selected legacy Cartesian session backend does not implement native 3D DRN/RIV')
         from DARCY_WARP_PACKAGE.solvers_3d import (
             solve_chebyshev_7point_3d,
             solve_multigrid_kcycle_7point_3d,
@@ -288,6 +349,8 @@ class ThreeDOperatorSession:
         self.rhs = np.empty((0, 0, 0))
         self.initial_head = None
         self.ghb_conductance = self.ghb_head = None
+        self.drn_conductance = self.drn_elevation = None
+        self.riv_conductance = self.riv_stage = self.riv_bottom = None
         self.z_interfaces = None
         self.layer_geometry = None
         for record in self._fast_workspace_holder.values():

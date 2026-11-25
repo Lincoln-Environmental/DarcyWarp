@@ -83,7 +83,10 @@ def solve_reference_correction(*, matrix, rhs, controls):
 
 def serialized_case_fields(*,case):
     names=tuple(name for name in case.__dataclass_fields__
-                if name not in ('ghb_conductance', 'ghb_head') or getattr(case, name) is not None)
+                if name not in ('ghb_conductance', 'ghb_head', 'drn_conductance',
+                                'drn_elevation', 'drn_mask', 'riv_conductance', 'riv_stage',
+                                'riv_bottom', 'riv_mask')
+                or getattr(case, name) is not None)
     if getattr(case,'_legacy_implicit_cell_type',False) and np.ndim(case.cell_type)==0 and case.cell_type==0:
         return tuple(name for name in names if name!='cell_type')
     return names
@@ -106,6 +109,13 @@ class NPF662Case:
     cell_type: np.ndarray | int = 0
     ghb_conductance: np.ndarray | None = None
     ghb_head: np.ndarray | None = None
+    drn_conductance: np.ndarray | None = None
+    drn_elevation: np.ndarray | None = None
+    drn_mask: np.ndarray | None = None
+    riv_conductance: np.ndarray | None = None
+    riv_stage: np.ndarray | None = None
+    riv_bottom: np.ndarray | None = None
+    riv_mask: np.ndarray | None = None
 
     def validate(self):
         shape=self.active.shape
@@ -137,6 +147,11 @@ class NPF662Case:
         if self.ghb_conductance is not None and np.any((np.asarray(self.ghb_conductance)>0.)
                 &(self.cell_types!=0)&(np.asarray(self.ghb_head)<self.bottoms)):
             raise ValueError('Convertible GHB head below cell bottom is invalid for MF6 6.6.2')
+        from DARCY_WARP_PACKAGE.physics.drn_riv_3d import validate_drn_fields, validate_riv_fields
+        validate_drn_fields(conductance=self.drn_conductance, elevation=self.drn_elevation,
+                            active=self.active, fixed=self.fixed, mask=self.drn_mask)
+        validate_riv_fields(conductance=self.riv_conductance, stage=self.riv_stage,
+                            bottom=self.riv_bottom, active=self.active, fixed=self.fixed, mask=self.riv_mask)
 
     def validate_active_heads(self):
         active = self.active != 0
@@ -195,6 +210,13 @@ class NPF662LayeredCase:
     cell_type: np.ndarray | int = 0
     ghb_conductance: np.ndarray | None = None
     ghb_head: np.ndarray | None = None
+    drn_conductance: np.ndarray | None = None
+    drn_elevation: np.ndarray | None = None
+    drn_mask: np.ndarray | None = None
+    riv_conductance: np.ndarray | None = None
+    riv_stage: np.ndarray | None = None
+    riv_bottom: np.ndarray | None = None
+    riv_mask: np.ndarray | None = None
 
     validate_active_heads = NPF662Case.validate_active_heads
 
@@ -246,7 +268,9 @@ def load_npf662_case(*,path):
         schema=int(saved['schema_version']) if 'schema_version' in saved else 1
         if schema not in (1,2):raise ValueError('Unsupported NPF input schema')
         cls=NPF662Case if schema==1 else NPF662LayeredCase
-        missing=set(cls.__dataclass_fields__)-set(saved.files)-{'ghb_conductance','ghb_head'}
+        optional_fields = {'ghb_conductance', 'ghb_head', 'drn_conductance', 'drn_elevation',
+                           'drn_mask', 'riv_conductance', 'riv_stage', 'riv_bottom', 'riv_mask'}
+        missing=set(cls.__dataclass_fields__)-set(saved.files)-optional_fields
         implicit=bool(schema==1 and missing=={'cell_type'})
         if missing and not implicit:raise ValueError(f'Missing NPF input fields: {sorted(missing)}')
         case=cls(**{name:saved[name].copy() for name in cls.__dataclass_fields__ if name in saved})
@@ -269,6 +293,18 @@ class NPF662Reference:
                                 else np.broadcast_to(case.ghb_conductance, self.shape).copy())
         self.ghb_head = (np.zeros(self.shape) if case.ghb_head is None
                          else np.broadcast_to(case.ghb_head, self.shape).copy())
+        from DARCY_WARP_PACKAGE.physics.drn_riv_3d import validate_drn_fields, validate_riv_fields
+        self.drn_conductance, self.drn_elevation = validate_drn_fields(
+            conductance=case.drn_conductance, elevation=case.drn_elevation,
+            active=case.active, fixed=case.fixed, mask=case.drn_mask)
+        self.riv_conductance, self.riv_stage, self.riv_bottom = validate_riv_fields(
+            conductance=case.riv_conductance, stage=case.riv_stage, bottom=case.riv_bottom,
+            active=case.active, fixed=case.fixed, mask=case.riv_mask)
+        self.drn_conductance = np.zeros(self.shape) if self.drn_conductance is None else self.drn_conductance
+        self.drn_elevation = np.zeros(self.shape) if self.drn_elevation is None else self.drn_elevation
+        self.riv_conductance = np.zeros(self.shape) if self.riv_conductance is None else self.riv_conductance
+        self.riv_stage = np.zeros(self.shape) if self.riv_stage is None else self.riv_stage
+        self.riv_bottom = np.zeros(self.shape) if self.riv_bottom is None else self.riv_bottom
         self.component_anchor = npf_ghb_component_anchor(conductance=case.ghb_conductance,
             active=case.active, fixed=case.fixed)
         ids=np.arange(case.active.size).reshape(self.shape)
@@ -319,8 +355,13 @@ class NPF662Reference:
 
     def jacobian(self,*,head):
         unused,dl,dr,unused_saturation=self.face_terms(head=head)
+        from DARCY_WARP_PACKAGE.physics.drn_riv_3d import drn_terms, riv_terms
+        drain = drn_terms(head=head, conductance=self.drn_conductance,
+                          elevation=self.drn_elevation)
+        river = riv_terms(head=head, conductance=self.riv_conductance,
+                          stage=self.riv_stage, bottom=self.riv_bottom)
         return (self.incidence@(self.select_left.multiply(dl[:,None])+self.select_right.multiply(dr[:,None]))
-                + sparse.diags(self.ghb_conductance.ravel())).tocsr()
+                + sparse.diags((self.ghb_conductance + drain.diagonal + river.diagonal).ravel())).tocsr()
 
     def check_components(self):
         n=self.case.active.size
@@ -328,18 +369,38 @@ class NPF662Reference:
         unused,labels=connected_components(csgraph=graph,directed=False)
         for label in np.unique(labels[self.case.active.ravel()!=0]):
             mask=(labels==label)&(self.case.active.ravel()!=0)
-            if not np.any((self.case.fixed.ravel()!=0)[mask] | (self.ghb_conductance.ravel()[mask]>0.)):
+            potential_boundary = ((self.drn_conductance.ravel()[mask] > 0.) |
+                                  (self.riv_conductance.ravel()[mask] > 0.))
+            if not np.any((self.case.fixed.ravel()!=0)[mask] |
+                          (self.ghb_conductance.ravel()[mask]>0.) | potential_boundary):
                 raise ValueError(f'Ungrounded active component; net source={self.case.source.ravel()[mask].sum():.17g}')
 
     def certify_roundoff(self, *, head, residual, conductance, storage=None, tangent=None):
         from .npf662_metrics import componentwise_roundoff
+        from DARCY_WARP_PACKAGE.physics.drn_riv_3d import drn_terms, riv_terms
+        drain = drn_terms(head=head, conductance=self.drn_conductance,
+                          elevation=self.drn_elevation)
+        river = riv_terms(head=head, conductance=self.riv_conductance,
+                          stage=self.riv_stage, bottom=self.riv_bottom)
+        boundary_c = self.ghb_conductance + drain.diagonal + river.diagonal
+        boundary_head = np.zeros(self.shape)
+        head_field = np.asarray(head, dtype=np.float64)
+        drain_active = (self.drn_conductance > 0.) & (head_field > self.drn_elevation)
+        river_coupled = (self.riv_conductance > 0.) & (head_field > self.riv_bottom)
+        boundary_row_scale = self.ghb_conductance * np.abs(self.ghb_head)
+        boundary_row_scale += np.where(drain_active,
+            self.drn_conductance * np.abs(self.drn_elevation), 0.)
+        river_reference = np.where(river_coupled, head_field, self.riv_bottom)
+        boundary_row_scale += self.riv_conductance * (
+            np.abs(river_reference) + np.abs(self.riv_stage))
         return componentwise_roundoff(head=head,source=self.case.source,residual=residual,
             free=self.free,left=self.left,right=self.right,conductance=conductance,
-            ghb_conductance=self.ghb_conductance,ghb_head=self.ghb_head,
+            ghb_conductance=boundary_c,ghb_head=boundary_head,
             storage=storage,tangent=tangent,previous=getattr(self,'previous',None),
             previous_tangent=getattr(self,'preconditioner_storage',None),
             storage_coordinate_scale=np.where(self.case.cell_types!=0,
-                np.abs(self.case.bottoms)+self.case.thicknesses,0.) if storage is not None else None)
+                np.abs(self.case.bottoms)+self.case.thicknesses,0.) if storage is not None else None,
+            boundary_row_scale=boundary_row_scale)
 
     def evaluate(self,*,head,physical_tolerance=1e-12,relative_tolerance=1e-8,
                  head_tolerance_m=1e-6,boundary_tolerance_m=1e-10,roundoff_acceptance=False):
@@ -360,13 +421,20 @@ class NPF662Reference:
         ghb_exchange=np.zeros(self.shape)
         selected=self.ghb_conductance>0.
         ghb_exchange[selected]=self.ghb_conductance[selected]*(head[selected]-self.ghb_head[selected])
-        residual=np.where(self.free,c.source-divergence-ghb_exchange,0.)
-        diagonal=np.asarray(abs(self.incidence)@conductance).reshape(self.shape)+self.ghb_conductance
+        from DARCY_WARP_PACKAGE.physics.drn_riv_3d import drn_terms, riv_terms
+        drain = drn_terms(head=head, conductance=self.drn_conductance,
+                          elevation=self.drn_elevation)
+        river = riv_terms(head=head, conductance=self.riv_conductance,
+                          stage=self.riv_stage, bottom=self.riv_bottom)
+        boundary_exchange = ghb_exchange + drain.discharge + river.discharge
+        boundary_tangent = self.ghb_conductance + drain.diagonal + river.diagonal
+        residual=np.where(self.free,c.source-divergence-boundary_exchange,0.)
+        diagonal=np.asarray(abs(self.incidence)@conductance).reshape(self.shape)+boundary_tangent
         scaled=np.divide(residual,diagonal,out=np.zeros_like(residual),where=diagonal>0)
         scaled[(diagonal<=0)&(residual!=0)]=np.inf
         boundary=self.free.ravel()[self.left]&c.fixed.ravel()[self.right].astype(bool)
         reverse=self.free.ravel()[self.right]&c.fixed.ravel()[self.left].astype(bool)
-        free_exchange=np.concatenate([flux[boundary],-flux[reverse],ghb_exchange[self.free]])
+        free_exchange=np.concatenate([flux[boundary],-flux[reverse],boundary_exchange[self.free]])
         free_in=stable_sum(values=np.maximum(-free_exchange,0.))
         free_out=stable_sum(values=np.maximum(free_exchange,0.))
         fixed=(c.active!=0)&(c.fixed!=0)
@@ -375,8 +443,12 @@ class NPF662Reference:
         chd_out=stable_sum(values=np.maximum(-chd_rate,0.))
         ghb_in=stable_sum(values=np.maximum(-ghb_exchange[self.free],0.))
         ghb_out=stable_sum(values=np.maximum(ghb_exchange[self.free],0.))
-        inflow=stable_sum(values=[chd_in,ghb_in])
-        outflow=stable_sum(values=[chd_out,ghb_out])
+        drn_in=stable_sum(values=np.maximum(-drain.discharge[self.free],0.))
+        drn_out=stable_sum(values=np.maximum(drain.discharge[self.free],0.))
+        riv_in=stable_sum(values=np.maximum(-river.discharge[self.free],0.))
+        riv_out=stable_sum(values=np.maximum(river.discharge[self.free],0.))
+        inflow=stable_sum(values=[chd_in,ghb_in,drn_in,riv_in])
+        outflow=stable_sum(values=[chd_out,ghb_out,drn_out,riv_out])
         throughput=stable_sum(values=np.concatenate([np.abs(c.source[self.free]),np.abs(free_exchange)]))
         rms=stable_rms(values=residual[self.free]);hrms=stable_rms(values=scaled[self.free])
         l1=stable_sum(values=np.abs(residual[self.free]));relative=l1/max(throughput,np.finfo(float).tiny)
@@ -388,13 +460,15 @@ class NPF662Reference:
         graph=sparse.coo_matrix((np.ones(int(edges.sum())),(self.left[edges],self.right[edges])),shape=self.matrix.shape).tocsr()
         unused,labels=connected_components(csgraph=graph,directed=False)
         active_labels=set(labels[c.active.ravel()!=0])
-        grounded_labels=set(labels[(c.active.ravel()!=0)&((c.fixed.ravel()!=0)|(self.ghb_conductance.ravel()>0.))])
+        grounded_labels=set(labels[(c.active.ravel()!=0)&((c.fixed.ravel()!=0)|(boundary_tangent.ravel()>0.))])
         ungrounded=len(active_labels-grounded_labels)
         result=dict(**checks,head_residual_rms=hrms,physical_rms=rms,
             physical_max=float(np.abs(residual).max()),residual_l1=l1,relative_cell_imbalance=relative,
             gross_throughput=throughput,signed_imbalance=stable_sum(values=residual[self.free]),boundary_inflow=inflow,boundary_outflow=outflow,
             free_boundary_inflow=free_in,free_boundary_outflow=free_out,
-            ghb_inflow=ghb_in,ghb_outflow=ghb_out,chd_inflow=chd_in,chd_outflow=chd_out,
+            ghb_inflow=ghb_in,ghb_outflow=ghb_out,drn_inflow=drn_in,drn_outflow=drn_out,
+            drn_net=drn_in-drn_out,riv_inflow=riv_in,riv_outflow=riv_out,riv_net=riv_in-riv_out,
+            chd_inflow=chd_in,chd_outflow=chd_out,
             fixed_cell_source_total=stable_sum(values=c.source[c.fixed!=0]),free_cells=int(self.free.sum()),
             fixed_reservoir_required_inflow=stable_sum(values=(divergence-c.source)[c.fixed!=0]),
             ungrounded_current_components=ungrounded,physical_metrics_valid=metrics_valid,
@@ -406,9 +480,11 @@ class NPF662Reference:
             (rms<=physical_tolerance or relative<=relative_tolerance))
         result['local_balance_valid'] = None
         if result['independent_accepted'] or roundoff_acceptance:
+            component_anchor = npf_ghb_component_anchor(conductance=boundary_tangent,
+                active=c.active, fixed=c.fixed)
             result['local_balance_valid'] = local_balance_valid(case=c, free=self.free, left=self.left, right=self.right,
-                head=head, residual=residual, flux=flux, conductance=conductance, ghb_conductance=self.ghb_conductance,
-                ghb_exchange=ghb_exchange, thresholds=thresholds, component_anchor=self.component_anchor)
+                head=head, residual=residual, flux=flux, conductance=conductance, ghb_conductance=boundary_tangent,
+                ghb_exchange=boundary_exchange, thresholds=thresholds, component_anchor=component_anchor)
             result['independent_accepted'] &= result['local_balance_valid']
         if roundoff_acceptance:
             from .npf662_metrics import apply_roundoff_acceptance
@@ -417,11 +493,14 @@ class NPF662Reference:
         return result,dict(flux=flux,residual=residual,fixed_reservoir_required_inflow=np.where(c.fixed,divergence-c.source,0.),
             chd_cell_rate=np.where(fixed,divergence,0.),
             principal_diagonal=diagonal,saturation=saturation,ghb_outflow=ghb_exchange,
+            drn_outflow=drain.discharge,riv_outflow=river.discharge,
             conductance=conductance,dflux_left=dl,dflux_right=dr)
 
     def solve(self,*,max_outer=200):
         self.check_components()
-        if np.any(self.case.cell_types[self.case.active!=0]):
+        has_switching_boundary = bool(np.any(self.drn_conductance > 0.) or
+                                      np.any(self.riv_conductance > 0.))
+        if np.any(self.case.cell_types[self.case.active!=0]) or has_switching_boundary:
             return self.solve_newton(max_outer=max_outer)
         c=self.case;f=self.free.ravel();fixed=c.fixed.ravel()!=0
         head=np.where(c.fixed,c.values,c.initial).astype(float).ravel().copy()
@@ -455,7 +534,16 @@ class NPF662Reference:
             old=checks['physical_rms']
             found=False;trials=[]
             for mode in ('newton','full_saturated_safeguard'):
-                A=(self.jacobian(head=head) if mode=='newton' else self.matrix)[f][:,f].tocsc()
+                if mode == 'newton':
+                    operator = self.jacobian(head=head)
+                else:
+                    from DARCY_WARP_PACKAGE.physics.drn_riv_3d import drn_terms, riv_terms
+                    drain = drn_terms(head=head, conductance=self.drn_conductance,
+                                      elevation=self.drn_elevation)
+                    river = riv_terms(head=head, conductance=self.riv_conductance,
+                                      stage=self.riv_stage, bottom=self.riv_bottom)
+                    operator = self.matrix + sparse.diags((drain.diagonal + river.diagonal).ravel())
+                A=operator[f][:,f].tocsc()
                 try:
                     correction, linear_info = solve_reference_correction(matrix=A, rhs=rhs, controls=linear_controls)
                 except (RuntimeError, Warning, ValueError) as error:

@@ -16,10 +16,14 @@ def case_from_model(*,model,top,cell_type=0):
         return NPF662LayeredCase(kx=model._kx_field,ky=model._ky_field,kz=model._kz_field,active=s.active,fixed=s.bc_mask,
             values=s.bc_values,source=s.rhs,initial=initial,dx=model.dx,dy=model.dy,
             z_interfaces=s.z_interfaces,cell_type=cell_type,
+            drn_conductance=s.drn_conductance,drn_elevation=s.drn_elevation,
+            riv_conductance=s.riv_conductance,riv_stage=s.riv_stage,riv_bottom=s.riv_bottom,
             ghb_conductance=s.ghb_conductance,ghb_head=s.ghb_head)
     return NPF662Case(kx=model._kx_field,ky=model._ky_field,kz=model._kz_field,active=s.active,fixed=s.bc_mask,
         values=s.bc_values,source=s.rhs,initial=initial,
         dx=model.dx,dy=model.dy,dz=model.dz,top=top,cell_type=cell_type,
+        drn_conductance=s.drn_conductance,drn_elevation=s.drn_elevation,
+        riv_conductance=s.riv_conductance,riv_stage=s.riv_stage,riv_bottom=s.riv_bottom,
         ghb_conductance=s.ghb_conductance,ghb_head=s.ghb_head)
 
 
@@ -99,6 +103,8 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
     if unconfined and top_elevation is None and not layered:raise ValueError('Matched unconfined mode requires explicit flat top_elevation')
     types=int(unconfined) if npf_cell_type is None else npf_cell_type
     case=case_from_model(model=model,top=0. if top_elevation is None else top_elevation,cell_type=types)
+    if case.drn_conductance is not None or case.riv_conductance is not None:
+        raise ValueError('The native NPF Newton device workspace does not yet assemble DRN/RIV; solve is rejected to prevent boundary terms being ignored')
     if transient:
         if npf_device_native:
             from .npf662_state import NPF662TransientState
