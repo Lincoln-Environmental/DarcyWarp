@@ -787,8 +787,13 @@ class WarpDarcySolver3D:
         if rate is None:
             recharge = dict(inflow=0., outflow=0., net=0.)
         else:
-            rates = np.broadcast_to(np.asarray(rate, dtype=np.float64), self.shape[1:]) * area
-            recharge = signed_rate_budget(rates=rates.ravel())
+            from DARCY_WARP_PACKAGE.physics.recharge_3d import surface_recharge_cells
+            flat_rates = np.broadcast_to(np.asarray(rate, dtype=np.float64),
+                self.shape[1:]).ravel() * area
+            # Only the actual receiving cells carry recharge; prescribed-head
+            # columns receive none and must not enter the physical budget.
+            receivers = surface_recharge_cells(self._active, self._bc_mask)
+            recharge = signed_rate_budget(rates=flat_rates[receivers % flat_rates.size])
         source = self._volumetric_source
         if source is None:
             volumetric = dict(inflow=0., outflow=0., net=0.)
