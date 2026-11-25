@@ -83,13 +83,34 @@ def solve_reference_correction(*, matrix, rhs, controls):
 
 def serialized_case_fields(*,case):
     names=tuple(name for name in case.__dataclass_fields__
-                if name not in ('ghb_conductance', 'ghb_head', 'drn_conductance',
-                                'drn_elevation', 'drn_mask', 'riv_conductance', 'riv_stage',
-                                'riv_bottom', 'riv_mask')
-                or getattr(case, name) is not None)
+                if name not in ('drn_entries', 'riv_entries')
+                and (name not in ('ghb_conductance', 'ghb_head', 'drn_conductance',
+                                  'drn_elevation', 'drn_mask', 'riv_conductance', 'riv_stage',
+                                  'riv_bottom', 'riv_mask')
+                     or getattr(case, name) is not None))
     if getattr(case,'_legacy_implicit_cell_type',False) and np.ndim(case.cell_type)==0 and case.cell_type==0:
         return tuple(name for name in names if name!='cell_type')
     return names
+
+
+def digest_with_boundary_entries(*, digest, case):
+    """Mix sparse package entries into a case digest.
+
+    :param digest: Running SHA-256 over the serialised dense fields.
+    :param case: Case owning optional ``drn_entries``/``riv_entries``.
+    :return: The same digest with entry cells, conductances and levels mixed in.
+    """
+    for name in ('drn_entries', 'riv_entries'):
+        entries = getattr(case, name, None)
+        if entries is None:
+            continue
+        digest.update(name.encode())
+        digest.update(np.ascontiguousarray(entries.cells, dtype=np.int64).tobytes())
+        digest.update(np.ascontiguousarray(entries.conductance, dtype=np.float64).tobytes())
+        for level in (entries.first_level, entries.second_level, entries.third_level):
+            if level is not None:
+                digest.update(np.ascontiguousarray(level, dtype=np.float64).tobytes())
+    return digest
 
 
 @dataclass
@@ -116,6 +137,8 @@ class NPF662Case:
     riv_stage: np.ndarray | None = None
     riv_bottom: np.ndarray | None = None
     riv_mask: np.ndarray | None = None
+    drn_entries: object | None = None
+    riv_entries: object | None = None
 
     def validate(self):
         shape=self.active.shape
@@ -147,7 +170,15 @@ class NPF662Case:
         if self.ghb_conductance is not None and np.any((np.asarray(self.ghb_conductance)>0.)
                 &(self.cell_types!=0)&(np.asarray(self.ghb_head)<self.bottoms)):
             raise ValueError('Convertible GHB head below cell bottom is invalid for MF6 6.6.2')
-        from DARCY_WARP_PACKAGE.physics.drn_riv_3d import validate_drn_fields, validate_riv_fields
+        from DARCY_WARP_PACKAGE.physics.drn_riv_3d import validate_drn_fields, validate_riv_fields, validate_boundary_entries
+        if self.drn_entries is not None and (self.drn_conductance is not None or self.drn_elevation is not None):
+            raise ValueError('Supply DRN through dense fields or sparse entries, not both')
+        if self.riv_entries is not None and (self.riv_conductance is not None or self.riv_stage is not None):
+            raise ValueError('Supply RIV through dense fields or sparse entries, not both')
+        validate_boundary_entries(entries=self.drn_entries, package='DRN', shape=shape,
+                                  active=self.active, fixed=self.fixed)
+        validate_boundary_entries(entries=self.riv_entries, package='RIV', shape=shape,
+                                  active=self.active, fixed=self.fixed)
         validate_drn_fields(conductance=self.drn_conductance, elevation=self.drn_elevation,
                             active=self.active, fixed=self.fixed, mask=self.drn_mask)
         validate_riv_fields(conductance=self.riv_conductance, stage=self.riv_stage,
@@ -190,7 +221,10 @@ class NPF662Case:
         for name in serialized_case_fields(case=self):
             value=np.ascontiguousarray(getattr(self,name))
             digest.update(name.encode());digest.update(value.dtype.str.encode());digest.update(str(value.shape).encode());digest.update(value.tobytes())
-        return digest.hexdigest()
+        return digest_with_boundary_entries(digest=digest, case=self).hexdigest()
+
+    def entry_digest_fields(self):
+        return ()
 
 
 @dataclass
@@ -217,6 +251,8 @@ class NPF662LayeredCase:
     riv_stage: np.ndarray | None = None
     riv_bottom: np.ndarray | None = None
     riv_mask: np.ndarray | None = None
+    drn_entries: object | None = None
+    riv_entries: object | None = None
 
     validate_active_heads = NPF662Case.validate_active_heads
 
@@ -254,7 +290,7 @@ class NPF662LayeredCase:
         for name in serialized_case_fields(case=self):
             value=np.ascontiguousarray(getattr(self,name))
             digest.update(name.encode());digest.update(value.dtype.str.encode());digest.update(str(value.shape).encode());digest.update(value.tobytes())
-        return digest.hexdigest()
+        return digest_with_boundary_entries(digest=digest, case=self).hexdigest()
 
 
 def save_npf662_case(*,case,path):
@@ -331,11 +367,16 @@ class NPF662Reference:
     def refresh_drn_riv_fields(self, *, case):
         """Refresh package values without rebuilding geometry and K operators.
 
+        Sparse entries and dense single-entry fields both reduce to one owned
+        CSR entry list per package; multiple entries per cell keep their own
+        fluxes and the cell contributions sum afterwards.
+
         :param case: Validated steady NPF case with the current DRN/RIV fields.
         :return: None.
         :raises ValueError: If package fields are invalid for the case grid.
         """
-        from DARCY_WARP_PACKAGE.physics.drn_riv_3d import validate_drn_fields, validate_riv_fields
+        from DARCY_WARP_PACKAGE.physics.drn_riv_3d import (csr_from_boundary_field,
+            validate_boundary_entries, validate_drn_fields, validate_riv_fields)
 
         drain_conductance, drain_elevation = validate_drn_fields(
             conductance=case.drn_conductance, elevation=case.drn_elevation,
@@ -351,7 +392,44 @@ class NPF662Reference:
             else river_conductance)
         self.riv_stage = np.zeros(self.shape) if river_stage is None else river_stage
         self.riv_bottom = np.zeros(self.shape) if river_bottom is None else river_bottom
+        self.drn_entries = (validate_boundary_entries(entries=case.drn_entries, package='DRN',
+            shape=self.shape, active=case.active, fixed=case.fixed)
+            if case.drn_entries is not None else None)
+        self.riv_entries = (validate_boundary_entries(entries=case.riv_entries, package='RIV',
+            shape=self.shape, active=case.active, fixed=case.fixed)
+            if case.riv_entries is not None else None)
+        self.drn_csr = (self.drn_entries if self.drn_entries is not None else
+            (csr_from_boundary_field(conductance=self.drn_conductance, levels=[self.drn_elevation],
+                shape=self.shape) if drain_conductance is not None else None))
+        self.riv_csr = (self.riv_entries if self.riv_entries is not None else
+            (csr_from_boundary_field(conductance=self.riv_conductance,
+                levels=[self.riv_stage, self.riv_bottom], shape=self.shape)
+                if river_conductance is not None else None))
         self.case = case
+
+    def boundary_terms(self, *, head):
+        """Evaluate DRN and RIV terms with per-entry discharges.
+
+        :param head: Current groundwater head grid.
+        :return: ``(drn_entry_discharge, drn_terms, riv_entry_discharge, riv_terms)``.
+        """
+        from DARCY_WARP_PACKAGE.physics.drn_riv_3d import csr_entry_terms, drn_terms, riv_terms
+        h_flat = np.where(self.case.active, np.asarray(head, dtype=np.float64), 0.).ravel()
+        if self.drn_csr is not None:
+            drn_entries, drn = csr_entry_terms(head_flat=h_flat, entries=self.drn_csr,
+                package='DRN', shape=self.shape)
+        else:
+            drn_entries = None
+            drn = drn_terms(head=head, conductance=self.drn_conductance,
+                            elevation=self.drn_elevation)
+        if self.riv_csr is not None:
+            riv_entries, riv = csr_entry_terms(head_flat=h_flat, entries=self.riv_csr,
+                package='RIV', shape=self.shape)
+        else:
+            riv_entries = None
+            riv = riv_terms(head=head, conductance=self.riv_conductance,
+                            stage=self.riv_stage, bottom=self.riv_bottom)
+        return drn_entries, drn, riv_entries, riv
 
     def face_terms(self,*,head):
         c=self.case
@@ -369,44 +447,46 @@ class NPF662Reference:
 
     def jacobian(self,*,head):
         unused,dl,dr,unused_saturation=self.face_terms(head=head)
-        from DARCY_WARP_PACKAGE.physics.drn_riv_3d import drn_terms, riv_terms
-        drain = drn_terms(head=head, conductance=self.drn_conductance,
-                          elevation=self.drn_elevation)
-        river = riv_terms(head=head, conductance=self.riv_conductance,
-                          stage=self.riv_stage, bottom=self.riv_bottom)
+        unused_drn_ed, drain, unused_riv_ed, river = self.boundary_terms(head=head)
         return (self.incidence@(self.select_left.multiply(dl[:,None])+self.select_right.multiply(dr[:,None]))
                 + sparse.diags((self.ghb_conductance + drain.diagonal + river.diagonal).ravel())).tocsr()
+
+    def boundary_occupancy(self):
+        """Flat conducting-cell indicator covering dense fields and entries."""
+        drn = np.zeros(self.case.active.size, dtype=bool)
+        riv = np.zeros(self.case.active.size, dtype=bool)
+        if self.drn_csr is not None:
+            drn[self.drn_csr.flat_cells] = self.drn_csr.conductance > 0.
+        else:
+            drn |= (self.drn_conductance.ravel() > 0.)
+        if self.riv_csr is not None:
+            riv[self.riv_csr.flat_cells] = self.riv_csr.conductance > 0.
+        else:
+            riv |= (self.riv_conductance.ravel() > 0.)
+        return drn, riv
 
     def check_components(self):
         n=self.case.active.size
         graph=sparse.coo_matrix((np.ones(self.left.size),(self.left,self.right)),shape=(n,n)).tocsr()
         unused,labels=connected_components(csgraph=graph,directed=False)
+        drn_occupied, riv_occupied = self.boundary_occupancy()
         for label in np.unique(labels[self.case.active.ravel()!=0]):
             mask=(labels==label)&(self.case.active.ravel()!=0)
-            potential_boundary = ((self.drn_conductance.ravel()[mask] > 0.) |
-                                  (self.riv_conductance.ravel()[mask] > 0.))
+            potential_boundary = drn_occupied[mask] | riv_occupied[mask]
             if not np.any((self.case.fixed.ravel()!=0)[mask] |
                           (self.ghb_conductance.ravel()[mask]>0.) | potential_boundary):
                 raise ValueError(f'Ungrounded active component; net source={self.case.source.ravel()[mask].sum():.17g}')
 
     def certify_roundoff(self, *, head, residual, conductance, storage=None, tangent=None):
         from .npf662_metrics import componentwise_roundoff
-        from DARCY_WARP_PACKAGE.physics.drn_riv_3d import drn_terms, riv_terms
-        drain = drn_terms(head=head, conductance=self.drn_conductance,
-                          elevation=self.drn_elevation)
-        river = riv_terms(head=head, conductance=self.riv_conductance,
-                          stage=self.riv_stage, bottom=self.riv_bottom)
+        unused_drn_ed, drain, unused_riv_ed, river = self.boundary_terms(head=head)
         boundary_c = self.ghb_conductance + drain.diagonal + river.diagonal
         boundary_head = np.zeros(self.shape)
         head_field = np.asarray(head, dtype=np.float64)
-        drain_active = (self.drn_conductance > 0.) & (head_field > self.drn_elevation)
-        river_coupled = (self.riv_conductance > 0.) & (head_field > self.riv_bottom)
         boundary_row_scale = self.ghb_conductance * np.abs(self.ghb_head)
-        boundary_row_scale += np.where(drain_active,
-            self.drn_conductance * np.abs(self.drn_elevation), 0.)
-        river_reference = np.where(river_coupled, head_field, self.riv_bottom)
-        boundary_row_scale += self.riv_conductance * (
-            np.abs(river_reference) + np.abs(self.riv_stage))
+        drn_ed, riv_ed = self.entry_discharge_scales(head=head)
+        boundary_row_scale += drn_ed
+        boundary_row_scale += riv_ed
         return componentwise_roundoff(head=head,source=self.case.source,residual=residual,
             free=self.free,left=self.left,right=self.right,conductance=conductance,
             ghb_conductance=boundary_c,ghb_head=boundary_head,
@@ -415,6 +495,33 @@ class NPF662Reference:
             storage_coordinate_scale=np.where(self.case.cell_types!=0,
                 np.abs(self.case.bottoms)+self.case.thicknesses,0.) if storage is not None else None,
             boundary_row_scale=boundary_row_scale)
+
+    def entry_discharge_scales(self, *, head):
+        """Per-cell rounding scales from every entry's own boundary operands.
+
+        :param head: Current groundwater head grid.
+        :return: ``(drn_scale, riv_scale)`` grids summing each entry's
+            conductance times its own reference-elevation magnitudes.
+        """
+        h_flat = np.where(self.case.active, np.asarray(head, dtype=np.float64), 0.).ravel()
+        drn_scale = np.zeros(self.case.active.size, dtype=np.float64)
+        riv_scale = np.zeros(self.case.active.size, dtype=np.float64)
+        for entries, target, package in ((self.drn_csr, drn_scale, 'DRN'),
+                                         (self.riv_csr, riv_scale, 'RIV')):
+            if entries is None:
+                continue
+            c = entries.conductance
+            h = h_flat[entries.flat_cells]
+            if package == 'DRN':
+                threshold = entries.first_level
+                active = (c > 0.) & (h > threshold)
+                scale = np.where(active, c * (np.abs(h) + np.abs(threshold)), 0.)
+            else:
+                stage, bottom = entries.second_level, entries.third_level
+                reference = np.maximum(h, bottom)
+                scale = np.where(c > 0., c * (np.abs(reference) + np.abs(stage)), 0.)
+            np.add.at(target, entries.flat_cells, scale)
+        return (drn_scale.reshape(self.shape), riv_scale.reshape(self.shape))
 
     def seed_unanchored_boundary_components(self, *, head):
         """Move only unanchored initial guesses to a needed switching threshold.
@@ -428,18 +535,16 @@ class NPF662Reference:
         :return: A copied head field and component/threshold seed records.
         """
         candidate = np.asarray(head, dtype=np.float64).copy()
-        if not np.any(self.drn_conductance > 0.) and not np.any(self.riv_conductance > 0.):
+        drn_has = self.drn_csr is not None or np.any(self.drn_conductance > 0.)
+        riv_has = self.riv_csr is not None or np.any(self.riv_conductance > 0.)
+        if not drn_has and not riv_has:
             return candidate, []
         n = self.case.active.size
         graph = sparse.coo_matrix((np.ones(self.left.size), (self.left, self.right)),
             shape=(n, n)).tocsr()
         unused, labels = connected_components(csgraph=graph, directed=False)
         checks, fields = self.evaluate(head=candidate)
-        from DARCY_WARP_PACKAGE.physics.drn_riv_3d import drn_terms, riv_terms
-        drain = drn_terms(head=candidate, conductance=self.drn_conductance,
-                          elevation=self.drn_elevation)
-        river = riv_terms(head=candidate, conductance=self.riv_conductance,
-                          stage=self.riv_stage, bottom=self.riv_bottom)
+        unused_drn_ed, drain, unused_riv_ed, river = self.boundary_terms(head=candidate)
         package_tangent = drain.diagonal + river.diagonal
         storage_tangent = np.zeros(self.shape)
         if hasattr(self, 'storage'):
@@ -457,18 +562,17 @@ class NPF662Reference:
             if not np.isfinite(net_need) or net_need <= 0.:
                 continue
             threshold_candidates = []
-            drain_selected = free_component & (self.drn_conductance.ravel() > 0.)
-            river_selected = free_component & (self.riv_conductance.ravel() > 0.)
-            drain_heads = np.flatnonzero(drain_selected)
-            river_heads = np.flatnonzero(river_selected)
-            for index in drain_heads:
-                elevation = self.drn_elevation.ravel()[index]
-                if candidate.ravel()[index] <= elevation:
-                    threshold_candidates.append((index, elevation, 'DRN'))
-            for index in river_heads:
-                bottom = self.riv_bottom.ravel()[index]
-                if candidate.ravel()[index] <= bottom:
-                    threshold_candidates.append((index, bottom, 'RIV'))
+            for entries, package in ((self.drn_csr, 'DRN'), (self.riv_csr, 'RIV')):
+                if entries is None:
+                    continue
+                for entry in range(len(entries)):
+                    cell = int(entries.flat_cells[entry])
+                    if not free_component[cell]:
+                        continue
+                    threshold = float(entries.first_level[entry] if package == 'DRN'
+                                      else entries.third_level[entry])
+                    if candidate.ravel()[cell] <= threshold:
+                        threshold_candidates.append((cell, threshold, package))
             if not threshold_candidates:
                 continue
             shifts = [(float(np.nextafter(threshold, np.inf) - candidate.ravel()[index]),
@@ -488,8 +592,9 @@ class NPF662Reference:
                 guard += 1
             if candidate.ravel()[index] <= threshold:
                 raise ValueError('Unanchored boundary seeding failed to cross the threshold')
-            entered = bool((self.drn_conductance.ravel()[index] > 0. and candidate.ravel()[index] > self.drn_elevation.ravel()[index])
-                           or (self.riv_conductance.ravel()[index] > 0. and candidate.ravel()[index] > self.riv_bottom.ravel()[index]))
+            # The seeded entry itself defines the branch; strict crossing above
+            # its own threshold is the activation condition.
+            entered = bool(candidate.ravel()[index] > threshold)
             if not entered:
                 raise ValueError('Unanchored boundary seeding did not enter the intended active branch')
             seeds.append(dict(component=int(label), package=package, cell=int(index),
@@ -517,11 +622,7 @@ class NPF662Reference:
         ghb_exchange=np.zeros(self.shape)
         selected=self.ghb_conductance>0.
         ghb_exchange[selected]=self.ghb_conductance[selected]*(head[selected]-self.ghb_head[selected])
-        from DARCY_WARP_PACKAGE.physics.drn_riv_3d import drn_terms, riv_terms
-        drain = drn_terms(head=head, conductance=self.drn_conductance,
-                          elevation=self.drn_elevation)
-        river = riv_terms(head=head, conductance=self.riv_conductance,
-                          stage=self.riv_stage, bottom=self.riv_bottom)
+        drn_entries_discharge, drain, riv_entries_discharge, river = self.boundary_terms(head=head)
         boundary_exchange = ghb_exchange + drain.discharge + river.discharge
         boundary_tangent = self.ghb_conductance + drain.diagonal + river.diagonal
         residual=np.where(self.free,c.source-divergence-boundary_exchange,0.)
@@ -634,11 +735,7 @@ class NPF662Reference:
                 if mode == 'newton':
                     operator = self.jacobian(head=head)
                 else:
-                    from DARCY_WARP_PACKAGE.physics.drn_riv_3d import drn_terms, riv_terms
-                    drain = drn_terms(head=head, conductance=self.drn_conductance,
-                                      elevation=self.drn_elevation)
-                    river = riv_terms(head=head, conductance=self.riv_conductance,
-                                      stage=self.riv_stage, bottom=self.riv_bottom)
+                    unused_drn_ed, drain, unused_riv_ed, river = self.boundary_terms(head=head)
                     operator = self.matrix + sparse.diags((drain.diagonal + river.diagonal).ravel())
                 A=operator[f][:,f].tocsc()
                 try:

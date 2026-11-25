@@ -18,12 +18,14 @@ def case_from_model(*,model,top,cell_type=0):
             z_interfaces=s.z_interfaces,cell_type=cell_type,
             drn_conductance=s.drn_conductance,drn_elevation=s.drn_elevation,
             riv_conductance=s.riv_conductance,riv_stage=s.riv_stage,riv_bottom=s.riv_bottom,
+            drn_entries=getattr(s,'drn_entries',None),riv_entries=getattr(s,'riv_entries',None),
             ghb_conductance=s.ghb_conductance,ghb_head=s.ghb_head)
     return NPF662Case(kx=model._kx_field,ky=model._ky_field,kz=model._kz_field,active=s.active,fixed=s.bc_mask,
         values=s.bc_values,source=s.rhs,initial=initial,
         dx=model.dx,dy=model.dy,dz=model.dz,top=top,cell_type=cell_type,
         drn_conductance=s.drn_conductance,drn_elevation=s.drn_elevation,
         riv_conductance=s.riv_conductance,riv_stage=s.riv_stage,riv_bottom=s.riv_bottom,
+        drn_entries=getattr(s,'drn_entries',None),riv_entries=getattr(s,'riv_entries',None),
         ghb_conductance=s.ghb_conductance,ghb_head=s.ghb_head)
 
 
@@ -35,7 +37,7 @@ def independent_reference(*, model, case):
     """
     case.validate()
     package_values = ('drn_conductance', 'drn_elevation', 'drn_mask', 'riv_conductance',
-                      'riv_stage', 'riv_bottom', 'riv_mask')
+                      'riv_stage', 'riv_bottom', 'riv_mask', 'drn_entries', 'riv_entries')
     names = tuple(name for name in case.__dataclass_fields__
         if name not in ('source', 'values', 'initial', *package_values))
     values = tuple(np.asarray(getattr(case, name)) for name in names)
@@ -106,7 +108,8 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
     if unconfined and top_elevation is None and not layered:raise ValueError('Matched unconfined mode requires explicit flat top_elevation')
     types=int(unconfined) if npf_cell_type is None else npf_cell_type
     case=case_from_model(model=model,top=0. if top_elevation is None else top_elevation,cell_type=types)
-    has_drn_riv = case.drn_conductance is not None or case.riv_conductance is not None
+    has_drn_riv = (case.drn_conductance is not None or case.riv_conductance is not None
+        or case.drn_entries is not None or case.riv_entries is not None)
     if transient:
         if npf_device_native:
             from .npf662_state import NPF662TransientState

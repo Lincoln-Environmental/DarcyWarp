@@ -17,7 +17,8 @@ from DARCY_WARP_PACKAGE.physics.faces_3d import validate_reciprocal_faces
 from DARCY_WARP_PACKAGE.physics.inputs_3d import binary_mask, floating_field
 from DARCY_WARP_PACKAGE.validation.head_checks import invalid_head_values
 from DARCY_WARP_PACKAGE.physics.ghb_3d import validate_ghb_fields
-from DARCY_WARP_PACKAGE.physics.drn_riv_3d import validate_drn_fields, validate_riv_fields
+from DARCY_WARP_PACKAGE.physics.drn_riv_3d import (validate_boundary_entries,
+    validate_drn_fields, validate_riv_fields)
 
 
 class ThreeDOperatorSession:
@@ -46,6 +47,8 @@ class ThreeDOperatorSession:
         riv_stage=None,
         riv_bottom=None,
         riv_mask=None,
+        drn_entries=None,
+        riv_entries=None,
     ) -> None:
         self._closed = False
         self.revision = 0
@@ -76,6 +79,16 @@ class ThreeDOperatorSession:
         self.riv_conductance, self.riv_stage, self.riv_bottom = validate_riv_fields(
             conductance=riv_conductance, stage=riv_stage, bottom=riv_bottom, mask=riv_mask,
             active=self.active, fixed=self.bc_mask)
+        self.drn_entries = validate_boundary_entries(entries=drn_entries, package='DRN',
+            shape=self.shape, active=self.active, fixed=self.bc_mask)
+        self.riv_entries = validate_boundary_entries(entries=riv_entries, package='RIV',
+            shape=self.shape, active=self.active, fixed=self.bc_mask)
+        if self.drn_entries is not None and (self.drn_conductance is not None
+                or self.drn_elevation is not None):
+            raise ValueError('Supply DRN through dense fields or sparse entries, not both')
+        if self.riv_entries is not None and (self.riv_conductance is not None
+                or self.riv_stage is not None):
+            raise ValueError('Supply RIV through dense fields or sparse entries, not both')
 
     @property
     def shape(self) -> tuple[int, int, int]:
@@ -185,8 +198,28 @@ class ThreeDOperatorSession:
         self.topology_revision += int(topology_changed)
         self.revision += 1
 
+    def _drn_occupancy(self):
+        """Flat conducting-cell indicator of the current DRN representation."""
+        if self.drn_entries is not None:
+            occupied = np.zeros(self.active.size, dtype=bool)
+            occupied[self.drn_entries.flat_cells] = True
+            return occupied
+        return (np.zeros(self.active.size, dtype=bool) if self.drn_conductance is None
+                else (self.drn_conductance > 0.).ravel())
+
+    def _riv_occupancy(self):
+        """Flat conducting-cell indicator of the current RIV representation."""
+        if self.riv_entries is not None:
+            occupied = np.zeros(self.active.size, dtype=bool)
+            occupied[self.riv_entries.flat_cells] = True
+            return occupied
+        return (np.zeros(self.active.size, dtype=bool) if self.riv_conductance is None
+                else (self.riv_conductance > 0.).ravel())
+
     def update_drn(self, *, drn_conductance, drn_elevation, drn_mask=None):
-        """Replace owned DRN fields after validating the complete update.
+        """Replace owned dense DRN fields after validating the complete update.
+
+        Supplying dense fields replaces any sparse entry list for the package.
 
         :param drn_conductance: Integrated conductance [L2/T], scalar or grid; None disables DRN.
         :param drn_elevation: Activation elevation [L], scalar or grid; None disables DRN.
@@ -197,9 +230,10 @@ class ThreeDOperatorSession:
         self._ensure_open()
         conductance, elevation = validate_drn_fields(conductance=drn_conductance,
             elevation=drn_elevation, mask=drn_mask, active=self.active, fixed=self.bc_mask)
-        previous = np.zeros(self.shape, dtype=bool) if self.drn_conductance is None else self.drn_conductance > 0.
-        current = np.zeros(self.shape, dtype=bool) if conductance is None else conductance > 0.
+        previous = self._drn_occupancy()
+        current = np.zeros(self.active.size, dtype=bool) if conductance is None else (conductance > 0.).ravel()
         self.drn_conductance, self.drn_elevation = conductance, elevation
+        self.drn_entries = None
         self.operator_revision += 1
         self.revision += 1
         if not np.array_equal(previous, current):
@@ -207,7 +241,9 @@ class ThreeDOperatorSession:
             self._fast_workspace_holder.clear()
 
     def update_riv(self, *, riv_conductance, riv_stage, riv_bottom, riv_mask=None):
-        """Replace owned RIV fields after validating the complete update.
+        """Replace owned dense RIV fields after validating the complete update.
+
+        Supplying dense fields replaces any sparse entry list for the package.
 
         :param riv_conductance: Integrated conductance [L2/T], scalar or grid; None disables RIV.
         :param riv_stage: River surface elevation [L], scalar or grid.
@@ -219,9 +255,60 @@ class ThreeDOperatorSession:
         self._ensure_open()
         conductance, stage, bottom = validate_riv_fields(conductance=riv_conductance,
             stage=riv_stage, bottom=riv_bottom, mask=riv_mask, active=self.active, fixed=self.bc_mask)
-        previous = np.zeros(self.shape, dtype=bool) if self.riv_conductance is None else self.riv_conductance > 0.
-        current = np.zeros(self.shape, dtype=bool) if conductance is None else conductance > 0.
+        previous = self._riv_occupancy()
+        current = np.zeros(self.active.size, dtype=bool) if conductance is None else (conductance > 0.).ravel()
         self.riv_conductance, self.riv_stage, self.riv_bottom = conductance, stage, bottom
+        self.riv_entries = None
+        self.operator_revision += 1
+        self.revision += 1
+        if not np.array_equal(previous, current):
+            self.topology_revision += 1
+            self._fast_workspace_holder.clear()
+
+    def update_drn_entries(self, entries):
+        """Replace owned sparse DRN entries after validating the complete update.
+
+        Supplying entries replaces any dense field pair for the package.
+
+        :param entries: Sparse ``(cell, conductance, elevation)`` records, a
+            cell-to-values mapping, or None to remove every drain.
+        :return: None.
+        :raises ValueError: If any entry is invalid; the model is unchanged then.
+        """
+        self._ensure_open()
+        validated = validate_boundary_entries(entries=entries, package='DRN',
+            shape=self.shape, active=self.active, fixed=self.bc_mask)
+        previous = self._drn_occupancy()
+        current = np.zeros(self.active.size, dtype=bool)
+        if validated is not None:
+            current[validated.flat_cells] = True
+        self.drn_entries = validated
+        self.drn_conductance = self.drn_elevation = None
+        self.operator_revision += 1
+        self.revision += 1
+        if not np.array_equal(previous, current):
+            self.topology_revision += 1
+            self._fast_workspace_holder.clear()
+
+    def update_riv_entries(self, entries):
+        """Replace owned sparse RIV entries after validating the complete update.
+
+        Supplying entries replaces any dense field triple for the package.
+
+        :param entries: Sparse ``(cell, conductance, stage, bottom)`` records, a
+            cell-to-values mapping, or None to remove every river entry.
+        :return: None.
+        :raises ValueError: If any entry is invalid; the model is unchanged then.
+        """
+        self._ensure_open()
+        validated = validate_boundary_entries(entries=entries, package='RIV',
+            shape=self.shape, active=self.active, fixed=self.bc_mask)
+        previous = self._riv_occupancy()
+        current = np.zeros(self.active.size, dtype=bool)
+        if validated is not None:
+            current[validated.flat_cells] = True
+        self.riv_entries = validated
+        self.riv_conductance = self.riv_stage = self.riv_bottom = None
         self.operator_revision += 1
         self.revision += 1
         if not np.array_equal(previous, current):

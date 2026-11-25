@@ -136,6 +136,7 @@ class WarpDarcySolver3D:
         ghb_conductance=None, ghb_head=None, ghb_mask=None,
         drn_conductance=None, drn_elevation=None, drn_mask=None,
         riv_conductance=None, riv_stage=None, riv_bottom=None, riv_mask=None,
+        drn_entries=None, riv_entries=None,
     ) -> "WarpDarcySolver3D":
         """
         Build face conductances from cell-centered hydraulic conductivity fields.
@@ -165,6 +166,13 @@ class WarpDarcySolver3D:
         :param riv_stage: River stage [L], scalar or full grid.
         :param riv_bottom: Riverbed bottom elevation [L], scalar or full grid.
         :param riv_mask: Optional binary mask selecting RIV cells.
+        :param drn_entries: Optional sparse drains replacing the dense DRN pair;
+            ``(cell, conductance, elevation)`` records in ``(layer, row, col)``
+            cells, a cell-to-values mapping, or an existing
+            :class:`BoundaryEntryList`. Multiple drains may share one cell.
+        :param riv_entries: Optional sparse river entries replacing the dense
+            RIV triple; ``(cell, conductance, stage, bottom)`` records with the
+            same accepted forms.
         :return: The built solver.
         """
         active = binary_mask(value=active, name="active", shape=self.shape)
@@ -181,7 +189,8 @@ class WarpDarcySolver3D:
                 dx=self.dx, dy=self.dy, dz=self.dz,
                 drn_conductance=drn_conductance, drn_elevation=drn_elevation,
                 drn_mask=drn_mask, riv_conductance=riv_conductance, riv_stage=riv_stage,
-                riv_bottom=riv_bottom, riv_mask=riv_mask)
+                riv_bottom=riv_bottom, riv_mask=riv_mask,
+                drn_entries=drn_entries, riv_entries=riv_entries)
             case.validate()
         tx_p, tx_m, ty_p, ty_m, tz_p, tz_m = build_7point_face_conductance_from_k(
             kx_field=fields[0],
@@ -207,6 +216,7 @@ class WarpDarcySolver3D:
             ghb_conductance=ghb_conductance, ghb_head=ghb_head, ghb_mask=ghb_mask,
             drn_conductance=drn_conductance, drn_elevation=drn_elevation, drn_mask=drn_mask,
             riv_conductance=riv_conductance, riv_stage=riv_stage, riv_bottom=riv_bottom, riv_mask=riv_mask,
+            drn_entries=drn_entries, riv_entries=riv_entries,
         )
         self._kx_field, self._ky_field, self._kz_field = fields
         self._store_source_components(volumetric, rate, entries)
@@ -218,6 +228,7 @@ class WarpDarcySolver3D:
         *, R_field=None, wel_entries=None, ghb_conductance=None, ghb_head=None, ghb_mask=None,
         drn_conductance=None, drn_elevation=None, drn_mask=None,
         riv_conductance=None, riv_stage=None, riv_bottom=None, riv_mask=None,
+        drn_entries=None, riv_entries=None,
     ) -> "WarpDarcySolver3D":
         """Build independent reciprocal faces for legacy confined flow.
 
@@ -239,7 +250,8 @@ class WarpDarcySolver3D:
             rhs=source, initial_head=initial_head,
             ghb_conductance=ghb_conductance, ghb_head=ghb_head, ghb_mask=ghb_mask,
             drn_conductance=drn_conductance, drn_elevation=drn_elevation, drn_mask=drn_mask,
-            riv_conductance=riv_conductance, riv_stage=riv_stage, riv_bottom=riv_bottom, riv_mask=riv_mask)
+            riv_conductance=riv_conductance, riv_stage=riv_stage, riv_bottom=riv_bottom, riv_mask=riv_mask,
+            drn_entries=drn_entries, riv_entries=riv_entries)
         self._store_source_components(volumetric, rate, entries)
         return self
 
@@ -259,6 +271,7 @@ class WarpDarcySolver3D:
         *, ghb_conductance=None, ghb_head=None, ghb_mask=None,
         drn_conductance=None, drn_elevation=None, drn_mask=None,
         riv_conductance=None, riv_stage=None, riv_bottom=None, riv_mask=None,
+        drn_entries=None, riv_entries=None,
     ) -> "WarpDarcySolver3D":
         """
         Build from reciprocal, nonnegative finite internal conductances.
@@ -303,6 +316,7 @@ class WarpDarcySolver3D:
             ghb_conductance=ghb_conductance, ghb_head=ghb_head, ghb_mask=ghb_mask,
             drn_conductance=drn_conductance, drn_elevation=drn_elevation, drn_mask=drn_mask,
             riv_conductance=riv_conductance, riv_stage=riv_stage, riv_bottom=riv_bottom, riv_mask=riv_mask,
+            drn_entries=drn_entries, riv_entries=riv_entries,
         )
         previous = self._session
         self._session = session
@@ -325,7 +339,8 @@ class WarpDarcySolver3D:
                           active, bc_mask, bc_values, rhs=None, initial_head=None,
                           R_field=None, wel_entries=None, ghb_conductance=None, ghb_head=None, ghb_mask=None,
                           drn_conductance=None, drn_elevation=None, drn_mask=None,
-                          riv_conductance=None, riv_stage=None, riv_bottom=None, riv_mask=None):
+                          riv_conductance=None, riv_stage=None, riv_bottom=None, riv_mask=None,
+                          drn_entries=None, riv_entries=None):
         """Build conventional layered DIS/NPF connections (not terrain metrics).
 
         Interfaces (nz+1,ny,nx) are authoritative. Constructor dz is unused;
@@ -352,7 +367,8 @@ class WarpDarcySolver3D:
             dx=self.dx,dy=self.dy,z_interfaces=np.asarray(z_interfaces,dtype=NP_FLOAT),
             drn_conductance=drn_conductance,drn_elevation=drn_elevation,
             drn_mask=drn_mask,riv_conductance=riv_conductance,riv_stage=riv_stage,
-            riv_bottom=riv_bottom,riv_mask=riv_mask)
+            riv_bottom=riv_bottom,riv_mask=riv_mask,
+            drn_entries=drn_entries,riv_entries=riv_entries)
         if case.active.shape!=self.shape:raise ValueError(f'Layered cell shape must be {self.shape}')
         case.validate()
         faces,unused=build_layered_dis_faces(z_interfaces=case.z_interfaces,kx=case.kx,ky=case.ky,kz=case.kz,
@@ -361,7 +377,8 @@ class WarpDarcySolver3D:
             rhs=case.source,initial_head=case.initial,dx=self.dx,dy=self.dy,dz=self.dz,z_interfaces=case.z_interfaces,
             ghb_conductance=ghb_conductance,ghb_head=ghb_head,ghb_mask=ghb_mask,
             drn_conductance=drn_conductance,drn_elevation=drn_elevation,drn_mask=drn_mask,
-            riv_conductance=riv_conductance,riv_stage=riv_stage,riv_bottom=riv_bottom,riv_mask=riv_mask)
+            riv_conductance=riv_conductance,riv_stage=riv_stage,riv_bottom=riv_bottom,riv_mask=riv_mask,
+            drn_entries=drn_entries,riv_entries=riv_entries)
         # The layered contract already enforces positive active K; finite
         # inactive conductivity markers remain compatible with that schema.
         fields = self._validated_K_fields(kx_field=case.kx, ky_field=case.ky, kz_field=case.kz,
@@ -425,6 +442,44 @@ class WarpDarcySolver3D:
             raise ValueError("Terrain sessions do not support cell RIV; use a supported Cartesian NPF model")
         self._session.update_riv(riv_conductance=riv_conductance, riv_stage=riv_stage,
             riv_bottom=riv_bottom, riv_mask=riv_mask)
+
+    def update_drn_entries(self, entries) -> None:
+        """Replace the native 3D DRN package with sparse entries.
+
+        Multiple drains may occupy one cell; each keeps its own conductance,
+        elevation and accepted exchange rate. Supplying entries replaces any
+        dense DRN field pair.
+
+        :param entries: Sparse ``(cell, conductance, elevation)`` records at
+            ``(layer, row, col)`` cells, a cell-to-values mapping, or None to
+            remove every drain.
+        :raises RuntimeError: If the model has not been built.
+        :raises ValueError: If an entry is invalid; the model is unchanged then.
+        """
+        if self._session is None:
+            raise RuntimeError("Build the model before updating DRN entries")
+        if self.geometry == "terrain":
+            raise ValueError("Terrain sessions do not support cell DRN; use a supported Cartesian NPF model")
+        self._session.update_drn_entries(entries)
+
+    def update_riv_entries(self, entries) -> None:
+        """Replace the native 3D RIV package with sparse entries.
+
+        Multiple reaches may intersect one cell without averaging stages or
+        bed bottoms; each entry's physical flux is evaluated independently and
+        the cell contributions sum. Supplying entries replaces any dense RIV
+        field triple.
+
+        :param entries: Sparse ``(cell, conductance, stage, bottom)`` records,
+            a cell-to-values mapping, or None to remove every river entry.
+        :raises RuntimeError: If the model has not been built.
+        :raises ValueError: If an entry is invalid; the model is unchanged then.
+        """
+        if self._session is None:
+            raise RuntimeError("Build the model before updating RIV entries")
+        if self.geometry == "terrain":
+            raise ValueError("Terrain sessions do not support cell RIV; use a supported Cartesian NPF model")
+        self._session.update_riv_entries(entries)
 
     def _verify_accepted_state(self, *, head, info, package):
         """Verify accepted-state ownership before releasing package rates.

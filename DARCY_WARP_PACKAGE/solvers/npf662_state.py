@@ -26,7 +26,8 @@ class NPF662TransientState:
         self.structure_names = tuple(name for name in case.__dataclass_fields__
             if name not in ('source', 'values', 'initial', 'kx', 'ky', 'kz', 'cell_type',
                 'ghb_conductance', 'ghb_head', 'drn_conductance', 'drn_elevation', 'drn_mask',
-                'riv_conductance', 'riv_stage', 'riv_bottom', 'riv_mask'))
+                'riv_conductance', 'riv_stage', 'riv_bottom', 'riv_mask',
+                'drn_entries', 'riv_entries'))
         self.structure = tuple(np.asarray(getattr(case, name)).copy() for name in self.structure_names)
         self.material = tuple(np.asarray(getattr(case, name)).copy() for name in ('kx', 'ky', 'kz'))
         self.operator_revision = model._session.operator_revision
@@ -101,6 +102,9 @@ class NPF662TransientState:
         self._audit_case = None
         self._audit_revisions = None
         self._activation_watch = None
+        self._entry_lists_revision = None
+        self._drn_entries_list = None
+        self._riv_entries_list = None
         self.refresh_count += 1
 
     @property
@@ -198,11 +202,8 @@ class NPF662TransientState:
         """
         candidate = np.array(head, dtype=np.float64, copy=True)
         case = self.case
-        drn_active = (case.drn_conductance is not None
-                      and np.any(np.broadcast_to(case.drn_conductance, self.shape) > 0.))
-        riv_active = (case.riv_conductance is not None
-                      and np.any(np.broadcast_to(case.riv_conductance, self.shape) > 0.))
-        if not drn_active and not riv_active:
+        drn_list, riv_list = self._boundary_entry_lists()
+        if drn_list is None and riv_list is None:
             return candidate, []
         labels = self._activation_component_labels()
         free = self.free.ravel()
@@ -210,18 +211,9 @@ class NPF662TransientState:
         fixed[np.asarray(case.fixed) != 0] = True
         ghb = (np.zeros(self.shape) if case.ghb_conductance is None
                else np.broadcast_to(case.ghb_conductance, self.shape))
-        drn = (np.zeros(self.shape) if case.drn_conductance is None
-               else np.broadcast_to(case.drn_conductance, self.shape))
-        drn_elevation = (np.zeros(self.shape) if case.drn_elevation is None
-                         else np.broadcast_to(case.drn_elevation, self.shape))
-        riv = (np.zeros(self.shape) if case.riv_conductance is None
-               else np.broadcast_to(case.riv_conductance, self.shape))
-        riv_stage = (np.zeros(self.shape) if case.riv_stage is None
-                     else np.broadcast_to(case.riv_stage, self.shape))
-        riv_bottom = (np.zeros(self.shape) if case.riv_bottom is None
-                      else np.broadcast_to(case.riv_bottom, self.shape))
         source = np.broadcast_to(case.source, self.shape)
         storage_restraint = (self.ss > 0.) | ((self.sy > 0.) & (np.asarray(case.cell_types) != 0))
+        flat = candidate.ravel()
         seeds = []
         for label in np.unique(labels[np.asarray(case.active).ravel() != 0]):
             component = (labels == label).reshape(self.shape)
@@ -229,26 +221,27 @@ class NPF662TransientState:
                 continue
             if np.any(storage_restraint[component]):
                 continue
-            if np.any((drn[component] > 0.) & (candidate[component] > drn_elevation[component])):
-                continue
-            if np.any((riv[component] > 0.) & (candidate[component] > riv_bottom[component])):
-                continue
             free_component = component & (free.reshape(self.shape))
+            if self._component_restrained(component, candidate, drn_list, riv_list):
+                continue
             net_need = float(np.sum(np.asarray(source, dtype=np.float64)[free_component]))
             if not np.isfinite(net_need) or net_need <= 0.:
                 continue
             threshold_candidates = []
-            for cell in zip(*np.nonzero(free_component & (drn > 0.))):
-                elevation = drn_elevation[cell]
-                if candidate[cell] <= elevation:
-                    threshold_candidates.append((cell, elevation, 'DRN'))
-            for cell in zip(*np.nonzero(free_component & (riv > 0.))):
-                bottom = riv_bottom[cell]
-                if candidate[cell] <= bottom:
-                    threshold_candidates.append((cell, bottom, 'RIV'))
+            for entries, package, level in ((drn_list, 'DRN', 'first_level'),
+                                            (riv_list, 'RIV', 'third_level')):
+                if entries is None:
+                    continue
+                for entry in range(len(entries)):
+                    cell = int(entries.flat_cells[entry])
+                    if not free_component[cell]:
+                        continue
+                    threshold = float(getattr(entries, level)[entry])
+                    if flat[cell] <= threshold:
+                        threshold_candidates.append((cell, threshold, package))
             if not threshold_candidates:
                 continue
-            shifts = [(float(np.nextafter(threshold, np.inf) - candidate[cell]),
+            shifts = [(float(np.nextafter(threshold, np.inf) - flat[cell]),
                        cell, float(threshold), package)
                       for cell, threshold, package in threshold_candidates]
             positive_shifts = [record for record in shifts if record[0] > 0. and np.isfinite(record[0])]
@@ -256,18 +249,59 @@ class NPF662TransientState:
                 continue
             shift, cell, threshold, package = min(positive_shifts)
             candidate[component] += shift
+            flat = candidate.ravel()
             # Enforce the intended active branch even when the uniform shift
             # rounds the threshold cell back onto the boundary value.
             guard = 0
-            while candidate[cell] <= threshold and guard < 64:
-                candidate[cell] = np.nextafter(candidate[cell], np.inf)
+            while flat[cell] <= threshold and guard < 64:
+                flat[cell] = np.nextafter(flat[cell], np.inf)
                 guard += 1
-            if candidate[cell] <= threshold:
+            if flat[cell] <= threshold:
                 raise ValueError('Unanchored boundary seeding failed to cross the threshold')
             seeds.append(dict(component=int(label), package=package,
-                cell=[int(value) for value in cell], threshold=float(threshold),
+                cell=[int(value) for value in np.unravel_index(cell, self.shape)],
+                flat_cell=int(cell), threshold=float(threshold),
                 uniform_shift_m=float(shift), component_net_inflow=net_need))
         return candidate, seeds
+
+    def _boundary_entry_lists(self):
+        """Reduce the case's dense or sparse package inputs to CSR entry lists."""
+        if self._entry_lists_revision != (int(self._session.revision),
+                                          int(self._session.topology_revision)):
+            from DARCY_WARP_PACKAGE.physics.drn_riv_3d import (csr_from_boundary_field,
+                validate_boundary_entries, validate_drn_fields, validate_riv_fields)
+            case = self.case
+            drn_c, drn_e = validate_drn_fields(conductance=case.drn_conductance,
+                elevation=case.drn_elevation, mask=case.drn_mask,
+                active=case.active, fixed=case.fixed)
+            riv_c, riv_s, riv_b = validate_riv_fields(conductance=case.riv_conductance,
+                stage=case.riv_stage, bottom=case.riv_bottom, mask=case.riv_mask,
+                active=case.active, fixed=case.fixed)
+            self._drn_entries_list = (validate_boundary_entries(entries=case.drn_entries,
+                package='DRN', shape=self.shape, active=case.active, fixed=case.fixed)
+                if case.drn_entries is not None
+                else (csr_from_boundary_field(conductance=drn_c, levels=[drn_e], shape=self.shape)
+                    if drn_c is not None else None))
+            self._riv_entries_list = (validate_boundary_entries(entries=case.riv_entries,
+                package='RIV', shape=self.shape, active=case.active, fixed=case.fixed)
+                if case.riv_entries is not None
+                else (csr_from_boundary_field(conductance=riv_c, levels=[riv_s, riv_b],
+                    shape=self.shape) if riv_c is not None else None))
+            self._entry_lists_revision = (int(self._session.revision),
+                                          int(self._session.topology_revision))
+        return self._drn_entries_list, self._riv_entries_list
+
+    def _component_restrained(self, component, candidate, drn_list, riv_list):
+        """Report whether any entry of the component is already on its active branch."""
+        flat = np.asarray(candidate, dtype=np.float64).ravel()
+        for entries, level in ((drn_list, 'first_level'), (riv_list, 'third_level')):
+            if entries is None:
+                continue
+            cells = entries.flat_cells
+            active = (entries.conductance > 0.) & (flat[cells] > getattr(entries, level)[cells])
+            if np.any(active & component.ravel()[cells]):
+                return True
+        return False
 
     def activation_watch_needed(self):
         """Report whether some component may lose every restraint between steps.
@@ -280,11 +314,8 @@ class NPF662TransientState:
         storage_restraint = (self.ss > 0.) | ((self.sy > 0.) & (np.asarray(case.cell_types) != 0))
         ghb = (np.zeros(self.shape) if case.ghb_conductance is None
                else np.broadcast_to(case.ghb_conductance, self.shape))
-        drn = (np.zeros(self.shape) if case.drn_conductance is None
-               else np.broadcast_to(case.drn_conductance, self.shape))
-        riv = (np.zeros(self.shape) if case.riv_conductance is None
-               else np.broadcast_to(case.riv_conductance, self.shape))
-        if not np.any(drn > 0.) and not np.any(riv > 0.):
+        drn_list, riv_list = self._boundary_entry_lists()
+        if drn_list is None and riv_list is None:
             return False
         labels = self._activation_component_labels().reshape(self.shape)
         free = self.free.reshape(self.shape)
@@ -295,7 +326,11 @@ class NPF662TransientState:
                 continue
             if np.any(storage_restraint[component]):
                 continue
-            if np.any(((drn[component] > 0.) | (riv[component] > 0.)) & free[component]):
+            occupied = np.zeros(self.case.active.size, dtype=bool)
+            for entries in (drn_list, riv_list):
+                if entries is not None:
+                    occupied[entries.flat_cells[entries.conductance > 0.]] = True
+            if np.any(occupied.reshape(self.shape) & free & component):
                 return True
         return False
 

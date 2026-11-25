@@ -81,7 +81,8 @@ class NPF662Workspace:
         self.commit_graph=None;self.commit_graph_failed=False;self.reuse_trial_state=False
         self.ghb_conductance = self.ghb_head = self.ghb_totals = None
         self.ghb_operator = self.trial_ghb_operator = None
-        self.has_drn_riv = case.drn_conductance is not None or case.riv_conductance is not None
+        self.has_drn_riv = case.drn_conductance is not None or case.riv_conductance is not None \
+            or case.drn_entries is not None or case.riv_entries is not None
         self.zero = wp.zeros(shape=self.n, dtype=wp.float64, device=self.device)
         # Combined previous-state restraint diagonal shared by GHB-only and
         # DRN/RIV workspaces; singular boundary-dominated rows stay nonsingular.
@@ -94,6 +95,10 @@ class NPF662Workspace:
         self.drn_conductance = self.drn_elevation = None
         self.riv_conductance = self.riv_stage = self.riv_bottom = None
         self.drn_rate = self.riv_rate = None
+        self.drn_offsets = self.riv_offsets = None
+        self.drn_entry_c = self.drn_entry_elev = None
+        self.riv_entry_c = self.riv_entry_stage = self.riv_entry_bottom = None
+        self.drn_entry_rate = self.riv_entry_rate = None
         if self.has_drn_riv:
             for name in ('boundary_operator', 'trial_boundary_operator', 'boundary_flow',
                          'trial_boundary_flow', 'boundary_tangent', 'trial_boundary_tangent'):
@@ -101,8 +106,21 @@ class NPF662Workspace:
             self.drn_rate = wp.zeros(shape=self.n, dtype=wp.float64, device=self.device)
             self.riv_rate = wp.zeros(shape=self.n, dtype=wp.float64, device=self.device)
             self.package_totals = wp.zeros(shape=4, dtype=wp.float64, device=self.device)
+            # Dense per-cell mirrors remain available for diagnostics and the
+            # restraint diagonal; the kernels consume the CSR entries below.
             for name in ('drn_conductance', 'drn_elevation', 'riv_conductance', 'riv_stage', 'riv_bottom'):
                 setattr(self, name, wp.zeros(shape=self.n, dtype=wp.float64, device=self.device))
+            # CSR entry storage; dense single-entry fields reduce to the same
+            # representation with one entry per conducting cell.
+            self.drn_offsets = wp.zeros(shape=self.n + 1, dtype=wp.int32, device=self.device)
+            self.riv_offsets = wp.zeros(shape=self.n + 1, dtype=wp.int32, device=self.device)
+            self.drn_entry_c = wp.zeros(shape=0, dtype=wp.float64, device=self.device)
+            self.drn_entry_elev = wp.zeros(shape=0, dtype=wp.float64, device=self.device)
+            self.riv_entry_c = wp.zeros(shape=0, dtype=wp.float64, device=self.device)
+            self.riv_entry_stage = wp.zeros(shape=0, dtype=wp.float64, device=self.device)
+            self.riv_entry_bottom = wp.zeros(shape=0, dtype=wp.float64, device=self.device)
+            self.drn_entry_rate = wp.zeros(shape=0, dtype=wp.float64, device=self.device)
+            self.riv_entry_rate = wp.zeros(shape=0, dtype=wp.float64, device=self.device)
         self.component_anchor = None
         self.anchor_revision = None
         self.roundoff_acceptance = False
@@ -135,7 +153,8 @@ class NPF662Workspace:
         return reused
 
     def compatible(self,*,model,case,restart):
-        package_mode = case.drn_conductance is not None or case.riv_conductance is not None
+        package_mode = (case.drn_conductance is not None or case.riv_conductance is not None
+            or case.drn_entries is not None or case.riv_entries is not None)
         return not self.closed and self.device==model.device and self.shape==case.active.shape and self.restart==restart and self.has_drn_riv==package_mode and np.array_equal(
             self.active_snapshot,case.active) and np.array_equal(self.fixed_snapshot,case.fixed)
 
@@ -145,17 +164,7 @@ class NPF662Workspace:
         conductance, boundary_head = validate_ghb_fields(conductance=case.ghb_conductance,
             head=case.ghb_head, active=case.active, fixed=case.fixed)
         if self.has_drn_riv:
-            from DARCY_WARP_PACKAGE.physics.drn_riv_3d import validate_drn_fields, validate_riv_fields
-            drn_c, drn_e = validate_drn_fields(conductance=case.drn_conductance,
-                elevation=case.drn_elevation, mask=case.drn_mask, active=case.active, fixed=case.fixed)
-            riv_c, riv_s, riv_b = validate_riv_fields(conductance=case.riv_conductance,
-                stage=case.riv_stage, bottom=case.riv_bottom, mask=case.riv_mask,
-                active=case.active, fixed=case.fixed)
-            self.drn_conductance.assign(np.zeros(self.shape).ravel() if drn_c is None else drn_c.ravel())
-            self.drn_elevation.assign(np.zeros(self.shape).ravel() if drn_e is None else drn_e.ravel())
-            self.riv_conductance.assign(np.zeros(self.shape).ravel() if riv_c is None else riv_c.ravel())
-            self.riv_stage.assign(np.zeros(self.shape).ravel() if riv_s is None else riv_s.ravel())
-            self.riv_bottom.assign(np.zeros(self.shape).ravel() if riv_b is None else riv_b.ravel())
+            self._load_boundary_entries(case=case)
         if self.anchor_revision != model._session.operator_revision:
             anchors = npf_ghb_component_anchor(conductance=conductance, active=case.active, fixed=case.fixed)
             self.component_anchor = (None if anchors is None else
@@ -231,6 +240,88 @@ class NPF662Workspace:
             raise ValueError('Invalid device previous-state storage tangent')
         self.jv_counter.zero_();self.preconditioner_counter.zero_();self.residual_evaluations=0;self.candidate_evaluations=0
 
+    def _load_boundary_entries(self, *, case):
+        """Rebuild owned CSR entry arrays from the case boundary inputs.
+
+        Dense single-entry fields and sparse entry lists reduce to the same
+        CSR representation, so one kernel family evaluates both and dense
+        models keep bit-identical single-entry physics.
+
+        :param case: Validated NPF case with current boundary inputs.
+        :return: None.
+        """
+        from DARCY_WARP_PACKAGE.physics.drn_riv_3d import (csr_from_boundary_field,
+            validate_boundary_entries, validate_drn_fields, validate_riv_fields)
+        drn_c, drn_e = validate_drn_fields(conductance=case.drn_conductance,
+            elevation=case.drn_elevation, mask=case.drn_mask, active=case.active, fixed=case.fixed)
+        riv_c, riv_s, riv_b = validate_riv_fields(conductance=case.riv_conductance,
+            stage=case.riv_stage, bottom=case.riv_bottom, mask=case.riv_mask,
+            active=case.active, fixed=case.fixed)
+        self.drn_conductance.assign(np.zeros(self.shape).ravel() if drn_c is None else drn_c.ravel())
+        self.drn_elevation.assign(np.zeros(self.shape).ravel() if drn_e is None else drn_e.ravel())
+        self.riv_conductance.assign(np.zeros(self.shape).ravel() if riv_c is None else riv_c.ravel())
+        self.riv_stage.assign(np.zeros(self.shape).ravel() if riv_s is None else riv_s.ravel())
+        self.riv_bottom.assign(np.zeros(self.shape).ravel() if riv_b is None else riv_b.ravel())
+        drn_list = (validate_boundary_entries(entries=case.drn_entries, package='DRN',
+            shape=self.shape, active=case.active, fixed=case.fixed)
+            if case.drn_entries is not None
+            else (csr_from_boundary_field(conductance=drn_c, levels=[drn_e], shape=self.shape)
+                if drn_c is not None else None))
+        riv_list = (validate_boundary_entries(entries=case.riv_entries, package='RIV',
+            shape=self.shape, active=case.active, fixed=case.fixed)
+            if case.riv_entries is not None
+            else (csr_from_boundary_field(conductance=riv_c, levels=[riv_s, riv_b], shape=self.shape)
+                if riv_c is not None else None))
+        self._assign_entry_package(package_list=drn_list, offsets_name='drn_offsets',
+            conductance_name='drn_entry_c', level_names=('drn_entry_elev',),
+            levels=lambda entries: (entries.first_level,),
+            rate_name='drn_entry_rate')
+        self._assign_entry_package(package_list=riv_list, offsets_name='riv_offsets',
+            conductance_name='riv_entry_c', level_names=('riv_entry_stage', 'riv_entry_bottom'),
+            levels=lambda entries: (entries.second_level, entries.third_level),
+            rate_name='riv_entry_rate')
+
+    def _assign_entry_package(self, *, package_list, offsets_name, conductance_name,
+                              level_names, levels, rate_name):
+        """Rewrite one package's CSR device arrays in place or reallocate.
+
+        The per-entry discharge output buffer is resized with the entry list so
+        kernel writes never exceed the allocated storage.
+
+        :param package_list: Owned :class:`BoundaryEntryList`, or None to clear.
+        :param offsets_name: Workspace attribute holding the offsets array.
+        :param conductance_name: Workspace attribute holding entry conductances.
+        :param level_names: Workspace attributes holding entry levels.
+        :param levels: Callable mapping an entry list to its level arrays.
+        :param rate_name: Workspace attribute holding per-entry discharge rates.
+        :return: None.
+        """
+        offsets = getattr(self, offsets_name)
+        # ``assign`` is the only correct write path here: a ``numpy()[:]``
+        # assignment mutates a host copy on CUDA devices and silently no-ops.
+        offsets.assign(np.zeros(self.n + 1, dtype=np.int32) if package_list is None
+                       else package_list.offsets.astype(np.int32))
+        size = 0 if package_list is None else len(package_list)
+        rate = getattr(self, rate_name)
+        if rate.shape[0] != size:
+            setattr(self, rate_name, wp.zeros(shape=size, dtype=wp.float64, device=self.device))
+        names = (conductance_name, *level_names)
+        for index, name in enumerate(names):
+            if package_list is None:
+                value = np.zeros(0, dtype=np.float64)
+            elif index == 0:
+                value = np.ascontiguousarray(package_list.conductance, dtype=np.float64)
+            else:
+                source = levels(package_list)[index - 1]
+                value = (np.zeros(len(package_list), dtype=np.float64) if source is None
+                         else np.ascontiguousarray(source, dtype=np.float64))
+            array = getattr(self, name)
+            if array.shape[0] == value.shape[0]:
+                if value.shape[0]:
+                    array.assign(value)
+            else:
+                setattr(self, name, wp.array(data=value, dtype=wp.float64, device=self.device))
+
     @property
     def operator_tangent(self):
         if self.has_drn_riv:
@@ -286,8 +377,10 @@ class NPF662Workspace:
         if self.has_drn_riv:
             self.package_totals.zero_()
             wp.launch(kernel=kernels.drn_riv_budget,dim=self.n,inputs=[self.head,
-                self.drn_conductance,self.drn_elevation,self.riv_conductance,self.riv_stage,
-                self.riv_bottom,self.drn_rate,self.riv_rate,self.package_totals],device=self.device)
+                self.drn_offsets,self.drn_entry_c,self.drn_entry_elev,
+                self.riv_offsets,self.riv_entry_c,self.riv_entry_stage,self.riv_entry_bottom,
+                self.drn_entry_rate,self.riv_entry_rate,
+                self.drn_rate,self.riv_rate,self.package_totals],device=self.device)
             drn_in,drn_out,riv_in,riv_out=self.package_totals.numpy()
             result.update(drn_inflow=float(drn_in),drn_outflow=float(drn_out),drn_net=float(drn_in-drn_out),
                           riv_inflow=float(riv_in),riv_outflow=float(riv_out),riv_net=float(riv_in-riv_out))
@@ -328,8 +421,9 @@ class NPF662Workspace:
             row_inputs.extend((
                 self.zero if self.ghb_conductance is None else self.ghb_conductance,
                 self.zero if self.ghb_head is None else self.ghb_head,
-                self.drn_conductance, self.drn_elevation, self.riv_conductance,
-                self.riv_stage, self.riv_bottom,
+                self.drn_offsets, self.drn_entry_c, self.drn_entry_elev,
+                self.riv_offsets, self.riv_entry_c, self.riv_entry_stage, self.riv_entry_bottom,
+                self.drn_entry_rate, self.riv_entry_rate,
                 self.trial_boundary_flow if trial else self.boundary_flow,
                 self.trial_boundary_tangent if trial else self.boundary_tangent,
                 self.trial_boundary_operator if trial else self.boundary_operator))
@@ -384,7 +478,8 @@ class NPF662Workspace:
                         self.left,self.right,c,self.roundoff_zero if self.ghb_conductance is None else self.ghb_conductance,
                         self.roundoff_zero if self.ghb_head is None else self.ghb_head,storage,tangent,
                         self.storage_previous,self.previous_storage_tangent,self.types,self.bottom,self.thickness,
-                        self.drn_conductance,self.drn_elevation,self.riv_conductance,self.riv_stage,self.riv_bottom,
+                        self.drn_offsets,self.drn_entry_c,self.drn_entry_elev,
+                        self.riv_offsets,self.riv_entry_c,self.riv_entry_stage,self.riv_entry_bottom,
                         self.roundoff_partials],device=self.device)
                 else:
                     wp.launch(kernel=kernels.roundoff_rows,dim=self.n,inputs=[head,self.source,r,self.free,
@@ -470,6 +565,10 @@ class NPF662Workspace:
         self.drn_conductance = self.drn_elevation = None
         self.riv_conductance = self.riv_stage = self.riv_bottom = None
         self.drn_rate = self.riv_rate = None
+        self.drn_offsets = self.riv_offsets = None
+        self.drn_entry_c = self.drn_entry_elev = None
+        self.riv_entry_c = self.riv_entry_stage = self.riv_entry_bottom = None
+        self.drn_entry_rate = self.riv_entry_rate = None
         self.boundary_operator = self.trial_boundary_operator = None
         self.boundary_flow = self.trial_boundary_flow = None
         self.boundary_tangent = self.trial_boundary_tangent = None
@@ -783,6 +882,10 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
             outflow=ghb_budget['riv_outflow'], net=ghb_budget['riv_net'])
         result['drn_discharge_rate_array'] = workspace.drn_rate.numpy().reshape(case.active.shape).copy()
         result['riv_discharge_rate_array'] = workspace.riv_rate.numpy().reshape(case.active.shape).copy()
+        if len(workspace.drn_entry_rate):
+            result['drn_entry_rates'] = workspace.drn_entry_rate.numpy().copy()
+        if len(workspace.riv_entry_rate):
+            result['riv_entry_rates'] = workspace.riv_entry_rate.numpy().copy()
         accepted_head = workspace.head.numpy().reshape(case.active.shape) if head is None else head
         result['accepted_state'] = accepted_state_identity(session=model._session,
             head=accepted_head, dt=float(reference.dt) if workspace.transient else None)
