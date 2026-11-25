@@ -14,6 +14,7 @@ import numpy as np
 
 from DARCY_WARP_PACKAGE.physics.faces_3d import validate_reciprocal_faces
 from DARCY_WARP_PACKAGE.physics.inputs_3d import binary_mask, floating_field
+from DARCY_WARP_PACKAGE.validation.head_checks import invalid_head_values
 from DARCY_WARP_PACKAGE.physics.ghb_3d import validate_ghb_fields
 
 
@@ -67,6 +68,11 @@ class ThreeDOperatorSession:
     def shape(self) -> tuple[int, int, int]:
         return tuple(int(value) for value in self.active.shape)
 
+    def _validate_prescribed_heads(self, values):
+        fixed = (self.active != 0) & (self.bc_mask != 0)
+        if np.any(invalid_head_values(head=values[fixed])):
+            raise ValueError("Invalid active prescribed head")
+
     def _validate(self) -> None:
         if self.active.ndim != 3:
             raise ValueError("3D session fields must have shape (nz, ny, nx).")
@@ -96,6 +102,7 @@ class ThreeDOperatorSession:
                 raise ValueError(f"{name} must be a finite binary mask.")
         if np.any((self.bc_mask != 0) & (self.active == 0)):
             raise ValueError("bc_mask may only select active cells.")
+        self._validate_prescribed_heads(self.bc_values)
         if self.initial_head is not None and not np.all(np.isfinite(self.initial_head)):
             raise ValueError("initial_head must contain finite values.")
         spacing=(self.dx,self.dy,self.dz) if self.z_interfaces is None else (self.dx,self.dy)
@@ -139,6 +146,7 @@ class ThreeDOperatorSession:
             raise ValueError(f"bc_values shape {value.shape} does not match {self.shape}.")
         if not np.all(np.isfinite(value)):
             raise ValueError("bc_values must contain finite values.")
+        self._validate_prescribed_heads(value)
         self.bc_values[...] = value
         self.operator_revision += 1
         self.revision += 1

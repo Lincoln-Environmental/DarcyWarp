@@ -158,6 +158,9 @@ def solve_transient_unconfined_backend(
     ):
         controls.pop(_control_key, None)
     min_sat = float(controls.get("min_saturated_thickness", min_saturated_thickness))
+    if not np.isfinite(min_sat) or min_sat <= 0.0:
+        raise ValueError("min_saturated_thickness must be positive and finite.")
+    controls["min_saturated_thickness"] = min_sat
     thickness = np.clip(h0 - bottom, min_sat, np.maximum(top - bottom, min_sat))
     initial_T = np.asarray(k * thickness, dtype=NP_FLOAT)
     initial_T[active_i == 0] = 0.0
@@ -245,9 +248,12 @@ def solve_transient_unconfined_backend(
     # Face-array operator (Phase A of UNCONFINED_FAST_PLAN.md): precomputed
     # face conductances + block-reduced reductions replace the per-outer
     # harmonic-mean M_inv rebuilds and per-thread-atomic check kernels on the
-    # device fast path. Default on; an explicit control wins over the env var.
+    # device fast path. FP64 uses faces by default; FP32 uses classic kernels.
     _face_operator_env = str(os.environ.get("DARCY_TRANSIENT_FACE_OPERATOR", "")).strip().lower()
-    _face_operator_env_default = _face_operator_env not in {"0", "false", "off", "no"}
+    fp64_fields = WP_FLOAT == wp.float64
+    _face_operator_env_default = (
+        _face_operator_env not in {"0", "false", "off", "no"} if _face_operator_env else fp64_fields
+    )
     transient_face_operator_enabled_b = bool(
         fast_path_controls.get("transient_face_operator_enabled", _face_operator_env_default)
     )
@@ -273,11 +279,6 @@ def solve_transient_unconfined_backend(
     transient_mixed_precision_enabled_b = bool(
         fast_path_controls.get("transient_mixed_precision_enabled", _mixed_env_on)
     )
-    if transient_mixed_precision_enabled_b and not transient_face_operator_enabled_b:
-        raise ValueError(
-            "transient_mixed_precision_enabled requires the face operator "
-            "(transient_face_operator_enabled=True, the default)"
-        )
     # Per-block h_iter = h^k + delta sync clip: large enough to be a no-op so
     # the residual check sees the true current head iterate (delta is a head
     # correction, bounded by the domain scale; the final relaxed update does
@@ -288,6 +289,22 @@ def solve_transient_unconfined_backend(
         and storage_mode == "mf6_convertible_secant_sy"
         and storage_reference == "current_picard"
     )
+    if use_device_fast_path and not fp64_fields:
+        graphs_requested = fast_path_controls.get(
+            "transient_face_graphs_enabled", bool(_face_graphs_env) and _face_graphs_env_default
+        )
+        if transient_face_operator_enabled_b or transient_mixed_precision_enabled_b or graphs_requested:
+            raise ValueError("Transient Picard face, face-graph and mixed kernels require DARCY_FLOAT=float64.")
+        # FP32 GHB uses the host Picard implementation. A selected classic
+        # device operator or a device-only iteration policy must stay explicit.
+        face_configured = "transient_face_operator_enabled" in fast_path_controls or bool(_face_operator_env)
+        needs_device = use_incremental_picard or any(fast_path_controls.get(key, False) for key in (
+            "adaptive_dt_enabled", "adaptive_unconfined_inner_enabled", "profile_transient_fast_path",
+        ))
+        if self.use_ghb and not face_configured and not needs_device:
+            fast_path = False
+    if transient_mixed_precision_enabled_b and not transient_face_operator_enabled_b:
+        raise ValueError("transient_mixed_precision_enabled requires transient_face_operator_enabled=True.")
     if fast_path:
         controls = fast_path_controls
         if self.use_ghb and not transient_face_operator_enabled_b:
@@ -300,8 +317,8 @@ def solve_transient_unconfined_backend(
             # use_device_transient_fast_path=False for the host Picard path.
             raise NotImplementedError(
                 "device transient fast path supports GHB only with the face "
-                "operator enabled (transient_face_operator_enabled=True, the "
-                "default); the classic device path does not support GHB"
+                "operator enabled (DARCY_FLOAT=float64, transient_face_operator_enabled=True). "
+                "Use use_device_transient_fast_path=False for host Picard with GHB."
             )
         counters["device_side_picard_fast_path_active"] = 1
         device = self.device_str
@@ -2481,6 +2498,11 @@ def solve_transient_unconfined_backend(
         "transient_replay_counters": counters,
     }
     if save_diagnostics_b:
+        # Prescribed and inactive cells have no storage equation. Head history
+        # still records their values; only storage rates and coefficients vanish.
+        excluded = (active_i == 0) | (bc_i != 0)
+        for field in (storage_coeffs, sy_coeffs, ss_coeffs, storage_terms, sy_terms, ss_terms, sy_crossing_terms):
+            field[:returned_periods, excluded] = 0.0
         info_all.update(
             {
                 "heads_old_per_period": heads_old_per_period[:returned_periods],

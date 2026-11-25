@@ -283,6 +283,8 @@ def solve_transient_unconfined_experimental(
     sy_f = float(sy)
     ss_f = float(ss)
     min_sat = float(controls.get("min_saturated_thickness", min_saturated_thickness))
+    if not np.isfinite(min_sat) or min_sat <= 0.0:
+        raise ValueError("min_saturated_thickness must be positive and finite.")
     thickness = np.clip(h0 - bottom, min_sat, np.maximum(top - bottom, min_sat))
     initial_T = np.asarray(k * thickness, dtype=NP_FLOAT)
     initial_T[active_i == 0] = 0.0
@@ -301,6 +303,7 @@ def solve_transient_unconfined_experimental(
     ny, nx = h0.shape
     heads_per_period = np.zeros((n_periods, ny, nx), dtype=np.float64)
     if save_diagnostics_b:
+        non_storage_cells = (active_i == 0) | (bc_i != 0)
         heads_old_per_period = np.zeros_like(heads_per_period)
         storage_reference_heads = np.zeros_like(heads_per_period)
         storage_coeffs = np.zeros_like(heads_per_period)
@@ -397,6 +400,7 @@ def solve_transient_unconfined_experimental(
                 K_field=k,
                 zbot_field=bottom,
                 ztop_field=top,
+                min_saturated_thickness=min_sat,
                 transient=True,
                 storage_coeff=sy_f,
                 sy=sy_f,
@@ -608,6 +612,8 @@ def solve_transient_unconfined_experimental(
                 specific_storage=ss_f,
                 dt=period_dt,
             )
+            for term in (exact_storage_term, exact_sy_term, exact_ss_term):
+                term[non_storage_cells] = 0.0
             heads_old_per_period[period_index] = period_head_old
             storage_reference_heads[period_index] = head_accepted
             storage_coeffs[period_index] = 0.0

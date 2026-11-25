@@ -174,3 +174,95 @@ def test_rebuild_checks_new_ungrounded_cell_with_unchanged_positive_connectivity
         model.build_from_fields(active=active, **fields)
         with pytest.raises(ValueError, match="Ungrounded"):
             model.solve()
+
+
+@pytest.mark.parametrize("fast_path", [False, True])
+def test_picard_storage_maps_exclude_prescribed_heads(fast_path):
+    shape = (4, 4)
+    ones = np.ones(shape)
+    initial = 5.0 * ones
+    fixed = np.zeros(shape, dtype=int)
+    fixed[:, 0] = 1
+    prescribed = initial + fixed
+    active = np.ones(shape, dtype=int)
+    active[-1, -1] = 0
+    with create_solver(dim=2, nx=4, ny=4, dx=1., device="cpu") as model:
+        heads, info = model.solve_transient_2d_unconfined(
+            initial_head=initial, recharge_rates=[0.0], k_field=ones, zbot_field=0.0 * ones,
+            ztop_field=10.0 * ones, sy=0.2, ss=0.0, dt=1.0, active=active,
+            bc_mask=fixed, bc_values=prescribed, save_diagnostics=True,
+            solve_controls={"use_device_transient_fast_path": fast_path},
+        )
+        if fast_path:
+            assert info["period_infos"][0]["device_side_picard_fast_path_active"]
+            assert info["period_infos"][0]["transient_face_operator"] == (model.T_field_host.dtype == np.float64)
+    assert info["accepted_periods"] == 1
+    excluded = (fixed != 0) | (active == 0)
+    names = ("storage_terms", "sy_storage_terms", "ss_storage_terms", "sy_crossing_volume_terms",
+             "storage_coeffs", "sy_storage_coeffs", "ss_storage_coeffs")
+    for name in names:
+        np.testing.assert_array_equal(info[name + "_per_period"][0, excluded], 0.0)
+    expected = 0.2 * (heads[0] - initial)
+    np.testing.assert_allclose(info["storage_terms_per_period"][0, ~excluded], expected[~excluded], atol=1.e-8)
+    np.testing.assert_array_equal(heads[0, fixed != 0], 6.0)
+
+
+@pytest.mark.parametrize("fast_path", [False, True])
+def test_ghb_picard_periods_use_requested_saturated_thickness_floor(fast_path):
+    shape = (4, 4)
+    ones = np.ones(shape)
+    zeros = np.zeros(shape)
+    with create_solver(dim=2, nx=4, ny=4, dx=1., device="cpu", use_ghb=True) as model:
+        heads, info = model.solve_transient_2d_unconfined(
+            initial_head=0.25 * ones, recharge_rates=[0.], k_field=ones,
+            zbot_field=zeros, ztop_field=10. * ones, sy=0.2, ss=0., dt=1.,
+            active=ones, bc_mask=zeros, bc_values=zeros, gh_mask=ones,
+            gh_head=0.5 * ones, gh_width=ones, aq_thickness=1., gh_alpha=0.2,
+            min_saturated_thickness=1., solve_controls={"use_device_transient_fast_path": fast_path},
+        )
+        expect_device = fast_path and model.T_field_host.dtype == np.float64
+        assert bool(info["transient_replay_counters"]["device_side_picard_fast_path_active"]) == expect_device
+    assert info["accepted_periods"] == 1
+    # Uniform one-day step, S_y (h - 0.25) = C (0.5 - h), with C = S_y = 0.2.
+    np.testing.assert_allclose(heads[0], 0.375, rtol=0.0, atol=5e-5)
+
+@pytest.mark.parametrize("settings", [
+    {"transient_face_operator_enabled": True},
+    {"transient_face_graphs_enabled": True},
+    {"transient_mixed_precision_enabled": True},
+])
+def test_fp32_picard_rejects_requested_face_profiles(settings):
+    from DARCY_WARP_PACKAGE.warped_darcy import NP_FLOAT as model_float
+
+    if model_float != np.float32:
+        pytest.skip("Checks the FP32 package precision contract.")
+    ones = np.ones((4, 4))
+    zeros = np.zeros_like(ones)
+    with create_solver(dim=2, nx=4, ny=4, dx=1., device="cpu") as model:
+        with pytest.raises(ValueError, match="DARCY_FLOAT=float64"):
+            model.solve_transient_2d_unconfined(
+                initial_head=ones, recharge_rates=[0.0], k_field=ones, zbot_field=zeros,
+                ztop_field=2.0 * ones, sy=0.2, ss=0.0, dt=1.0, active=ones,
+                bc_mask=zeros, bc_values=zeros, solve_controls=dict(use_device_transient_fast_path=True, **settings),
+            )
+
+
+@pytest.mark.parametrize("settings", [
+    {"transient_face_operator_enabled": False},
+    {"adaptive_dt_enabled": True},
+])
+def test_fp32_ghb_preserves_explicit_device_requirements(settings):
+    from DARCY_WARP_PACKAGE.warped_darcy import NP_FLOAT as model_float
+
+    if model_float != np.float32:
+        pytest.skip("Checks the FP32 package precision contract.")
+    ones = np.ones((4, 4))
+    zeros = np.zeros_like(ones)
+    with create_solver(dim=2, nx=4, ny=4, dx=1., device="cpu", use_ghb=True) as model:
+        with pytest.raises(NotImplementedError, match="GHB"):
+            model.solve_transient_2d_unconfined(
+                initial_head=ones, recharge_rates=[0.0], k_field=ones, zbot_field=zeros,
+                ztop_field=2.0 * ones, sy=0.2, ss=0.0, dt=1.0, active=ones, bc_mask=zeros,
+                bc_values=zeros, gh_mask=ones, gh_head=ones, gh_width=ones,
+                solve_controls=dict(use_device_transient_fast_path=True, **settings),
+            )

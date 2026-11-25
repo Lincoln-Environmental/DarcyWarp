@@ -189,6 +189,16 @@ Use that artifact and its adjacent ``mf6`` workspace in the same benchmark
 command. The measured reference converged in 16 MF6 fixed-point runs, with
 terminal head change 9.46e-7 m and budget discrepancy 3.38e-8%.
 
+Current transient references use artifact schema 3. The generator checks the
+MODFLOW 6.6.2 executable against the recorded builds before launching it,
+saves its path, version and SHA-256, and fingerprints the steady warm-start
+equation. Reuse requires matching inputs and a complete cached head.
+Changed physics under an existing artifact name produce a separate bundle
+under ``qualified/``. Use the path returned by ``ensure_case_artifact``.
+For offline historical inspection, ``load_transient_artifact(path,
+allow_legacy=True)`` also reads schema-2 heads. The fixed-step CPU report
+retains its original reference and source hashes.
+
 Omit ``--controls`` to measure the existing production settings with the
 parallel reduction. For the second production case, use the artifact in
 ``mf6_transient_2d_unconfined_500x500_52w``. Missing references can be generated

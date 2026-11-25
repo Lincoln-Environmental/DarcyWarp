@@ -90,9 +90,10 @@ def test_active_prescribed_marker_is_rejected_on_reused_npf(native):
             npf_device_native=native)
         _, info = model.solve(**controls)
         assert info["converged"]
-        model.update_boundary_values(bc_values=np.full((1, 1, 2), 1e30))
         with pytest.raises(ValueError, match="active prescribed head"):
-            model.solve(**controls)
+            model.update_boundary_values(bc_values=np.full((1, 1, 2), 1e30))
+        repeated, info = model.solve(**controls)
+        assert info["converged"] and repeated[0, 0, 0] == 10.0
 
 
 @pytest.mark.parametrize("native", [False, True])

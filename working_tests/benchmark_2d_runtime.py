@@ -23,7 +23,7 @@ from working_tests.transient_artifacts import (
     validate_transient_artifact, spatial_fields_from_artifact,
     select_artifact_warm_start,
 )
-from working_tests.transient_replay_support import run_warp_transient_replay
+from working_tests.transient_replay_support import run_warp_transient_replay, verify_replay_reference_files
 from working_tests.transient_replay_settings import HEAD_ACCURACY_CRITERIA
 from working_tests.transient_replay_metrics import compare_transient
 from working_tests.transient_replay_mass_balance import (
@@ -195,6 +195,9 @@ def saved_mf6_runtime(*, workspace, artifact):
 
 def benchmark(*, artifact_path, output, variants, repeats, device, audit, implementation, baseline_heads, default_overrides, mf6_workspace=None):
     artifact = validate_transient_artifact(path=artifact_path)
+    verified_reference = verify_replay_reference_files(
+        artifact=artifact, artifact_path=artifact_path, native_workspace=mf6_workspace,
+    )
     spatial = spatial_fields_from_artifact(artifact=artifact)
     initial, mode = select_artifact_warm_start(artifact=artifact, spatial=spatial,
         warm_start_mode=str(artifact['warm_start_mode']))
@@ -206,6 +209,7 @@ def benchmark(*, artifact_path, output, variants, repeats, device, audit, implem
         use_ghb=bool(np.any(spatial.get('ghb_mask', False))))
     report = dict(commit=subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip(),
         artifact=str(artifact_path), case_fingerprint=str(artifact['case_fingerprint']),
+        reference_verification=verified_reference,
         artifact_sha256=hashlib.sha256(artifact_path.read_bytes()).hexdigest(),
         source_sha256={str(path.relative_to(root)):hashlib.sha256(path.read_bytes()).hexdigest()
             for path in sorted((root/'DARCY_WARP_PACKAGE').rglob('*.py'))},

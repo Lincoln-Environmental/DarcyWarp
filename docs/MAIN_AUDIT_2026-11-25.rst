@@ -166,6 +166,14 @@ native heads gave ``6.73139e-10`` on the same records. The
 <../benchmark_results/main_audit_20261125/followup_fixed_step_cpu.json>`
 record the accepted steps and face-flow errors for each backend and week.
 
+The follow-up 4 × 4 test starts every cell at 0.25 m, with a 0.5 m GHB
+stage, a 1 m minimum saturated thickness, and a one-day timestep. Both
+the Newton and FAS period drivers reproduce the direct solve at 0.375 m
+and the analytical GHB inflow of 0.400 m³/day. In a separate 4 × 4 test,
+raising the prescribed edge from 5 to 6 m gives 2.076623 m³/day of
+free-cell storage. The published storage maps now sum to that budget even
+when the boundary and bottom were built from the same input array.
+
 See the :download:`qualification JSON
 <../benchmark_results/main_audit_20261125/qualification.json>`
 for the numerical results and native reference fingerprints.

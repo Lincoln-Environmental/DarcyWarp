@@ -4,11 +4,14 @@ import io
 import hashlib
 import json
 import lzma
+import subprocess
 from pathlib import Path
 
 import numpy as np
 
-from DARCY_WARP_PACKAGE.project_base import data_store
+from DARCY_WARP_PACKAGE.project_base import data_store, require_mf6
+from DARCY_WARP_PACKAGE.validation.head_checks import invalid_head_values
+from DARCY_WARP_PACKAGE.validation.npf662_mf6 import MF6_VERSION, validate_mf6_identity
 from DARCY_WARP_PACKAGE.model_builder import _build_dirichlet_boundary_mask, _build_domain
 
 # Local copies keep this module independent of the replay facade.
@@ -45,7 +48,7 @@ WARM_START_WARP_SOLVE_MODES = {
 # Bump whenever the serialized truth contract changes.  Old artifacts are
 # intentionally rejected instead of being silently compared as if they were
 # generated from the current equations.
-ARTIFACT_SCHEMA_VERSION = 2
+ARTIFACT_SCHEMA_VERSION = 3
 
 _FINGERPRINT_KEYS = (
     "nx", "ny", "dx", "active", "bc_mask", "bc_values", "top", "bottom",
@@ -84,7 +87,36 @@ def _fingerprint_value(hasher: "hashlib._Hash", key: str, value: object) -> None
     hasher.update(b"\0")
 
 
-def compute_transient_case_fingerprint(case_inputs: dict) -> str:
+MF6_MODEL_NAME = "tr2d_truth"
+NATIVE_OUTPUT_NAMES = ("mfsim.lst", *(MF6_MODEL_NAME + suffix for suffix in (".hds", ".cbb", ".dis.grb")))
+
+
+def file_sha256(path):
+    with Path(path).open("rb") as source:
+        return hashlib.file_digest(source, "sha256").hexdigest()
+
+
+def head_history_sha256(heads):
+    """Hash one canonical FP64 plane at a time to support large portable histories."""
+    digest = hashlib.sha256()
+    for plane in heads:
+        values = np.ascontiguousarray(plane, dtype="<f8")
+        digest.update(memoryview(values).cast("B"))
+    return digest.hexdigest()
+
+
+def pinned_mf6_executable(executable=None):
+    """Resolve and identify the exact executable passed to FloPy."""
+    path = Path(require_mf6() if executable is None else executable).resolve(strict=True)
+    checksum = file_sha256(path)
+    validate_mf6_identity(version=MF6_VERSION, checksum=checksum)
+    version = subprocess.check_output([str(path), "-v"], text=True).strip()
+    build = validate_mf6_identity(version=version, checksum=checksum)
+    return {"mf6_executable": str(path), "mf6_sha256": checksum, "mf6_version": version,
+            "mf6_build_identity": build}
+
+
+def compute_transient_case_fingerprint(case_inputs: dict, *, schema=ARTIFACT_SCHEMA_VERSION) -> str:
     """Return the SHA-256 identity of all transient equation inputs.
 
     Runtime settings, output heads, and timing values are deliberately absent.
@@ -92,7 +124,11 @@ def compute_transient_case_fingerprint(case_inputs: dict) -> str:
     GHB mode cannot reuse a no-GHB artifact.
     """
     hasher = hashlib.sha256()
-    hasher.update(f"artifact-schema={ARTIFACT_SCHEMA_VERSION}\0".encode("ascii"))
+    hasher.update(f"artifact-schema={schema}\0".encode("ascii"))
+    if schema >= 3:
+        for key in ("mf6_sha256", "mf6_version", "warm_start_source", "warm_start_fingerprint",
+                    "ghb_width", "ghb_alpha", "ghb_aq_thickness"):
+            _fingerprint_value(hasher, key, case_inputs.get(key))
     for key in _FINGERPRINT_KEYS:
         _fingerprint_value(hasher, key, case_inputs.get(key))
     return hasher.hexdigest()
@@ -111,7 +147,27 @@ def all_active_transient_heads_finite(
     active_mask = np.asarray(active, dtype=bool)
     if heads.ndim != 3 or heads.shape[1:] != active_mask.shape:
         return False
-    return all(np.isfinite(period[active_mask]).all() for period in heads)
+    return all(not np.any(invalid_head_values(head=period[active_mask])) for period in heads)
+
+
+def verify_transient_sidecars(artifact, *, artifact_path, native_workspace=None, storage_budget_path=None,
+                             existing_native_only=False):
+    """Match each consumed native file to the specific portable truth artifact."""
+    recorded = json.loads(_scalar_string(artifact.get("native_output_sha256", "{}")))
+    if not isinstance(recorded, dict):
+        raise ValueError("Native output checksum manifest is not a mapping")
+    locations = {}
+    if native_workspace is not None:
+        for name in NATIVE_OUTPUT_NAMES:
+            path = Path(native_workspace) / name
+            if not existing_native_only or path.exists():
+                locations[name] = path
+    if storage_budget_path is not None:
+        locations["mf6_storage_budget_terms.npz"] = Path(storage_budget_path)
+    for name, path in locations.items():
+        if name not in recorded or not path.is_file() or file_sha256(path) != recorded[name]:
+            raise ValueError(f"Native output {path} differs from transient reference {artifact_path}")
+    return list(locations.values())
 
 
 def validate_transient_artifact(
@@ -120,18 +176,40 @@ def validate_transient_artifact(
     expected_fingerprint: str | None = None,
     expected_periods: int | None = None,
     require_mf6_gates: bool = True,
+    allow_legacy: bool = False,
+    expected_mf6_sha256: str | None = None,
+    verify_native_files: bool = False,
 ) -> dict:
     """Load and validate a current, internally consistent truth artifact."""
     artifact_path = Path(path)
     artifact = _load_compressed_npz(artifact_path)
     stored_version = int(np.asarray(artifact.get("artifact_schema_version", -1)).reshape(()))
-    if stored_version != ARTIFACT_SCHEMA_VERSION:
+    legacy = allow_legacy and stored_version == 2 and expected_mf6_sha256 is None
+    if stored_version != ARTIFACT_SCHEMA_VERSION and not legacy:
         raise ValueError(
             f"stale transient artifact {artifact_path}: schema {stored_version}, "
             f"expected {ARTIFACT_SCHEMA_VERSION}."
         )
     stored_fingerprint = _scalar_string(artifact.get("case_fingerprint", ""))
-    computed_fingerprint = compute_transient_case_fingerprint(artifact)
+    if verify_native_files:
+        native_workspace = artifact_path.parent / _scalar_string(artifact.get("mf6_native_workspace", "mf6"))
+        verify_transient_sidecars(artifact, artifact_path=artifact_path,
+            native_workspace=native_workspace,
+            storage_budget_path=artifact_path.parent / "mf6_storage_budget_terms.npz")
+    if not legacy:
+        version = _scalar_string(artifact.get("mf6_version", ""))
+        checksum = _scalar_string(artifact.get("mf6_sha256", ""))
+        build = validate_mf6_identity(version=version, checksum=checksum)
+        if _scalar_string(artifact.get("mf6_build_identity", "")) != build or not _scalar_string(artifact.get("mf6_executable", "")):
+            raise ValueError(f"transient artifact {artifact_path} lacks the native executable provenance")
+        if expected_mf6_sha256 is not None and checksum != expected_mf6_sha256:
+            raise ValueError(f"transient artifact {artifact_path} used a different native executable")
+        source = _scalar_string(artifact.get("warm_start_source", ""))
+        if source not in {"native_steady", "supplied_head", "artifact_initial"}:
+            raise ValueError(f"transient artifact {artifact_path} lacks its warm-start origin")
+        if source == "native_steady" and not _scalar_string(artifact.get("warm_start_fingerprint", "")):
+            raise ValueError(f"transient artifact {artifact_path} lacks the steady native input fingerprint")
+    computed_fingerprint = compute_transient_case_fingerprint(artifact, schema=stored_version)
     if stored_fingerprint != computed_fingerprint:
         raise ValueError(f"corrupt or stale transient artifact {artifact_path}: fingerprint mismatch.")
     if expected_fingerprint is not None and stored_fingerprint != str(expected_fingerprint):
@@ -156,9 +234,20 @@ def validate_transient_artifact(
         active=active,
     ):
         raise ValueError(f"transient artifact {artifact_path} has invalid head shape or non-finite active heads.")
+    if not legacy and _scalar_string(artifact.get("mf6_heads_sha256", "")) != head_history_sha256(heads):
+        raise ValueError(f"transient artifact {artifact_path} head history checksum differs")
+    final = np.asarray(artifact["heads_final"])
+    if final.shape != shape or not np.array_equal(final[active], heads[-1][active]):
+        raise ValueError(f"transient artifact {artifact_path} final head differs from its history")
     initial = np.asarray(artifact["initial_head"], dtype=np.float64)
-    if initial.shape != shape or not np.isfinite(initial[active]).all():
+    if initial.shape != shape or np.any(invalid_head_values(head=initial[active])):
         raise ValueError(f"transient artifact {artifact_path} has an invalid warm-start head.")
+    warm_mode = _scalar_string(artifact.get("warm_start_mode", ""))
+    if not legacy and warm_mode in (WARM_START_CONFINED_STEADY_MF6, WARM_START_UNCONFINED_STEADY_MF6):
+        warm_name = "confined_steady_head" if warm_mode == WARM_START_CONFINED_STEADY_MF6 else "unconfined_steady_head"
+        selected = np.asarray(artifact.get(warm_name))
+        if selected.shape != shape or not np.array_equal(selected[active], initial[active]):
+            raise ValueError(f"transient artifact {artifact_path} named steady head differs from its initial head")
     if np.max(np.abs(heads[-1][active] - initial[active])) <= 1.0e-12:
         raise ValueError(f"transient artifact {artifact_path} has no nontrivial transient response.")
     if require_mf6_gates:
@@ -176,8 +265,9 @@ def validate_transient_artifact(
     return artifact
 
 
-def load_transient_artifact(path: str | Path) -> dict:
-    arrays = validate_transient_artifact(path)
+def load_transient_artifact(path: str | Path, *, allow_legacy: bool = False) -> dict:
+    """Legacy schema-2 files are available explicitly for historical analysis."""
+    arrays = validate_transient_artifact(path, allow_legacy=allow_legacy)
     required = (
         "heads_per_period",
         "heads_final",
