@@ -88,8 +88,10 @@ it shows a numerical solution and its analytical reference, not field observatio
 | 3D MF6 6.6.2 NPF/STO | Uniform Cartesian or layered DIS, `(nz, ny, nx)` | Confined or convertible, steady or backward-Euler transient Ss/Sy; native GHB | GMRES or K-cycle-preconditioned FGMRES; opt-in device-resident transient history |
 
 All formulations run on CPU or NVIDIA CUDA using Warp and support active-cell
-and fixed-head masks. The 3D source is a *volumetric rate per cell*, whereas
-the 2D source is an *areal recharge or withdrawal rate*. Mixed precision is
+and fixed-head masks. In 2D and 3D, pass surface recharge as `R_field`
+in length per unit time, positive into the aquifer. For example, in a
+metre/day model, 1 mm/day is `0.001` on any grid. In 3D you can also
+supply well rates using the volumetric per-cell `rhs` argument. Mixed precision is
 explicitly selected and retains FP64 physical acceptance in the qualified
 fast NPF history. Library defaults are unchanged.
 

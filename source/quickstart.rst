@@ -104,6 +104,10 @@ fixed-head mask and fixed-head values. Keep the time unit consistent across
 transmissivity, recharge and any transient timestep. The example uses seconds;
 other workflows may use days.
 
+The same ``R_field`` array can drive a 3D model with the same horizontal grid.
+For uniform recharge of 1 mm/day in a metre/day model, pass
+``R_field=0.001`` in either dimension. Both solvers apply cell area internally.
+
 Next steps
 ----------
 

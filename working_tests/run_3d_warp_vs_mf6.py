@@ -46,7 +46,6 @@ class Case3D:
     active_3d: np.ndarray
     bc_mask_3d: np.ndarray
     bc_values_3d: np.ndarray
-    rhs_3d: np.ndarray
     initial_head_3d: np.ndarray
 
 
@@ -105,9 +104,6 @@ def build_simple_multilayer_case(
     for layer in range(nlay):
         bc_values_3d[layer, dirichlet_mask] = dem[dirichlet_mask]
 
-    rhs_3d = np.zeros((nlay, int(ny), int(nx)), dtype=np.float64)
-    rhs_3d[0, :, :] = recharge_2d * float(dx) * float(dx)
-
     initial_head_3d = np.repeat(dem[np.newaxis, :, :], nlay, axis=0).astype(np.float64)
 
     return Case3D(
@@ -122,7 +118,6 @@ def build_simple_multilayer_case(
         active_3d=active_3d,
         bc_mask_3d=bc_mask_3d,
         bc_values_3d=bc_values_3d,
-        rhs_3d=rhs_3d,
         initial_head_3d=initial_head_3d,
     )
 
@@ -245,7 +240,7 @@ def run_warp(
             active=case.active_3d,
             bc_mask=case.bc_mask_3d,
             bc_values=case.bc_values_3d,
-            rhs=case.rhs_3d,
+            R_field=case.recharge_2d,
             initial_head=case.initial_head_3d,
         )
         if solver == "kcycle":

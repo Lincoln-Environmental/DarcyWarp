@@ -3,10 +3,23 @@
 Use `WarpDarcySolver3D` or `create_solver(dim=3, ...)` from
 `DARCY_WARP_PACKAGE`. The factory takes `nx`, `ny`, `nz`, `dx` and `dz`.
 `dy` defaults to `dx`. Cell fields have shape `(nz, ny, nx)`, ordered from the
-top layer down. With metres and days as units, conductivity is in m/day and
-`rhs` is volumetric injection in m³/day. Multiply an areal recharge rate by
-`dx * dy` once to form the source. Use the active and fixed-head masks to set
-the model domain and prescribed heads. Exterior and inactive faces are no-flow.
+top layer down. Use the active and fixed-head masks to set the model domain
+and prescribed heads. Exterior and inactive faces are no-flow.
+
+Supply surface recharge in the same way as in 2D. Pass `R_field` as a scalar
+or a horizontal `(ny, nx)` array in length per unit time, positive for recharge
+and negative for withdrawal. With metres and days, 1 mm/day is `0.001`.
+DarcyWarp multiplies by `dx * dy` and applies the rate to the uppermost active
+cell in each column. A completely inactive column receives zero. If the
+uppermost active cell has prescribed head, the column receives zero recharge.
+For a MODFLOW 6 RCHA comparison with inactive cells in the top layer, set
+the RCHA receiving-layer array (`IRCH`) to the same active layers.
+
+For additional, layer-specific sources such as screened wells, supply a
+`(nz, ny, nx)` array via `rhs` in volume per unit time. DarcyWarp adds these
+rates to the surface recharge. For an existing model with recharge already
+included in `rhs`, remove that contribution from `rhs` when moving it to
+`R_field`.
 
 | Formulation | Geometry | Supported flow |
 | --- | --- | --- |
@@ -61,8 +74,9 @@ head, info = model.solve(
 ```
 
 `head_prev` is the previous physical state. Use `update_initial_head`
-to choose a separate iterative starting point, `update_rhs` to change
-the volumetric source, `update_boundary_values` to change prescribed heads,
+to choose a separate iterative starting point, `update_R_in_place(rate)`
+to change the recharge depth rate, `update_rhs` to change additional
+volumetric sources, `update_boundary_values` to change prescribed heads,
 and `update_K_fields` to change physical conductivity and its derived
 faces. Check `info["converged"]`, the residual and the water balance before
 advancing the timestep. Returned heads own their storage. A later steady
@@ -110,8 +124,7 @@ fixed = np.zeros(shape, dtype=int)
 fixed[:, :, 0] = 1
 values = np.full(shape, 4.0)
 initial = np.full(shape, 4.0)
-source = np.zeros(shape)
-source[:, :, 1:-1] = 0.01  # m3/day per active free cell
+recharge = np.full((ny, nx), 0.001)  # 1 mm/day
 cell_types = np.zeros(shape, dtype=int)
 cell_types[0] = 1  # upper layer convertible
 
@@ -126,10 +139,10 @@ with WarpDarcySolver3D(
         ky_field=np.full(shape, 0.7),
         kz_field=np.full(shape, 0.2),
         active=active, bc_mask=fixed,
-        bc_values=values, rhs=source, initial_head=initial,
+        bc_values=values, R_field=recharge, initial_head=initial,
     )
     heads, info = model.solve_transient_npf(
-        source_factors=[1.0, 1.5, 0.25],
+        recharge_rates=[0.001, 0.0015, 0.00025],  # m/day in successive periods
         dt=7.0, head_prev=initial,
         ss=1e-3, sy=0.15,
         unconfined=True, npf_cell_type=cell_types,
@@ -151,8 +164,12 @@ with WarpDarcySolver3D(
     assert heads.shape == (3, nz, ny, nx)
 ```
 
-`source_factors` multiplies the base `rhs` for each period. Timestep
-lengths may also vary, but conductivity, storage, cell types, geometry and
+`recharge_rates` supplies absolute depth rates for the history, replacing the
+built-in `R_field` for those steps. Supply a scalar, one rate per step, a
+static `(ny, nx)` map or a `(nstep, ny, nx)` stack. With explicit
+`recharge_rates`, optional `source_factors` scale the additional volumetric
+`rhs` only. Used alone, `source_factors` scale the combined built sources.
+Timestep lengths may also vary, but conductivity, storage, cell types, geometry and
 prescribed heads are fixed *within* a single history call. Call
 `update_K_fields()` between histories when hydraulic conductivity changes.
 

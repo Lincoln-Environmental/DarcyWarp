@@ -37,6 +37,7 @@ jobs:
         run: |
           python -m pytest -q -ra tests/test_3d_operator_analytical.py tests/test_3d_budget_acceptance.py \
             tests/test_3d_public_contract.py tests/test_3d_release_contract.py tests/test_3d_session.py \
+            tests/test_3d_recharge.py \
             tests/test_npf662_transient.py tests/test_npf662_reference_controller.py
 
       - name: Numerical audit regressions

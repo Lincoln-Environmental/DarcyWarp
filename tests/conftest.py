@@ -6,6 +6,14 @@ import shutil
 import pytest
 
 
+# Pin the production precision before any test module is collected: some
+# modules import DARCY_WARP_PACKAGE.config at collection time, and config.py
+# defaults to float32 while the production kernels (warped_darcy.py) default
+# to float64. Without this, whichever file imports config first decides the
+# process-wide dtype and later module-level setdefault calls cannot change it.
+os.environ.setdefault("DARCY_FLOAT", "float64")
+
+
 def pytest_configure(config):
     if os.environ.get('DARCYWARP_TEST_CPU_ONLY') == '1':
         os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
