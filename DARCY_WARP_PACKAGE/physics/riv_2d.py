@@ -12,6 +12,16 @@ def riv_discharge_2d(*, head, stage, bottom, conductance, mask, device="cpu"):
 
     This CPU/CUDA extraction launches the same RIV function as the residual.
     The caller must supply an accepted nonlinear head and sanitized mask.
+
+    :param head: Accepted 2D hydraulic head grid, length units.
+    :param stage: External river stage grid, length units.
+    :param bottom: Riverbed elevation grid, length units.
+    :param conductance: Nonnegative riverbed conductance grid, L^2/T.
+    :param mask: Enabled river-cell mask, with inactive and fixed cells excluded.
+    :param device: Warp execution device, cpu or CUDA device string.
+    :returns: Host array of signed volume/time exchange, positive to the river.
+    :raises ValueError: If shapes differ or inputs are nonfinite or negative
+        conductances are supplied.
     """
     h = np.asarray(head)
     if h.ndim != 2:

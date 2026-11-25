@@ -18,6 +18,13 @@ def drn_discharge_2d(
     Mirrors the nonlinear operator's gated diagonal/source pair exactly:
     active cells have ``C * (head - elevation)`` for head above elevation,
     and zero otherwise. The caller supplies the sanitized DRN mask.
+
+    :param head: Accepted head grid in length units, shape (ny, nx).
+    :param elevation: Drain elevation grid in length units.
+    :param conductance: Nonnegative drain conductance grid in L^2/T.
+    :param mask: Nonzero at enabled drain cells after boundary exclusions.
+    :returns: FP64 nonnegative aquifer outflow rates in volume/time.
+    :raises ValueError: If shapes differ or enabled drain fields are invalid.
     """
     h = np.asarray(head, dtype=np.float64)
     elev = np.asarray(elevation, dtype=np.float64)
@@ -43,6 +50,12 @@ def add_drn_to_budget(budget: pd.DataFrame, discharge: np.ndarray) -> pd.DataFra
 
     This also works with a budget table that already has zero-filled DRN
     columns, without counting discharge twice.
+
+    :param budget: Single-row groundwater budget with total_in and total_out.
+    :param discharge: Finite, nonnegative grid of drain outflow in volume/time.
+    :returns: A copy of the table with DRN rates and closure totals updated.
+    :raises ValueError: If the input budget is not one row, the discharge is
+        invalid, or nonzero existing drain rates conflict with the discharge.
     """
     if len(budget) != 1:
         raise ValueError("budget must contain exactly one row")

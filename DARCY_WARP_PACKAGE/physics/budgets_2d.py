@@ -67,6 +67,35 @@ def compute_mass_balance_budget(
     Optional cell diagnostics include DRN and RIV exchange and their active
     derivatives. With return_cells, component_budgets also groups external
     exchange by hydraulically connected free cells for transient acceptance.
+
+    All spatial arrays have shape (ny, nx); use consistent length/time units.
+
+    :param T_field: Transmissivity grid in L^2/T.
+    :param R_field: Recharge grid in length/time, positive into the aquifer.
+    :param head: Hydraulic head grid in length units.
+    :param active: Active-cell mask.
+    :param bc_mask: Prescribed-head mask.
+    :param bc_values: Prescribed hydraulic heads in length units.
+    :param dx: Square-cell width in length units.
+    :param gh_mask: Optional general-head-boundary mask.
+    :param gh_head: External GHB head grid in length units.
+    :param gh_width: Optional GHB connection width grid in length units.
+    :param ghb_factor: Optional precomputed conductance/transmissivity ratio.
+    :param gh_alpha: GHB scaling coefficient used when no factor is supplied.
+    :param aq_thickness: Aquifer thickness used to derive GHB conductance.
+    :param case: Optional identifier attached to the reported budget.
+    :param drn_mask: Optional enabled drain-cell mask.
+    :param drn_elev: Drain elevations in length units.
+    :param drn_cond: Drain conductance grid in L^2/T.
+    :param riv_mask: Optional enabled river-cell mask.
+    :param riv_stage: River stage grid in length units.
+    :param riv_rbot: Riverbed elevation grid in length units.
+    :param riv_cond: River conductance grid in L^2/T.
+    :param return_cells: Return the aggregate budget and cell-level diagnostics.
+    :param component_budgets: Add connected-component diagnostics when returning cells.
+    :param local_flow_scale: Request local flow scaling for residual evaluation.
+    :returns: Single-row budget DataFrame, or a tuple of aggregate budget,
+        cell residual, diagonal and residual-scale diagnostics when requested.
     """
     T = np.asarray(T_field, dtype=np.float64)
     R = np.asarray(R_field, dtype=np.float64)

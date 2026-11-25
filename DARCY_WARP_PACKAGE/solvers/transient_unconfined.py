@@ -374,7 +374,8 @@ def solve_transient_unconfined_backend(
     :param gh_mask: GHB cell mask, required when model.use_ghb is true.
     :param gh_head: External GHB stage grid in length units.
     :param gh_width: GHB connection width grid in length units.
-    :param gh_alpha: Dimensionless multiplier for GHB conductance, scalar or grid.
+    :param gh_alpha: GHB conductance scaling coefficient, scalar or grid.
+        See compute_ghb_factor_from_raw_fields for the dimensional convention.
     :param aq_thickness: Aquifer thickness used to derive GHB conductance.
     :param storage_mode: Constitutive storage relation for the Picard solve.
     :param storage_reference: Current Picard iterate or previous accepted period.

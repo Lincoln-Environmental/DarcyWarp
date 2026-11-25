@@ -54,7 +54,15 @@ def normalize_scalar_or_grid_to_shape(
     shape: tuple[int, int],
     name: str,
 ) -> tuple[np.ndarray, str]:
-    """Normalize scalar or grid parameters without changing their values."""
+    """Convert a scalar or matching grid to the canonical FP64 2D shape.
+
+    :param value: Scalar, (ny, nx) grid or (1, ny, nx) single-layer grid.
+    :param shape: Required (ny, nx) output shape.
+    :param name: Parameter name used in validation errors.
+    :returns: Normalised array and either scalar or grid as the input kind.
+        Existing FP64 arrays can be returned as views.
+    :raises ValueError: If scalar is nonfinite or the shape is unsupported.
+    """
     arr = np.asarray(value, dtype=np.float64)
     if arr.ndim == 0:
         scalar = float(arr)
@@ -78,7 +86,22 @@ def compute_ghb_factor_from_raw_fields(
     active: np.ndarray | None = None,
     bc_mask: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict[str, str]]:
-    """Compute the 2D GHB conductance factor used by the discrete operator."""
+    """Compute the multiplier that converts transmissivity into GHB conductance.
+
+    :param gh_mask: Nonzero at requested GHB cells, shape (ny, nx).
+    :param gh_width: Connection width grid, length units.
+    :param gh_alpha: Conductance scaling coefficient, scalar or grid. The factor
+        is gh_alpha * gh_width * dx / aq_thickness; use inverse-length units for
+        gh_alpha when widths, spacing and thickness are lengths.
+    :param aq_thickness: Aquifer thickness, positive scalar or grid on GHB cells.
+    :param dx: Square-cell width in length units.
+    :param active: Optional active mask; inactive cells are excluded.
+    :param bc_mask: Optional prescribed-head mask; fixed cells are excluded.
+    :returns: GHB factor grid, expanded alpha and thickness arrays, and a mapping
+        describing which inputs were scalar or grid. Non-GHB factors are zero.
+    :raises ValueError: For incompatible shapes or nonpositive/nonfinite
+        alpha or thickness on an enabled connection.
+    """
     gh_mask_i = np.asarray(gh_mask, dtype=np.int32)
     gh_width_f = np.asarray(gh_width, dtype=np.float64)
     shape = tuple(gh_mask_i.shape)
