@@ -1,0 +1,12 @@
+{
+  "cells": 100800,
+  "head_rmse": 1.6555903838234967e-08,
+  "head_max_abs": 1.172276713035103e-06,
+  "wel_rate_darcywarp": 231000.0,
+  "wel_rate_mf6": 231000.0,
+  "drn_rate_darcywarp": -8149.046850503027,
+  "drn_rate_mf6": -8149.046847091957,
+  "riv_rate_darcywarp": 17465.222644598158,
+  "riv_rate_mf6": 17465.222603656213,
+  "mf6_percent_discrepancy": 0.0
+}

@@ -1,0 +1,39 @@
+{
+  "device": "cuda:0",
+  "grids": {
+    "small": {
+      "cells": 100800,
+      "construction_seconds": 0.03521910699782893,
+      "drn_entries": 792,
+      "history_accepted_steps": 20,
+      "history_converged": true,
+      "history_seconds": 16.801192385988543,
+      "history_steps": 20,
+      "krylov_iterations": 3216,
+      "mempool_high_water_bytes": 137439020,
+      "newton_iterations": 9,
+      "preconditioner": "diagonal",
+      "pumping_update_seconds": 0.8599719949997962,
+      "riv_entries": 44,
+      "shape": [
+        10,
+        112,
+        90
+      ],
+      "stage_update_seconds": 1.4636637060029898,
+      "steady_best_seconds": 0.9695598439866444,
+      "steady_solve_seconds": [
+        1.3125857490085764,
+        0.9695598439866444,
+        0.9990831890027039
+      ],
+      "total_seconds": 22.44736780600215,
+      "wel_budget": {
+        "inflow": 0.0,
+        "net": -231000.0,
+        "outflow": 231000.0
+      },
+      "wel_entries": 84
+    }
+  }
+}

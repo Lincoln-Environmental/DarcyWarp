@@ -62,7 +62,7 @@ def heterogeneous_fields(*, shape, seed=11, wells_top=True, drain=True, river=Tr
                     entries.append(((layer, row, col), -1500.0))
     drn_entries = None
     if drain:
-        drn_entries = [((0, row, col), 25.0, 38.5 + 0.01 * (col % 4))
+        drn_entries = [((0, row, col), 25.0, 28.5 + 0.01 * (col % 4))
                        for row in range(2, ny - 2, 3) for col in range(2, nx - 2, 4)]
     riv_entries = None
     if river:

@@ -14,8 +14,9 @@ CPU and CUDA tests cover steady, STO, convertible and layered NPF cases.
 
 The legacy Cartesian classic/fast session explicitly rejects solves with DRN
 or RIV. Terrain sessions also reject cell DRN/RIV. Do not describe either
-legacy path as package-capable. The current cell-based representation allows
-one DRN and one RIV per cell; it is not yet a multi-reach exchange map for SFR.
+legacy path as package-capable. Since the 2026-11-26 increment, sparse entry
+lists support multiple drains or river reaches per cell through one CSR
+representation; see ``docs/3D_WEL_SOURCE_PACKAGES_2026-11-26.rst``.
 
 Verified evidence on this branch:
 
@@ -73,10 +74,10 @@ For head h, drain elevation e, stage s, riverbed bottom b, and conductance C:
 * DRN, RIV, GHB, recharge, prescribed-head exchange and physical storage
   retain distinct budget terms. Opposite signs may cancel in a net total,
   but not in the gross flow ledger.
-* The first representation allows one drain and one river entry per
-  structured cell. Multiple reaches sharing a groundwater cell at different
-  stages/bottoms require an entry-based exchange representation; do not
-  average away thresholds.
+* Sparse entries allow multiple drains and river reaches per structured
+  cell; each entry keeps its own threshold, stage and bed bottom and never
+  averages them. Dense single-entry fields remain supported and reduce to
+  the same CSR representation.
 
 Public API and runnable examples
 --------------------------------

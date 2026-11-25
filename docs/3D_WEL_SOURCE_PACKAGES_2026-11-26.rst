@@ -141,6 +141,15 @@ Validation
   multi-entry cells at ~100k and 1M+ cells, separating construction
   from warm solves and recording update, stage-update and 20-step
   history timings (``benchmark_results/wel_boundaries_3d/``).
+* Regional MF6 parity: ``working_tests/mf6_parity_3d_wel_boundaries.py``
+  solves the matched MF6 twin of the small benchmark grid (100,800
+  heterogeneous cells, 84 well entries including shared cells, 792
+  active drains, 44 gaining/losing river entries, receiving-cell
+  recharge). With anisotropic horizontal K matched via ``k22``, heads
+  agree to RMSE 1.66e-8 m (max 1.17e-6 m), gross WEL rates agree
+  exactly (231000 L3/T), and DRN and RIV net rates agree to relative
+  4e-10 and 2.3e-9; MF6 reports a 0.0 percent budget discrepancy
+  (``benchmark_results/wel_boundaries_3d/mf6_parity_small.json``).
 
 Runnable examples
 -----------------
