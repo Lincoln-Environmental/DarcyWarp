@@ -34,7 +34,10 @@ def independent_reference(*, model, case):
     Owned snapshots detect in-place mutation as well as public updates.
     """
     case.validate()
-    names = tuple(name for name in case.__dataclass_fields__ if name not in ('source', 'values', 'initial'))
+    package_values = ('drn_conductance', 'drn_elevation', 'drn_mask', 'riv_conductance',
+                      'riv_stage', 'riv_bottom', 'riv_mask')
+    names = tuple(name for name in case.__dataclass_fields__
+        if name not in ('source', 'values', 'initial', *package_values))
     values = tuple(np.asarray(getattr(case, name)) for name in names)
     holder = model._session._npf662_workspace_holder
     cached = holder.get('reference')
@@ -42,7 +45,7 @@ def independent_reference(*, model, case):
         np.array_equal(saved, current) for saved, current in zip(cached[1], values))
     if reused:
         reference = cached[2]
-        reference.case = case
+        reference.refresh_drn_riv_fields(case=case)
     else:
         reference = NPF662Reference(case=case)
         holder['reference'] = (names, tuple(value.copy() for value in values), reference)

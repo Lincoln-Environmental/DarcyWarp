@@ -9,13 +9,28 @@
     "boundary_case": "none",
     "package_fields": false,
     "zero_exchange_solution_equivalent_to_no_package": true,
-    "field_preparation_seconds": 0.0015508069991483353,
-    "build_seconds": 0.0870019020003383,
-    "warmup_seconds": 0.4068611949987826,
+    "field_preparation_seconds": 0.0014362329966388643,
+    "build_seconds": 0.0909868539965828,
+    "warmup_seconds": 0.3720977810007753,
     "solve_seconds": [
-      0.17621300199971301,
-      0.1756634880002821,
-      0.17644836300314637
+      0.17762963700079126,
+      0.1719179029969382,
+      0.17268775800039293
+    ],
+    "solver_seconds": [
+      0.11184308700467227,
+      0.11166476999642327,
+      0.11153292100061662
+    ],
+    "public_total_seconds": [
+      0.17749873399588978,
+      0.17183529699832434,
+      0.17256404799991287
+    ],
+    "reference_setup_seconds": [
+      0.0033056859974749386,
+      0.001830961999075953,
+      0.0018614469954627566
     ],
     "update_api_seconds": [
       0.0,
@@ -23,9 +38,9 @@
       0.0
     ],
     "workspace_setup_seconds": [
-      0.0025270089972764254,
-      0.0022117869957583025,
-      0.0026743869966594502
+      0.0027760279990616255,
+      0.0026053840047097765,
+      0.0021675489988410845
     ],
     "converged": true,
     "outer_iterations": 4,
@@ -33,19 +48,19 @@
     "multigrid_cycles": 20,
     "workspace_reused": true,
     "device_final_metrics": {
-      "physical_rms": 1.4302420355293962e-11,
-      "head_residual_rms": 7.442393618723761e-16,
-      "relative_cell_imbalance": 5.669829792250987e-10,
-      "gross_throughput": 2376.000000001003,
+      "physical_rms": 1.4302420355293957e-11,
+      "head_residual_rms": 7.442393618723734e-16,
+      "relative_cell_imbalance": 5.669829792250959e-10,
+      "gross_throughput": 2376.000000001015,
       "residual_l1": 1.3471515586394034e-06,
       "signed_imbalance": 1.48977705172193e-09,
       "boundary_inflow": 0.0,
-      "boundary_outflow": 1187.9999999985066,
-      "scaled_l2": 2.565197782977198e-13,
+      "boundary_outflow": 1187.9999999985064,
+      "scaled_l2": 2.565197782977199e-13,
       "finite": true,
       "local_balance_valid": true,
       "chd_inflow": 0.0,
-      "chd_outflow": 1187.9999999985066,
+      "chd_outflow": 1187.9999999985064,
       "ghb_inflow": 0.0,
       "ghb_outflow": 0.0,
       "ghb_net": 0.0,
@@ -56,7 +71,7 @@
       "riv_outflow": 0.0,
       "riv_net": 0.0,
       "free_boundary_inflow": 0.0,
-      "free_boundary_outflow": 1187.9999999985084
+      "free_boundary_outflow": 1187.9999999985075
     },
     "maximum_head_difference_from_no_package_m": 0.0
   },
@@ -70,23 +85,38 @@
     "boundary_case": "sparse_drn",
     "package_fields": true,
     "zero_exchange_solution_equivalent_to_no_package": true,
-    "field_preparation_seconds": 0.0006675799959339201,
-    "build_seconds": 0.012476097996113822,
-    "warmup_seconds": 0.2868052929989062,
+    "field_preparation_seconds": 0.0005620820011245087,
+    "build_seconds": 0.010972525997203775,
+    "warmup_seconds": 0.2715979869972216,
     "solve_seconds": [
-      0.22293150799669093,
-      0.25050639700202737,
-      0.22529353899881244
+      0.2054519369994523,
+      0.21362772599968594,
+      0.21648719000222627
+    ],
+    "solver_seconds": [
+      0.11227473899634788,
+      0.11209649100055685,
+      0.11223234900535317
+    ],
+    "public_total_seconds": [
+      0.2045584340012283,
+      0.21354613400035305,
+      0.21632920100091724
+    ],
+    "reference_setup_seconds": [
+      0.00293492399941897,
+      0.0025642090040491894,
+      0.0025660120008978993
     ],
     "update_api_seconds": [
       0.0,
-      0.0009007600019685924,
-      0.0009610359993530437
+      0.0007979790025274269,
+      0.0007857140008127317
     ],
     "workspace_setup_seconds": [
-      0.0038635880046058446,
-      0.0038128480009618215,
-      0.0033917499968083575
+      0.0034705959988059476,
+      0.003278477001003921,
+      0.0033448189933551475
     ],
     "converged": true,
     "outer_iterations": 4,
@@ -94,76 +124,15 @@
     "multigrid_cycles": 20,
     "workspace_reused": true,
     "device_final_metrics": {
-      "physical_rms": 1.4302291992215305e-11,
-      "head_residual_rms": 7.442326915528779e-16,
-      "relative_cell_imbalance": 5.669749637293684e-10,
-      "gross_throughput": 2376.0000000010896,
-      "residual_l1": 1.3471325138215973e-06,
-      "signed_imbalance": 1.48977705172193e-09,
-      "boundary_inflow": 0.0,
-      "boundary_outflow": 1187.9999999985089,
-      "scaled_l2": 2.5651747921362654e-13,
-      "finite": true,
-      "local_balance_valid": true,
-      "chd_inflow": 0.0,
-      "chd_outflow": 1187.9999999985089,
-      "ghb_inflow": 0.0,
-      "ghb_outflow": 0.0,
-      "ghb_net": 0.0,
-      "drn_inflow": 0.0,
-      "drn_outflow": 0.0,
-      "drn_net": 0.0,
-      "riv_inflow": 0.0,
-      "riv_outflow": 0.0,
-      "riv_net": 0.0,
-      "free_boundary_inflow": 0.0,
-      "free_boundary_outflow": 1187.9999999985066
-    },
-    "maximum_head_difference_from_no_package_m": 7.105427357601002e-15
-  },
-  {
-    "shape": [
-      3,
-      200,
-      200
-    ],
-    "active_cells": 120000,
-    "boundary_case": "distributed_riv",
-    "package_fields": true,
-    "zero_exchange_solution_equivalent_to_no_package": true,
-    "field_preparation_seconds": 0.0004784400007338263,
-    "build_seconds": 0.011776163999456912,
-    "warmup_seconds": 0.27343344999826513,
-    "solve_seconds": [
-      0.20894203599891625,
-      0.2335403349934495,
-      0.22115965500415768
-    ],
-    "update_api_seconds": [
-      0.0,
-      0.001239879995409865,
-      0.0011758710024878383
-    ],
-    "workspace_setup_seconds": [
-      0.003701310997712426,
-      0.0037298300012480468,
-      0.003639984002802521
-    ],
-    "converged": true,
-    "outer_iterations": 4,
-    "krylov_iterations": 20,
-    "multigrid_cycles": 20,
-    "workspace_reused": true,
-    "device_final_metrics": {
-      "physical_rms": 1.4302420355293978e-11,
-      "head_residual_rms": 7.442393618723814e-16,
-      "relative_cell_imbalance": 5.669829792250664e-10,
-      "gross_throughput": 2376.0000000011387,
+      "physical_rms": 1.430242035529393e-11,
+      "head_residual_rms": 7.442393618723756e-16,
+      "relative_cell_imbalance": 5.669829792250768e-10,
+      "gross_throughput": 2376.000000001095,
       "residual_l1": 1.3471515586394034e-06,
       "signed_imbalance": 1.48977705172193e-09,
       "boundary_inflow": 0.0,
       "boundary_outflow": 1187.999999998508,
-      "scaled_l2": 2.5651977829772234e-13,
+      "scaled_l2": 2.5651977829772043e-13,
       "finite": true,
       "local_balance_valid": true,
       "chd_inflow": 0.0,
@@ -178,7 +147,83 @@
       "riv_outflow": 0.0,
       "riv_net": 0.0,
       "free_boundary_inflow": 0.0,
-      "free_boundary_outflow": 1187.999999998509
+      "free_boundary_outflow": 1187.9999999985077
+    },
+    "maximum_head_difference_from_no_package_m": 0.0
+  },
+  {
+    "shape": [
+      3,
+      200,
+      200
+    ],
+    "active_cells": 120000,
+    "boundary_case": "distributed_riv",
+    "package_fields": true,
+    "zero_exchange_solution_equivalent_to_no_package": true,
+    "field_preparation_seconds": 0.000516314001288265,
+    "build_seconds": 0.012171676993602887,
+    "warmup_seconds": 0.2863374849985121,
+    "solve_seconds": [
+      0.22057614899676992,
+      0.2122542390061426,
+      0.21305251400190173
+    ],
+    "solver_seconds": [
+      0.1120849819999421,
+      0.11228702199878171,
+      0.11212783600058174
+    ],
+    "public_total_seconds": [
+      0.22041545899992343,
+      0.2120956579965423,
+      0.21297419699840248
+    ],
+    "reference_setup_seconds": [
+      0.0037104799994267523,
+      0.0034570549978525378,
+      0.0035730119998333976
+    ],
+    "update_api_seconds": [
+      0.0,
+      0.0013662819983437657,
+      0.001382731003104709
+    ],
+    "workspace_setup_seconds": [
+      0.0044586570002138615,
+      0.003663999006676022,
+      0.0035729759983951226
+    ],
+    "converged": true,
+    "outer_iterations": 4,
+    "krylov_iterations": 20,
+    "multigrid_cycles": 20,
+    "workspace_reused": true,
+    "device_final_metrics": {
+      "physical_rms": 1.4302420355293957e-11,
+      "head_residual_rms": 7.442393618723779e-16,
+      "relative_cell_imbalance": 5.669829792250747e-10,
+      "gross_throughput": 2376.0000000011037,
+      "residual_l1": 1.3471515586394034e-06,
+      "signed_imbalance": 1.48977705172193e-09,
+      "boundary_inflow": 0.0,
+      "boundary_outflow": 1187.9999999985077,
+      "scaled_l2": 2.5651977829771926e-13,
+      "finite": true,
+      "local_balance_valid": true,
+      "chd_inflow": 0.0,
+      "chd_outflow": 1187.9999999985077,
+      "ghb_inflow": 0.0,
+      "ghb_outflow": 0.0,
+      "ghb_net": 0.0,
+      "drn_inflow": 0.0,
+      "drn_outflow": 0.0,
+      "drn_net": 0.0,
+      "riv_inflow": 0.0,
+      "riv_outflow": 0.0,
+      "riv_net": 0.0,
+      "free_boundary_inflow": 0.0,
+      "free_boundary_outflow": 1187.999999998506
     },
     "maximum_head_difference_from_no_package_m": 0.0
   },
@@ -192,23 +237,38 @@
     "boundary_case": "overlap",
     "package_fields": true,
     "zero_exchange_solution_equivalent_to_no_package": true,
-    "field_preparation_seconds": 0.000491639002575539,
-    "build_seconds": 0.012490736997278873,
-    "warmup_seconds": 0.2754693790047895,
+    "field_preparation_seconds": 0.0004683070001192391,
+    "build_seconds": 0.01239286700001685,
+    "warmup_seconds": 0.2738130279976758,
     "solve_seconds": [
-      0.21433011600311147,
-      0.2393264869970153,
-      0.2283899019967066
+      0.21624327099561924,
+      0.207971299001656,
+      0.22059925400390057
+    ],
+    "solver_seconds": [
+      0.1122421129985014,
+      0.11221258799923817,
+      0.11242893899907358
+    ],
+    "public_total_seconds": [
+      0.21611601499898825,
+      0.20784225899842568,
+      0.21956584599683993
+    ],
+    "reference_setup_seconds": [
+      0.004747381004563067,
+      0.004133766997256316,
+      0.004161010998359416
     ],
     "update_api_seconds": [
       0.0,
-      0.001272273002541624,
-      0.0012177440003142692
+      0.001219642006617505,
+      0.0011658919975161552
     ],
     "workspace_setup_seconds": [
-      0.00477360899822088,
-      0.004748693994770292,
-      0.005109460995299742
+      0.004301644999941345,
+      0.004311739998229314,
+      0.0048564200042164885
     ],
     "converged": true,
     "outer_iterations": 4,
@@ -216,19 +276,19 @@
     "multigrid_cycles": 20,
     "workspace_reused": true,
     "device_final_metrics": {
-      "physical_rms": 1.4302420355293972e-11,
-      "head_residual_rms": 7.442393618723822e-16,
-      "relative_cell_imbalance": 5.669829792250423e-10,
-      "gross_throughput": 2376.0000000012396,
+      "physical_rms": 1.4302420355293936e-11,
+      "head_residual_rms": 7.442393618723735e-16,
+      "relative_cell_imbalance": 5.669829792250578e-10,
+      "gross_throughput": 2376.0000000011746,
       "residual_l1": 1.3471515586394034e-06,
       "signed_imbalance": 1.48977705172193e-09,
       "boundary_inflow": 0.0,
-      "boundary_outflow": 1187.999999998508,
-      "scaled_l2": 2.5651977829772234e-13,
+      "boundary_outflow": 1187.9999999985075,
+      "scaled_l2": 2.5651977829772103e-13,
       "finite": true,
       "local_balance_valid": true,
       "chd_inflow": 0.0,
-      "chd_outflow": 1187.999999998508,
+      "chd_outflow": 1187.9999999985075,
       "ghb_inflow": 0.0,
       "ghb_outflow": 0.0,
       "ghb_net": 0.0,
@@ -239,7 +299,7 @@
       "riv_outflow": 0.0,
       "riv_net": 0.0,
       "free_boundary_inflow": 0.0,
-      "free_boundary_outflow": 1187.999999998509
+      "free_boundary_outflow": 1187.9999999985075
     },
     "maximum_head_difference_from_no_package_m": 0.0
   },
@@ -253,13 +313,28 @@
     "boundary_case": "none",
     "package_fields": false,
     "zero_exchange_solution_equivalent_to_no_package": true,
-    "field_preparation_seconds": 0.005927698999585118,
-    "build_seconds": 0.16537020699615823,
-    "warmup_seconds": 1.3754932960000588,
+    "field_preparation_seconds": 0.0068173640029272065,
+    "build_seconds": 0.17364278299646685,
+    "warmup_seconds": 1.438171499998134,
     "solve_seconds": [
-      0.8283873149994179,
-      0.8159358229968348,
-      0.8296340870001586
+      0.8620104559959145,
+      0.8327396669992595,
+      0.8264251389991841
+    ],
+    "solver_seconds": [
+      0.2844007090025116,
+      0.28425628400145797,
+      0.2842806839980767
+    ],
+    "public_total_seconds": [
+      0.8609546910010977,
+      0.8323340300048585,
+      0.8256707070031553
+    ],
+    "reference_setup_seconds": [
+      0.01845589499862399,
+      0.019867786002578214,
+      0.017300099003477953
     ],
     "update_api_seconds": [
       0.0,
@@ -267,9 +342,9 @@
       0.0
     ],
     "workspace_setup_seconds": [
-      0.022324197001580615,
-      0.02008064999972703,
-      0.02101475200470304
+      0.021657596000295598,
+      0.019736068999918643,
+      0.01994809500320116
     ],
     "converged": true,
     "outer_iterations": 4,
@@ -277,19 +352,19 @@
     "multigrid_cycles": 19,
     "workspace_reused": true,
     "device_final_metrics": {
-      "physical_rms": 2.7699778119461766e-11,
-      "head_residual_rms": 1.2886634265648473e-15,
-      "relative_cell_imbalance": 9.034799780295978e-10,
-      "gross_throughput": 20159.99999986058,
-      "residual_l1": 1.8214156356950728e-05,
+      "physical_rms": 2.770199703891329e-11,
+      "head_residual_rms": 1.2887679690076816e-15,
+      "relative_cell_imbalance": 9.037330124497724e-10,
+      "gross_throughput": 20159.999999860225,
+      "residual_l1": 1.8219257530861094e-05,
       "signed_imbalance": -5.000305725033627e-09,
       "boundary_inflow": 0.0,
-      "boundary_outflow": 10080.000000005062,
-      "scaled_l2": 1.293807811995875e-12,
+      "boundary_outflow": 10080.000000005055,
+      "scaled_l2": 1.2939127717754612e-12,
       "finite": true,
       "local_balance_valid": true,
       "chd_inflow": 0.0,
-      "chd_outflow": 10080.000000005062,
+      "chd_outflow": 10080.000000005055,
       "ghb_inflow": 0.0,
       "ghb_outflow": 0.0,
       "ghb_net": 0.0,
@@ -300,7 +375,7 @@
       "riv_outflow": 0.0,
       "riv_net": 0.0,
       "free_boundary_inflow": 0.0,
-      "free_boundary_outflow": 10080.00000000505
+      "free_boundary_outflow": 10080.000000005042
     },
     "maximum_head_difference_from_no_package_m": 0.0
   },
@@ -314,23 +389,38 @@
     "boundary_case": "sparse_drn",
     "package_fields": true,
     "zero_exchange_solution_equivalent_to_no_package": true,
-    "field_preparation_seconds": 0.005426686002465431,
-    "build_seconds": 0.13981544299895177,
-    "warmup_seconds": 1.757595934002893,
+    "field_preparation_seconds": 0.004797157002030872,
+    "build_seconds": 0.18043011400004616,
+    "warmup_seconds": 1.7678162320007687,
     "solve_seconds": [
-      1.2352060400007758,
-      1.503813581999566,
-      1.4548502120014746
+      1.2249994160010829,
+      1.2352847279980779,
+      1.244210662000114
+    ],
+    "solver_seconds": [
+      0.284154713001044,
+      0.28431151199765736,
+      0.28396886499831453
+    ],
+    "public_total_seconds": [
+      1.2237012009936734,
+      1.2345396500022616,
+      1.2433868090010947
+    ],
+    "reference_setup_seconds": [
+      0.03109429300093325,
+      0.030026432999875396,
+      0.030584945001464803
     ],
     "update_api_seconds": [
       0.0,
-      0.007451310993928928,
-      0.007362588003161363
+      0.0074555820028763264,
+      0.00750619699829258
     ],
     "workspace_setup_seconds": [
-      0.0318491020007059,
-      0.0324012130004121,
-      0.03292770600091899
+      0.032489812998392154,
+      0.031271936000848655,
+      0.03299645700462861
     ],
     "converged": true,
     "outer_iterations": 4,
@@ -338,19 +428,19 @@
     "multigrid_cycles": 19,
     "workspace_reused": true,
     "device_final_metrics": {
-      "physical_rms": 2.7698440028014468e-11,
-      "head_residual_rms": 1.2886004917395726e-15,
-      "relative_cell_imbalance": 9.034903609776833e-10,
-      "gross_throughput": 20159.999999862077,
-      "residual_l1": 1.8214365677185484e-05,
+      "physical_rms": 2.7709022926942228e-11,
+      "head_residual_rms": 1.2890935175141722e-15,
+      "relative_cell_imbalance": 9.041903764029647e-10,
+      "gross_throughput": 20159.99999986099,
+      "residual_l1": 1.8228477988158076e-05,
       "signed_imbalance": -5.000305725033627e-09,
       "boundary_inflow": 0.0,
-      "boundary_outflow": 10080.000000005064,
-      "scaled_l2": 1.2937446259327527e-12,
+      "boundary_outflow": 10080.000000005059,
+      "scaled_l2": 1.2942396198819592e-12,
       "finite": true,
       "local_balance_valid": true,
       "chd_inflow": 0.0,
-      "chd_outflow": 10080.000000005064,
+      "chd_outflow": 10080.000000005059,
       "ghb_inflow": 0.0,
       "ghb_outflow": 0.0,
       "ghb_net": 0.0,
@@ -361,7 +451,7 @@
       "riv_outflow": 0.0,
       "riv_net": 0.0,
       "free_boundary_inflow": 0.0,
-      "free_boundary_outflow": 10080.00000000506
+      "free_boundary_outflow": 10080.000000005051
     },
     "maximum_head_difference_from_no_package_m": 7.105427357601002e-15
   },
@@ -375,23 +465,38 @@
     "boundary_case": "distributed_riv",
     "package_fields": true,
     "zero_exchange_solution_equivalent_to_no_package": true,
-    "field_preparation_seconds": 0.004448464002052788,
-    "build_seconds": 0.16575690700119594,
-    "warmup_seconds": 1.7548407050053356,
+    "field_preparation_seconds": 0.004475663001358043,
+    "build_seconds": 0.15745947499817703,
+    "warmup_seconds": 1.8392196299973875,
     "solve_seconds": [
-      1.2746093469977495,
-      1.5438602619979065,
-      1.4590566030019545
+      1.2642704660029267,
+      1.3075157109997235,
+      1.2898155669972766
+    ],
+    "solver_seconds": [
+      0.28400004499417264,
+      0.28425718099606456,
+      0.2839892880001571
+    ],
+    "public_total_seconds": [
+      1.2628532540038577,
+      1.3071103839974967,
+      1.289101597001718
+    ],
+    "reference_setup_seconds": [
+      0.040963061997899786,
+      0.04355324900097912,
+      0.04465979400265496
     ],
     "update_api_seconds": [
       0.0,
-      0.011572062998311594,
-      0.011545105000550393
+      0.012206637002236675,
+      0.011915089999092743
     ],
     "workspace_setup_seconds": [
-      0.0385079119951115,
-      0.03853844900004333,
-      0.03845833399827825
+      0.0376348700010567,
+      0.03851913000107743,
+      0.038969592002104037
     ],
     "converged": true,
     "outer_iterations": 4,
@@ -399,19 +504,19 @@
     "multigrid_cycles": 19,
     "workspace_reused": true,
     "device_final_metrics": {
-      "physical_rms": 2.769925735641962e-11,
-      "head_residual_rms": 1.2886384935125677e-15,
-      "relative_cell_imbalance": 9.035453434513046e-10,
-      "gross_throughput": 20159.999999861622,
-      "residual_l1": 1.821547412385327e-05,
+      "physical_rms": 2.769983308832278e-11,
+      "head_residual_rms": 1.2886652622303898e-15,
+      "relative_cell_imbalance": 9.035607588443497e-10,
+      "gross_throughput": 20159.999999860687,
+      "residual_l1": 1.8215784898176213e-05,
       "signed_imbalance": -5.000305725033627e-09,
       "boundary_inflow": 0.0,
-      "boundary_outflow": 10080.00000000508,
-      "scaled_l2": 1.2937827794100534e-12,
+      "boundary_outflow": 10080.000000005055,
+      "scaled_l2": 1.2938096549894379e-12,
       "finite": true,
       "local_balance_valid": true,
       "chd_inflow": 0.0,
-      "chd_outflow": 10080.00000000508,
+      "chd_outflow": 10080.000000005055,
       "ghb_inflow": 0.0,
       "ghb_outflow": 0.0,
       "ghb_net": 0.0,
@@ -422,7 +527,7 @@
       "riv_outflow": 0.0,
       "riv_net": 0.0,
       "free_boundary_inflow": 0.0,
-      "free_boundary_outflow": 10080.000000005039
+      "free_boundary_outflow": 10080.000000005064
     },
     "maximum_head_difference_from_no_package_m": 7.105427357601002e-15
   },
@@ -436,23 +541,38 @@
     "boundary_case": "overlap",
     "package_fields": true,
     "zero_exchange_solution_equivalent_to_no_package": true,
-    "field_preparation_seconds": 0.004327021997596603,
-    "build_seconds": 0.1553114900016226,
-    "warmup_seconds": 1.7878219480044208,
+    "field_preparation_seconds": 0.004308059003960807,
+    "build_seconds": 0.1564976250010659,
+    "warmup_seconds": 1.8180065419946914,
     "solve_seconds": [
-      1.2262044470044202,
-      1.5661533889942802,
-      1.5048329109995393
+      1.3738186990012764,
+      1.5225166889940738,
+      1.5014632680031355
+    ],
+    "solver_seconds": [
+      0.2843347680027364,
+      0.2850062959987554,
+      0.28489207699749386
+    ],
+    "public_total_seconds": [
+      1.3720284719966003,
+      1.5214341839964618,
+      1.5003779460021178
+    ],
+    "reference_setup_seconds": [
+      0.055554092999955174,
+      0.06846862500242423,
+      0.0658133649994852
     ],
     "update_api_seconds": [
       0.0,
-      0.011631690998910926,
-      0.012876373999461066
+      0.01486565799859818,
+      0.014000418996147346
     ],
     "workspace_setup_seconds": [
-      0.04413405500235967,
-      0.04430459399736719,
-      0.044959455997741316
+      0.047007270994072314,
+      0.0566765760013368,
+      0.055915652999829035
     ],
     "converged": true,
     "outer_iterations": 4,
@@ -460,19 +580,19 @@
     "multigrid_cycles": 19,
     "workspace_reused": true,
     "device_final_metrics": {
-      "physical_rms": 2.7701360600404956e-11,
-      "head_residual_rms": 1.2887383161969008e-15,
-      "relative_cell_imbalance": 9.036780299761376e-10,
-      "gross_throughput": 20159.999999860982,
-      "residual_l1": 1.8218149084193308e-05,
+      "physical_rms": 2.77016556782588e-11,
+      "head_residual_rms": 1.2887498617155507e-15,
+      "relative_cell_imbalance": 9.036330086358394e-10,
+      "gross_throughput": 20159.99999986035,
+      "residual_l1": 1.8217241453972327e-05,
       "signed_imbalance": -5.000305725033627e-09,
       "boundary_inflow": 0.0,
-      "boundary_outflow": 10080.000000005071,
-      "scaled_l2": 1.2938830005897322e-12,
+      "boundary_outflow": 10080.000000005084,
+      "scaled_l2": 1.2938945921984542e-12,
       "finite": true,
       "local_balance_valid": true,
       "chd_inflow": 0.0,
-      "chd_outflow": 10080.000000005071,
+      "chd_outflow": 10080.000000005084,
       "ghb_inflow": 0.0,
       "ghb_outflow": 0.0,
       "ghb_net": 0.0,
@@ -483,7 +603,7 @@
       "riv_outflow": 0.0,
       "riv_net": 0.0,
       "free_boundary_inflow": 0.0,
-      "free_boundary_outflow": 10080.00000000504
+      "free_boundary_outflow": 10080.000000005046
     },
     "maximum_head_difference_from_no_package_m": 7.105427357601002e-15
   }

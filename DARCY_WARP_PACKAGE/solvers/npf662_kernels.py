@@ -353,9 +353,7 @@ def physical_rows_drn_riv(head:wp.array(dtype=wp.float64), source:wp.array(dtype
     ghb_c:wp.array(dtype=wp.float64), ghb_head:wp.array(dtype=wp.float64),
     drn_c:wp.array(dtype=wp.float64), drn_elevation:wp.array(dtype=wp.float64),
     riv_c:wp.array(dtype=wp.float64), riv_stage:wp.array(dtype=wp.float64),
-    riv_bottom:wp.array(dtype=wp.float64), drn_rate:wp.array(dtype=wp.float64),
-    riv_rate:wp.array(dtype=wp.float64), drn_tangent:wp.array(dtype=wp.float64),
-    riv_tangent:wp.array(dtype=wp.float64), boundary_flow:wp.array(dtype=wp.float64),
+    riv_bottom:wp.array(dtype=wp.float64), boundary_flow:wp.array(dtype=wp.float64),
     boundary_tangent:wp.array(dtype=wp.float64), operator_tangent:wp.array(dtype=wp.float64)):
     """Evaluate physical rows and boundary terms for a DRN/RIV NPF state.
 
@@ -381,10 +379,6 @@ def physical_rows_drn_riv(head:wp.array(dtype=wp.float64), source:wp.array(dtype
     :param riv_c: Integrated river conductances.
     :param riv_stage: River stages.
     :param riv_bottom: Riverbed bottoms.
-    :param drn_rate: Drain discharge output, positive out of aquifer.
-    :param riv_rate: River discharge output, positive out of aquifer.
-    :param drn_tangent: Drain Jacobian diagonal output.
-    :param riv_tangent: River Jacobian diagonal output.
     :param boundary_flow: Combined GHB/DRN/RIV discharge output.
     :param boundary_tangent: Combined boundary tangent output.
     :param operator_tangent: Storage plus boundary diagonal output.
@@ -396,10 +390,6 @@ def physical_rows_drn_riv(head:wp.array(dtype=wp.float64), source:wp.array(dtype
     ghb_flow = ghb_flow_at(i, head, ghb_c, ghb_head)
     combined_flow = ghb_flow + drain[0] + river[0]
     combined_tangent = ghb_c[i] + drain[1] + river[1]
-    drn_rate[i] = drain[0]
-    riv_rate[i] = river[0]
-    drn_tangent[i] = drain[1]
-    riv_tangent[i] = river[1]
     boundary_flow[i] = combined_flow
     boundary_tangent[i] = combined_tangent
     operator_tangent[i] = storage_tangent[i] + combined_tangent
@@ -421,9 +411,7 @@ def physical_rows_drn_riv_tiled(head:wp.array(dtype=wp.float64), source:wp.array
     ghb_c:wp.array(dtype=wp.float64), ghb_head:wp.array(dtype=wp.float64),
     drn_c:wp.array(dtype=wp.float64), drn_elevation:wp.array(dtype=wp.float64),
     riv_c:wp.array(dtype=wp.float64), riv_stage:wp.array(dtype=wp.float64),
-    riv_bottom:wp.array(dtype=wp.float64), drn_rate:wp.array(dtype=wp.float64),
-    riv_rate:wp.array(dtype=wp.float64), drn_tangent:wp.array(dtype=wp.float64),
-    riv_tangent:wp.array(dtype=wp.float64), boundary_flow:wp.array(dtype=wp.float64),
+    riv_bottom:wp.array(dtype=wp.float64), boundary_flow:wp.array(dtype=wp.float64),
     boundary_tangent:wp.array(dtype=wp.float64), operator_tangent:wp.array(dtype=wp.float64)):
     """Tiled equivalent of :func:`physical_rows_drn_riv`.
 
@@ -449,10 +437,6 @@ def physical_rows_drn_riv_tiled(head:wp.array(dtype=wp.float64), source:wp.array
     :param riv_c: Integrated river conductances.
     :param riv_stage: River stages.
     :param riv_bottom: Riverbed bottoms.
-    :param drn_rate: Drain discharge output, positive out of aquifer.
-    :param riv_rate: River discharge output, positive out of aquifer.
-    :param drn_tangent: Drain Jacobian diagonal output.
-    :param riv_tangent: River Jacobian diagonal output.
     :param boundary_flow: Combined GHB/DRN/RIV discharge output.
     :param boundary_tangent: Combined boundary tangent output.
     :param operator_tangent: Storage plus boundary diagonal output.
@@ -464,10 +448,6 @@ def physical_rows_drn_riv_tiled(head:wp.array(dtype=wp.float64), source:wp.array
     ghb_flow = ghb_flow_at(i, head, ghb_c, ghb_head)
     combined_flow = ghb_flow + drain[0] + river[0]
     combined_tangent = ghb_c[i] + drain[1] + river[1]
-    drn_rate[i] = drain[0]
-    riv_rate[i] = river[0]
-    drn_tangent[i] = drain[1]
-    riv_tangent[i] = river[1]
     boundary_flow[i] = combined_flow
     boundary_tangent[i] = combined_tangent
     operator_tangent[i] = storage_tangent[i] + combined_tangent

@@ -100,6 +100,52 @@ def _run_mf6_transient_package_case(*, workspace, package):
     return heads, rates
 
 
+def _run_mf6_layered_mixed_case(*, workspace):
+    """Run a two-layer MF6 case with co-located DRN/RIV capability.
+
+    :param workspace: Writable directory for the simulation files.
+    :return: Full head grid and individual signed DRN/RIV rates.
+    :raises RuntimeError: If MF6 fails to terminate normally.
+    """
+    import flopy
+
+    name = "dwmix3d"
+    simulation = flopy.mf6.MFSimulation(sim_name=name, exe_name=str(require_mf6()),
+        version="mf6", sim_ws=str(workspace))
+    flopy.mf6.ModflowTdis(simulation, time_units="DAYS", nper=1,
+        perioddata=[(1.0, 1, 1.0)])
+    model = flopy.mf6.ModflowGwf(simulation, modelname=name, save_flows=True)
+    flopy.mf6.ModflowIms(simulation, complexity="COMPLEX", linear_acceleration="BICGSTAB",
+        outer_maximum=100, outer_dvclose=1.0e-12, inner_maximum=100,
+        inner_dvclose=1.0e-12, rcloserecord=[1.0e-12, "strict"])
+    flopy.mf6.ModflowGwfdis(model, nlay=2, nrow=1, ncol=3, delr=1.0, delc=1.0,
+        top=12.0, botm=[6.0, 0.0])
+    flopy.mf6.ModflowGwfic(model, strt=11.0)
+    flopy.mf6.ModflowGwfnpf(model, icelltype=0, k=np.array([[[10.0] * 3], [[2.0] * 3]]),
+        k33=np.array([[[2.0] * 3], [[1.0] * 3]]), save_flows=True)
+    flopy.mf6.ModflowGwfchd(model, maxbound=4,
+        stress_period_data=[((layer, 0, col), 11.0)
+            for layer in range(2) for col in (0, 2)], save_flows=True)
+    flopy.mf6.ModflowGwfwel(model, maxbound=2,
+        stress_period_data=[((0, 0, 1), 2.0), ((1, 0, 1), -1.0)], save_flows=True)
+    flopy.mf6.ModflowGwfdrn(model, maxbound=1,
+        stress_period_data=[((1, 0, 1), 9.0, 1.0)], save_flows=True)
+    flopy.mf6.ModflowGwfriv(model, maxbound=1,
+        stress_period_data=[((0, 0, 1), 10.5, 2.0, 9.5)], save_flows=True)
+    flopy.mf6.ModflowGwfoc(model, head_filerecord=f"{name}.hds",
+        budget_filerecord=f"{name}.cbc", saverecord=[("HEAD", "ALL"), ("BUDGET", "ALL")])
+    simulation.write_simulation()
+    success, output = simulation.run_simulation(silent=True, report=True)
+    if not success or not any("Normal termination" in line for line in output):
+        raise RuntimeError(f"MF6 failed: {output}")
+    head_file = flopy.utils.HeadFile(str(workspace / f"{name}.hds"))
+    budget_file = flopy.utils.CellBudgetFile(str(workspace / f"{name}.cbc"), precision="double")
+    head = head_file.get_data(totim=1.0)
+    drn = budget_file.get_data(text="DRN", totim=1.0)[0]
+    riv = budget_file.get_data(text="RIV", totim=1.0)[0]
+    return head, float(drn["q"].sum()), float(riv["q"].sum())
+
+
 @pytest.mark.parametrize("package", ["DRN", "RIV"])
 def test_confined_native_package_matches_mf6_head_and_exchange(tmp_path, package):
     """Compare steady DarcyWarp head and package exchange with actual MF6.
@@ -170,3 +216,47 @@ def test_transient_native_package_matches_mf6_heads_and_rates(tmp_path, package)
     assert info["converged"]
     np.testing.assert_allclose(heads[:, 0, 0, 0], mf6_heads, rtol=0.0, atol=1e-9)
     np.testing.assert_allclose(rates, -mf6_rates, rtol=1e-11, atol=1e-11)
+
+
+def test_layered_npf_with_mixed_drn_riv_matches_mf6(tmp_path):
+    """Compare layered heads and simultaneous DRN/RIV budgets with MF6.
+
+    :param tmp_path: Pytest-provided temporary directory.
+    :return: None.
+    """
+    pytest.importorskip("flopy")
+    require_mf6()
+    shape = (2, 1, 3)
+    active = np.ones(shape, dtype=np.int32)
+    fixed = np.zeros(shape, dtype=np.int32)
+    fixed[:, :, 0] = 1
+    fixed[:, :, 2] = 1
+    values = np.full(shape, 11.0)
+    values[fixed == 0] = 0.0
+    initial = np.full(shape, 11.0)
+    source = np.zeros(shape)
+    source[0, 0, 1] = 2.0
+    source[1, 0, 1] = -1.0
+    drn_mask = np.zeros(shape, dtype=np.int32)
+    drn_mask[1, 0, 1] = 1
+    riv_mask = np.zeros(shape, dtype=np.int32)
+    riv_mask[0, 0, 1] = 1
+    interfaces = np.broadcast_to(np.array([12.0, 6.0, 0.0])[:, None, None],
+        (3, 1, 3)).copy()
+    with WarpDarcySolver3D(nx=3, ny=1, nz=2, dx=1.0, dy=1.0, dz=1.0,
+            device="cuda:0", implementation="fast", formulation="mf6_6_6_2_npf") as solver:
+        solver.build_from_layers(z_interfaces=interfaces, kx_field=np.broadcast_to(
+            np.array([10.0, 2.0])[:, None, None], shape).copy(),
+            ky_field=np.broadcast_to(np.array([10.0, 2.0])[:, None, None], shape).copy(),
+            kz_field=np.broadcast_to(np.array([2.0, 1.0])[:, None, None], shape).copy(),
+            active=active, bc_mask=fixed, bc_values=values, rhs=source, initial_head=initial,
+            drn_conductance=1.0, drn_elevation=9.0, drn_mask=drn_mask,
+            riv_conductance=2.0, riv_stage=10.5, riv_bottom=9.5, riv_mask=riv_mask)
+        head, info = solver.solve(max_outer=30, max_cycles=100)
+        drn_rate = solver.accepted_drn_discharge(head=head, info=info)[1, 0, 1]
+        riv_rate = solver.accepted_riv_discharge(head=head, info=info)[0, 0, 1]
+    mf6_head, mf6_drn_rate, mf6_riv_rate = _run_mf6_layered_mixed_case(workspace=tmp_path)
+    assert info["converged"]
+    np.testing.assert_allclose(head, mf6_head, rtol=0.0, atol=1e-9)
+    np.testing.assert_allclose(drn_rate, -mf6_drn_rate, rtol=1e-11, atol=1e-11)
+    np.testing.assert_allclose(riv_rate, -mf6_riv_rate, rtol=1e-11, atol=1e-11)

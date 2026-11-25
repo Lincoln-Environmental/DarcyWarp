@@ -210,6 +210,7 @@ def test_npf_solver_accepts_co_located_ghb_drn_and_gaining_riv(device, precondit
 
     assert updated_info["converged"]
     assert updated_info["workspace_reused"]
+    assert updated_info["reference_reused"]
     np.testing.assert_allclose(updated_head.item(), 17.0 / 6.0, rtol=0.0, atol=1e-10)
     updated_river = model.accepted_riv_discharge(head=updated_head, info=updated_info).item()
     np.testing.assert_allclose(updated_river, -3.5, rtol=0.0, atol=1e-10)

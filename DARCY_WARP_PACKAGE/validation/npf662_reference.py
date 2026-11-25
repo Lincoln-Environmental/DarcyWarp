@@ -293,18 +293,7 @@ class NPF662Reference:
                                 else np.broadcast_to(case.ghb_conductance, self.shape).copy())
         self.ghb_head = (np.zeros(self.shape) if case.ghb_head is None
                          else np.broadcast_to(case.ghb_head, self.shape).copy())
-        from DARCY_WARP_PACKAGE.physics.drn_riv_3d import validate_drn_fields, validate_riv_fields
-        self.drn_conductance, self.drn_elevation = validate_drn_fields(
-            conductance=case.drn_conductance, elevation=case.drn_elevation,
-            active=case.active, fixed=case.fixed, mask=case.drn_mask)
-        self.riv_conductance, self.riv_stage, self.riv_bottom = validate_riv_fields(
-            conductance=case.riv_conductance, stage=case.riv_stage, bottom=case.riv_bottom,
-            active=case.active, fixed=case.fixed, mask=case.riv_mask)
-        self.drn_conductance = np.zeros(self.shape) if self.drn_conductance is None else self.drn_conductance
-        self.drn_elevation = np.zeros(self.shape) if self.drn_elevation is None else self.drn_elevation
-        self.riv_conductance = np.zeros(self.shape) if self.riv_conductance is None else self.riv_conductance
-        self.riv_stage = np.zeros(self.shape) if self.riv_stage is None else self.riv_stage
-        self.riv_bottom = np.zeros(self.shape) if self.riv_bottom is None else self.riv_bottom
+        self.refresh_drn_riv_fields(case=case)
         self.component_anchor = npf_ghb_component_anchor(conductance=case.ghb_conductance,
             active=case.active, fixed=case.fixed)
         ids=np.arange(case.active.size).reshape(self.shape)
@@ -338,6 +327,31 @@ class NPF662Reference:
         indices=np.arange(m)
         self.select_left=sparse.csr_matrix((np.ones(m),(indices,self.left)),shape=(m,n))
         self.select_right=sparse.csr_matrix((np.ones(m),(indices,self.right)),shape=(m,n))
+
+    def refresh_drn_riv_fields(self, *, case):
+        """Refresh package values without rebuilding geometry and K operators.
+
+        :param case: Validated steady NPF case with the current DRN/RIV fields.
+        :return: None.
+        :raises ValueError: If package fields are invalid for the case grid.
+        """
+        from DARCY_WARP_PACKAGE.physics.drn_riv_3d import validate_drn_fields, validate_riv_fields
+
+        drain_conductance, drain_elevation = validate_drn_fields(
+            conductance=case.drn_conductance, elevation=case.drn_elevation,
+            active=case.active, fixed=case.fixed, mask=case.drn_mask)
+        river_conductance, river_stage, river_bottom = validate_riv_fields(
+            conductance=case.riv_conductance, stage=case.riv_stage, bottom=case.riv_bottom,
+            active=case.active, fixed=case.fixed, mask=case.riv_mask)
+        self.drn_conductance = (np.zeros(self.shape) if drain_conductance is None
+            else drain_conductance)
+        self.drn_elevation = (np.zeros(self.shape) if drain_elevation is None
+            else drain_elevation)
+        self.riv_conductance = (np.zeros(self.shape) if river_conductance is None
+            else river_conductance)
+        self.riv_stage = np.zeros(self.shape) if river_stage is None else river_stage
+        self.riv_bottom = np.zeros(self.shape) if river_bottom is None else river_bottom
+        self.case = case
 
     def face_terms(self,*,head):
         c=self.case

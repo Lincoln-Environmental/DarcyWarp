@@ -89,16 +89,13 @@ class NPF662Workspace:
         self.boundary_tangent = self.trial_boundary_tangent = None
         self.drn_conductance = self.drn_elevation = None
         self.riv_conductance = self.riv_stage = self.riv_bottom = None
-        self.drn_rate = self.trial_drn_rate = None
-        self.riv_rate = self.trial_riv_rate = None
-        self.drn_tangent = self.trial_drn_tangent = None
-        self.riv_tangent = self.trial_riv_tangent = None
+        self.drn_rate = self.riv_rate = None
         if self.has_drn_riv:
             for name in ('boundary_operator', 'trial_boundary_operator', 'boundary_flow',
-                         'trial_boundary_flow', 'boundary_tangent', 'trial_boundary_tangent',
-                         'drn_rate', 'trial_drn_rate', 'riv_rate', 'trial_riv_rate',
-                         'drn_tangent', 'trial_drn_tangent', 'riv_tangent', 'trial_riv_tangent'):
+                         'trial_boundary_flow', 'boundary_tangent', 'trial_boundary_tangent'):
                 setattr(self, name, wp.zeros(shape=self.n, dtype=wp.float64, device=self.device))
+            self.drn_rate = wp.zeros(shape=self.n, dtype=wp.float64, device=self.device)
+            self.riv_rate = wp.zeros(shape=self.n, dtype=wp.float64, device=self.device)
             self.package_totals = wp.zeros(shape=4, dtype=wp.float64, device=self.device)
             for name in ('drn_conductance', 'drn_elevation', 'riv_conductance', 'riv_stage', 'riv_bottom'):
                 setattr(self, name, wp.zeros(shape=self.n, dtype=wp.float64, device=self.device))
@@ -300,10 +297,6 @@ class NPF662Workspace:
                 self.zero if self.ghb_head is None else self.ghb_head,
                 self.drn_conductance, self.drn_elevation, self.riv_conductance,
                 self.riv_stage, self.riv_bottom,
-                self.trial_drn_rate if trial else self.drn_rate,
-                self.trial_riv_rate if trial else self.riv_rate,
-                self.trial_drn_tangent if trial else self.drn_tangent,
-                self.trial_riv_tangent if trial else self.riv_tangent,
                 self.trial_boundary_flow if trial else self.boundary_flow,
                 self.trial_boundary_tangent if trial else self.boundary_tangent,
                 self.trial_boundary_operator if trial else self.boundary_operator))
@@ -394,9 +387,7 @@ class NPF662Workspace:
             wp.copy(dest=self.ghb_operator,src=self.trial_ghb_operator)
         if self.has_drn_riv:
             for current, trial in (('boundary_operator','trial_boundary_operator'),
-                ('boundary_flow','trial_boundary_flow'),('boundary_tangent','trial_boundary_tangent'),
-                ('drn_rate','trial_drn_rate'),('riv_rate','trial_riv_rate'),
-                ('drn_tangent','trial_drn_tangent'),('riv_tangent','trial_riv_tangent')):
+                ('boundary_flow','trial_boundary_flow'),('boundary_tangent','trial_boundary_tangent')):
                 wp.copy(dest=getattr(self,current),src=getattr(self,trial))
 
     def accept_trial(self,*,metrics):
@@ -444,7 +435,7 @@ class NPF662Workspace:
         self.ghb_operator = self.trial_ghb_operator = self.previous_ghb_operator = None
         self.drn_conductance = self.drn_elevation = None
         self.riv_conductance = self.riv_stage = self.riv_bottom = None
-        self.drn_rate = self.trial_drn_rate = self.riv_rate = self.trial_riv_rate = None
+        self.drn_rate = self.riv_rate = None
         self.boundary_operator = self.trial_boundary_operator = None
         self.boundary_flow = self.trial_boundary_flow = None
         self.boundary_tangent = self.trial_boundary_tangent = None

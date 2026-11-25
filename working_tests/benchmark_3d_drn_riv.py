@@ -86,6 +86,9 @@ def benchmark_one(*, shape: tuple[int, int, int], boundary_case: str,
     wp.synchronize_device(device=device)
     warmup_seconds = perf_counter() - warmup_start
     solve_rows = []
+    solver_rows = []
+    public_rows = []
+    reference_setup_rows = []
     update_rows = []
     workspace_setup_rows = []
     reference_head = accepted_head.copy()
@@ -112,6 +115,9 @@ def benchmark_one(*, shape: tuple[int, int, int], boundary_case: str,
         wp.synchronize_device(device=device)
         solve_seconds = perf_counter() - solve_start
         solve_rows.append(solve_seconds)
+        solver_rows.append(float(last_info.get("seconds", 0.0)))
+        public_rows.append(float(last_info.get("public_total_seconds", solve_seconds)))
+        reference_setup_rows.append(float(last_info.get("reference_setup_seconds", 0.0)))
         update_rows.append(update_seconds)
         workspace_setup_rows.append(float(last_info.get("setup_seconds", 0.0)))
         if not last_info["converged"]:
@@ -126,6 +132,9 @@ def benchmark_one(*, shape: tuple[int, int, int], boundary_case: str,
         build_seconds=build_seconds,
         warmup_seconds=warmup_seconds,
         solve_seconds=solve_rows,
+        solver_seconds=solver_rows,
+        public_total_seconds=public_rows,
+        reference_setup_seconds=reference_setup_rows,
         update_api_seconds=update_rows,
         workspace_setup_seconds=workspace_setup_rows,
         converged=bool(last_info and last_info["converged"]),

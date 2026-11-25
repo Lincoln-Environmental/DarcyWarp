@@ -24,17 +24,22 @@ Verified evidence on this branch:
   CUDA ``test_common_head_shift_with_opposing_large_wells`` case, exceeding
   its 1e-6 m bound by 1.57e-6 m. The exact same result reproduces at the
   committed pre-integration feature baseline ``ca09497``.
-* The focused analytical, API, and actual MF6 tests pass: 59 passed. MF6
-  6.6.2 checks cover confined steady DRN/RIV and two transient single-cell
-  periods covering DRN activation and RIV leakage below the bed. Head error
-  is below 1e-9 m and package-rate error below 1e-11 L3/T in those cases.
+* The broad post-optimization NPF and package regressions report 272 passed,
+  4 skipped and the same baseline CUDA failure. A separate layered mixed
+  DRN/RIV actual-MF6 case passes. MF6 6.6.2 checks cover confined steady
+  DRN/RIV, transient single-cell activation/leakage, and a two-layer steady
+  case with both packages. Head error is below 1e-9 m and package-rate error
+  below 1e-11 L3/T in these cases.
 * The CUDA benchmark ``working_tests/benchmark_3d_drn_riv.py`` covers
   120,000 and 1,012,500 cells. Paired package cases use zero exchange and
   retain the no-package solution (max head difference 7.11e-15 m). Warm
-  solve medians are 0.176 s without packages and 0.221-0.228 s with packages
-  at 120k cells; at 1.0125M cells they are 0.828 s and 1.455-1.505 s. The
-  large-grid package handling cost is material and remains an optimization
-  target. Parameter updates take 1-13 ms.
+  Newton execution medians are unchanged by the zero-exchange package fields:
+  0.112 s at 120k cells and 0.284-0.285 s at 1.0125M cells. Warm public-call
+  medians are 0.173 s without packages and 0.214-0.216 s with packages at
+  120k cells; at 1.0125M cells they are 0.832 s and 1.235-1.500 s. Reference
+  cache refresh takes 3-66 ms and parameter updates take 1-15 ms. Remaining
+  public-call overhead includes input validation and package field refresh;
+  GPU Newton time itself is unchanged in these equivalent-solution cases.
 
 These tests and measurements do not establish matched MF6 accuracy for
 layered or convertible DRN/RIV, nor performance parity on active regional
