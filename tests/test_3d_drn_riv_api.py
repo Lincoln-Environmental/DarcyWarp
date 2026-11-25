@@ -147,6 +147,52 @@ def test_disconnected_river_constant_balance_is_not_reported_as_unique():
 
 
 @pytest.mark.parametrize("device", ["cpu", "cuda:0"])
+@pytest.mark.parametrize("package", ["drn", "riv"])
+def test_three_cell_boundary_roots_match_closed_form(device, package):
+    """Check 1D anchored DRN and disconnected-RIV roots against hand algebra.
+
+    :param device: Warp device identifier.
+    :param package: Boundary package to include in the middle cell.
+    :return: None.
+    """
+    if device.startswith("cuda"):
+        import warp as wp
+        wp.init()
+        if not wp.is_cuda_available():
+            pytest.skip("CUDA is unavailable")
+    shape = (1, 1, 3)
+    fixed = np.array([[[1, 0, 1]]], dtype=np.int32)
+    values = np.zeros(shape)
+    source = np.zeros(shape)
+    boundary = {}
+    expected_head = 1.0
+    expected_rate = -2.0
+    if package == "drn":
+        source[0, 0, 1] = 4.0
+        boundary = dict(drn_conductance=2.0, drn_elevation=1.0,
+            drn_mask=np.array([[[0, 1, 0]]], dtype=np.int32))
+        expected_head = 1.5
+        expected_rate = 1.0
+    else:
+        boundary = dict(riv_conductance=2.0, riv_stage=3.0, riv_bottom=2.0,
+            riv_mask=np.array([[[0, 1, 0]]], dtype=np.int32))
+    with WarpDarcySolver3D(nx=3, ny=1, nz=1, dx=1.0, dy=1.0, dz=1.0,
+            device=device, implementation="fast", formulation="mf6_6_6_2_npf") as model:
+        model.build_from_K_fields(kx_field=np.ones(shape), ky_field=np.ones(shape),
+            kz_field=np.ones(shape), active=np.ones(shape, dtype=np.int32),
+            bc_mask=fixed, bc_values=values, rhs=source, **boundary)
+        head, info = model.solve(max_outer=30, max_cycles=100)
+        assert info["converged"]
+        assert info["physical_acceptance"]["relative_cell_imbalance"] <= 1e-8
+        np.testing.assert_allclose(head[0, 0, 1], expected_head, rtol=0.0, atol=1e-12)
+        if package == "drn":
+            rate = model.accepted_drn_discharge(head=head, info=info)[0, 0, 1]
+        else:
+            rate = model.accepted_riv_discharge(head=head, info=info)[0, 0, 1]
+        np.testing.assert_allclose(rate, expected_rate, rtol=0.0, atol=1e-12)
+
+
+@pytest.mark.parametrize("device", ["cpu", "cuda:0"])
 def test_transient_npf_storage_can_cross_drain_activation(device):
     """Check backward-Euler storage and DRN share one accepted cell balance."""
     if device.startswith("cuda"):
