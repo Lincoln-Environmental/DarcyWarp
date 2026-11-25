@@ -4,6 +4,11 @@
 from __future__ import annotations
 
 from typing import Any
+import os
+import time
+
+import numpy as np
+from DARCY_WARP_PACKAGE.physics.storage_2d import exact_unconfined_storage_terms
 
 from DARCY_WARP_PACKAGE.physics.budgets_2d import evaluate_picard_transient_balance
 
@@ -12,66 +17,33 @@ from .registry import select_backend
 from .capabilities import CAPABILITIES
 from .transient_experimental import solve_transient_unconfined_experimental
 
-def solve_transient_unconfined_backend(
-        *,
-        model: Any,
-        initial_head: np.ndarray,
-        recharge_rates: np.ndarray,
-        k_field: np.ndarray,
-        zbot_field: np.ndarray,
-        ztop_field: np.ndarray,
-        sy: float,
-        ss: float,
-        dt: float,
-        active: np.ndarray | None = None,
-        bc_mask: np.ndarray | None = None,
-        bc_values: np.ndarray | None = None,
-        gh_mask: np.ndarray | None = None,
-        gh_head: np.ndarray | None = None,
-        gh_width: np.ndarray | None = None,
-        gh_alpha: float | np.ndarray = 1.0,
-        aq_thickness: float | np.ndarray | None = None,
-        storage_mode: str = "mf6_convertible_secant_sy",
-        storage_reference: str = "current_picard",
-        solve_controls: dict | None = None,
-        min_saturated_thickness: float = 0.1,
-        save_diagnostics: bool = False,
-        return_info: bool = True,
+def _prepare_transient_fields(
+    *, model, initial_head, k_field, zbot_field, ztop_field, active, bc_mask,
+    bc_values, recharge_rates, dt, dtype,
 ):
-    from DARCY_WARP_PACKAGE import warped_darcy as kernel_module
-    globals().update(kernel_module.__dict__)
-    self = model
-    """
-    Step a 2D unconfined transient solve through multiple stress periods.
+    """Normalise the grid inputs without writing any model or device state.
 
-    This is solver infrastructure only: callers remain responsible for MF6
-    artifact loading, comparisons, reporting, mass balance, and persistence.
-
-    :param initial_head: Initial/previous head for period 1.
-    :param recharge_rates: One recharge value per stress period.
-    :param k_field: Hydraulic conductivity field.
-    :param zbot_field: Cell bottom field.
-    :param ztop_field: Cell top field.
-    :param sy: Specific yield.
-    :param ss: Specific storage.
-    :param dt: Transient time step.
-    :param active: Optional active mask; defaults to all active.
-    :param bc_mask: Optional Dirichlet mask; defaults to no Dirichlet cells.
-    :param bc_values: Optional Dirichlet values; defaults to initial heads.
-    :param storage_mode: 2D unconfined storage mode passed to the Picard solver.
-    :param storage_reference: ``current_picard`` or ``previous_period``.
-    :param solve_controls: Extra controls forwarded to :meth:`solve`.
-    :param min_saturated_thickness: Minimum saturated thickness.
-    :param save_diagnostics: Save full-grid storage/reference arrays.
-    :param return_info: Return ``(heads_per_period, info)`` when true.
-    :return: Heads per period, plus diagnostics when ``return_info`` is true.
+    :param model: Model providing nx and ny.
+    :param initial_head: Initial head grid (ny, nx), in length units.
+    :param k_field: Hydraulic conductivity grid, in length per time.
+    :param zbot_field: Cell-bottom elevation grid, in length units.
+    :param ztop_field: Cell-top elevation grid, in length units.
+    :param active: Active-cell mask, or None for an entirely active grid.
+    :param bc_mask: Prescribed-head mask, or None for no prescribed heads.
+    :param bc_values: Prescribed head grid, or None to use initial_head.
+    :param recharge_rates: Uniform recharge rate per period, length per time.
+    :param dt: Positive stress period duration in model time units.
+    :param dtype: NumPy floating-point type used by the selected 2D solver.
+    :returns: Head, conductivity, bottom, top, active mask, boundary mask,
+        boundary heads, one-dimensional recharge rates and period duration.
+    :raises ValueError: If shapes are inconsistent, rates empty or dt invalid.
     """
-    h0 = np.asarray(initial_head, dtype=NP_FLOAT)
-    if h0.shape != (self.ny, self.nx):
-        raise ValueError(f"initial_head shape {h0.shape} expected {(self.ny, self.nx)}")
-    k = np.asarray(k_field, dtype=NP_FLOAT)
-    bottom = np.asarray(zbot_field, dtype=NP_FLOAT)
-    top = np.asarray(ztop_field, dtype=NP_FLOAT)
+    h0 = np.asarray(initial_head, dtype=dtype)
+    if h0.shape != (model.ny, model.nx):
+        raise ValueError(f"initial_head shape {h0.shape} expected {(model.ny, model.nx)}")
+    k = np.asarray(k_field, dtype=dtype)
+    bottom = np.asarray(zbot_field, dtype=dtype)
+    top = np.asarray(ztop_field, dtype=dtype)
     for name, arr in (("k_field", k), ("zbot_field", bottom), ("ztop_field", top)):
         if arr.shape != h0.shape:
             raise ValueError(f"{name} shape {arr.shape} expected {h0.shape}")
@@ -85,24 +57,39 @@ def solve_transient_unconfined_backend(
     else:
         bc_i = np.asarray(bc_mask, dtype=np.int32)
     if bc_values is None:
-        bc_v = np.asarray(h0, dtype=NP_FLOAT)
+        bc_v = np.asarray(h0, dtype=dtype)
     else:
-        bc_v = np.asarray(bc_values, dtype=NP_FLOAT)
+        bc_v = np.asarray(bc_values, dtype=dtype)
     for name, arr in (("active", active_i), ("bc_mask", bc_i), ("bc_values", bc_v)):
         if arr.shape != h0.shape:
             raise ValueError(f"{name} shape {arr.shape} expected {h0.shape}")
 
-    rates = np.asarray(recharge_rates, dtype=NP_FLOAT).reshape(-1)
+    rates = np.asarray(recharge_rates, dtype=dtype).reshape(-1)
     if rates.size < 1:
         raise ValueError("recharge_rates must contain at least one period.")
     dt_f = float(dt)
     if not np.isfinite(dt_f) or dt_f <= 0.0:
         raise ValueError("dt must be finite and > 0.")
+    return h0, k, bottom, top, active_i, bc_i, bc_v, rates, dt_f
 
+
+def _prepare_transient_controls(
+    *, solve_controls, save_diagnostics: bool, return_info: bool,
+    min_saturated_thickness: float,
+):
+    """Separate single-solve controls from period and device-only controls.
+
+    :param solve_controls: Optional input mapping; it is copied, not mutated.
+    :param save_diagnostics: Default for saving full-grid storage histories.
+    :param return_info: Whether diagnostic results are returned to the caller.
+    :param min_saturated_thickness: Default thickness floor, in length units.
+    :returns: Host solve controls, device controls, diagnostics flag,
+        rejected-trial reporting flag and validated thickness floor.
+    :raises ValueError: If the selected minimum thickness is not positive and finite.
+    """
     controls = {} if solve_controls is None else dict(solve_controls)
     save_diagnostics_b = bool(controls.pop("save_transient_diagnostics", save_diagnostics))
     allow_rejected_trial = bool(controls.get("allow_unaccepted_transient_period", False)) and return_info
-    accepted_periods = 0
     fast_path_controls = dict(controls)
     # Drop keys consumed by this wrapper or the device fast path so the
     # ``**controls`` spread forwarded to ``solve()`` does not inject unexpected
@@ -161,6 +148,274 @@ def solve_transient_unconfined_backend(
     if not np.isfinite(min_sat) or min_sat <= 0.0:
         raise ValueError("min_saturated_thickness must be positive and finite.")
     controls["min_saturated_thickness"] = min_sat
+    return controls, fast_path_controls, save_diagnostics_b, allow_rejected_trial, min_sat
+
+
+def _assemble_transient_result(
+    *, model, heads_per_period, head_prev, accepted_periods, n_periods, period_infos,
+    last_info, period_times, total_t0, dt_f, storage_reference, controls, counters,
+    active_i, bc_i, return_info, histories,
+):
+    """Trim histories to returned periods and publish the last accepted state.
+
+    :param model: Model receiving the final replay counters.
+    :param heads_per_period: Preallocated head history, including any reported trial.
+    :param head_prev: Last accepted head, not the last rejected trial.
+    :param accepted_periods: Number of fully accepted periods.
+    :param n_periods: Requested number of periods.
+    :param period_infos: Diagnostic record for each returned period.
+    :param last_info: Final returned period's diagnostic record.
+    :param period_times: Per-period elapsed times in seconds.
+    :param total_t0: perf_counter timestamp at the start of execution.
+    :param dt_f: Period duration in model time units.
+    :param storage_reference: Storage linearisation reference policy.
+    :param controls: Effective solve control mapping.
+    :param counters: Work and data-transfer counters.
+    :param active_i: Active-cell mask, shape (ny, nx).
+    :param bc_i: Prescribed-head mask, shape (ny, nx).
+    :param return_info: Return a diagnostic dictionary alongside the heads.
+    :param histories: Optional named storage and head history arrays, mutated in
+        place to zero storage terms and coefficients at excluded cells.
+    :returns: Head history, or (head history, diagnostic dictionary).
+    """
+    returned_periods = len(period_infos)
+    heads_per_period = heads_per_period[:returned_periods]
+    info_all = {
+        "heads_per_period": heads_per_period,
+        "heads_final": np.asarray(head_prev).copy(),
+        "accepted_periods": accepted_periods,
+        "accepted_time": accepted_periods * dt_f,
+        "requested_periods": n_periods,
+        "period_infos": period_infos,
+        "last_info": last_info,
+        "period_times": period_times[:returned_periods],
+        "total_time": float(time.perf_counter() - total_t0),
+        "n_periods": returned_periods,
+        "storage_reference": storage_reference,
+        "dt": dt_f,
+        "solve_controls": controls,
+        "save_diagnostics": bool(histories is not None),
+        "transient_replay_counters": counters,
+    }
+    if histories is not None:
+        # Prescribed and inactive cells have no storage equation. Head history
+        # still records their values; only storage rates and coefficients vanish.
+        excluded = (active_i == 0) | (bc_i != 0)
+        for name, field in histories.items():
+            if name not in ("heads_old_per_period", "storage_reference_heads_per_period"):
+                field[:returned_periods, excluded] = 0.0
+            info_all[name] = field[:returned_periods]
+    model._transient_replay_counters = dict(counters)
+    return (heads_per_period, info_all) if return_info else heads_per_period
+
+
+def _run_host_picard_periods(
+    *, self, rates, head_prev, k, bottom, top, sy, ss, dt_f, storage_reference,
+    storage_mode, controls, allow_rejected_trial, heads_per_period, period_times,
+    period_infos, counters, histories,
+):
+    """Advance the host-controlled Picard path through requested periods.
+
+    :param self: Built 2D model (updated with each period's recharge and solve).
+    :param rates: Uniform recharge rates, length per time, in period order.
+    :param head_prev: Last accepted head (initial head on entry).
+    :param k: Hydraulic conductivity grid, length per time.
+    :param bottom: Cell bottom elevations.
+    :param top: Cell top elevations.
+    :param sy: Dimensionless specific yield.
+    :param ss: Specific storage, inverse length.
+    :param dt_f: Period duration in model time units.
+    :param storage_reference: Policy selecting the reference head for storage.
+    :param storage_mode: Storage constitutive relation passed to solve.
+    :param controls: Host Picard solver controls, forwarded unchanged.
+    :param allow_rejected_trial: Return a terminal rejected trial rather than raise.
+    :param heads_per_period: Writable preallocated head history.
+    :param period_times: Writable elapsed time array in seconds.
+    :param period_infos: List to which each returned period record is appended.
+    :param counters: Work counters, updated in place.
+    :param histories: Optional writable full-grid diagnostic histories.
+    :returns: Last accepted head, last period info and number of accepted periods.
+    :raises RuntimeError: If a period is rejected and trial reporting is disabled.
+    """
+    save_diagnostics_b = histories is not None
+    accepted_periods = 0
+    last_info = {}
+    for period_index in range(int(rates.size)):
+        self.update_uniform_recharge_in_place(float(rates[period_index]))
+        counters["R_device_updates"] += 1
+        if save_diagnostics_b:
+            period_head_old = np.asarray(head_prev, dtype=np.float64).copy()
+        else:
+            period_head_old = head_prev
+        period_t0 = time.perf_counter()
+        head, info = self.solve(
+            formulation="unconfined",
+            initial_head=head_prev,
+            K_field=k,
+            zbot_field=bottom,
+            ztop_field=top,
+            transient=True,
+            storage_coeff=None,
+            dt=dt_f,
+            head_prev=head_prev,
+            return_info=True,
+            storage_reference=storage_reference,
+            unconfined_storage_mode_2d=storage_mode,
+            save_transient_diagnostics=save_diagnostics_b,
+            sy=float(sy),
+            ss=float(ss),
+            **controls,
+        )
+        period_times[period_index] = time.perf_counter() - period_t0
+        counters["device_to_host_full_grid_copies"] += 1
+        counters["head_downloads"] += 1
+        head_arr = np.asarray(head, dtype=np.float64)
+        info_out = dict(info) if isinstance(info, dict) else {}
+        period_accepted = bool(info_out.get("converged", False))
+        if not period_accepted and not allow_rejected_trial:
+            raise RuntimeError(f"Unconfined transient period {period_index + 1} did not converge.")
+        info_out["state"] = "accepted" if period_accepted else "rejected_trial"
+        info_out.setdefault("incremental_picard_enabled", False)
+        info_out.setdefault("adaptive_dt_enabled", False)
+        storage_ref = info_out.pop("storage_reference_head_last_linearization_array", None)
+        storage_coeff = info_out.pop("storage_coeff_last_linearization_array", None)
+        sy_coeff = info_out.pop("sy_storage_coeff_last_linearization_array", None)
+        ss_coeff = info_out.pop("ss_storage_coeff_last_linearization_array", None)
+        if bool(info_out.get("cuda_graph_built_this_call", False)):
+            counters["hierarchy_rebuilds"] += 1
+
+        heads_per_period[period_index] = head_arr
+        if save_diagnostics_b:
+            if storage_ref is None:
+                storage_ref = head_arr if storage_reference == "current_picard" else period_head_old
+            if storage_coeff is None:
+                storage_coeff = np.zeros_like(head_arr)
+            if sy_coeff is None:
+                sy_coeff = np.zeros_like(head_arr)
+            if ss_coeff is None:
+                ss_coeff = np.asarray(storage_coeff, dtype=np.float64) - np.asarray(sy_coeff, dtype=np.float64)
+
+            storage_ref_arr = np.asarray(storage_ref, dtype=np.float64)
+            storage_coeff_arr = np.asarray(storage_coeff, dtype=np.float64)
+            sy_coeff_arr = np.asarray(sy_coeff, dtype=np.float64)
+            ss_coeff_arr = np.asarray(ss_coeff, dtype=np.float64)
+            if storage_reference == "previous_period":
+                delta_head = head_arr - period_head_old
+                exact_sy_term = sy_coeff_arr * delta_head / dt_f
+                exact_ss_term = ss_coeff_arr * delta_head / dt_f
+                exact_storage_term = exact_sy_term + exact_ss_term
+            else:
+                exact_storage_term, exact_sy_term, exact_ss_term = exact_unconfined_storage_terms(
+                    head_new=head_arr, head_old=period_head_old, bottom=bottom, top=top,
+                    specific_yield=float(sy), specific_storage=float(ss), dt=dt_f,
+                )
+            histories["heads_old_per_period"][period_index] = period_head_old
+            histories["storage_reference_heads_per_period"][period_index] = storage_ref_arr
+            histories["storage_coeffs_per_period"][period_index] = storage_coeff_arr
+            histories["sy_storage_coeffs_per_period"][period_index] = sy_coeff_arr
+            histories["ss_storage_coeffs_per_period"][period_index] = ss_coeff_arr
+            histories["storage_terms_per_period"][period_index] = exact_storage_term
+            histories["sy_storage_terms_per_period"][period_index] = exact_sy_term
+            histories["ss_storage_terms_per_period"][period_index] = exact_ss_term
+            histories["sy_crossing_volume_terms_per_period"][period_index] = exact_sy_term
+        period_infos.append(info_out)
+        last_info = info_out
+        if not period_accepted:
+            break
+        accepted_periods += 1
+        head_prev = head_arr
+    return head_prev, last_info, accepted_periods
+
+
+def solve_transient_unconfined_backend(
+        *,
+        model: Any,
+        initial_head: np.ndarray,
+        recharge_rates: np.ndarray,
+        k_field: np.ndarray,
+        zbot_field: np.ndarray,
+        ztop_field: np.ndarray,
+        sy: float,
+        ss: float,
+        dt: float,
+        active: np.ndarray | None = None,
+        bc_mask: np.ndarray | None = None,
+        bc_values: np.ndarray | None = None,
+        gh_mask: np.ndarray | None = None,
+        gh_head: np.ndarray | None = None,
+        gh_width: np.ndarray | None = None,
+        gh_alpha: float | np.ndarray = 1.0,
+        aq_thickness: float | np.ndarray | None = None,
+        storage_mode: str = "mf6_convertible_secant_sy",
+        storage_reference: str = "current_picard",
+        solve_controls: dict | None = None,
+        min_saturated_thickness: float = 0.1,
+        save_diagnostics: bool = False,
+        return_info: bool = True,
+):
+    """Advance a 2D unconfined groundwater model through uniform-recharge periods.
+
+    All grid fields use shape (ny, nx) and consistent model length/time units.
+    Each returned period is identified as accepted or rejected; only accepted
+    heads advance the storage reference for subsequent periods.
+
+    :param model: Model whose grid, boundary state and device buffers are used.
+    :param initial_head: Initial hydraulic head grid, length units.
+    :param recharge_rates: One recharge rate per period, length per time.
+    :param k_field: Saturated hydraulic conductivity grid, length per time.
+    :param zbot_field: Cell bottom elevations, length units.
+    :param ztop_field: Cell top elevations, length units.
+    :param sy: Specific yield, dimensionless.
+    :param ss: Specific storage, inverse length.
+    :param dt: Duration of each stress period in model time units.
+    :param active: Optional active mask; defaults to all active.
+    :param bc_mask: Optional Dirichlet mask; defaults to no Dirichlet cells.
+    :param bc_values: Prescribed heads; defaults to initial heads.
+    :param gh_mask: GHB cell mask, required when model.use_ghb is true.
+    :param gh_head: External GHB stage grid in length units.
+    :param gh_width: GHB connection width grid in length units.
+    :param gh_alpha: Dimensionless multiplier for GHB conductance, scalar or grid.
+    :param aq_thickness: Aquifer thickness used to derive GHB conductance.
+    :param storage_mode: Constitutive storage relation for the Picard solve.
+    :param storage_reference: Current Picard iterate or previous accepted period.
+    :param solve_controls: Optional solver and timestep controls, not mutated.
+    :param min_saturated_thickness: Positive thickness floor in length units.
+    :param save_diagnostics: Include full-grid storage and reference histories.
+    :param return_info: Return (heads, info) instead of just the head history.
+    :returns: Head history, optionally accompanied by diagnostic information.
+    :raises ValueError: If input geometry or solver controls are invalid.
+    :raises RuntimeError: If a period cannot be accepted and trial reporting is off.
+    """
+    import warp as wp
+    from DARCY_WARP_PACKAGE.warped_darcy import (
+        NP_FLOAT, WP_FLOAT, AdaptiveInnerSolveState,
+        _adaptive_dt_should_early_shrink, _adaptive_dt_should_extend_budget,
+        _adaptive_practical_acceptance_allowed, _build_adaptive_inner_solve_config_from_controls,
+        _compute_inner_forcing_eta, _compute_inner_target_residual,
+        _format_unaccepted_transient_period_error, _remaining_legacy_fallback_cycles,
+        _run_adaptive_inner_kcycle_blocks, _select_legacy_unconfined_inner_max_cycles_from_dh,
+        apply_relaxed_clipped_picard_update_kernel, apply_relaxed_correction_kernel,
+        build_transient_rhs_from_storage_kernel, clamp_unconfined_head_kernel,
+        compute_active_rhs_l2_kernel, compute_dual_residual_kernel,
+        compute_residual_kernel, copy_field_kernel, detect_nonfinite_field_kernel,
+        kcycle_check_dh_and_dual_residual_kernel, update_secant_sy_storage_block_kernel,
+        update_secant_sy_storage_kernel, update_unconfined_transmissivity_from_head_kernel,
+        zero_field_kernel, zero_int_scalar_kernel, zero_scalar_kernel,
+    )
+    self = model
+    h0, k, bottom, top, active_i, bc_i, bc_v, rates, dt_f = _prepare_transient_fields(
+        model=self, initial_head=initial_head, k_field=k_field, zbot_field=zbot_field,
+        ztop_field=ztop_field, active=active, bc_mask=bc_mask, bc_values=bc_values,
+        recharge_rates=recharge_rates, dt=dt, dtype=NP_FLOAT,
+    )
+
+    controls, fast_path_controls, save_diagnostics_b, allow_rejected_trial, min_sat = (
+        _prepare_transient_controls(
+            solve_controls=solve_controls, save_diagnostics=save_diagnostics,
+            return_info=return_info, min_saturated_thickness=min_saturated_thickness,
+        )
+    )
+    accepted_periods = 0
     thickness = np.clip(h0 - bottom, min_sat, np.maximum(top - bottom, min_sat))
     initial_T = np.asarray(k * thickness, dtype=NP_FLOAT)
     initial_T[active_i == 0] = 0.0
@@ -210,6 +465,19 @@ def solve_transient_unconfined_backend(
         sy_terms = None
         ss_terms = None
         sy_crossing_terms = None
+    histories = None
+    if save_diagnostics_b:
+        histories = {
+            "heads_old_per_period": heads_old_per_period,
+            "storage_reference_heads_per_period": storage_reference_heads,
+            "storage_coeffs_per_period": storage_coeffs,
+            "sy_storage_coeffs_per_period": sy_coeffs,
+            "ss_storage_coeffs_per_period": ss_coeffs,
+            "storage_terms_per_period": storage_terms,
+            "sy_storage_terms_per_period": sy_terms,
+            "ss_storage_terms_per_period": ss_terms,
+            "sy_crossing_volume_terms_per_period": sy_crossing_terms,
+        }
     period_infos: list[dict] = []
     period_times = np.zeros(n_periods, dtype=np.float64)
     counters = {
@@ -401,7 +669,12 @@ def solve_transient_unconfined_backend(
             face_levels = ensure_transient_face_levels(self, self.mg_levels)
 
         def _launch_storage_update(*, head_ref, head_previous, dt_value: float) -> None:
-            """Refresh storage and reduce change statistics without scalar atomics."""
+            """Refresh storage and reduce change statistics.
+
+            :param head_ref: Device reference-head grid for the secant coefficients.
+            :param head_previous: Device head grid at the start of the timestep.
+            :param dt_value: Current timestep duration in model time units.
+            """
             if transient_face_operator_enabled_b:
                 wp.launch(
                     kernel=update_secant_sy_storage_block_kernel,
@@ -552,11 +825,17 @@ def solve_transient_unconfined_backend(
         dim2d = (self.ny, self.nx)
 
         def _fast_path_phase_start() -> float:
+            """Return a start timestamp, synchronising CUDA only when profiling."""
             if profile_fast_path_b and str(device).startswith("cuda"):
                 wp.synchronize_device(device)
             return time.perf_counter()
 
         def _fast_path_phase_elapsed(t_start: float) -> float:
+            """Return elapsed execution time, with optional profiling synchronisation.
+
+            :param t_start: perf_counter timestamp from the phase start.
+            :returns: Elapsed seconds.
+            """
             if profile_fast_path_b and str(device).startswith("cuda"):
                 wp.synchronize_device(device)
             return float(time.perf_counter() - t_start)
@@ -645,7 +924,10 @@ def solve_transient_unconfined_backend(
             by-value ``dt_value``) — safe to CUDA-graph capture.  The storage
             change scalar buffers are re-zeroed INSIDE the sequence so graph
             replays are self-cleaning; the face-level partial buffers used by
-            the (uncaptured) check kernels self-clean via combine kernels."""
+            the (uncaptured) check kernels self-clean via combine kernels.
+
+            :param dt_value: Current timestep duration in model time units.
+            """
             wp.launch(
                 kernel=update_unconfined_transmissivity_from_head_kernel,
                 dim=dim2d,
@@ -667,7 +949,10 @@ def solve_transient_unconfined_backend(
             """Per-outer refresh as one CUDA graph, keyed on the by-value dt
             (adaptive-dt retries change it and re-capture — rare) and on the
             hierarchy/T pointer identities.  Eager fallback on any capture
-            failure (identical launch sequence, identical semantics)."""
+            failure (identical launch sequence, identical semantics).
+
+            :param dt_value: Current timestep duration and capture cache key.
+            """
             key = ("face_outer_refresh_v1", float(dt_value), id(self.mg_levels), id(self.T_wp))
             entry = face_refresh_graphs.get(key)
             if entry is None:
@@ -705,7 +990,15 @@ def solve_transient_unconfined_backend(
             solve_controls: dict,
             return_scalar_info: bool,
         ) -> dict:
-            """Inner K-cycle dispatch: face operator (default) or classic kernels."""
+            """Solve one inner linear block on the selected device operator.
+
+            :param x_wp: Writable head or correction iterate.
+            :param rhs_wp: Device right-hand-side grid.
+            :param bc_values_wp: Device prescribed-head or homogeneous correction values.
+            :param solve_controls: Controls for this K-cycle block.
+            :param return_scalar_info: Request scalar convergence diagnostics.
+            :returns: Inner solver diagnostic dictionary.
+            """
             if mixed_session is not None and not return_scalar_info:
                 # Phase C: FP32 fixed-work correction K-cycle (delta32
                 # continues in place across blocks), then cast the
@@ -847,7 +1140,16 @@ def solve_transient_unconfined_backend(
             substep_dt: float,
             require_strict: bool = False,
         ) -> dict[str, Any]:
-            """Refresh the nonlinear operator and evaluate authoritative acceptance."""
+            """Refresh the nonlinear operator and evaluate authoritative acceptance.
+
+            :param outer_iteration: Current nonlinear iteration number.
+            :param info_lin: Diagnostics from the preceding linear solve.
+            :param dh_max: Maximum absolute head update, length units.
+            :param dh_rms: RMS head update, length units.
+            :param substep_dt: Current attempted timestep duration.
+            :param require_strict: Disable the practical convergence criterion.
+            :returns: Refreshed residuals, balance and convergence decisions.
+            """
             wp.launch(kernel=copy_field_kernel, dim=dim2d, inputs=[storage_diag_wp, storage_diag_prev_wp, self.nx, self.ny], device=device)
             wp.launch(
                 kernel=update_unconfined_transmissivity_from_head_kernel,
@@ -2393,131 +2695,23 @@ def solve_transient_unconfined_backend(
             head_prev = head_arr
 
     else:
-        for period_index in range(n_periods):
-            self.update_uniform_recharge_in_place(float(rates[period_index]))
-            counters["R_device_updates"] += 1
-            if save_diagnostics_b:
-                period_head_old = np.asarray(head_prev, dtype=np.float64).copy()
-            else:
-                period_head_old = head_prev
-            period_t0 = time.perf_counter()
-            head, info = self.solve(
-                formulation="unconfined",
-                initial_head=head_prev,
-                K_field=k,
-                zbot_field=bottom,
-                ztop_field=top,
-                transient=True,
-                storage_coeff=None,
-                dt=dt_f,
-                head_prev=head_prev,
-                return_info=True,
-                storage_reference=storage_reference,
-                unconfined_storage_mode_2d=storage_mode,
-                save_transient_diagnostics=save_diagnostics_b,
-                sy=float(sy),
-                ss=float(ss),
-                **controls,
-            )
-            period_times[period_index] = time.perf_counter() - period_t0
-            counters["device_to_host_full_grid_copies"] += 1
-            counters["head_downloads"] += 1
-            head_arr = np.asarray(head, dtype=np.float64)
-            info_out = dict(info) if isinstance(info, dict) else {}
-            period_accepted = bool(info_out.get("converged", False))
-            if not period_accepted and not allow_rejected_trial:
-                raise RuntimeError(f"Unconfined transient period {period_index + 1} did not converge.")
-            info_out["state"] = "accepted" if period_accepted else "rejected_trial"
-            info_out.setdefault("incremental_picard_enabled", False)
-            info_out.setdefault("adaptive_dt_enabled", False)
-            storage_ref = info_out.pop("storage_reference_head_last_linearization_array", None)
-            storage_coeff = info_out.pop("storage_coeff_last_linearization_array", None)
-            sy_coeff = info_out.pop("sy_storage_coeff_last_linearization_array", None)
-            ss_coeff = info_out.pop("ss_storage_coeff_last_linearization_array", None)
-            if bool(info_out.get("cuda_graph_built_this_call", False)):
-                counters["hierarchy_rebuilds"] += 1
-
-            heads_per_period[period_index] = head_arr
-            if save_diagnostics_b:
-                if storage_ref is None:
-                    storage_ref = head_arr if storage_reference == "current_picard" else period_head_old
-                if storage_coeff is None:
-                    storage_coeff = np.zeros_like(head_arr)
-                if sy_coeff is None:
-                    sy_coeff = np.zeros_like(head_arr)
-                if ss_coeff is None:
-                    ss_coeff = np.asarray(storage_coeff, dtype=np.float64) - np.asarray(sy_coeff, dtype=np.float64)
-
-                storage_ref_arr = np.asarray(storage_ref, dtype=np.float64)
-                storage_coeff_arr = np.asarray(storage_coeff, dtype=np.float64)
-                sy_coeff_arr = np.asarray(sy_coeff, dtype=np.float64)
-                ss_coeff_arr = np.asarray(ss_coeff, dtype=np.float64)
-                if storage_reference == "previous_period":
-                    delta_head = head_arr - period_head_old
-                    exact_sy_term = sy_coeff_arr * delta_head / dt_f
-                    exact_ss_term = ss_coeff_arr * delta_head / dt_f
-                    exact_storage_term = exact_sy_term + exact_ss_term
-                else:
-                    exact_storage_term, exact_sy_term, exact_ss_term = exact_unconfined_storage_terms(
-                        head_new=head_arr, head_old=period_head_old, bottom=bottom, top=top,
-                        specific_yield=float(sy), specific_storage=float(ss), dt=dt_f,
-                    )
-                heads_old_per_period[period_index] = period_head_old
-                storage_reference_heads[period_index] = storage_ref_arr
-                storage_coeffs[period_index] = storage_coeff_arr
-                sy_coeffs[period_index] = sy_coeff_arr
-                ss_coeffs[period_index] = ss_coeff_arr
-                storage_terms[period_index] = exact_storage_term
-                sy_terms[period_index] = exact_sy_term
-                ss_terms[period_index] = exact_ss_term
-                sy_crossing_terms[period_index] = exact_sy_term
-            period_infos.append(info_out)
-            last_info = info_out
-            if not period_accepted:
-                break
-            accepted_periods += 1
-            head_prev = head_arr
-
-    returned_periods = len(period_infos)
-    heads_per_period = heads_per_period[:returned_periods]
-    info_all = {
-        "heads_per_period": heads_per_period,
-        "heads_final": np.asarray(head_prev).copy(),
-        "accepted_periods": accepted_periods,
-        "accepted_time": accepted_periods * dt_f,
-        "requested_periods": n_periods,
-        "period_infos": period_infos,
-        "last_info": last_info,
-        "period_times": period_times[:returned_periods],
-        "total_time": float(time.perf_counter() - total_t0),
-        "n_periods": returned_periods,
-        "storage_reference": storage_reference,
-        "dt": dt_f,
-        "solve_controls": controls,
-        "save_diagnostics": bool(save_diagnostics_b),
-        "transient_replay_counters": counters,
-    }
-    if save_diagnostics_b:
-        # Prescribed and inactive cells have no storage equation. Head history
-        # still records their values; only storage rates and coefficients vanish.
-        excluded = (active_i == 0) | (bc_i != 0)
-        for field in (storage_coeffs, sy_coeffs, ss_coeffs, storage_terms, sy_terms, ss_terms, sy_crossing_terms):
-            field[:returned_periods, excluded] = 0.0
-        info_all.update(
-            {
-                "heads_old_per_period": heads_old_per_period[:returned_periods],
-                "storage_reference_heads_per_period": storage_reference_heads[:returned_periods],
-                "storage_coeffs_per_period": storage_coeffs[:returned_periods],
-                "sy_storage_coeffs_per_period": sy_coeffs[:returned_periods],
-                "ss_storage_coeffs_per_period": ss_coeffs[:returned_periods],
-                "storage_terms_per_period": storage_terms[:returned_periods],
-                "sy_storage_terms_per_period": sy_terms[:returned_periods],
-                "ss_storage_terms_per_period": ss_terms[:returned_periods],
-                "sy_crossing_volume_terms_per_period": sy_crossing_terms[:returned_periods],
-            }
+        head_prev, last_info, accepted_periods = _run_host_picard_periods(
+            self=self, rates=rates, head_prev=head_prev, k=k, bottom=bottom, top=top,
+            sy=sy, ss=ss, dt_f=dt_f, storage_reference=storage_reference,
+            storage_mode=storage_mode, controls=controls, allow_rejected_trial=allow_rejected_trial,
+            heads_per_period=heads_per_period, period_times=period_times,
+            period_infos=period_infos, counters=counters, histories=histories,
         )
-    self._transient_replay_counters = dict(counters)
-    return (heads_per_period, info_all) if return_info else heads_per_period
+
+    return _assemble_transient_result(
+        model=self, heads_per_period=heads_per_period, head_prev=head_prev,
+        accepted_periods=accepted_periods, n_periods=n_periods, period_infos=period_infos,
+        last_info=last_info, period_times=period_times, total_t0=total_t0, dt_f=dt_f,
+        storage_reference=storage_reference, controls=controls, counters=counters,
+        active_i=active_i, bc_i=bc_i, return_info=return_info,
+        histories=histories,
+    )
+
 
 def solve_transient_unconfined(
     context: SolverContext,
@@ -2525,11 +2719,13 @@ def solve_transient_unconfined(
     solver: str | None = "unconfined_picard_kcycle",
     **kwargs: Any,
 ):
-    """Run the model-owned transient driver through its compatibility bridge.
+    """Dispatch to the selected unconfined multi-period backend.
 
-    The bridge is deliberately narrow: all period, adaptive-dt, and diagnostic
-    behaviour remains byte-for-byte in the existing implementation until the
-    single-step Picard and K-cycle bodies have been extracted.
+    :param context: Model and formulation supplied to the solver registry.
+    :param solver: Backend name; defaults to the production Picard K-cycle driver.
+    :param kwargs: Physical inputs and controls of the selected period driver.
+    :returns: Head history, optionally with backend-labelled diagnostics.
+    :raises ValueError: If the backend does not support the selected formulation.
     """
     if context.formulation != "unconfined":
         raise ValueError("transient unconfined backend requires formulation='unconfined'.")
