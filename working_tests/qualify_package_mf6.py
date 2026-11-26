@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 from time import perf_counter
 
 import numpy as np
@@ -122,6 +123,7 @@ def run_native(*, fields, durations, well_factors, recharge_factors, stage_offse
         for path in directory.iterdir() if path.suffix in input_suffixes}
     input_audit_seconds = perf_counter() - started
     manifest = dict(version=version, sha256=checksum, build=build, shape=list(shape), transient=transient,
+        npf_cell_types=np.unique(np.asarray(cell_type)).tolist(),
         well_precision=well_precision, ims_controls=ims_controls, construction_seconds=construction,
         input_precision=17, input_float_characters=25, input_sha256=input_hashes,
         input_audit_seconds=input_audit_seconds, durations=[float(value) for value in durations],
@@ -159,6 +161,11 @@ def extract_completed_native(*, directory, manifest):
     packages = manifest['packages']
     transient = manifest['transient']
     engine = manifest['engine_seconds']
+    # Read the generated model option, rather than inferring it from the IMS
+    # linear solver or labelling every nonlinear boundary solve as NPF Newton.
+    name_text = (directory / 'pkgqual.nam').read_text()
+    newton_lines = [line.strip() for line in name_text.splitlines()
+                   if re.match(r'^\s*NEWTON(?:\s|$)', line, re.IGNORECASE)]
     started = perf_counter()
     reader = flopy.utils.HeadFile(str(directory / 'pkgqual.hds'), precision='double')
     heads = reader.get_alldata()
@@ -193,6 +200,7 @@ def extract_completed_native(*, directory, manifest):
     budget.close()
     np.savez_compressed(directory / 'reference_outputs.npz', **arrays)
     result = dict(manifest, periods=periods,
+        mf6_newton=bool(newton_lines), mf6_newton_options=newton_lines,
         engine_summary=(dict(median=float(np.median(engine)), minimum=min(engine), maximum=max(engine)) if engine else None),
         extraction_seconds=perf_counter() - started,
         output_sha256=hashlib.sha256((directory / 'reference_outputs.npz').read_bytes()).hexdigest())
