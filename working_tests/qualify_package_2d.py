@@ -137,10 +137,7 @@ def run_confined(*, model, fields, initial, options, mixed, config):
     """
     if mixed:
         from DARCY_WARP_PACKAGE.solvers.mixed_fast import solve_mixed_fast
-        recharge = getattr(model, '_qualification_recharge_f64', None)
-        if recharge is None:
-            recharge = np.empty(model._recharge_input_host.shape, dtype=np.float64)
-            model._qualification_recharge_f64 = recharge
+        recharge = model._qualification_recharge_f64
         head, info = solve_mixed_fast(model=model, initial_head_f64=initial,
             bc_values_f64=fields['bc_values'], gh_head_f64=None,
             R_f64=recharge, config=config)

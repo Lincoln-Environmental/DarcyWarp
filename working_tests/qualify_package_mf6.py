@@ -226,7 +226,8 @@ if __name__ == "__main__":
     parser.add_argument('--mode', choices=('steady', 'history', 'all'), default='all')
     parser.add_argument('--boundary-case', choices=('packages', 'gaining_losing', 'wel_only'), default='packages')
     parser.add_argument('--profile', choices=('production', 'strict'), default='production')
-    parser.add_argument('--newton', action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument('--newton', action=argparse.BooleanOptionalAction, default=False,
+        help='Enable Newton explicitly; regional models here have confined ICELLTYPE=0.')
     parser.add_argument('--strategy', choices=('original', 'ilut8', 'cg_ilu0'), default='original')
     parser.add_argument('--repeats', type=int, default=3)
     parser.add_argument('--output', type=Path, default=Path('/tmp/darcywarp-package-mf6-exact'))

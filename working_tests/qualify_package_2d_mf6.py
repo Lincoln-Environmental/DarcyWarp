@@ -39,8 +39,8 @@ if __name__ == "__main__":
     parser.add_argument('--mode', choices=('steady', 'mixed', 'transient', 'picard', 'all'), default='all')
     parser.add_argument('--repeats', type=int, default=3)
     parser.add_argument('--profile', choices=('production', 'strict'), default='production')
-    parser.add_argument('--newton', action=argparse.BooleanOptionalAction, default=None,
-        help='Override formulation matching: Picard uses standard harmonic T; confined diagnostics use Newton.')
+    parser.add_argument('--newton', action=argparse.BooleanOptionalAction, default=False,
+        help='Run an explicit upstream-saturation diagnostic; the maintained 2D operator uses harmonic T.')
     arguments = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     output = Path('/tmp/darcywarp-package-2d-mf6-exact')
@@ -62,10 +62,8 @@ if __name__ == "__main__":
                 continue
             fields, dx = fields_for_grid(shape=shape, controls=controls)
             convertible = mode == 'picard'
-            mode_newton = not convertible if arguments.newton is None else arguments.newton
+            mode_newton = arguments.newton
             case_output = output
-            if arguments.newton is None:
-                case_output = output / ('newton' if mode_newton else 'standard')
             if convertible:
                 fields['R_field'] = np.full(shape, np.mean(fields['R_field']))
             native = native_fields(fields=fields, dx=dx, controls=controls, convertible=convertible)
