@@ -121,16 +121,14 @@ class NPF662Workspace:
             self.drn_entry_rate = wp.zeros(shape=0, dtype=wp.float64, device=self.device)
             self.riv_entry_rate = wp.zeros(shape=0, dtype=wp.float64, device=self.device)
         self.component_anchor = None
-        from scipy.ndimage import label
-        labels, count = label(case.active != 0)
-        sizes = np.bincount(labels.ravel(), minlength=count + 1)
-        eligible = np.ones(count + 1, dtype=np.float64)
-        eligible[0] = 0.
-        eligible[labels[case.fixed != 0]] = 0.
+        unused_anchor, labels, weights = npf_ghb_component_anchor(
+            conductance=None, active=case.active, fixed=case.fixed,
+            return_layout=True)
+        self._right_host = right
+        self._component_edge_mask = None
         self.component_labels = wp.array(labels.ravel(), dtype=wp.int32, device=self.device)
-        self.component_weight = wp.array((eligible[labels] / sizes[labels]).ravel(),
-            dtype=wp.float64, device=self.device)
-        self.component_sums = wp.zeros(count + 1, dtype=wp.float64, device=self.device)
+        self.component_weight = wp.array(weights.ravel(), dtype=wp.float64, device=self.device)
+        self.component_sums = wp.zeros(self.n, dtype=wp.float64, device=self.device)
         self.active_component_anchor = wp.zeros(self.n, dtype=wp.float64, device=self.device)
         self.anchor_revision = None
         self.roundoff_acceptance = False
@@ -140,6 +138,28 @@ class NPF662Workspace:
         self.device_native = bool(getattr(reference, 'device_storage_state', False))
         self.load(model=model,case=case,reference=reference)
         self.evaluate(trial=False,linearize=True)
+
+    def _refresh_component_layout(self, *, conductance):
+        """Refresh restraint components when the set of wet faces changes."""
+        current = np.asarray(conductance.numpy(), dtype=np.float64).reshape((self.n, 3))
+        edge_mask = (self._right_host >= 0) & (current > 0.)
+        if (self._component_edge_mask is not None
+                and np.array_equal(edge_mask, self._component_edge_mask)):
+            return
+        left = np.broadcast_to(
+            np.arange(self.n, dtype=np.int64)[:, None], (self.n, 3)).ravel()
+        unused_anchor, labels, weights = npf_ghb_component_anchor(
+            conductance=None,
+            active=self.active_snapshot,
+            fixed=self.fixed_snapshot,
+            left=left,
+            right=self._right_host.ravel(),
+            face_conductance=current.ravel(),
+            return_layout=True,
+        )
+        self.component_labels.assign(labels.ravel())
+        self.component_weight.assign(weights.ravel())
+        self._component_edge_mask = edge_mask.copy()
 
     def select_krylov(self,*,method,krylov_budget):
         """Own only the selected basis; share all hydraulic/operator buffers."""
@@ -487,6 +507,7 @@ class NPF662Workspace:
                                                  relative_tolerance=self.relative_tolerance):
             # Share actual active external derivatives across unprescribed
             # components. An allocated but inactive package supplies no restraint.
+            self._refresh_component_layout(conductance=c)
             self.component_sums.zero_()
             wp.launch(kernel=kernels.sum_component_restraint, dim=self.n,
                 inputs=[self.component_labels, self.component_weight, tangent,

@@ -183,14 +183,18 @@ class NPF662Case:
                 &(self.cell_types!=0)&(np.asarray(self.ghb_head)<self.bottoms)):
             raise ValueError('Convertible GHB head below cell bottom is invalid for MF6 6.6.2')
         from DARCY_WARP_PACKAGE.physics.drn_riv_3d import validate_drn_fields, validate_riv_fields, validate_boundary_entries
-        if self.drn_entries is not None and (self.drn_conductance is not None or self.drn_elevation is not None):
+        drn_entries = validate_boundary_entries(entries=self.drn_entries, package='DRN', shape=shape,
+            active=self.active, fixed=self.fixed)
+        riv_entries = validate_boundary_entries(entries=self.riv_entries, package='RIV', shape=shape,
+            active=self.active, fixed=self.fixed)
+        if self.drn_entries is not None and drn_entries is None:
+            self.drn_entries = None
+        if self.riv_entries is not None and riv_entries is None:
+            self.riv_entries = None
+        if drn_entries is not None and (self.drn_conductance is not None or self.drn_elevation is not None):
             raise ValueError('Supply DRN through dense fields or sparse entries, not both')
-        if self.riv_entries is not None and (self.riv_conductance is not None or self.riv_stage is not None):
+        if riv_entries is not None and (self.riv_conductance is not None or self.riv_stage is not None):
             raise ValueError('Supply RIV through dense fields or sparse entries, not both')
-        validate_boundary_entries(entries=self.drn_entries, package='DRN', shape=shape,
-                                  active=self.active, fixed=self.fixed)
-        validate_boundary_entries(entries=self.riv_entries, package='RIV', shape=shape,
-                                  active=self.active, fixed=self.fixed)
         validate_drn_fields(conductance=self.drn_conductance, elevation=self.drn_elevation,
                             active=self.active, fixed=self.fixed, mask=self.drn_mask)
         validate_riv_fields(conductance=self.riv_conductance, stage=self.riv_stage,
@@ -315,6 +319,8 @@ def save_npf662_case(*,case,path):
             continue
         entries = validate_boundary_entries(entries=supplied, package=package,
             shape=case.active.shape, active=case.active, fixed=case.fixed)
+        if entries is None:
+            continue
         prefix = name + '_'
         arrays[prefix + 'cells'] = entries.cells
         arrays[prefix + 'conductance'] = entries.conductance
@@ -746,7 +752,8 @@ class NPF662Reference:
         result['local_balance_valid'] = None
         if result['independent_accepted'] or roundoff_acceptance:
             component_anchor = npf_ghb_component_anchor(conductance=boundary_tangent,
-                active=c.active, fixed=c.fixed)
+                active=c.active, fixed=c.fixed, left=self.left, right=self.right,
+                face_conductance=conductance)
             result['local_balance_valid'] = local_balance_valid(case=c, free=self.free, left=self.left, right=self.right,
                 head=head, residual=residual, flux=flux, conductance=conductance, ghb_conductance=boundary_tangent,
                 ghb_exchange=boundary_exchange, thresholds=thresholds, component_anchor=component_anchor,

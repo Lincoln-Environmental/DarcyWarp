@@ -115,7 +115,8 @@ class NPF662TransientReference(NPF662Reference):
         if checks['independent_accepted'] or roundoff_acceptance:
             from DARCY_WARP_PACKAGE.physics.ghb_3d import npf_ghb_component_anchor
             component_anchor = npf_ghb_component_anchor(conductance=boundary_tangent + tangent,
-                active=self.case.active, fixed=self.case.fixed)
+                active=self.case.active, fixed=self.case.fixed, left=self.left, right=self.right,
+                face_conductance=fields['conductance'])
             checks['local_balance_valid'] = local_balance_valid(case=self.case, free=self.free, left=self.left,
                 right=self.right, head=head, residual=residual, flux=fields['flux'], conductance=fields['conductance'],
                 ghb_conductance=boundary_tangent, ghb_exchange=(fields['ghb_outflow']+

@@ -59,9 +59,14 @@ def resolve_fixed_heads(*, active, stages, masks, policy):
     """
     if policy not in {"sea_precedence", "legacy_archive"}:
         raise ValueError("Unknown Canterbury boundary policy")
+    source_precedence = ("sea", "south", "north")
+    assignment_order = tuple(reversed(source_precedence))
+    if set(stages) != set(source_precedence):
+        raise ValueError("Canterbury stages must contain sea, south and north sources")
     assigned = {}
     missing = []
-    for name, stage in stages.items():
+    for name in assignment_order:
+        stage = stages[name]
         selected = active & masks.get(name, stage != 0.0)
         for row, col in np.argwhere(selected & ~np.isfinite(stage)):
             missing.append(dict(row=int(row), column=int(col), source=name))
@@ -69,20 +74,24 @@ def resolve_fixed_heads(*, active, stages, masks, policy):
     overlaps = []
     combined_count = sum(assigned.values())
     for row, col in np.argwhere(combined_count > 1):
-        values = {name: float(stages[name][row, col]) for name in stages if assigned[name][row, col]}
+        values = {name: float(stages[name][row, col]) for name in assignment_order
+                  if assigned[name][row, col]}
+        selected_source = next(name for name in source_precedence
+                               if assigned[name][row, col])
         overlaps.append(dict(row=int(row), column=int(col), stages=values,
-            selected_source=next(reversed(values)) if policy == "sea_precedence" else "legacy_sum"))
+            selected_source=selected_source if policy == "sea_precedence" else "legacy_sum"))
     if policy == "legacy_archive":
         fixed = active & np.logical_or.reduce([stage != 0.0 for stage in stages.values()])
         values = np.where(fixed, np.nan_to_num(sum(stages.values()), nan=0.0), 0.0)
     else:
         fixed = combined_count > 0
         values = np.zeros(active.shape, dtype=np.float32)
-        for name, stage in stages.items():
+        for name in assignment_order:
+            stage = stages[name]
             values[assigned[name]] = stage[assigned[name]]
     return fixed.astype(np.int32), values, dict(
         policy=policy, missing_stages=missing, overlaps=overlaps,
-        source_precedence=["sea", "south", "north"], west_boundary="no flow",
+        source_precedence=list(source_precedence), west_boundary="no flow",
     )
 
 

@@ -12,13 +12,12 @@ def compare_accepted_boundary_volumes(*, accepted_totals, native_periods, entry_
 
     :param accepted_totals: Actual integrated DRN/RIV ledger returned by the driver.
     :param native_periods: Matched MF6 per-period CBC volume ledgers.
-    :param entry_counts: Independently counted entries of each package.
+    :param entry_counts: Independently counted entries of each package per period.
     :param rate_gate: Prespecified absolute per-entry rate error gate.
     :return: Actual accepted volume errors and conservative integration bounds.
     :raises AssertionError: If an accepted integrated volume fails its bound.
     """
     result = {}
-    duration = fsum(period['dt'] for period in native_periods)
     for package in ('DRN', 'RIV'):
         if package not in entry_counts:
             continue
@@ -28,7 +27,11 @@ def compare_accepted_boundary_volumes(*, accepted_totals, native_periods, entry_
         errors = {name: float(actual[name] - expected[name]) for name in expected}
         # Sign splitting is Lipschitz: N entry error bounds integrated over
         # the physical time grid bound gross inflow, gross outflow and net.
-        bound = entry_counts[package] * rate_gate * duration
+        counts = entry_counts[package]
+        if len(counts) != len(native_periods):
+            raise ValueError(f'{package} entry-count history does not match the period history')
+        bound = fsum(count * period['dt'] * rate_gate
+                     for count, period in zip(counts, native_periods, strict=True))
         assert all(abs(value) <= bound for value in errors.values()), (package, errors, bound)
         result[package] = dict(accepted=actual, native=expected, errors_m3=errors,
                                entry_integrated_bound_m3=bound)
@@ -63,7 +66,13 @@ def _compare_complete_outputs(*, gpu_directory, native_directory, output, head_g
                 [row['dt'] for row in native_info['periods']], rtol=0., atol=1.e-12)
         for index, period in enumerate(periods):
             assert period['converged'], (index, period.get('stop_reason'))
-            difference = numerical[f'head_{index}'] - native['heads'][index]
+            numerical_head = numerical[f'head_{index}']
+            native_head = native['heads'][index]
+            assert native_head.ndim == 3, 'native head fields must match the three-dimensional domain'
+            assert numerical_head.shape == native_head.shape, (
+                f'head_{index} shape {numerical_head.shape} does not match '
+                f'physical domain {native_head.shape}')
+            difference = numerical_head - native_head
             row = dict(index=index, head_max_m=float(np.max(np.abs(difference))),
                 head_rms_m=float(np.sqrt(np.mean(difference * difference))), entry_rates={}, budgets={})
             expected_packages = set(native_info['packages'])
@@ -72,14 +81,17 @@ def _compare_complete_outputs(*, gpu_directory, native_directory, output, head_g
             for package in expected_packages:
                 native_key = f'{package}_{index}'
                 assert native_key in native, f'missing native {native_key} array'
-                package_counts[package] = int(native[native_key].size)
+                native_rates = native[native_key]
+                assert native_rates.ndim == 1, f'native {native_key} entry rates must be one-dimensional'
+                package_counts[package] = int(native_rates.shape[0])
             for package in ('DRN', 'RIV'):
                 if package not in expected_packages:
                     continue
                 key = f'{package.lower()}_{index}'
                 assert key in numerical, f'missing numerical {key} entry array'
                 physical = numerical[key]
-                assert physical.size == package_counts[package]
+                assert physical.ndim == 1, f'numerical {key} entry rates must be one-dimensional'
+                assert physical.shape[0] == package_counts[package]
                 error = physical + native[f'{package}_{index}']
                 row['entry_rates'][package] = dict(max_absolute_error_m3_day=float(np.max(np.abs(error), initial=0.)),
                     count=int(error.size), gross_inflow=float(np.sum(np.maximum(-physical, 0.))),
@@ -119,7 +131,8 @@ def _compare_complete_outputs(*, gpu_directory, native_directory, output, head_g
         result['accepted_boundary_volume_totals'] = compare_accepted_boundary_volumes(
             accepted_totals=gpu_info['warm'][-1]['accepted_exchange_volume_totals'],
             native_periods=native_info['periods'],
-            entry_counts={name: item['count'] for name, item in comparisons[0]['entry_rates'].items()},
+            entry_counts={name: [row['entry_rates'][name]['count'] for row in comparisons]
+                          for name in comparisons[0]['entry_rates']},
             rate_gate=rate_gate)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(result, indent=2))

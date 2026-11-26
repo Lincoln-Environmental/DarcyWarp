@@ -74,13 +74,39 @@ def _entry_cell_index(cell, shape):
 def _entry_records(entries, shape, level_count):
     """Normalise entry inputs into (cell, conductance, levels) records."""
     if isinstance(entries, BoundaryEntryList):
-        if entries.cells.shape[1:] != (len(shape),):
+        cells = np.asarray(entries.cells)
+        if cells.ndim != 2 or cells.shape[1:] != (len(shape),):
             raise ValueError(f"Entry cells must have {len(shape)} indices per entry")
-        return [(tuple(map(int, cell)), float(c), *levels)
-                for cell, c, *levels in zip(entries.cells.tolist(), entries.conductance.tolist(),
-                    *([] if entries.first_level is None else [entries.first_level.tolist()]),
-                    *([] if entries.second_level is None else [entries.second_level.tolist()]),
-                    *([] if entries.third_level is None else [entries.third_level.tolist()]))]
+        if (np.issubdtype(cells.dtype, np.bool_)
+                or not np.issubdtype(cells.dtype, np.integer)):
+            raise ValueError("Entry cells must use an integer coordinate dtype")
+        count = cells.shape[0]
+        conductance = np.asarray(entries.conductance)
+        if conductance.ndim != 1 or conductance.shape[0] != count:
+            raise ValueError("Entry conductance must have one value per cell")
+        if level_count == 1:
+            raw_levels = (entries.first_level,)
+            if entries.second_level is not None or entries.third_level is not None:
+                raise ValueError("DRN entries carry exactly one elevation array")
+        else:
+            raw_levels = (entries.second_level, entries.third_level)
+            if entries.first_level is not None:
+                raise ValueError("RIV entries carry exactly stage and bottom arrays")
+        levels = []
+        for level in raw_levels:
+            if level is None:
+                raise ValueError("Entry level arrays are incomplete")
+            values = np.asarray(level)
+            if values.ndim != 1 or values.shape[0] != count:
+                raise ValueError("Entry levels must have one value per cell")
+            levels.append(values)
+        flat_cells = np.asarray(entries.flat_cells)
+        if flat_cells.ndim != 1 or flat_cells.shape[0] != count:
+            raise ValueError("Entry flat-cell indices must match the entry count")
+        validated_cells = [_entry_cell_index(cell, shape) for cell in cells.tolist()]
+        return [(cell, float(conductance[index]),
+                 *[float(level[index]) for level in levels])
+                for index, cell in enumerate(validated_cells)]
     if isinstance(entries, Mapping):
         records = []
         for cell, values in entries.items():
@@ -126,6 +152,8 @@ def validate_boundary_entries(*, entries, package, shape, active, fixed):
     for level in levels:
         if not np.all(np.isfinite(level)):
             raise ValueError(f"{package} entry levels must be finite")
+        if np.any(invalid_head_values(head=level[conductance > 0.])):
+            raise ValueError(f"Invalid conducting {package} entry level")
     if package == "RIV" and np.any((conductance > 0.) & (levels[0] < levels[1])):
         raise ValueError("RIV entry stage must be at or above its bed bottom")
     active_grid = binary_mask(value=active, name="active", shape=shape)

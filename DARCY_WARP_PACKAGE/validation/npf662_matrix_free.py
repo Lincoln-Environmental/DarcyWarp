@@ -161,7 +161,8 @@ class NPF662MatrixFreeReference:
         result['local_balance_valid'] = None
         if result['independent_accepted'] or roundoff_acceptance:
             component_anchor = npf_ghb_component_anchor(conductance=boundary_tangent,
-                active=case.active, fixed=case.fixed)
+                active=case.active, fixed=case.fixed, left=self.left, right=self.right,
+                face_conductance=conductance)
             result['local_balance_valid'] = local_balance_valid(case=case, free=self.free, left=self.left, right=self.right,
                 head=head, residual=residual, flux=flux, conductance=conductance, ghb_conductance=boundary_tangent,
                 ghb_exchange=ghb_exchange+drain[0]+river[0], thresholds=thresholds,

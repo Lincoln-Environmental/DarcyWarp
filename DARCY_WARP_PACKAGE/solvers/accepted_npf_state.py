@@ -11,21 +11,47 @@ import numpy as np
 import warp as wp
 
 
+@dataclass(frozen=True)
+class _RetainedStateOwner:
+    """Shared lifetime owner for one immutable accepted-state identifier."""
+
+    _session: object
+    _identifier: str
+
+    def __init__(self, *, session, identifier):
+        object.__setattr__(self, '_session', weakref.ref(session))
+        object.__setattr__(self, '_identifier', str(identifier))
+
+    def __del__(self):
+        session = self._session()
+        if session is not None:
+            getattr(session, '_accepted_equations', {}).pop(self._identifier, None)
+
+
 class RetainedStateToken(dict):
     """Opaque public token whose lifetime owns one session snapshot."""
 
-    def __init__(self, *, session, identifier, dt):
+    def __init__(self, *, session=None, identifier=None, dt=None, owner=None):
+        if owner is None:
+            owner = _RetainedStateOwner(session=session, identifier=identifier)
+        identifier = owner._identifier
         super().__init__(identifier=identifier, dt=dt)
-        self._session = weakref.ref(session)
+        self._owner = owner
+
+    def __copy__(self):
+        """A shallow diagnostic copy shares ownership of the retained state."""
+        return type(self)(owner=self._owner, dt=self.get('dt'))
 
     def __deepcopy__(self, memo):
         """Diagnostic copies verify the live original without acquiring ownership."""
         return dict(self)
 
-    def __del__(self):
-        session = self._session()
-        if session is not None:
-            getattr(session, '_accepted_equations', {}).pop(self.get('identifier'), None)
+
+def retained_state_identifier(*, token):
+    """Return the private immutable identifier carried by an accepted token."""
+    if isinstance(token, RetainedStateToken):
+        return token._owner._identifier
+    return token.get('identifier') if isinstance(token, dict) else None
 
 
 class RetainedStateIdentifier(str):
@@ -123,7 +149,7 @@ def verified_package_rates(*, session, head, info, package, entries=False):
     if not isinstance(info, dict) or not info.get('converged', False):
         raise RuntimeError('Package exchange requires a converged solve')
     token = info.get('accepted_state', {})
-    identifier = token.get('identifier') if isinstance(token, dict) else None
+    identifier = retained_state_identifier(token=token)
     state = getattr(session, '_accepted_equations', {}).get(identifier)
     if state is None:
         raise RuntimeError('Accepted state does not belong to this model session')

@@ -178,6 +178,11 @@ class WarpDarcySolver3D:
         """
         active = binary_mask(value=active, name="active", shape=self.shape)
         fields = self._validated_K_fields(kx_field=kx_field, ky_field=ky_field, kz_field=kz_field)
+        from DARCY_WARP_PACKAGE.physics.drn_riv_3d import validate_boundary_entries
+        drn_entries = validate_boundary_entries(entries=drn_entries, package='DRN',
+            shape=self.shape, active=active, fixed=bc_mask)
+        riv_entries = validate_boundary_entries(entries=riv_entries, package='RIV',
+            shape=self.shape, active=active, fixed=bc_mask)
         volumetric, rate, entries, source = self._prepare_sources(
             rhs=rhs, R_field=R_field, wel_entries=wel_entries, active=active, bc_mask=bc_mask,
         )
@@ -357,7 +362,12 @@ class WarpDarcySolver3D:
         if self.formulation!='mf6_6_6_2_npf':
             raise ValueError('build_from_layers requires formulation=mf6_6_6_2_npf')
         from DARCY_WARP_PACKAGE.physics.npf662_layers import build_layered_dis_faces
+        from DARCY_WARP_PACKAGE.physics.drn_riv_3d import validate_boundary_entries
         from DARCY_WARP_PACKAGE.validation.npf662_reference import NPF662LayeredCase
+        drn_entries = validate_boundary_entries(entries=drn_entries, package='DRN',
+            shape=self.shape, active=active, fixed=bc_mask)
+        riv_entries = validate_boundary_entries(entries=riv_entries, package='RIV',
+            shape=self.shape, active=active, fixed=bc_mask)
         volumetric, rate, entries, source = self._prepare_sources(
             rhs=rhs, R_field=R_field, wel_entries=wel_entries, active=active, bc_mask=bc_mask,
         )

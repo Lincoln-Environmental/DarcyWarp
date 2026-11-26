@@ -67,26 +67,76 @@ def ghb_flux(*, head, conductance, boundary_head):
     return result
 
 
-def npf_ghb_component_anchor(*, conductance, active, fixed):
+def npf_ghb_component_anchor(*, conductance, active, fixed, left=None, right=None,
+                             face_conductance=None, return_layout=False):
     """Share the GHB head restraint over each connected aquifer without a CHD.
 
     For a uniform head shift, internal flows cancel and the derivative of the
     component's external discharge is sum(C_ghb). Dividing that conductance by
     the number of cells assigns a local flow tolerance whose sum retains the
-    same head tolerance. NPF's saturated Cartesian/layered stencil connects
-    every adjacent pair of active cells. Zero marks CHD-grounded components.
+    same head tolerance. Current positive face conductances define connectivity
+    when edge arrays are supplied, so dry faces cannot share restraint between
+    wet components. Zero marks CHD-grounded components.
     """
-    if conductance is None or not np.any(conductance):
-        return None
-    from scipy.ndimage import label
-    labels, count = label(np.asarray(active) != 0)
-    size = np.bincount(labels.ravel(), minlength=count+1)
-    c = np.broadcast_to(conductance, labels.shape)
-    # Scale each summand first so a representable average cannot overflow
-    # from summing many high-conductance cells.
-    average = np.bincount(labels.ravel(), weights=(c / size[labels]).ravel(), minlength=count+1)
-    average[0] = 0.0
-    average[labels[np.asarray(fixed) != 0]] = 0.0
-    if not np.any(average):
-        return None
-    return average[labels]
+    active_grid = np.asarray(active) != 0
+    fixed_grid = np.asarray(fixed) != 0
+    if active_grid.shape != fixed_grid.shape:
+        raise ValueError("Active and fixed grids must have matching shapes")
+    if face_conductance is None:
+        if left is not None or right is not None:
+            raise ValueError("Face connectivity requires left, right and conductance arrays")
+        from scipy.ndimage import label
+        labels, count = label(active_grid)
+        component_count = count + 1
+    else:
+        if left is None or right is None:
+            raise ValueError("Face connectivity requires both endpoint arrays")
+        from scipy import sparse
+        from scipy.sparse.csgraph import connected_components
+        edge_left = np.asarray(left)
+        edge_right = np.asarray(right)
+        faces = np.asarray(face_conductance, dtype=np.float64)
+        if edge_left.ndim != 1 or edge_right.ndim != 1 or faces.ndim != 1:
+            raise ValueError("Face connectivity arrays must be one-dimensional")
+        if not (edge_left.shape == edge_right.shape == faces.shape):
+            raise ValueError("Face connectivity arrays must have matching lengths")
+        cell_count = active_grid.size
+        valid = ((edge_left >= 0) & (edge_left < cell_count) &
+                 (edge_right >= 0) & (edge_right < cell_count))
+        if np.any(~np.isfinite(faces[valid])) or np.any(faces[valid] < 0.):
+            raise ValueError("Current face conductances must be finite and nonnegative")
+        active_flat = active_grid.ravel()
+        safe_left = np.clip(edge_left, 0, cell_count - 1)
+        safe_right = np.clip(edge_right, 0, cell_count - 1)
+        connected = (valid & (faces > 0.) & active_flat[safe_left] & active_flat[safe_right])
+        graph = sparse.coo_matrix((np.ones(int(np.sum(connected))),
+            (edge_left[connected], edge_right[connected])),
+            shape=(cell_count, cell_count)).tocsr()
+        component_count, flat_labels = connected_components(csgraph=graph, directed=False)
+        labels = flat_labels.reshape(active_grid.shape)
+    flat_labels = labels.ravel()
+    active_flat = active_grid.ravel()
+    sizes = np.bincount(flat_labels[active_flat], minlength=component_count)
+    eligible = np.ones(component_count, dtype=np.float64)
+    if face_conductance is None:
+        eligible[0] = 0.
+    eligible[flat_labels[fixed_grid.ravel()]] = 0.
+    weights = np.zeros(active_grid.size, dtype=np.float64)
+    selected = active_flat & (sizes[flat_labels] > 0)
+    weights[selected] = eligible[flat_labels[selected]] / sizes[flat_labels[selected]]
+    anchor = None
+    if conductance is not None and np.any(conductance):
+        c = np.broadcast_to(conductance, active_grid.shape).ravel()
+        if np.any(~np.isfinite(c[active_flat])) or np.any(c[active_flat] < 0.):
+            raise ValueError("Component restraint must be finite and nonnegative")
+        # Scale each summand first so a representable average cannot overflow.
+        average = np.bincount(flat_labels[active_flat],
+            weights=c[active_flat] / sizes[flat_labels[active_flat]],
+            minlength=component_count)
+        average *= eligible
+        if np.any(average):
+            anchor = average[flat_labels].reshape(active_grid.shape)
+            anchor[~active_grid] = 0.
+    if return_layout:
+        return anchor, labels.astype(np.int32, copy=False), weights.reshape(active_grid.shape)
+    return anchor

@@ -257,7 +257,12 @@ def source_budgets_2d(*, model, recharge_field=None):
     rates = np.empty(0) if entries is None else entries.rates
     fixed_rates = np.empty(0)
     if entries is not None:
-        fixed_rates = rates[fixed[tuple(entries.cells.T)]]
+        cells, cell_rates, unused_gross = sparse_well_cell_rates(
+            entries=entries,
+            shape=active.shape,
+            dtype=np.float64,
+        )
+        fixed_rates = cell_rates[fixed.ravel()[cells]]
     return dict(recharge=signed_rate_budget(rates=recharge * area),
         wel=signed_rate_budget(rates=rates),
         prescribed_head_wel_exchange=signed_rate_budget(rates=-fixed_rates))
@@ -301,7 +306,8 @@ def attach_accepted_source_state(*, model, head, info, dt, entries, budgets, sou
     cells = np.empty((0, np.ndim(head)), dtype=np.int64) if entries is None else np.asarray(entries.cells, dtype=np.int64)
     session = getattr(model, '_session', None)
     token = info.get('accepted_state', {})
-    equation_identifier = token.get('identifier') if isinstance(token, dict) else None
+    from DARCY_WARP_PACKAGE.solvers.accepted_npf_state import retained_state_identifier
+    equation_identifier = retained_state_identifier(token=token)
     equation = getattr(session, '_accepted_equations', {}).get(equation_identifier)
     if equation is None:
         accepted_head = np.asarray(head, dtype=np.float64)
@@ -356,10 +362,25 @@ def accepted_well_rates(*, model, head, info):
         if state.head_owner is None else state.head_owner.numpy().reshape(state.shape))
     if state.equation_identifier is not None:
         token = info.get('accepted_state', {})
-        if not isinstance(token, dict) or token.get('identifier') != state.equation_identifier or token.get('dt') != state.dt:
+        from DARCY_WARP_PACKAGE.solvers.accepted_npf_state import retained_state_identifier
+        if (not isinstance(token, dict)
+                or retained_state_identifier(token=token) != state.equation_identifier
+                or token.get('dt') != state.dt):
             raise ValueError('Source metadata is associated with a different accepted equation')
         if 'dt' in info and info['dt'] != state.dt:
             raise ValueError('Duration differs from the accepted physical equation')
+    for name in ('period_dt', 'adaptive_dt_substep_dt', 'substep_dt'):
+        if name in info and info[name] != state.dt:
+            raise ValueError('Duration differs from the accepted physical equation')
+    for name in ('adaptive_dt_substep_dts', 'experimental_substep_dts'):
+        if name in info:
+            durations = np.asarray(info[name], dtype=np.float64)
+            if durations.ndim != 1:
+                raise ValueError('Substep durations differ from the accepted physical interval')
+            if (durations.size and (not np.all(np.isfinite(durations))
+                    or np.any(durations <= 0.) or not np.isclose(
+                        durations.sum(), state.dt, rtol=0., atol=1.e-12))):
+                raise ValueError('Substep durations differ from the accepted physical interval')
     cells = np.frombuffer(state.cell_bytes, dtype=np.int64).reshape((-1, len(state.shape)))
     if not np.array_equal(np.asarray(info.get('wel_entry_cells')), cells):
         raise ValueError('WEL cells do not match the accepted source state')
