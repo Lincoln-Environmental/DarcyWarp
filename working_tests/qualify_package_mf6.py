@@ -256,7 +256,7 @@ if __name__ == "__main__":
         history_ims.update(overrides)
         arguments.output = arguments.output / 'ilut8'
     if arguments.strategy == 'cg_ilu0':
-        overrides = dict(complexity='SIMPLE', under_relaxation='NONE', backtracking_number=0,
+        overrides = dict(complexity='COMPLEX', under_relaxation='NONE', backtracking_number=0,
             linear_acceleration='CG', preconditioner_levels=0, preconditioner_drop_tolerance=0.,
             number_orthogonalizations=0, relaxation_factor=0.)
         steady_ims.update(overrides)

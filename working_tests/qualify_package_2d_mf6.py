@@ -39,8 +39,8 @@ if __name__ == "__main__":
     parser.add_argument('--mode', choices=('steady', 'mixed', 'transient', 'picard', 'all'), default='all')
     parser.add_argument('--repeats', type=int, default=3)
     parser.add_argument('--profile', choices=('production', 'strict'), default='production')
-    parser.add_argument('--newton', action=argparse.BooleanOptionalAction, default=True,
-        help='Write MF6 NEWTON UNDER_RELAXATION explicitly (enabled by default).')
+    parser.add_argument('--newton', action=argparse.BooleanOptionalAction, default=None,
+        help='Override formulation matching: Picard uses standard harmonic T; confined diagnostics use Newton.')
     arguments = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     output = Path('/tmp/darcywarp-package-2d-mf6-exact')
@@ -62,6 +62,10 @@ if __name__ == "__main__":
                 continue
             fields, dx = fields_for_grid(shape=shape, controls=controls)
             convertible = mode == 'picard'
+            mode_newton = not convertible if arguments.newton is None else arguments.newton
+            case_output = output
+            if arguments.newton is None:
+                case_output = output / ('newton' if mode_newton else 'standard')
             if convertible:
                 fields['R_field'] = np.full(shape, np.mean(fields['R_field']))
             native = native_fields(fields=fields, dx=dx, controls=controls, convertible=convertible)
@@ -86,11 +90,11 @@ if __name__ == "__main__":
                 ims = dict(complexity='COMPLEX', linear_acceleration='BICGSTAB',
                     outer_maximum=200, outer_dvclose=1.e-11, inner_maximum=200,
                     inner_dvclose=1.e-12, rcloserecord=[1.e-12, 'strict'])
-            if arguments.newton:
+            if mode_newton:
                 ims['linear_acceleration'] = 'BICGSTAB'
             ims['complexity'] = 'COMPLEX'
             run_native(fields=native, durations=durations, well_factors=well_factors, recharge_factors=recharge_factors,
                 stage_offsets=[0.] * len(durations), transient=mode not in ('steady', 'mixed'),
                 ss=controls['specific_storage_per_m'], sy=controls['unconfined_sy'] if convertible else 0.,
                 cell_type=int(convertible), ims_controls=ims, executable=executable, repeats=arguments.repeats,
-                directory=output / label / mode, well_precision='float64', newton=arguments.newton)
+                directory=case_output / label / mode, well_precision='float64', newton=mode_newton)
