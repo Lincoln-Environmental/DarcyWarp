@@ -421,14 +421,25 @@ def solve_transient_history(*, model, dt, head_prev, ss, sy,
             reference.index = index
             step_seeds = []
             activation_head = None
+            # Freeze the accepted physical state and assemble the upcoming
+            # forcing/storage before perturbing the numerical initial guess.
+            prepare_next_step(workspace=workspace, sources=sources, index=index,
+                dt=reference.dt, area=base.dx*base.dy)
             if activation_watch:
-                previous_host = workspace.head.numpy().reshape(base.active.shape)
-                seeded_head, step_seeds = state.seed_unanchored_boundary_components(head=previous_host)
+                previous_host = workspace.storage_previous.numpy().reshape(base.active.shape)
+                step_case = replace(base, source=sources.host_source(index=index))
+                activation_reference = NPF662TransientReference(case=step_case,
+                    previous=previous_host, dt=reference.dt, ss=state.ss, sy=state.sy)
+                seeded_head, step_seeds = activation_reference.seed_unanchored_boundary_components(head=previous_host)
                 if step_seeds:
                     workspace.head.assign(seeded_head.ravel())
-                    activation_head = workspace.head
-            prepare_next_step(workspace=workspace, sources=sources, index=index,
-                dt=reference.dt, area=base.dx*base.dy, activation_head=activation_head)
+                    workspace.refresh_previous_operator(activation_head=workspace.head)
+                    workspace.maximum.zero_()
+                    wp.launch(kernel=kernels.previous_storage_scale, dim=workspace.n,
+                        inputs=[workspace.principal, workspace.previous_operator_tangent,
+                            workspace.scale, workspace.maximum], device=workspace.device)
+                    if workspace.maximum.numpy()[0] != 0.:
+                        raise ValueError('Invalid seeded previous-state restraint diagonal')
             head, info = solve_newton_device(model=model, case=base, reference=reference,
                 max_outer=first_info['max_outer'], krylov_budget=first_info['max_krylov_per_outer'],
                 restart=first_info['krylov_restart'], controls=nonlinear,

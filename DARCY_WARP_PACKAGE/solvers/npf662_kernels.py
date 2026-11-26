@@ -651,10 +651,12 @@ def ghb_diagonal(storage:wp.array(dtype=wp.float64),conductance:wp.array(dtype=w
 
 @wp.kernel
 def previous_restraint_diagonal(storage_tangent:wp.array(dtype=wp.float64),
-    ghb_c:wp.array(dtype=wp.float64), drn_c:wp.array(dtype=wp.float64),
-    drn_elevation:wp.array(dtype=wp.float64), riv_c:wp.array(dtype=wp.float64),
+    ghb_c:wp.array(dtype=wp.float64), drn_offsets:wp.array(dtype=wp.int32),
+    drn_c:wp.array(dtype=wp.float64), drn_elevation:wp.array(dtype=wp.float64),
+    riv_offsets:wp.array(dtype=wp.int32), riv_c:wp.array(dtype=wp.float64),
     riv_stage:wp.array(dtype=wp.float64), riv_bottom:wp.array(dtype=wp.float64),
-    previous:wp.array(dtype=wp.float64), has_ghb:int, result:wp.array(dtype=wp.float64)):
+    previous:wp.array(dtype=wp.float64), has_ghb:int, has_entries:int,
+    result:wp.array(dtype=wp.float64)):
     """Combine every previous-state restraint into one preconditioner diagonal.
 
     Systems constrained only by an active drain or a connected river must keep
@@ -662,6 +664,8 @@ def previous_restraint_diagonal(storage_tangent:wp.array(dtype=wp.float64),
     residual or Newton Jacobian.
 
     :param storage_tangent: Storage tangent at the previous state.
+    :param drn_offsets: Authoritative CSR drain offsets by groundwater cell.
+    :param riv_offsets: Authoritative CSR river offsets by groundwater cell.
     :param ghb_c: Integrated GHB conductances.
     :param drn_c: Integrated drain conductances.
     :param drn_elevation: Drain elevations.
@@ -670,6 +674,7 @@ def previous_restraint_diagonal(storage_tangent:wp.array(dtype=wp.float64),
     :param riv_bottom: Riverbed bottoms.
     :param previous: Previous accepted heads used to test branch activation.
     :param has_ghb: One when GHB arrays carry real fields.
+    :param has_entries: One when CSR offsets are allocated.
     :param result: Combined previous-state restraint diagonal, written in place.
     :return: None; ``result`` is modified in place.
     """
@@ -677,9 +682,14 @@ def previous_restraint_diagonal(storage_tangent:wp.array(dtype=wp.float64),
     tangent = storage_tangent[i]
     if has_ghb != 0:
         tangent = tangent + ghb_c[i]
-    drain = drn_flow_pair(previous[i], drn_c[i], drn_elevation[i])
-    river = riv_flow_pair(previous[i], riv_c[i], riv_stage[i], riv_bottom[i])
-    result[i] = tangent + drain[1] + river[1]
+    if has_entries != 0:
+        for entry in range(drn_offsets[i], drn_offsets[i + 1]):
+            drain = drn_flow_pair(previous[i], drn_c[entry], drn_elevation[entry])
+            tangent = tangent + drain[1]
+        for entry in range(riv_offsets[i], riv_offsets[i + 1]):
+            river = riv_flow_pair(previous[i], riv_c[entry], riv_stage[entry], riv_bottom[entry])
+            tangent = tangent + river[1]
+    result[i] = tangent
 
 
 @wp.kernel

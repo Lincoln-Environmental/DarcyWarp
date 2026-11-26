@@ -445,3 +445,5 @@ class ThreeDOperatorSession:
         workspace=self._npf662_workspace_holder.get('workspace')
         if workspace is not None:workspace.close()
         self._npf662_workspace_holder.clear()
+        if hasattr(self, '_accepted_equations'):
+            self._accepted_equations.clear()

@@ -63,7 +63,8 @@ class NPF662TransientReference(NPF662Reference):
         n = self.case.active.size
         graph = sparse.coo_matrix((np.ones(self.left.size), (self.left, self.right)), shape=(n, n)).tocsr()
         unused, labels = connected_components(csgraph=graph, directed=False)
-        potential_boundary = (self.drn_conductance > 0.) | (self.riv_conductance > 0.)
+        drn_occupied, riv_occupied = self.boundary_occupancy()
+        potential_boundary = (drn_occupied | riv_occupied).reshape(self.shape)
         anchors = ((self.case.fixed != 0)|(self.ghb_conductance > 0.)|potential_boundary|
                    ((self.ss > 0.)|((self.sy > 0.)&(self.case.cell_types != 0))))
         for label in np.unique(labels[self.case.active.ravel() != 0]):
@@ -90,11 +91,7 @@ class NPF662TransientReference(NPF662Reference):
             shape=(self.case.active.size, self.case.active.size)).tocsr()
         unused, labels = connected_components(csgraph=graph, directed=False)
         active_labels = set(labels[self.case.active.ravel() != 0])
-        from DARCY_WARP_PACKAGE.physics.drn_riv_3d import drn_terms, riv_terms
-        drain = drn_terms(head=head, conductance=self.drn_conductance,
-                          elevation=self.drn_elevation)
-        river = riv_terms(head=head, conductance=self.riv_conductance,
-                          stage=self.riv_stage, bottom=self.riv_bottom)
+        unused_drain_entries, drain, unused_river_entries, river = self.boundary_terms(head=head)
         boundary_tangent = self.ghb_conductance + drain.diagonal + river.diagonal
         anchors = (self.case.fixed != 0)|(boundary_tangent > 0.)|((tangent > 0.)&self.free)
         grounded = set(labels[anchors.ravel()&(self.case.active.ravel() != 0)])

@@ -21,8 +21,12 @@ class NPF662TransientState:
         self.shape = case.active.shape
         self._session = model._session
         self._audit = None
-        self._audit_case = None
-        self._audit_revisions = None
+        # Own the equation at the solve boundary, before any later model
+        # update can replace or mutate its host fields. Lazy reference assembly
+        # must never reconstruct historical inputs from the live model.
+        from copy import deepcopy
+        self._audit_case = deepcopy(case)
+        self._audit_revisions = self._input_revisions()
         self.structure_names = tuple(name for name in case.__dataclass_fields__
             if name not in ('source', 'values', 'initial', 'kx', 'ky', 'kz', 'cell_type',
                 'ghb_conductance', 'ghb_head', 'drn_conductance', 'drn_elevation', 'drn_mask',
@@ -102,8 +106,12 @@ class NPF662TransientState:
             self.material = tuple(np.asarray(getattr(case, name)).copy() for name in ('kx', 'ky', 'kz'))
         self.operator_revision = model._session.operator_revision
         self._audit = None
-        self._audit_case = None
-        self._audit_revisions = None
+        # Own the equation at the solve boundary, before any later model
+        # update can replace or mutate its host fields. Lazy reference assembly
+        # must never reconstruct historical inputs from the live model.
+        from copy import deepcopy
+        self._audit_case = deepcopy(case)
+        self._audit_revisions = self._input_revisions()
         self._activation_watch = None
         self._entry_lists_revision = None
         self._drn_entries_list = None
@@ -126,25 +134,10 @@ class NPF662TransientState:
     def _owned_audit_case(self):
         """Snapshot every solver-owned input the independent audit may read.
 
-        ``case_from_model`` aliases live session arrays for the source,
-        prescribed values and boundary fields, and update methods replace
-        those arrays with new objects, so a stale case would carry discarded
-        values. The snapshot is therefore rebuilt from the live session
-        whenever a session revision changes and always owns copies.
+        The snapshot is captured at refresh, including sparse boundary entry
+        definitions. Subsequent session revisions belong to a different
+        equation and cannot invalidate or rewrite this historical audit.
         """
-        revisions = self._input_revisions()
-        if self._audit_case is None or revisions != self._audit_revisions:
-            from DARCY_WARP_PACKAGE.solvers.npf662_3d import case_from_model
-            case = case_from_model(model=self._model, top=self._case_top,
-                cell_type=self._case_cell_type)
-            frozen_inputs = ('source', 'values', 'initial', 'kx', 'ky', 'kz',
-                'ghb_conductance', 'ghb_head', 'drn_conductance', 'drn_elevation', 'drn_mask',
-                'riv_conductance', 'riv_stage', 'riv_bottom', 'riv_mask', 'cell_type')
-            owned = {name: (None if getattr(case, name) is None
-                            else np.array(getattr(case, name), copy=True))
-                     for name in frozen_inputs}
-            self._audit_case = replace(case, **owned)
-            self._audit_revisions = revisions
         return self._audit_case
 
     def independent(self):
@@ -230,7 +223,17 @@ class NPF662TransientState:
             free_component = component & (free.reshape(self.shape))
             if self._component_restrained(component, candidate, drn_list, riv_list):
                 continue
-            net_need = float(np.sum(np.asarray(source, dtype=np.float64)[free_component]))
+            # For an unrestrained closed component intercell fluxes cancel.
+            # Include disconnected river leakage: it is a physical constant
+            # source on this branch, even when the numerical source is zero.
+            component_source = np.asarray(source, dtype=np.float64)[free_component]
+            net_need = float(np.sum(component_source))
+            if riv_list is not None:
+                cells = riv_list.flat_cells
+                included = free_component.ravel()[cells]
+                river_out = riv_list.conductance * (
+                    np.maximum(flat[cells], riv_list.third_level) - riv_list.second_level)
+                net_need -= float(np.sum(river_out[included]))
             if not np.isfinite(net_need) or net_need <= 0.:
                 continue
             threshold_candidates = []
@@ -240,7 +243,7 @@ class NPF662TransientState:
                     continue
                 for entry in range(len(entries)):
                     cell = int(entries.flat_cells[entry])
-                    if not free_component[cell]:
+                    if not free_component.ravel()[cell] or entries.conductance[entry] <= 0.:
                         continue
                     threshold = float(getattr(entries, level)[entry])
                     if flat[cell] <= threshold:
@@ -304,7 +307,7 @@ class NPF662TransientState:
             if entries is None:
                 continue
             cells = entries.flat_cells
-            active = (entries.conductance > 0.) & (flat[cells] > getattr(entries, level)[cells])
+            active = (entries.conductance > 0.) & (flat[cells] > getattr(entries, level))
             if np.any(active & component.ravel()[cells]):
                 return True
         return False

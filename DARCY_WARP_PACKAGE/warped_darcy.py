@@ -7153,8 +7153,13 @@ class WarpDarcySolver:
             if self.wel_depth_wp is not None:
                 self.wel_depth_wp.zero_()
             return
+        depth = self._well_depth_rate_host(entries=entries)
+        with np.errstate(over="ignore", invalid="ignore"):
+            combined = self._recharge_input_host + depth
+        if not np.all(np.isfinite(combined)):
+            raise ValueError("Combined recharge and well depth rates are not representable")
         self.wel_entries = entries
-        self.wel_depth_rate_host = self._well_depth_rate_host(entries)
+        self.wel_depth_rate_host = depth
         if self._recharge_input_host is self.R_field_host:
             # Split the shared buffer so the pure recharge input keeps its own
             # values once wells are combined into ``R_field_host``.
@@ -7230,7 +7235,13 @@ class WarpDarcySolver:
         if self.R_field_host is None or self.R_wp is None or self._recharge_input_host is None:
             raise RuntimeError("Call build_from_truth_inputs() once before update_R_in_place().")
 
-        R_arr = np.asarray(R_field, dtype=NP_FLOAT, order="C")
+        from DARCY_WARP_PACKAGE.physics.inputs_3d import floating_field
+        R_arr = floating_field(value=R_field, name="R_field", dtype=NP_FLOAT)
+        if self.wel_depth_rate_host is not None:
+            with np.errstate(over="ignore", invalid="ignore"):
+                combined = R_arr + self.wel_depth_rate_host
+            if not np.all(np.isfinite(combined)):
+                raise ValueError("Combined recharge and well rates are not representable")
         if R_arr.shape != tuple(self._recharge_input_host.shape):
             if R_arr.size == 1:
                 self._recharge_input_host[:, :] = R_arr.reshape(1)[0]
@@ -7253,7 +7264,16 @@ class WarpDarcySolver:
         """
         if self.R_field_host is None or self.R_wp is None or self.active_wp is None:
             raise RuntimeError("Call build_from_truth_inputs() once before update_uniform_recharge_in_place().")
-        rate = NP_FLOAT(float(recharge_rate))
+        from DARCY_WARP_PACKAGE.physics.inputs_3d import floating_field
+        validated = floating_field(value=recharge_rate, name="recharge_rate", dtype=NP_FLOAT)
+        if validated.ndim != 0:
+            raise ValueError("Uniform recharge requires a scalar rate")
+        rate = NP_FLOAT(validated)
+        if self.wel_depth_rate_host is not None:
+            with np.errstate(over="ignore", invalid="ignore"):
+                combined = rate + self.wel_depth_rate_host
+            if not np.all(np.isfinite(combined)):
+                raise ValueError("Combined recharge and well rates are not representable")
         if self._recharge_input_host is not None:
             self._recharge_input_host[:, :] = rate
             if self.active_host is not None:

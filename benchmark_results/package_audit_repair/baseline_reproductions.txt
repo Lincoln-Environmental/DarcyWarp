@@ -1,0 +1,187 @@
+Warp 1.17.0 initialized:
+   CUDA Toolkit 12.9, Driver 13.2
+   Devices:
+     "cpu"      : "x86_64"
+     "cuda:0"   : "NVIDIA GeForce RTX 4070 Ti SUPER" (16 GiB, sm_89, mempool enabled)
+   Kernel cache:
+     /home/patrickdurney/.cache/warp/1.17.0
+FFFFFFFFF.FFFFFFF                                                        [100%]
+=================================== FAILURES ===================================
+___________ test_raw_source_survives_repeated_well_replacement[cpu] ____________
+tests/test_package_audit_regressions.py:22: in test_raw_source_survives_repeated_well_replacement
+    assert model._volumetric_source[0, 1, 1] == 50.
+E   assert np.float64(-50.0) == 50.0
+__________ test_raw_source_survives_repeated_well_replacement[cuda:0] __________
+tests/test_package_audit_regressions.py:22: in test_raw_source_survives_repeated_well_replacement
+    assert model._volumetric_source[0, 1, 1] == 50.
+E   assert np.float64(-50.0) == 50.0
+___________ test_well_helper_rejects_invalid_raw_coordinates[cell0] ____________
+tests/test_package_audit_regressions.py:30: in test_well_helper_rejects_invalid_raw_coordinates
+    with pytest.raises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError
+___________ test_well_helper_rejects_invalid_raw_coordinates[cell1] ____________
+tests/test_package_audit_regressions.py:30: in test_well_helper_rejects_invalid_raw_coordinates
+    with pytest.raises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError
+___________ test_well_helper_rejects_invalid_raw_coordinates[cell2] ____________
+tests/test_package_audit_regressions.py:30: in test_well_helper_rejects_invalid_raw_coordinates
+    with pytest.raises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError
+___________ test_well_helper_rejects_invalid_raw_coordinates[cell3] ____________
+tests/test_package_audit_regressions.py:30: in test_well_helper_rejects_invalid_raw_coordinates
+    with pytest.raises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError
+___________ test_well_helper_rejects_invalid_raw_coordinates[cell4] ____________
+tests/test_package_audit_regressions.py:30: in test_well_helper_rejects_invalid_raw_coordinates
+    with pytest.raises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError
+_____________ test_well_rates_are_scalar_and_representable[rate0] ______________
+tests/test_package_audit_regressions.py:37: in test_well_rates_are_scalar_and_representable
+    with pytest.raises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError
+_____________ test_well_rates_are_scalar_and_representable[rate1] ______________
+tests/test_package_audit_regressions.py:37: in test_well_rates_are_scalar_and_representable
+    with pytest.raises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError
+_____________ test_well_rates_are_scalar_and_representable[1e+100] _____________
+tests/test_package_audit_regressions.py:37: in test_well_rates_are_scalar_and_representable
+    with pytest.raises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE ValueError
+___________ test_native_activation_at_large_flat_cell_index[drn-cpu] ___________
+tests/test_package_audit_regressions.py:59: in test_native_activation_at_large_flat_cell_index
+    head, info = model.solve(transient=True, dt=1., head_prev=np.zeros(shape), ss=0., sy=0.,
+DARCY_WARP_PACKAGE/warped_darcy_3d.py:620: in solve
+    result = self._solve(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/warped_darcy_3d.py:642: in _solve
+    return solve_npf662(model=self,**kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/npf662_3d.py:133: in solve_npf662
+    reference.check_components()
+DARCY_WARP_PACKAGE/solvers/npf662_state.py:169: in check_components
+    self.independent().check_components()
+DARCY_WARP_PACKAGE/validation/npf662_transient_reference.py:71: in check_components
+    raise ValueError('Ungrounded transient component without boundary or storage')
+E   ValueError: Ungrounded transient component without boundary or storage
+_________ test_native_activation_at_large_flat_cell_index[drn-cuda:0] __________
+tests/test_package_audit_regressions.py:59: in test_native_activation_at_large_flat_cell_index
+    head, info = model.solve(transient=True, dt=1., head_prev=np.zeros(shape), ss=0., sy=0.,
+DARCY_WARP_PACKAGE/warped_darcy_3d.py:620: in solve
+    result = self._solve(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/warped_darcy_3d.py:642: in _solve
+    return solve_npf662(model=self,**kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/npf662_3d.py:133: in solve_npf662
+    reference.check_components()
+DARCY_WARP_PACKAGE/solvers/npf662_state.py:169: in check_components
+    self.independent().check_components()
+DARCY_WARP_PACKAGE/validation/npf662_transient_reference.py:71: in check_components
+    raise ValueError('Ungrounded transient component without boundary or storage')
+E   ValueError: Ungrounded transient component without boundary or storage
+___________ test_native_activation_at_large_flat_cell_index[riv-cpu] ___________
+tests/test_package_audit_regressions.py:59: in test_native_activation_at_large_flat_cell_index
+    head, info = model.solve(transient=True, dt=1., head_prev=np.zeros(shape), ss=0., sy=0.,
+DARCY_WARP_PACKAGE/warped_darcy_3d.py:620: in solve
+    result = self._solve(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/warped_darcy_3d.py:642: in _solve
+    return solve_npf662(model=self,**kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/npf662_3d.py:133: in solve_npf662
+    reference.check_components()
+DARCY_WARP_PACKAGE/solvers/npf662_state.py:169: in check_components
+    self.independent().check_components()
+DARCY_WARP_PACKAGE/validation/npf662_transient_reference.py:71: in check_components
+    raise ValueError('Ungrounded transient component without boundary or storage')
+E   ValueError: Ungrounded transient component without boundary or storage
+_________ test_native_activation_at_large_flat_cell_index[riv-cuda:0] __________
+tests/test_package_audit_regressions.py:59: in test_native_activation_at_large_flat_cell_index
+    head, info = model.solve(transient=True, dt=1., head_prev=np.zeros(shape), ss=0., sy=0.,
+DARCY_WARP_PACKAGE/warped_darcy_3d.py:620: in solve
+    result = self._solve(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/warped_darcy_3d.py:642: in _solve
+    return solve_npf662(model=self,**kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/npf662_3d.py:133: in solve_npf662
+    reference.check_components()
+DARCY_WARP_PACKAGE/solvers/npf662_state.py:169: in check_components
+    self.independent().check_components()
+DARCY_WARP_PACKAGE/validation/npf662_transient_reference.py:71: in check_components
+    raise ValueError('Ungrounded transient component without boundary or storage')
+E   ValueError: Ungrounded transient component without boundary or storage
+_________________ test_sparse_previous_restraint_diagonal[cpu] _________________
+tests/test_package_audit_regressions.py:89: in test_sparse_previous_restraint_diagonal
+    np.testing.assert_array_equal(workspace.previous_ghb_operator.numpy().reshape(shape), expected)
+E   AssertionError: 
+E   Arrays are not equal
+E   
+E   Mismatched elements: 1 / 12 (8.33%)
+E   Max absolute difference among violations: 5.
+E   Max relative difference among violations: 1.
+E    ACTUAL: array([[[0., 0., 0.],
+E           [0., 0., 0.]],
+E   ...
+E    DESIRED: array([[[0., 0., 0.],
+E           [0., 0., 0.]],
+E   ...
+----------------------------- Captured stdout call -----------------------------
+Module DARCY_WARP_PACKAGE.solvers.npf662_kernels 4909e8b load on device 'cpu' took 0.78 ms  (cached)
+_______________ test_sparse_previous_restraint_diagonal[cuda:0] ________________
+tests/test_package_audit_regressions.py:89: in test_sparse_previous_restraint_diagonal
+    np.testing.assert_array_equal(workspace.previous_ghb_operator.numpy().reshape(shape), expected)
+E   AssertionError: 
+E   Arrays are not equal
+E   
+E   Mismatched elements: 1 / 12 (8.33%)
+E   Max absolute difference among violations: 5.
+E   Max relative difference among violations: 1.
+E    ACTUAL: array([[[0., 0., 0.],
+E           [0., 0., 0.]],
+E   ...
+E    DESIRED: array([[[0., 0., 0.],
+E           [0., 0., 0.]],
+E   ...
+----------------------------- Captured stdout call -----------------------------
+Module DARCY_WARP_PACKAGE.solvers.npf662_kernels 8999fb7 load on device 'cuda:0' took 6.06 ms  (cached)
+=============================== warnings summary ===============================
+../../home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/warp/_src/apic/types.py:49
+  /home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/warp/_src/apic/types.py:49: DeprecationWarning: Due to '_pack_', the 'APICLaunchParamRecord' Structure will use memory layout compatible with MSVC (Windows). If this is intended, set _layout_ to 'ms'. The implicit default is deprecated and slated to become an error in Python 3.19.
+    class APICLaunchParamRecord(ctypes.Structure):
+
+../../home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/warp/_src/apic/types.py:69
+  /home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/warp/_src/apic/types.py:69: DeprecationWarning: Due to '_pack_', the 'APICLaunchPtrLocation' Structure will use memory layout compatible with MSVC (Windows). If this is intended, set _layout_ to 'ms'. The implicit default is deprecated and slated to become an error in Python 3.19.
+    class APICLaunchPtrLocation(ctypes.Structure):
+
+tests/test_package_audit_regressions.py::test_well_rates_are_scalar_and_representable[1e+100]
+  /tmp/darcywarp-sfr-3d-boundaries/DARCY_WARP_PACKAGE/physics/wel.py:111: RuntimeWarning: overflow encountered in cast
+    return WellEntries(cells=cells.astype(np.int64), rates=rates.astype(dtype))
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_package_audit_regressions.py::test_raw_source_survives_repeated_well_replacement[cpu]
+FAILED tests/test_package_audit_regressions.py::test_raw_source_survives_repeated_well_replacement[cuda:0]
+FAILED tests/test_package_audit_regressions.py::test_well_helper_rejects_invalid_raw_coordinates[cell0]
+FAILED tests/test_package_audit_regressions.py::test_well_helper_rejects_invalid_raw_coordinates[cell1]
+FAILED tests/test_package_audit_regressions.py::test_well_helper_rejects_invalid_raw_coordinates[cell2]
+FAILED tests/test_package_audit_regressions.py::test_well_helper_rejects_invalid_raw_coordinates[cell3]
+FAILED tests/test_package_audit_regressions.py::test_well_helper_rejects_invalid_raw_coordinates[cell4]
+FAILED tests/test_package_audit_regressions.py::test_well_rates_are_scalar_and_representable[rate0]
+FAILED tests/test_package_audit_regressions.py::test_well_rates_are_scalar_and_representable[rate1]
+FAILED tests/test_package_audit_regressions.py::test_well_rates_are_scalar_and_representable[1e+100]
+FAILED tests/test_package_audit_regressions.py::test_native_activation_at_large_flat_cell_index[drn-cpu]
+FAILED tests/test_package_audit_regressions.py::test_native_activation_at_large_flat_cell_index[drn-cuda:0]
+FAILED tests/test_package_audit_regressions.py::test_native_activation_at_large_flat_cell_index[riv-cpu]
+FAILED tests/test_package_audit_regressions.py::test_native_activation_at_large_flat_cell_index[riv-cuda:0]
+FAILED tests/test_package_audit_regressions.py::test_sparse_previous_restraint_diagonal[cpu]
+FAILED tests/test_package_audit_regressions.py::test_sparse_previous_restraint_diagonal[cuda:0]
+16 failed, 1 passed, 3 warnings in 0.80s

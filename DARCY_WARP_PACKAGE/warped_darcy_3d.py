@@ -496,27 +496,10 @@ class WarpDarcySolver3D:
         :raises RuntimeError: If the solve state is not accepted or unowned.
         :raises ValueError: If the head or rate array is malformed or unrelated.
         """
-        import hashlib
+        from DARCY_WARP_PACKAGE.solvers.accepted_npf_state import verified_package_rates
         if self._session is None:
             raise RuntimeError("The model has not been built")
-        if not isinstance(info, dict) or not info.get("converged", False):
-            raise RuntimeError(f"Accepted {package.upper()} discharge requires a converged solve")
-        accepted = np.asarray(head, dtype=np.float64)
-        if accepted.shape != self.shape or not np.all(np.isfinite(accepted)):
-            raise ValueError(f"head must be a finite field of shape {self.shape}")
-        token = info.get("accepted_state")
-        if not isinstance(token, dict) or token.get("head_sha256") is None:
-            raise RuntimeError("Accepted solve metadata lacks the accepted_state ownership token")
-        supplied = hashlib.sha256(np.ascontiguousarray(accepted).tobytes()).hexdigest()
-        if supplied != token["head_sha256"]:
-            raise ValueError("head does not match the accepted solve state")
-        rate = info.get(f"{package}_discharge_rate_array")
-        if rate is None:
-            raise RuntimeError(f"Accepted solve metadata lacks {package}_discharge_rate_array")
-        rate = np.asarray(rate, dtype=np.float64)
-        if rate.shape != self.shape or not np.all(np.isfinite(rate)):
-            raise ValueError(f"{package}_discharge_rate_array must be a finite field of shape {self.shape}")
-        return rate.copy()
+        return verified_package_rates(session=self._session, head=head, info=info, package=package)
 
     def accepted_drn_discharge(self, *, head, info) -> np.ndarray:
         """Return nonnegative per-cell DRN outflow from a verified accepted solve.
@@ -527,8 +510,6 @@ class WarpDarcySolver3D:
         :raises RuntimeError: If DRN is disabled or the solve state is not accepted.
         :raises ValueError: If the head or rate array is malformed or unrelated.
         """
-        if self._session.drn_conductance is None:
-            raise RuntimeError("DRN fields have not been built")
         rate = self._verify_accepted_state(head=head, info=info, package="drn")
         if np.any(rate < 0.0):
             raise ValueError("drn_discharge_rate_array must be nonnegative")
@@ -543,8 +524,6 @@ class WarpDarcySolver3D:
         :raises RuntimeError: If RIV is disabled or the solve state is not accepted.
         :raises ValueError: If the head or rate array is malformed or unrelated.
         """
-        if self._session.riv_conductance is None:
-            raise RuntimeError("RIV fields have not been built")
         return self._verify_accepted_state(head=head, info=info, package="riv")
 
     def _validated_K_fields(self, *, kx_field, ky_field, kz_field, require_nonnegative=True):
@@ -816,8 +795,13 @@ class WarpDarcySolver3D:
         source = self._assemble_source(rhs=self._volumetric_source, R_field=self._recharge_rate,
             entries=validated, active=self._active, fixed=self._bc_mask,
             dtype=NP_FLOAT if self._recharge_rate is not None else self._session.rhs.dtype)
+        volumetric = self._volumetric_source
+        if volumetric is self._rhs and validated is not None:
+            # The session upload overwrites its owned RHS in place. Separate
+            # the raw physical source only when a second component is added.
+            volumetric = volumetric.copy()
         self._session.update_rhs(source)
-        self._wel_entries = validated
+        self._store_source_components(volumetric, self._recharge_rate, validated)
 
     def update_R_in_place(self, R_field) -> None:
         """Replace surface recharge while retaining wells and other cell rates.

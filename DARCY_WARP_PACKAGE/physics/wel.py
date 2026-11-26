@@ -39,7 +39,17 @@ def well_entries(*cells, rates) -> list[tuple[tuple[int, ...], float]]:
     :param rates: One signed volumetric rate [L³/T] per cell.
     :return: Entry pairs accepted by every WEL interface.
     """
-    indices = tuple(tuple(int(value) for value in cell) for cell in cells)
+    indices = []
+    for cell in cells:
+        try:
+            dimensionality = len(cell)
+        except TypeError as error:
+            raise ValueError("Well cells must be explicit index tuples") from error
+        if dimensionality not in (2, 3):
+            raise ValueError("Well cells must have two or three indices")
+        indices.append(_entry_cells(entry=cell, dimensionality=dimensionality))
+    if indices and any(len(cell) != len(indices[0]) for cell in indices):
+        raise ValueError("Well cells must have consistent dimensionality")
     values = floating_field(value=rates, name="wel_rates", dtype=np.float64)
     values = np.atleast_1d(values)
     if values.ndim != 1 or values.shape[0] != len(indices):
@@ -53,7 +63,7 @@ def _entry_cells(entry, dimensionality):
         raise ValueError("Well cells must be explicit index tuples, not scalars")
     cell = tuple(entry)
     if len(cell) != dimensionality or any(
-        isinstance(value, bool) or not isinstance(value, (int, np.integer)) for value in cell
+        isinstance(value, (bool, np.bool_)) or not isinstance(value, (int, np.integer)) for value in cell
     ):
         raise ValueError(
             f"Each well cell must be an integer index tuple of length {dimensionality}"
@@ -94,7 +104,10 @@ def validate_well_entries(*, entries, shape, active, dtype=np.float64):
         if not isinstance(item, Sequence) or isinstance(item, (str, bytes)) or len(item) != 2:
             raise ValueError("Each well entry must be a (cell, rate) pair")
         cell, rate = item
-        parsed.append((_entry_cells(cell, len(shape)), rate))
+        scalar = floating_field(value=rate, name="wel_rate", dtype=dtype)
+        if scalar.ndim != 0:
+            raise ValueError("Each well entry requires exactly one scalar rate")
+        parsed.append((_entry_cells(entry=cell, dimensionality=len(shape)), float(scalar)))
 
     cells = np.asarray([cell for cell, unused in parsed], dtype=np.int64)
     rates = np.asarray([rate for unused, rate in parsed], dtype=np.float64)
@@ -145,7 +158,10 @@ def combine_volumetric_sources(*, rhs, wells, dtype=np.float64):
     if rhs.shape != wells.shape:
         raise ValueError(f"Well source shape {wells.shape} does not match {rhs.shape}")
     combined = np.array(rhs, dtype=dtype, copy=True)
-    combined += wells
+    with np.errstate(over="ignore", invalid="ignore"):
+        combined += wells
+    if not np.all(np.isfinite(combined)):
+        raise ValueError("Combined volumetric sources are not representable")
     return combined
 
 

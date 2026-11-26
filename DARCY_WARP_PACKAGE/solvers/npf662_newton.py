@@ -232,7 +232,9 @@ class NPF662Workspace:
             self.previous_storage_tangent.zero_()
             # Steady solves test boundary activation at the initial guess.
             wp.copy(dest=self.storage_previous, src=self.head)
-        self.refresh_previous_operator()
+        # Storage always uses the physical previous state. Boundary restraint
+        # follows the initial active set, including a threshold recovery seed.
+        self.refresh_previous_operator(activation_head=self.head)
         self.maximum.zero_()
         wp.launch(kernel=kernels.previous_storage_scale,dim=self.n,
             inputs=[self.principal,self.previous_operator_tangent,self.scale,self.maximum],device=self.device)
@@ -274,11 +276,12 @@ class NPF662Workspace:
                 if riv_c is not None else None))
         self._assign_entry_package(package_list=drn_list, offsets_name='drn_offsets',
             conductance_name='drn_entry_c', level_names=('drn_entry_elev',),
-            levels=lambda entries: (entries.first_level,),
+            levels=(None if drn_list is None else drn_list.first_level,),
             rate_name='drn_entry_rate')
         self._assign_entry_package(package_list=riv_list, offsets_name='riv_offsets',
             conductance_name='riv_entry_c', level_names=('riv_entry_stage', 'riv_entry_bottom'),
-            levels=lambda entries: (entries.second_level, entries.third_level),
+            levels=(None if riv_list is None else riv_list.second_level,
+                    None if riv_list is None else riv_list.third_level),
             rate_name='riv_entry_rate')
 
     def _assign_entry_package(self, *, package_list, offsets_name, conductance_name,
@@ -292,7 +295,7 @@ class NPF662Workspace:
         :param offsets_name: Workspace attribute holding the offsets array.
         :param conductance_name: Workspace attribute holding entry conductances.
         :param level_names: Workspace attributes holding entry levels.
-        :param levels: Callable mapping an entry list to its level arrays.
+        :param levels: Tuple of authoritative per-entry level arrays.
         :param rate_name: Workspace attribute holding per-entry discharge rates.
         :return: None.
         """
@@ -312,7 +315,7 @@ class NPF662Workspace:
             elif index == 0:
                 value = np.ascontiguousarray(package_list.conductance, dtype=np.float64)
             else:
-                source = levels(package_list)[index - 1]
+                source = levels[index - 1]
                 value = (np.zeros(len(package_list), dtype=np.float64) if source is None
                          else np.ascontiguousarray(source, dtype=np.float64))
             array = getattr(self, name)
@@ -357,12 +360,10 @@ class NPF662Workspace:
             wp.launch(kernel=kernels.previous_restraint_diagonal, dim=self.n,
                 inputs=[self.previous_storage_tangent,
                     self.ghb_conductance if has_ghb else self.zero,
-                    self.drn_conductance if self.has_drn_riv else self.zero,
-                    self.drn_elevation if self.has_drn_riv else self.zero,
-                    self.riv_conductance if self.has_drn_riv else self.zero,
-                    self.riv_stage if self.has_drn_riv else self.zero,
-                    self.riv_bottom if self.has_drn_riv else self.zero,
-                    self.activation_head, has_ghb, self.previous_ghb_operator], device=self.device)
+                    self.drn_offsets, self.drn_entry_c, self.drn_entry_elev,
+                    self.riv_offsets, self.riv_entry_c, self.riv_entry_stage,
+                    self.riv_entry_bottom,
+                    self.activation_head, has_ghb, int(self.has_drn_riv), self.previous_ghb_operator], device=self.device)
 
     def boundary_budget(self):
         result = dict(ghb_inflow=0.,ghb_outflow=0.,ghb_net=0.,
@@ -590,38 +591,6 @@ def device_accepted(*,metrics,physical_tolerance=1e-12,relative_tolerance=1e-8):
             (metrics['physical_rms']<=1e-12 or metrics['relative_cell_imbalance']<=1e-8) and metrics['roundoff_accepted'])
     return metrics['finite'] and valid and metrics['head_residual_rms']<=1e-6 and (
         metrics['physical_rms']<=physical_tolerance or metrics['relative_cell_imbalance']<=relative_tolerance)
-
-
-def accepted_state_identity(*, session, head, dt=None):
-    """Bind accepted package exchange to the state that produced it.
-
-    Inactive drains and disconnected rivers return identical fluxes for many
-    different groundwater heads, so per-cell rates are tied to immutable
-    digests of the accepted head and boundary fields plus the owning session
-    revisions instead of being re-derived against later model state.
-
-    :param session: The operator session owning the accepted solve inputs.
-    :param head: Accepted groundwater head grid.
-    :param dt: Optional accepted timestep duration.
-    :return: Mapping of revisions, digests and transient metadata.
-    """
-    import hashlib
-    def digest(field):
-        if field is None:
-            return None
-        return hashlib.sha256(np.ascontiguousarray(field, dtype=np.float64).tobytes()).hexdigest()
-    return dict(
-        revision=int(session.revision),
-        operator_revision=int(session.operator_revision),
-        topology_revision=int(session.topology_revision),
-        head_sha256=digest(np.asarray(head, dtype=np.float64)),
-        drn_conductance_sha256=digest(session.drn_conductance),
-        drn_elevation_sha256=digest(session.drn_elevation),
-        riv_conductance_sha256=digest(session.riv_conductance),
-        riv_stage_sha256=digest(session.riv_stage),
-        riv_bottom_sha256=digest(session.riv_bottom),
-        dt=None if dt is None else float(dt),
-    )
 
 
 def residual_merit(*,candidate,current):
@@ -886,9 +855,9 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
             result['drn_entry_rates'] = workspace.drn_entry_rate.numpy().copy()
         if len(workspace.riv_entry_rate):
             result['riv_entry_rates'] = workspace.riv_entry_rate.numpy().copy()
-        accepted_head = workspace.head.numpy().reshape(case.active.shape) if head is None else head
-        result['accepted_state'] = accepted_state_identity(session=model._session,
-            head=accepted_head, dt=float(reference.dt) if workspace.transient else None)
+        from .accepted_npf_state import own_accepted_state
+        result['accepted_state'] = own_accepted_state(session=model._session,
+            workspace=workspace, dt=float(reference.dt) if workspace.transient else None)
     result['krylov_workspace_reused']=krylov_reused
     result['npf_preconditioner']=npf_preconditioner
     result.update(accepted_updates=sum(row['accepted'] for row in history),
