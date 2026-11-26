@@ -1,0 +1,98 @@
+[
+  {
+    "label": "original",
+    "controls": {
+      "inner_kcycles": 5,
+      "max_outer": 40,
+      "nu_pre": 2,
+      "nu_post": 2,
+      "nu_coarse": 10,
+      "omega": 0.7,
+      "smoother": "chebyshev",
+      "cheby_lambda_min": 0.1,
+      "cheby_lambda_max": 2.0,
+      "rel_tol": 5e-07,
+      "abs_tol_min": 5e-07,
+      "dh_rms_tol": 0.0001,
+      "dh_max_tol": null,
+      "max_levels": 6,
+      "min_coarse_cells": 500
+    },
+    "seconds": 0.7167962459934643,
+    "converged": false,
+    "residual": 391.25942128196357,
+    "outers": 40
+  },
+  {
+    "label": "deeper7",
+    "controls": {
+      "inner_kcycles": 5,
+      "max_outer": 40,
+      "nu_pre": 2,
+      "nu_post": 2,
+      "nu_coarse": 10,
+      "omega": 0.7,
+      "smoother": "chebyshev",
+      "cheby_lambda_min": 0.1,
+      "cheby_lambda_max": 2.0,
+      "rel_tol": 5e-07,
+      "abs_tol_min": 5e-07,
+      "dh_rms_tol": 0.0001,
+      "dh_max_tol": null,
+      "max_levels": 7,
+      "min_coarse_cells": 100
+    },
+    "seconds": 1.1362904109992087,
+    "converged": false,
+    "residual": 361.91377596305233,
+    "outers": 40
+  },
+  {
+    "label": "deeper8",
+    "controls": {
+      "inner_kcycles": 5,
+      "max_outer": 40,
+      "nu_pre": 2,
+      "nu_post": 2,
+      "nu_coarse": 10,
+      "omega": 0.7,
+      "smoother": "chebyshev",
+      "cheby_lambda_min": 0.1,
+      "cheby_lambda_max": 2.0,
+      "rel_tol": 5e-07,
+      "abs_tol_min": 5e-07,
+      "dh_rms_tol": 0.0001,
+      "dh_max_tol": null,
+      "max_levels": 8,
+      "min_coarse_cells": 16
+    },
+    "seconds": 2.018764143009321,
+    "converged": false,
+    "residual": 361.07547886161444,
+    "outers": 40
+  },
+  {
+    "label": "jacobi",
+    "controls": {
+      "inner_kcycles": 5,
+      "max_outer": 40,
+      "nu_pre": 2,
+      "nu_post": 2,
+      "nu_coarse": 10,
+      "omega": 0.7,
+      "smoother": "jacobi",
+      "cheby_lambda_min": 0.1,
+      "cheby_lambda_max": 2.0,
+      "rel_tol": 5e-07,
+      "abs_tol_min": 5e-07,
+      "dh_rms_tol": 0.0001,
+      "dh_max_tol": null,
+      "max_levels": 6,
+      "min_coarse_cells": 500
+    },
+    "seconds": 0.39626243300153874,
+    "converged": true,
+    "residual": 4.1176649316171947e-07,
+    "outers": 13
+  }
+]

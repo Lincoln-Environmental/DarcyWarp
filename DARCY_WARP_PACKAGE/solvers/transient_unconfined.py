@@ -933,7 +933,9 @@ def solve_transient_unconfined_backend(
 
         for period_index in range(n_periods):
             if well_schedule is not None:
-                self.update_wel_in_place(wel_entries=well_schedule[period_index])
+                # Entries were validated before the history began. Recharge is
+                # assembled immediately below, so avoid uploading it twice.
+                self._upload_well_depth_rates(entries=well_schedule[period_index])
             self.update_uniform_recharge_in_place(float(rates[period_index]))
             counters["R_device_updates"] += 1
             wp.launch(
@@ -2415,7 +2417,9 @@ def solve_transient_unconfined_backend(
     else:
         for period_index in range(n_periods):
             if well_schedule is not None:
-                self.update_wel_in_place(wel_entries=well_schedule[period_index])
+                # Entries were validated before the history began. Recharge is
+                # assembled immediately below, so avoid uploading it twice.
+                self._upload_well_depth_rates(entries=well_schedule[period_index])
             self.update_uniform_recharge_in_place(float(rates[period_index]))
             counters["R_device_updates"] += 1
             if save_diagnostics_b:

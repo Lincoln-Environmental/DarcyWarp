@@ -369,7 +369,9 @@ def solve_transient_unconfined_experimental(
     for period_index in range(n_periods):
         # ---------------- stress-period transition ----------------
         if well_schedule is not None:
-            model.update_wel_in_place(wel_entries=well_schedule[period_index])
+            # Entries were validated before the history began. Recharge is
+            # assembled immediately below, so avoid uploading it twice.
+            model._upload_well_depth_rates(entries=well_schedule[period_index])
         if source_fields is not None:
             model.update_R_in_place(source_fields[period_index])
         else:

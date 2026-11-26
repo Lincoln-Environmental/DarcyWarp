@@ -1,0 +1,2780 @@
+[
+  {
+    "grid": "100k",
+    "shape": [
+      10,
+      112,
+      90
+    ],
+    "configuration": "saturated_fp64",
+    "construction_seconds": 0.036048480003955774,
+    "cold": {
+      "implementation": "device_newton_fgmres",
+      "session_backend": "npf662_newton",
+      "npf_preconditioner": "kcycle",
+      "krylov_method": "FGMRES",
+      "outer_iterations": 8,
+      "krylov_iterations": 138,
+      "preconditioner_cycles": 138,
+      "seconds": 0.370179925012053,
+      "cuda_graph_captures": null,
+      "cuda_graph_replays": null,
+      "device_final_metrics": {
+        "physical_rms": 3.212699893219861e-10,
+        "head_residual_rms": 1.0277233001939992e-11,
+        "relative_cell_imbalance": 6.112802697227068e-12,
+        "gross_throughput": 478269.29369907896,
+        "residual_l1": 2.9235658285246145e-06,
+        "signed_imbalance": -5.984115762341874e-07,
+        "boundary_inflow": 236082.16684924078,
+        "boundary_outflow": 8149.046849838635,
+        "scaled_l2": 2.4999903767609266e-10,
+        "finite": true,
+        "local_balance_valid": true,
+        "chd_inflow": 218616.94420412427,
+        "chd_outflow": 0.0,
+        "ghb_inflow": 0.0,
+        "ghb_outflow": 0.0,
+        "ghb_net": 0.0,
+        "drn_inflow": 0.0,
+        "drn_outflow": 8149.046849838635,
+        "drn_net": -8149.046849838635,
+        "riv_inflow": 17465.22264511652,
+        "riv_outflow": 0.0,
+        "riv_net": 17465.22264511652,
+        "free_boundary_inflow": 236082.16684924022,
+        "free_boundary_outflow": 8149.046849838634
+      },
+      "public_seconds": 0.7522314860107144,
+      "multigrid": {
+        "controls": {
+          "levels": 5,
+          "min_coarse_n": 2,
+          "pre_sweeps": 2,
+          "post_sweeps": 2,
+          "coarse_sweeps": 2,
+          "cycles": 1,
+          "omega": 0.8,
+          "use_cuda_graph": true,
+          "cycle_kind": "k",
+          "cached_line_factors": true,
+          "preconditioner_precision": "float64",
+          "coefficient_state": "saturated",
+          "line_smoother": "jacobi",
+          "device_hierarchy_build": true
+        },
+        "smoother": "vertical_line",
+        "coefficient_state": "saturated",
+        "precision": "float64",
+        "dimensions": [
+          [
+            10,
+            112,
+            90
+          ],
+          [
+            10,
+            56,
+            45
+          ],
+          [
+            10,
+            28,
+            23
+          ],
+          [
+            10,
+            14,
+            12
+          ],
+          [
+            10,
+            7,
+            6
+          ]
+        ],
+        "actual_levels": 5,
+        "coarsening_factors": [
+          [
+            2,
+            2
+          ],
+          [
+            2,
+            2
+          ],
+          [
+            2,
+            2
+          ],
+          [
+            2,
+            2
+          ]
+        ],
+        "construction_seconds": 0.031241202988894656,
+        "hierarchy_reused": false,
+        "coefficients_refreshed": false,
+        "value_refresh_count": 0,
+        "device_storage_refresh_count": 1,
+        "refresh_graph_captures": 1,
+        "refresh_graph_replays": 1,
+        "refresh_graph_fallback": false,
+        "allocated_device_bytes": 22611328,
+        "applications": 138,
+        "cycles": 138,
+        "graph_captures": 1,
+        "graph_replays": 138,
+        "graph_capture_failed": false,
+        "graph_error": null,
+        "inner_scalar_readbacks": 0,
+        "scalar_readbacks": 166,
+        "synchronization_seconds": 0.3365585562423803,
+        "device_apply_seconds": 0.34084508728980994,
+        "preconditioner_enqueue_seconds": 0.014641896894318052
+      },
+      "mempool_high_water_bytes": 109371940
+    },
+    "identical_initial": [
+      {
+        "implementation": "device_newton_fgmres",
+        "session_backend": "npf662_newton",
+        "npf_preconditioner": "kcycle",
+        "krylov_method": "FGMRES",
+        "outer_iterations": 8,
+        "krylov_iterations": 138,
+        "preconditioner_cycles": 138,
+        "seconds": 0.3627632889983943,
+        "cuda_graph_captures": null,
+        "cuda_graph_replays": null,
+        "device_final_metrics": {
+          "physical_rms": 3.2126961112815497e-10,
+          "head_residual_rms": 1.0277230620915833e-11,
+          "relative_cell_imbalance": 6.112687465060893e-12,
+          "gross_throughput": 478269.29369907896,
+          "residual_l1": 2.9235107165178865e-06,
+          "signed_imbalance": -5.98405380556292e-07,
+          "boundary_inflow": 236082.16684924084,
+          "boundary_outflow": 8149.046849838635,
+          "scaled_l2": 2.4999870562645943e-10,
+          "finite": true,
+          "local_balance_valid": true,
+          "chd_inflow": 218616.94420412433,
+          "chd_outflow": 0.0,
+          "ghb_inflow": 0.0,
+          "ghb_outflow": 0.0,
+          "ghb_net": 0.0,
+          "drn_inflow": 0.0,
+          "drn_outflow": 8149.046849838635,
+          "drn_net": -8149.046849838635,
+          "riv_inflow": 17465.22264511651,
+          "riv_outflow": 0.0,
+          "riv_net": 17465.22264511651,
+          "free_boundary_inflow": 236082.16684924025,
+          "free_boundary_outflow": 8149.046849838634
+        },
+        "public_seconds": 0.46563434999552555,
+        "multigrid": {
+          "controls": {
+            "levels": 5,
+            "min_coarse_n": 2,
+            "pre_sweeps": 2,
+            "post_sweeps": 2,
+            "coarse_sweeps": 2,
+            "cycles": 1,
+            "omega": 0.8,
+            "use_cuda_graph": true,
+            "cycle_kind": "k",
+            "cached_line_factors": true,
+            "preconditioner_precision": "float64",
+            "coefficient_state": "saturated",
+            "line_smoother": "jacobi",
+            "device_hierarchy_build": true
+          },
+          "smoother": "vertical_line",
+          "coefficient_state": "saturated",
+          "precision": "float64",
+          "dimensions": [
+            [
+              10,
+              112,
+              90
+            ],
+            [
+              10,
+              56,
+              45
+            ],
+            [
+              10,
+              28,
+              23
+            ],
+            [
+              10,
+              14,
+              12
+            ],
+            [
+              10,
+              7,
+              6
+            ]
+          ],
+          "actual_levels": 5,
+          "coarsening_factors": [
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "construction_seconds": 0.0,
+          "hierarchy_reused": true,
+          "coefficients_refreshed": false,
+          "value_refresh_count": 0,
+          "device_storage_refresh_count": 1,
+          "refresh_graph_captures": 1,
+          "refresh_graph_replays": 1,
+          "refresh_graph_fallback": false,
+          "allocated_device_bytes": 22611328,
+          "applications": 138,
+          "cycles": 138,
+          "graph_captures": 0,
+          "graph_replays": 138,
+          "graph_capture_failed": false,
+          "graph_error": null,
+          "inner_scalar_readbacks": 0,
+          "scalar_readbacks": 166,
+          "synchronization_seconds": 0.33514974002901,
+          "device_apply_seconds": 0.3355363836288449,
+          "preconditioner_enqueue_seconds": 0.013493761944118887
+        },
+        "mempool_high_water_bytes": 121891564
+      },
+      {
+        "implementation": "device_newton_fgmres",
+        "session_backend": "npf662_newton",
+        "npf_preconditioner": "kcycle",
+        "krylov_method": "FGMRES",
+        "outer_iterations": 8,
+        "krylov_iterations": 138,
+        "preconditioner_cycles": 138,
+        "seconds": 0.3635319820023142,
+        "cuda_graph_captures": null,
+        "cuda_graph_replays": null,
+        "device_final_metrics": {
+          "physical_rms": 3.212699287934661e-10,
+          "head_residual_rms": 1.0277231848038776e-11,
+          "relative_cell_imbalance": 6.112736728098966e-12,
+          "gross_throughput": 478269.29369907896,
+          "residual_l1": 2.9235342775163112e-06,
+          "signed_imbalance": -5.984051809342382e-07,
+          "boundary_inflow": 236082.16684924072,
+          "boundary_outflow": 8149.046849838637,
+          "scaled_l2": 2.499990381786918e-10,
+          "finite": true,
+          "local_balance_valid": true,
+          "chd_inflow": 218616.94420412421,
+          "chd_outflow": 0.0,
+          "ghb_inflow": 0.0,
+          "ghb_outflow": 0.0,
+          "ghb_net": 0.0,
+          "drn_inflow": 0.0,
+          "drn_outflow": 8149.046849838637,
+          "drn_net": -8149.046849838637,
+          "riv_inflow": 17465.22264511651,
+          "riv_outflow": 0.0,
+          "riv_net": 17465.22264511651,
+          "free_boundary_inflow": 236082.16684924022,
+          "free_boundary_outflow": 8149.046849838634
+        },
+        "public_seconds": 0.487034126999788,
+        "multigrid": {
+          "controls": {
+            "levels": 5,
+            "min_coarse_n": 2,
+            "pre_sweeps": 2,
+            "post_sweeps": 2,
+            "coarse_sweeps": 2,
+            "cycles": 1,
+            "omega": 0.8,
+            "use_cuda_graph": true,
+            "cycle_kind": "k",
+            "cached_line_factors": true,
+            "preconditioner_precision": "float64",
+            "coefficient_state": "saturated",
+            "line_smoother": "jacobi",
+            "device_hierarchy_build": true
+          },
+          "smoother": "vertical_line",
+          "coefficient_state": "saturated",
+          "precision": "float64",
+          "dimensions": [
+            [
+              10,
+              112,
+              90
+            ],
+            [
+              10,
+              56,
+              45
+            ],
+            [
+              10,
+              28,
+              23
+            ],
+            [
+              10,
+              14,
+              12
+            ],
+            [
+              10,
+              7,
+              6
+            ]
+          ],
+          "actual_levels": 5,
+          "coarsening_factors": [
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "construction_seconds": 0.017073050999897532,
+          "hierarchy_reused": false,
+          "coefficients_refreshed": false,
+          "value_refresh_count": 0,
+          "device_storage_refresh_count": 1,
+          "refresh_graph_captures": 1,
+          "refresh_graph_replays": 1,
+          "refresh_graph_fallback": false,
+          "allocated_device_bytes": 22611328,
+          "applications": 138,
+          "cycles": 138,
+          "graph_captures": 1,
+          "graph_replays": 138,
+          "graph_capture_failed": false,
+          "graph_error": null,
+          "inner_scalar_readbacks": 0,
+          "scalar_readbacks": 166,
+          "synchronization_seconds": 0.33515985203848686,
+          "device_apply_seconds": 0.33607315039634694,
+          "preconditioner_enqueue_seconds": 0.013971745982416905
+        },
+        "mempool_high_water_bytes": 146930812
+      },
+      {
+        "implementation": "device_newton_fgmres",
+        "session_backend": "npf662_newton",
+        "npf_preconditioner": "kcycle",
+        "krylov_method": "FGMRES",
+        "outer_iterations": 8,
+        "krylov_iterations": 138,
+        "preconditioner_cycles": 138,
+        "seconds": 0.363113842002349,
+        "cuda_graph_captures": null,
+        "cuda_graph_replays": null,
+        "device_final_metrics": {
+          "physical_rms": 3.212694484641201e-10,
+          "head_residual_rms": 1.0277229819831514e-11,
+          "relative_cell_imbalance": 6.112664359574802e-12,
+          "gross_throughput": 478269.29369907896,
+          "residual_l1": 2.923499665873373e-06,
+          "signed_imbalance": -5.984091509259591e-07,
+          "boundary_inflow": 236082.16684924063,
+          "boundary_outflow": 8149.046849838635,
+          "scaled_l2": 2.499985974167372e-10,
+          "finite": true,
+          "local_balance_valid": true,
+          "chd_inflow": 218616.94420412413,
+          "chd_outflow": 0.0,
+          "ghb_inflow": 0.0,
+          "ghb_outflow": 0.0,
+          "ghb_net": 0.0,
+          "drn_inflow": 0.0,
+          "drn_outflow": 8149.046849838635,
+          "drn_net": -8149.046849838635,
+          "riv_inflow": 17465.22264511651,
+          "riv_outflow": 0.0,
+          "riv_net": 17465.22264511651,
+          "free_boundary_inflow": 236082.16684924025,
+          "free_boundary_outflow": 8149.046849838634
+        },
+        "public_seconds": 0.4827978270041058,
+        "multigrid": {
+          "controls": {
+            "levels": 5,
+            "min_coarse_n": 2,
+            "pre_sweeps": 2,
+            "post_sweeps": 2,
+            "coarse_sweeps": 2,
+            "cycles": 1,
+            "omega": 0.8,
+            "use_cuda_graph": true,
+            "cycle_kind": "k",
+            "cached_line_factors": true,
+            "preconditioner_precision": "float64",
+            "coefficient_state": "saturated",
+            "line_smoother": "jacobi",
+            "device_hierarchy_build": true
+          },
+          "smoother": "vertical_line",
+          "coefficient_state": "saturated",
+          "precision": "float64",
+          "dimensions": [
+            [
+              10,
+              112,
+              90
+            ],
+            [
+              10,
+              56,
+              45
+            ],
+            [
+              10,
+              28,
+              23
+            ],
+            [
+              10,
+              14,
+              12
+            ],
+            [
+              10,
+              7,
+              6
+            ]
+          ],
+          "actual_levels": 5,
+          "coarsening_factors": [
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "construction_seconds": 0.016943843991612084,
+          "hierarchy_reused": false,
+          "coefficients_refreshed": false,
+          "value_refresh_count": 0,
+          "device_storage_refresh_count": 1,
+          "refresh_graph_captures": 1,
+          "refresh_graph_replays": 1,
+          "refresh_graph_fallback": false,
+          "allocated_device_bytes": 22611328,
+          "applications": 138,
+          "cycles": 138,
+          "graph_captures": 1,
+          "graph_replays": 138,
+          "graph_capture_failed": false,
+          "graph_error": null,
+          "inner_scalar_readbacks": 0,
+          "scalar_readbacks": 166,
+          "synchronization_seconds": 0.33520659907662775,
+          "device_apply_seconds": 0.33595523118972764,
+          "preconditioner_enqueue_seconds": 0.013823190005496144
+        },
+        "mempool_high_water_bytes": 171970060
+      }
+    ],
+    "warm_start": [
+      {
+        "implementation": "device_newton_fgmres",
+        "session_backend": "npf662_newton",
+        "npf_preconditioner": "kcycle",
+        "krylov_method": "FGMRES",
+        "outer_iterations": 0,
+        "krylov_iterations": 0,
+        "preconditioner_cycles": 0,
+        "seconds": 0.0003117840096820146,
+        "cuda_graph_captures": null,
+        "cuda_graph_replays": null,
+        "device_final_metrics": {
+          "physical_rms": 3.2126961112815497e-10,
+          "head_residual_rms": 1.0277230620915833e-11,
+          "relative_cell_imbalance": 6.112687465060893e-12,
+          "gross_throughput": 478269.29369907896,
+          "residual_l1": 2.9235107165178865e-06,
+          "signed_imbalance": -5.98405380556292e-07,
+          "boundary_inflow": 236082.16684924075,
+          "boundary_outflow": 8149.046849838635,
+          "scaled_l2": 3.226461220571216e-09,
+          "finite": true,
+          "local_balance_valid": true,
+          "chd_inflow": 218616.94420412424,
+          "chd_outflow": 0.0,
+          "ghb_inflow": 0.0,
+          "ghb_outflow": 0.0,
+          "ghb_net": 0.0,
+          "drn_inflow": 0.0,
+          "drn_outflow": 8149.046849838635,
+          "drn_net": -8149.046849838635,
+          "riv_inflow": 17465.22264511651,
+          "riv_outflow": 0.0,
+          "riv_net": 17465.22264511651,
+          "free_boundary_inflow": 236082.16684924025,
+          "free_boundary_outflow": 8149.046849838634
+        },
+        "public_seconds": 0.1293816510005854,
+        "multigrid": {
+          "controls": {
+            "levels": 5,
+            "min_coarse_n": 2,
+            "pre_sweeps": 2,
+            "post_sweeps": 2,
+            "coarse_sweeps": 2,
+            "cycles": 1,
+            "omega": 0.8,
+            "use_cuda_graph": true,
+            "cycle_kind": "k",
+            "cached_line_factors": true,
+            "preconditioner_precision": "float64",
+            "coefficient_state": "saturated",
+            "line_smoother": "jacobi",
+            "device_hierarchy_build": true
+          },
+          "smoother": "vertical_line",
+          "coefficient_state": "saturated",
+          "precision": "float64",
+          "dimensions": [
+            [
+              10,
+              112,
+              90
+            ],
+            [
+              10,
+              56,
+              45
+            ],
+            [
+              10,
+              28,
+              23
+            ],
+            [
+              10,
+              14,
+              12
+            ],
+            [
+              10,
+              7,
+              6
+            ]
+          ],
+          "actual_levels": 5,
+          "coarsening_factors": [
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "construction_seconds": 0.017272612007218413,
+          "hierarchy_reused": false,
+          "coefficients_refreshed": false,
+          "value_refresh_count": 0,
+          "device_storage_refresh_count": 1,
+          "refresh_graph_captures": 1,
+          "refresh_graph_replays": 1,
+          "refresh_graph_fallback": false,
+          "allocated_device_bytes": 22611328,
+          "applications": 0,
+          "cycles": 0,
+          "graph_captures": 1,
+          "graph_replays": 0,
+          "graph_capture_failed": false,
+          "graph_error": null,
+          "inner_scalar_readbacks": 0,
+          "scalar_readbacks": 0,
+          "synchronization_seconds": 0,
+          "device_apply_seconds": 0,
+          "preconditioner_enqueue_seconds": 0
+        },
+        "mempool_high_water_bytes": 134411188
+      },
+      {
+        "implementation": "device_newton_fgmres",
+        "session_backend": "npf662_newton",
+        "npf_preconditioner": "kcycle",
+        "krylov_method": "FGMRES",
+        "outer_iterations": 0,
+        "krylov_iterations": 0,
+        "preconditioner_cycles": 0,
+        "seconds": 0.0002870619937311858,
+        "cuda_graph_captures": null,
+        "cuda_graph_replays": null,
+        "device_final_metrics": {
+          "physical_rms": 3.212699287934661e-10,
+          "head_residual_rms": 1.0277231848038776e-11,
+          "relative_cell_imbalance": 6.112736728098966e-12,
+          "gross_throughput": 478269.29369907896,
+          "residual_l1": 2.9235342775163112e-06,
+          "signed_imbalance": -5.984051809342382e-07,
+          "boundary_inflow": 236082.16684924086,
+          "boundary_outflow": 8149.046849838635,
+          "scaled_l2": 3.2264616058174687e-09,
+          "finite": true,
+          "local_balance_valid": true,
+          "chd_inflow": 218616.94420412436,
+          "chd_outflow": 0.0,
+          "ghb_inflow": 0.0,
+          "ghb_outflow": 0.0,
+          "ghb_net": 0.0,
+          "drn_inflow": 0.0,
+          "drn_outflow": 8149.046849838635,
+          "drn_net": -8149.046849838635,
+          "riv_inflow": 17465.22264511651,
+          "riv_outflow": 0.0,
+          "riv_net": 17465.22264511651,
+          "free_boundary_inflow": 236082.16684924022,
+          "free_boundary_outflow": 8149.046849838634
+        },
+        "public_seconds": 0.1308925100020133,
+        "multigrid": {
+          "controls": {
+            "levels": 5,
+            "min_coarse_n": 2,
+            "pre_sweeps": 2,
+            "post_sweeps": 2,
+            "coarse_sweeps": 2,
+            "cycles": 1,
+            "omega": 0.8,
+            "use_cuda_graph": true,
+            "cycle_kind": "k",
+            "cached_line_factors": true,
+            "preconditioner_precision": "float64",
+            "coefficient_state": "saturated",
+            "line_smoother": "jacobi",
+            "device_hierarchy_build": true
+          },
+          "smoother": "vertical_line",
+          "coefficient_state": "saturated",
+          "precision": "float64",
+          "dimensions": [
+            [
+              10,
+              112,
+              90
+            ],
+            [
+              10,
+              56,
+              45
+            ],
+            [
+              10,
+              28,
+              23
+            ],
+            [
+              10,
+              14,
+              12
+            ],
+            [
+              10,
+              7,
+              6
+            ]
+          ],
+          "actual_levels": 5,
+          "coarsening_factors": [
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "construction_seconds": 0.017007911010296084,
+          "hierarchy_reused": false,
+          "coefficients_refreshed": false,
+          "value_refresh_count": 0,
+          "device_storage_refresh_count": 1,
+          "refresh_graph_captures": 1,
+          "refresh_graph_replays": 1,
+          "refresh_graph_fallback": false,
+          "allocated_device_bytes": 22611328,
+          "applications": 0,
+          "cycles": 0,
+          "graph_captures": 1,
+          "graph_replays": 0,
+          "graph_capture_failed": false,
+          "graph_error": null,
+          "inner_scalar_readbacks": 0,
+          "scalar_readbacks": 0,
+          "synchronization_seconds": 0,
+          "device_apply_seconds": 0,
+          "preconditioner_enqueue_seconds": 0
+        },
+        "mempool_high_water_bytes": 159450436
+      },
+      {
+        "implementation": "device_newton_fgmres",
+        "session_backend": "npf662_newton",
+        "npf_preconditioner": "kcycle",
+        "krylov_method": "FGMRES",
+        "outer_iterations": 0,
+        "krylov_iterations": 0,
+        "preconditioner_cycles": 0,
+        "seconds": 0.0003233239986002445,
+        "cuda_graph_captures": null,
+        "cuda_graph_replays": null,
+        "device_final_metrics": {
+          "physical_rms": 3.212694484641201e-10,
+          "head_residual_rms": 1.0277229819831514e-11,
+          "relative_cell_imbalance": 6.112664359574802e-12,
+          "gross_throughput": 478269.29369907896,
+          "residual_l1": 2.923499665873373e-06,
+          "signed_imbalance": -5.984091509259591e-07,
+          "boundary_inflow": 236082.1668492406,
+          "boundary_outflow": 8149.046849838637,
+          "scaled_l2": 3.2264609690766655e-09,
+          "finite": true,
+          "local_balance_valid": true,
+          "chd_inflow": 218616.9442041241,
+          "chd_outflow": 0.0,
+          "ghb_inflow": 0.0,
+          "ghb_outflow": 0.0,
+          "ghb_net": 0.0,
+          "drn_inflow": 0.0,
+          "drn_outflow": 8149.046849838637,
+          "drn_net": -8149.046849838637,
+          "riv_inflow": 17465.22264511651,
+          "riv_outflow": 0.0,
+          "riv_net": 17465.22264511651,
+          "free_boundary_inflow": 236082.16684924025,
+          "free_boundary_outflow": 8149.046849838634
+        },
+        "public_seconds": 0.13061389900394715,
+        "multigrid": {
+          "controls": {
+            "levels": 5,
+            "min_coarse_n": 2,
+            "pre_sweeps": 2,
+            "post_sweeps": 2,
+            "coarse_sweeps": 2,
+            "cycles": 1,
+            "omega": 0.8,
+            "use_cuda_graph": true,
+            "cycle_kind": "k",
+            "cached_line_factors": true,
+            "preconditioner_precision": "float64",
+            "coefficient_state": "saturated",
+            "line_smoother": "jacobi",
+            "device_hierarchy_build": true
+          },
+          "smoother": "vertical_line",
+          "coefficient_state": "saturated",
+          "precision": "float64",
+          "dimensions": [
+            [
+              10,
+              112,
+              90
+            ],
+            [
+              10,
+              56,
+              45
+            ],
+            [
+              10,
+              28,
+              23
+            ],
+            [
+              10,
+              14,
+              12
+            ],
+            [
+              10,
+              7,
+              6
+            ]
+          ],
+          "actual_levels": 5,
+          "coarsening_factors": [
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "construction_seconds": 0.017102377008995973,
+          "hierarchy_reused": false,
+          "coefficients_refreshed": false,
+          "value_refresh_count": 0,
+          "device_storage_refresh_count": 1,
+          "refresh_graph_captures": 1,
+          "refresh_graph_replays": 1,
+          "refresh_graph_fallback": false,
+          "allocated_device_bytes": 22611328,
+          "applications": 0,
+          "cycles": 0,
+          "graph_captures": 1,
+          "graph_replays": 0,
+          "graph_capture_failed": false,
+          "graph_error": null,
+          "inner_scalar_readbacks": 0,
+          "scalar_readbacks": 0,
+          "synchronization_seconds": 0,
+          "device_apply_seconds": 0,
+          "preconditioner_enqueue_seconds": 0
+        },
+        "mempool_high_water_bytes": 184489684
+      }
+    ],
+    "median_seconds": 0.4827978270041058,
+    "minimum_seconds": 0.46563434999552555,
+    "maximum_seconds": 0.487034126999788
+  },
+  {
+    "grid": "100k",
+    "shape": [
+      10,
+      112,
+      90
+    ],
+    "configuration": "current_fp64",
+    "construction_seconds": 0.011749148005037569,
+    "cold": {
+      "implementation": "device_newton_fgmres",
+      "session_backend": "npf662_newton",
+      "npf_preconditioner": "kcycle",
+      "krylov_method": "FGMRES",
+      "outer_iterations": 7,
+      "krylov_iterations": 54,
+      "preconditioner_cycles": 54,
+      "seconds": 0.14624481400824152,
+      "cuda_graph_captures": null,
+      "cuda_graph_replays": null,
+      "device_final_metrics": {
+        "physical_rms": 7.783510850807534e-09,
+        "head_residual_rms": 3.7058414748886954e-11,
+        "relative_cell_imbalance": 6.178051668149473e-10,
+        "gross_throughput": 478269.2937406626,
+        "residual_l1": 0.0002954772408019171,
+        "signed_imbalance": 4.3353744055027284e-05,
+        "boundary_inflow": 236082.16689200822,
+        "boundary_outflow": 8149.0468486544305,
+        "scaled_l2": 1.160786665504022e-08,
+        "finite": true,
+        "local_balance_valid": true,
+        "chd_inflow": 218616.94424599246,
+        "chd_outflow": 0.0,
+        "ghb_inflow": 0.0,
+        "ghb_outflow": 0.0,
+        "ghb_net": 0.0,
+        "drn_inflow": 0.0,
+        "drn_outflow": 8149.0468486544305,
+        "drn_net": -8149.0468486544305,
+        "riv_inflow": 17465.222646015747,
+        "riv_outflow": 0.0,
+        "riv_net": 17465.222646015747,
+        "free_boundary_inflow": 236082.16689200816,
+        "free_boundary_outflow": 8149.046848654427
+      },
+      "public_seconds": 0.2923532470013015,
+      "multigrid": {
+        "controls": {
+          "levels": 5,
+          "min_coarse_n": 2,
+          "pre_sweeps": 2,
+          "post_sweeps": 2,
+          "coarse_sweeps": 2,
+          "cycles": 1,
+          "omega": 0.8,
+          "use_cuda_graph": true,
+          "cycle_kind": "k",
+          "cached_line_factors": true,
+          "preconditioner_precision": "float64",
+          "coefficient_state": "current",
+          "line_smoother": "jacobi",
+          "device_hierarchy_build": true
+        },
+        "smoother": "vertical_line",
+        "coefficient_state": "current",
+        "precision": "float64",
+        "dimensions": [
+          [
+            10,
+            112,
+            90
+          ],
+          [
+            10,
+            56,
+            45
+          ],
+          [
+            10,
+            28,
+            23
+          ],
+          [
+            10,
+            14,
+            12
+          ],
+          [
+            10,
+            7,
+            6
+          ]
+        ],
+        "actual_levels": 5,
+        "coarsening_factors": [
+          [
+            2,
+            2
+          ],
+          [
+            2,
+            2
+          ],
+          [
+            2,
+            2
+          ],
+          [
+            2,
+            2
+          ]
+        ],
+        "construction_seconds": 0.019051684997975826,
+        "hierarchy_reused": false,
+        "coefficients_refreshed": false,
+        "value_refresh_count": 0,
+        "device_storage_refresh_count": 8,
+        "refresh_graph_captures": 1,
+        "refresh_graph_replays": 8,
+        "refresh_graph_fallback": false,
+        "allocated_device_bytes": 22611328,
+        "applications": 54,
+        "cycles": 54,
+        "graph_captures": 1,
+        "graph_replays": 54,
+        "graph_capture_failed": false,
+        "graph_error": null,
+        "inner_scalar_readbacks": 0,
+        "scalar_readbacks": 69,
+        "synchronization_seconds": 0.12986300398188177,
+        "device_apply_seconds": 0.1316085112094879,
+        "preconditioner_enqueue_seconds": 0.005785725006717257
+      },
+      "mempool_high_water_bytes": 184489684
+    },
+    "identical_initial": [
+      {
+        "implementation": "device_newton_fgmres",
+        "session_backend": "npf662_newton",
+        "npf_preconditioner": "kcycle",
+        "krylov_method": "FGMRES",
+        "outer_iterations": 7,
+        "krylov_iterations": 54,
+        "preconditioner_cycles": 54,
+        "seconds": 0.1457381510117557,
+        "cuda_graph_captures": null,
+        "cuda_graph_replays": null,
+        "device_final_metrics": {
+          "physical_rms": 7.783511115325766e-09,
+          "head_residual_rms": 3.7058413873373416e-11,
+          "relative_cell_imbalance": 6.178050745339556e-10,
+          "gross_throughput": 478269.2937406626,
+          "residual_l1": 0.00029547719666675237,
+          "signed_imbalance": 4.335374502590786e-05,
+          "boundary_inflow": 236082.16689200822,
+          "boundary_outflow": 8149.04684865443,
+          "scaled_l2": 1.1607866390248001e-08,
+          "finite": true,
+          "local_balance_valid": true,
+          "chd_inflow": 218616.94424599246,
+          "chd_outflow": 0.0,
+          "ghb_inflow": 0.0,
+          "ghb_outflow": 0.0,
+          "ghb_net": 0.0,
+          "drn_inflow": 0.0,
+          "drn_outflow": 8149.04684865443,
+          "drn_net": -8149.04684865443,
+          "riv_inflow": 17465.222646015747,
+          "riv_outflow": 0.0,
+          "riv_net": 17465.222646015747,
+          "free_boundary_inflow": 236082.16689200816,
+          "free_boundary_outflow": 8149.046848654427
+        },
+        "public_seconds": 0.24851365100766998,
+        "multigrid": {
+          "controls": {
+            "levels": 5,
+            "min_coarse_n": 2,
+            "pre_sweeps": 2,
+            "post_sweeps": 2,
+            "coarse_sweeps": 2,
+            "cycles": 1,
+            "omega": 0.8,
+            "use_cuda_graph": true,
+            "cycle_kind": "k",
+            "cached_line_factors": true,
+            "preconditioner_precision": "float64",
+            "coefficient_state": "current",
+            "line_smoother": "jacobi",
+            "device_hierarchy_build": true
+          },
+          "smoother": "vertical_line",
+          "coefficient_state": "current",
+          "precision": "float64",
+          "dimensions": [
+            [
+              10,
+              112,
+              90
+            ],
+            [
+              10,
+              56,
+              45
+            ],
+            [
+              10,
+              28,
+              23
+            ],
+            [
+              10,
+              14,
+              12
+            ],
+            [
+              10,
+              7,
+              6
+            ]
+          ],
+          "actual_levels": 5,
+          "coarsening_factors": [
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "construction_seconds": 0.0,
+          "hierarchy_reused": true,
+          "coefficients_refreshed": false,
+          "value_refresh_count": 0,
+          "device_storage_refresh_count": 15,
+          "refresh_graph_captures": 1,
+          "refresh_graph_replays": 15,
+          "refresh_graph_fallback": false,
+          "allocated_device_bytes": 22611328,
+          "applications": 54,
+          "cycles": 54,
+          "graph_captures": 0,
+          "graph_replays": 54,
+          "graph_capture_failed": false,
+          "graph_error": null,
+          "inner_scalar_readbacks": 0,
+          "scalar_readbacks": 69,
+          "synchronization_seconds": 0.13211053791746963,
+          "device_apply_seconds": 0.13117254400253298,
+          "preconditioner_enqueue_seconds": 0.005336060974514112
+        },
+        "mempool_high_water_bytes": 184489684
+      },
+      {
+        "implementation": "device_newton_fgmres",
+        "session_backend": "npf662_newton",
+        "npf_preconditioner": "kcycle",
+        "krylov_method": "FGMRES",
+        "outer_iterations": 7,
+        "krylov_iterations": 54,
+        "preconditioner_cycles": 54,
+        "seconds": 0.1457570909988135,
+        "cuda_graph_captures": null,
+        "cuda_graph_replays": null,
+        "device_final_metrics": {
+          "physical_rms": 7.783510793494856e-09,
+          "head_residual_rms": 3.705841409569689e-11,
+          "relative_cell_imbalance": 6.178050902524973e-10,
+          "gross_throughput": 478269.2937406626,
+          "residual_l1": 0.0002954772041844482,
+          "signed_imbalance": 4.335374893423886e-05,
+          "boundary_inflow": 236082.1668920084,
+          "boundary_outflow": 8149.0468486544305,
+          "scaled_l2": 1.1607866490301239e-08,
+          "finite": true,
+          "local_balance_valid": true,
+          "chd_inflow": 218616.94424599264,
+          "chd_outflow": 0.0,
+          "ghb_inflow": 0.0,
+          "ghb_outflow": 0.0,
+          "ghb_net": 0.0,
+          "drn_inflow": 0.0,
+          "drn_outflow": 8149.0468486544305,
+          "drn_net": -8149.0468486544305,
+          "riv_inflow": 17465.222646015744,
+          "riv_outflow": 0.0,
+          "riv_net": 17465.222646015744,
+          "free_boundary_inflow": 236082.16689200816,
+          "free_boundary_outflow": 8149.046848654426
+        },
+        "public_seconds": 0.2656805939914193,
+        "multigrid": {
+          "controls": {
+            "levels": 5,
+            "min_coarse_n": 2,
+            "pre_sweeps": 2,
+            "post_sweeps": 2,
+            "coarse_sweeps": 2,
+            "cycles": 1,
+            "omega": 0.8,
+            "use_cuda_graph": true,
+            "cycle_kind": "k",
+            "cached_line_factors": true,
+            "preconditioner_precision": "float64",
+            "coefficient_state": "current",
+            "line_smoother": "jacobi",
+            "device_hierarchy_build": true
+          },
+          "smoother": "vertical_line",
+          "coefficient_state": "current",
+          "precision": "float64",
+          "dimensions": [
+            [
+              10,
+              112,
+              90
+            ],
+            [
+              10,
+              56,
+              45
+            ],
+            [
+              10,
+              28,
+              23
+            ],
+            [
+              10,
+              14,
+              12
+            ],
+            [
+              10,
+              7,
+              6
+            ]
+          ],
+          "actual_levels": 5,
+          "coarsening_factors": [
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "construction_seconds": 0.017176606997963972,
+          "hierarchy_reused": false,
+          "coefficients_refreshed": false,
+          "value_refresh_count": 0,
+          "device_storage_refresh_count": 8,
+          "refresh_graph_captures": 1,
+          "refresh_graph_replays": 8,
+          "refresh_graph_fallback": false,
+          "allocated_device_bytes": 22611328,
+          "applications": 54,
+          "cycles": 54,
+          "graph_captures": 1,
+          "graph_replays": 54,
+          "graph_capture_failed": false,
+          "graph_error": null,
+          "inner_scalar_readbacks": 0,
+          "scalar_readbacks": 69,
+          "synchronization_seconds": 0.13222010202298407,
+          "device_apply_seconds": 0.1316153590679169,
+          "preconditioner_enqueue_seconds": 0.005704144045012072
+        },
+        "mempool_high_water_bytes": 184489684
+      },
+      {
+        "implementation": "device_newton_fgmres",
+        "session_backend": "npf662_newton",
+        "npf_preconditioner": "kcycle",
+        "krylov_method": "FGMRES",
+        "outer_iterations": 7,
+        "krylov_iterations": 54,
+        "preconditioner_cycles": 54,
+        "seconds": 0.1457348210096825,
+        "cuda_graph_captures": null,
+        "cuda_graph_replays": null,
+        "device_final_metrics": {
+          "physical_rms": 7.783511170107044e-09,
+          "head_residual_rms": 3.7058414332076906e-11,
+          "relative_cell_imbalance": 6.178050564384551e-10,
+          "gross_throughput": 478269.2937406626,
+          "residual_l1": 0.0002954771880122301,
+          "signed_imbalance": 4.335374835683397e-05,
+          "boundary_inflow": 236082.16689200856,
+          "boundary_outflow": 8149.04684865443,
+          "scaled_l2": 1.1607866565114519e-08,
+          "finite": true,
+          "local_balance_valid": true,
+          "chd_inflow": 218616.9442459928,
+          "chd_outflow": 0.0,
+          "ghb_inflow": 0.0,
+          "ghb_outflow": 0.0,
+          "ghb_net": 0.0,
+          "drn_inflow": 0.0,
+          "drn_outflow": 8149.04684865443,
+          "drn_net": -8149.04684865443,
+          "riv_inflow": 17465.22264601574,
+          "riv_outflow": 0.0,
+          "riv_net": 17465.22264601574,
+          "free_boundary_inflow": 236082.16689200816,
+          "free_boundary_outflow": 8149.046848654427
+        },
+        "public_seconds": 0.27078273599909153,
+        "multigrid": {
+          "controls": {
+            "levels": 5,
+            "min_coarse_n": 2,
+            "pre_sweeps": 2,
+            "post_sweeps": 2,
+            "coarse_sweeps": 2,
+            "cycles": 1,
+            "omega": 0.8,
+            "use_cuda_graph": true,
+            "cycle_kind": "k",
+            "cached_line_factors": true,
+            "preconditioner_precision": "float64",
+            "coefficient_state": "current",
+            "line_smoother": "jacobi",
+            "device_hierarchy_build": true
+          },
+          "smoother": "vertical_line",
+          "coefficient_state": "current",
+          "precision": "float64",
+          "dimensions": [
+            [
+              10,
+              112,
+              90
+            ],
+            [
+              10,
+              56,
+              45
+            ],
+            [
+              10,
+              28,
+              23
+            ],
+            [
+              10,
+              14,
+              12
+            ],
+            [
+              10,
+              7,
+              6
+            ]
+          ],
+          "actual_levels": 5,
+          "coarsening_factors": [
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "construction_seconds": 0.016982938002911396,
+          "hierarchy_reused": false,
+          "coefficients_refreshed": false,
+          "value_refresh_count": 0,
+          "device_storage_refresh_count": 8,
+          "refresh_graph_captures": 1,
+          "refresh_graph_replays": 8,
+          "refresh_graph_fallback": false,
+          "allocated_device_bytes": 22611328,
+          "applications": 54,
+          "cycles": 54,
+          "graph_captures": 1,
+          "graph_replays": 54,
+          "graph_capture_failed": false,
+          "graph_error": null,
+          "inner_scalar_readbacks": 0,
+          "scalar_readbacks": 69,
+          "synchronization_seconds": 0.13215059695357922,
+          "device_apply_seconds": 0.1315423030853272,
+          "preconditioner_enqueue_seconds": 0.005715787046938203
+        },
+        "mempool_high_water_bytes": 184489684
+      }
+    ],
+    "warm_start": [
+      {
+        "implementation": "device_newton_fgmres",
+        "session_backend": "npf662_newton",
+        "npf_preconditioner": "kcycle",
+        "krylov_method": "FGMRES",
+        "outer_iterations": 0,
+        "krylov_iterations": 0,
+        "preconditioner_cycles": 0,
+        "seconds": 0.00028811400989070535,
+        "cuda_graph_captures": null,
+        "cuda_graph_replays": null,
+        "device_final_metrics": {
+          "physical_rms": 7.783511115325766e-09,
+          "head_residual_rms": 3.7058413873373416e-11,
+          "relative_cell_imbalance": 6.178050745339556e-10,
+          "gross_throughput": 478269.2937406626,
+          "residual_l1": 0.00029547719666675237,
+          "signed_imbalance": 4.335374502590786e-05,
+          "boundary_inflow": 236082.16689200827,
+          "boundary_outflow": 8149.0468486544305,
+          "scaled_l2": 1.1634217394613906e-08,
+          "finite": true,
+          "local_balance_valid": true,
+          "chd_inflow": 218616.94424599255,
+          "chd_outflow": 0.0,
+          "ghb_inflow": 0.0,
+          "ghb_outflow": 0.0,
+          "ghb_net": 0.0,
+          "drn_inflow": 0.0,
+          "drn_outflow": 8149.0468486544305,
+          "drn_net": -8149.0468486544305,
+          "riv_inflow": 17465.22264601574,
+          "riv_outflow": 0.0,
+          "riv_net": 17465.22264601574,
+          "free_boundary_inflow": 236082.16689200816,
+          "free_boundary_outflow": 8149.046848654427
+        },
+        "public_seconds": 0.13194416400801856,
+        "multigrid": {
+          "controls": {
+            "levels": 5,
+            "min_coarse_n": 2,
+            "pre_sweeps": 2,
+            "post_sweeps": 2,
+            "coarse_sweeps": 2,
+            "cycles": 1,
+            "omega": 0.8,
+            "use_cuda_graph": true,
+            "cycle_kind": "k",
+            "cached_line_factors": true,
+            "preconditioner_precision": "float64",
+            "coefficient_state": "current",
+            "line_smoother": "jacobi",
+            "device_hierarchy_build": true
+          },
+          "smoother": "vertical_line",
+          "coefficient_state": "current",
+          "precision": "float64",
+          "dimensions": [
+            [
+              10,
+              112,
+              90
+            ],
+            [
+              10,
+              56,
+              45
+            ],
+            [
+              10,
+              28,
+              23
+            ],
+            [
+              10,
+              14,
+              12
+            ],
+            [
+              10,
+              7,
+              6
+            ]
+          ],
+          "actual_levels": 5,
+          "coarsening_factors": [
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "construction_seconds": 0.016998417006107047,
+          "hierarchy_reused": false,
+          "coefficients_refreshed": false,
+          "value_refresh_count": 0,
+          "device_storage_refresh_count": 1,
+          "refresh_graph_captures": 1,
+          "refresh_graph_replays": 1,
+          "refresh_graph_fallback": false,
+          "allocated_device_bytes": 22611328,
+          "applications": 0,
+          "cycles": 0,
+          "graph_captures": 1,
+          "graph_replays": 0,
+          "graph_capture_failed": false,
+          "graph_error": null,
+          "inner_scalar_readbacks": 0,
+          "scalar_readbacks": 0,
+          "synchronization_seconds": 0,
+          "device_apply_seconds": 0,
+          "preconditioner_enqueue_seconds": 0
+        },
+        "mempool_high_water_bytes": 184489684
+      },
+      {
+        "implementation": "device_newton_fgmres",
+        "session_backend": "npf662_newton",
+        "npf_preconditioner": "kcycle",
+        "krylov_method": "FGMRES",
+        "outer_iterations": 0,
+        "krylov_iterations": 0,
+        "preconditioner_cycles": 0,
+        "seconds": 0.00028979399939998984,
+        "cuda_graph_captures": null,
+        "cuda_graph_replays": null,
+        "device_final_metrics": {
+          "physical_rms": 7.783510793494856e-09,
+          "head_residual_rms": 3.705841409569689e-11,
+          "relative_cell_imbalance": 6.178050902524973e-10,
+          "gross_throughput": 478269.2937406626,
+          "residual_l1": 0.0002954772041844482,
+          "signed_imbalance": 4.335374893423886e-05,
+          "boundary_inflow": 236082.1668920083,
+          "boundary_outflow": 8149.04684865443,
+          "scaled_l2": 1.1634217464410731e-08,
+          "finite": true,
+          "local_balance_valid": true,
+          "chd_inflow": 218616.94424599255,
+          "chd_outflow": 0.0,
+          "ghb_inflow": 0.0,
+          "ghb_outflow": 0.0,
+          "ghb_net": 0.0,
+          "drn_inflow": 0.0,
+          "drn_outflow": 8149.04684865443,
+          "drn_net": -8149.04684865443,
+          "riv_inflow": 17465.222646015747,
+          "riv_outflow": 0.0,
+          "riv_net": 17465.222646015747,
+          "free_boundary_inflow": 236082.16689200816,
+          "free_boundary_outflow": 8149.046848654426
+        },
+        "public_seconds": 0.1295875150099164,
+        "multigrid": {
+          "controls": {
+            "levels": 5,
+            "min_coarse_n": 2,
+            "pre_sweeps": 2,
+            "post_sweeps": 2,
+            "coarse_sweeps": 2,
+            "cycles": 1,
+            "omega": 0.8,
+            "use_cuda_graph": true,
+            "cycle_kind": "k",
+            "cached_line_factors": true,
+            "preconditioner_precision": "float64",
+            "coefficient_state": "current",
+            "line_smoother": "jacobi",
+            "device_hierarchy_build": true
+          },
+          "smoother": "vertical_line",
+          "coefficient_state": "current",
+          "precision": "float64",
+          "dimensions": [
+            [
+              10,
+              112,
+              90
+            ],
+            [
+              10,
+              56,
+              45
+            ],
+            [
+              10,
+              28,
+              23
+            ],
+            [
+              10,
+              14,
+              12
+            ],
+            [
+              10,
+              7,
+              6
+            ]
+          ],
+          "actual_levels": 5,
+          "coarsening_factors": [
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "construction_seconds": 0.016854846995556727,
+          "hierarchy_reused": false,
+          "coefficients_refreshed": false,
+          "value_refresh_count": 0,
+          "device_storage_refresh_count": 1,
+          "refresh_graph_captures": 1,
+          "refresh_graph_replays": 1,
+          "refresh_graph_fallback": false,
+          "allocated_device_bytes": 22611328,
+          "applications": 0,
+          "cycles": 0,
+          "graph_captures": 1,
+          "graph_replays": 0,
+          "graph_capture_failed": false,
+          "graph_error": null,
+          "inner_scalar_readbacks": 0,
+          "scalar_readbacks": 0,
+          "synchronization_seconds": 0,
+          "device_apply_seconds": 0,
+          "preconditioner_enqueue_seconds": 0
+        },
+        "mempool_high_water_bytes": 184489684
+      },
+      {
+        "implementation": "device_newton_fgmres",
+        "session_backend": "npf662_newton",
+        "npf_preconditioner": "kcycle",
+        "krylov_method": "FGMRES",
+        "outer_iterations": 0,
+        "krylov_iterations": 0,
+        "preconditioner_cycles": 0,
+        "seconds": 0.00029411399737000465,
+        "cuda_graph_captures": null,
+        "cuda_graph_replays": null,
+        "device_final_metrics": {
+          "physical_rms": 7.783511170107044e-09,
+          "head_residual_rms": 3.7058414332076906e-11,
+          "relative_cell_imbalance": 6.178050564384551e-10,
+          "gross_throughput": 478269.2937406626,
+          "residual_l1": 0.0002954771880122301,
+          "signed_imbalance": 4.335374835683397e-05,
+          "boundary_inflow": 236082.16689200842,
+          "boundary_outflow": 8149.0468486544305,
+          "scaled_l2": 1.1634217538620505e-08,
+          "finite": true,
+          "local_balance_valid": true,
+          "chd_inflow": 218616.94424599266,
+          "chd_outflow": 0.0,
+          "ghb_inflow": 0.0,
+          "ghb_outflow": 0.0,
+          "ghb_net": 0.0,
+          "drn_inflow": 0.0,
+          "drn_outflow": 8149.0468486544305,
+          "drn_net": -8149.0468486544305,
+          "riv_inflow": 17465.222646015747,
+          "riv_outflow": 0.0,
+          "riv_net": 17465.222646015747,
+          "free_boundary_inflow": 236082.16689200816,
+          "free_boundary_outflow": 8149.046848654427
+        },
+        "public_seconds": 0.13356913600000553,
+        "multigrid": {
+          "controls": {
+            "levels": 5,
+            "min_coarse_n": 2,
+            "pre_sweeps": 2,
+            "post_sweeps": 2,
+            "coarse_sweeps": 2,
+            "cycles": 1,
+            "omega": 0.8,
+            "use_cuda_graph": true,
+            "cycle_kind": "k",
+            "cached_line_factors": true,
+            "preconditioner_precision": "float64",
+            "coefficient_state": "current",
+            "line_smoother": "jacobi",
+            "device_hierarchy_build": true
+          },
+          "smoother": "vertical_line",
+          "coefficient_state": "current",
+          "precision": "float64",
+          "dimensions": [
+            [
+              10,
+              112,
+              90
+            ],
+            [
+              10,
+              56,
+              45
+            ],
+            [
+              10,
+              28,
+              23
+            ],
+            [
+              10,
+              14,
+              12
+            ],
+            [
+              10,
+              7,
+              6
+            ]
+          ],
+          "actual_levels": 5,
+          "coarsening_factors": [
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "construction_seconds": 0.016825864993734285,
+          "hierarchy_reused": false,
+          "coefficients_refreshed": false,
+          "value_refresh_count": 0,
+          "device_storage_refresh_count": 1,
+          "refresh_graph_captures": 1,
+          "refresh_graph_replays": 1,
+          "refresh_graph_fallback": false,
+          "allocated_device_bytes": 22611328,
+          "applications": 0,
+          "cycles": 0,
+          "graph_captures": 1,
+          "graph_replays": 0,
+          "graph_capture_failed": false,
+          "graph_error": null,
+          "inner_scalar_readbacks": 0,
+          "scalar_readbacks": 0,
+          "synchronization_seconds": 0,
+          "device_apply_seconds": 0,
+          "preconditioner_enqueue_seconds": 0
+        },
+        "mempool_high_water_bytes": 184489684
+      }
+    ],
+    "median_seconds": 0.2656805939914193,
+    "minimum_seconds": 0.24851365100766998,
+    "maximum_seconds": 0.27078273599909153
+  },
+  {
+    "grid": "100k",
+    "shape": [
+      10,
+      112,
+      90
+    ],
+    "configuration": "qualified_current_fp32",
+    "construction_seconds": 0.01135825899837073,
+    "cold": {
+      "implementation": "device_newton_fgmres",
+      "session_backend": "npf662_newton",
+      "npf_preconditioner": "kcycle",
+      "krylov_method": "FGMRES",
+      "outer_iterations": 7,
+      "krylov_iterations": 54,
+      "preconditioner_cycles": 54,
+      "seconds": 0.13235786800214555,
+      "cuda_graph_captures": null,
+      "cuda_graph_replays": null,
+      "device_final_metrics": {
+        "physical_rms": 7.783516542527412e-09,
+        "head_residual_rms": 3.7058473052049335e-11,
+        "relative_cell_imbalance": 6.178060985094196e-10,
+        "gross_throughput": 478269.2937406624,
+        "residual_l1": 0.0002954776864027742,
+        "signed_imbalance": 4.335353731483263e-05,
+        "boundary_inflow": 236082.1668920081,
+        "boundary_outflow": 8149.0468486544305,
+        "scaled_l2": 1.1607885070952072e-08,
+        "finite": true,
+        "local_balance_valid": true,
+        "chd_inflow": 218616.94424599234,
+        "chd_outflow": 0.0,
+        "ghb_inflow": 0.0,
+        "ghb_outflow": 0.0,
+        "ghb_net": 0.0,
+        "drn_inflow": 0.0,
+        "drn_outflow": 8149.0468486544305,
+        "drn_net": -8149.0468486544305,
+        "riv_inflow": 17465.22264601575,
+        "riv_outflow": 0.0,
+        "riv_net": 17465.22264601575,
+        "free_boundary_inflow": 236082.16689200795,
+        "free_boundary_outflow": 8149.046848654432
+      },
+      "public_seconds": 0.28447498800233006,
+      "multigrid": {
+        "controls": {
+          "levels": 5,
+          "min_coarse_n": 2,
+          "pre_sweeps": 2,
+          "post_sweeps": 2,
+          "coarse_sweeps": 2,
+          "cycles": 1,
+          "omega": 0.8,
+          "use_cuda_graph": true,
+          "cycle_kind": "k",
+          "cached_line_factors": true,
+          "preconditioner_precision": "float32",
+          "coefficient_state": "current",
+          "line_smoother": "jacobi",
+          "device_hierarchy_build": true
+        },
+        "smoother": "vertical_line",
+        "coefficient_state": "current",
+        "precision": "float32",
+        "dimensions": [
+          [
+            10,
+            112,
+            90
+          ],
+          [
+            10,
+            56,
+            45
+          ],
+          [
+            10,
+            28,
+            23
+          ],
+          [
+            10,
+            14,
+            12
+          ],
+          [
+            10,
+            7,
+            6
+          ]
+        ],
+        "actual_levels": 5,
+        "coarsening_factors": [
+          [
+            2,
+            2
+          ],
+          [
+            2,
+            2
+          ],
+          [
+            2,
+            2
+          ],
+          [
+            2,
+            2
+          ]
+        ],
+        "construction_seconds": 0.02413231499667745,
+        "hierarchy_reused": false,
+        "coefficients_refreshed": false,
+        "value_refresh_count": 0,
+        "device_storage_refresh_count": 8,
+        "refresh_graph_captures": 1,
+        "refresh_graph_replays": 8,
+        "refresh_graph_fallback": false,
+        "allocated_device_bytes": 32836368,
+        "applications": 54,
+        "cycles": 54,
+        "graph_captures": 1,
+        "graph_replays": 54,
+        "graph_capture_failed": false,
+        "graph_error": null,
+        "inner_scalar_readbacks": 0,
+        "scalar_readbacks": 69,
+        "synchronization_seconds": 0.11364511000283528,
+        "device_apply_seconds": 0.11692185544967654,
+        "preconditioner_enqueue_seconds": 0.006156081944936886
+      },
+      "mempool_high_water_bytes": 184489684
+    },
+    "identical_initial": [
+      {
+        "implementation": "device_newton_fgmres",
+        "session_backend": "npf662_newton",
+        "npf_preconditioner": "kcycle",
+        "krylov_method": "FGMRES",
+        "outer_iterations": 7,
+        "krylov_iterations": 54,
+        "preconditioner_cycles": 54,
+        "seconds": 0.13157024700194597,
+        "cuda_graph_captures": null,
+        "cuda_graph_replays": null,
+        "device_final_metrics": {
+          "physical_rms": 7.783516542527412e-09,
+          "head_residual_rms": 3.7058473052049335e-11,
+          "relative_cell_imbalance": 6.178060985094196e-10,
+          "gross_throughput": 478269.2937406624,
+          "residual_l1": 0.0002954776864027742,
+          "signed_imbalance": 4.335353731483263e-05,
+          "boundary_inflow": 236082.16689200836,
+          "boundary_outflow": 8149.046848654433,
+          "scaled_l2": 1.1607885070952072e-08,
+          "finite": true,
+          "local_balance_valid": true,
+          "chd_inflow": 218616.9442459926,
+          "chd_outflow": 0.0,
+          "ghb_inflow": 0.0,
+          "ghb_outflow": 0.0,
+          "ghb_net": 0.0,
+          "drn_inflow": 0.0,
+          "drn_outflow": 8149.046848654433,
+          "drn_net": -8149.046848654433,
+          "riv_inflow": 17465.222646015754,
+          "riv_outflow": 0.0,
+          "riv_net": 17465.222646015754,
+          "free_boundary_inflow": 236082.16689200795,
+          "free_boundary_outflow": 8149.046848654432
+        },
+        "public_seconds": 0.2399776189995464,
+        "multigrid": {
+          "controls": {
+            "levels": 5,
+            "min_coarse_n": 2,
+            "pre_sweeps": 2,
+            "post_sweeps": 2,
+            "coarse_sweeps": 2,
+            "cycles": 1,
+            "omega": 0.8,
+            "use_cuda_graph": true,
+            "cycle_kind": "k",
+            "cached_line_factors": true,
+            "preconditioner_precision": "float32",
+            "coefficient_state": "current",
+            "line_smoother": "jacobi",
+            "device_hierarchy_build": true
+          },
+          "smoother": "vertical_line",
+          "coefficient_state": "current",
+          "precision": "float32",
+          "dimensions": [
+            [
+              10,
+              112,
+              90
+            ],
+            [
+              10,
+              56,
+              45
+            ],
+            [
+              10,
+              28,
+              23
+            ],
+            [
+              10,
+              14,
+              12
+            ],
+            [
+              10,
+              7,
+              6
+            ]
+          ],
+          "actual_levels": 5,
+          "coarsening_factors": [
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "construction_seconds": 0.0,
+          "hierarchy_reused": true,
+          "coefficients_refreshed": false,
+          "value_refresh_count": 0,
+          "device_storage_refresh_count": 15,
+          "refresh_graph_captures": 1,
+          "refresh_graph_replays": 15,
+          "refresh_graph_fallback": false,
+          "allocated_device_bytes": 32836368,
+          "applications": 54,
+          "cycles": 54,
+          "graph_captures": 0,
+          "graph_replays": 54,
+          "graph_capture_failed": false,
+          "graph_error": null,
+          "inner_scalar_readbacks": 0,
+          "scalar_readbacks": 69,
+          "synchronization_seconds": 0.1161882429587422,
+          "device_apply_seconds": 0.1164541106224061,
+          "preconditioner_enqueue_seconds": 0.005627592938253656
+        },
+        "mempool_high_water_bytes": 184489684
+      },
+      {
+        "implementation": "device_newton_fgmres",
+        "session_backend": "npf662_newton",
+        "npf_preconditioner": "kcycle",
+        "krylov_method": "FGMRES",
+        "outer_iterations": 7,
+        "krylov_iterations": 54,
+        "preconditioner_cycles": 54,
+        "seconds": 0.1319194239913486,
+        "cuda_graph_captures": null,
+        "cuda_graph_replays": null,
+        "device_final_metrics": {
+          "physical_rms": 7.783516542527412e-09,
+          "head_residual_rms": 3.7058473052049335e-11,
+          "relative_cell_imbalance": 6.178060985094196e-10,
+          "gross_throughput": 478269.2937406624,
+          "residual_l1": 0.0002954776864027742,
+          "signed_imbalance": 4.335353731483263e-05,
+          "boundary_inflow": 236082.1668920082,
+          "boundary_outflow": 8149.046848654432,
+          "scaled_l2": 1.1607885070952072e-08,
+          "finite": true,
+          "local_balance_valid": true,
+          "chd_inflow": 218616.94424599243,
+          "chd_outflow": 0.0,
+          "ghb_inflow": 0.0,
+          "ghb_outflow": 0.0,
+          "ghb_net": 0.0,
+          "drn_inflow": 0.0,
+          "drn_outflow": 8149.046848654432,
+          "drn_net": -8149.046848654432,
+          "riv_inflow": 17465.222646015747,
+          "riv_outflow": 0.0,
+          "riv_net": 17465.222646015747,
+          "free_boundary_inflow": 236082.16689200795,
+          "free_boundary_outflow": 8149.046848654432
+        },
+        "public_seconds": 0.25789792800787836,
+        "multigrid": {
+          "controls": {
+            "levels": 5,
+            "min_coarse_n": 2,
+            "pre_sweeps": 2,
+            "post_sweeps": 2,
+            "coarse_sweeps": 2,
+            "cycles": 1,
+            "omega": 0.8,
+            "use_cuda_graph": true,
+            "cycle_kind": "k",
+            "cached_line_factors": true,
+            "preconditioner_precision": "float32",
+            "coefficient_state": "current",
+            "line_smoother": "jacobi",
+            "device_hierarchy_build": true
+          },
+          "smoother": "vertical_line",
+          "coefficient_state": "current",
+          "precision": "float32",
+          "dimensions": [
+            [
+              10,
+              112,
+              90
+            ],
+            [
+              10,
+              56,
+              45
+            ],
+            [
+              10,
+              28,
+              23
+            ],
+            [
+              10,
+              14,
+              12
+            ],
+            [
+              10,
+              7,
+              6
+            ]
+          ],
+          "actual_levels": 5,
+          "coarsening_factors": [
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "construction_seconds": 0.018556230992544442,
+          "hierarchy_reused": false,
+          "coefficients_refreshed": false,
+          "value_refresh_count": 0,
+          "device_storage_refresh_count": 8,
+          "refresh_graph_captures": 1,
+          "refresh_graph_replays": 8,
+          "refresh_graph_fallback": false,
+          "allocated_device_bytes": 32836368,
+          "applications": 54,
+          "cycles": 54,
+          "graph_captures": 1,
+          "graph_replays": 54,
+          "graph_capture_failed": false,
+          "graph_error": null,
+          "inner_scalar_readbacks": 0,
+          "scalar_readbacks": 69,
+          "synchronization_seconds": 0.11622886496479623,
+          "device_apply_seconds": 0.11686921548843382,
+          "preconditioner_enqueue_seconds": 0.006007021918776445
+        },
+        "mempool_high_water_bytes": 184489684
+      },
+      {
+        "implementation": "device_newton_fgmres",
+        "session_backend": "npf662_newton",
+        "npf_preconditioner": "kcycle",
+        "krylov_method": "FGMRES",
+        "outer_iterations": 7,
+        "krylov_iterations": 54,
+        "preconditioner_cycles": 54,
+        "seconds": 0.1318168540019542,
+        "cuda_graph_captures": null,
+        "cuda_graph_replays": null,
+        "device_final_metrics": {
+          "physical_rms": 7.783516542527412e-09,
+          "head_residual_rms": 3.7058473052049335e-11,
+          "relative_cell_imbalance": 6.178060985094196e-10,
+          "gross_throughput": 478269.2937406624,
+          "residual_l1": 0.0002954776864027742,
+          "signed_imbalance": 4.335353731483263e-05,
+          "boundary_inflow": 236082.1668920085,
+          "boundary_outflow": 8149.046848654432,
+          "scaled_l2": 1.1607885070952072e-08,
+          "finite": true,
+          "local_balance_valid": true,
+          "chd_inflow": 218616.94424599275,
+          "chd_outflow": 0.0,
+          "ghb_inflow": 0.0,
+          "ghb_outflow": 0.0,
+          "ghb_net": 0.0,
+          "drn_inflow": 0.0,
+          "drn_outflow": 8149.046848654432,
+          "drn_net": -8149.046848654432,
+          "riv_inflow": 17465.222646015747,
+          "riv_outflow": 0.0,
+          "riv_net": 17465.222646015747,
+          "free_boundary_inflow": 236082.16689200795,
+          "free_boundary_outflow": 8149.046848654432
+        },
+        "public_seconds": 0.2561787009908585,
+        "multigrid": {
+          "controls": {
+            "levels": 5,
+            "min_coarse_n": 2,
+            "pre_sweeps": 2,
+            "post_sweeps": 2,
+            "coarse_sweeps": 2,
+            "cycles": 1,
+            "omega": 0.8,
+            "use_cuda_graph": true,
+            "cycle_kind": "k",
+            "cached_line_factors": true,
+            "preconditioner_precision": "float32",
+            "coefficient_state": "current",
+            "line_smoother": "jacobi",
+            "device_hierarchy_build": true
+          },
+          "smoother": "vertical_line",
+          "coefficient_state": "current",
+          "precision": "float32",
+          "dimensions": [
+            [
+              10,
+              112,
+              90
+            ],
+            [
+              10,
+              56,
+              45
+            ],
+            [
+              10,
+              28,
+              23
+            ],
+            [
+              10,
+              14,
+              12
+            ],
+            [
+              10,
+              7,
+              6
+            ]
+          ],
+          "actual_levels": 5,
+          "coarsening_factors": [
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "construction_seconds": 0.018663397000636905,
+          "hierarchy_reused": false,
+          "coefficients_refreshed": false,
+          "value_refresh_count": 0,
+          "device_storage_refresh_count": 8,
+          "refresh_graph_captures": 1,
+          "refresh_graph_replays": 8,
+          "refresh_graph_fallback": false,
+          "allocated_device_bytes": 32836368,
+          "applications": 54,
+          "cycles": 54,
+          "graph_captures": 1,
+          "graph_replays": 54,
+          "graph_capture_failed": false,
+          "graph_error": null,
+          "inner_scalar_readbacks": 0,
+          "scalar_readbacks": 69,
+          "synchronization_seconds": 0.11622300394810736,
+          "device_apply_seconds": 0.11684671926498413,
+          "preconditioner_enqueue_seconds": 0.005988586985040456
+        },
+        "mempool_high_water_bytes": 184489684
+      }
+    ],
+    "warm_start": [
+      {
+        "implementation": "device_newton_fgmres",
+        "session_backend": "npf662_newton",
+        "npf_preconditioner": "kcycle",
+        "krylov_method": "FGMRES",
+        "outer_iterations": 0,
+        "krylov_iterations": 0,
+        "preconditioner_cycles": 0,
+        "seconds": 0.00028955099696759135,
+        "cuda_graph_captures": null,
+        "cuda_graph_replays": null,
+        "device_final_metrics": {
+          "physical_rms": 7.783516542527412e-09,
+          "head_residual_rms": 3.7058473052049335e-11,
+          "relative_cell_imbalance": 6.178060985094196e-10,
+          "gross_throughput": 478269.2937406624,
+          "residual_l1": 0.0002954776864027742,
+          "signed_imbalance": 4.335353731483263e-05,
+          "boundary_inflow": 236082.1668920081,
+          "boundary_outflow": 8149.046848654431,
+          "scaled_l2": 1.1634235973325428e-08,
+          "finite": true,
+          "local_balance_valid": true,
+          "chd_inflow": 218616.94424599234,
+          "chd_outflow": 0.0,
+          "ghb_inflow": 0.0,
+          "ghb_outflow": 0.0,
+          "ghb_net": 0.0,
+          "drn_inflow": 0.0,
+          "drn_outflow": 8149.046848654431,
+          "drn_net": -8149.046848654431,
+          "riv_inflow": 17465.22264601575,
+          "riv_outflow": 0.0,
+          "riv_net": 17465.22264601575,
+          "free_boundary_inflow": 236082.16689200795,
+          "free_boundary_outflow": 8149.046848654432
+        },
+        "public_seconds": 0.13427041200338863,
+        "multigrid": {
+          "controls": {
+            "levels": 5,
+            "min_coarse_n": 2,
+            "pre_sweeps": 2,
+            "post_sweeps": 2,
+            "coarse_sweeps": 2,
+            "cycles": 1,
+            "omega": 0.8,
+            "use_cuda_graph": true,
+            "cycle_kind": "k",
+            "cached_line_factors": true,
+            "preconditioner_precision": "float32",
+            "coefficient_state": "current",
+            "line_smoother": "jacobi",
+            "device_hierarchy_build": true
+          },
+          "smoother": "vertical_line",
+          "coefficient_state": "current",
+          "precision": "float32",
+          "dimensions": [
+            [
+              10,
+              112,
+              90
+            ],
+            [
+              10,
+              56,
+              45
+            ],
+            [
+              10,
+              28,
+              23
+            ],
+            [
+              10,
+              14,
+              12
+            ],
+            [
+              10,
+              7,
+              6
+            ]
+          ],
+          "actual_levels": 5,
+          "coarsening_factors": [
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "construction_seconds": 0.018743961001746356,
+          "hierarchy_reused": false,
+          "coefficients_refreshed": false,
+          "value_refresh_count": 0,
+          "device_storage_refresh_count": 1,
+          "refresh_graph_captures": 1,
+          "refresh_graph_replays": 1,
+          "refresh_graph_fallback": false,
+          "allocated_device_bytes": 32836368,
+          "applications": 0,
+          "cycles": 0,
+          "graph_captures": 1,
+          "graph_replays": 0,
+          "graph_capture_failed": false,
+          "graph_error": null,
+          "inner_scalar_readbacks": 0,
+          "scalar_readbacks": 0,
+          "synchronization_seconds": 0,
+          "device_apply_seconds": 0,
+          "preconditioner_enqueue_seconds": 0
+        },
+        "mempool_high_water_bytes": 184489684
+      },
+      {
+        "implementation": "device_newton_fgmres",
+        "session_backend": "npf662_newton",
+        "npf_preconditioner": "kcycle",
+        "krylov_method": "FGMRES",
+        "outer_iterations": 0,
+        "krylov_iterations": 0,
+        "preconditioner_cycles": 0,
+        "seconds": 0.00029120199906174093,
+        "cuda_graph_captures": null,
+        "cuda_graph_replays": null,
+        "device_final_metrics": {
+          "physical_rms": 7.783516542527412e-09,
+          "head_residual_rms": 3.7058473052049335e-11,
+          "relative_cell_imbalance": 6.178060985094196e-10,
+          "gross_throughput": 478269.2937406624,
+          "residual_l1": 0.0002954776864027742,
+          "signed_imbalance": 4.335353731483263e-05,
+          "boundary_inflow": 236082.16689200836,
+          "boundary_outflow": 8149.0468486544305,
+          "scaled_l2": 1.1634235973325428e-08,
+          "finite": true,
+          "local_balance_valid": true,
+          "chd_inflow": 218616.9442459926,
+          "chd_outflow": 0.0,
+          "ghb_inflow": 0.0,
+          "ghb_outflow": 0.0,
+          "ghb_net": 0.0,
+          "drn_inflow": 0.0,
+          "drn_outflow": 8149.0468486544305,
+          "drn_net": -8149.0468486544305,
+          "riv_inflow": 17465.222646015754,
+          "riv_outflow": 0.0,
+          "riv_net": 17465.222646015754,
+          "free_boundary_inflow": 236082.16689200795,
+          "free_boundary_outflow": 8149.046848654432
+        },
+        "public_seconds": 0.13565011200262234,
+        "multigrid": {
+          "controls": {
+            "levels": 5,
+            "min_coarse_n": 2,
+            "pre_sweeps": 2,
+            "post_sweeps": 2,
+            "coarse_sweeps": 2,
+            "cycles": 1,
+            "omega": 0.8,
+            "use_cuda_graph": true,
+            "cycle_kind": "k",
+            "cached_line_factors": true,
+            "preconditioner_precision": "float32",
+            "coefficient_state": "current",
+            "line_smoother": "jacobi",
+            "device_hierarchy_build": true
+          },
+          "smoother": "vertical_line",
+          "coefficient_state": "current",
+          "precision": "float32",
+          "dimensions": [
+            [
+              10,
+              112,
+              90
+            ],
+            [
+              10,
+              56,
+              45
+            ],
+            [
+              10,
+              28,
+              23
+            ],
+            [
+              10,
+              14,
+              12
+            ],
+            [
+              10,
+              7,
+              6
+            ]
+          ],
+          "actual_levels": 5,
+          "coarsening_factors": [
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "construction_seconds": 0.018743501001154073,
+          "hierarchy_reused": false,
+          "coefficients_refreshed": false,
+          "value_refresh_count": 0,
+          "device_storage_refresh_count": 1,
+          "refresh_graph_captures": 1,
+          "refresh_graph_replays": 1,
+          "refresh_graph_fallback": false,
+          "allocated_device_bytes": 32836368,
+          "applications": 0,
+          "cycles": 0,
+          "graph_captures": 1,
+          "graph_replays": 0,
+          "graph_capture_failed": false,
+          "graph_error": null,
+          "inner_scalar_readbacks": 0,
+          "scalar_readbacks": 0,
+          "synchronization_seconds": 0,
+          "device_apply_seconds": 0,
+          "preconditioner_enqueue_seconds": 0
+        },
+        "mempool_high_water_bytes": 184489684
+      },
+      {
+        "implementation": "device_newton_fgmres",
+        "session_backend": "npf662_newton",
+        "npf_preconditioner": "kcycle",
+        "krylov_method": "FGMRES",
+        "outer_iterations": 0,
+        "krylov_iterations": 0,
+        "preconditioner_cycles": 0,
+        "seconds": 0.0003060509916394949,
+        "cuda_graph_captures": null,
+        "cuda_graph_replays": null,
+        "device_final_metrics": {
+          "physical_rms": 7.783516542527412e-09,
+          "head_residual_rms": 3.7058473052049335e-11,
+          "relative_cell_imbalance": 6.178060985094196e-10,
+          "gross_throughput": 478269.2937406624,
+          "residual_l1": 0.0002954776864027742,
+          "signed_imbalance": 4.335353731483263e-05,
+          "boundary_inflow": 236082.1668920082,
+          "boundary_outflow": 8149.046848654432,
+          "scaled_l2": 1.1634235973325428e-08,
+          "finite": true,
+          "local_balance_valid": true,
+          "chd_inflow": 218616.94424599243,
+          "chd_outflow": 0.0,
+          "ghb_inflow": 0.0,
+          "ghb_outflow": 0.0,
+          "ghb_net": 0.0,
+          "drn_inflow": 0.0,
+          "drn_outflow": 8149.046848654432,
+          "drn_net": -8149.046848654432,
+          "riv_inflow": 17465.222646015754,
+          "riv_outflow": 0.0,
+          "riv_net": 17465.222646015754,
+          "free_boundary_inflow": 236082.16689200795,
+          "free_boundary_outflow": 8149.046848654432
+        },
+        "public_seconds": 0.13238048099447042,
+        "multigrid": {
+          "controls": {
+            "levels": 5,
+            "min_coarse_n": 2,
+            "pre_sweeps": 2,
+            "post_sweeps": 2,
+            "coarse_sweeps": 2,
+            "cycles": 1,
+            "omega": 0.8,
+            "use_cuda_graph": true,
+            "cycle_kind": "k",
+            "cached_line_factors": true,
+            "preconditioner_precision": "float32",
+            "coefficient_state": "current",
+            "line_smoother": "jacobi",
+            "device_hierarchy_build": true
+          },
+          "smoother": "vertical_line",
+          "coefficient_state": "current",
+          "precision": "float32",
+          "dimensions": [
+            [
+              10,
+              112,
+              90
+            ],
+            [
+              10,
+              56,
+              45
+            ],
+            [
+              10,
+              28,
+              23
+            ],
+            [
+              10,
+              14,
+              12
+            ],
+            [
+              10,
+              7,
+              6
+            ]
+          ],
+          "actual_levels": 5,
+          "coarsening_factors": [
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "construction_seconds": 0.018611298000905663,
+          "hierarchy_reused": false,
+          "coefficients_refreshed": false,
+          "value_refresh_count": 0,
+          "device_storage_refresh_count": 1,
+          "refresh_graph_captures": 1,
+          "refresh_graph_replays": 1,
+          "refresh_graph_fallback": false,
+          "allocated_device_bytes": 32836368,
+          "applications": 0,
+          "cycles": 0,
+          "graph_captures": 1,
+          "graph_replays": 0,
+          "graph_capture_failed": false,
+          "graph_error": null,
+          "inner_scalar_readbacks": 0,
+          "scalar_readbacks": 0,
+          "synchronization_seconds": 0,
+          "device_apply_seconds": 0,
+          "preconditioner_enqueue_seconds": 0
+        },
+        "mempool_high_water_bytes": 194714728
+      }
+    ],
+    "median_seconds": 0.2561787009908585,
+    "minimum_seconds": 0.2399776189995464,
+    "maximum_seconds": 0.25789792800787836
+  },
+  {
+    "grid": "100k",
+    "shape": [
+      10,
+      112,
+      90
+    ],
+    "configuration": "diagonal_fgmres",
+    "failed": true,
+    "error": "outer_budget",
+    "elapsed_seconds": 47.49939999899652
+  },
+  {
+    "grid": "1M",
+    "shape": [
+      5,
+      450,
+      450
+    ],
+    "configuration": "saturated_fp64",
+    "failed": true,
+    "error": "outer_budget",
+    "elapsed_seconds": 15.80794567099656
+  },
+  {
+    "grid": "1M",
+    "shape": [
+      5,
+      450,
+      450
+    ],
+    "configuration": "current_fp64",
+    "failed": true,
+    "error": "outer_budget",
+    "elapsed_seconds": 5.891350676989532
+  },
+  {
+    "grid": "1M",
+    "shape": [
+      5,
+      450,
+      450
+    ],
+    "configuration": "qualified_current_fp32",
+    "failed": true,
+    "error": "outer_budget",
+    "elapsed_seconds": 5.374291044005076
+  },
+  {
+    "grid": "1M",
+    "shape": [
+      5,
+      450,
+      450
+    ],
+    "configuration": "diagonal_fgmres",
+    "failed": true,
+    "error": "outer_budget",
+    "elapsed_seconds": 227.06706301101076
+  }
+]

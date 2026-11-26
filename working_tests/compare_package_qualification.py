@@ -42,6 +42,8 @@ def compare_outputs(*, gpu_directory, native_directory, output, head_gate, rate_
                 ('GHB', period.get('ghb_budget')), ('WEL', source.get('wel')), ('RCH', source.get('recharge'))]:
                 if numerical_budget is None or package not in native_info['periods'][index]['packages']:
                     continue
+                if package == 'GHB':
+                    numerical_budget = {name: numerical_budget['ghb_' + name] for name in ('inflow', 'outflow', 'net')}
                 reference = native_info['periods'][index]['packages'][package]
                 errors = {name: float(numerical_budget[name] - reference[name]) for name in ('inflow', 'outflow', 'net')}
                 row['budgets'][package] = dict(rate_errors_m3_day=errors,

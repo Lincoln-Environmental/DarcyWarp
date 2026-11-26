@@ -141,7 +141,8 @@ Validation
 * Regression: full suite on CPU and CUDA; the merged baseline reported
   1,475 passed, 21 expected FP32/graph skips and the one pre-existing
   CUDA precision case documented above, since resolved.
-* Benchmark: ``working_tests/benchmark_3d_wel_boundaries.py`` measures
+* Benchmark: ``working_tests/qualify_package_kcycle.py`` replaces the original
+  diagonal-preconditioned timing programme and measures
   heterogeneous multilayer workloads with substantial abstraction,
   nonzero recharge, gaining/losing rivers, extensive drainage and
   multi-entry cells at ~100k and 1M+ cells, separating construction

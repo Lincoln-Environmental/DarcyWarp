@@ -1,0 +1,9 @@
+{
+  "configuration": "diagonal FGMRES restart=8",
+  "grid": "1M",
+  "variant": "raw_control",
+  "status": "interrupted_resource_limit",
+  "elapsed_case_seconds": 611.7695059776306,
+  "reason": "No accepted cold solve returned after more than 600 seconds. Retain this unsuitable short-restart reference; compare the existing default restart=48 separately.",
+  "accepted_result": false
+}

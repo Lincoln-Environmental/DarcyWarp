@@ -166,6 +166,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--grid', choices=('100k', '1M', 'all'), default='all')
     parser.add_argument('--mode', choices=('steady', 'history', 'all'), default='all')
+    parser.add_argument('--strategy', choices=('original', 'ilut8'), default='original')
     parser.add_argument('--repeats', type=int, default=3)
     parser.add_argument('--output', type=Path, default=Path('/tmp/darcywarp-package-mf6-qualification'))
     arguments = parser.parse_args()
@@ -175,6 +176,12 @@ if __name__ == "__main__":
     ims_controls = dict(complexity='COMPLEX', linear_acceleration='BICGSTAB',
         outer_maximum=200, outer_dvclose=1.e-11, inner_maximum=200, inner_dvclose=1.e-12,
         rcloserecord=[1.e-12, 'strict'])
+    if arguments.strategy == 'ilut8':
+        # Archived ugly-T native diagnostic; retain all original tolerances.
+        ims_controls.update(under_relaxation='NONE', backtracking_number=0,
+            preconditioner_levels=8, preconditioner_drop_tolerance=1.e-4,
+            number_orthogonalizations=8, relaxation_factor=0.)
+        arguments.output = arguments.output / 'ilut8'
     executable = require_mf6()
     for label, shape in grids.items():
         if arguments.grid not in ('all', label):

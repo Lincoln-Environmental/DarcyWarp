@@ -17,7 +17,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from benchmark_3d_wel_boundaries import heterogeneous_fields  # noqa: E402
+from regional_package_fields import heterogeneous_fields  # noqa: E402
 
 RESULT_DIR = Path(__file__).resolve().parents[1] / "benchmark_results" / "wel_boundaries_3d"
 

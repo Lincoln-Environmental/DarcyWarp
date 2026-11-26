@@ -1,0 +1,166 @@
+{
+  "periods": [
+    {
+      "index": 0,
+      "storage_max_rate_error_m3_day": 6.952759826206467e-09,
+      "storage_sum_rate_error_m3_day": -1.45452768929126e-07,
+      "storage_net_volume_error_m3": -1.018169382503882e-06,
+      "accepted_accumulation_m3": -105525.19097820116,
+      "native_accumulation_m3": -105525.19097718301
+    },
+    {
+      "index": 1,
+      "storage_max_rate_error_m3_day": 3.9545183828926245e-09,
+      "storage_sum_rate_error_m3_day": 2.656955353758271e-07,
+      "storage_net_volume_error_m3": 1.8598687476307897e-06,
+      "accepted_accumulation_m3": -9440.600354092223,
+      "native_accumulation_m3": -9440.60035595209
+    },
+    {
+      "index": 2,
+      "storage_max_rate_error_m3_day": 6.479352445201703e-10,
+      "storage_sum_rate_error_m3_day": 2.6021843695386924e-08,
+      "storage_net_volume_error_m3": 1.8215290586770847e-07,
+      "accepted_accumulation_m3": -1617.806087708153,
+      "native_accumulation_m3": -1617.806087890306
+    },
+    {
+      "index": 3,
+      "storage_max_rate_error_m3_day": 1.287630789210785e-10,
+      "storage_sum_rate_error_m3_day": -3.011944751301438e-07,
+      "storage_net_volume_error_m3": -2.1083613259110066e-06,
+      "accepted_accumulation_m3": 202.7640866379109,
+      "native_accumulation_m3": 202.76408874627225
+    },
+    {
+      "index": 4,
+      "storage_max_rate_error_m3_day": 4.67610395256347e-12,
+      "storage_sum_rate_error_m3_day": -1.79263547141259e-08,
+      "storage_net_volume_error_m3": -1.254844829988813e-07,
+      "accepted_accumulation_m3": 18.28679825539374,
+      "native_accumulation_m3": 18.286798380878228
+    },
+    {
+      "index": 5,
+      "storage_max_rate_error_m3_day": 2.228636448563942e-11,
+      "storage_sum_rate_error_m3_day": 2.396778103935478e-07,
+      "storage_net_volume_error_m3": 1.6777446727548346e-06,
+      "accepted_accumulation_m3": 358.4276359926245,
+      "native_accumulation_m3": 358.42763431487987
+    },
+    {
+      "index": 6,
+      "storage_max_rate_error_m3_day": 4.9123154545818726e-11,
+      "storage_sum_rate_error_m3_day": 7.245379973398577e-08,
+      "storage_net_volume_error_m3": 5.071765981379004e-07,
+      "accepted_accumulation_m3": -680.0394381851961,
+      "native_accumulation_m3": -680.0394386923726
+    },
+    {
+      "index": 7,
+      "storage_max_rate_error_m3_day": 4.6681954200648856e-11,
+      "storage_sum_rate_error_m3_day": -2.980875553981195e-07,
+      "storage_net_volume_error_m3": -2.0866128877868363e-06,
+      "accepted_accumulation_m3": 293.5275608386501,
+      "native_accumulation_m3": 293.527562925263
+    },
+    {
+      "index": 8,
+      "storage_max_rate_error_m3_day": 8.486719898885553e-12,
+      "storage_sum_rate_error_m3_day": -1.3245684135308938e-08,
+      "storage_net_volume_error_m3": -9.271978894716256e-08,
+      "accepted_accumulation_m3": 27.125817264301787,
+      "native_accumulation_m3": 27.125817357021578
+    },
+    {
+      "index": 9,
+      "storage_max_rate_error_m3_day": 2.2190530066679842e-11,
+      "storage_sum_rate_error_m3_day": 2.5502454592884287e-07,
+      "storage_net_volume_error_m3": 1.7851718215019e-06,
+      "accepted_accumulation_m3": 359.292007418276,
+      "native_accumulation_m3": 359.2920056331041
+    },
+    {
+      "index": 10,
+      "storage_max_rate_error_m3_day": 4.884691631214244e-11,
+      "storage_sum_rate_error_m3_day": 4.080064591988393e-08,
+      "storage_net_volume_error_m3": 2.856045214391875e-07,
+      "accepted_accumulation_m3": -679.9546395604522,
+      "native_accumulation_m3": -679.9546398460566
+    },
+    {
+      "index": 11,
+      "storage_max_rate_error_m3_day": 4.736846472789408e-11,
+      "storage_sum_rate_error_m3_day": -2.8111869929191033e-07,
+      "storage_net_volume_error_m3": -1.9678308950433723e-06,
+      "accepted_accumulation_m3": 293.53590225426024,
+      "native_accumulation_m3": 293.53590422209106
+    },
+    {
+      "index": 12,
+      "storage_max_rate_error_m3_day": 9.199966506114824e-12,
+      "storage_sum_rate_error_m3_day": -4.729368115417659e-08,
+      "storage_net_volume_error_m3": -3.310557680792361e-07,
+      "accepted_accumulation_m3": 27.12663970128451,
+      "native_accumulation_m3": 27.12664003234028
+    },
+    {
+      "index": 13,
+      "storage_max_rate_error_m3_day": 2.2238371788583372e-11,
+      "storage_sum_rate_error_m3_day": 2.9766429024160766e-07,
+      "storage_net_volume_error_m3": 2.0836500316912536e-06,
+      "accepted_accumulation_m3": 359.29208867609725,
+      "native_accumulation_m3": 359.29208659244716
+    },
+    {
+      "index": 14,
+      "storage_max_rate_error_m3_day": 5.00797864549235e-11,
+      "storage_sum_rate_error_m3_day": 5.802426652441488e-08,
+      "storage_net_volume_error_m3": 4.061698656709042e-07,
+      "accepted_accumulation_m3": -679.9546315171053,
+      "native_accumulation_m3": -679.9546319232751
+    },
+    {
+      "index": 15,
+      "storage_max_rate_error_m3_day": 4.7108590032346465e-11,
+      "storage_sum_rate_error_m3_day": -2.982723796230902e-07,
+      "storage_net_volume_error_m3": -2.0879066573616313e-06,
+      "accepted_accumulation_m3": 293.53590305177914,
+      "native_accumulation_m3": 293.53590513968584
+    },
+    {
+      "index": 16,
+      "storage_max_rate_error_m3_day": 8.866413632208515e-12,
+      "storage_sum_rate_error_m3_day": -2.6691081558389344e-08,
+      "storage_net_volume_error_m3": -1.868375709087254e-07,
+      "accepted_accumulation_m3": 27.126639780481938,
+      "native_accumulation_m3": 27.126639967319512
+    },
+    {
+      "index": 17,
+      "storage_max_rate_error_m3_day": 2.225077961508573e-11,
+      "storage_sum_rate_error_m3_day": 2.749667637827797e-07,
+      "storage_net_volume_error_m3": 1.924767346479458e-06,
+      "accepted_accumulation_m3": 359.29208868397296,
+      "native_accumulation_m3": 359.29208675920563
+    },
+    {
+      "index": 18,
+      "storage_max_rate_error_m3_day": 4.9453896056386726e-11,
+      "storage_sum_rate_error_m3_day": 2.2008574450169992e-08,
+      "storage_net_volume_error_m3": 1.5406002115118994e-07,
+      "accepted_accumulation_m3": -679.954631516321,
+      "native_accumulation_m3": -679.9546316703809
+    },
+    {
+      "index": 19,
+      "storage_max_rate_error_m3_day": 4.685033058119542e-11,
+      "storage_sum_rate_error_m3_day": -2.6996704148596074e-07,
+      "storage_net_volume_error_m3": -1.8897692904017252e-06,
+      "accepted_accumulation_m3": 293.53590305185725,
+      "native_accumulation_m3": 293.53590494162654
+    }
+  ],
+  "maximum_rate_error_m3_day": 6.952759826206467e-09,
+  "total_accumulation_error_m3": -1.0283815176173328e-06
+}

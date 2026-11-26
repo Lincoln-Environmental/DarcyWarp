@@ -24,7 +24,7 @@ def regional_fields(*, shape, abstraction_fraction, packages, seed, regional_con
     :param seed: Existing field generator seed.
     :return: Builder fields, retaining physical geometry.
     """
-    from benchmark_3d_wel_boundaries import heterogeneous_fields
+    from regional_package_fields import heterogeneous_fields
     from DARCY_WARP_PACKAGE.physics.recharge_3d import surface_recharge_cells
     fields = heterogeneous_fields(shape=shape, seed=seed)
     receivers = surface_recharge_cells(active=fields['active'], bc_mask=fields['bc_mask'])
@@ -77,7 +77,7 @@ def build_model(*, fields, device, formulation, raw_control):
     return model
 
 
-def options_for(*, saved, state, precision, preconditioner, graphs, line_smoother, levels):
+def options_for(*, saved, state, precision, preconditioner, graphs, line_smoother, levels, restart=None):
     """Use saved qualified controls with explicit diagnostic choices.
 
     :param saved: Existing qualification JSON.
@@ -94,6 +94,8 @@ def options_for(*, saved, state, precision, preconditioner, graphs, line_smoothe
     options = dict(saved['solve'])
     options.pop('npf_device_native', None)
     options.update(npf_preconditioner=preconditioner, npf_krylov_method='fgmres')
+    if restart is not None:
+        options['krylov_restart'] = restart
     nonlinear = dict(saved['newton'], tiled_reductions=graphs, reuse_trial_state=graphs)
     options['npf_newton_controls'] = NPF662NewtonControls(**nonlinear)
     if preconditioner == 'kcycle':
@@ -114,7 +116,8 @@ def compact_info(*, info, elapsed):
         'npf_preconditioner', 'outer_iterations', 'krylov_iterations', 'preconditioner_cycles',
         'cuda_graph_captures', 'cuda_graph_replays', 'seconds', 'public_total_seconds',
         'device_final_metrics', 'physical_acceptance', 'ghb_budget', 'drn_budget', 'riv_budget',
-        'source_budgets', 'multigrid', 'n_cycles_used', 'graph_count', 'graph_replays')
+        'source_budgets', 'multigrid', 'n_cycles_used', 'graph_count', 'graph_replays',
+        'linear_acceleration', 'preconditioner_applications', 'cuda_graph_replayed', 'r_rms_end', 'h_rms_end')
     result = {name: info.get(name) for name in names}
     result.update(public_seconds=elapsed, gpu_used_bytes=int(wp.get_mempool_used_mem_current()),
         process_gpu_high_water_bytes=int(wp.get_mempool_used_mem_high()))
@@ -138,6 +141,9 @@ def timed_solve(*, model, options, preconditioner, direct):
     assert info['converged'], row
     if direct:
         assert info['session_backend'] == 'fast_3d' and 'npf_preconditioner' not in info, row
+        if options.get('linear_acceleration') == 'fgmres':
+            assert info['linear_acceleration'] == 'fgmres' and info['preconditioner_applications'] > 0, row
+            assert info['cuda_graph_replayed'], row
     else:
         assert info['npf_preconditioner'] == preconditioner and info['krylov_method'] == 'FGMRES', row
         if preconditioner == 'kcycle' and info['krylov_iterations']:
@@ -167,11 +173,14 @@ def qualify_case(*, fields, configuration, repeats, saved, direct_controls, outp
     :return: Qualification evidence.
     """
     output.mkdir(parents=True, exist_ok=True)
-    direct = configuration['name'] == 'cartesian_fast'
+    direct = configuration['name'].startswith('cartesian_')
     started = perf_counter()
     with build_model(fields=fields, device=device, formulation='legacy' if direct else 'mf6_6_6_2_npf', raw_control=raw_control) as model:
         construction = perf_counter() - started
         options = dict(direct_controls) if direct else options_for(saved=saved, **{key: value for key, value in configuration.items() if key != 'name'})
+        if configuration['name'] == 'cartesian_fgmres':
+            from DARCY_WARP_PACKAGE.solvers.npf662_kcycle import NPF662KCycleControls
+            options.update(linear_acceleration='fgmres', linear_kcycle_controls=NPF662KCycleControls(**saved['multigrid']))
         if not direct:
             options['top_elevation'] = fields['top_elevation']
         preconditioner = configuration.get('preconditioner')
@@ -245,7 +254,7 @@ def run_matrix(*, grids, configurations, variants, repeats, saved, direct_contro
         for variant, packages, raw in variants:
             fields = regional_fields(shape=shape, abstraction_fraction=abstraction_fraction, packages=packages, seed=seed, regional_controls=regional_controls)
             for configuration in configurations:
-                if configuration['name'] == 'cartesian_fast' and packages:
+                if configuration['name'].startswith('cartesian_') and packages:
                     continue
                 directory = output / label / variant / configuration['name']
                 try:
@@ -346,16 +355,19 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--grid', choices=('100k', '1M', 'all'), default='all')
     parser.add_argument('--mode', choices=('steady', 'history', 'all'), default='all')
-    parser.add_argument('--configuration', default='all')
+    parser.add_argument('--configuration', default='fast')
+    parser.add_argument('--variant', choices=('all', 'raw_control', 'wel_only', 'packages'), default='all')
     arguments = parser.parse_args()
     grids = {'100k': (10, 112, 90), '1M': (5, 450, 450)}
     grids = {name: shape for name, shape in grids.items() if arguments.grid in ('all', name)}
-    configurations = [dict(name='cartesian_fast'),
+    configurations = [dict(name='cartesian_fast'), dict(name='cartesian_fgmres'),
         dict(name='saturated_fp64', state='saturated', precision='float64', preconditioner='kcycle', graphs=True, line_smoother='jacobi', levels=5),
         dict(name='current_fp64', state='current', precision='float64', preconditioner='kcycle', graphs=True, line_smoother='jacobi', levels=5),
         dict(name='qualified_current_fp32', state='current', precision='float32', preconditioner='kcycle', graphs=True, line_smoother='jacobi', levels=5),
+        dict(name='diagonal_restart48', restart=48, state='current', precision='float64', preconditioner='diagonal', graphs=True, line_smoother='jacobi', levels=5),
         dict(name='diagonal_fgmres', state='current', precision='float64', preconditioner='diagonal', graphs=True, line_smoother='jacobi', levels=5)]
     variants = [('raw_control', False, True), ('wel_only', False, False), ('packages', True, False)]
+    variants = [item for item in variants if arguments.variant in ('all', item[0])]
     repeats = 3
     output = root / 'benchmark_results/package_audit_repair/production_3d'
     device = 'cuda:0'
@@ -363,7 +375,7 @@ if __name__ == "__main__":
     abstraction_fraction = regional_controls['abstraction_fraction']
     seed = regional_controls['seed']
     wp.init()
-    configurations = [item for item in configurations if arguments.configuration in ('all', item['name']) or (arguments.configuration == 'fast' and item['name'] != 'diagonal_fgmres')]
+    configurations = [item for item in configurations if arguments.configuration in ('all', item['name']) or (arguments.configuration == 'fast' and not item['name'].startswith('diagonal') and item['name'] != 'cartesian_fast')]
     if arguments.mode in ('steady', 'all'):
         run_matrix(grids=grids, configurations=configurations, variants=variants, repeats=repeats,
         saved=saved, direct_controls=direct_controls, output=output, device=device,

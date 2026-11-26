@@ -43,6 +43,7 @@ def make_model(*, fields, dx, device, source_control):
     shape = fields['active'].shape
     model = WarpDarcySolver(nx=shape[1], ny=shape[0], dx=dx, solver_type='kcycle', device=device)
     model.build_from_fields(**options)
+    model._qualification_recharge_f64 = np.array(options['R_field'], dtype=np.float64, copy=True)
     return model
 
 
@@ -81,12 +82,11 @@ def run_confined(*, model, fields, initial, options, mixed, config):
         if recharge is None:
             recharge = np.empty(model._recharge_input_host.shape, dtype=np.float64)
             model._qualification_recharge_f64 = recharge
-        np.copyto(recharge, model._recharge_input_host)
         head, info = solve_mixed_fast(model=model, initial_head_f64=initial,
             bc_values_f64=fields['bc_values'], gh_head_f64=None,
             R_f64=recharge, config=config)
         assert info['production_precision_path'] and info['converged'], info
-        assert model._mixed_fast_retained_session._correction_graph is not None
+        assert model._mixed_fast_workspace._correction_graph is not None
     else:
         head, info = model.solve(implementation='fast', initial_head=initial, **options)
         assert info['solver_backend'] == 'confined_kcycle' and info['implementation'] == 'fast' and info['converged'], info
@@ -132,7 +132,9 @@ def qualify_steady(*, fields, dx, controls, profiles, mixed, repeats, source_con
                 wp.synchronize_device(device=device)
                 wel_seconds = perf_counter() - started
                 started = perf_counter()
-                model.update_R_in_place(R_field=fields['R_field'] * controls['calibration_recharge_factors'][index])
+                changed_recharge = fields['R_field'] * controls['calibration_recharge_factors'][index]
+                model.update_R_in_place(R_field=changed_recharge)
+                np.copyto(model._qualification_recharge_f64, changed_recharge)
                 wp.synchronize_device(device=device)
                 recharge_seconds = perf_counter() - started
                 started = perf_counter()
@@ -195,7 +197,6 @@ def qualify_transient(*, fields, dx, controls, profiles, repeats, unconfined, de
             else:
                 previous, history, periods = initial, [], []
                 options = dict(profiles['transient'])
-                options.pop('dh_max_tol', None)
                 for index in range(steps):
                     model.update_wel_in_place(wel_entries=schedules[index])
                     model.update_R_in_place(R_field=recharge[index])
@@ -230,6 +231,10 @@ if __name__ == "__main__":
     root = Path(__file__).resolve().parents[1]
     from sanity_3d_controls import read_profiles
     profiles = read_profiles(root=root)
+    from DARCY_WARP_PACKAGE.solvers.mixed_fast import MixedFastConfig
+    spectrum = MixedFastConfig()
+    profiles['steady']['fast'].update(cheby_lambda_min=spectrum.cheby_lambda_min, cheby_lambda_max=spectrum.cheby_lambda_max)
+    profiles['transient'] = dict(profiles['steady']['fast'])
     controls = json.loads((root / 'working_tests/wel_regional_qualification_controls.json').read_text())
     controls.update(runtime_2d=json.loads((root / 'working_tests/2d_transient_runtime_controls.json').read_text())['runtime']['solve_controls'],
         confined_thickness=10., unconfined_top=100., unconfined_sy=.15)
