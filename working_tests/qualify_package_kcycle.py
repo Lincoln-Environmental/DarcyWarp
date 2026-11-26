@@ -371,7 +371,8 @@ def qualify_history(*, fields, saved, controls, repeats, output, device, raw_con
             for name, value in accepted_snapshot(model=model, head=heads[index], info=period, fields=fields).items()}
         extraction = perf_counter() - started
         np.savez_compressed(output / 'accepted_heads.npz', **arrays)
-    result = dict(cold=rows[0], warm=rows[1:], warm_summary=summary(rows=rows[1:]),
+    result = dict(commit=subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+        raw_control=raw_control, cold=rows[0], warm=rows[1:], warm_summary=summary(rows=rows[1:]),
         extraction_seconds=extraction, controls=controls, configuration=dict(solve=saved))
     (output / 'result.json').write_text(json.dumps(result, indent=2))
     print(fields['active'].shape, 'resident history', result['warm_summary'], flush=True)

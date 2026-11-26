@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from dataclasses import asdict
 import json
 import os
+import subprocess
 from pathlib import Path
 from time import perf_counter
 
@@ -203,7 +204,8 @@ def qualify_steady(*, fields, dx, controls, profiles, mixed, repeats, source_con
                 calibration.append(capture_info(info=info, elapsed=perf_counter() - started))
                 updates.append(dict(wel_seconds=wel_seconds, recharge_seconds=recharge_seconds))
         np.savez_compressed(directory / 'heads.npz', cold=cold_head, calibration=head)
-    result = dict(construction_seconds=construction, cold=rows[0], warm=rows[1:],
+    result = dict(commit=subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+        model_precision=os.environ['DARCY_FLOAT'], construction_seconds=construction, cold=rows[0], warm=rows[1:],
         warm_summary=summary(rows=rows[1:]), calibration=calibration, source_updates=updates,
         controls=asdict(config) if mixed else profiles['steady']['fast'], source_control=source_control)
     (directory / 'result.json').write_text(json.dumps(result, indent=2))
@@ -275,7 +277,8 @@ def qualify_transient(*, fields, dx, controls, profiles, repeats, unconfined, de
                 process_gpu_high_water_bytes=int(wp.get_mempool_used_mem_high()),
                 periods=[capture_info(info=period, elapsed=period.get('seconds', 0.)) for period in periods]))
         np.savez_compressed(directory / 'heads.npz', heads=heads)
-    result = dict(cold=rows[0], warm=rows[1:], warm_summary=summary(rows=rows[1:]),
+    result = dict(commit=subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+        model_precision=os.environ['DARCY_FLOAT'], cold=rows[0], warm=rows[1:], warm_summary=summary(rows=rows[1:]),
         steps=steps, dt_days=dt, unconfined=unconfined)
     (directory / 'result.json').write_text(json.dumps(result, indent=2))
     print(fields['active'].shape, 'device Picard' if unconfined else 'fast transient', result['warm_summary'], flush=True)
