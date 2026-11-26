@@ -221,7 +221,7 @@ def compute_3d_flow_budget(
     # Prescribed-cell divergence includes all incident faces. Split signs
     # after summing the faces of each cell, as a CHD package budget does.
     fixed = act & bcm
-    chd_rate = div[fixed] - storage_change[fixed] - ghb_q[fixed] - src[fixed]
+    chd_rate = div[fixed] - storage_change[fixed] - ghb_q[fixed]
     chd_in = stable_sum(values=np.maximum(chd_rate, 0.0))
     chd_out = stable_sum(values=np.minimum(chd_rate, 0.0))
     ghb_in = stable_sum(values=np.maximum(-ghb_q[free], 0.0))
@@ -253,9 +253,9 @@ def compute_3d_flow_budget(
         "cell_residual_max": cell_residual_max,
         "cell_residual_rms": cell_residual_rms,
         "source_total": source_total,
-        "source_all_total": stable_sum(values=src[act]),
-        "source_all_gross": float(np.sum(np.abs(src[act]))),
-        "total_physical_throughput": float(np.sum(np.abs(src[act]))) + chd_in - chd_out + ghb_in - ghb_out + float(np.sum(np.abs(storage_free))),
+        "source_all_total": source_total,
+        "source_all_gross": float(np.sum(np.abs(source_free))),
+        "total_physical_throughput": float(np.sum(np.abs(source_free))) + chd_in - chd_out + ghb_in - ghb_out + float(np.sum(np.abs(storage_free))),
         "boundary_inflow": bc_in,
         "boundary_outflow": bc_out,
         "boundary_net": bc_net,
@@ -486,7 +486,26 @@ def named_boundary_interface_fluxes(
     }
 
 
-def include_gross_source_throughput(*, budget, source, gross_source, active, fixed):
+def prescribed_cell_face_discharge(*, head, faces, cell):
+    """Evaluate a prescribed cell's physical face divergence without dense copies.
+
+    :param head: Accepted Cartesian groundwater head grid.
+    :param faces: Reciprocal Cartesian face arrays in x/y/z plus/minus order.
+    :param cell: Groundwater cell coordinates.
+    :return: Outward volumetric face divergence.
+    """
+    terms = []
+    for axis, pair in enumerate(((faces[4], faces[5]), (faces[2], faces[3]), (faces[0], faces[1]))):
+        for direction, conductance in zip((1, -1), pair, strict=True):
+            neighbour = list(cell)
+            neighbour[axis] += direction
+            if 0 <= neighbour[axis] < head.shape[axis]:
+                terms.append(conductance[cell] * (head[cell] - head[tuple(neighbour)]))
+    return stable_sum(values=terms)
+
+
+def include_gross_source_throughput(*, budget, source, gross_source, active, fixed,
+                                    wel_entries=None, head=None, faces=None):
     """Report independent package throughput without loosening prior acceptance.
 
     :param budget: Already evaluated Cartesian physical budget, updated in place.
@@ -494,15 +513,19 @@ def include_gross_source_throughput(*, budget, source, gross_source, active, fix
     :param gross_source: Owned gross field, or None when absolute source suffices.
     :param active: Groundwater activity grid.
     :param fixed: Prescribed-head mask.
+    :param wel_entries: Explicit owned WEL entries, including wells on CHD cells.
+    :param head: Accepted heads when explicit wells lie on CHD cells.
+    :param faces: Physical Cartesian faces when wells lie on CHD cells.
     :return: None. Existing signed residuals and acceptance decisions are retained.
     """
-    if gross_source is None:
+    if gross_source is None and wel_entries is None:
         return
     selected = np.asarray(active) != 0
     free = selected & (np.asarray(fixed) == 0)
-    extra = np.asarray(gross_source, dtype=np.float64) - np.abs(np.asarray(source, dtype=np.float64))
-    free_extra = float(np.sum(extra[free], dtype=np.float64))
-    all_extra = float(np.sum(extra[selected], dtype=np.float64))
+    free_extra = 0.
+    if gross_source is not None:
+        extra = np.asarray(gross_source, dtype=np.float64) - np.abs(np.asarray(source, dtype=np.float64))
+        free_extra = float(np.sum(extra[free], dtype=np.float64))
     previous = budget['throughput']
     residual_l1 = budget['relative_cell_imbalance'] * previous
     budget['acceptance_throughput'] = previous
@@ -510,6 +533,30 @@ def include_gross_source_throughput(*, budget, source, gross_source, active, fix
     budget['throughput'] = previous + free_extra
     budget['relative_cell_imbalance'] = residual_l1 / budget['throughput']
     budget['relative_imbalance'] = abs(budget['domain_imbalance']) / budget['throughput']
-    budget['source_all_gross'] += all_extra
-    budget['total_physical_throughput'] += all_extra
+    budget['source_all_gross'] += free_extra
+    budget['total_physical_throughput'] += free_extra
+    if wel_entries is not None and np.any(np.asarray(fixed)[tuple(wel_entries.cells.T)] != 0):
+        from DARCY_WARP_PACKAGE.physics.wel import sparse_well_cell_rates
+        cells, rates, gross = sparse_well_cell_rates(entries=wel_entries, shape=np.asarray(source).shape)
+        on_fixed = (selected & (np.asarray(fixed) != 0)).ravel()[cells]
+        inflow_change, outflow_change = [], []
+        for index in np.flatnonzero(on_fixed):
+            cell = tuple(int(value) for value in np.unravel_index(cells[index], head.shape))
+            original = prescribed_cell_face_discharge(head=head, faces=faces, cell=cell)
+            accepted = original - rates[index]
+            inflow_change.append(max(accepted, 0.) - max(original, 0.))
+            outflow_change.append(max(-accepted, 0.) - max(-original, 0.))
+            if 'chd_cell_rate' in budget:
+                budget['chd_cell_rate'][cell] = accepted
+        delta_in = stable_sum(values=inflow_change)
+        delta_out = stable_sum(values=outflow_change)
+        budget['chd_inflow'] += delta_in
+        budget['chd_outflow'] += delta_out
+        budget['boundary_inflow'] += delta_in
+        budget['boundary_outflow'] -= delta_out
+        budget['boundary_net'] = stable_sum(values=[budget['boundary_inflow'], budget['boundary_outflow']])
+        budget['source_all_total'] += stable_sum(values=rates[on_fixed])
+        fixed_gross = stable_sum(values=gross[on_fixed])
+        budget['source_all_gross'] += fixed_gross
+        budget['total_physical_throughput'] += fixed_gross + delta_in + delta_out
     budget['physical_metrics_valid'] = bool(budget['physical_metrics_valid'] and np.isfinite(budget['total_physical_throughput']) and np.isfinite(budget['throughput']))

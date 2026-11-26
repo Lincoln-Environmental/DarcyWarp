@@ -86,6 +86,33 @@ def test_gross_reporting_does_not_relax_cartesian_conservation():
     assert not is_3d_budget_conserved(budget=budget, absolute_tolerance=1.e-12, relative_tolerance=1.e-3)
 
 
+@pytest.mark.parametrize('device', ['cpu', 'cuda:0'])
+@pytest.mark.parametrize('implementation', ['classic', 'fast'])
+def test_cartesian_chd_preserves_raw_source_convention_with_explicit_well(device, implementation):
+    """Raw RHS on CHD remains excluded; only the explicit WEL is compensated."""
+    shape = (2, 3, 4)
+    cell = (1, 2, 3)
+    fixed = np.zeros(shape, dtype=np.int32)
+    fixed[cell] = 1
+    raw = np.zeros(shape)
+    raw[cell] = 50.
+    with WarpDarcySolver3D(nx=4, ny=3, nz=2, dx=1., dy=1., dz=1., device=device,
+            solver='kcycle', implementation=implementation) as model:
+        model.build_from_K_fields(kx_field=np.ones(shape), ky_field=np.ones(shape), kz_field=np.ones(shape),
+            active=np.ones(shape), bc_mask=fixed, bc_values=np.full(shape, 3.),
+            initial_head=np.full(shape, 3.), rhs=raw)
+        head, info = model.solve()
+        assert info['converged']
+        assert info['budget']['boundary_net'] == 0.
+        model.update_wel(entries=[(cell, -100.)])
+        head, info = model.solve()
+        assert info['converged']
+        assert info['budget']['chd_inflow'] == 100.
+        assert info['budget']['source_all_total'] == -100.
+        assert info['budget']['source_all_gross'] == 100.
+        np.testing.assert_array_equal(head, np.full(shape, 3.))
+
+
 def test_two_dimensional_isolated_components_keep_independent_gross_sources():
     """Physical storage restrains two disconnected cells with balanced entry pairs."""
     shape = (1, 2)

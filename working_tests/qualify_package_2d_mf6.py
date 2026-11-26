@@ -36,15 +36,18 @@ if __name__ == "__main__":
     from DARCY_WARP_PACKAGE.project_base import require_mf6
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--grid', choices=('100k', '1M', 'all'), default='all')
-    parser.add_argument('--mode', choices=('steady', 'transient', 'picard', 'all'), default='all')
+    parser.add_argument('--mode', choices=('steady', 'mixed', 'transient', 'picard', 'all'), default='all')
     parser.add_argument('--repeats', type=int, default=3)
+    parser.add_argument('--profile', choices=('production', 'strict'), default='production')
     arguments = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
-    output = Path('/tmp/darcywarp-package-2d-mf6')
+    output = Path('/tmp/darcywarp-package-2d-mf6-exact')
+    if arguments.profile == 'strict':
+        output = output / 'strict'
     controls = json.loads((root / 'working_tests/wel_regional_qualification_controls.json').read_text())
     controls.update(confined_thickness=10., unconfined_top=100., unconfined_sy=.15)
     grids = {'100k': (320, 320), '1M': (1000, 1000)}
-    modes = ('steady', 'transient', 'picard')
+    modes = ('steady', 'mixed', 'transient', 'picard')
     profiles = read_profiles(root=root)
     executable = require_mf6()
     for label, shape in grids.items():
@@ -58,7 +61,10 @@ if __name__ == "__main__":
             if convertible:
                 fields['R_field'] = np.full(shape, np.mean(fields['R_field']))
             native = native_fields(fields=fields, dx=dx, controls=controls, convertible=convertible)
-            if mode == 'steady':
+            if mode == 'mixed':
+                for name in ('kx_field', 'ky_field', 'kz_field'):
+                    native[name] = fields['T_field'].astype(np.float32).astype(np.float64)[None] / controls['confined_thickness']
+            if mode in ('steady', 'mixed'):
                 well_factors = [1., *controls['calibration_wel_factors']]
                 recharge_factors = [1., *controls['calibration_recharge_factors']]
                 durations = [1.] * len(well_factors)
@@ -66,9 +72,14 @@ if __name__ == "__main__":
                 well_factors = np.resize(controls['history_wel_pattern'], controls['history_steps'])
                 recharge_factors = np.resize(controls['history_recharge_pattern'], controls['history_steps'])
                 durations = [controls['history_dt_days']] * controls['history_steps']
-            ims = profiles['mf6']['steady_confined' if mode == 'steady' else 'transient']
+            ims = profiles['mf6']['steady_confined' if mode in ('steady', 'mixed') else 'transient']
+            if arguments.profile == 'strict':
+                # Same independently pinned accuracy profile as the 3D twin.
+                ims = dict(complexity='COMPLEX', linear_acceleration='BICGSTAB',
+                    outer_maximum=200, outer_dvclose=1.e-11, inner_maximum=200,
+                    inner_dvclose=1.e-12, rcloserecord=[1.e-12, 'strict'])
             run_native(fields=native, durations=durations, well_factors=well_factors, recharge_factors=recharge_factors,
-                stage_offsets=[0.] * len(durations), transient=mode != 'steady',
+                stage_offsets=[0.] * len(durations), transient=mode not in ('steady', 'mixed'),
                 ss=controls['specific_storage_per_m'], sy=controls['unconfined_sy'] if convertible else 0.,
                 cell_type=int(convertible), ims_controls=ims, executable=executable, repeats=arguments.repeats,
-                directory=output / label / mode)
+                directory=output / label / mode, well_precision='float32' if mode == 'mixed' else 'float64')

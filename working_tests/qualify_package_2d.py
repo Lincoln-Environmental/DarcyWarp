@@ -1,5 +1,6 @@
 """Measure maintained 2D WEL paths using the saved production solver controls."""
 import argparse
+from contextlib import contextmanager
 from dataclasses import asdict
 import json
 import os
@@ -8,6 +9,61 @@ from time import perf_counter
 
 import numpy as np
 import warp as wp
+
+
+@contextmanager
+def count_graph_execution():
+    """Count successful graph launches in this isolated benchmark process.
+
+    :return: First launches and actual repeated launches of the same graphs.
+    """
+    original_launch = wp.capture_launch
+    executed_graphs = {}
+    counts = dict(first_launches=0, replays=0)
+
+    def launch_counted_graph(*args, **kwargs):
+        result = original_launch(*args, **kwargs)
+        graph = kwargs.get('graph', args[0] if args else None)
+        identity = id(graph)
+        if identity in executed_graphs:
+            counts['replays'] += 1
+        else:
+            executed_graphs[identity] = graph
+            counts['first_launches'] += 1
+        return result
+
+    wp.capture_launch = launch_counted_graph
+    try:
+        yield counts
+    finally:
+        wp.capture_launch = original_launch
+
+
+def solve_picard_history(*, model, fields, controls, initial, recharge_factors, schedules, options, dt):
+    """Verify physical timesteps and actual graph replay in the maintained driver.
+
+    :param model: Built production model.
+    :param fields: Owned physical conductivity, geometry and forcing.
+    :param controls: Physical storage and geometry settings.
+    :param initial: Original physical initial heads.
+    :param recharge_factors: Actual period recharge schedule.
+    :param schedules: Actual period WEL entries.
+    :param options: Existing qualified Picard controls.
+    :param dt: Native-matched physical timestep duration.
+    :return: Accepted heads, period metadata and observed graph executions.
+    """
+    with count_graph_execution() as graph_execution:
+        heads, info = model.solve_transient_2d_unconfined(solver='unconfined_picard_kcycle',
+            initial_head=initial, recharge_rates=np.asarray(recharge_factors) * fields['R_field'].flat[0],
+            wel_rates=schedules, k_field=fields['T_field'] / controls['initial_head'],
+            zbot_field=np.zeros_like(initial), ztop_field=np.full_like(initial, controls['unconfined_top']),
+            sy=controls['unconfined_sy'], ss=controls['specific_storage_per_m'], dt=dt,
+            active=fields['active'], bc_mask=fields['bc_mask'], bc_values=fields['bc_values'], solve_controls=options)
+    assert graph_execution['first_launches'] > 0 and graph_execution['replays'] > 0, graph_execution
+    for period in info['period_infos']:
+        assert period['adaptive_dt_retry_count'] == 0, period
+        assert period['adaptive_dt_substep_dts'] == [dt], period
+    return heads, info, graph_execution
 
 
 def fields_for_grid(*, shape, controls):
@@ -58,6 +114,8 @@ def capture_info(*, info, elapsed):
         'n_cycles_used', 'outer_iterations', 'cuda_graph_captures', 'cuda_graph_replays', 'cuda_graph_built_this_call', 'cuda_graph_reused',
         'graph_count', 'graph_fallback_count', 'device_side_picard_fast_path_active',
         'transient_face_graphs', 'transient_face_kcycle_graph_count', 'transient_face_refresh_graph_count',
+        'adaptive_dt_retry_count', 'adaptive_dt_practical_fallback_count',
+        'adaptive_dt_substep_count', 'adaptive_dt_substep_dts',
         'seconds', 'residual_norm', 'head_residual_rms', 'physical_period_balance',
         'source_budgets', 'source_volume_budgets')
     return dict(public_seconds=elapsed, **{key: info.get(key) for key in keys},
@@ -180,17 +238,15 @@ def qualify_transient(*, fields, dx, controls, profiles, repeats, unconfined, de
         for repeat in range(repeats + 1):
             wp.synchronize_device(device=device)
             started = perf_counter()
+            graph_execution = None
             if unconfined:
                 options = default_solve_controls()
                 options.update(controls['runtime_2d'])
                 # The maintained Picard driver accepts uniform scalar recharge schedules.
                 assert np.all(fields['R_field'] == fields['R_field'].flat[0])
-                heads, info = model.solve_transient_2d_unconfined(solver='unconfined_picard_kcycle',
-                    initial_head=initial, recharge_rates=np.asarray(recharge_factors) * fields['R_field'].flat[0],
-                    wel_rates=schedules, k_field=fields['T_field'] / controls['initial_head'],
-                    zbot_field=np.zeros_like(initial), ztop_field=np.full_like(initial, controls['unconfined_top']),
-                    sy=controls['unconfined_sy'], ss=controls['specific_storage_per_m'], dt=dt,
-                    active=fields['active'], bc_mask=fields['bc_mask'], bc_values=fields['bc_values'], solve_controls=options)
+                heads, info, graph_execution = solve_picard_history(model=model, fields=fields,
+                    controls=controls, initial=initial, recharge_factors=recharge_factors,
+                    schedules=schedules, options=options, dt=dt)
                 periods = info['period_infos']
                 assert len(periods) == steps and all(period['converged'] for period in periods), info
                 assert all(period['device_side_picard_fast_path_active'] for period in periods)
@@ -212,6 +268,7 @@ def qualify_transient(*, fields, dx, controls, profiles, repeats, unconfined, de
                 heads = np.asarray(history)
             wp.synchronize_device(device=device)
             rows.append(dict(public_seconds=perf_counter() - started,
+                observed_graph_execution=graph_execution,
                 gpu_used_bytes=int(wp.get_mempool_used_mem_current()),
                 process_gpu_high_water_bytes=int(wp.get_mempool_used_mem_high()),
                 periods=[capture_info(info=period, elapsed=period.get('seconds', 0.)) for period in periods]))

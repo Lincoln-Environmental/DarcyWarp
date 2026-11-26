@@ -34,7 +34,7 @@ def native_boundary_rows(*, fields, package, stage_offset):
 
 
 def run_native(*, fields, durations, well_factors, recharge_factors, stage_offsets, transient,
-               ss, sy, cell_type, ims_controls, executable, repeats, directory):
+               ss, sy, cell_type, ims_controls, executable, repeats, directory, well_precision='float64'):
     """Build and repeatedly run the exact pinned native reference.
 
     :param fields: Identical grid, material, sources and entry definitions.
@@ -50,6 +50,7 @@ def run_native(*, fields, durations, well_factors, recharge_factors, stage_offse
     :param executable: Pinned MF6 6.6.2 executable.
     :param repeats: Number of native engine measurements from identical inputs.
     :param directory: Native files and compact evidence destination.
+    :param well_precision: Match actual source precision in the numerical model.
     :return: Compact native timing and physical-budget evidence.
     :raises RuntimeError: If MF6 fails or does not terminate normally.
     """
@@ -60,12 +61,16 @@ def run_native(*, fields, durations, well_factors, recharge_factors, stage_offse
     binary, version, checksum, build = pinned_native_executable(executable=executable)
     directory.mkdir(parents=True, exist_ok=True)
     started = perf_counter()
+    # Match the existing pinned adapter's exact float64 text round trip.
+    # FloPy defaults to eight digits, which changes physical inputs.
     shape = fields['active'].shape
     nz, ny, nx = shape
     name = 'pkgqual'
     simulation = flopy.mf6.MFSimulation(sim_name=name, sim_ws=str(directory), exe_name=str(binary))
     flopy.mf6.ModflowTdis(simulation, nper=len(durations), time_units='DAYS',
         perioddata=[(float(duration), 1, 1.) for duration in durations])
+    simulation.simulation_data.float_precision = 17
+    simulation.simulation_data.float_characters = 25
     gwf = flopy.mf6.ModflowGwf(simulation, modelname=name, save_flows=True)
     flopy.mf6.ModflowIms(simulation, **ims_controls)
     flopy.mf6.ModflowGwfdis(gwf, nlay=nz, nrow=ny, ncol=nx, delr=fields['dx'], delc=fields['dy'],
@@ -83,7 +88,8 @@ def run_native(*, fields, durations, well_factors, recharge_factors, stage_offse
         for cell, value in zip(cells, rate)] for period in range(len(durations))}
     flopy.mf6.ModflowGwfrch(gwf, maxbound=len(receivers), stress_period_data=recharge, save_flows=True)
     wells = validate_well_entries(entries=fields['wel_entries'], shape=shape, active=fields['active'])
-    well_rows = {period: [(tuple(int(value) for value in cell), float(value * well_factors[period]))
+    rate_type = np.dtype(well_precision).type
+    well_rows = {period: [(tuple(int(value) for value in cell), float(rate_type(value * well_factors[period])))
         for cell, value in zip(wells.cells, wells.rates)] for period in range(len(durations))}
     flopy.mf6.ModflowGwfwel(gwf, maxbound=len(wells), stress_period_data=well_rows, save_flows=True)
     packages = ['WEL', 'RCH', 'CHD']
@@ -110,23 +116,58 @@ def run_native(*, fields, durations, well_factors, recharge_factors, stage_offse
         saverecord=[('HEAD', 'ALL'), ('BUDGET', 'ALL')])
     simulation.write_simulation(silent=True)
     construction = perf_counter() - started
-    engine = []
+    started = perf_counter()
+    input_suffixes = {'.nam', '.tdis', '.ims', '.dis', '.ic', '.npf', '.sto', '.rch', '.wel', '.drn', '.riv', '.ghb', '.chd', '.oc'}
+    input_hashes = {path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in directory.iterdir() if path.suffix in input_suffixes}
+    input_audit_seconds = perf_counter() - started
+    manifest = dict(version=version, sha256=checksum, build=build, shape=list(shape), transient=transient,
+        well_precision=well_precision, ims_controls=ims_controls, construction_seconds=construction,
+        input_precision=17, input_float_characters=25, input_sha256=input_hashes,
+        input_audit_seconds=input_audit_seconds, durations=[float(value) for value in durations],
+        packages=packages, engine_seconds=[], engine_logs=[], requested_repeats=repeats)
+    manifest_path = directory / 'run_manifest.json'
+    manifest_path.write_text(json.dumps(manifest, indent=2))
     for repeat in range(repeats):
         started = perf_counter()
         success, lines = simulation.run_simulation(silent=True, report=True)
         elapsed = perf_counter() - started
-        (directory / f'engine_{repeat}.txt').write_text('\n'.join(lines))
+        log_name = f'engine_{repeat}.txt'
+        (directory / log_name).write_text('\n'.join(lines))
         if not success or not any('Normal termination' in line for line in lines):
             raise RuntimeError(f'MF6 failed at repeat {repeat}; see engine log')
-        engine.append(elapsed)
+        manifest['engine_seconds'].append(elapsed)
+        manifest['engine_logs'].append(log_name)
+        manifest_path.write_text(json.dumps(manifest, indent=2))
+    return extract_completed_native(directory=directory, manifest=manifest)
+
+
+def extract_completed_native(*, directory, manifest):
+    """Extract only the saved native equation whose inputs this manifest owns.
+
+    :param directory: Completed native workspace.
+    :param manifest: Input hashes, accepted engine runs and physical time grid.
+    :return: Native heads, per-entry budgets and accepted volume evidence.
+    :raises AssertionError: If saved equation inputs or accepted time grids differ.
+    """
+    import flopy
+    for name, expected in manifest['input_sha256'].items():
+        assert hashlib.sha256((directory / name).read_bytes()).hexdigest() == expected, name
+    for name in manifest['engine_logs']:
+        assert 'Normal termination' in (directory / name).read_text(), name
+    durations = manifest['durations']
+    packages = manifest['packages']
+    transient = manifest['transient']
+    engine = manifest['engine_seconds']
     started = perf_counter()
-    reader = flopy.utils.HeadFile(str(directory / f'{name}.hds'), precision='double')
+    reader = flopy.utils.HeadFile(str(directory / 'pkgqual.hds'), precision='double')
     heads = reader.get_alldata()
     times = reader.get_times()
     reader.close()
     np.testing.assert_allclose(times, np.cumsum(durations), rtol=0., atol=1.e-12)
-    budget = flopy.utils.CellBudgetFile(str(directory / f'{name}.cbc'), precision='double')
+    budget = flopy.utils.CellBudgetFile(str(directory / 'pkgqual.cbc'), precision='double')
     arrays = dict(heads=heads, times=np.asarray(times))
+    record_names = {name.decode().strip() for name in budget.get_unique_record_names()}
     periods = []
     for period, duration in enumerate(durations):
         rates = {}
@@ -138,6 +179,8 @@ def run_native(*, fields, durations, well_factors, recharge_factors, stage_offse
                 outflow=float(np.sum(np.maximum(-values, 0.))), net=float(np.sum(values)))
         if transient:
             for storage_name in ('STO-SS', 'STO-SY'):
+                if storage_name not in record_names:
+                    continue
                 records = budget.get_data(text=storage_name, kstpkper=(0, period))
                 if not records:
                     continue
@@ -149,14 +192,14 @@ def run_native(*, fields, durations, well_factors, recharge_factors, stage_offse
             volumes={package: {key: value * duration for key, value in rates[package].items()} for package in rates}))
     budget.close()
     np.savez_compressed(directory / 'reference_outputs.npz', **arrays)
-    result = dict(version=version, sha256=checksum, build=build, shape=list(shape), transient=transient,
-        ims_controls=ims_controls, engine_seconds=engine, construction_seconds=construction,
-        engine_summary=dict(median=float(np.median(engine)), minimum=min(engine), maximum=max(engine)),
-        extraction_seconds=perf_counter() - started, periods=periods,
+    result = dict(manifest, periods=periods,
+        engine_summary=(dict(median=float(np.median(engine)), minimum=min(engine), maximum=max(engine)) if engine else None),
+        extraction_seconds=perf_counter() - started,
         output_sha256=hashlib.sha256((directory / 'reference_outputs.npz').read_bytes()).hexdigest())
     (directory / 'reference.json').write_text(json.dumps(result, indent=2))
-    print(shape, 'transient' if transient else 'steady updates', result['engine_summary'], flush=True)
+    print(manifest['shape'], 'transient' if transient else 'steady updates', result['engine_summary'], flush=True)
     return result
+
 
 
 if __name__ == "__main__":
@@ -166,10 +209,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--grid', choices=('100k', '1M', 'all'), default='all')
     parser.add_argument('--mode', choices=('steady', 'history', 'all'), default='all')
-    parser.add_argument('--boundary-case', choices=('packages', 'gaining_losing'), default='packages')
+    parser.add_argument('--boundary-case', choices=('packages', 'gaining_losing', 'wel_only'), default='packages')
+    parser.add_argument('--profile', choices=('production', 'strict'), default='production')
     parser.add_argument('--strategy', choices=('original', 'ilut8', 'cg_ilu0'), default='original')
     parser.add_argument('--repeats', type=int, default=3)
-    parser.add_argument('--output', type=Path, default=Path('/tmp/darcywarp-package-mf6-qualification'))
+    parser.add_argument('--output', type=Path, default=Path('/tmp/darcywarp-package-mf6-exact'))
     arguments = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     controls = json.loads((root / 'working_tests/wel_regional_qualification_controls.json').read_text())
@@ -177,17 +221,28 @@ if __name__ == "__main__":
     ims_controls = dict(complexity='COMPLEX', linear_acceleration='BICGSTAB',
         outer_maximum=200, outer_dvclose=1.e-11, inner_maximum=200, inner_dvclose=1.e-12,
         rcloserecord=[1.e-12, 'strict'])
+    if arguments.profile == 'production':
+        from sanity_3d_controls import read_profiles
+        qualified_native = read_profiles(root=root)['mf6']
+        steady_ims = dict(qualified_native['steady_confined'])
+        history_ims = dict(qualified_native['transient'])
+    else:
+        steady_ims = dict(ims_controls)
+        history_ims = dict(ims_controls)
+    arguments.output = arguments.output / arguments.profile
     if arguments.strategy == 'ilut8':
-        # Archived ugly-T native diagnostic; retain all original tolerances.
-        ims_controls.update(under_relaxation='NONE', backtracking_number=0,
+        overrides = dict(under_relaxation='NONE', backtracking_number=0,
             preconditioner_levels=8, preconditioner_drop_tolerance=1.e-4,
             number_orthogonalizations=8, relaxation_factor=0.)
+        steady_ims.update(overrides)
+        history_ims.update(overrides)
         arguments.output = arguments.output / 'ilut8'
     if arguments.strategy == 'cg_ilu0':
-        # Archived confined CG/ILU(0) strategy, retaining original final gates.
-        ims_controls.update(complexity='SIMPLE', under_relaxation='NONE', backtracking_number=0,
+        overrides = dict(complexity='SIMPLE', under_relaxation='NONE', backtracking_number=0,
             linear_acceleration='CG', preconditioner_levels=0, preconditioner_drop_tolerance=0.,
             number_orthogonalizations=0, relaxation_factor=0.)
+        steady_ims.update(overrides)
+        history_ims.update(overrides)
         arguments.output = arguments.output / 'cg_ilu0'
     controls = boundary_controls(controls=controls, variant=arguments.boundary_case)
     if arguments.boundary_case != 'packages':
@@ -197,7 +252,7 @@ if __name__ == "__main__":
         if arguments.grid not in ('all', label):
             continue
         fields = regional_fields(shape=shape, abstraction_fraction=controls['abstraction_fraction'],
-            packages=True, seed=controls['seed'], regional_controls=controls)
+            packages=arguments.boundary_case != 'wel_only', seed=controls['seed'], regional_controls=controls)
         if arguments.mode in ('all', 'steady'):
             well_factors = [1., *controls['calibration_wel_factors']]
             recharge_factors = [1., *controls['calibration_recharge_factors']]
@@ -206,7 +261,7 @@ if __name__ == "__main__":
             run_native(fields=fields, durations=durations, well_factors=well_factors,
                 recharge_factors=recharge_factors, stage_offsets=stage_offsets, transient=False,
                 ss=controls['specific_storage_per_m'], sy=controls['specific_yield'], cell_type=0,
-                ims_controls=ims_controls, executable=executable, repeats=arguments.repeats,
+                ims_controls=steady_ims, executable=executable, repeats=arguments.repeats,
                 directory=arguments.output / label / 'steady')
         if arguments.mode in ('all', 'history'):
             steps = controls['history_steps']
@@ -217,5 +272,5 @@ if __name__ == "__main__":
             run_native(fields=fields, durations=durations, well_factors=well_factors,
                 recharge_factors=recharge_factors, stage_offsets=stage_offsets, transient=True,
                 ss=controls['specific_storage_per_m'], sy=controls['specific_yield'], cell_type=0,
-                ims_controls=ims_controls, executable=executable, repeats=arguments.repeats,
+                ims_controls=history_ims, executable=executable, repeats=arguments.repeats,
                 directory=arguments.output / label / 'history')
