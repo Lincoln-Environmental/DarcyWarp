@@ -371,3 +371,21 @@ def test_npf_newton_defaults_to_actual_kcycle_and_retains_diagonal(device):
                 assert info['npf_preconditioner'] == 'diagonal'
                 assert info['krylov_method'] == 'GMRES'
                 assert info['preconditioner_cycles'] == 0
+
+
+@pytest.mark.parametrize('device', ['cpu', 'cuda:0'])
+def test_resident_entry_exchange_is_materialized_from_owned_state(device):
+    """Resident entry arrays stay private until explicitly requested, after later updates."""
+    from test_3d_drn_riv_entries import _one_cell_model
+    shape = (1, 1, 1)
+    with _one_cell_model(device=device, drn_entries=[((0, 0, 0), 1., 2.)]) as model:
+        heads, info = model.solve_transient_npf(dt=[1., 1.], head_prev=np.zeros(shape),
+            ss=.1, sy=0., source_factors=[1., 2.])
+        assert info['converged']
+        period = info['periods'][1]
+        assert period['package_outputs_resident']
+        assert 'drn_entry_rates' not in period
+        rates = model.accepted_boundary_entry_rates(package='DRN', head=heads[1], info=period)
+        np.testing.assert_allclose(rates, [max(heads[1].item() - 2., 0.)], atol=1.e-12)
+        model.update_drn_entries(entries=None)
+        np.testing.assert_array_equal(model.accepted_boundary_entry_rates(package='DRN', head=heads[1], info=period), rates)

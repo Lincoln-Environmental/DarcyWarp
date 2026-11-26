@@ -69,13 +69,14 @@ def own_accepted_state(*, session, workspace, dt, resident_outputs):
     return dict(identifier=identifier, dt=dt)
 
 
-def verified_package_rates(*, session, head, info, package):
+def verified_package_rates(*, session, head, info, package, entries=False):
     """Verify supplied metadata against owned historical outputs on extraction.
 
     :param session: The session that accepted the state.
     :param head: Supplied accepted groundwater head.
     :param info: Accepted public solve metadata.
     :param package: Drain or river package name in lowercase.
+    :param entries: Return per-entry rates instead of accumulated per-cell rates.
     :return: Owned copy of the accepted per-cell discharge array.
     :raises ValueError: If any supplied head, discharge, entry rate or duration differs.
     :raises RuntimeError: If the state is rejected, absent or belongs to another session.
@@ -113,6 +114,8 @@ def verified_package_rates(*, session, head, info, package):
             materialized[name] = owned_cells
         elif not state.resident_outputs:
             raise ValueError('Accepted cell output is missing')
+    if entries:
+        return state.fields[f'{package}_entry_rate'].numpy().copy()
     rate = materialized.get(package)
     if rate is None:
         rate = state.fields[f'{package}_rate'].numpy().reshape(state.shape)

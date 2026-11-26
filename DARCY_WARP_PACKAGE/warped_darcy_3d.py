@@ -501,6 +501,24 @@ class WarpDarcySolver3D:
             raise RuntimeError("The model has not been built")
         return verified_package_rates(session=self._session, head=head, info=info, package=package)
 
+    def accepted_boundary_entry_rates(self, *, package, head, info) -> np.ndarray:
+        """Materialize independently owned accepted DRN/RIV entry discharges.
+
+        :param package: DRN or RIV package name, case-insensitive.
+        :param head: Groundwater heads belonging to the accepted period.
+        :param info: Metadata belonging to that same accepted equation.
+        :return: Owned per-entry rates, positive out of the groundwater model.
+        :raises ValueError: If the package or supplied accepted metadata is invalid.
+        :raises RuntimeError: If the accepted state is absent or unowned.
+        """
+        name = str(package).lower()
+        if name not in ('drn', 'riv'):
+            raise ValueError('Entry exchange is available for DRN or RIV')
+        if self._session is None:
+            raise RuntimeError('The model has not been built')
+        from DARCY_WARP_PACKAGE.solvers.accepted_npf_state import verified_package_rates
+        return verified_package_rates(session=self._session, head=head, info=info, package=name, entries=True)
+
     def accepted_drn_discharge(self, *, head, info) -> np.ndarray:
         """Return nonnegative per-cell DRN outflow from a verified accepted solve.
 
