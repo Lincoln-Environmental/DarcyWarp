@@ -19,7 +19,7 @@ jobs:
       GH_REPO: Lincoln-Environmental/DarcyWarp
       CURRENT_RELEASE: 2b6c452f982e12c76128109f167da88ffe8c6133
     steps:
-      - name: Validate and publish the current release snapshot
+      - name: Publish the existing historical v0.3.0 tag
         shell: bash
         run: |
           set -euo pipefail
@@ -40,7 +40,8 @@ jobs:
             local tag="$1" target="$2" latest="$3" existing
             existing="$(gh api "repos/$GH_REPO/git/matching-refs/tags/$tag" --jq ".[].ref")"
             if ! grep -Fxq "refs/tags/$tag" <<< "$existing"; then
-              gh api --method POST "repos/$GH_REPO/git/refs" -f "ref=refs/tags/$tag" -f "sha=$target" --silent
+              echo "Expected existing tag $tag is missing" >&2
+              return 1
             fi
             test "$(gh api "repos/$GH_REPO/commits/$tag" --jq .sha)" = "$target"
             if gh release view "$tag" --repo "$GH_REPO" >/dev/null 2>&1; then
@@ -49,6 +50,6 @@ jobs:
               gh release create "$tag" --repo "$GH_REPO" --verify-tag --title "DarcyWarp $tag" --notes-file "$RUNNER_TEMP/$tag.md" --latest="$latest"
             fi
           }
-          preflight v0.4.0 "$CURRENT_RELEASE"
-          publish v0.4.0 "$CURRENT_RELEASE" true
-          gh release view v0.4.0 --repo "$GH_REPO" --json url,tagName,isDraft,isPrerelease
+          preflight v0.3.0 65cba8df6154bcdfd8eb73c1b20a2623a744d73c
+          publish v0.3.0 65cba8df6154bcdfd8eb73c1b20a2623a744d73c false
+          gh release view v0.3.0 --repo "$GH_REPO" --json url,tagName,isDraft,isPrerelease
