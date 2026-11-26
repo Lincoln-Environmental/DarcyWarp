@@ -1,0 +1,34 @@
+name: Archive DarcyWarp development history
+on:
+  push:
+    branches: [release/publish-v0.4.0]
+    paths:
+      - '.github/workflows/archive-development.yml'
+permissions:
+  contents: write
+jobs:
+  archive:
+    if: github.repository == 'Lincoln-Environmental/DarcyWarp'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: Lincoln-Environmental/DarcyWarp
+      ARCHIVE_TAG: archive/pre-dev-reset-2026-11-27
+    steps:
+      - name: Retain verified archive commit under a non-release tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_parents="$(gh api "repos/$GH_REPO/git/commits/$GITHUB_SHA" --jq ".parents[].sha")"
+          gh api "repos/$GH_REPO/contents/archive/branch-tips.json?ref=$GITHUB_SHA" --jq .content | base64 --decode > "$RUNNER_TEMP/branch-tips.json"
+          jq -r ".branches[].sha" "$RUNNER_TEMP/branch-tips.json" | sort -u > "$RUNNER_TEMP/expected.txt"
+          printf "%s\n" "$expected_parents" | sort -u > "$RUNNER_TEMP/actual.txt"
+          test ! -s <(comm -23 "$RUNNER_TEMP/expected.txt" "$RUNNER_TEMP/actual.txt")
+          existing="$(gh api "repos/$GH_REPO/git/matching-refs/tags/$ARCHIVE_TAG" --jq ".[].ref")"
+          if ! grep -Fxq "refs/tags/$ARCHIVE_TAG" <<< "$existing"; then
+            gh api --method POST "repos/$GH_REPO/git/refs" -f "ref=refs/tags/$ARCHIVE_TAG" -f "sha=$GITHUB_SHA" --silent
+          fi
+          test "$(gh api "repos/$GH_REPO/commits/$ARCHIVE_TAG" --jq .sha)" = "$GITHUB_SHA"
+          test "$(gh api "repos/$GH_REPO/git/ref/heads/main" --jq .object.sha)" = "2b6c452f982e12c76128109f167da88ffe8c6133"
+          printf "Archive %s verified at %s\n" "$ARCHIVE_TAG" "$GITHUB_SHA"

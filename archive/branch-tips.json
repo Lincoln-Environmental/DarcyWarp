@@ -1,0 +1,85 @@
+{
+  "purpose": "Preserve all pre-cleanup branch histories. This commit is an archive anchor, not a source merge. Original branch trees remain accessible by their exact commit IDs.",
+  "date": "2026-11-27",
+  "release_baseline": "2b6c452f982e12c76128109f167da88ffe8c6133",
+  "old_dev": "3fe45a5a70655c2936896448fbb075e9f2c324b7",
+  "branches": [
+    {
+      "name": "dev",
+      "sha": "3fe45a5a70655c2936896448fbb075e9f2c324b7"
+    },
+    {
+      "name": "docs/consolidate-3d-main-20261112",
+      "sha": "0ee8b08a554fcf3783cbed8ff705f3fa52fd6d4e"
+    },
+    {
+      "name": "docs/darcywarp-refresh-20261102",
+      "sha": "57e8b184bb739efd8990a6d0ad204afb57e574bd"
+    },
+    {
+      "name": "docs/npf-sto-third-party-attributions-20261112",
+      "sha": "d5a6f44b226fd4cafdf0f18ca5d0c779df7a38b5"
+    },
+    {
+      "name": "feature/sfr-3d-boundaries",
+      "sha": "5a24b6a6d8366139b62ce78b442a7ec6019620f5"
+    },
+    {
+      "name": "feature/shanz-steady-hot-start",
+      "sha": "db5ddc85b97e0179e4f5ad1caebdf501a9a950e9"
+    },
+    {
+      "name": "feature/shanz-surface-coupling",
+      "sha": "989b0ee1a3ac007fef9747bd69fd56d9cf942576"
+    },
+    {
+      "name": "fix/main-audit-followup",
+      "sha": "a162380d62767dd7f20baa6c1cd8ae7fba45291f"
+    },
+    {
+      "name": "fix/nov25-acceptance-and-state",
+      "sha": "0a4a574dc00a247f0558fa8e9730404f36b6bd20"
+    },
+    {
+      "name": "fix/nov25-audit-review",
+      "sha": "3e746360f70e225eaeb408d12c13b1004ce7f393"
+    },
+    {
+      "name": "fix/storage-diag-dtype-pollution",
+      "sha": "da2aaa781941f040ffd399cb531566af5b2bff7e"
+    },
+    {
+      "name": "fix/terrain-contact-law-runtime",
+      "sha": "48dd46df6626176526473864e49e3e4ddf67c6a5"
+    },
+    {
+      "name": "fix/3d-audit-20261102",
+      "sha": "13227aa742927c0b304d298f5b5dcbc7816cbddf"
+    },
+    {
+      "name": "fix/3d-release-preparation",
+      "sha": "65aed23d21ca24914a2115f4aca95fba67e18de9"
+    },
+    {
+      "name": "hotfix/transient-accepted-state-ownership",
+      "sha": "1bf20601dd80e52cd3e1090ef6a92d6fca744ecb"
+    },
+    {
+      "name": "integrate/3d-cartesian-npf-20261111",
+      "sha": "56bfada9666d2ac296420245f894c2300c6d5f0b"
+    },
+    {
+      "name": "main",
+      "sha": "2b6c452f982e12c76128109f167da88ffe8c6133"
+    },
+    {
+      "name": "refactor/readability-and-sphinx",
+      "sha": "e0acf84b6683d9818f90e6c9023c63adb2d2a5f1"
+    },
+    {
+      "name": "release/publish-v0.4.0",
+      "sha": "b02e806ea4233f448d428d83a00672b06cbfed8d"
+    }
+  ],
+  "archive_tag": "archive/pre-dev-reset-2026-11-27"
+}
