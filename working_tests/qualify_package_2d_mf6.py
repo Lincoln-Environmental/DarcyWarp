@@ -39,7 +39,8 @@ if __name__ == "__main__":
     parser.add_argument('--mode', choices=('steady', 'mixed', 'transient', 'picard', 'all'), default='all')
     parser.add_argument('--repeats', type=int, default=3)
     parser.add_argument('--profile', choices=('production', 'strict'), default='production')
-    parser.add_argument('--newton', action='store_true', help='Write MF6 NEWTON UNDER_RELAXATION explicitly.')
+    parser.add_argument('--newton', action=argparse.BooleanOptionalAction, default=True,
+        help='Write MF6 NEWTON UNDER_RELAXATION explicitly (enabled by default).')
     arguments = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     output = Path('/tmp/darcywarp-package-2d-mf6-exact')
@@ -77,8 +78,8 @@ if __name__ == "__main__":
                 well_factors = np.resize(controls['history_wel_pattern'], controls['history_steps'])
                 recharge_factors = np.resize(controls['history_recharge_pattern'], controls['history_steps'])
                 durations = [controls['history_dt_days']] * controls['history_steps']
-            ims = dict(profiles['mf6']['steady_confined' if mode in ('steady', 'mixed') else 'transient'])
-            if arguments.newton and mode in ('steady', 'mixed'):
+            ims = dict(profiles['mf6']['steady_unconfined' if mode in ('steady', 'mixed') else 'transient'])
+            if mode in ('steady', 'mixed'):
                 # Reuse the maintained nonlinear MF6 profile, including its
                 # outer budget and head criteria, rather than the ten-outer
                 # SIMPLE/CG profile used for confined linear references.
@@ -90,6 +91,7 @@ if __name__ == "__main__":
                     inner_dvclose=1.e-12, rcloserecord=[1.e-12, 'strict'])
             if arguments.newton:
                 ims['linear_acceleration'] = 'BICGSTAB'
+            ims['complexity'] = 'COMPLEX'
             run_native(fields=native, durations=durations, well_factors=well_factors, recharge_factors=recharge_factors,
                 stage_offsets=[0.] * len(durations), transient=mode not in ('steady', 'mixed'),
                 ss=controls['specific_storage_per_m'], sy=controls['unconfined_sy'] if convertible else 0.,

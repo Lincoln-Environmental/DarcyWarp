@@ -61,6 +61,10 @@ def run_native(*, fields, durations, well_factors, recharge_factors, stage_offse
     from DARCY_WARP_PACKAGE.validation.npf662_mf6 import pinned_native_executable
     from DARCY_WARP_PACKAGE.physics.recharge_3d import surface_recharge_cells
     from DARCY_WARP_PACKAGE.physics.wel import validate_well_entries
+    if str(ims_controls.get('complexity', '')).upper() != 'COMPLEX':
+        raise ValueError('Final package references require the qualified COMPLEX MF6 profile')
+    if newton and str(ims_controls.get('linear_acceleration', '')).upper() != 'BICGSTAB':
+        raise ValueError('MF6 Newton references require BICGSTAB')
     binary, version, checksum, build = pinned_native_executable(executable=executable)
     directory.mkdir(parents=True, exist_ok=True)
     started = perf_counter()
@@ -222,6 +226,7 @@ if __name__ == "__main__":
     parser.add_argument('--mode', choices=('steady', 'history', 'all'), default='all')
     parser.add_argument('--boundary-case', choices=('packages', 'gaining_losing', 'wel_only'), default='packages')
     parser.add_argument('--profile', choices=('production', 'strict'), default='production')
+    parser.add_argument('--newton', action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument('--strategy', choices=('original', 'ilut8', 'cg_ilu0'), default='original')
     parser.add_argument('--repeats', type=int, default=3)
     parser.add_argument('--output', type=Path, default=Path('/tmp/darcywarp-package-mf6-exact'))
@@ -235,12 +240,14 @@ if __name__ == "__main__":
     if arguments.profile == 'production':
         from sanity_3d_controls import read_profiles
         qualified_native = read_profiles(root=root)['mf6']
-        steady_ims = dict(qualified_native['steady_confined'])
+        steady_ims = dict(qualified_native['steady_unconfined'])
         history_ims = dict(qualified_native['transient'])
     else:
         steady_ims = dict(ims_controls)
         history_ims = dict(ims_controls)
     arguments.output = arguments.output / arguments.profile
+    if arguments.newton:
+        arguments.output = arguments.output / 'newton'
     if arguments.strategy == 'ilut8':
         overrides = dict(under_relaxation='NONE', backtracking_number=0,
             preconditioner_levels=8, preconditioner_drop_tolerance=1.e-4,
@@ -273,7 +280,7 @@ if __name__ == "__main__":
                 recharge_factors=recharge_factors, stage_offsets=stage_offsets, transient=False,
                 ss=controls['specific_storage_per_m'], sy=controls['specific_yield'], cell_type=0,
                 ims_controls=steady_ims, executable=executable, repeats=arguments.repeats,
-                directory=arguments.output / label / 'steady')
+                directory=arguments.output / label / 'steady', newton=arguments.newton)
         if arguments.mode in ('all', 'history'):
             steps = controls['history_steps']
             well_factors = np.resize(controls['history_wel_pattern'], steps)
@@ -284,4 +291,4 @@ if __name__ == "__main__":
                 recharge_factors=recharge_factors, stage_offsets=stage_offsets, transient=True,
                 ss=controls['specific_storage_per_m'], sy=controls['specific_yield'], cell_type=0,
                 ims_controls=history_ims, executable=executable, repeats=arguments.repeats,
-                directory=arguments.output / label / 'history')
+                directory=arguments.output / label / 'history', newton=arguments.newton)
