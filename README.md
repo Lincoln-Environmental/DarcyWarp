@@ -13,6 +13,14 @@ and repeated solves with changing recharge or aquifer properties. The repository
 includes the solver, small reproducible examples, MODFLOW 6 comparisons and
 ensemble benchmarks.
 
+The current package release adds explicit 2D/3D WEL and native 3D DRN/RIV to
+the fast `mf6_6_6_2_npf` formulation, together with sparse multi-entry
+boundaries, accepted exchange/source budgets and independent transient source
+schedules. It also makes K-cycle-preconditioned FGMRES the nonlinear 3D NPF
+default and consolidates numerical qualification into 100 maintained cases.
+See the [concise release summary](source/package_audit.rst) for the inherited
+bug fixes, evidence scope and remaining limitations.
+
 DarcyWarp provides **two-dimensional horizontal flow on a square-cell grid** and
 **three-dimensional flow on structured Cartesian and layered DIS grids**. The
 3D solver includes a legacy Cartesian formulation and an explicit MF6 6.6.2
@@ -43,6 +51,14 @@ All six large GHB cases pass their recorded sanity gates and outperform matching
 explicit FP64 roundoff profile, convertible NPF takes **1.819 s versus
 142.638 s MF6** for twenty steps on 500 x 500 x 5 cells. The release report
 contains all steady/transient timings, accuracy measurements and controls.
+
+The WEL/DRN/RIV qualification archives also retain million-cell package
+measurements of about **1.36 s** for steady current-coefficient NPF with an
+FP32 K-cycle preconditioner and **2.35 s** for a 20-step resident NPF/STO
+history. Eight strict regional comparisons passed their recorded head and
+individual DRN/RIV exchange gates, with maxima of about **9.55e-8 m** and
+**6.99e-7 m³/day**, respectively. These are historical measurements of their
+recorded source revisions, not timings rerun for this release documentation.
 
 The direct parity audit retains **1e-6 m as the preferred maximum head-error
 target**. The current large-model maximum is **6.467e-5 m**; convertible NPF
@@ -83,17 +99,23 @@ it shows a numerical solution and its analytical reference, not field observatio
 
 | Formulation | Grid | Supported physics and modes | Solvers |
 | --- | --- | --- | --- |
-| 2D thickness-integrated | Square cells, `(ny, nx)` | Confined or unconfined, steady or transient; GHB and 2D Newton DRN/RIV | PCG, K-cycle, Picard, semismooth Newton; experimental FAS |
+| 2D thickness-integrated | Square cells, `(ny, nx)` | Confined or unconfined, steady or transient; GHB, explicit WEL and 2D Newton DRN/RIV | PCG, K-cycle, Picard, semismooth Newton; experimental FAS |
 | 3D legacy Cartesian | Uniform layers, `(nz, ny, nx)` | Confined or unconfined, steady or transient; native GHB | Classic and fast K-cycle; opt-in confined FGMRES |
-| 3D MF6 6.6.2 NPF/STO | Uniform Cartesian or layered DIS, `(nz, ny, nx)` | Confined or convertible, steady or backward-Euler transient Ss/Sy; native GHB | GMRES or K-cycle-preconditioned FGMRES; opt-in device-resident transient history |
+| 3D MF6 6.6.2 NPF/STO | Uniform Cartesian or layered DIS, `(nz, ny, nx)` | Confined or convertible, steady or backward-Euler transient Ss/Sy; native GHB, DRN, RIV and explicit WEL | K-cycle-preconditioned FGMRES by default; direct confined fast path; explicit diagonal reference; device-resident transient history |
 
 All formulations run on CPU or NVIDIA CUDA using Warp and support active-cell
 and fixed-head masks. In 2D and 3D, pass surface recharge as `R_field`
 in length per unit time, positive into the aquifer. For example, in a
 metre/day model, 1 mm/day is `0.001` on any grid. In 3D you can also
-supply well rates using the volumetric per-cell `rhs` argument. Mixed precision is
-explicitly selected and retains FP64 physical acceptance in the qualified
-fast NPF history. Library defaults are unchanged.
+supply explicit sparse `wel_entries` or raw volumetric per-cell `rhs`; these
+sources are independently owned. WEL rates are signed volumes per unit time,
+negative for abstraction and positive for injection. Mixed precision is
+explicitly selected and retains FP64 heads, residuals, outer FGMRES and
+physical acceptance in the qualified fast NPF history.
+
+SFR, UZF and transport are not included. Legacy Cartesian and experimental
+terrain DRN/RIV, automatic dry-cell well-rate reduction and comprehensive
+drying/rewetting parity remain outside the supported scope.
 
 See [2D solver selection](source/capabilities.rst),
 [structured 3D models](docs/3D_CARTESIAN_NPF.md) and
@@ -201,6 +223,7 @@ the grid, hardware, precision, convergence criteria and setup costs identified.
 | --- | --- |
 | [Quickstart](source/quickstart.rst) | Installation and a complete first model. |
 | [Capabilities and solver selection](source/capabilities.rst) | 2D formulations, backend choices, boundaries, precision and limitations. |
+| [WEL, DRN and RIV release](source/package_audit.rst) | Current package APIs, inherited fixes, solver default, qualification and limitations. |
 | [Structured 3D models](docs/3D_CARTESIAN_NPF.md) | Cartesian/layered DIS, NPF/STO and the device-resident history API. |
 | [Current 3D GPU performance](source/npf_gpu_native.rst) | Verified 20-step GPU/MF6 timings, controls, acceptance and timing scope. |
 | [Validation](source/validation.rst) | Analytical checks, numerical comparisons and their scope. |
