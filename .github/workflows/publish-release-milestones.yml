@@ -1,0 +1,60 @@
+name: Publish DarcyWarp release milestones
+on:
+  push:
+    branches: [release/publish-v0.4.0]
+    paths:
+      - '.github/workflows/publish-release-milestones.yml'
+permissions:
+  contents: write
+concurrency:
+  group: darcywarp-release-milestones-v0.4.0
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.repository == 'Lincoln-Environmental/DarcyWarp'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: Lincoln-Environmental/DarcyWarp
+      CURRENT_RELEASE: 2b6c452f982e12c76128109f167da88ffe8c6133
+    steps:
+      - name: Validate and publish the four fixed source snapshots
+        shell: bash
+        run: |
+          set -euo pipefail
+          changelog="$RUNNER_TEMP/darcywarp-changelog.md"
+          gh api "repos/$GH_REPO/contents/CHANGELOG.md?ref=$CURRENT_RELEASE" --jq .content | base64 --decode > "$changelog"
+          preflight() {
+            local tag="$1" target="$2" existing
+            test "$(gh api "repos/$GH_REPO/commits/$target" --jq .sha)" = "$target"
+            test "$(gh api "repos/$GH_REPO/compare/$target...$CURRENT_RELEASE" --jq .behind_by)" = "0"
+            existing="$(gh api "repos/$GH_REPO/git/matching-refs/tags/$tag" --jq ".[].ref")"
+            if grep -Fxq "refs/tags/$tag" <<< "$existing"; then
+              test "$(gh api "repos/$GH_REPO/commits/$tag" --jq .sha)" = "$target"
+            fi
+            awk -v heading="## $tag" '$0 == heading { active=1; next } active && /^## v/ { exit } active { print }' "$changelog" > "$RUNNER_TEMP/$tag.md"
+            test -s "$RUNNER_TEMP/$tag.md"
+          }
+          publish() {
+            local tag="$1" target="$2" latest="$3" existing
+            existing="$(gh api "repos/$GH_REPO/git/matching-refs/tags/$tag" --jq ".[].ref")"
+            if ! grep -Fxq "refs/tags/$tag" <<< "$existing"; then
+              gh api --method POST "repos/$GH_REPO/git/refs" -f "ref=refs/tags/$tag" -f "sha=$target" --silent
+            fi
+            test "$(gh api "repos/$GH_REPO/commits/$tag" --jq .sha)" = "$target"
+            if gh release view "$tag" --repo "$GH_REPO" >/dev/null 2>&1; then
+              test "$(gh release view "$tag" --repo "$GH_REPO" --json isDraft,isPrerelease --jq "(.isDraft or .isPrerelease)")" = "false"
+            else
+              gh release create "$tag" --repo "$GH_REPO" --verify-tag --title "DarcyWarp $tag" --notes-file "$RUNNER_TEMP/$tag.md" --latest="$latest"
+            fi
+          }
+          preflight v0.1.0 ba94383f7b95932e397454ae5960c66132a8a507
+          preflight v0.2.0 ca67fdcf5302fb3cdd5ae00383f87b77db34a8dc
+          preflight v0.3.0 65cba8df6154bcdfd8eb73c1b20a2623a744d73c
+          preflight v0.4.0 "$CURRENT_RELEASE"
+          publish v0.1.0 ba94383f7b95932e397454ae5960c66132a8a507 false
+          publish v0.2.0 ca67fdcf5302fb3cdd5ae00383f87b77db34a8dc false
+          publish v0.3.0 65cba8df6154bcdfd8eb73c1b20a2623a744d73c false
+          publish v0.4.0 "$CURRENT_RELEASE" true
+          gh release view v0.4.0 --repo "$GH_REPO" --json url,tagName,isDraft,isPrerelease
