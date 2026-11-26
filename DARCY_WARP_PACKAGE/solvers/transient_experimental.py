@@ -151,7 +151,8 @@ def _timestep_budget_summary(
         active=np.asarray(active, dtype=np.int32),
         bc_mask=np.asarray(model.bc_mask_host, dtype=np.int32),
         bc_values=np.asarray(model.bc_values_host, dtype=np.float64),
-        dx=float(model.dx),
+        dx=float(model.dx), wel_entries=model.wel_entries,
+        recharge_field=model._recharge_input_host if model.wel_entries is not None else None,
         ghb_factor=model.ghb_factor_host if model.use_ghb else None,
         **model._head_dependent_boundary_fields(),
     )

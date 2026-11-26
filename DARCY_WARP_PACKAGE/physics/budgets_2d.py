@@ -61,11 +61,21 @@ def compute_mass_balance_budget(
     return_cells: bool = False,
     component_budgets: bool = False,
     local_flow_scale: bool = False,
+    wel_entries=None,
+    recharge_field=None,
 ) -> pd.DataFrame | tuple[dict, np.ndarray, np.ndarray, float]:
     """Compute the MF6-like discrete recharge, CHD, and GHB budget.
 
     Optional cell diagnostics include DRN and RIV exchange and their active
-    derivatives. With return_cells, component_budgets also groups external
+    derivatives. ``R_field`` is the assembled numerical depth source.
+    Supply both validated ``wel_entries`` and owned pure ``recharge_field``
+    to retain independent gross source throughput and CHD compensation.
+
+    :param wel_entries: Optional validated volumetric WEL entries.
+    :param recharge_field: Pure areal recharge when WEL is present.
+    :return: Package budget and optional physical cell diagnostics.
+
+    With return_cells, component_budgets also groups external
     exchange by hydraulically connected free cells for transient acceptance.
     """
     T = np.asarray(T_field, dtype=np.float64)
@@ -90,6 +100,28 @@ def compute_mass_balance_budget(
     r_cell[cell_is_interior] = R[cell_is_interior] * dx_f * dx_f
     rcha_in = float(np.sum(np.maximum(r_cell, 0.0)))
     rcha_out = float(np.sum(np.maximum(-r_cell, 0.0)))
+
+    assembled_in, assembled_out = rcha_in, rcha_out
+    wel_in = wel_out = free_wel_in = free_wel_out = 0.
+    source_gross = None
+    well_cells = well_net = None
+    if wel_entries is not None:
+        from DARCY_WARP_PACKAGE.physics.wel import signed_rate_budget, sparse_well_cell_rates
+        if recharge_field is None:
+            raise ValueError('WEL physical accounting requires owned pure recharge')
+        pure_recharge = np.broadcast_to(np.asarray(recharge_field, dtype=np.float64), h.shape)
+        recharge_volume = np.where(cell_is_interior, pure_recharge * (dx_f * dx_f), 0.)
+        rcha_in = float(np.sum(np.maximum(recharge_volume, 0.)))
+        rcha_out = float(np.sum(np.maximum(-recharge_volume, 0.)))
+        source_gross = np.abs(recharge_volume)
+        well_cells, well_net, well_gross = sparse_well_cell_rates(entries=wel_entries, shape=h.shape)
+        free_well_cells = cell_is_interior.ravel()[well_cells]
+        source_gross.ravel()[well_cells[free_well_cells]] += well_gross[free_well_cells]
+        all_wells = signed_rate_budget(rates=wel_entries.rates)
+        selected_wells = cell_is_interior[tuple(wel_entries.cells.T)]
+        free_wells = signed_rate_budget(rates=wel_entries.rates[selected_wells])
+        wel_in, wel_out = all_wells['inflow'], all_wells['outflow']
+        free_wel_in, free_wel_out = free_wells['inflow'], free_wells['outflow']
 
     act_l = act[:, :-1]
     act_r = act[:, 1:]
@@ -132,6 +164,11 @@ def compute_mass_balance_budget(
     face_divergence[:-1, :] += q_t_to_b
     face_divergence[1:, :] -= q_t_to_b
     chd_rate = face_divergence[bc]
+    if well_cells is not None:
+        on_fixed = bc.ravel()[well_cells]
+        if np.any(on_fixed):
+            fixed_positions = np.searchsorted(np.flatnonzero(bc), well_cells[on_fixed])
+            chd_rate[fixed_positions] -= well_net[on_fixed]
     chd_in = float(np.sum(np.maximum(chd_rate, 0.0)))
     chd_out = float(np.sum(np.maximum(-chd_rate, 0.0)))
     chd_net_out_positive = chd_out - chd_in
@@ -209,11 +246,28 @@ def compute_mass_balance_budget(
         riv_in = float(np.sum(np.maximum(-q_riv, 0.0)))
         riv_net_out_positive = riv_out - riv_in
 
-    other_in = rcha_in + ghb_in + drn_in + riv_in
-    other_out = rcha_out + ghb_out + drn_out + riv_out
+    boundary_in = ghb_in + drn_in + riv_in
+    boundary_out = ghb_out + drn_out + riv_out
+    other_in = rcha_in + boundary_in + wel_in
+    other_out = rcha_out + boundary_out + wel_out
+    free_other_in = rcha_in + boundary_in + free_wel_in
+    free_other_out = rcha_out + boundary_out + free_wel_out
+    acceptance_in = assembled_in + boundary_in + free_chd_in
+    acceptance_out = assembled_out + boundary_out + free_chd_out
     total_in = other_in + chd_in
     total_out = other_out + chd_out
     in_minus_out = total_in - total_out
+    free_balance = acceptance_in - acceptance_out
+    if wel_entries is not None:
+        from math import fsum
+        # Gross package sums may cancel beyond representable head increments.
+        # Keep signed conservation independent of that reporting scale.
+        free_balance = fsum((float(np.sum(r_cell)), -float(np.sum(q_gh)),
+            -float(np.sum(q_drn)) if q_drn is not None else 0.,
+            -float(np.sum(q_riv)) if q_riv is not None else 0.,
+            -float(np.sum(q_int_to_bc_l)), -float(np.sum(q_int_to_bc_r)),
+            -float(np.sum(q_int_to_bc_t)), -float(np.sum(q_int_to_bc_b))))
+        in_minus_out = free_balance
     throughflow = 0.5 * (total_in + total_out)
     imbalance_fraction = 0.0 if throughflow == 0.0 else in_minus_out / throughflow
     row = {
@@ -221,12 +275,15 @@ def compute_mass_balance_budget(
         "rcha_in": rcha_in, "rcha_out": rcha_out,
         "chd_in": chd_in, "chd_out": chd_out,
         "free_chd_in": free_chd_in, "free_chd_out": free_chd_out,
-        "free_total_in": other_in + free_chd_in, "free_total_out": other_out + free_chd_out,
+        "free_total_in": free_other_in + free_chd_in, "free_total_out": free_other_out + free_chd_out,
+        "free_acceptance_in": acceptance_in, "free_acceptance_out": acceptance_out,
+        "free_signed_balance": free_balance,
+        "wel_in": wel_in, "wel_out": wel_out,
         "ghb_in": ghb_in, "ghb_out": ghb_out,
         "drn_in": drn_in, "drn_out": drn_out, "riv_in": riv_in, "riv_out": riv_out,
         "total_in": total_in, "total_out": total_out,
         "in_minus_out": in_minus_out,
-        "percent_discrepancy": modflow_percent_discrepancy(inflow=total_in, outflow=total_out),
+        "percent_discrepancy": 0. if throughflow == 0. else 100. * in_minus_out / throughflow,
         "throughflow": throughflow, "imbalance_fraction": imbalance_fraction,
         "chd_net_out_positive": chd_net_out_positive,
         "ghb_net_out_positive": ghb_net_out_positive,
@@ -258,11 +315,16 @@ def compute_mass_balance_budget(
             # Sum each boundary separately. Opposing flows in the same cell
             # still both contribute to its gross external exchange.
             external_net = residual.copy()
-            external_gross = np.abs(r_cell) + np.abs(q_gh)
+            external_gross = (np.abs(r_cell) if source_gross is None else source_gross) + np.abs(q_gh)
+            acceptance_gross = external_gross if source_gross is None else np.abs(r_cell) + np.abs(q_gh)
             if q_drn is not None:
                 external_gross += np.abs(q_drn)
+                if source_gross is not None:
+                    acceptance_gross += np.abs(q_drn)
             if q_riv is not None:
                 external_gross += np.abs(q_riv)
+                if source_gross is not None:
+                    acceptance_gross += np.abs(q_riv)
             component_operand = boundary_operand.copy()
             for first, second, conductance, out_first, out_second in (
                 (np.s_[:, :-1], np.s_[:, 1:], cond_e, q_int_to_bc_l, q_int_to_bc_r),
@@ -272,12 +334,16 @@ def compute_mass_balance_budget(
                 external_net[second] -= out_second
                 external_gross[first] += np.abs(out_first)
                 external_gross[second] += np.abs(out_second)
+                if source_gross is not None:
+                    acceptance_gross[first] += np.abs(out_first)
+                    acceptance_gross[second] += np.abs(out_second)
                 operand = conductance * (np.abs(h_use[first]) + np.abs(h_use[second]))
                 component_operand[first] += np.where(bc[second], operand, 0.0)
                 component_operand[second] += np.where(bc[first], operand, 0.0)
             row["component_labels"] = labels
             row["component_net"] = _component_sum(labels, external_net)
             row["component_gross"] = _component_sum(labels, external_gross)
+            row["component_acceptance_flow"] = _component_sum(labels, acceptance_gross)
             row["component_operand"] = _component_sum(labels, component_operand)
 
     residual -= face_divergence
@@ -298,11 +364,16 @@ def compute_mass_balance_budget(
     if local_flow_scale:
         # Rates entering and leaving this cell set its physical budget scale.
         # Throughflow elsewhere must not absorb an unresolved local source.
-        gross = np.abs(r_cell) + np.abs(q_gh)
+        gross = (np.abs(r_cell) if source_gross is None else source_gross) + np.abs(q_gh)
+        acceptance_flow = gross if source_gross is None else np.abs(r_cell) + np.abs(q_gh)
         if q_drn is not None:
             gross += np.abs(q_drn)
+            if source_gross is not None:
+                acceptance_flow += np.abs(q_drn)
         if q_riv is not None:
             gross += np.abs(q_riv)
+            if source_gross is not None:
+                acceptance_flow += np.abs(q_riv)
         operand = boundary_operand.copy()
         for first, second, transfer, conductance in (
             (np.s_[:, :-1], np.s_[:, 1:], q_l_to_r, cond_e),
@@ -311,10 +382,16 @@ def compute_mass_balance_budget(
             magnitude = np.abs(transfer)
             gross[first] += magnitude
             gross[second] += magnitude
+            if source_gross is not None:
+                acceptance_flow[first] += magnitude
+                acceptance_flow[second] += magnitude
             head_operand = conductance * (np.abs(h_use[first]) + np.abs(h_use[second]))
             operand[first] += head_operand
             operand[second] += head_operand
         row["local_gross_flow"] = gross
+        row["local_acceptance_flow"] = acceptance_flow
+        if source_gross is not None:
+            row["local_source_gross"] = source_gross
         row["local_head_operand"] = operand
         row["local_east"] = cond_e
         row["local_south"] = cond_s
@@ -381,7 +458,8 @@ def evaluate_picard_transient_balance(
     budget, residual, diagonal, boundary_scale = compute_mass_balance_budget(
         T_field=conductivity * saturation, R_field=model.R_field_host, head=h,
         active=model.active_host, bc_mask=model.bc_mask_host, bc_values=model.bc_values_host,
-        dx=model.dx,
+        dx=model.dx, wel_entries=model.wel_entries,
+        recharge_field=model._recharge_input_host if model.wel_entries is not None else None,
         ghb_factor=model.ghb_factor_host, return_cells=True, component_budgets=True, local_flow_scale=local_head_tolerance is not None,
         **model._head_dependent_boundary_fields(),
     )
@@ -400,11 +478,12 @@ def evaluate_picard_transient_balance(
     total_in = budget["free_total_in"] + storage_in
     total_out = budget["free_total_out"] + storage_out
     throughflow = 0.5 * (total_in + total_out)
-    imbalance = total_in - total_out
+    acceptance_throughflow = 0.5 * (budget['free_acceptance_in'] + storage_in + budget['free_acceptance_out'] + storage_out)
+    imbalance = budget['free_signed_balance'] - float(np.sum(storage_volume))
     storage_operand = np.where(free, storage_scale * (np.abs(h) + np.abs(old)) * (area / dt), 0.0)
     eps = np.finfo(np.asarray(head).dtype).eps
-    floor = float(32.0 * eps * (throughflow + boundary_scale + np.sum(storage_operand)))
-    discrepancy = modflow_percent_discrepancy(inflow=total_in, outflow=total_out)
+    floor = float(32.0 * eps * (acceptance_throughflow + boundary_scale + np.sum(storage_operand)))
+    discrepancy = 0. if throughflow == 0. else 100. * imbalance / throughflow
     worst_component_pct = abs(discrepancy)
     components_ok = True
     component_balances = []
@@ -413,15 +492,16 @@ def evaluate_picard_transient_balance(
         storage_net = _component_sum(labels, storage_volume)
         net = budget["component_net"] - storage_net
         component_throughflow = 0.5 * (budget["component_gross"] + _component_sum(labels, np.abs(storage_volume)))
+        component_acceptance_flow = 0.5 * (budget['component_acceptance_flow'] + _component_sum(labels, np.abs(storage_volume)))
         component_floor = 32.0 * eps * (
-            component_throughflow + budget["component_operand"] + _component_sum(labels, storage_operand)
+            component_acceptance_flow + budget["component_operand"] + _component_sum(labels, storage_operand)
         )
-        limits = np.maximum(component_floor, relative_tolerance * component_throughflow)
+        limits = np.maximum(component_floor, relative_tolerance * component_acceptance_flow)
         components_ok = np.all(np.abs(net) <= limits)
         component_balances = [
             dict(external_net=float(external), storage_uptake=float(uptake),
-                 imbalance=float(imbalance), tolerance=float(limit))
-            for external, uptake, imbalance, limit in zip(budget["component_net"], storage_net, net, limits, strict=True)
+                 imbalance=float(imbalance), tolerance=float(limit), throughflow=float(flow))
+            for external, uptake, imbalance, limit, flow in zip(budget["component_net"], storage_net, net, limits, component_throughflow, strict=True)
         ]
         ratios = np.divide(np.abs(net), component_throughflow, out=np.zeros_like(net), where=component_throughflow > 0)
         worst_component_pct = float(100.0 * np.max(ratios))
@@ -429,7 +509,7 @@ def evaluate_picard_transient_balance(
     if local_head_tolerance is not None:
         # A cell-centred balance is evaluated with physical face differences.
         # Permit rounding of the represented heads on top of the flux tolerance.
-        local_scale = 0.5 * (budget["local_gross_flow"] + np.abs(storage_volume))
+        local_scale = 0.5 * (budget["local_acceptance_flow"] + np.abs(storage_volume))
         field_epsilon = np.finfo(model.T_field_host.dtype).eps
         local_roundoff = 4.0 * field_epsilon * (budget["local_head_operand"] + storage_operand)
         local_limit = relative_tolerance * local_scale
@@ -437,7 +517,10 @@ def evaluate_picard_transient_balance(
             # At a pumped or recharged cell, unresolved water over the step
             # can become a head error even when neighbouring cells are highly
             # conductive. Bound that additional storage change by hclose.
-            source_cells = (model.R_field_host != 0.0) & (storage_diagonal > 0.0)
+            if 'local_source_gross' in budget:
+                source_cells = (budget['local_source_gross'] > 0.) & (storage_diagonal > 0.)
+            else:
+                source_cells = (model.R_field_host != 0.0) & (storage_diagonal > 0.0)
             local_limit[source_cells] = np.minimum(local_limit[source_cells],
                                                     storage_diagonal[source_cells] * local_head_tolerance)
         elif np.isfinite(local_head_tolerance):
@@ -463,12 +546,13 @@ def evaluate_picard_transient_balance(
             local_limit=local_limit, roundoff=local_roundoff, epsilon=field_epsilon,
         )
     balance_accepted = bool(local_ok and components_ok and np.isfinite([imbalance, floor]).all()
-                            and abs(imbalance) <= max(floor, relative_tolerance * throughflow))
+                            and abs(imbalance) <= max(floor, relative_tolerance * acceptance_throughflow))
     return dict(accepted=bool(balance_accepted and np.isfinite([head_rms, flow_rms]).all()
                               and head_rms <= head_tolerance),
         balance_accepted=balance_accepted, local_balance_accepted=local_ok,
         head_residual_rms=head_rms, flow_residual_rms=flow_rms, total_in=total_in, total_out=total_out,
         storage_in=storage_in, storage_out=storage_out, in_minus_out=imbalance,
+        physical_throughflow=throughflow, acceptance_throughflow=acceptance_throughflow,
         percent_discrepancy=discrepancy, component_count=budget["component_count"],
         worst_component_percent_discrepancy=worst_component_pct, component_balances=component_balances,
         flow_roundoff_floor=floor, relative_tolerance=relative_tolerance,

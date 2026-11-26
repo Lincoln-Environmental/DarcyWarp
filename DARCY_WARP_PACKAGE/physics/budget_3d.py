@@ -43,7 +43,8 @@ def is_3d_budget_conserved(*, budget, absolute_tolerance, relative_tolerance=1e-
     required = ("cell_residual_rms", "relative_cell_imbalance")
     if any(name not in budget for name in required):
         return False
-    nonnegative = required + ("cell_residual_max", "relative_imbalance", "throughput", "head_residual_rms")
+    nonnegative = required + ("cell_residual_max", "relative_imbalance", "throughput", "head_residual_rms",
+                              "acceptance_throughput", "acceptance_relative_cell_imbalance")
     scalars = nonnegative + ("source_total", "boundary_inflow", "boundary_outflow",
                              "boundary_net", "storage_uptake", "domain_imbalance", "imbalance")
     for name in scalars:
@@ -55,7 +56,7 @@ def is_3d_budget_conserved(*, budget, absolute_tolerance, relative_tolerance=1e-
         if name in nonnegative and value < 0.0:
             return False
     return bool(budget["cell_residual_rms"] <= absolute_tolerance
-                or budget["relative_cell_imbalance"] <= relative_tolerance)
+                or budget.get("acceptance_relative_cell_imbalance", budget["relative_cell_imbalance"]) <= relative_tolerance)
 
 
 def check_3d_linear_budget(*, budget, free, head_tolerance, flow_tolerance, relative_tolerance,
@@ -220,7 +221,7 @@ def compute_3d_flow_budget(
     # Prescribed-cell divergence includes all incident faces. Split signs
     # after summing the faces of each cell, as a CHD package budget does.
     fixed = act & bcm
-    chd_rate = div[fixed] - storage_change[fixed] - ghb_q[fixed]
+    chd_rate = div[fixed] - storage_change[fixed] - ghb_q[fixed] - src[fixed]
     chd_in = stable_sum(values=np.maximum(chd_rate, 0.0))
     chd_out = stable_sum(values=np.minimum(chd_rate, 0.0))
     ghb_in = stable_sum(values=np.maximum(-ghb_q[free], 0.0))
@@ -252,6 +253,9 @@ def compute_3d_flow_budget(
         "cell_residual_max": cell_residual_max,
         "cell_residual_rms": cell_residual_rms,
         "source_total": source_total,
+        "source_all_total": stable_sum(values=src[act]),
+        "source_all_gross": float(np.sum(np.abs(src[act]))),
+        "total_physical_throughput": float(np.sum(np.abs(src[act]))) + chd_in - chd_out + ghb_in - ghb_out + float(np.sum(np.abs(storage_free))),
         "boundary_inflow": bc_in,
         "boundary_outflow": bc_out,
         "boundary_net": bc_net,
@@ -480,3 +484,32 @@ def named_boundary_interface_fluxes(
         )
         for name, mask in named_masks.items()
     }
+
+
+def include_gross_source_throughput(*, budget, source, gross_source, active, fixed):
+    """Report independent package throughput without loosening prior acceptance.
+
+    :param budget: Already evaluated Cartesian physical budget, updated in place.
+    :param source: The model-owned signed volumetric source.
+    :param gross_source: Owned gross field, or None when absolute source suffices.
+    :param active: Groundwater activity grid.
+    :param fixed: Prescribed-head mask.
+    :return: None. Existing signed residuals and acceptance decisions are retained.
+    """
+    if gross_source is None:
+        return
+    selected = np.asarray(active) != 0
+    free = selected & (np.asarray(fixed) == 0)
+    extra = np.asarray(gross_source, dtype=np.float64) - np.abs(np.asarray(source, dtype=np.float64))
+    free_extra = float(np.sum(extra[free], dtype=np.float64))
+    all_extra = float(np.sum(extra[selected], dtype=np.float64))
+    previous = budget['throughput']
+    residual_l1 = budget['relative_cell_imbalance'] * previous
+    budget['acceptance_throughput'] = previous
+    budget['acceptance_relative_cell_imbalance'] = budget['relative_cell_imbalance']
+    budget['throughput'] = previous + free_extra
+    budget['relative_cell_imbalance'] = residual_l1 / budget['throughput']
+    budget['relative_imbalance'] = abs(budget['domain_imbalance']) / budget['throughput']
+    budget['source_all_gross'] += all_extra
+    budget['total_physical_throughput'] += all_extra
+    budget['physical_metrics_valid'] = bool(budget['physical_metrics_valid'] and np.isfinite(budget['total_physical_throughput']) and np.isfinite(budget['throughput']))
