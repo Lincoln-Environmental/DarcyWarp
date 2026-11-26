@@ -19,7 +19,7 @@ jobs:
       GH_REPO: Lincoln-Environmental/DarcyWarp
       CURRENT_RELEASE: 2b6c452f982e12c76128109f167da88ffe8c6133
     steps:
-      - name: Validate and publish the four fixed source snapshots
+      - name: Validate and publish the current release snapshot
         shell: bash
         run: |
           set -euo pipefail
@@ -49,12 +49,6 @@ jobs:
               gh release create "$tag" --repo "$GH_REPO" --verify-tag --title "DarcyWarp $tag" --notes-file "$RUNNER_TEMP/$tag.md" --latest="$latest"
             fi
           }
-          preflight v0.1.0 ba94383f7b95932e397454ae5960c66132a8a507
-          preflight v0.2.0 ca67fdcf5302fb3cdd5ae00383f87b77db34a8dc
-          preflight v0.3.0 65cba8df6154bcdfd8eb73c1b20a2623a744d73c
           preflight v0.4.0 "$CURRENT_RELEASE"
-          publish v0.1.0 ba94383f7b95932e397454ae5960c66132a8a507 false
-          publish v0.2.0 ca67fdcf5302fb3cdd5ae00383f87b77db34a8dc false
-          publish v0.3.0 65cba8df6154bcdfd8eb73c1b20a2623a744d73c false
           publish v0.4.0 "$CURRENT_RELEASE" true
           gh release view v0.4.0 --repo "$GH_REPO" --json url,tagName,isDraft,isPrerelease
