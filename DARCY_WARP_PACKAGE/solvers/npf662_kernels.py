@@ -667,7 +667,7 @@ def ghb_diagonal(storage:wp.array(dtype=wp.float64),conductance:wp.array(dtype=w
 
 @wp.kernel
 def previous_restraint_diagonal(storage_tangent:wp.array(dtype=wp.float64),
-    ghb_c:wp.array(dtype=wp.float64), drn_offsets:wp.array(dtype=wp.int32),
+    activation_tangent:wp.array(dtype=wp.float64), ghb_c:wp.array(dtype=wp.float64), drn_offsets:wp.array(dtype=wp.int32),
     drn_c:wp.array(dtype=wp.float64), drn_elevation:wp.array(dtype=wp.float64),
     riv_offsets:wp.array(dtype=wp.int32), riv_c:wp.array(dtype=wp.float64),
     riv_stage:wp.array(dtype=wp.float64), riv_bottom:wp.array(dtype=wp.float64),
@@ -679,7 +679,10 @@ def previous_restraint_diagonal(storage_tangent:wp.array(dtype=wp.float64),
     a nonsingular approximate preconditioner without touching the physical
     residual or Newton Jacobian.
 
-    :param storage_tangent: Storage tangent at the previous state.
+    :param storage_tangent: Physical storage tangent at the previous state.
+    :param activation_tangent: Actual storage tangent at the numerical activation
+        guess; its maximum with the previous tangent safeguards only the
+        approximate preconditioner and never enters the physical residual.
     :param drn_offsets: Authoritative CSR drain offsets by groundwater cell.
     :param riv_offsets: Authoritative CSR river offsets by groundwater cell.
     :param ghb_c: Integrated GHB conductances.
@@ -695,7 +698,7 @@ def previous_restraint_diagonal(storage_tangent:wp.array(dtype=wp.float64),
     :return: None; ``result`` is modified in place.
     """
     i=wp.tid()
-    tangent = storage_tangent[i]
+    tangent = wp.max(storage_tangent[i], activation_tangent[i])
     if has_ghb != 0:
         tangent = tangent + ghb_c[i]
     if has_entries != 0:

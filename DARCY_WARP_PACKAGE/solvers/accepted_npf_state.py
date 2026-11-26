@@ -67,7 +67,7 @@ def verified_package_rates(*, session, head, info, package):
     :raises RuntimeError: If the state is rejected, absent or belongs to another session.
     """
     if not isinstance(info, dict) or not info.get('converged', False):
-        raise RuntimeError('Package exchange requires an accepted solve')
+        raise RuntimeError('Package exchange requires a converged solve')
     token = info.get('accepted_state', {})
     identifier = token.get('identifier') if isinstance(token, dict) else None
     state = getattr(session, '_accepted_equations', {}).get(identifier)

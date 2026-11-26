@@ -198,8 +198,18 @@ class NPF662TransientState:
         candidate = np.array(head, dtype=np.float64, copy=True)
         case = self.case
         drn_list, riv_list = self._boundary_entry_lists()
-        if drn_list is None and riv_list is None:
+        convertible_storage = (np.asarray(case.cell_types) != 0) & ((self.ss > 0.) | (self.sy > 0.))
+        if drn_list is None and riv_list is None and not np.any(convertible_storage):
             return candidate, []
+        dry_convertible = ((np.asarray(case.cell_types) != 0)
+            & (np.asarray(case.active) != 0) & (candidate <= case.bottoms))
+        flat_storage = convertible_storage & ((candidate <= case.bottoms)
+            | ((self.ss == 0.) & (candidate >= case.bottoms + case.thicknesses)))
+        if np.any(dry_convertible) or np.any(flat_storage):
+            # Storage parameters alone cannot certify a dry tangent or
+            # hydraulic connectivity. Use the complete owned physical equation
+            # for this exceptional activation decision.
+            return self.independent().seed_unanchored_boundary_components(head=candidate)
         labels = self._activation_component_labels()
         free = self.free.ravel()
         fixed = np.zeros(self.shape, dtype=bool)
@@ -329,7 +339,11 @@ class NPF662TransientState:
             component = labels == label
             if np.any(fixed[component]) or np.any(ghb[component] > 0.):
                 continue
-            if np.any(storage_restraint[component]):
+            # Positive storage parameters may have a zero dry tangent. Such
+            # components must remain watched until the upcoming physical state
+            # establishes actual restraint.
+            if np.any(storage_restraint[component]) and not np.any(
+                    (np.asarray(case.cell_types)[component] != 0)):
                 continue
             occupied = np.zeros(self.case.active.size, dtype=bool)
             for entries in (drn_list, riv_list):

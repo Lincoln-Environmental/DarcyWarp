@@ -222,3 +222,69 @@ def test_well_on_prescribed_head_enters_chd_ledger(device, rate):
         assert info['converged']
         assert info['chd_budget']['chd_inflow'] == max(-rate, 0.)
         assert info['chd_budget']['chd_outflow'] == max(rate, 0.)
+
+
+@pytest.mark.parametrize('device', ['cpu', 'cuda:0'])
+@pytest.mark.parametrize('factor', [-1., 1.])
+def test_history_built_components_keep_gross_budgets(device, factor):
+    """Unscheduled wells survive history scaling and CHD excludes recharge."""
+    from DARCY_WARP_PACKAGE.solvers.npf662_history import HistorySources
+    raw = np.zeros((1, 3, 3))
+    raw[0, 1, 1] = 50.
+    with _anchored_model(device=device, rhs=raw, well=-100., recharge=.01) as model:
+        sources = HistorySources(model=model, original_source=model._rhs.copy(), rates=None,
+            factors=np.array([factor]))
+        budget = sources.component_budget(index=0)
+        assert budget['wel']['inflow'] == max(-100. * factor, 0.)
+        assert budget['wel']['outflow'] == max(100. * factor, 0.)
+        assert budget['recharge']['inflow'] == max(24. * factor, 0.)
+        assert budget['recharge']['outflow'] == max(-24. * factor, 0.)
+        assert budget['volumetric']['net'] == 50. * factor
+
+
+@pytest.mark.parametrize('device', ['cpu', 'cuda:0'])
+def test_dry_storage_potential_does_not_prevent_boundary_activation(device):
+    """A dry cell has zero current Sy tangent; seed the guess without changing h_old."""
+    from test_3d_drn_riv_entries import _one_cell_model
+    shape = (1, 1, 1)
+    with _one_cell_model(device=device, drn_entries=[((0, 0, 0), 1., 2.)]) as model:
+        head, info = model.solve(unconfined=True, top_elevation=1., npf_cell_type=1,
+            transient=True, dt=1., head_prev=np.zeros(shape), ss=0., sy=.1,
+            npf_device_native=True, npf_preconditioner='kcycle')
+        assert info['converged'], info
+        assert head.item() == pytest.approx(2.9, abs=1e-12)
+        workspace = model._session._npf662_workspace_holder['workspace']
+        np.testing.assert_array_equal(workspace.storage_previous.numpy(), [0.])
+        assert info['drn_budget']['outflow'] == pytest.approx(.9)
+
+
+@pytest.mark.parametrize('device', ['cpu', 'cuda:0'])
+def test_resident_recharge_changes_preserve_previous_physical_storage(device):
+    """Dry activation and later forcing changes match exact sequential storage."""
+    from test_3d_drn_riv_entries import _one_cell_model
+    shape = (1, 1, 1)
+    options = dict(unconfined=True, top_elevation=1., npf_cell_type=1,
+        npf_preconditioner='kcycle', npf_device_native=True)
+    expected = []
+    previous = np.zeros(shape)
+    with _one_cell_model(device=device, drn_entries=[((0, 0, 0), 1., 2.)]) as model:
+        model.update_rhs(rhs=np.zeros(shape))
+        for duration, recharge in [(1., .05), (2., 1.)]:
+            model.update_R_in_place(R_field=recharge)
+            model.update_initial_head(initial_head=previous)
+            head, info = model.solve(transient=True, dt=duration, head_prev=previous,
+                ss=0., sy=.1, **options)
+            assert info['converged']
+            expected.append(head)
+            previous = head.copy()
+    with _one_cell_model(device=device, drn_entries=[((0, 0, 0), 1., 2.)]) as model:
+        model.update_rhs(rhs=np.zeros(shape))
+        heads, info = model.solve_transient_npf(dt=[1., 2.], recharge_rates=[.05, 1.],
+            head_prev=np.zeros(shape), ss=0., sy=.1, **options)
+        assert info['converged'], info
+        np.testing.assert_allclose(heads.ravel(), [.5, 2.975], atol=1e-12, rtol=0.)
+        np.testing.assert_allclose(heads, np.stack(expected), atol=1e-12, rtol=0.)
+        workspace = model._session._npf662_workspace_holder['workspace']
+        np.testing.assert_array_equal(workspace.storage_previous.numpy(), heads[0].ravel())
+        assert info['periods'][1]['drn_volume_budget']['outflow'] == pytest.approx(1.95)
+        assert info['periods'][1]['source_volume_budgets']['recharge']['net'] == pytest.approx(2.)

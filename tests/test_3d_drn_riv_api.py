@@ -358,7 +358,8 @@ def test_transient_history_integrates_only_accepted_drn_volumes(device):
     assert info["accepted_exchange_volume_totals"]["drn"]["outflow"] == 2.5
 
 
-def test_transient_state_audit_owns_accepted_inputs(device="cpu"):
+@pytest.mark.parametrize("device", ["cpu", "cuda:0"])
+def test_transient_state_audit_owns_accepted_inputs(device):
     """Independent audits stay bound to the accepted state after updates.
 
     The transient state's cached reference must keep using an owned snapshot
@@ -393,15 +394,19 @@ def test_transient_state_audit_owns_accepted_inputs(device="cpu"):
         case = audit_after.case
         assert float(case.source.ravel()[0]) == pytest.approx(1.0)
         assert float(np.asarray(case.drn_conductance).ravel()[0]) == pytest.approx(1.0)
-        # Revision-bumping updates rebuild the audit against the new inputs:
-        # the state tracks the current accepted solve, while per-period
-        # history diagnostics carry their own accepted-state tokens.
+        # Input updates prepare a different equation. They cannot rewrite an
+        # accepted historical audit, even when they bump session revisions.
         model.update_rhs(np.full(shape, 50.0))
         model.update_drn(drn_conductance=4.0, drn_elevation=2.0)
         audit_next = state.independent()
-        assert audit_next is not audit_after
-        assert float(np.asarray(audit_next.case.source).ravel()[0]) == pytest.approx(50.0)
-        assert float(np.asarray(audit_next.case.drn_conductance).ravel()[0]) == pytest.approx(4.0)
+        assert audit_next is audit_after
+        assert float(np.asarray(audit_next.case.source).ravel()[0]) == pytest.approx(1.0)
+        assert float(np.asarray(audit_next.case.drn_conductance).ravel()[0]) == pytest.approx(1.0)
         head, info = model.solve(transient=True, dt=1.0, head_prev=head,
             ss=1.0, sy=0.0, npf_device_native=True, max_outer=50, max_cycles=100)
         assert info["converged"]
+        refreshed_audit = state.independent()
+        assert refreshed_audit is not audit_after
+        assert float(np.asarray(refreshed_audit.case.source).ravel()[0]) == pytest.approx(50.0)
+        assert float(np.asarray(refreshed_audit.case.drn_conductance).ravel()[0]) == pytest.approx(4.0)
+        assert float(np.asarray(audit_after.case.source).ravel()[0]) == pytest.approx(1.0)

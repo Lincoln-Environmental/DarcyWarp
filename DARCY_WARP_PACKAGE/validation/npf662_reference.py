@@ -545,11 +545,13 @@ class NPF662Reference:
         candidate = np.asarray(head, dtype=np.float64).copy()
         drn_has = self.drn_csr is not None or np.any(self.drn_conductance > 0.)
         riv_has = self.riv_csr is not None or np.any(self.riv_conductance > 0.)
-        if not drn_has and not riv_has:
+        if not drn_has and not riv_has and not hasattr(self, 'storage'):
             return candidate, []
         n = self.case.active.size
-        graph = sparse.coo_matrix((np.ones(self.left.size), (self.left, self.right)),
-            shape=(n, n)).tocsr()
+        current_conductance, unused_dl, unused_dr, unused_sat = self.face_terms(head=candidate)
+        connected = current_conductance > 0.
+        graph = sparse.coo_matrix((np.ones(int(np.sum(connected))),
+            (self.left[connected], self.right[connected])), shape=(n, n)).tocsr()
         unused, labels = connected_components(csgraph=graph, directed=False)
         checks, fields = self.evaluate(head=candidate)
         unused_drn_ed, drain, unused_riv_ed, river = self.boundary_terms(head=candidate)
@@ -567,11 +569,25 @@ class NPF662Reference:
                 continue
             free_component = component & self.free.ravel()
             net_need = stable_sum(values=fields['residual'].ravel()[free_component])
-            if not np.isfinite(net_need) or net_need <= 0.:
+            if not np.isfinite(net_need) or net_need == 0.:
                 continue
+            direction = 1. if net_need > 0. else -1.
             threshold_candidates = []
+            if hasattr(self, 'storage'):
+                # Enter the existing constitutive transition, rather than
+                # pretending a positive parameter implies a positive tangent.
+                # 1e-6 is the fixed MF6 saturation smoothing width.
+                for cell in np.flatnonzero(free_component & (self.case.cell_types.ravel() != 0)):
+                    current_head = candidate.ravel()[cell]
+                    bottom = self.case.bottoms.ravel()[cell]
+                    thickness = self.case.thicknesses.ravel()[cell]
+                    top = bottom + thickness
+                    if direction > 0. and current_head <= bottom and (self.ss.ravel()[cell] > 0. or self.sy.ravel()[cell] > 0.):
+                        threshold_candidates.append((int(cell), float(bottom + 1.e-6 * thickness), 'STO'))
+                    if direction < 0. and current_head >= top and self.sy.ravel()[cell] > 0.:
+                        threshold_candidates.append((int(cell), float(top - 1.e-6 * thickness), 'STO'))
             for entries, package in ((self.drn_csr, 'DRN'), (self.riv_csr, 'RIV')):
-                if entries is None:
+                if entries is None or direction < 0.:
                     continue
                 for entry in range(len(entries)):
                     cell = int(entries.flat_cells[entry])
@@ -583,26 +599,28 @@ class NPF662Reference:
                         threshold_candidates.append((cell, threshold, package))
             if not threshold_candidates:
                 continue
-            shifts = [(float(np.nextafter(threshold, np.inf) - candidate.ravel()[index]),
+            target = np.inf if direction > 0. else -np.inf
+            shifts = [(float(np.nextafter(threshold, target) - candidate.ravel()[index]),
                        int(index), float(threshold), package)
                       for index, threshold, package in threshold_candidates]
-            positive_shifts = [record for record in shifts if record[0] > 0. and np.isfinite(record[0])]
-            if not positive_shifts:
+            directional_shifts = [(abs(record[0]), *record) for record in shifts
+                                  if record[0] * direction > 0. and np.isfinite(record[0])]
+            if not directional_shifts:
                 continue
-            shift, index, threshold, package = min(positive_shifts)
+            unused_distance, shift, index, threshold, package = min(directional_shifts)
             candidate.ravel()[component] += shift
             # The uniform shift addition can round the threshold cell back onto
             # the boundary value. Enforce the intended active branch explicitly
             # instead of trusting the representability of the shift.
             guard = 0
-            while candidate.ravel()[index] <= threshold and guard < 64:
-                candidate.ravel()[index] = np.nextafter(candidate.ravel()[index], np.inf)
+            while (candidate.ravel()[index] - threshold) * direction <= 0. and guard < 64:
+                candidate.ravel()[index] = np.nextafter(candidate.ravel()[index], target)
                 guard += 1
-            if candidate.ravel()[index] <= threshold:
+            if (candidate.ravel()[index] - threshold) * direction <= 0.:
                 raise ValueError('Unanchored boundary seeding failed to cross the threshold')
             # The seeded entry itself defines the branch; strict crossing above
             # its own threshold is the activation condition.
-            entered = bool(candidate.ravel()[index] > threshold)
+            entered = bool((candidate.ravel()[index] - threshold) * direction > 0.)
             if not entered:
                 raise ValueError('Unanchored boundary seeding did not enter the intended active branch')
             seeds.append(dict(component=int(label), package=package, cell=int(index),

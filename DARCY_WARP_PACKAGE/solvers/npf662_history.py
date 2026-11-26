@@ -96,6 +96,7 @@ class HistorySources:
         self.area = model.dx * model.dy
         self.column_count = model.nx * model.ny
         self.receivers = None
+        self.budget_receivers = surface_recharge_cells(active=model._active, bc_mask=model._bc_mask)
         self.base = original_source
         # Physical components kept separate for gross budget reporting; a
         # scheduled component drops out of the scaled base entirely.
@@ -151,15 +152,16 @@ class HistorySources:
         scheduled = self.wells_at(index)
         wel = signed_rate_budget(rates=None if scheduled is None else scheduled.rates)
         if scheduled is None and self.built_wells is not None:
-            wel = {key: value * factor for key, value in wel.items()}
+            wel = signed_rate_budget(rates=self.built_wells * factor)
         rate = self.rate_at(index) if self.rates is not None else self.built_recharge
         if rate is None:
             recharge = dict(inflow=0., outflow=0., net=0.)
         else:
             rates = np.broadcast_to(np.asarray(rate, dtype=np.float64), self.base.shape[1:]) * self.area
-            recharge = signed_rate_budget(rates=rates.ravel())
+            actual_rates = rates.ravel()[self.budget_receivers % self.column_count]
             if self.rates is None:
-                recharge = {key: value * factor for key, value in recharge.items()}
+                actual_rates = actual_rates * factor
+            recharge = signed_rate_budget(rates=actual_rates)
         volumetric = signed_rate_budget(rates=None if self.volumetric is None
                                         else self.volumetric.ravel() * factor)
         return dict(wel=wel, recharge=recharge, volumetric=volumetric)
@@ -239,6 +241,18 @@ class DeviceHistoryReference:
         self.dt = None
         self.sources = sources
         self.index = 0
+
+    def seed_unanchored_boundary_components(self, *, head):
+        """Recover an active set against the actual resident period equation.
+
+        :param head: Numerical trial heads; physical previous heads stay frozen.
+        :return: Seeded numerical heads and physical activation records.
+        """
+        previous = self.workspace.storage_previous.numpy().reshape(self.case.active.shape).copy()
+        case = replace(self.case, source=self.sources.host_source(index=self.index))
+        reference = NPF662TransientReference(case=case, previous=previous, dt=self.dt,
+            ss=self.ss, sy=self.sy)
+        return reference.seed_unanchored_boundary_components(head=head)
 
     def evaluate(self, *, head, **tolerances):
         previous = self.workspace.storage_previous.numpy().reshape(self.case.active.shape).copy()

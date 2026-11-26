@@ -325,7 +325,7 @@ class NPF662Workspace:
     @property
     def previous_operator_tangent(self):
         """Combined previous-state restraint diagonal for approximate solves."""
-        if self.ghb_conductance is not None or self.has_drn_riv:
+        if self.transient or self.ghb_conductance is not None or self.has_drn_riv:
             return self.previous_ghb_operator
         return self.previous_storage_tangent
 
@@ -342,14 +342,25 @@ class NPF662Workspace:
         :param activation_head: Optional replacement heads for the branch tests.
         :return: None.
         """
-        if self.ghb_conductance is not None or self.has_drn_riv:
+        if self.transient or self.ghb_conductance is not None or self.has_drn_riv:
             if activation_head is None:
                 wp.copy(dest=self.activation_head, src=self.storage_previous)
             else:
                 wp.copy(dest=self.activation_head, src=activation_head)
+            activation_tangent = self.previous_storage_tangent
+            if self.transient and activation_head is not None:
+                # This tangent is an approximate preconditioner coefficient.
+                # The physical previous state and previous storage derivative
+                # remain untouched. Trial buffers are scratch at refresh time.
+                wp.launch(kernel=kernels.storage_terms, dim=self.n,
+                    inputs=[self.activation_head, self.storage_previous, self.bottom, self.thickness,
+                        self.types, self.storage_ss, self.storage_sy, self.free,
+                        self.trial_storage_rate, self.trial_storage_tangent, self.storage_factor],
+                    device=self.device)
+                activation_tangent = self.trial_storage_tangent
             has_ghb = int(self.ghb_conductance is not None)
             wp.launch(kernel=kernels.previous_restraint_diagonal, dim=self.n,
-                inputs=[self.previous_storage_tangent,
+                inputs=[self.previous_storage_tangent, activation_tangent,
                     self.ghb_conductance if has_ghb else self.zero,
                     self.drn_offsets, self.drn_entry_c, self.drn_entry_elev,
                     self.riv_offsets, self.riv_entry_c, self.riv_entry_stage,
@@ -710,7 +721,7 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
             and not workspace.multigrid.closed and workspace.multigrid.controls == mg_controls
             and not workspace.faces_changed)
         storage_diagonal = None if direct_refresh else getattr(reference,'preconditioner_storage',None)
-        if not direct_refresh and (workspace.ghb_conductance is not None or workspace.has_drn_riv):
+        if not direct_refresh and (workspace.transient or workspace.ghb_conductance is not None or workspace.has_drn_riv):
             storage_diagonal=workspace.previous_operator_tangent.numpy().reshape(case.active.shape)
         mg_reused=direct_refresh or (workspace.multigrid is not None and workspace.multigrid.compatible(
             faces=model._session.faces,active=case.active,fixed=case.fixed,device=model.device,controls=mg_controls,
@@ -817,6 +828,28 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
                 accepted=True;break
         history.append(dict(outer=outer+1,accepted=accepted,krylov=krylov_budget-remaining,attempts=attempts,metrics=current,inner_forcing=forcing))
         if not accepted:
+            if hasattr(reference, 'seed_unanchored_boundary_components'):
+                numerical_head = workspace.head.numpy().reshape(case.active.shape)
+                seeded, recovery_seeds = reference.seed_unanchored_boundary_components(head=numerical_head)
+                if recovery_seeds:
+                    # This is a new numerical guess, never a change to the
+                    # physical previous head or an accepted historical state.
+                    workspace.head.assign(seeded.ravel())
+                    workspace.refresh_previous_operator(activation_head=workspace.head)
+                    workspace.maximum.zero_()
+                    wp.launch(kernel=kernels.previous_storage_scale, dim=workspace.n,
+                        inputs=[workspace.principal, workspace.previous_operator_tangent,
+                            workspace.scale, workspace.maximum], device=workspace.device)
+                    if workspace.maximum.numpy()[0] != 0.:
+                        raise ValueError('Invalid active-set recovery restraint diagonal')
+                    if workspace.multigrid is not None:
+                        wp.copy(dest=workspace.multigrid.levels[0]['storage'].flatten(),
+                            src=workspace.previous_operator_tangent)
+                        if workspace.multigrid.controls.coefficient_state != 'current':
+                            workspace.multigrid.refresh_storage_device()
+                    current = workspace.evaluate(trial=False, linearize=True)
+                    history[-1]['active_set_recovery'] = recovery_seeds
+                    continue
             if reason!='krylov_budget':reason='line_search_failed'
             break
     workspace.mode.fill_(1)
