@@ -54,8 +54,8 @@ The current SHANZ Orton Bradley branch at
 Its Darcy hot-start path also imports `nonlinear.coastal.CoastalSubfaces2D`
 from older SHANZ-specific branches. These are actual downstream dependencies.
 
-Recover the configuration function from the current solver settings without
-changing their numerical values. Port surface contact separately: the
+The configuration function has been extracted from the current replay settings
+without changing numerical values. Port surface contact separately: the
 current semismooth Newton solver needs an explicit contact constraint and
 reaction output while retaining accepted previous heads, physical storage,
 WEL/recharge ownership and exact exchange budgets. The old persistent
