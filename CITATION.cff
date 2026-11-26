@@ -4,7 +4,8 @@ message: >-
   software commit or release, formulation, solver and precision used. The paper
   describes the original steady, fixed-transmissivity implementation.
 type: software
-title: "DarcyWarp: two-dimensional groundwater flow on CPUs and NVIDIA GPUs"
+version: "0.4.0"
+title: "DarcyWarp: structured groundwater flow on CPUs and NVIDIA GPUs"
 authors:
   - family-names: Durney
     given-names: Patrick
@@ -13,9 +14,10 @@ authors:
 repository-code: "https://github.com/Lincoln-Environmental/DarcyWarp"
 url: "https://github.com/Lincoln-Environmental/DarcyWarp"
 abstract: >-
-  DarcyWarp provides two-dimensional confined and unconfined groundwater flow
-  solvers implemented with NVIDIA Warp, with steady and transient formulations,
-  CPU and CUDA execution, numerical comparison workflows and ensemble benchmarks.
+  DarcyWarp provides structured two-dimensional and three-dimensional confined
+  and unconfined groundwater flow solvers implemented with NVIDIA Warp, with
+  steady and transient formulations, CPU and CUDA execution, physical source
+  and boundary packages, numerical validation and ensemble benchmarks.
 keywords:
   - groundwater
   - Darcy flow

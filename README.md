@@ -2,6 +2,8 @@
 
 **Fast structured groundwater flow on CPUs and NVIDIA GPUs.**
 
+Software version: **0.4.0** · [Releases](https://github.com/Lincoln-Environmental/DarcyWarp/releases) · [Changelog](CHANGELOG.md).
+
 [![CI](https://github.com/Lincoln-Environmental/DarcyWarp/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Lincoln-Environmental/DarcyWarp/actions/workflows/ci.yml)
 [![Licence: AGPL-3.0-or-later](https://img.shields.io/badge/Licence-AGPL--3.0--or--later-163b4c)](LICENSE)
 
