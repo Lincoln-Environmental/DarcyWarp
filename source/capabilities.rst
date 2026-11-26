@@ -23,8 +23,9 @@ Model representation
      - Backward-Euler time integration. The unconfined workflows include
        specific yield and specific storage with aquifer bottom/top crossings.
    * - Sources and sinks
-     - Spatial recharge/source arrays. Negative sources can represent
-       withdrawals after converting volumetric rates to rates per cell area.
+     - Signed recharge depth rates and explicit sparse WEL entries. WEL uses
+       volumetric rates, divided by cell area internally; negative is
+       abstraction and positive is injection.
    * - Prescribed heads
      - A mask and head values for fixed-head cells.
    * - General-head boundaries
@@ -66,7 +67,10 @@ Positive rates leave the aquifer. The Newton multi-period driver retains
 GHB, DRN and RIV fields from ``build_from_fields()`` and reports their
 time-weighted mean rates over each stress period. With DRN or RIV enabled,
 timestep retries use Newton because Picard cannot assemble those packages.
-Native 3D Cartesian and NPF/STO currently provide GHB.
+Use ``wel_entries`` for explicit wells and ``update_wel_in_place()`` to replace
+them without changing recharge. ``wel_budget()`` and ``accepted_wel_rates()``
+retain gross/net and entry rates for the accepted state. Supported transient
+drivers accept independent recharge and WEL schedules.
 
 Use consistent units
 --------------------
@@ -88,6 +92,10 @@ A convenient SI convention is:
      - m²/s
    * - Recharge or distributed withdrawal
      - m/s
+   * - WEL rate and raw 3D source
+     - m3/s
+   * - Integrated boundary conductance
+     - m2/s
    * - Time step
      - s
    * - Specific yield and confined storativity
@@ -226,7 +234,13 @@ pass surface recharge as ``R_field`` in length per unit time, positive into
 the aquifer. In 3D a scalar specifies uniform recharge and a ``(ny, nx)``
 array specifies spatial recharge. The solver applies the horizontal cell area.
 Use the optional ``(nz, ny, nx)`` volumetric ``rhs`` for additional cell
-sources or sinks such as screened wells.
+sources or sinks. Explicit screened wells use sparse ``wel_entries`` with
+signed volumetric rates. Multiple wells may occupy one cell. Use
+``update_wel()``, ``wel_budget()``, ``accepted_wel_rates()`` and
+``physical_source_budgets()`` for updates and accepted-state extraction.
+``Model3DInputs`` and supported transient histories accept explicit wells;
+``wel_rates`` schedules replace the built WEL component without replacing
+recharge or raw sources.
 
 Both formulations also support cell-based general-head boundaries through
 ``ghb_conductance`` and ``ghb_head`` build inputs and ``update_ghb()``.
@@ -235,6 +249,28 @@ at construction and on update.
 The :doc:`native_3d_ghb` page covers steady/transient GHB, budgets, the
 Cartesian FGMRES option, explicit FP64 roundoff checks and MF6 benchmarks.
 
+The fast ``mf6_6_6_2_npf`` formulation additionally supports native 3D DRN
+and RIV for confined or convertible, steady or transient flow. Dense fields
+and sparse entries are accepted by ``build_from_K_fields()`` and
+``build_from_layers()``; multiple entries in one cell retain their individual
+properties. ``update_drn()``, ``update_riv()``, ``update_drn_entries()`` and
+``update_riv_entries()`` replace or remove packages. Accepted cell and entry
+rates are available through ``accepted_drn_discharge()``,
+``accepted_riv_discharge()`` and ``accepted_boundary_entry_rates()``.
+Conductance is integrated [L2/T], and positive exchange leaves the aquifer.
+
+Accepted source/boundary states retain physical inputs, matching heads,
+package rates and timestep duration. Gross inflow/outflow, net exchange and
+integrated volumes exclude rejected trials. Configured WEL rates,
+prescribed-head compensation and realised MF6 cell-budget exchange are
+separate reported quantities.
+
+K-cycle-preconditioned FGMRES is the default for nonlinear 3D NPF solves.
+Explicit diagonal preconditioning remains available. Eligible uniform
+confined cases retain direct fast Cartesian dispatch. The qualified mixed path
+uses FP64 heads, residuals and outer FGMRES with an FP32 K-cycle
+preconditioner.
+
 The `3D guide <https://github.com/Lincoln-Environmental/DarcyWarp/blob/main/docs/3D_CARTESIAN_NPF.md>`_
 describes the public API, the layered example and CPU FP64 validation.
 The :doc:`npf_gpu_native` page summarises the current accelerated
@@ -242,3 +278,11 @@ multi-step NPF history, strict and confined performance control files,
 independent MF6 checks and timing boundaries. The fast history is
 opt-in, and its measured runtime is not a library-default guarantee.
 Transformed terrain remains experimental on ``dev``.
+
+SFR, UZF and transport are not included. Legacy Cartesian and experimental
+terrain DRN/RIV, automatic dry-cell well-rate reduction and comprehensive
+drying/rewetting parity are unsupported. Historical 2D regional comparisons
+did not all meet the preferred ``1e-6 m`` maximum head-error target, and
+particular Chebyshev configurations have known convergence limitations on
+heterogeneous regional models. See :doc:`package_audit` for the concise
+current release summary.

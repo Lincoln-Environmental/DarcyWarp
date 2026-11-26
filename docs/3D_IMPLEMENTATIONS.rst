@@ -13,8 +13,10 @@ Set ``DARCY_FLOAT=float64`` before importing the package. Qualification uses
 Python 3.12, warp-lang 1.17.0 and an NVIDIA CUDA device. K, head, source and
 time must use consistent units. For metre/day models, supply surface
 recharge as ``R_field`` in m/day just as in 2D. It may be a scalar or a
-``(ny, nx)`` map. The solver applies ``dx * dy`` once. Additional well
-rates use ``rhs`` in m³/day with shape ``(nz, ny, nx)``.
+``(ny, nx)`` map. The solver applies ``dx * dy`` once. Explicit sparse
+``wel_entries`` use signed volumetric rates in m3/day (negative abstraction,
+positive injection); raw additional sources use ``rhs`` in m3/day with shape
+``(nz, ny, nx)``. Recharge, WEL and raw sources are updated independently.
 
 NPF steady and transient flow
 -----------------------------
@@ -76,6 +78,29 @@ GMRES with K-cycle preconditioning is rejected. Uniform confined steady
 NPF retains its direct Cartesian dispatch when Krylov controls are omitted.
 The default preconditioner/Krylov selection changed during the WEL/DRN/RIV
 audit repair. Physical acceptance thresholds are unchanged.
+
+WEL, DRN and RIV packages
+-------------------------
+
+The fast NPF formulation accepts explicit WEL plus dense or sparse DRN/RIV in
+``build_from_K_fields()`` and ``build_from_layers()``. Multiple package entries
+may occupy one cell and retain independent properties and exchange rates.
+Use ``update_wel()``, ``update_drn()``, ``update_riv()``,
+``update_drn_entries()`` and ``update_riv_entries()`` to replace or remove the
+corresponding component without changing the other physical sources.
+
+Accepted-state APIs retain per-cell and per-entry rates, gross inflow/outflow,
+net exchange and volumes integrated over accepted physical durations. Rejected
+trials do not enter those volumes. Supported transient histories accept
+independent ``recharge_rates`` and ``wel_rates`` schedules; an explicit
+schedule replaces its built component. Configured WEL rates are requested
+sources, prescribed-head compensation is the exchange needed to hold CHD, and
+MF6 cell-budget exchange is the realised matched-model output. Do not use one
+as a synonym for another.
+
+Legacy Cartesian and experimental terrain DRN/RIV are unsupported. See
+:doc:`package_audit` for the package equations, release qualification and
+remaining limitations.
 
 For an explicit tolerance experiment, pass
 ``npf_final_relative_tolerance=1e-7`` to ``model.solve()`` or use the runner's
@@ -143,9 +168,9 @@ repository root in the declared environment::
   python working_tests/run_3d_sanity.py --device cuda:0 --sizes 16 32
 
 The default selects fast Cartesian and the fast NPF device implementation.
-NPF automatically selects diagonal GMRES below 50,000 cells and K-cycle
-FGMRES at larger sizes. This is a case-size heuristic, not a guarantee of the
-fastest method for every geology. Compare the alternatives explicitly::
+Nonlinear NPF uses K-cycle-preconditioned FGMRES by default; diagonal
+preconditioning is an explicit reference option. Compare alternatives
+explicitly::
 
   python working_tests/run_3d_sanity.py --device cuda:0 --sizes 32 --compare
 

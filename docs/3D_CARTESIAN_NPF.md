@@ -15,11 +15,14 @@ uppermost active cell has prescribed head, the column receives zero recharge.
 For a MODFLOW 6 RCHA comparison with inactive cells in the top layer, set
 the RCHA receiving-layer array (`IRCH`) to the same active layers.
 
-For additional, layer-specific sources such as screened wells, supply a
-`(nz, ny, nx)` array via `rhs` in volume per unit time. DarcyWarp adds these
-rates to the surface recharge. For an existing model with recharge already
-included in `rhs`, remove that contribution from `rhs` when moving it to
-`R_field`.
+For explicit screened wells, supply sparse `wel_entries` with signed volumetric
+rates [L³/T]: negative rates abstract and positive rates inject. Multiple wells
+may occupy one cell. Use `update_wel()` to replace or remove them,
+`wel_budget()` for gross/net package totals and `accepted_wel_rates()` for
+rates bound to an accepted state. `Model3DInputs` also accepts wells. A raw
+`(nz, ny, nx)` `rhs` remains available for other signed volumetric sources.
+Recharge, WEL and raw `rhs` are independently owned, so updating one does not
+overwrite the others.
 
 | Formulation | Geometry | Supported flow |
 | --- | --- | --- |
@@ -42,6 +45,17 @@ independent of K and saturation, and contributes both a diagonal term and
 external-head forcing. See the [native 3D GHB release](3D_NATIVE_GHB.rst)
 for budgets, CPU/CUDA and MF6 checks, precision controls and runtime profiles.
 Exterior face arrays remain no-flow; they cannot encode a GHB.
+
+The fast `mf6_6_6_2_npf` formulation additionally supports native DRN and RIV
+for confined or convertible, steady or transient models. Dense cell fields and
+sparse entries are accepted by `build_from_K_fields()` and
+`build_from_layers()`. Multiple entries in one cell retain independent
+conductance and elevations. Use `update_drn()`, `update_riv()`,
+`update_drn_entries()` and `update_riv_entries()` to replace or remove package
+definitions. `accepted_drn_discharge()`, `accepted_riv_discharge()` and
+`accepted_boundary_entry_rates()` expose accepted cell and entry rates,
+positive out of the aquifer. Legacy Cartesian and experimental terrain DRN/RIV
+are not supported. See the [current package release](../source/package_audit.rst).
 
 NPF requires `DARCY_FLOAT=float64` before import. Use Python 3.12 and Warp
 1.17.0 for the validated configuration. Convertible, layered and transient
@@ -77,8 +91,9 @@ head, info = model.solve(
 
 `head_prev` is the previous physical state. Use `update_initial_head`
 to choose a separate iterative starting point, `update_R_in_place(rate)`
-to change the recharge depth rate, `update_rhs` to change additional
-volumetric sources, `update_boundary_values` to change prescribed heads,
+to change the recharge depth rate, `update_wel()` to change explicit wells,
+`update_rhs` to change additional volumetric sources,
+`update_boundary_values` to change prescribed heads,
 and `update_K_fields` to change physical conductivity and its derived
 faces. Check `info["converged"]`, the residual and the water balance before
 advancing the timestep. Returned heads own their storage. A later steady
@@ -86,7 +101,9 @@ solve clears transient storage terms.
 
 The MF6 6.6.2 contract covers default NPF connections and default Ss/Sy
 storage with Newton saturation smoothing. XT3D, variable CV, rewetting,
-perched flow and alternative STO options are outside this contract. The original 3D promotion was qualified on CPU FP64;
+perched flow and alternative STO options are outside this contract. SFR, UZF,
+transport, automatic dry-cell well-rate reduction and comprehensive
+drying/rewetting parity are not included. The original 3D promotion was qualified on CPU FP64;
 subsequent GPU qualification and device-native history optimisations are
 now on `main`. The [current NPF GPU performance guide](../source/npf_gpu_native.rst)
 summarises final timings and acceptance. The
@@ -168,9 +185,10 @@ with WarpDarcySolver3D(
 
 `recharge_rates` supplies absolute depth rates for the history, replacing the
 built-in `R_field` for those steps. Supply a scalar, one rate per step, a
-static `(ny, nx)` map or a `(nstep, ny, nx)` stack. With explicit
-`recharge_rates`, optional `source_factors` scale the additional volumetric
-`rhs` only. Used alone, `source_factors` scale the combined built sources.
+static `(ny, nx)` map or a `(nstep, ny, nx)` stack. `wel_rates` independently
+supplies the well schedule and replaces the built WEL component for those
+steps. With explicit recharge and WEL schedules, optional `source_factors`
+scale only the additional volumetric `rhs`.
 Timestep lengths may also vary, but conductivity, storage, cell types, geometry and
 prescribed heads are fixed *within* a single history call. Call
 `update_K_fields()` between histories when hydraulic conductivity changes.
@@ -178,6 +196,11 @@ prescribed heads are fixed *within* a single history call. Call
 Always check `info["converged"]` and `info["accepted_steps"]` before
 using the result. If a timestep fails, the output can include a final
 unaccepted trial for diagnosis, which must not be advanced as a valid head.
+Accepted package/source objects bind the physical inputs, heads, rates and
+timestep duration. Their gross/net rates and integrated volumes exclude
+rejected trials. Configured WEL rates, prescribed-head compensation and the
+realised MF6 cell-budget exchange are distinct quantities and should be
+reported separately.
 
 The [current NPF GPU performance guide](../source/npf_gpu_native.rst)
 gives the qualified 500 x 500 x 5 runtime, strict control files, matching

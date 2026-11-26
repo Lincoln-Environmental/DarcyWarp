@@ -21,6 +21,38 @@ flow problem and demonstrates the API, outputs and units.
 Numerical test coverage
 -----------------------
 
+The maintained suite is a consolidated 100-case selection. It replaces the
+previous generated regression matrix and retains the original parity tests and
+their reference data.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 80 20
+
+   * - Group
+     - Cases
+   * - 2D groundwater equations and solver pathways
+     - 23
+   * - 3D groundwater equations and solver pathways
+     - 24
+   * - Model inputs and spatial preparation
+     - 8
+   * - Live MF6 parity
+     - 14
+   * - Independent reference equations
+     - 10
+   * - Qualification evidence
+     - 6
+   * - Original comparisons and retained regional references
+     - 15
+   * - Total
+     - 100
+
+The selection emphasises independent analytical solutions, physical
+conservation, matched MF6 comparisons, mathematical invariance and execution
+of the actual production solver. It does not convert every historical
+development test into a permanent regression.
+
 The following modules live under ``tests/``. Their cases report which solver,
 physical inputs and numerical tolerances were used.
 
@@ -52,7 +84,10 @@ physical inputs and numerical tolerances were used.
 
 The original sparse-system tests compare the linear equations with an independent
 finite-difference assembly. The original unconfined tests compare heads against
-stored MF6 reference grids.
+stored MF6 reference grids. Independent NPF, transient and matrix-free
+references cover WEL/DRN/RIV residuals, Jacobians, activation and accepted
+budgets. Canonical archives retain individual sparse boundary entries, and
+matched comparisons distinguish MF6 standard and Newton formulations.
 
 Running the checks
 ------------------
@@ -135,6 +170,20 @@ different GPU.
 Retain metadata and report whether timings include compilation, model setup,
 data transfer, first solve, repeated solves and output. Compare equivalent
 numerical accuracy before interpreting a speed ratio.
+
+The live package evidence records million-cell medians of approximately
+``1.36 s`` for steady NPF with current-coefficient FP32 K-cycle
+preconditioning and ``2.35 s`` for a 20-step resident NPF/STO history. Eight
+strict regional 3D comparisons passed their archived head and individual
+DRN/RIV exchange gates. The largest recorded head difference is approximately
+``9.55e-8 m`` and the largest individual boundary-rate difference is
+approximately ``6.99e-7 m3/day``. These measurements belong to their recorded
+source revisions and were not rerun for the release documentation.
+
+The original no-package transient qualification retains its approximately
+100--250x MF6 speedup evidence within the matched configurations and timing
+boundaries documented in :doc:`npf_gpu_native`. Do not combine either campaign
+with unmatched inputs, controls or timing scopes to derive a new speedup.
 
 Original publication
 --------------------

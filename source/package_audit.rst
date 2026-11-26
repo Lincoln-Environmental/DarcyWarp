@@ -119,7 +119,7 @@ generic MF6 writer and regional comparison tools include WEL/DRN/RIV; canonical
 archives retain individual sparse entries and distinguish MF6 standard and
 Newton formulations.
 
-Committed million-cell package measurements recorded approximately 1.36 s for
+The live-tree million-cell package evidence records approximately 1.36 s for
 steady NPF with current-coefficient FP32 K-cycle preconditioning and 2.35 s for
 a 20-step resident NPF/STO history. Eight archived strict regional 3D
 comparisons passed their recorded head and individual DRN/RIV exchange gates;

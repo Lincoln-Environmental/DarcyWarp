@@ -9,6 +9,11 @@ the completed head history at the end of the call.
 This page describes the current public capability. The dated reports linked
 below preserve earlier measurements and experimental optimisation work.
 
+The current nonlinear NPF default is K-cycle-preconditioned FGMRES. Diagonal
+preconditioning remains an explicit reference option, while eligible uniform
+confined models retain direct fast Cartesian dispatch. Native DRN/RIV and
+explicit WEL are described in :doc:`package_audit`.
+
 Qualified transient performance
 -------------------------------
 
@@ -53,8 +58,8 @@ model-building or independently audited workflows.
 All 400 endpoints in the recorded final qualification passed independent
 physical audits and MF6 head gates at matching timesteps. The strict
 runtime profile explicitly selects a ``1e-7`` relative cellwise-imbalance
-limit and retains the ``1e-6 m`` head-equivalent RMS gate. The solver's
-library defaults are unchanged. The measured GPU path uses FP64 for heads,
+limit and retains the ``1e-6 m`` head-equivalent RMS gate. These are historical
+no-package measurements. The measured GPU path uses FP64 for heads,
 storage, fluxes, FGMRES and acceptance, with an explicitly selected FP32
 multigrid preconditioner.
 
@@ -67,9 +72,10 @@ Using the accelerated history
 -----------------------------
 
 Build a ``mf6_6_6_2_npf`` model using ``WarpDarcySolver3D`` or
-``create_solver(dim=3, ...)`` and call ``solve_transient_npf()`` with source
-multipliers and a scalar or vector of timestep lengths. The model's base
-source is multiplied by each source factor. The output array has shape
+``create_solver(dim=3, ...)`` and call ``solve_transient_npf()`` with explicit
+recharge and/or WEL schedules, source multipliers and a scalar or vector of
+timestep lengths. Explicit schedules replace their corresponding built
+components; raw volumetric sources remain independently owned. The output array has shape
 ``(number_of_steps, nz, ny, nx)`` when every step is accepted.
 
 Geometry, conductivity, storage and prescribed heads remain fixed within
@@ -112,6 +118,23 @@ For the confined result, use `--variants confined` and
 compares the full head history with the saved MF6 reference, audits
 physical conservation and records timing intervals separately.
 
+Package qualification evidence
+------------------------------
+
+The live release evidence records approximately ``1.36 s`` for a million-cell
+steady NPF package solve using current-coefficient FP32 K-cycle
+preconditioning, and ``2.35 s`` for a 20-step resident NPF/STO history. Eight
+archived strict regional comparisons passed their recorded head and individual
+DRN/RIV exchange gates. Their largest head difference is approximately
+``9.55e-8 m`` and largest individual boundary-rate difference approximately
+``6.99e-7 m3/day``.
+
+These are historical measurements of their recorded production revisions,
+not fresh measurements for the release documentation. They do not replace or
+extend the 100--250x MF6 evidence above, which remains scoped to the original
+matched no-package cases. No speedup should be derived by mixing those
+configurations.
+
 Scope and archived reports
 --------------------------
 
@@ -119,7 +142,9 @@ The supported NPF/STO formulation has confined or convertible cells on
 uniform Cartesian or conventional layered DIS grids, default MF6 6.6.2
 NPF connections and backward-Euler Ss/Sy storage. XT3D, VARIABLECV,
 PERCHED, rewetting, alternative STO options and transformed terrain are
-outside this qualified implementation. Results vary with geometry,
+outside this qualified implementation. SFR, UZF, transport, automatic
+dry-cell well-rate reduction and comprehensive drying/rewetting parity are
+also outside the release. Results vary with geometry,
 forcing, numerical controls, hardware and problem size.
 
 Older experiments are preserved as separate technical evidence, not

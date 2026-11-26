@@ -47,6 +47,13 @@ physical checks. The [capability guide](source/capabilities.rst) lists supported
 solver combinations. Record the device alongside pass, failure and skip counts.
 The native parity suite uses FloPy and the pinned MODFLOW 6.6.2 executable.
 
+The maintained numerical suite is the consolidated 100-case selection: 23 2D
+groundwater cases, 24 3D groundwater cases, 8 model-input cases, 14 live MF6
+parity cases, 10 independent-reference cases, 6 qualification-evidence cases
+and 15 retained original/regional comparisons. Preserve the original parity
+tests and their reference data. Add a focused case only for a distinct
+behaviour or regression; do not recreate a generated regression matrix.
+
 For dimensional solver runs and JUnit XML reports, use these commands.
 
 ```bash
@@ -69,6 +76,13 @@ python -m sphinx -b html -n -W --keep-going source build/html
 
 Review the rendered pages. New tests should exercise a meaningful behaviour or
 regression, rather than repeat the implementation.
+
+For WEL/DRN/RIV changes, keep recharge, explicit WEL and raw sources
+independently owned. Verify accepted per-cell/per-entry rates, gross and net
+budgets, physical timestep integration and rejected-trial exclusion. Report
+configured WEL rates, prescribed-head compensation and realised MF6
+cell-budget exchange as distinct quantities. Update the
+[package release page](source/package_audit.rst) when supported scope changes.
 
 ## Numerical changes and comparisons
 

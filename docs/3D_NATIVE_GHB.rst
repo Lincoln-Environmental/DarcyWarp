@@ -1,6 +1,12 @@
 Native 3D general-head boundaries
 ==========================================
 
+This page preserves the original GHB release and its dated qualification for
+provenance. It is not the complete current boundary-package guide. Native 3D
+DRN/RIV and explicit WEL were added later; see :doc:`package_audit` for the
+current release scope, solver default and limitations. Historical test counts
+and timings below apply only to the revisions and configurations stated.
+
 The Cartesian and ``mf6_6_6_2_npf`` formulations accept native cell-based
 general-head boundaries in steady and transient solves. Conductance is an
 integrated coefficient in square metres per day, independent of conductivity
@@ -68,25 +74,19 @@ head contacts with conductance obey the scalar GHB law. Sloping or offset
 contacts include gradient terms, and contacts are restricted to exterior
 subfaces. They are not substitutes for native Cartesian/NPF GHB.
 
-Planned boundary and transport work
---------------------------------------------------
+Later boundary-package release
+------------------------------
 
-The next native 3D boundary extensions are drains (DRN) and rivers (RIV),
-with steady and transient MF6 comparisons covering activation thresholds,
-flow reversal where permitted, changing boundary inputs and water budgets.
-The public 2D semismooth Newton solver accepts DRN and RIV through its
-cell-boundary inputs and reports accepted package fluxes.
+Native 3D drains and rivers are now released for the fast
+``mf6_6_6_2_npf`` formulation on uniform and layered DIS grids. They support
+dense and sparse entries, multiple entries per cell, replacement/removal,
+accepted per-cell and per-entry rates, gross/net budgets and transient
+volumes. Explicit sparse WEL is also available in 2D and 3D, with independently
+owned recharge, WEL and raw sources. These additions do not extend DRN/RIV to
+legacy Cartesian or experimental terrain formulations.
 
-Transport follows these boundary extensions. A proposed first scope is
-conservative solute advection and dispersion using the converged flow
-solution's face fluxes, boundary exchanges and storage changes. Transport
-needs its own mass-balance, analytical and MF6 transport comparisons;
-flow parity alone does not qualify it.
-
-Unsaturated-zone flow (UZF) and routed streamflow (SFR) remain separate
-coupled-process extensions. This sequence describes the targeted workflow,
-not complete coverage of every MF6 package or discretisation. These are
-planned capabilities, not features included in this GHB release.
+SFR, UZF and transport remain outside the release. See :doc:`package_audit`
+for current APIs, equations, qualification evidence and remaining limitations.
 
 Qualification
 -------------
@@ -99,11 +99,11 @@ and input ownership on CPU and CUDA. Its analytical cases targeted FP64
 roundoff and its live comparisons used a ``2e-11`` absolute head/flow
 bound on those models.
 
-The final solver regression selection passed 961 tests on ``dev`` and 798
-on ``main`` (which excludes experimental terrain and includes the restored
-2D standalone-validator checks). Each run has four expected CPU entries
-skipped for CUDA-only checks; their CUDA counterparts ran. The live MF6
-tests cover both the original acceptance mode and explicit roundoff mode.
+The dated regression receipts cover CPU, CUDA and live MF6 execution for the
+original release. Current suite composition is documented in
+:doc:`validation`; the earlier aggregate test totals are intentionally not
+carried forward. The live MF6 tests cover both the original acceptance mode
+and explicit roundoff mode.
 Analytical tests cover dry-start GHB grounding, tiny positive conductance,
 gross inflow/outflow cancellation, storage datum rounding and changing
 boundary values after graph capture.
@@ -134,7 +134,7 @@ larger release qualification below.
 The acceleration tests include changing K, boundary conductance/head, zero
 conductance, FP64/FP32 preconditioners, exact iteration budgets, invalid
 controls and resource release. The focused accelerator/GHB/session selection
-passes 97 tests on CPU/CUDA.
+was exercised on CPU/CUDA in the dated qualification.
 
 Reproducible sanity and runtime checks
 ----------------------------------------------
@@ -509,9 +509,9 @@ head target. The strict command exits with status 1 on the current large
 baseline, retaining both the preferred-target misses and saturation-state
 differences rather than treating them as passes.
 
-The affected regression selection passes 107 tests on CPU/CUDA, including
-the new native-state tests and deliberate face-order, GHB-sign, storage-sign,
-nonfinite-data, cache-hash and timestep corruptions. The qualification
+The affected historical regression selection includes native-state tests and
+deliberate face-order, GHB-sign, storage-sign, nonfinite-data, cache-hash and
+timestep corruptions. The qualification
 establishes the tested flow/storage laws at matched states and records the
 remaining solution tolerance differences; it does not claim bitwise MF6
 head identity.
