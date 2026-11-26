@@ -35,7 +35,8 @@ def native_boundary_rows(*, fields, package, stage_offset):
 
 
 def run_native(*, fields, durations, well_factors, recharge_factors, stage_offsets, transient,
-               ss, sy, cell_type, ims_controls, executable, repeats, directory, well_precision='float64'):
+               ss, sy, cell_type, ims_controls, executable, repeats, directory,
+               well_precision='float64', newton=False):
     """Build and repeatedly run the exact pinned native reference.
 
     :param fields: Identical grid, material, sources and entry definitions.
@@ -52,6 +53,7 @@ def run_native(*, fields, durations, well_factors, recharge_factors, stage_offse
     :param repeats: Number of native engine measurements from identical inputs.
     :param directory: Native files and compact evidence destination.
     :param well_precision: Match actual source precision in the numerical model.
+    :param newton: Explicitly enable MF6's Newton formulation and under-relaxation.
     :return: Compact native timing and physical-budget evidence.
     :raises RuntimeError: If MF6 fails or does not terminate normally.
     """
@@ -72,7 +74,8 @@ def run_native(*, fields, durations, well_factors, recharge_factors, stage_offse
         perioddata=[(float(duration), 1, 1.) for duration in durations])
     simulation.simulation_data.float_precision = 17
     simulation.simulation_data.float_characters = 25
-    gwf = flopy.mf6.ModflowGwf(simulation, modelname=name, save_flows=True)
+    gwf = flopy.mf6.ModflowGwf(simulation, modelname=name, save_flows=True,
+        newtonoptions='UNDER_RELAXATION' if newton else None)
     flopy.mf6.ModflowIms(simulation, **ims_controls)
     flopy.mf6.ModflowGwfdis(gwf, nlay=nz, nrow=ny, ncol=nx, delr=fields['dx'], delc=fields['dy'],
         top=fields['top_elevation'], botm=fields['top_elevation'] - fields['dz'] * (np.arange(nz) + 1),

@@ -39,11 +39,14 @@ if __name__ == "__main__":
     parser.add_argument('--mode', choices=('steady', 'mixed', 'transient', 'picard', 'all'), default='all')
     parser.add_argument('--repeats', type=int, default=3)
     parser.add_argument('--profile', choices=('production', 'strict'), default='production')
+    parser.add_argument('--newton', action='store_true', help='Write MF6 NEWTON UNDER_RELAXATION explicitly.')
     arguments = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     output = Path('/tmp/darcywarp-package-2d-mf6-exact')
     if arguments.profile == 'strict':
         output = output / 'strict'
+    if arguments.newton:
+        output = output / 'newton'
     controls = json.loads((root / 'working_tests/wel_regional_qualification_controls.json').read_text())
     controls.update(confined_thickness=10., unconfined_top=100., unconfined_sy=.15)
     grids = {'100k': (320, 320), '1M': (1000, 1000)}
@@ -74,14 +77,16 @@ if __name__ == "__main__":
                 well_factors = np.resize(controls['history_wel_pattern'], controls['history_steps'])
                 recharge_factors = np.resize(controls['history_recharge_pattern'], controls['history_steps'])
                 durations = [controls['history_dt_days']] * controls['history_steps']
-            ims = profiles['mf6']['steady_confined' if mode in ('steady', 'mixed') else 'transient']
+            ims = dict(profiles['mf6']['steady_confined' if mode in ('steady', 'mixed') else 'transient'])
             if arguments.profile == 'strict':
                 # Same independently pinned accuracy profile as the 3D twin.
                 ims = dict(complexity='COMPLEX', linear_acceleration='BICGSTAB',
                     outer_maximum=200, outer_dvclose=1.e-11, inner_maximum=200,
                     inner_dvclose=1.e-12, rcloserecord=[1.e-12, 'strict'])
+            if arguments.newton:
+                ims['linear_acceleration'] = 'BICGSTAB'
             run_native(fields=native, durations=durations, well_factors=well_factors, recharge_factors=recharge_factors,
                 stage_offsets=[0.] * len(durations), transient=mode not in ('steady', 'mixed'),
                 ss=controls['specific_storage_per_m'], sy=controls['unconfined_sy'] if convertible else 0.,
                 cell_type=int(convertible), ims_controls=ims, executable=executable, repeats=arguments.repeats,
-                directory=output / label / mode, well_precision='float64')
+                directory=output / label / mode, well_precision='float64', newton=arguments.newton)
