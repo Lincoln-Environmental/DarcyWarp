@@ -584,6 +584,53 @@ def device_accepted(*,metrics,physical_tolerance=1e-12,relative_tolerance=1e-8):
         metrics['physical_rms']<=physical_tolerance or metrics['relative_cell_imbalance']<=relative_tolerance)
 
 
+def refine_confined_component_datum(*, case, reference, head):
+    """Correct the constant mode using the component's external physical balance.
+
+    For confined steady GHB flow, intercell conductances annihilate a uniform
+    head shift. Summing external sources and GHB exchange independently avoids
+    subtracting large opposing intercell fluxes to determine this weak mode.
+    This changes no conductance and introduces no artificial constraint.
+
+    :param case: Solved confined steady equation without switching packages.
+    :param reference: Independent reference owning the physical connectivity.
+    :param head: Current numerical head grid.
+    :return: Candidate heads, or None when every component has prescribed heads.
+    """
+    from math import fsum
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+    labels = getattr(reference, '_datum_component_labels', None)
+    if labels is None:
+        graph = coo_matrix((np.ones(reference.left.size), (reference.left, reference.right)),
+            shape=(case.active.size, case.active.size)).tocsr()
+        unused, labels = connected_components(csgraph=graph, directed=False)
+        reference._datum_component_labels = labels
+    corrected = None
+    active = np.asarray(case.active).ravel() != 0
+    fixed = np.asarray(case.fixed).ravel() != 0
+    source = np.asarray(case.source).ravel()
+    conductance = reference.ghb_conductance.ravel()
+    boundary_head = reference.ghb_head.ravel()
+    flat = np.asarray(head).ravel()
+    for label in np.unique(labels[active]):
+        component = (labels == label) & active
+        if np.any(fixed[component]):
+            continue
+        restraint = fsum(conductance[component])
+        if restraint <= 0.:
+            continue
+        net_source = fsum(source[component])
+        boundary_outflow = fsum(conductance[component] * (flat[component] - boundary_head[component]))
+        shift = (net_source - boundary_outflow) / restraint
+        if not np.isfinite(shift) or shift == 0.:
+            continue
+        if corrected is None:
+            corrected = np.array(head, copy=True)
+        corrected.ravel()[component] += shift
+    return corrected
+
+
 def residual_merit(*,candidate,current):
     if not candidate['finite']:return np.inf
     flow=candidate['physical_rms']/max(current['physical_rms'],1e-12)
@@ -779,6 +826,20 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
     if wp.get_device(ident=model.device).is_cuda:wp.synchronize_device(device=model.device)
     seconds=perf_counter()-start
     head=None if device_sequence else workspace.head.numpy().reshape(case.active.shape).copy()
+    datum_refined = False
+    if (not workspace.transient and not workspace.has_drn_riv
+            and case.ghb_conductance is not None and not np.any(case.cell_types)):
+        corrected = refine_confined_component_datum(case=case, reference=reference, head=head)
+        if corrected is not None:
+            workspace.trial.assign(corrected.ravel())
+            refined_metrics = workspace.evaluate(trial=True, linearize=True)
+            refined_checks, unused = reference.evaluate(head=corrected,
+                physical_tolerance=physical_tolerance, relative_tolerance=relative_tolerance)
+            if (refined_checks['independent_accepted'] and device_accepted(metrics=refined_metrics,
+                    physical_tolerance=physical_tolerance, relative_tolerance=relative_tolerance)):
+                current = workspace.accept_trial(metrics=refined_metrics)
+                head = workspace.head.numpy().reshape(case.active.shape).copy()
+                datum_refined = True
     device_passed=device_accepted(metrics=current,physical_tolerance=physical_tolerance,relative_tolerance=relative_tolerance)
     ghb_budget = workspace.boundary_budget()
     chd_budget = workspace.chd_budget()
@@ -828,6 +889,7 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
         linear_budget_units='Krylov iterations shared across Newton and Picard per outer',
         max_krylov_per_outer=krylov_budget,max_outer=max_outer,krylov_restart=restart,
         scaling='fixed full-saturated principal diagonal; S*J and S*R',preconditioner='fixed diagonal within each GMRES solve')
+    result['component_datum_refined'] = datum_refined
     result['krylov_method']=method.upper()
     if roundoff_acceptance:
         result.update(roundoff_accepted=converged,requested_thresholds_met=requested_met,
