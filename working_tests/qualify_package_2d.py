@@ -112,7 +112,9 @@ def capture_info(*, info, elapsed):
     :return: Compact JSON-safe diagnostics.
     """
     keys = ('converged', 'solver_backend', 'implementation', 'production_precision_path',
-        'n_cycles_used', 'outer_iterations', 'cuda_graph_captures', 'cuda_graph_replays', 'cuda_graph_built_this_call', 'cuda_graph_reused',
+        'precision_mode', 'n_cycles_used', 'total_kcycles', 'inner_kcycles_per_outer',
+        'r_rms_end_64', 'dh_max_last', 'dh_rms_last',
+        'outer_iterations', 'cuda_graph_captures', 'cuda_graph_replays', 'cuda_graph_built_this_call', 'cuda_graph_reused',
         'graph_count', 'graph_fallback_count', 'device_side_picard_fast_path_active',
         'transient_face_graphs', 'transient_face_kcycle_graph_count', 'transient_face_refresh_graph_count',
         'adaptive_dt_retry_count', 'adaptive_dt_practical_fallback_count',
@@ -173,7 +175,7 @@ def qualify_steady(*, fields, dx, controls, profiles, mixed, repeats, source_con
     started = perf_counter()
     with make_model(fields=fields, dx=dx, device=device, source_control=source_control) as model:
         construction = perf_counter() - started
-        rows, calibration, updates = [], [], []
+        rows, calibration, updates, calibration_heads = [], [], [], []
         for repeat in range(repeats + 1):
             wp.synchronize_device(device=device)
             started = perf_counter()
@@ -199,12 +201,21 @@ def qualify_steady(*, fields, dx, controls, profiles, mixed, repeats, source_con
                     options=profiles['steady']['fast'], mixed=mixed, config=config)
                 wp.synchronize_device(device=device)
                 calibration.append(capture_info(info=info, elapsed=perf_counter() - started))
+                calibration_heads.append(head.copy())
                 updates.append(dict(wel_seconds=wel_seconds, recharge_seconds=recharge_seconds))
-        np.savez_compressed(directory / 'heads.npz', cold=cold_head, calibration=head)
+        started = perf_counter()
+        if not source_control:
+            model.accepted_wel_rates(head=head, info=info)
+        extraction = perf_counter() - started
+        started = perf_counter()
+        np.savez_compressed(directory / 'heads.npz', cold=cold_head, calibration=head,
+            heads=np.stack([cold_head, *calibration_heads]))
+        serialization = perf_counter() - started
     result = dict(commit=subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
         model_precision=os.environ['DARCY_FLOAT'], construction_seconds=construction, cold=rows[0], warm=rows[1:],
         warm_summary=summary(rows=rows[1:]), calibration=calibration, source_updates=updates,
-        controls=asdict(config) if mixed else profiles['steady']['fast'], source_control=source_control)
+        controls=asdict(config) if mixed else profiles['steady']['fast'], source_control=source_control,
+        accepted_output_extraction_seconds=extraction, output_serialization_seconds=serialization)
     (directory / 'result.json').write_text(json.dumps(result, indent=2))
     print(fields['active'].shape, 'mixed' if mixed else 'fast confined', source_control, result['warm_summary'], flush=True)
     return result

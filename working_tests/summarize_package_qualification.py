@@ -17,7 +17,8 @@ def compare_2d_heads(*, numerical, native, transient, target):
     :return: Measured errors and explicit preferred-target status.
     """
     with np.load(numerical / 'heads.npz') as computed, np.load(native / 'reference_outputs.npz') as reference:
-        if transient:
+        native_endpoints = len(reference['heads'])
+        if transient or 'heads' in computed:
             pairs = [(index, head) for index, head in enumerate(computed['heads'])]
         else:
             pairs = [(0, computed['cold']), (len(reference['heads']) - 1, computed['calibration'])]
@@ -26,7 +27,8 @@ def compare_2d_heads(*, numerical, native, transient, target):
             difference = head - reference['heads'][index, 0]
             rows.append(dict(index=index, maximum_m=float(np.max(np.abs(difference))),
                 rms_m=float(np.sqrt(np.mean(difference * difference)))))
-    result = dict(periods=rows, preferred_head_target_m=target,
+    result = dict(periods=rows, compared_endpoints=len(rows), native_endpoints=native_endpoints,
+        preferred_head_target_m=target,
         preferred_target_met=all(row['maximum_m'] <= target for row in rows))
     (numerical / 'mf6_exact_head_comparison.json').write_text(json.dumps(result, indent=2))
     return result
