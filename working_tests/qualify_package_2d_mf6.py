@@ -78,12 +78,9 @@ if __name__ == "__main__":
                 well_factors = np.resize(controls['history_wel_pattern'], controls['history_steps'])
                 recharge_factors = np.resize(controls['history_recharge_pattern'], controls['history_steps'])
                 durations = [controls['history_dt_days']] * controls['history_steps']
+            # Reuse qualified nonlinear profiles, including their outer
+            # budgets and head criteria, for every final Newton reference.
             ims = dict(profiles['mf6']['steady_unconfined' if mode in ('steady', 'mixed') else 'transient'])
-            if mode in ('steady', 'mixed'):
-                # Reuse the maintained nonlinear MF6 profile, including its
-                # outer budget and head criteria, rather than the ten-outer
-                # SIMPLE/CG profile used for confined linear references.
-                ims = dict(profiles['mf6']['steady_unconfined'])
             if arguments.profile == 'strict':
                 # Same independently pinned accuracy profile as the 3D twin.
                 ims = dict(complexity='COMPLEX', linear_acceleration='BICGSTAB',
