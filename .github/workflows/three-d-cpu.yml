@@ -2,7 +2,7 @@ name: Numerical regression suite
 
 on:
   push:
-    branches: [dev, main, feature/sfr-3d-boundaries]
+    branches: [dev, main]
   pull_request:
     branches: [dev, main]
 

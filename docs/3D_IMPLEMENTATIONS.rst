@@ -7,7 +7,7 @@ originally promoted by PR #4 at revision
 Subsequent GPU-resident history and performance optimisations are now on
 ``main``. See :doc:`npf_gpu_native` for the current 3D transient
 qualification and explicit runtime profiles. Transformed terrain
-remains experimental development on ``dev``.
+is archived research outside the maintained solver tree.
 
 Set ``DARCY_FLOAT=float64`` before importing the package. Qualification uses
 Python 3.12, warp-lang 1.17.0 and an NVIDIA CUDA device. K, head, source and

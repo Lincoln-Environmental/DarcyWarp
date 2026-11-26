@@ -277,7 +277,7 @@ The :doc:`npf_gpu_native` page summarises the current accelerated
 multi-step NPF history, strict and confined performance control files,
 independent MF6 checks and timing boundaries. The fast history is
 opt-in, and its measured runtime is not a library-default guarantee.
-Transformed terrain remains experimental on ``dev``.
+Transformed terrain is archived research outside the maintained solver tree.
 
 SFR, UZF and transport are not included. Legacy Cartesian and experimental
 terrain DRN/RIV, automatic dry-cell well-rate reduction and comprehensive

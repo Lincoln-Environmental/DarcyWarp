@@ -122,7 +122,7 @@ drying/rewetting parity remain outside the supported scope.
 See [2D solver selection](source/capabilities.rst),
 [structured 3D models](docs/3D_CARTESIAN_NPF.md) and
 [current 3D NPF GPU execution](source/npf_gpu_native.rst) for API and
-validation details. Transformed terrain remains experimental on `dev`.
+validation details. Transformed terrain is archived research, outside the maintained solver tree. See the [development archive](docs/DEVELOPMENT_ARCHIVE.md).
 
 ## Quick start
 

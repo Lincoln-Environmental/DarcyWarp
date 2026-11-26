@@ -19,8 +19,9 @@ Warp as `warp-lang==1.17.0`; its Python import name is `warp`.
 
 ## Make a focused change
 
-Work on a branch based on `main` and keep documentation, examples and
-numerical changes scoped to the problem. Preserve existing APIs unless the
+Work on `dev` or a short-lived branch based on `dev`; keep `main` as the
+stable release branch. Keep documentation, examples and numerical changes
+scoped to the problem. See the [development archive and branch policy](docs/DEVELOPMENT_ARCHIVE.md). Preserve existing APIs unless the
 change explicitly requires an interface update.
 
 Use explicit functions and readable control flow. Keep parameters and physical

@@ -4,7 +4,7 @@ import re
 from collections import defaultdict
 from pathlib import Path
 import csv
-import time
+from operator import itemgetter
 
 import warp as wp
 
@@ -47,6 +47,12 @@ def _filter_label(filter_value: int) -> str:
 
 
 def print_warp_bottlenecks(results: list[wp.TimingResult], indent: str = "", top_k: int = 30) -> None:
+    """Summarise GPU timing events by activity, device and kernel.
+
+    :param results: Warp timing events from the measured solve.
+    :param indent: Prefix for printed output.
+    :param top_k: Maximum number of kernel entries to print.
+    """
     # Aggregate totals
     total_ms = 0.0
     by_filter_ms = defaultdict(float)
@@ -80,21 +86,21 @@ def print_warp_bottlenecks(results: list[wp.TimingResult], indent: str = "", top
     print(f"{indent}Total recorded GPU time: {total_ms:.3f} ms")
 
     print(f"{indent}\n{indent}By activity type:")
-    for key in sorted(by_filter_ms.keys(), key=lambda k: by_filter_ms[k], reverse=True):
+    for key in sorted(by_filter_ms.keys(), key=by_filter_ms.__getitem__, reverse=True):
         ms = by_filter_ms[key]
         pct = 0.0 if total_ms <= 0.0 else 100.0 * ms / total_ms
         cnt = by_filter_count[key]
         print(f"{indent}  {key:8s}  {ms:12.3f} ms  {pct:6.2f}%  (count={cnt})")
 
     print(f"{indent}\n{indent}By device:")
-    for dev in sorted(by_device_ms.keys(), key=lambda d: by_device_ms[d], reverse=True):
+    for dev in sorted(by_device_ms.keys(), key=by_device_ms.__getitem__, reverse=True):
         ms = by_device_ms[dev]
         pct = 0.0 if total_ms <= 0.0 else 100.0 * ms / total_ms
         print(f"{indent}  {dev:8s}  {ms:12.3f} ms  {pct:6.2f}%")
 
     # Top kernels
     print(f"{indent}\n{indent}Top kernels (kernel + builtin) by total GPU time:")
-    items = sorted(by_kernel_ms.items(), key=lambda kv: kv[1], reverse=True)
+    items = sorted(by_kernel_ms.items(), key=itemgetter(1), reverse=True)
     for i, (kname, ms) in enumerate(items[:top_k], start=1):
         pct = 0.0 if total_ms <= 0.0 else 100.0 * ms / total_ms
         cnt = by_kernel_count[kname]
@@ -106,6 +112,13 @@ def profile_one_solve(
     out_csv: Path | None = None,
     warmup_runs: int = 1,
 ) -> list[wp.TimingResult]:
+    """Profile a supplied callable after optional warmup.
+
+    :param solve_callable: Explicit callable executing the solve.
+    :param out_csv: Optional destination for raw timing events.
+    :param warmup_runs: Number of untimed solves before profiling.
+    :return: Measured Warp timing events.
+    """
     # Warmup to exclude JIT compilation and first time allocations
     for _ in range(warmup_runs):
         solve_callable()

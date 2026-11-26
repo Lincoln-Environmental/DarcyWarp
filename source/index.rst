@@ -80,7 +80,8 @@ Repository map
 
 The public factory also supports 3D Cartesian and conventional layered DIS
 flow. See :doc:`capabilities` for the 3D formulations and example. Transformed
-terrain remains experimental on ``dev``.
+terrain is archived research outside the maintained solver tree. See the
+`development archive <https://github.com/Lincoln-Environmental/DarcyWarp/blob/dev/docs/DEVELOPMENT_ARCHIVE.md>`_.
 
 Development and citation
 ------------------------

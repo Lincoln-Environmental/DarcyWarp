@@ -1,0 +1,68 @@
+{
+  "baseline": "2b6c452f982e12c76128109f167da88ffe8c6133",
+  "archive_tag": "archive/pre-dev-reset-2026-11-27",
+  "archive_commit": "667c80388ea1b1e67d3e7060a7916b8d1dafedf8",
+  "retired_files": [
+    {
+      "path": "DARCY_WARP_PACKAGE/profiles/darcy_kcycle.qdrep",
+      "sha": "763ebbd1e9bfe52a8d92d20de6f5e546a3b0029b",
+      "bytes": 6605141
+    },
+    {
+      "path": "DARCY_WARP_PACKAGE/profiles/darcy_kcycle.qdstrm",
+      "sha": "3df39e7450aaba47339543fa7824b740541c9b42",
+      "bytes": 37627114
+    },
+    {
+      "path": "DARCY_WARP_PACKAGE/profiles/darcy_kcycle.sqlite",
+      "sha": "001ed24b0f317115da324b0399dbda5ed3b2f0cc",
+      "bytes": 21442560
+    },
+    {
+      "path": "DARCY_WARP_PACKAGE/profiles/darcy_warp_timing.csv",
+      "sha": "0d4b5dd2e39af5ae116b61a727a09383c4694891",
+      "bytes": 224434
+    },
+    {
+      "path": "DARCY_WARP_PACKAGE/k_cycle_multigrid.py",
+      "sha": "ec19c1551f123d805febe7bc7f0ebfc8214112e0",
+      "bytes": 7020
+    },
+    {
+      "path": "DARCY_WARP_PACKAGE/QUICKFLOW_mass_balance_check.py",
+      "sha": "5342c8f97b19ba69805bdb15803bf744bfb63cac",
+      "bytes": 7756
+    },
+    {
+      "path": "DARCY_WARP_PACKAGE/warp_profile.py",
+      "sha": "d4d564d2855f8e745129c36590a18d05d4314877",
+      "bytes": 4446
+    },
+    {
+      "path": "docs/3D_DRN_RIV_SFR_DEVELOPMENT.rst",
+      "sha": "239b847eccd8ebf7b72162b21bfb0c681547264a",
+      "bytes": 7587
+    },
+    {
+      "path": "docs/3D_WEL_SOURCE_PACKAGES_2026-11-26.rst",
+      "sha": "98b126dbafc1f4f9009551e056edc07a40b8e6bb",
+      "bytes": 10396
+    },
+    {
+      "path": "docs/WEL_DRN_RIV_AUDIT_REPAIR_2026-11-26.rst",
+      "sha": "1d6082da68dfad329ef4b3ab4941c80810ea5bf4",
+      "bytes": 7955
+    },
+    {
+      "path": "docs/PACKAGE_AUDIT_STOPPED_2026-11-27.rst",
+      "sha": "2c8158b509bb7d1a704de81b6e05f7449a61eaff",
+      "bytes": 926
+    },
+    {
+      "path": "docs/SFR_BOUNDARY_IMPLEMENTATION_AUDIT.rst",
+      "sha": "dc96f24fae37bc586e8e70a6aca3878c57dd53da",
+      "bytes": 7174
+    }
+  ],
+  "note": "All files are recoverable at v0.4.0; warp_profile.py is relocated to working_tests. Historical scientific fixtures and benchmark receipts are unchanged."
+}

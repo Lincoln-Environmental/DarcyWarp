@@ -21,3 +21,7 @@ build/
 
 # Generated example and benchmark outputs
 outputs/
+
+# Generated profiling data (historical outputs are preserved in v0.4.0)
+/profiles/
+/DARCY_WARP_PACKAGE/profiles/

@@ -28,7 +28,7 @@ overwrite the others.
 | --- | --- | --- |
 | `legacy` | Flat Cartesian, uniform layer thickness | Confined and unconfined, steady and backward Euler transient |
 | `mf6_6_6_2_npf` | Uniform Cartesian or conventional layered DIS | Confined and convertible, steady and backward Euler NPF/STO |
-| Transformed terrain | Experimental development on `dev` | Separate formulation outside the Cartesian/NPF release |
+| Transformed terrain | Archived experimental research | Separate formulation outside the Cartesian/NPF release |
 
 Build legacy and uniform NPF models with `build_from_K_fields`. Legacy
 confined models can also use six reciprocal face arrays through

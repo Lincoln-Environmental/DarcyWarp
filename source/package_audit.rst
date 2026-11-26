@@ -3,8 +3,8 @@ WEL, DRN and RIV release
 
 This page summarises the production package release audited at
 ``72cb1ee535c3db5f5b8e21121cf70169cdb08cc8``. It supersedes the interim
-package-status pages as current user documentation. Those dated reports remain
-in ``docs/`` as development provenance; they describe intermediate revisions,
+package-status pages as current user documentation. Those dated reports remain available in the immutable v0.4.0 release
+as development provenance; they describe intermediate revisions,
 open work and test counts and must not be read as the final release contract.
 
 New capabilities
@@ -143,7 +143,7 @@ Remaining limitations
   heterogeneous regional models.
 
 The historical
-`WEL/DRN/RIV audit-repair report <https://github.com/Lincoln-Environmental/DarcyWarp/blob/main/docs/WEL_DRN_RIV_AUDIT_REPAIR_2026-11-26.rst>`_
+`WEL/DRN/RIV audit-repair report <https://github.com/Lincoln-Environmental/DarcyWarp/blob/v0.4.0/docs/WEL_DRN_RIV_AUDIT_REPAIR_2026-11-26.rst>`_
 and related dated reports are retained for traceability. They are not current
 release notes and their internal development defect inventory is not reproduced
 here.
