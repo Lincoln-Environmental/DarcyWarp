@@ -102,6 +102,7 @@ class HistorySources:
         # scheduled component drops out of the scaled base entirely.
         self.volumetric = (None if model._volumetric_source is None
                            else np.array(model._volumetric_source, copy=True))
+        self.built_well_entries = model._wel_entries if wells is None else None
         self.built_wells = (None if model._wel_entries is None or wells is not None
                             else np.array(model._wel_entries.rates, copy=True))
         self.built_recharge = (None if model._recharge_rate is None or rates is not None
@@ -118,6 +119,42 @@ class HistorySources:
                     dtype=self.base.dtype)
             else:
                 self.base = model._source_without_wells(dtype=self.base.dtype)
+
+        from DARCY_WARP_PACKAGE.physics.wel import sparse_well_cell_rates
+        self.sparse_wells = (None if wells is None else [
+            sparse_well_cell_rates(entries=entries, shape=self.base.shape) for entries in wells])
+        self.requires_gross = bool(wells is not None or self.built_wells is not None or
+            ((rates is not None or self.built_recharge is not None) and self.volumetric is not None
+             and np.any(self.volumetric != 0.)))
+        self.gross_base = None
+        if self.requires_gross:
+            self.gross_base = (np.zeros_like(self.base) if self.volumetric is None
+                               else np.abs(self.volumetric))
+            if self.built_recharge is not None:
+                selected = np.broadcast_to(np.abs(self.built_recharge), self.base.shape[1:]).ravel()
+                self.gross_base.ravel()[self.budget_receivers] += selected[self.budget_receivers % self.column_count] * self.area
+            cells, unused_signed, gross = sparse_well_cell_rates(entries=self.built_well_entries,
+                shape=self.base.shape)
+            self.gross_base.ravel()[cells] += gross
+
+    def host_gross_source(self, *, index):
+        """Own gross throughput of the exact period-specific physical sources.
+
+        :param index: Requested period.
+        :return: Gross source field, or None when signed magnitude is sufficient.
+        """
+        if not self.requires_gross:
+            return None
+        gross = self.gross_base * abs(self.factors[index])
+        if self.rates is not None:
+            rate = np.abs(self.rate_at(index))
+            if rate.ndim == 2:
+                rate = rate.ravel()[self.receivers % self.column_count]
+            gross.ravel()[self.receivers] += rate * self.area
+        if self.sparse_wells is not None:
+            cells, unused_signed, rates = self.sparse_wells[index]
+            gross.ravel()[cells] += rates
+        return gross
 
     def rate_at(self, index):
         """Return the scalar or horizontal field for one zero-based step.
@@ -177,58 +214,65 @@ class HistorySources:
             if rate.ndim == 2:
                 rate = rate.ravel()[self.receivers % self.column_count]
             source.flat[self.receivers] += rate * self.area
-        scheduled = well_cell_volume_rates(entries=self.wells_at(index), shape=source.shape)
-        if scheduled is not None:
-            source += scheduled
+        if self.sparse_wells is not None:
+            cells, rates, unused_gross = self.sparse_wells[index]
+            source.ravel()[cells] += rates
         return source
 
     def upload(self, device):
-        """Upload reusable source buffers for the resident history.
+        """Upload persistent source fields and capacity-sized sparse WEL buffers.
 
-        :param device: Warp device holding the Newton workspace.
+        :param device: Owning Warp device.
+        :return: None.
         """
         self.device_base = wp.array(self.base.ravel(), dtype=wp.float64, device=device)
-        self.has_scheduled_wells = self.wells is not None
-        if self.has_scheduled_wells:
-            self.device_wells = wp.empty(self.base.size, dtype=wp.float64, device=device)
-            self.host_wells = [well_cell_volume_rates(entries=step, shape=self.base.shape)
-                               for step in self.wells]
-        if self.rates is None or not self.receivers.size:
-            return
-        self.device_receivers = wp.array(self.receivers, dtype=wp.int32, device=device)
-        if self.rates.ndim < 2:
-            # Uniform rates travel as kernel arguments, without period uploads.
-            self.device_rates = wp.empty(1, dtype=wp.float64, device=device)
-        else:
-            self.device_rates = wp.array(self.rate_at(0).ravel(), dtype=wp.float64, device=device)
+        if self.requires_gross:
+            self.device_gross_base = wp.array(self.gross_base.ravel(), dtype=wp.float64, device=device)
+        if self.sparse_wells is not None:
+            capacity = max(len(record[0]) for record in self.sparse_wells)
+            self.device_well_cells = wp.empty(capacity, dtype=wp.int32, device=device)
+            self.device_well_rates = wp.empty(capacity, dtype=wp.float64, device=device)
+            self.device_well_gross = wp.empty(capacity, dtype=wp.float64, device=device)
+        if self.rates is not None and self.receivers.size:
+            self.device_receivers = wp.array(self.receivers, dtype=wp.int32, device=device)
+            self.device_rates = (wp.empty(1, dtype=wp.float64, device=device) if self.rates.ndim < 2 else
+                wp.array(self.rate_at(0).ravel(), dtype=wp.float64, device=device))
 
     def apply(self, workspace, index):
-        """Prepare the complete source on device; copy only varying surface fields.
+        """Update resident signed/gross forcing without dense period WEL uploads.
 
-        :param workspace: Resident Newton workspace whose source field is updated.
-        :param index: Requested step.
+        :param workspace: Resident numerical workspace.
+        :param index: Requested period.
+        :return: None.
         """
         wp.launch(kernel=kernels.scale_period_source, dim=workspace.n,
             inputs=[self.device_base, workspace.source, self.factors[index]], device=workspace.device)
-        if getattr(self, 'has_scheduled_wells', False):
-            scheduled = self.host_wells[index]
-            if scheduled is None:
-                self.device_wells.zero_()
-            else:
-                self.device_wells.assign(scheduled.ravel())
-            wp.launch(kernel=kernels.add_cell_rates, dim=workspace.n,
-                inputs=[self.device_wells, workspace.source], device=workspace.device)
-        if self.rates is None or not self.receivers.size:
-            return
-        scalar_rate = 0.0
-        uniform = self.rates.ndim < 2
-        if uniform:
-            scalar_rate = float(self.rate_at(index))
-        elif self.rates.ndim == 3:
-            self.device_rates.assign(self.rate_at(index).ravel())
-        wp.launch(kernel=kernels.add_surface_recharge, dim=self.receivers.size,
-            inputs=[self.device_receivers, self.device_rates, self.column_count, self.area,
-                    int(uniform), scalar_rate, workspace.source], device=workspace.device)
+        if self.requires_gross:
+            wp.launch(kernel=kernels.scale_period_source, dim=workspace.n,
+                inputs=[self.device_gross_base, workspace.source_gross, abs(self.factors[index])], device=workspace.device)
+        if self.rates is not None and self.receivers.size:
+            uniform = self.rates.ndim < 2
+            scalar_rate = float(self.rate_at(index)) if uniform else 0.
+            if self.rates.ndim == 3:
+                self.device_rates.assign(self.rate_at(index).ravel())
+            inputs = [self.device_receivers, self.device_rates, self.column_count, self.area,
+                      int(uniform), scalar_rate]
+            wp.launch(kernel=kernels.add_surface_recharge, dim=self.receivers.size,
+                inputs=[*inputs, workspace.source], device=workspace.device)
+            if self.requires_gross:
+                wp.launch(kernel=kernels.add_surface_recharge_gross, dim=self.receivers.size,
+                    inputs=[*inputs, workspace.source_gross], device=workspace.device)
+        if self.sparse_wells is not None:
+            cells, rates, gross = self.sparse_wells[index]
+            count = len(cells)
+            if count:
+                self.device_well_cells[:count].assign(cells.astype(np.int32))
+                self.device_well_rates[:count].assign(rates)
+                self.device_well_gross[:count].assign(gross)
+                wp.launch(kernel=kernels.add_sparse_period_wells, dim=count,
+                    inputs=[self.device_well_cells, self.device_well_rates, self.device_well_gross,
+                        workspace.source, workspace.source if workspace.source_gross is None else workspace.source_gross,
+                        int(workspace.source_gross is not None)], device=workspace.device)
 
 
 class DeviceHistoryReference:
@@ -249,14 +293,14 @@ class DeviceHistoryReference:
         :return: Seeded numerical heads and physical activation records.
         """
         previous = self.workspace.storage_previous.numpy().reshape(self.case.active.shape).copy()
-        case = replace(self.case, source=self.sources.host_source(index=self.index))
+        case = replace(self.case, source=self.sources.host_source(index=self.index), source_gross=self.sources.host_gross_source(index=self.index))
         reference = NPF662TransientReference(case=case, previous=previous, dt=self.dt,
             ss=self.ss, sy=self.sy)
         return reference.seed_unanchored_boundary_components(head=head)
 
     def evaluate(self, *, head, **tolerances):
         previous = self.workspace.storage_previous.numpy().reshape(self.case.active.shape).copy()
-        case = replace(self.case, source=self.sources.host_source(self.index))
+        case = replace(self.case, source=self.sources.host_source(self.index), source_gross=self.sources.host_gross_source(index=self.index))
         return NPF662TransientReference(case=case, previous=previous, dt=self.dt,
             ss=self.ss, sy=self.sy).evaluate(head=head, **tolerances)
 
@@ -386,6 +430,8 @@ def solve_transient_history(*, model, dt, head_prev, ss, sy,
         dt=dt, source_factors=source_factors, recharge_rates=recharge_rates,
         wel_rates=wel_rates, surface_shape=(model.ny, model.nx), model=model,
     )
+    if wells is not None:
+        model._track_well_sources = True
     options = dict(solver_options)
     for name in ('transient', 'npf_device_native', 'return_info'):
         if not isinstance(options.get(name, True), (bool, np.bool_)) or not options.pop(name, True):
@@ -403,7 +449,10 @@ def solve_transient_history(*, model, dt, head_prev, ss, sy,
     periods = []
     workspace = None
     head_readbacks = 0
+    was_running = getattr(model, '_npf_history_running', False)
+    model._npf_history_running = True
     try:
+        model._npf_history_sources = (sources, 0)
         model._session.update_rhs(sources.host_source(0))
         model.update_initial_head(initial_head=initial)
         first_start = perf_counter()
@@ -441,7 +490,7 @@ def solve_transient_history(*, model, dt, head_prev, ss, sy,
                 dt=reference.dt, area=base.dx*base.dy)
             if activation_watch:
                 previous_host = workspace.storage_previous.numpy().reshape(base.active.shape)
-                step_case = replace(base, source=sources.host_source(index=index))
+                step_case = replace(base, source=sources.host_source(index=index), source_gross=sources.host_gross_source(index=index))
                 activation_reference = NPF662TransientReference(case=step_case,
                     previous=previous_host, dt=reference.dt, ss=state.ss, sy=state.sy)
                 seeded_head, step_seeds = activation_reference.seed_unanchored_boundary_components(head=previous_host)
@@ -484,9 +533,22 @@ def solve_transient_history(*, model, dt, head_prev, ss, sy,
         else:
             prefix = history.numpy()
         heads = prefix.reshape((count, *base.active.shape))
+        if getattr(model, '_track_well_sources', False):
+            from DARCY_WARP_PACKAGE.physics.wel import WellEntries, attach_accepted_source_state, own_source_inputs
+            for index, period in enumerate(periods):
+                entries = sources.wells_at(index=index)
+                if sources.wells is None and sources.built_well_entries is not None:
+                    entries = WellEntries(cells=sources.built_well_entries.cells,
+                        rates=sources.built_well_entries.rates * factors[index])
+                attach_accepted_source_state(model=model, head=heads[index], info=period,
+                    dt=float(times[index]), entries=entries, budgets=period['source_budgets'],
+                    source_inputs=own_source_inputs(volumetric=sources.volumetric,
+                        recharge=sources.rate_at(index) if sources.rates is not None else sources.built_recharge,
+                        volumetric_factor=factors[index], recharge_factor=1. if sources.rates is not None else factors[index],
+                        cell_area=sources.area, copy_arrays=False))
         last_previous = initial if count == 1 else heads[-2]
         state = model._session._npf662_workspace_holder['native_state']
-        state.refresh(model=model, case=replace(base, source=sources.host_source(count-1), initial=last_previous),
+        state.refresh(model=model, case=replace(base, source=sources.host_source(count-1), source_gross=sources.host_gross_source(index=count-1), initial=last_previous),
             previous=last_previous, dt=float(times[count-1]), ss=ss, sy=sy)
         state.preconditioner_storage_device = workspace.previous_storage_tangent
         if workspace.predictor_checkpoint is not None:
@@ -500,6 +562,8 @@ def solve_transient_history(*, model, dt, head_prev, ss, sy,
         model._session._npf662_workspace_holder.pop('native_state', None)
         raise
     finally:
+        model._npf_history_sources = None
+        model._npf_history_running = was_running
         model._session.update_rhs(source_host)
         model.update_initial_head(initial_head=old_initial)
     wp.synchronize_device(device=model.device)

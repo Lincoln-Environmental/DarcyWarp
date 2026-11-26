@@ -86,7 +86,7 @@ def serialized_case_fields(*,case):
                 if name not in ('drn_entries', 'riv_entries')
                 and (name not in ('ghb_conductance', 'ghb_head', 'drn_conductance',
                                   'drn_elevation', 'drn_mask', 'riv_conductance', 'riv_stage',
-                                  'riv_bottom', 'riv_mask')
+                                  'riv_bottom', 'riv_mask', 'source_gross')
                      or getattr(case, name) is not None))
     if getattr(case,'_legacy_implicit_cell_type',False) and np.ndim(case.cell_type)==0 and case.cell_type==0:
         return tuple(name for name in names if name!='cell_type')
@@ -146,6 +146,7 @@ class NPF662Case:
     riv_mask: np.ndarray | None = None
     drn_entries: object | None = None
     riv_entries: object | None = None
+    source_gross: np.ndarray | None = None
 
     def validate(self):
         shape=self.active.shape
@@ -153,6 +154,10 @@ class NPF662Case:
         for name in ('kx','ky','kz','fixed','values','source','initial'):
             value=np.asarray(getattr(self,name))
             if value.shape!=shape or not np.all(np.isfinite(value)):raise ValueError(f'Invalid {name}')
+        if self.source_gross is not None:
+            gross = np.asarray(self.source_gross)
+            if gross.shape != shape or not np.all(np.isfinite(gross)) or np.any(gross < np.abs(self.source)):
+                raise ValueError('Gross source must be finite and include every signed source')
         spacing=(self.dx,self.dy) if self.geometry=='structured_dis_layered' else (self.dx,self.dy,self.dz)
         if any(np.ndim(x)!=0 or not np.isfinite(x) or x<=0 for x in spacing):raise ValueError('Positive finite spacing required')
         if self.geometry!='structured_dis_layered' and (np.ndim(self.top)!=0 or not np.isfinite(self.top)):
@@ -260,6 +265,7 @@ class NPF662LayeredCase:
     riv_mask: np.ndarray | None = None
     drn_entries: object | None = None
     riv_entries: object | None = None
+    source_gross: np.ndarray | None = None
 
     validate_active_heads = NPF662Case.validate_active_heads
 
@@ -313,7 +319,7 @@ def load_npf662_case(*,path):
         cls=NPF662Case if schema==1 else NPF662LayeredCase
         optional_fields = {'ghb_conductance', 'ghb_head', 'drn_conductance', 'drn_elevation',
                            'drn_mask', 'riv_conductance', 'riv_stage', 'riv_bottom', 'riv_mask',
-                           'drn_entries', 'riv_entries'}
+                           'drn_entries', 'riv_entries', 'source_gross'}
         missing=set(cls.__dataclass_fields__)-set(saved.files)-optional_fields
         implicit=bool(schema==1 and missing=={'cell_type'})
         if missing and not implicit:raise ValueError(f'Missing NPF input fields: {sorted(missing)}')
@@ -651,6 +657,11 @@ class NPF662Reference:
         drn_entries_discharge, drain, riv_entries_discharge, river = self.boundary_terms(head=head)
         boundary_exchange = ghb_exchange + drain.discharge + river.discharge
         boundary_tangent = self.ghb_conductance + drain.diagonal + river.diagonal
+        drain_gross = (np.abs(drain.discharge) if drn_entries_discharge is None else
+            np.bincount(self.drn_csr.flat_cells, weights=np.abs(drn_entries_discharge), minlength=c.active.size).reshape(self.shape))
+        river_gross = (np.abs(river.discharge) if riv_entries_discharge is None else
+            np.bincount(self.riv_csr.flat_cells, weights=np.abs(riv_entries_discharge), minlength=c.active.size).reshape(self.shape))
+        boundary_gross = np.abs(ghb_exchange) + drain_gross + river_gross
         residual=np.where(self.free,c.source-divergence-boundary_exchange,0.)
         diagonal=np.asarray(abs(self.incidence)@conductance).reshape(self.shape)+boundary_tangent
         scaled=np.divide(residual,diagonal,out=np.zeros_like(residual),where=diagonal>0)
@@ -675,7 +686,8 @@ class NPF662Reference:
         riv_out=stable_sum(values=np.maximum(river_rates,0.))
         inflow=stable_sum(values=[chd_in,ghb_in,drn_in,riv_in])
         outflow=stable_sum(values=[chd_out,ghb_out,drn_out,riv_out])
-        throughput=stable_sum(values=np.concatenate([np.abs(c.source[self.free]),np.abs(free_exchange)]))
+        gross_source = np.abs(c.source) if c.source_gross is None else np.asarray(c.source_gross)
+        throughput=stable_sum(values=np.concatenate([gross_source[self.free],np.abs(free_exchange)]))
         rms=stable_rms(values=residual[self.free]);hrms=stable_rms(values=scaled[self.free])
         l1=stable_sum(values=np.abs(residual[self.free]));relative=l1/max(throughput,np.finfo(float).tiny)
         active=c.active!=0
@@ -710,7 +722,8 @@ class NPF662Reference:
                 active=c.active, fixed=c.fixed)
             result['local_balance_valid'] = local_balance_valid(case=c, free=self.free, left=self.left, right=self.right,
                 head=head, residual=residual, flux=flux, conductance=conductance, ghb_conductance=boundary_tangent,
-                ghb_exchange=boundary_exchange, thresholds=thresholds, component_anchor=component_anchor)
+                ghb_exchange=boundary_exchange, thresholds=thresholds, component_anchor=component_anchor,
+                boundary_throughput=boundary_gross)
             result['independent_accepted'] &= result['local_balance_valid']
         if roundoff_acceptance:
             from .npf662_metrics import apply_roundoff_acceptance
@@ -719,13 +732,13 @@ class NPF662Reference:
         return result,dict(flux=flux,residual=residual,fixed_reservoir_required_inflow=np.where(c.fixed,divergence-c.source,0.),
             chd_cell_rate=np.where(fixed,divergence,0.),
             principal_diagonal=diagonal,saturation=saturation,ghb_outflow=ghb_exchange,
-            drn_outflow=drain.discharge,riv_outflow=river.discharge,
+            drn_outflow=drain.discharge,riv_outflow=river.discharge,boundary_throughput=boundary_gross,
             conductance=conductance,dflux_left=dl,dflux_right=dr)
 
     def solve(self,*,max_outer=200):
         self.check_components()
-        has_switching_boundary = bool(np.any(self.drn_conductance > 0.) or
-                                      np.any(self.riv_conductance > 0.))
+        has_switching_boundary = bool(self.drn_csr is not None or self.riv_csr is not None
+            or np.any(self.drn_conductance > 0.) or np.any(self.riv_conductance > 0.))
         if np.any(self.case.cell_types[self.case.active!=0]) or has_switching_boundary:
             return self.solve_newton(max_outer=max_outer)
         c=self.case;f=self.free.ravel();fixed=c.fixed.ravel()!=0

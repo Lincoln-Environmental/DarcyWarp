@@ -970,3 +970,67 @@ def add_surface_recharge(receivers: wp.array(dtype=wp.int32), rates: wp.array(dt
     if uniform == 0:
         rate = rates[cell % column_count]
     source[cell] += rate * area
+
+
+@wp.kernel
+def add_gross_source_metrics(source: wp.array(dtype=wp.float64),
+    gross: wp.array(dtype=wp.float64), free: wp.array(dtype=wp.int32),
+    partials: wp.array2d(dtype=wp.float64), block_size: int):
+    """Add physical source throughput omitted by signed source cancellation.
+
+    :param source: Signed numerical source field.
+    :param gross: Independently assembled gross physical source field.
+    :param free: Free groundwater cells.
+    :param partials: Existing per-block physical metrics, modified in place.
+    :param block_size: Cells per partial metric block.
+    :return: None; the signed residual and head gates remain unchanged.
+    """
+    i = wp.tid()
+    if free[i] != 0:
+        correction = gross[i] - wp.abs(source[i])
+        if correction > wp.float64(0.0):
+            wp.atomic_add(partials, i / block_size, 3, correction)
+
+
+@wp.kernel
+def add_sparse_period_wells(cells: wp.array(dtype=wp.int32), rates: wp.array(dtype=wp.float64),
+    gross_rates: wp.array(dtype=wp.float64), source: wp.array(dtype=wp.float64),
+    source_gross: wp.array(dtype=wp.float64), has_gross: int):
+    """Add unique sparse cell rates without full-grid WEL uploads or atomics.
+
+    :param cells: Unique flat groundwater cell indices.
+    :param rates: Stably accumulated signed WEL rates.
+    :param gross_rates: Gross per-cell WEL throughput.
+    :param source: Resident signed source, updated in place.
+    :param source_gross: Optional resident physical throughput field.
+    :param has_gross: One when the gross field is present.
+    :return: None.
+    """
+    entry = wp.tid()
+    cell = cells[entry]
+    source[cell] += rates[entry]
+    if has_gross != 0:
+        source_gross[cell] += gross_rates[entry]
+
+
+@wp.kernel
+def add_surface_recharge_gross(receivers: wp.array(dtype=wp.int32),
+    rates: wp.array(dtype=wp.float64), column_count: int, area: wp.float64,
+    uniform: int, scalar_rate: wp.float64, source_gross: wp.array(dtype=wp.float64)):
+    """Add absolute surface recharge with the existing receiving-cell convention.
+
+    :param receivers: Actual flat recharge receiving cells.
+    :param rates: Optional nonuniform depth field.
+    :param column_count: Horizontal cell count.
+    :param area: Horizontal cell area.
+    :param uniform: One for scalar recharge.
+    :param scalar_rate: Uniform signed depth rate.
+    :param source_gross: Resident gross physical source field.
+    :return: None.
+    """
+    index = wp.tid()
+    cell = receivers[index]
+    rate = scalar_rate
+    if uniform == 0:
+        rate = rates[cell % column_count]
+    source_gross[cell] += wp.abs(rate) * area

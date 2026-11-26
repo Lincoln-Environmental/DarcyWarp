@@ -188,6 +188,7 @@ def test_both_attempts_and_safeguard_share_five_krylov_iterations():
     case=make_dry_case(initial=.001,source=1.)
     with make_gpu_model(case=case,device='cpu') as model:
         head,info=model.solve(unconfined=True,top_elevation=4.,max_cycles=5,max_outer=1,
+            npf_preconditioner='diagonal',
             npf_newton_controls=NPF662NewtonControls(line_search_steps=1,max_head_change_m=50.,recovery_growth=1.))
         assert not info['converged']
         row=info['outer_history'][0]

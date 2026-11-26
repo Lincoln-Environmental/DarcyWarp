@@ -178,6 +178,7 @@ def solve_transient_unconfined_experimental(
     backend_name: str,
     initial_head: np.ndarray,
     recharge_rates: np.ndarray,
+    wel_rates=None,
     k_field: np.ndarray,
     zbot_field: np.ndarray,
     ztop_field: np.ndarray,
@@ -202,6 +203,8 @@ def solve_transient_unconfined_experimental(
     ``head_new`` given the previous accepted head, the current dt, the current
     stress-period source and boundary data, and the current Sy/Ss.  The
     previous-head state advances only on accepted timesteps.
+
+    :param wel_rates: Optional independent sparse WEL entry list per period; None retains built wells.
     """
     if backend_name not in NONLINEAR_TRANSIENT_BACKENDS:
         raise ValueError(
@@ -252,10 +255,11 @@ def solve_transient_unconfined_experimental(
         if arr.shape != h0.shape:
             raise ValueError(f"{name} shape {arr.shape} expected {h0.shape}")
 
-    rates = np.asarray(recharge_rates, dtype=np.float64).reshape(-1)
+    from DARCY_WARP_PACKAGE.physics.inputs_3d import floating_field
+    rates = floating_field(value=recharge_rates, name="recharge_rates", dtype=np.float64).reshape(-1)
     source_fields = None
     if source_fields_per_period is not None:
-        source_fields = np.asarray(source_fields_per_period, dtype=np.float64)
+        source_fields = floating_field(value=source_fields_per_period, name="source_fields_per_period", dtype=np.float64)
         if source_fields.ndim != 3 or source_fields.shape[1:] != h0.shape:
             raise ValueError(
                 f"source_fields_per_period must have shape (n_periods, {h0.shape[0]}, {h0.shape[1]}), "
@@ -293,7 +297,14 @@ def solve_transient_unconfined_experimental(
     initial_T = np.asarray(k * thickness, dtype=NP_FLOAT)
     initial_T[active_i == 0] = 0.0
     recharge_field = np.zeros(h0.shape, dtype=NP_FLOAT)
+    from DARCY_WARP_PACKAGE.physics.wel import validate_well_schedule
+    built_wells = model.wel_entries
+    well_schedule = validate_well_schedule(wel_rates=wel_rates, periods=int(rates.size) if source_fields is None else n_periods,
+        shape=h0.shape, active=active_i, dtype=NP_FLOAT)
+    if well_schedule is not None:
+        model._track_well_sources = True
     model.build_from_fields(
+        wel_entries=built_wells,
         T_field=initial_T,
         R_field=recharge_field,
         active=active_i,
@@ -357,6 +368,8 @@ def solve_transient_unconfined_experimental(
 
     for period_index in range(n_periods):
         # ---------------- stress-period transition ----------------
+        if well_schedule is not None:
+            model.update_wel_in_place(wel_entries=well_schedule[period_index])
         if source_fields is not None:
             model.update_R_in_place(source_fields[period_index])
         else:
@@ -616,6 +629,8 @@ def solve_transient_unconfined_experimental(
             "unconfined_storage_mode_2d": storage_mode,
             "storage_reference": storage_reference,
         }
+        from DARCY_WARP_PACKAGE.physics.wel import attach_accepted_well_state
+        attach_accepted_well_state(model=model, head=head_accepted, info=period_info, dt=period_dt)
         period_infos.append(period_info)
 
         if save_diagnostics_b:

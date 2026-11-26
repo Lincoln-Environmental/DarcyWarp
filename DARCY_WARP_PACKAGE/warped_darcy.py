@@ -7139,8 +7139,13 @@ class WarpDarcySolver:
         area = float(self.dx) * float(self.dx)
         depth = np.zeros((int(self.ny), int(self.nx)), dtype=NP_FLOAT)
         if entries is not None and len(entries):
-            rows, columns = (axis.astype(np.int64) for axis in entries.cells.T)
-            np.add.at(depth, (rows, columns), entries.rates / NP_FLOAT(area))
+            if not np.isfinite(area) or area <= 0.:
+                raise ValueError('WEL requires a positive representable cell area')
+            from DARCY_WARP_PACKAGE.physics.wel import sparse_well_cell_rates
+            cells, rates, unused_gross = sparse_well_cell_rates(entries=entries,
+                shape=(int(self.ny), int(self.nx)), dtype=np.float64)
+            with np.errstate(over="ignore", invalid="ignore"):
+                depth.ravel()[cells] = rates / area
         if not np.all(np.isfinite(depth)):
             raise ValueError("Accumulated well depth rates are not representable")
         return depth
@@ -7159,6 +7164,7 @@ class WarpDarcySolver:
         if not np.all(np.isfinite(combined)):
             raise ValueError("Combined recharge and well depth rates are not representable")
         self.wel_entries = entries
+        self._track_well_sources = True
         self.wel_depth_rate_host = depth
         if self._recharge_input_host is self.R_field_host:
             # Split the shared buffer so the pure recharge input keeps its own
@@ -7195,6 +7201,18 @@ class WarpDarcySolver:
             raise RuntimeError("Call build_from_truth_inputs() once before wel_budget().")
         rates = None if self.wel_entries is None else self.wel_entries.rates
         return signed_rate_budget(rates=rates)
+
+    def accepted_wel_rates(self, *, head, info):
+        """Return verified accepted volumetric WEL entry rates.
+
+        :param head: Head field from the accepted solve or period.
+        :param info: Metadata from that same accepted numerical state.
+        :return: Owned volumetric entry rates, with injection positive.
+        :raises RuntimeError: If the state is absent or not accepted.
+        :raises ValueError: If supplied metadata or heads have changed.
+        """
+        from DARCY_WARP_PACKAGE.physics.wel import accepted_well_rates
+        return accepted_well_rates(model=self, head=head, info=info)
 
     def update_wel_in_place(self, wel_entries) -> None:
         """
@@ -7714,6 +7732,9 @@ class WarpDarcySolver:
             info_out = dict(info) if isinstance(info, dict) else {}
             info_out["formulation"] = form_mode
             info_out["solver_backend"] = backend_name
+            from DARCY_WARP_PACKAGE.physics.wel import attach_accepted_well_state
+            attach_accepted_well_state(model=self, head=head, info=info_out,
+                dt=dt if transient else None)
             return self._own_cpu_head(result=(head, info_out))
         head = head_info[0] if backend_name == "confined_pcg" else head_info
         return self._own_cpu_head(result=head)
@@ -7736,6 +7757,8 @@ class WarpDarcySolver:
         "reserved" memory. :contentReference[oaicite:2]{index=2}
         """
         self._steady_grounding = None
+        if hasattr(self, '_accepted_well_states'):
+            self._accepted_well_states.clear()
         # 1) Break graph references first, because graphs can keep arrays alive.
         self._invalidate_kcycle_graph()
         # Drop the fast backend's face-conductance cache (holds strong refs to

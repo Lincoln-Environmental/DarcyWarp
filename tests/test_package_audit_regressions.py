@@ -288,3 +288,86 @@ def test_resident_recharge_changes_preserve_previous_physical_storage(device):
         np.testing.assert_array_equal(workspace.storage_previous.numpy(), heads[0].ravel())
         assert info['periods'][1]['drn_volume_budget']['outflow'] == pytest.approx(1.95)
         assert info['periods'][1]['source_volume_budgets']['recharge']['net'] == pytest.approx(2.)
+
+
+@pytest.mark.parametrize('device', ['cpu', 'cuda:0'])
+def test_resident_source_ownership_uses_actual_period_and_shared_static_inputs(device):
+    """Historical WEL ledgers bind actual schedules after built forcing is restored."""
+    shape = (1, 3, 3)
+    raw = np.zeros(shape)
+    raw[0, 1, 1] = 50.
+    with _anchored_model(device=device, rhs=raw, well=-5., recharge=.001) as model:
+        heads, info = model.solve_transient_npf(dt=[1., 2., 3.], head_prev=np.zeros(shape),
+            recharge_rates=[.01, .02, .03], wel_rates=[[((0, 1, 1), -10.)], [((0, 1, 1), -30.)], None],
+            source_factors=[1., 1., -1.], ss=.1, sy=0., npf_preconditioner='kcycle')
+        assert info['converged']
+        states = []
+        for index, period in enumerate(info['periods']):
+            expected = [-10.] if index == 0 else [-30.] if index == 1 else []
+            np.testing.assert_array_equal(model.accepted_wel_rates(head=heads[index], info=period), expected)
+            assert period['source_budgets']['recharge']['net'] == pytest.approx(24. * (index + 1))
+            assert period['source_budgets']['volumetric']['net'] == (50. if index < 2 else -50.)
+            states.append(model._session._accepted_equations[period['accepted_state']['identifier']])
+        assert len({state.fields['c0'].ptr for state in states}) == 1
+        assert len({state.head.ptr for state in states}) == 3
+        assert len({state.fields['source'].ptr for state in states}) == 3
+        model.update_wel(entries=None)
+        model.update_R_in_place(R_field=None)
+        model.update_rhs(rhs=np.zeros(shape))
+        np.testing.assert_array_equal(model.accepted_wel_rates(head=heads[0], info=info['periods'][0]), [-10.])
+        from copy import deepcopy
+        altered = deepcopy(info['periods'][0])
+        altered['source_volume_budgets']['wel']['net'] += 1.
+        with pytest.raises(ValueError):
+            model.accepted_wel_rates(head=heads[0], info=altered)
+        altered = deepcopy(info['periods'][0])
+        altered['wel_entry_cells'][0, 2] = 2
+        with pytest.raises(ValueError):
+            model.accepted_wel_rates(head=heads[0], info=altered)
+
+
+@pytest.mark.parametrize('device', ['cpu', 'cuda:0'])
+@pytest.mark.parametrize('kind', ['opposing_wells', 'three_sources', 'cancellation'])
+def test_gross_physical_source_throughput_and_stable_wel_sum(device, kind):
+    """Physical throughput retains packages while stable entry sums preserve forcing."""
+    shape = (1, 1, 1)
+    if kind == 'opposing_wells':
+        entries = [((0, 0, 0), -100.), ((0, 0, 0), 100.)]
+        raw, recharge, expected_head, expected_gross = None, None, 0., 200.
+    elif kind == 'three_sources':
+        entries = [((0, 0, 0), -100.)]
+        raw, recharge, expected_head, expected_gross = np.full(shape, 50.), 50., 0., 200.
+    else:
+        entries = [((0, 0, 0), 1.e16), ((0, 0, 0), 1.), ((0, 0, 0), -1.e16)]
+        raw, recharge, expected_head, expected_gross = None, None, 1., 2.e16
+    with WarpDarcySolver3D(nx=1, ny=1, nz=1, dx=1., dy=1., dz=1., device=device,
+            solver='kcycle', implementation='fast', formulation='mf6_6_6_2_npf') as model:
+        model.build_from_K_fields(kx_field=np.ones(shape), ky_field=np.ones(shape),
+            kz_field=np.ones(shape), active=np.ones(shape), bc_mask=np.zeros(shape),
+            bc_values=np.zeros(shape), initial_head=np.zeros(shape), rhs=raw,
+            R_field=recharge, wel_entries=entries, ghb_conductance=1., ghb_head=0.)
+        head, info = model.solve(npf_preconditioner='kcycle')
+        assert info['converged']
+        assert head.item() == pytest.approx(expected_head, abs=1.e-12)
+        assert info['device_final_metrics']['gross_throughput'] >= expected_gross
+        assert info['independent_acceptance']['gross_throughput'] >= expected_gross
+
+
+@pytest.mark.parametrize('device', ['cpu', 'cuda:0'])
+def test_npf_newton_defaults_to_actual_kcycle_and_retains_diagonal(device):
+    """Constructor K-cycle selection governs Newton; diagonal requires an explicit request."""
+    from test_3d_drn_riv_entries import _one_cell_model
+    for requested in (None, 'diagonal'):
+        with _one_cell_model(device=device, drn_entries=[((0, 0, 0), 1., 2.)]) as model:
+            options = {} if requested is None else dict(npf_preconditioner=requested)
+            head, info = model.solve(**options)
+            assert info['converged']
+            assert head.item() == pytest.approx(3., abs=1.e-12)
+            if requested is None:
+                assert info['npf_preconditioner'] == 'kcycle'
+                assert info['krylov_method'] == 'FGMRES'
+                assert info['preconditioner_cycles'] > 0
+            else:
+                assert info['npf_preconditioner'] == 'diagonal'
+                assert info['krylov_method'] == 'GMRES'
+                assert info['preconditioner_cycles'] == 0

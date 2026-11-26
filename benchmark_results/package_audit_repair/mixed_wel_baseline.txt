@@ -1,0 +1,49 @@
+Warp 1.17.0 initialized:
+   CUDA Toolkit 12.9, Driver 13.2
+   Devices:
+     "cpu"      : "x86_64"
+     "cuda:0"   : "NVIDIA GeForce RTX 4070 Ti SUPER" (16 GiB, sm_89, mempool enabled)
+   Kernel cache:
+     /home/patrickdurney/.cache/warp/1.17.0
+F                                                                        [100%]
+=================================== FAILURES ===================================
+________ test_production_mixed_wel_updates_match_independent_reference _________
+tests/test_2d_wel_mixed.py:70: in test_production_mixed_wel_updates_match_independent_reference
+    assert result.returncode == 0, result.stdout + result.stderr
+E   AssertionError: ✅ CUDA driver reports 1 device(s).
+E     cuda_device_found = True
+E     Warp 1.17.0 initialized:
+E        CUDA Toolkit 12.9, Driver 13.2
+E        Devices:
+E          "cpu"      : "x86_64"
+E          "cuda:0"   : "NVIDIA GeForce RTX 4070 Ti SUPER" (16 GiB, sm_89, mempool enabled)
+E        Kernel cache:
+E          /home/patrickdurney/.cache/warp/1.17.0
+E     Module DARCY_WARP_PACKAGE.warped_darcy 1373438 load on device 'cuda:0' took 611.17 ms  (compiled)
+E     Module DARCY_WARP_PACKAGE.solvers.mixed_fast_kernels 120c681 load on device 'cuda:0' took 163.78 ms  (compiled)
+E     Module DARCY_WARP_PACKAGE.solvers.face_kernels_f64 983c464 load on device 'cuda:0' took 240.60 ms  (compiled)
+E     Module DARCY_WARP_PACKAGE.solvers.mixed_fast_kernels 91ae7e5 load on device 'cuda:0' took 207.99 ms  (compiled)
+E     Traceback (most recent call last):
+E       File "/tmp/darcywarp-sfr-3d-boundaries/tests/test_2d_wel_mixed.py", line 82, in <module>
+E         errors = run_mixed_case(device=device, shape=shape, dx=dx, transmissivity=transmissivity,
+E             fixed_head=fixed_head, well_rates=well_rates, recharge_rates=recharge_rates, tolerance=tolerance)
+E       File "/tmp/darcywarp-sfr-3d-boundaries/tests/test_2d_wel_mixed.py", line 57, in run_mixed_case
+E         assert error <= tolerance, (error, head[cell], expected[cell])
+E                ^^^^^^^^^^^^^^^^^^
+E     AssertionError: (7.257656597325685, np.float64(10.0), np.float64(2.742343402674315))
+E     
+E   assert 1 == 0
+E    +  where 1 = CompletedProcess(args=['/home/patrickdurney/miniconda3/envs/darcywarp/bin/python', '/tmp/darcywarp-sfr-3d-boundaries/t...           ^^^^^^^^^^^^^^^^^^\nAssertionError: (7.257656597325685, np.float64(10.0), np.float64(2.742343402674315))\n').returncode
+=============================== warnings summary ===============================
+../../home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/warp/_src/apic/types.py:49
+  /home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/warp/_src/apic/types.py:49: DeprecationWarning: Due to '_pack_', the 'APICLaunchParamRecord' Structure will use memory layout compatible with MSVC (Windows). If this is intended, set _layout_ to 'ms'. The implicit default is deprecated and slated to become an error in Python 3.19.
+    class APICLaunchParamRecord(ctypes.Structure):
+
+../../home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/warp/_src/apic/types.py:69
+  /home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/warp/_src/apic/types.py:69: DeprecationWarning: Due to '_pack_', the 'APICLaunchPtrLocation' Structure will use memory layout compatible with MSVC (Windows). If this is intended, set _layout_ to 'ms'. The implicit default is deprecated and slated to become an error in Python 3.19.
+    class APICLaunchPtrLocation(ctypes.Structure):
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_2d_wel_mixed.py::test_production_mixed_wel_updates_match_independent_reference
+1 failed, 2 warnings in 2.45s

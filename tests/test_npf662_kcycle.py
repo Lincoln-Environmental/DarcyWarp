@@ -215,7 +215,7 @@ def test_lazy_selection_switching_and_shared_operator_buffers(device):
         assert diagnostic['preconditioner_applications'] == diagnostic['krylov_iterations']
         assert diagnostic['preconditioner_cycles'] == 0 and 'multigrid' not in diagnostic
         assert ws.flexible is flexible and ws.multigrid is mg and ws.krylov is None
-        head, diagonal = model.solve(**options)
+        head, diagonal = model.solve(npf_preconditioner='diagonal', **options)
         assert diagonal['converged'] and diagonal['krylov_method'] == 'GMRES'
         assert flexible.closed and ws.flexible is None and ws.krylov is not None
         legacy = weakref.ref(ws.krylov)

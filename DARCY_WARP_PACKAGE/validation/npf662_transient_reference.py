@@ -119,7 +119,8 @@ class NPF662TransientReference(NPF662Reference):
                 right=self.right, head=head, residual=residual, flux=fields['flux'], conductance=fields['conductance'],
                 ghb_conductance=boundary_tangent, ghb_exchange=(fields['ghb_outflow']+
                     fields['drn_outflow']+fields['riv_outflow']), component_anchor=component_anchor,
-                thresholds=limits, storage=storage, tangent=tangent)
+                thresholds=limits, storage=storage, tangent=tangent,
+                boundary_throughput=fields['boundary_throughput'])
             checks['independent_accepted'] &= checks['local_balance_valid']
         if roundoff_acceptance:
             from .npf662_metrics import apply_roundoff_acceptance

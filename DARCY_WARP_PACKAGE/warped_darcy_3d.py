@@ -106,6 +106,7 @@ class WarpDarcySolver3D:
         self._volumetric_source: np.ndarray | None = None
         self._recharge_rate: np.ndarray | None = None
         self._wel_entries = None
+        self._gross_source_cache = None
         self._active: np.ndarray | None = None
         self._bc_mask: np.ndarray | None = None
         self._bc_values: np.ndarray | None = None
@@ -597,6 +598,12 @@ class WarpDarcySolver3D:
         started = perf_counter()
         result = self._solve(**kwargs)
         if isinstance(result, tuple):
+            if (getattr(self, '_track_well_sources', False)
+                    and not getattr(self, '_npf_history_running', False)):
+                from DARCY_WARP_PACKAGE.physics.wel import attach_accepted_source_state
+                attach_accepted_source_state(model=self, head=result[0], info=result[1],
+                    dt=kwargs.get('dt') if kwargs.get('transient', False) else None,
+                    entries=self._wel_entries, budgets=self.physical_source_budgets())
             result[1]['public_total_seconds'] = perf_counter()-started
             result[1]['public_timing_scope'] = 'dispatch, setup, iterations, readback and independent final acceptance'
         return result
@@ -715,6 +722,8 @@ class WarpDarcySolver3D:
         self._volumetric_source = volumetric
         self._recharge_rate = rate
         self._wel_entries = entries
+        if entries is not None:
+            self._track_well_sources = True
 
     def _source_with_recharge(self, R_field, dtype=None):
         """Assemble a replacement recharge rate with the current other sources."""
@@ -722,6 +731,39 @@ class WarpDarcySolver3D:
             dtype = NP_FLOAT if R_field is not None else self._session.rhs.dtype
         return self._assemble_source(rhs=self._volumetric_source, R_field=R_field,
             entries=self._wel_entries, active=self._active, fixed=self._bc_mask, dtype=dtype)
+
+    def _gross_source_field(self):
+        """Own gross physical source throughput without changing signed forcing.
+
+        :return: Cached gross volumetric field, or None when absolute signed
+            source already represents all physical throughput.
+        """
+        context = getattr(self, '_npf_history_sources', None)
+        if context is not None:
+            sources, index = context
+            return sources.host_gross_source(index=index)
+        key = (id(self._session), self._session.source_revision)
+        cached = getattr(self, '_gross_source_cache', None)
+        if cached is not None and cached[0] == key:
+            return cached[1]
+        from DARCY_WARP_PACKAGE.physics.wel import WellEntries
+        entries = self._wel_entries
+        raw = self._volumetric_source
+        recharge = self._recharge_rate
+        mixed = (entries is not None or (raw is not None and recharge is not None))
+        gross = None
+        if mixed:
+            positive_entries = (None if entries is None else
+                WellEntries(cells=entries.cells, rates=np.abs(entries.rates)))
+            gross = self._assemble_source(rhs=None if raw is None else np.abs(raw),
+                R_field=None if recharge is None else np.abs(recharge), entries=positive_entries,
+                active=self._active, fixed=self._bc_mask, dtype=np.float64)
+            if np.array_equal(gross, np.abs(self._rhs)):
+                gross = None
+            else:
+                gross = np.maximum(gross, np.abs(self._rhs))
+        self._gross_source_cache = (key, gross)
+        return gross
 
     def _source_without_wells(self, dtype=None):
         """Assemble the built source with every explicit well entry removed.
@@ -734,6 +776,18 @@ class WarpDarcySolver3D:
             dtype = self._session.rhs.dtype
         return self._assemble_source(rhs=self._volumetric_source, R_field=self._recharge_rate,
             entries=None, active=self._active, fixed=self._bc_mask, dtype=dtype)
+
+    def accepted_wel_rates(self, *, head, info):
+        """Return verified volumetric entry rates from an accepted source state.
+
+        :param head: Accepted groundwater heads.
+        :param info: Metadata belonging to the same accepted solve or period.
+        :return: Owned volumetric WEL entry rates.
+        :raises RuntimeError: If the state is absent, rejected or unowned.
+        :raises ValueError: If supplied inputs or accepted outputs were modified.
+        """
+        from DARCY_WARP_PACKAGE.physics.wel import accepted_well_rates
+        return accepted_well_rates(model=self, head=head, info=info)
 
     def wel_budget(self) -> dict:
         """Gross physical well budget of the owned sparse entries.
@@ -871,6 +925,8 @@ class WarpDarcySolver3D:
 
     def close(self) -> None:
         """Release stored host arrays."""
+        if hasattr(self, '_accepted_well_states'):
+            self._accepted_well_states.clear()
         if self._session is not None:
             self._session.close()
             self._session = None
@@ -884,6 +940,7 @@ class WarpDarcySolver3D:
         self._volumetric_source = None
         self._recharge_rate = None
         self._wel_entries = None
+        self._gross_source_cache = None
         self._active = None
         self._bc_mask = None
         self._bc_values = None

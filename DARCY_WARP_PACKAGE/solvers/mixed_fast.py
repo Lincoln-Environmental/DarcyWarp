@@ -417,6 +417,9 @@ class MixedPrecisionFastSession(MixedPrecisionDefectCorrectionSession):
     and block-reduced FP64 outer kernels."""
 
     def __init__(self, model: Any, **kwargs: Any):
+        from DARCY_WARP_PACKAGE.physics.wel import combine_well_depth_source
+        self._recharge_input_f64 = np.asarray(kwargs['R_f64'], dtype=np.float64)
+        kwargs['R_f64'] = combine_well_depth_source(model=model, recharge=self._recharge_input_f64)
         super().__init__(model, emit_experimental_warning=False, **kwargs)
         device = self.device
         self._max_levels = int(kwargs.get("max_levels", 6))
@@ -458,9 +461,13 @@ class MixedPrecisionFastSession(MixedPrecisionDefectCorrectionSession):
 
     def set_forcing(self, bc_values_f64, gh_head_f64, R_f64) -> None:
         """Use these FP64 fields for the next solve, retaining device buffers."""
+        from DARCY_WARP_PACKAGE.physics.wel import combine_well_depth_source
+        recharge = np.asarray(R_f64, dtype=np.float64)
+        combined = combine_well_depth_source(model=self.model, recharge=recharge)
         self._bc_values_f64_host = np.asarray(bc_values_f64, dtype=np.float64)
         self._gh_head_f64_host = None if gh_head_f64 is None else np.asarray(gh_head_f64, dtype=np.float64)
-        self._R_f64_host = np.asarray(R_f64, dtype=np.float64)
+        self._recharge_input_f64 = recharge
+        self._R_f64_host = combined
 
     def _ensure_operator_current(self) -> None:
         """Sync cached face arrays and the FP64 RHS with the model operator.
@@ -475,6 +482,8 @@ class MixedPrecisionFastSession(MixedPrecisionDefectCorrectionSession):
         confined fast backend, which owns a separate face cache.
         """
         model = self.model
+        from DARCY_WARP_PACKAGE.physics.wel import combine_well_depth_source
+        self._R_f64_host = combine_well_depth_source(model=model, recharge=self._recharge_input_f64)
         if self.nx != int(model.nx) or self.ny != int(model.ny):
             raise RuntimeError(
                 "Model geometry changed since this MixedPrecisionFastSession "
@@ -541,6 +550,9 @@ class MixedPrecisionFastSession(MixedPrecisionDefectCorrectionSession):
         production_info = dict(info)
         production_info["experimental"] = False
         production_info["production_precision_path"] = True
+        from DARCY_WARP_PACKAGE.physics.wel import attach_accepted_well_state
+        attach_accepted_well_state(model=self.model, head=head, info=production_info,
+            dt=None, recharge_field=self._recharge_input_f64)
         return head, production_info
 
     def refresh_operator_faces(self) -> None:
@@ -586,6 +598,8 @@ class MixedPrecisionFastSession(MixedPrecisionDefectCorrectionSession):
         from .mixed_precision import _mp_cast_r64_to_r32_kernel
 
         model = self.model
+        from DARCY_WARP_PACKAGE.physics.wel import combine_well_depth_source
+        self._R_f64_host = combine_well_depth_source(model=model, recharge=self._recharge_input_f64)
         wp.launch(
             kernel=_mp_cast_r64_to_r32_kernel,
             dim=(self.ny, self.nx),

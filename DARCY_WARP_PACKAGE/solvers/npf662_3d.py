@@ -14,14 +14,14 @@ def case_from_model(*,model,top,cell_type=0):
     initial = np.zeros(s.shape) if s.initial_head is None else s.initial_head
     if model.geometry=='structured_dis_layered':
         return NPF662LayeredCase(kx=model._kx_field,ky=model._ky_field,kz=model._kz_field,active=s.active,fixed=s.bc_mask,
-            values=s.bc_values,source=s.rhs,initial=initial,dx=model.dx,dy=model.dy,
+            values=s.bc_values,source=s.rhs,source_gross=model._gross_source_field(),initial=initial,dx=model.dx,dy=model.dy,
             z_interfaces=s.z_interfaces,cell_type=cell_type,
             drn_conductance=s.drn_conductance,drn_elevation=s.drn_elevation,
             riv_conductance=s.riv_conductance,riv_stage=s.riv_stage,riv_bottom=s.riv_bottom,
             drn_entries=getattr(s,'drn_entries',None),riv_entries=getattr(s,'riv_entries',None),
             ghb_conductance=s.ghb_conductance,ghb_head=s.ghb_head)
     return NPF662Case(kx=model._kx_field,ky=model._ky_field,kz=model._kz_field,active=s.active,fixed=s.bc_mask,
-        values=s.bc_values,source=s.rhs,initial=initial,
+        values=s.bc_values,source=s.rhs,source_gross=model._gross_source_field(),initial=initial,
         dx=model.dx,dy=model.dy,dz=model.dz,top=top,cell_type=cell_type,
         drn_conductance=s.drn_conductance,drn_elevation=s.drn_elevation,
         riv_conductance=s.riv_conductance,riv_stage=s.riv_stage,riv_bottom=s.riv_bottom,
@@ -39,7 +39,7 @@ def independent_reference(*, model, case):
     package_values = ('drn_conductance', 'drn_elevation', 'drn_mask', 'riv_conductance',
                       'riv_stage', 'riv_bottom', 'riv_mask', 'drn_entries', 'riv_entries')
     names = tuple(name for name in case.__dataclass_fields__
-        if name not in ('source', 'values', 'initial', *package_values))
+        if name not in ('source', 'source_gross', 'values', 'initial', *package_values))
     values = tuple(np.asarray(getattr(case, name)) for name in names)
     holder = model._session._npf662_workspace_holder
     cached = holder.get('reference')
@@ -72,7 +72,10 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
     min_coarse_n = 2 if min_coarse_n is None else min_coarse_n
     max_outer = 2000 if max_outer is None else max_outer
     krylov_restart = 24 if krylov_restart is None else krylov_restart
-    npf_preconditioner = 'diagonal' if npf_preconditioner is None else npf_preconditioner
+    # The constructor's fast K-cycle selection also governs Newton solves.
+    # Keep preconditioner_selected tied to the explicit argument above so
+    # prescribed sources alone retain the direct confined Cartesian solve.
+    npf_preconditioner = 'kcycle' if npf_preconditioner is None else npf_preconditioner
     if unsupported:raise ValueError(f'Unsupported mf6_6_6_2_npf controls: {sorted(unsupported)}')
     if not isinstance(npf_device_native,(bool,np.bool_)):
         raise ValueError('npf_device_native must be Boolean')

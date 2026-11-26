@@ -24,7 +24,7 @@ class NPF662TransientState:
         self._audit_case = None
         self._audit_revisions = None
         self.structure_names = tuple(name for name in case.__dataclass_fields__
-            if name not in ('source', 'values', 'initial', 'kx', 'ky', 'kz', 'cell_type',
+            if name not in ('source', 'source_gross', 'values', 'initial', 'kx', 'ky', 'kz', 'cell_type',
                 'ghb_conductance', 'ghb_head', 'drn_conductance', 'drn_elevation', 'drn_mask',
                 'riv_conductance', 'riv_stage', 'riv_bottom', 'riv_mask',
                 'drn_entries', 'riv_entries'))

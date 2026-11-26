@@ -17,6 +17,7 @@ def solve_transient_unconfined_backend(
         model: Any,
         initial_head: np.ndarray,
         recharge_rates: np.ndarray,
+        wel_rates=None,
         k_field: np.ndarray,
         zbot_field: np.ndarray,
         ztop_field: np.ndarray,
@@ -49,6 +50,7 @@ def solve_transient_unconfined_backend(
 
     :param initial_head: Initial/previous head for period 1.
     :param recharge_rates: One recharge value per stress period.
+    :param wel_rates: Optional independent sparse WEL entry list per period; None retains built wells.
     :param k_field: Hydraulic conductivity field.
     :param zbot_field: Cell bottom field.
     :param ztop_field: Cell top field.
@@ -92,7 +94,8 @@ def solve_transient_unconfined_backend(
         if arr.shape != h0.shape:
             raise ValueError(f"{name} shape {arr.shape} expected {h0.shape}")
 
-    rates = np.asarray(recharge_rates, dtype=NP_FLOAT).reshape(-1)
+    from DARCY_WARP_PACKAGE.physics.inputs_3d import floating_field
+    rates = floating_field(value=recharge_rates, name="recharge_rates", dtype=NP_FLOAT).reshape(-1)
     if rates.size < 1:
         raise ValueError("recharge_rates must contain at least one period.")
     dt_f = float(dt)
@@ -175,7 +178,14 @@ def solve_transient_unconfined_backend(
                 raise ValueError(f"{_name} is required when the model has use_ghb=True.")
             if np.asarray(_arr).shape != h0.shape:
                 raise ValueError(f"{_name} shape {np.asarray(_arr).shape} expected {h0.shape}")
+    from DARCY_WARP_PACKAGE.physics.wel import validate_well_schedule
+    built_wells = self.wel_entries
+    well_schedule = validate_well_schedule(wel_rates=wel_rates, periods=int(rates.size),
+        shape=h0.shape, active=active_i, dtype=NP_FLOAT)
+    if well_schedule is not None:
+        self._track_well_sources = True
     self.build_from_fields(
+        wel_entries=built_wells,
         T_field=initial_T,
         R_field=recharge_field,
         active=active_i,
@@ -922,6 +932,8 @@ def solve_transient_unconfined_backend(
             }
 
         for period_index in range(n_periods):
+            if well_schedule is not None:
+                self.update_wel_in_place(wel_entries=well_schedule[period_index])
             self.update_uniform_recharge_in_place(float(rates[period_index]))
             counters["R_device_updates"] += 1
             wp.launch(
@@ -2384,6 +2396,8 @@ def solve_transient_unconfined_backend(
                 info_period["inner_kcycle_caps"] = [int(v) for v in inner_kcycle_caps]
                 info_period["inner_kcycle_used"] = [int(v) for v in inner_kcycle_used]
                 info_period["inner_block_counts"] = [int(v) for v in inner_block_counts]
+            from DARCY_WARP_PACKAGE.physics.wel import attach_accepted_well_state
+            attach_accepted_well_state(model=self, head=head_arr, info=info_period, dt=dt_f)
             period_infos.append(info_period)
             last_info = info_period
             info_period["state"] = "accepted" if production_acceptance_passed else "rejected_trial"
@@ -2400,6 +2414,8 @@ def solve_transient_unconfined_backend(
 
     else:
         for period_index in range(n_periods):
+            if well_schedule is not None:
+                self.update_wel_in_place(wel_entries=well_schedule[period_index])
             self.update_uniform_recharge_in_place(float(rates[period_index]))
             counters["R_device_updates"] += 1
             if save_diagnostics_b:
@@ -2408,6 +2424,7 @@ def solve_transient_unconfined_backend(
                 period_head_old = head_prev
             period_t0 = time.perf_counter()
             head, info = self.solve(
+                solver="unconfined_picard_kcycle",
                 formulation="unconfined",
                 initial_head=head_prev,
                 K_field=k,

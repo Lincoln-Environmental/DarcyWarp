@@ -83,6 +83,7 @@ class NPF662Workspace:
         self.ghb_operator = self.trial_ghb_operator = None
         self.has_drn_riv = case.drn_conductance is not None or case.riv_conductance is not None \
             or case.drn_entries is not None or case.riv_entries is not None
+        self.source_gross = None
         self.zero = wp.zeros(shape=self.n, dtype=wp.float64, device=self.device)
         # Combined previous-state restraint diagonal shared by GHB-only and
         # DRN/RIV workspaces; singular boundary-dominated rows stay nonsingular.
@@ -155,6 +156,7 @@ class NPF662Workspace:
             self.active_snapshot,case.active) and np.array_equal(self.fixed_snapshot,case.fixed)
 
     def load(self,*,model,case,reference=None):
+        self._accepted_static_fields = None
         native = getattr(reference, 'device_storage_state', False)
         static_reused = native and getattr(self, '_native_state', None) is reference
         conductance, boundary_head = validate_ghb_fields(conductance=case.ghb_conductance,
@@ -182,6 +184,16 @@ class NPF662Workspace:
             else:
                 self.ghb_conductance.assign(conductance.ravel())
                 self.ghb_head.assign(boundary_head.ravel())
+        if case.source_gross is None:
+            self.source_gross = None
+        else:
+            gross = np.asarray(case.source_gross, dtype=np.float64)
+            if gross.shape != self.shape or not np.all(np.isfinite(gross)) or np.any(gross < np.abs(case.source)):
+                raise ValueError('Invalid gross physical source')
+            if self.source_gross is None:
+                self.source_gross = wp.array(gross.ravel(), dtype=wp.float64, device=self.device)
+            else:
+                self.source_gross.assign(gross.ravel())
         self.source.assign(case.source.ravel())
         self.prescribed.assign(case.values.ravel())
         if not static_reused:
@@ -437,6 +449,10 @@ class NPF662Workspace:
             row_inputs.extend((self.ghb_conductance,self.ghb_head))
         wp.launch(kernel=row_kernel,dim=self.n,inputs=row_inputs,
             device=self.device,block_dim=self.metric_block_size)
+        if self.source_gross is not None:
+            wp.launch(kernel=kernels.add_gross_source_metrics, dim=self.n,
+                inputs=[self.source, self.source_gross, self.free, self.metric_partials, block_size],
+                device=self.device)
         wp.launch(kernel=kernels.combine_metrics_tiled if tiled else kernels.combine_physical_metrics,dim=2304 if tiled else 9,
             inputs=[self.metric_partials,self.metrics,(self.n+block_size-1)//block_size],device=self.device,block_dim=256)
         self.residual_evaluations+=1
@@ -456,14 +472,16 @@ class NPF662Workspace:
             self.maximum.zero_()
             if self.has_drn_riv:
                 wp.launch(kernel=kernels.check_local_balance_drn_riv, dim=self.n,
-                    inputs=[head, self.free, self.fixed, self.source, self.left, self.right, q, c,
+                    inputs=[head, self.free, self.fixed,
+                        self.source if self.source_gross is None else self.source_gross, self.left, self.right, q, c,
                         storage, tangent, r,
                         self.trial_boundary_throughput if trial else self.boundary_throughput,
                         self.trial_boundary_tangent if trial else self.boundary_tangent,
                         self.physical_tolerance, self.relative_tolerance, self.maximum], device=self.device)
             else:
                 wp.launch(kernel=kernels.check_local_balance, dim=self.n,
-                    inputs=[head, self.free, self.fixed, self.source, self.left, self.right, q, c,
+                    inputs=[head, self.free, self.fixed,
+                        self.source if self.source_gross is None else self.source_gross, self.left, self.right, q, c,
                             storage, tangent, r, int(self.ghb_conductance is not None),
                             self.ghb_conductance, self.ghb_head, self.component_anchor, int(self.component_anchor is not None),
                             self.physical_tolerance, self.relative_tolerance,
@@ -562,6 +580,8 @@ class NPF662Workspace:
         self.commit_graph=None
         self._native_state = self._faces_snapshot = self._types_snapshot = None
         self.principal = self.previous_storage_tangent = None
+        self._accepted_static_fields = None
+        self.source_gross = None
         self.activation_head = None
         self.ghb_conductance = self.ghb_head = self.ghb_totals = None
         self.ghb_operator = self.trial_ghb_operator = self.previous_ghb_operator = None
@@ -935,15 +955,19 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
             outflow=ghb_budget['drn_outflow'], net=ghb_budget['drn_net'])
         result['riv_budget'] = dict(inflow=ghb_budget['riv_inflow'],
             outflow=ghb_budget['riv_outflow'], net=ghb_budget['riv_net'])
-        result['drn_discharge_rate_array'] = workspace.drn_rate.numpy().reshape(case.active.shape).copy()
-        result['riv_discharge_rate_array'] = workspace.riv_rate.numpy().reshape(case.active.shape).copy()
-        if len(workspace.drn_entry_rate):
-            result['drn_entry_rates'] = workspace.drn_entry_rate.numpy().copy()
-        if len(workspace.riv_entry_rate):
-            result['riv_entry_rates'] = workspace.riv_entry_rate.numpy().copy()
+        if not device_sequence:
+            result['drn_discharge_rate_array'] = workspace.drn_rate.numpy().reshape(case.active.shape).copy()
+            result['riv_discharge_rate_array'] = workspace.riv_rate.numpy().reshape(case.active.shape).copy()
+            if len(workspace.drn_entry_rate):
+                result['drn_entry_rates'] = workspace.drn_entry_rate.numpy().copy()
+            if len(workspace.riv_entry_rate):
+                result['riv_entry_rates'] = workspace.riv_entry_rate.numpy().copy()
+        result['package_outputs_resident'] = bool(device_sequence)
+    if converged and (workspace.has_drn_riv or getattr(model, '_track_well_sources', False)):
         from .accepted_npf_state import own_accepted_state
         result['accepted_state'] = own_accepted_state(session=model._session,
-            workspace=workspace, dt=float(reference.dt) if workspace.transient else None)
+            workspace=workspace, dt=float(reference.dt) if workspace.transient else None,
+            resident_outputs=bool(device_sequence))
     result['krylov_workspace_reused']=krylov_reused
     result['npf_preconditioner']=npf_preconditioner
     result.update(accepted_updates=sum(row['accepted'] for row in history),

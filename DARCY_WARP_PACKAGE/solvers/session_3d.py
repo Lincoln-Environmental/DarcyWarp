@@ -52,6 +52,7 @@ class ThreeDOperatorSession:
     ) -> None:
         self._closed = False
         self.revision = 0
+        self.source_revision = 0
         self.operator_revision = 0
         self.topology_revision = 0
         self.dx = float(dx)
@@ -151,6 +152,7 @@ class ThreeDOperatorSession:
         if np.any(value[self.active == 0] != 0.0):
             raise ValueError("Inactive source would be lost; rhs must be zero in inactive cells.")
         self.rhs[...] = value
+        self.source_revision += 1
         self.revision += 1
 
     def update_initial_head(self, initial_head: np.ndarray | None) -> None:

@@ -4,7 +4,8 @@ import numpy as np
 
 
 def local_balance_valid(*, case, free, left, right, head, residual, flux, conductance, ghb_conductance,
-                        ghb_exchange, component_anchor, thresholds, storage=None, tangent=None):
+                        ghb_exchange, component_anchor, thresholds, storage=None, tangent=None,
+                        boundary_throughput=None):
     """Check each free control volume at its own physical flow and head scales.
 
     Internal conductances do not restrain a common head shift. Only an
@@ -14,7 +15,10 @@ def local_balance_valid(*, case, free, left, right, head, residual, flux, conduc
     """
     head = np.asarray(head, dtype=np.float64).ravel()
     fixed = case.fixed.ravel() != 0
-    throughput = np.abs(case.source.ravel()) + np.abs(ghb_exchange.ravel())
+    gross_source = getattr(case, 'source_gross', None)
+    source_throughput = np.abs(case.source.ravel()) if gross_source is None else np.asarray(gross_source).ravel()
+    boundary_gross = np.abs(ghb_exchange.ravel()) if boundary_throughput is None else np.asarray(boundary_throughput).ravel()
+    throughput = source_throughput + boundary_gross
     anchor = ghb_conductance.ravel().copy()
     if component_anchor is not None:
         shared = component_anchor.ravel()
