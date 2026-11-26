@@ -37,7 +37,7 @@ def own_accepted_state(*, session, workspace, dt):
     :return: JSON-compatible opaque token for the session-owned snapshot.
     """
     names = ('source', 'prescribed', 'free', 'fixed', 'bottom', 'thickness',
-             'types', 'c0', 'storage_previous', 'storage_ss', 'storage_sy',
+             'types', 'c0', 'left', 'right', 'storage_previous', 'storage_ss', 'storage_sy',
              'ghb_conductance', 'ghb_head', 'drn_offsets', 'drn_entry_c',
              'drn_entry_elev', 'riv_offsets', 'riv_entry_c', 'riv_entry_stage',
              'riv_entry_bottom', 'drn_rate', 'riv_rate', 'drn_entry_rate', 'riv_entry_rate')

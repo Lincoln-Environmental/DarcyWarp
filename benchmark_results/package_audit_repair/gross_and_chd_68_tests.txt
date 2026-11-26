@@ -1,0 +1,19 @@
+Warp 1.17.0 initialized:
+   CUDA Toolkit 12.9, Driver 13.2
+   Devices:
+     "cpu"      : "x86_64"
+     "cuda:0"   : "NVIDIA GeForce RTX 4070 Ti SUPER" (16 GiB, sm_89, mempool enabled)
+   Kernel cache:
+     /home/patrickdurney/.cache/warp/1.17.0
+....................................................................     [100%]
+=============================== warnings summary ===============================
+../../home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/warp/_src/apic/types.py:49
+  /home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/warp/_src/apic/types.py:49: DeprecationWarning: Due to '_pack_', the 'APICLaunchParamRecord' Structure will use memory layout compatible with MSVC (Windows). If this is intended, set _layout_ to 'ms'. The implicit default is deprecated and slated to become an error in Python 3.19.
+    class APICLaunchParamRecord(ctypes.Structure):
+
+../../home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/warp/_src/apic/types.py:69
+  /home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/warp/_src/apic/types.py:69: DeprecationWarning: Due to '_pack_', the 'APICLaunchPtrLocation' Structure will use memory layout compatible with MSVC (Windows). If this is intended, set _layout_ to 'ms'. The implicit default is deprecated and slated to become an error in Python 3.19.
+    class APICLaunchPtrLocation(ctypes.Structure):
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+68 passed, 2 warnings in 11.75s

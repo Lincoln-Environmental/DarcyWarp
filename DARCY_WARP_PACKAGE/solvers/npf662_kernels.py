@@ -360,7 +360,7 @@ def physical_rows_ghb(head:wp.array(dtype=wp.float64),source:wp.array(dtype=wp.f
 def cell_boundary_flow(head: wp.float64, offsets: wp.array(dtype=wp.int32),
     c: wp.array(dtype=wp.float64), first_level: wp.array(dtype=wp.float64),
     second_level: wp.array(dtype=wp.float64), third_level: wp.array(dtype=wp.float64),
-    package: int, cell: int, entry_rate: wp.array(dtype=wp.float64)) -> wp.vec2d:
+    package: int, cell: int, entry_rate: wp.array(dtype=wp.float64)) -> wp.vec4d:
     """Sum every CSR entry's own flux for one cell.
 
     :param head: Current groundwater head at the cell.
@@ -372,10 +372,12 @@ def cell_boundary_flow(head: wp.float64, offsets: wp.array(dtype=wp.int32),
     :param package: Zero for DRN, one for RIV.
     :param cell: Owning cell index.
     :param entry_rate: Per-entry discharge output, positive out of the aquifer.
-    :return: ``(flow, tangent)`` summed over the cell's entries.
+    :return: Signed flow, tangent, gross inflow and gross outflow for the entries.
     """
     flow = wp.float64(0.0)
     tangent = wp.float64(0.0)
+    inflow = wp.float64(0.0)
+    outflow = wp.float64(0.0)
     for entry in range(offsets[cell], offsets[cell + 1]):
         if package == 0:
             pair = drn_flow_pair(head, c[entry], first_level[entry])
@@ -384,7 +386,9 @@ def cell_boundary_flow(head: wp.float64, offsets: wp.array(dtype=wp.int32),
         flow = flow + pair[0]
         tangent = tangent + pair[1]
         entry_rate[entry] = pair[0]
-    return wp.vec2d(flow, tangent)
+        inflow += wp.max(-pair[0], wp.float64(0.0))
+        outflow += wp.max(pair[0], wp.float64(0.0))
+    return wp.vec4d(flow, tangent, inflow, outflow)
 
 
 @wp.kernel
@@ -401,7 +405,7 @@ def physical_rows_drn_riv(head:wp.array(dtype=wp.float64), source:wp.array(dtype
     riv_offsets:wp.array(dtype=wp.int32), riv_c:wp.array(dtype=wp.float64),
     riv_stage:wp.array(dtype=wp.float64), riv_bottom:wp.array(dtype=wp.float64),
     drn_entry_rate:wp.array(dtype=wp.float64), riv_entry_rate:wp.array(dtype=wp.float64),
-    boundary_flow:wp.array(dtype=wp.float64),
+    boundary_throughput:wp.array(dtype=wp.float64),
     boundary_tangent:wp.array(dtype=wp.float64), operator_tangent:wp.array(dtype=wp.float64)):
     """Evaluate physical rows with CSR DRN/RIV entries per cell.
 
@@ -435,7 +439,7 @@ def physical_rows_drn_riv(head:wp.array(dtype=wp.float64), source:wp.array(dtype
     :param riv_bottom: River entry bed bottoms.
     :param drn_entry_rate: Per-entry drain discharge output.
     :param riv_entry_rate: Per-entry river discharge output.
-    :param boundary_flow: Combined GHB/DRN/RIV discharge output.
+    :param boundary_throughput: Combined GHB/DRN/RIV discharge output.
     :param boundary_tangent: Combined boundary tangent output.
     :param operator_tangent: Storage plus boundary diagonal output.
     :return: None; outputs are written in place.
@@ -448,12 +452,18 @@ def physical_rows_drn_riv(head:wp.array(dtype=wp.float64), source:wp.array(dtype
     ghb_flow = ghb_flow_at(i, head, ghb_c, ghb_head)
     combined_flow = ghb_flow + drain[0] + river[0]
     combined_tangent = ghb_c[i] + drain[1] + river[1]
-    boundary_flow[i] = combined_flow
+    boundary_throughput[i] = wp.abs(ghb_flow) + drain[2] + drain[3] + river[2] + river[3]
     boundary_tangent[i] = combined_tangent
     operator_tangent[i] = storage_tangent[i] + combined_tangent
     values = physical_row_metrics_base(i, head, source, free, fixed, left, right, flux, conductance,
         scale, residual, rhs, storage, storage_tangent,
         ghb_flow, drain[0], river[0], combined_tangent)
+    if free[i] != 0:
+        extra_in = drain[2] + river[2] - wp.max(-drain[0], wp.float64(0.0)) - wp.max(-river[0], wp.float64(0.0))
+        extra_out = drain[3] + river[3] - wp.max(drain[0], wp.float64(0.0)) - wp.max(river[0], wp.float64(0.0))
+        values[3] += extra_in + extra_out
+        values[4] += extra_in
+        values[5] += extra_out
     for metric in range(9):
         if values[metric] != wp.float64(0.0):
             wp.atomic_add(metrics, i / block_size, metric, values[metric])
@@ -473,7 +483,7 @@ def physical_rows_drn_riv_tiled(head:wp.array(dtype=wp.float64), source:wp.array
     riv_offsets:wp.array(dtype=wp.int32), riv_c:wp.array(dtype=wp.float64),
     riv_stage:wp.array(dtype=wp.float64), riv_bottom:wp.array(dtype=wp.float64),
     drn_entry_rate:wp.array(dtype=wp.float64), riv_entry_rate:wp.array(dtype=wp.float64),
-    boundary_flow:wp.array(dtype=wp.float64),
+    boundary_throughput:wp.array(dtype=wp.float64),
     boundary_tangent:wp.array(dtype=wp.float64), operator_tangent:wp.array(dtype=wp.float64)):
     """Tiled equivalent of :func:`physical_rows_drn_riv`.
 
@@ -503,7 +513,7 @@ def physical_rows_drn_riv_tiled(head:wp.array(dtype=wp.float64), source:wp.array
     :param riv_bottom: River entry bed bottoms.
     :param drn_entry_rate: Per-entry drain discharge output.
     :param riv_entry_rate: Per-entry river discharge output.
-    :param boundary_flow: Combined GHB/DRN/RIV discharge output.
+    :param boundary_throughput: Combined GHB/DRN/RIV discharge output.
     :param boundary_tangent: Combined boundary tangent output.
     :param operator_tangent: Storage plus boundary diagonal output.
     :return: None; outputs are written in place.
@@ -516,12 +526,18 @@ def physical_rows_drn_riv_tiled(head:wp.array(dtype=wp.float64), source:wp.array
     ghb_flow = ghb_flow_at(i, head, ghb_c, ghb_head)
     combined_flow = ghb_flow + drain[0] + river[0]
     combined_tangent = ghb_c[i] + drain[1] + river[1]
-    boundary_flow[i] = combined_flow
+    boundary_throughput[i] = wp.abs(ghb_flow) + drain[2] + drain[3] + river[2] + river[3]
     boundary_tangent[i] = combined_tangent
     operator_tangent[i] = storage_tangent[i] + combined_tangent
     values = physical_row_metrics_base(i, head, source, free, fixed, left, right, flux, conductance,
         scale, residual, rhs, storage, storage_tangent,
         ghb_flow, drain[0], river[0], combined_tangent)
+    if free[i] != 0:
+        extra_in = drain[2] + river[2] - wp.max(-drain[0], wp.float64(0.0)) - wp.max(-river[0], wp.float64(0.0))
+        extra_out = drain[3] + river[3] - wp.max(drain[0], wp.float64(0.0)) - wp.max(river[0], wp.float64(0.0))
+        values[3] += extra_in + extra_out
+        values[4] += extra_in
+        values[5] += extra_out
     for metric in range(9):
         wp.tile_store(metrics, wp.tile_sum(wp.tile(values[metric])), offset=(i / block_size) * 9 + metric)
 
@@ -532,7 +548,7 @@ def check_local_balance_drn_riv(head: wp.array(dtype=wp.float64), free: wp.array
     left: wp.array2d(dtype=wp.int32), right: wp.array2d(dtype=wp.int32),
     flux: wp.array2d(dtype=wp.float64), conductance: wp.array2d(dtype=wp.float64),
     storage: wp.array(dtype=wp.float64), storage_tangent: wp.array(dtype=wp.float64),
-    residual: wp.array(dtype=wp.float64), boundary_flow: wp.array(dtype=wp.float64),
+    residual: wp.array(dtype=wp.float64), boundary_throughput: wp.array(dtype=wp.float64),
     boundary_tangent: wp.array(dtype=wp.float64), absolute_tolerance: wp.float64,
     relative_tolerance: wp.float64, failed: wp.array(dtype=wp.float64)):
     """Check independently assembled cell balances including package flow.
@@ -548,7 +564,7 @@ def check_local_balance_drn_riv(head: wp.array(dtype=wp.float64), free: wp.array
     :param storage: Physical storage residual contribution.
     :param storage_tangent: Storage tangent contribution.
     :param residual: Independently evaluated physical residuals.
-    :param boundary_flow: Combined accepted DRN/RIV/GHB exchange rates.
+    :param boundary_throughput: Gross accepted DRN/RIV/GHB entry throughput.
     :param boundary_tangent: Combined active boundary tangent.
     :param absolute_tolerance: Absolute cell balance tolerance.
     :param relative_tolerance: Throughput-relative balance tolerance.
@@ -558,7 +574,7 @@ def check_local_balance_drn_riv(head: wp.array(dtype=wp.float64), free: wp.array
     i = wp.tid()
     if free[i] == 0:
         return
-    throughput = wp.abs(source[i]) + wp.abs(storage[i]) + wp.abs(boundary_flow[i])
+    throughput = wp.abs(source[i]) + wp.abs(storage[i]) + boundary_throughput[i]
     anchor = storage_tangent[i] + boundary_tangent[i]
     roundoff = wp.float64(0.0)
     eps = wp.float64(2.220446049250313e-16)
@@ -621,10 +637,10 @@ def drn_riv_budget(head: wp.array(dtype=wp.float64),
         riv_bottom, 1, i, riv_entry_rate)
     drn_rate[i] = drain[0]
     riv_rate[i] = river[0]
-    wp.atomic_add(totals, 0, wp.max(-drain[0], wp.float64(0.0)))
-    wp.atomic_add(totals, 1, wp.max(drain[0], wp.float64(0.0)))
-    wp.atomic_add(totals, 2, wp.max(-river[0], wp.float64(0.0)))
-    wp.atomic_add(totals, 3, wp.max(river[0], wp.float64(0.0)))
+    wp.atomic_add(totals, 0, drain[2])
+    wp.atomic_add(totals, 1, drain[3])
+    wp.atomic_add(totals, 2, river[2])
+    wp.atomic_add(totals, 3, river[3])
 
 
 @wp.kernel
@@ -705,12 +721,13 @@ def add_cell_rates(rates:wp.array(dtype=wp.float64),source:wp.array(dtype=wp.flo
 
 
 @wp.kernel
-def chd_budget(fixed: wp.array(dtype=wp.int32), left: wp.array2d(dtype=wp.int32),
+def chd_budget(fixed: wp.array(dtype=wp.int32), source: wp.array(dtype=wp.float64),
+               left: wp.array2d(dtype=wp.int32),
                right: wp.array2d(dtype=wp.int32), flux: wp.array2d(dtype=wp.float64),
                totals: wp.array(dtype=wp.float64)):
     i = wp.tid()
     if fixed[i] != 0:
-        rate = wp.float64(0.0)
+        rate = -source[i]
         for axis in range(3):
             if right[i, axis] >= 0:
                 rate += flux[i, axis]

@@ -145,8 +145,9 @@ def test_entry_updates_replace_between_solves(device):
         # (c=2, e=1) alone: outflow 2*(h-1)=1 -> h=1.5
         np.testing.assert_allclose(head[0, 0, 0], 1.5, rtol=0., atol=1e-9)
         model.update_drn_entries(None)
-        with pytest.raises(RuntimeError):
-            model.accepted_drn_discharge(head=head, info=info)
+        # This accepted historical equation owns its exchange even after
+        # the current package is removed. Current solves still reject it.
+        np.testing.assert_allclose(model.accepted_drn_discharge(head=head, info=info), 1.)
         with pytest.raises(ValueError):
             # The isolated source is ungrounded with the drain removed.
             model.solve(max_outer=200)

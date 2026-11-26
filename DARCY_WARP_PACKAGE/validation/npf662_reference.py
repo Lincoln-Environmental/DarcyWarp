@@ -639,19 +639,22 @@ class NPF662Reference:
         scaled[(diagonal<=0)&(residual!=0)]=np.inf
         boundary=self.free.ravel()[self.left]&c.fixed.ravel()[self.right].astype(bool)
         reverse=self.free.ravel()[self.right]&c.fixed.ravel()[self.left].astype(bool)
-        free_exchange=np.concatenate([flux[boundary],-flux[reverse],boundary_exchange[self.free]])
+        drain_rates = (drain.discharge[self.free] if drn_entries_discharge is None else drn_entries_discharge)
+        river_rates = (river.discharge[self.free] if riv_entries_discharge is None else riv_entries_discharge)
+        free_exchange=np.concatenate([flux[boundary], -flux[reverse], ghb_exchange[self.free],
+            drain_rates, river_rates])
         free_in=stable_sum(values=np.maximum(-free_exchange,0.))
         free_out=stable_sum(values=np.maximum(free_exchange,0.))
         fixed=(c.active!=0)&(c.fixed!=0)
-        chd_rate=divergence[fixed]
+        chd_rate=divergence[fixed]-c.source[fixed]
         chd_in=stable_sum(values=np.maximum(chd_rate,0.))
         chd_out=stable_sum(values=np.maximum(-chd_rate,0.))
         ghb_in=stable_sum(values=np.maximum(-ghb_exchange[self.free],0.))
         ghb_out=stable_sum(values=np.maximum(ghb_exchange[self.free],0.))
-        drn_in=stable_sum(values=np.maximum(-drain.discharge[self.free],0.))
-        drn_out=stable_sum(values=np.maximum(drain.discharge[self.free],0.))
-        riv_in=stable_sum(values=np.maximum(-river.discharge[self.free],0.))
-        riv_out=stable_sum(values=np.maximum(river.discharge[self.free],0.))
+        drn_in=stable_sum(values=np.maximum(-drain_rates,0.))
+        drn_out=stable_sum(values=np.maximum(drain_rates,0.))
+        riv_in=stable_sum(values=np.maximum(-river_rates,0.))
+        riv_out=stable_sum(values=np.maximum(river_rates,0.))
         inflow=stable_sum(values=[chd_in,ghb_in,drn_in,riv_in])
         outflow=stable_sum(values=[chd_out,ghb_out,drn_out,riv_out])
         throughput=stable_sum(values=np.concatenate([np.abs(c.source[self.free]),np.abs(free_exchange)]))

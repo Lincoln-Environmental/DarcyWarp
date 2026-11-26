@@ -90,7 +90,7 @@ class NPF662Workspace:
         self.activation_head = wp.zeros(shape=self.n, dtype=wp.float64, device=self.device)
         self.package_totals = None
         self.boundary_operator = self.trial_boundary_operator = None
-        self.boundary_flow = self.trial_boundary_flow = None
+        self.boundary_throughput = self.trial_boundary_throughput = None
         self.boundary_tangent = self.trial_boundary_tangent = None
         self.drn_conductance = self.drn_elevation = None
         self.riv_conductance = self.riv_stage = self.riv_bottom = None
@@ -100,16 +100,12 @@ class NPF662Workspace:
         self.riv_entry_c = self.riv_entry_stage = self.riv_entry_bottom = None
         self.drn_entry_rate = self.riv_entry_rate = None
         if self.has_drn_riv:
-            for name in ('boundary_operator', 'trial_boundary_operator', 'boundary_flow',
-                         'trial_boundary_flow', 'boundary_tangent', 'trial_boundary_tangent'):
+            for name in ('boundary_operator', 'trial_boundary_operator', 'boundary_throughput',
+                         'trial_boundary_throughput', 'boundary_tangent', 'trial_boundary_tangent'):
                 setattr(self, name, wp.zeros(shape=self.n, dtype=wp.float64, device=self.device))
             self.drn_rate = wp.zeros(shape=self.n, dtype=wp.float64, device=self.device)
             self.riv_rate = wp.zeros(shape=self.n, dtype=wp.float64, device=self.device)
             self.package_totals = wp.zeros(shape=4, dtype=wp.float64, device=self.device)
-            # Dense per-cell mirrors remain available for diagnostics and the
-            # restraint diagonal; the kernels consume the CSR entries below.
-            for name in ('drn_conductance', 'drn_elevation', 'riv_conductance', 'riv_stage', 'riv_bottom'):
-                setattr(self, name, wp.zeros(shape=self.n, dtype=wp.float64, device=self.device))
             # CSR entry storage; dense single-entry fields reduce to the same
             # representation with one entry per conducting cell.
             self.drn_offsets = wp.zeros(shape=self.n + 1, dtype=wp.int32, device=self.device)
@@ -259,11 +255,6 @@ class NPF662Workspace:
         riv_c, riv_s, riv_b = validate_riv_fields(conductance=case.riv_conductance,
             stage=case.riv_stage, bottom=case.riv_bottom, mask=case.riv_mask,
             active=case.active, fixed=case.fixed)
-        self.drn_conductance.assign(np.zeros(self.shape).ravel() if drn_c is None else drn_c.ravel())
-        self.drn_elevation.assign(np.zeros(self.shape).ravel() if drn_e is None else drn_e.ravel())
-        self.riv_conductance.assign(np.zeros(self.shape).ravel() if riv_c is None else riv_c.ravel())
-        self.riv_stage.assign(np.zeros(self.shape).ravel() if riv_s is None else riv_s.ravel())
-        self.riv_bottom.assign(np.zeros(self.shape).ravel() if riv_b is None else riv_b.ravel())
         drn_list = (validate_boundary_entries(entries=case.drn_entries, package='DRN',
             shape=self.shape, active=case.active, fixed=case.fixed)
             if case.drn_entries is not None
@@ -390,7 +381,7 @@ class NPF662Workspace:
     def chd_budget(self):
         totals = wp.zeros(shape=2, dtype=wp.float64, device=self.device)
         wp.launch(kernel=kernels.chd_budget, dim=self.n,
-                  inputs=[self.fixed, self.left, self.right, self.q, totals], device=self.device)
+                  inputs=[self.fixed, self.source, self.left, self.right, self.q, totals], device=self.device)
         inflow, outflow = totals.numpy()
         return dict(chd_inflow=float(inflow), chd_outflow=float(outflow))
 
@@ -425,7 +416,7 @@ class NPF662Workspace:
                 self.drn_offsets, self.drn_entry_c, self.drn_entry_elev,
                 self.riv_offsets, self.riv_entry_c, self.riv_entry_stage, self.riv_entry_bottom,
                 self.drn_entry_rate, self.riv_entry_rate,
-                self.trial_boundary_flow if trial else self.boundary_flow,
+                self.trial_boundary_throughput if trial else self.boundary_throughput,
                 self.trial_boundary_tangent if trial else self.boundary_tangent,
                 self.trial_boundary_operator if trial else self.boundary_operator))
         else:
@@ -456,7 +447,7 @@ class NPF662Workspace:
                 wp.launch(kernel=kernels.check_local_balance_drn_riv, dim=self.n,
                     inputs=[head, self.free, self.fixed, self.source, self.left, self.right, q, c,
                         storage, tangent, r,
-                        self.trial_boundary_flow if trial else self.boundary_flow,
+                        self.trial_boundary_throughput if trial else self.boundary_throughput,
                         self.trial_boundary_tangent if trial else self.boundary_tangent,
                         self.physical_tolerance, self.relative_tolerance, self.maximum], device=self.device)
             else:
@@ -516,7 +507,7 @@ class NPF662Workspace:
             wp.copy(dest=self.ghb_operator,src=self.trial_ghb_operator)
         if self.has_drn_riv:
             for current, trial in (('boundary_operator','trial_boundary_operator'),
-                ('boundary_flow','trial_boundary_flow'),('boundary_tangent','trial_boundary_tangent')):
+                ('boundary_throughput','trial_boundary_throughput'),('boundary_tangent','trial_boundary_tangent')):
                 wp.copy(dest=getattr(self,current),src=getattr(self,trial))
 
     def accept_trial(self,*,metrics):
@@ -571,7 +562,7 @@ class NPF662Workspace:
         self.riv_entry_c = self.riv_entry_stage = self.riv_entry_bottom = None
         self.drn_entry_rate = self.riv_entry_rate = None
         self.boundary_operator = self.trial_boundary_operator = None
-        self.boundary_flow = self.trial_boundary_flow = None
+        self.boundary_throughput = self.trial_boundary_throughput = None
         self.boundary_tangent = self.trial_boundary_tangent = None
         self.package_totals = None
         self.predictor_increment = self.predictor_older_increment = self.predictor_checkpoint = None

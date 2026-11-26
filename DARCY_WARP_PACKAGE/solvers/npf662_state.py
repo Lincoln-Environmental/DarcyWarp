@@ -21,12 +21,8 @@ class NPF662TransientState:
         self.shape = case.active.shape
         self._session = model._session
         self._audit = None
-        # Own the equation at the solve boundary, before any later model
-        # update can replace or mutate its host fields. Lazy reference assembly
-        # must never reconstruct historical inputs from the live model.
-        from copy import deepcopy
-        self._audit_case = deepcopy(case)
-        self._audit_revisions = self._input_revisions()
+        self._audit_case = None
+        self._audit_revisions = None
         self.structure_names = tuple(name for name in case.__dataclass_fields__
             if name not in ('source', 'values', 'initial', 'kx', 'ky', 'kz', 'cell_type',
                 'ghb_conductance', 'ghb_head', 'drn_conductance', 'drn_elevation', 'drn_mask',

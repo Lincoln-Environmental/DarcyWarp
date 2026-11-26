@@ -122,9 +122,9 @@ E   ValueError: Ungrounded transient component without boundary or storage
 _________________ test_sparse_previous_restraint_diagonal[cpu] _________________
 tests/test_package_audit_regressions.py:89: in test_sparse_previous_restraint_diagonal
     np.testing.assert_array_equal(workspace.previous_ghb_operator.numpy().reshape(shape), expected)
-E   AssertionError: 
+E   AssertionError:
 E   Arrays are not equal
-E   
+E
 E   Mismatched elements: 1 / 12 (8.33%)
 E   Max absolute difference among violations: 5.
 E   Max relative difference among violations: 1.
@@ -139,9 +139,9 @@ Module DARCY_WARP_PACKAGE.solvers.npf662_kernels 4909e8b load on device 'cpu' to
 _______________ test_sparse_previous_restraint_diagonal[cuda:0] ________________
 tests/test_package_audit_regressions.py:89: in test_sparse_previous_restraint_diagonal
     np.testing.assert_array_equal(workspace.previous_ghb_operator.numpy().reshape(shape), expected)
-E   AssertionError: 
+E   AssertionError:
 E   Arrays are not equal
-E   
+E
 E   Mismatched elements: 1 / 12 (8.33%)
 E   Max absolute difference among violations: 5.
 E   Max relative difference among violations: 1.

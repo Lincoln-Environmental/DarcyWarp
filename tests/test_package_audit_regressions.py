@@ -190,3 +190,35 @@ def test_accepted_exchange_rejects_unowned_metadata(device, mutation):
         expected = model.accepted_drn_discharge(head=head, info=info)
         model.update_rhs(rhs=np.full((1, 1, 1), 2.))
         np.testing.assert_array_equal(model.accepted_drn_discharge(head=head, info=info), expected)
+
+
+@pytest.mark.parametrize('device', ['cpu', 'cuda:0'])
+def test_opposing_river_entries_keep_gross_exchange(device):
+    """Two nonzero opposing river entries retain gross package throughput."""
+    from test_3d_drn_riv_entries import _one_cell_model
+    with _one_cell_model(device=device,
+            riv_entries=[((0, 0, 0), 2., 2., 1.), ((0, 0, 0), 2., 4., 1.)]) as model:
+        model.update_rhs(rhs=np.zeros((1, 1, 1)))
+        head, info = model.solve(npf_preconditioner='kcycle')
+        assert info['converged']
+        assert head.item() == pytest.approx(3., abs=1e-12)
+        assert info['riv_budget']['inflow'] == pytest.approx(2.)
+        assert info['riv_budget']['outflow'] == pytest.approx(2.)
+        assert info['device_final_metrics']['gross_throughput'] == pytest.approx(4.)
+
+
+@pytest.mark.parametrize('device', ['cpu', 'cuda:0'])
+@pytest.mark.parametrize('rate', [-100., 100.])
+def test_well_on_prescribed_head_enters_chd_ledger(device, rate):
+    """CHD must supply an imposed abstraction or remove an imposed injection."""
+    shape = (1, 1, 1)
+    with WarpDarcySolver3D(nx=1, ny=1, nz=1, dx=1., dy=1., dz=1., device=device,
+            solver='kcycle', implementation='fast', formulation='mf6_6_6_2_npf') as model:
+        model.build_from_K_fields(kx_field=np.ones(shape), ky_field=np.ones(shape),
+            kz_field=np.ones(shape), active=np.ones(shape, dtype=np.int32),
+            bc_mask=np.ones(shape, dtype=np.int32), bc_values=np.full(shape, 3.),
+            initial_head=np.full(shape, 3.), wel_entries=[((0, 0, 0), rate)])
+        head, info = model.solve(npf_preconditioner='kcycle')
+        assert info['converged']
+        assert info['chd_budget']['chd_inflow'] == max(-rate, 0.)
+        assert info['chd_budget']['chd_outflow'] == max(rate, 0.)

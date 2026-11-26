@@ -484,10 +484,9 @@ class WarpDarcySolver3D:
     def _verify_accepted_state(self, *, head, info, package):
         """Verify accepted-state ownership before releasing package rates.
 
-        Inactive drains and disconnected rivers return identical fluxes for
-        many heads, so ownership is established through the immutable accepted
-        state token (revisions plus digests of the accepted head and boundary
-        fields) rather than by re-deriving fluxes against current fields.
+        An opaque token locates the session-owned historical equation. Supplied
+        heads, cell rates and entry rates are compared against owned outputs;
+        later changes to current model fields cannot rewrite that equation.
 
         :param head: Groundwater head returned by the same solve as ``info``.
         :param info: Converged solve metadata carrying ``accepted_state``.
