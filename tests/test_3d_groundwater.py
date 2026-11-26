@@ -110,14 +110,18 @@ def test_well_replacement_preserves_raw_rates_on_nonunit_cells(solver_device):
             assert info["source_budgets"]["wel"]["net"] == rate
 
 
-def test_opposing_wells_share_a_cell_but_retain_gross_rates(solver_device):
-    with groundwater_model(solver_device, spacing=(3., 2., 4.), ghb_conductance=4.,
-            ghb_head=5., wel_entries=[(CELL, -12.), (CELL, 20.)]) as model:
+def test_opposing_wells_do_not_relax_head_acceptance_or_disappear_from_budgets(solver_device):
+    # The well rates cancel in this cell's equation. Its only active boundary
+    # is a weak GHB at 5 m, so an initial 6 m head must be corrected.
+    rates = [-1.e9, 1.e9]
+    with groundwater_model(solver_device, spacing=(3., 2., 4.), ghb_conductance=2.e-7,
+            ghb_head=5., drn_entries=[(CELL, 1., 10.)], initial_head=np.full((1, 1, 1), 6.),
+            wel_entries=[(CELL, rates[0]), (CELL, rates[1])]) as model:
         head, info = model.solve(npf_preconditioner="kcycle")
-        assert info["converged"]
-        assert head.item() == pytest.approx(7., abs=1e-8)
-        assert info["source_budgets"]["wel"] == {"inflow": 20., "outflow": 12., "net": 8.}
-        np.testing.assert_array_equal(model.accepted_wel_rates(head=head, info=info), [-12., 20.])
+        assert info["converged"] and info["krylov_iterations"] > 0
+        assert head.item() == pytest.approx(5., abs=1.e-7)
+        assert info["source_budgets"]["wel"] == {"inflow": 1.e9, "outflow": 1.e9, "net": 0.}
+        np.testing.assert_array_equal(model.accepted_wel_rates(head=head, info=info), rates)
 
 
 @pytest.mark.parametrize(("package", "external_head", "expected_head", "expected_outflow"), [
