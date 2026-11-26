@@ -1,0 +1,310 @@
+........................................sssss........................... [  4%]
+........................................................................ [  8%]
+........................................................................ [ 13%]
+........................................................................ [ 17%]
+........................................................................ [ 22%]
+........................................................................ [ 26%]
+........................................................................ [ 30%]
+...................................................FFFFFFFF............. [ 35%]
+................................F............F.......................... [ 39%]
+........................................................................ [ 44%]
+................ssss.................................................... [ 48%]
+.......................................................................s [ 53%]
+sssss................................................................... [ 57%]
+........................................................................ [ 61%]
+................................................................ss...... [ 66%]
+.......................................................................s [ 70%]
+.ss....s................................................................ [ 75%]
+........................................................................ [ 79%]
+.....FFFFFFFF........................................................... [ 84%]
+........................................................................ [ 88%]
+........................................................................ [ 92%]
+........................................................................ [ 97%]
+..........................................                               [100%]
+=================================== FAILURES ===================================
+_ test_npf_returned_cpu_heads_remain_owned_across_reuse[False-False-cartesian] _
+tests/test_3d_public_contract.py:155: in test_npf_returned_cpu_heads_remain_owned_across_reuse
+    first, info = model.solve(**controls)
+                  ^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/warped_darcy_3d.py:599: in solve
+    result = self._solve(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/warped_darcy_3d.py:627: in _solve
+    return solve_npf662(model=self,**kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/npf662_3d.py:94: in solve_npf662
+    if npf_preconditioner=='kcycle' and npf_krylov_method=='gmres':raise ValueError('K-cycle requires flexible GMRES')
+                                                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ValueError: K-cycle requires flexible GMRES
+__ test_npf_returned_cpu_heads_remain_owned_across_reuse[False-False-layered] __
+tests/test_3d_public_contract.py:155: in test_npf_returned_cpu_heads_remain_owned_across_reuse
+    first, info = model.solve(**controls)
+                  ^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/warped_darcy_3d.py:599: in solve
+    result = self._solve(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/warped_darcy_3d.py:627: in _solve
+    return solve_npf662(model=self,**kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/npf662_3d.py:94: in solve_npf662
+    if npf_preconditioner=='kcycle' and npf_krylov_method=='gmres':raise ValueError('K-cycle requires flexible GMRES')
+                                                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ValueError: K-cycle requires flexible GMRES
+_ test_npf_returned_cpu_heads_remain_owned_across_reuse[False-True-cartesian] __
+tests/test_3d_public_contract.py:155: in test_npf_returned_cpu_heads_remain_owned_across_reuse
+    first, info = model.solve(**controls)
+                  ^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/warped_darcy_3d.py:599: in solve
+    result = self._solve(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/warped_darcy_3d.py:627: in _solve
+    return solve_npf662(model=self,**kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/npf662_3d.py:94: in solve_npf662
+    if npf_preconditioner=='kcycle' and npf_krylov_method=='gmres':raise ValueError('K-cycle requires flexible GMRES')
+                                                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ValueError: K-cycle requires flexible GMRES
+__ test_npf_returned_cpu_heads_remain_owned_across_reuse[False-True-layered] ___
+tests/test_3d_public_contract.py:155: in test_npf_returned_cpu_heads_remain_owned_across_reuse
+    first, info = model.solve(**controls)
+                  ^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/warped_darcy_3d.py:599: in solve
+    result = self._solve(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/warped_darcy_3d.py:627: in _solve
+    return solve_npf662(model=self,**kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/npf662_3d.py:94: in solve_npf662
+    if npf_preconditioner=='kcycle' and npf_krylov_method=='gmres':raise ValueError('K-cycle requires flexible GMRES')
+                                                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ValueError: K-cycle requires flexible GMRES
+_ test_npf_returned_cpu_heads_remain_owned_across_reuse[True-False-cartesian] __
+tests/test_3d_public_contract.py:155: in test_npf_returned_cpu_heads_remain_owned_across_reuse
+    first, info = model.solve(**controls)
+                  ^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/warped_darcy_3d.py:599: in solve
+    result = self._solve(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/warped_darcy_3d.py:627: in _solve
+    return solve_npf662(model=self,**kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/npf662_3d.py:94: in solve_npf662
+    if npf_preconditioner=='kcycle' and npf_krylov_method=='gmres':raise ValueError('K-cycle requires flexible GMRES')
+                                                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ValueError: K-cycle requires flexible GMRES
+__ test_npf_returned_cpu_heads_remain_owned_across_reuse[True-False-layered] ___
+tests/test_3d_public_contract.py:155: in test_npf_returned_cpu_heads_remain_owned_across_reuse
+    first, info = model.solve(**controls)
+                  ^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/warped_darcy_3d.py:599: in solve
+    result = self._solve(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/warped_darcy_3d.py:627: in _solve
+    return solve_npf662(model=self,**kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/npf662_3d.py:94: in solve_npf662
+    if npf_preconditioner=='kcycle' and npf_krylov_method=='gmres':raise ValueError('K-cycle requires flexible GMRES')
+                                                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ValueError: K-cycle requires flexible GMRES
+__ test_npf_returned_cpu_heads_remain_owned_across_reuse[True-True-cartesian] __
+tests/test_3d_public_contract.py:155: in test_npf_returned_cpu_heads_remain_owned_across_reuse
+    first, info = model.solve(**controls)
+                  ^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/warped_darcy_3d.py:599: in solve
+    result = self._solve(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/warped_darcy_3d.py:627: in _solve
+    return solve_npf662(model=self,**kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/npf662_3d.py:94: in solve_npf662
+    if npf_preconditioner=='kcycle' and npf_krylov_method=='gmres':raise ValueError('K-cycle requires flexible GMRES')
+                                                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ValueError: K-cycle requires flexible GMRES
+___ test_npf_returned_cpu_heads_remain_owned_across_reuse[True-True-layered] ___
+tests/test_3d_public_contract.py:155: in test_npf_returned_cpu_heads_remain_owned_across_reuse
+    first, info = model.solve(**controls)
+                  ^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/warped_darcy_3d.py:599: in solve
+    result = self._solve(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/warped_darcy_3d.py:627: in _solve
+    return solve_npf662(model=self,**kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/npf662_3d.py:94: in solve_npf662
+    if npf_preconditioner=='kcycle' and npf_krylov_method=='gmres':raise ValueError('K-cycle requires flexible GMRES')
+                                                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ValueError: K-cycle requires flexible GMRES
+_________ test_explicit_gmres_is_honoured_and_unused_controls_rejected _________
+tests/test_3d_release_contract.py:84: in test_explicit_gmres_is_honoured_and_unused_controls_rejected
+    unused, info = model.solve(npf_krylov_method='gmres')
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/warped_darcy_3d.py:599: in solve
+    result = self._solve(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/warped_darcy_3d.py:627: in _solve
+    return solve_npf662(model=self,**kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/npf662_3d.py:94: in solve_npf662
+    if npf_preconditioner=='kcycle' and npf_krylov_method=='gmres':raise ValueError('K-cycle requires flexible GMRES')
+                                                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ValueError: K-cycle requires flexible GMRES
+______________ test_public_timing_includes_independent_acceptance ______________
+tests/test_3d_release_contract.py:200: in test_public_timing_includes_independent_acceptance
+    unused, info = model.solve(npf_krylov_method='gmres')
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/warped_darcy_3d.py:599: in solve
+    result = self._solve(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/warped_darcy_3d.py:627: in _solve
+    return solve_npf662(model=self,**kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DARCY_WARP_PACKAGE/solvers/npf662_3d.py:94: in solve_npf662
+    if npf_preconditioner=='kcycle' and npf_krylov_method=='gmres':raise ValueError('K-cycle requires flexible GMRES')
+                                                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ValueError: K-cycle requires flexible GMRES
+________ test_layered_faces_jacobian_and_complete_confined_solve[cpu-x] ________
+tests/test_npf662_layers.py:77: in test_layered_faces_jacobian_and_complete_confined_solve
+    assert info['preconditioner']=='fixed diagonal within each GMRES solve'
+E   AssertionError: assert 'full-saturat...s corrections' == 'fixed diagon...h GMRES solve'
+E     
+E     - fixed diagonal within each GMRES solve
+E     + full-saturated A0 K-cycle; physical RHS D0*v; homogeneous corrections
+________ test_layered_faces_jacobian_and_complete_confined_solve[cpu-y] ________
+tests/test_npf662_layers.py:77: in test_layered_faces_jacobian_and_complete_confined_solve
+    assert info['preconditioner']=='fixed diagonal within each GMRES solve'
+E   AssertionError: assert 'full-saturat...s corrections' == 'fixed diagon...h GMRES solve'
+E     
+E     - fixed diagonal within each GMRES solve
+E     + full-saturated A0 K-cycle; physical RHS D0*v; homogeneous corrections
+____ test_layered_faces_jacobian_and_complete_confined_solve[cpu-vertical] _____
+tests/test_npf662_layers.py:77: in test_layered_faces_jacobian_and_complete_confined_solve
+    assert info['preconditioner']=='fixed diagonal within each GMRES solve'
+E   AssertionError: assert 'full-saturat...s corrections' == 'fixed diagon...h GMRES solve'
+E     
+E     - fixed diagonal within each GMRES solve
+E     + full-saturated A0 K-cycle; physical RHS D0*v; homogeneous corrections
+___ test_layered_faces_jacobian_and_complete_confined_solve[cpu-independent] ___
+tests/test_npf662_layers.py:77: in test_layered_faces_jacobian_and_complete_confined_solve
+    assert info['preconditioner']=='fixed diagonal within each GMRES solve'
+E   AssertionError: assert 'full-saturat...s corrections' == 'fixed diagon...h GMRES solve'
+E     
+E     - fixed diagonal within each GMRES solve
+E     + full-saturated A0 K-cycle; physical RHS D0*v; homogeneous corrections
+______ test_layered_faces_jacobian_and_complete_confined_solve[cuda:0-x] _______
+tests/test_npf662_layers.py:77: in test_layered_faces_jacobian_and_complete_confined_solve
+    assert info['preconditioner']=='fixed diagonal within each GMRES solve'
+E   AssertionError: assert 'full-saturat...s corrections' == 'fixed diagon...h GMRES solve'
+E     
+E     - fixed diagonal within each GMRES solve
+E     + full-saturated A0 K-cycle; physical RHS D0*v; homogeneous corrections
+______ test_layered_faces_jacobian_and_complete_confined_solve[cuda:0-y] _______
+tests/test_npf662_layers.py:77: in test_layered_faces_jacobian_and_complete_confined_solve
+    assert info['preconditioner']=='fixed diagonal within each GMRES solve'
+E   AssertionError: assert 'full-saturat...s corrections' == 'fixed diagon...h GMRES solve'
+E     
+E     - fixed diagonal within each GMRES solve
+E     + full-saturated A0 K-cycle; physical RHS D0*v; homogeneous corrections
+___ test_layered_faces_jacobian_and_complete_confined_solve[cuda:0-vertical] ___
+tests/test_npf662_layers.py:77: in test_layered_faces_jacobian_and_complete_confined_solve
+    assert info['preconditioner']=='fixed diagonal within each GMRES solve'
+E   AssertionError: assert 'full-saturat...s corrections' == 'fixed diagon...h GMRES solve'
+E     
+E     - fixed diagonal within each GMRES solve
+E     + full-saturated A0 K-cycle; physical RHS D0*v; homogeneous corrections
+_ test_layered_faces_jacobian_and_complete_confined_solve[cuda:0-independent] __
+tests/test_npf662_layers.py:77: in test_layered_faces_jacobian_and_complete_confined_solve
+    assert info['preconditioner']=='fixed diagonal within each GMRES solve'
+E   AssertionError: assert 'full-saturat...s corrections' == 'fixed diagon...h GMRES solve'
+E     
+E     - fixed diagonal within each GMRES solve
+E     + full-saturated A0 K-cycle; physical RHS D0*v; homogeneous corrections
+=============================== warnings summary ===============================
+../../home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/warp/_src/apic/types.py:49
+  /home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/warp/_src/apic/types.py:49: DeprecationWarning: Due to '_pack_', the 'APICLaunchParamRecord' Structure will use memory layout compatible with MSVC (Windows). If this is intended, set _layout_ to 'ms'. The implicit default is deprecated and slated to become an error in Python 3.19.
+    class APICLaunchParamRecord(ctypes.Structure):
+
+../../home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/warp/_src/apic/types.py:69
+  /home/patrickdurney/miniconda3/envs/darcywarp/lib/python3.14/site-packages/warp/_src/apic/types.py:69: DeprecationWarning: Due to '_pack_', the 'APICLaunchPtrLocation' Structure will use memory layout compatible with MSVC (Windows). If this is intended, set _layout_ to 'ms'. The implicit default is deprecated and slated to become an error in Python 3.19.
+    class APICLaunchPtrLocation(ctypes.Structure):
+
+tests/test_2d_local_acceptance.py: 206 warnings
+tests/test_fas_2d.py: 16 warnings
+tests/test_fas_transient_multistep.py: 97 warnings
+tests/test_nov25_audit_regressions.py: 310 warnings
+tests/test_transient_period_controls.py: 9 warnings
+tests/test_unconfined_solvers_500x500.py: 52 warnings
+  /tmp/darcywarp-sfr-3d-boundaries/DARCY_WARP_PACKAGE/solvers/registry.py:62: UserWarning: solver='unconfined_fas' is experimental and not validated for production runs.
+    backend = select_backend(
+
+tests/test_2d_local_acceptance.py: 4 warnings
+tests/test_fas_2d.py: 1 warning
+tests/test_wel_fast_execution.py: 8 warnings
+  /tmp/darcywarp-sfr-3d-boundaries/DARCY_WARP_PACKAGE/warped_darcy.py:5723: RuntimeWarning: MG level 1 coarsening ratio 0.50 is outside [0.7, 1.3]; coarse-grid geometry may be inconsistent.
+    self._two_level_coarsening_diag = self._coarsening_diag_entry(
+
+tests/test_2d_local_acceptance.py: 88 warnings
+  /tmp/darcywarp-sfr-3d-boundaries/DARCY_WARP_PACKAGE/warped_darcy.py:6516: RuntimeWarning: MG level 1 coarsening ratio 0.50 is outside [0.7, 1.3]; coarse-grid geometry may be inconsistent.
+    self._two_level_coarsening_diag = self._coarsening_diag_entry(
+
+tests/test_2d_local_acceptance.py: 2 warnings
+tests/test_fas_transient_multistep.py: 26 warnings
+tests/test_nov25_audit_regressions.py: 6 warnings
+tests/test_transient_period_controls.py: 5 warnings
+tests/test_unconfined_solvers_500x500.py: 1 warning
+  /tmp/darcywarp-sfr-3d-boundaries/DARCY_WARP_PACKAGE/solvers/transient_unconfined.py:2559: UserWarning: solver='unconfined_fas' is experimental and not validated for production runs.
+    backend = select_backend(
+
+tests/test_2d_main_audit.py::test_isolated_cell_storage_and_steady_grounding[classic]
+tests/test_2d_main_audit.py::test_isolated_cell_storage_and_steady_grounding[fast]
+tests/test_2d_main_audit.py::test_isolated_ghb_cell_retains_steady_equation[classic]
+tests/test_2d_main_audit.py::test_isolated_ghb_cell_retains_steady_equation[fast]
+tests/test_2d_main_audit.py::test_rebuild_checks_new_ungrounded_cell_with_unchanged_positive_connectivity
+tests/test_scientific_audit_regressions.py::test_isolated_cells_retain_transient_storage[0.0]
+tests/test_scientific_audit_regressions.py::test_isolated_cells_retain_transient_storage[0.05]
+  /tmp/darcywarp-sfr-3d-boundaries/DARCY_WARP_PACKAGE/warped_darcy.py:5723: RuntimeWarning: MG level 1 coarsening ratio inf is outside [0.7, 1.3]; coarse-grid geometry may be inconsistent.
+    self._two_level_coarsening_diag = self._coarsening_diag_entry(
+
+tests/test_2d_wel.py::test_identical_well_rates_equivalent_2d_and_3d[cpu]
+tests/test_2d_wel.py::test_identical_well_rates_equivalent_2d_and_3d[cuda:0]
+tests/test_scientific_audit_regressions.py::test_transient_riv_is_present_in_accepted_newton_budget[8.5]
+tests/test_scientific_audit_regressions.py::test_transient_riv_is_present_in_accepted_newton_budget[9.0]
+tests/test_scientific_audit_regressions.py::test_transient_riv_is_present_in_accepted_newton_budget[10.0]
+tests/test_shanz_drn_flux_2d.py::test_transient_budget_contains_accepted_drn_volume[cpu]
+tests/test_shanz_drn_flux_2d.py::test_transient_budget_contains_accepted_drn_volume[cuda:0]
+  /tmp/darcywarp-sfr-3d-boundaries/DARCY_WARP_PACKAGE/warped_darcy.py:5723: RuntimeWarning: MG level 1 coarsening ratio 0.69 is outside [0.7, 1.3]; coarse-grid geometry may be inconsistent.
+    self._two_level_coarsening_diag = self._coarsening_diag_entry(
+
+tests/test_main_audit_followup.py::test_active_river_rejects_stage_below_bed[update]
+  /tmp/darcywarp-sfr-3d-boundaries/DARCY_WARP_PACKAGE/warped_darcy.py:5723: RuntimeWarning: MG level 1 coarsening ratio 0.56 is outside [0.7, 1.3]; coarse-grid geometry may be inconsistent.
+    self._two_level_coarsening_diag = self._coarsening_diag_entry(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+SKIPPED [3] tests/test_2d_main_audit.py:238: Checks the FP32 package precision contract.
+SKIPPED [2] tests/test_2d_main_audit.py:258: Checks the FP32 package precision contract.
+SKIPPED [4] tests/test_3d_session.py:186: Exercises the FP32 coefficient conversion
+SKIPPED [4] tests/test_confined_steady_acceptance.py:38: This grid probes FP32 rounding at a 100 m datum.
+SKIPPED [2] tests/test_confined_steady_acceptance.py:66: The mixed driver requires an FP32 model.
+SKIPPED [2] tests/test_nov25_audit_regressions.py:182: FP32 underflow contract
+SKIPPED [1] tests/test_npf662_device_native.py:125: CUDA graph failure path
+SKIPPED [2] tests/test_npf662_device_native.py:146: CUDA tiled reductions
+SKIPPED [1] tests/test_npf662_device_native.py:187: CUDA graph identity
+FAILED tests/test_3d_public_contract.py::test_npf_returned_cpu_heads_remain_owned_across_reuse[False-False-cartesian]
+FAILED tests/test_3d_public_contract.py::test_npf_returned_cpu_heads_remain_owned_across_reuse[False-False-layered]
+FAILED tests/test_3d_public_contract.py::test_npf_returned_cpu_heads_remain_owned_across_reuse[False-True-cartesian]
+FAILED tests/test_3d_public_contract.py::test_npf_returned_cpu_heads_remain_owned_across_reuse[False-True-layered]
+FAILED tests/test_3d_public_contract.py::test_npf_returned_cpu_heads_remain_owned_across_reuse[True-False-cartesian]
+FAILED tests/test_3d_public_contract.py::test_npf_returned_cpu_heads_remain_owned_across_reuse[True-False-layered]
+FAILED tests/test_3d_public_contract.py::test_npf_returned_cpu_heads_remain_owned_across_reuse[True-True-cartesian]
+FAILED tests/test_3d_public_contract.py::test_npf_returned_cpu_heads_remain_owned_across_reuse[True-True-layered]
+FAILED tests/test_3d_release_contract.py::test_explicit_gmres_is_honoured_and_unused_controls_rejected
+FAILED tests/test_3d_release_contract.py::test_public_timing_includes_independent_acceptance
+FAILED tests/test_npf662_layers.py::test_layered_faces_jacobian_and_complete_confined_solve[cpu-x]
+FAILED tests/test_npf662_layers.py::test_layered_faces_jacobian_and_complete_confined_solve[cpu-y]
+FAILED tests/test_npf662_layers.py::test_layered_faces_jacobian_and_complete_confined_solve[cpu-vertical]
+FAILED tests/test_npf662_layers.py::test_layered_faces_jacobian_and_complete_confined_solve[cpu-independent]
+FAILED tests/test_npf662_layers.py::test_layered_faces_jacobian_and_complete_confined_solve[cuda:0-x]
+FAILED tests/test_npf662_layers.py::test_layered_faces_jacobian_and_complete_confined_solve[cuda:0-y]
+FAILED tests/test_npf662_layers.py::test_layered_faces_jacobian_and_complete_confined_solve[cuda:0-vertical]
+FAILED tests/test_npf662_layers.py::test_layered_faces_jacobian_and_complete_confined_solve[cuda:0-independent]
+18 failed, 1587 passed, 21 skipped, 848 warnings in 943.51s (0:15:43)

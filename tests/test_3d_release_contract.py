@@ -81,7 +81,7 @@ def test_uniform_npf_newton_dispatch_rejects_legacy_overrides(option):
 
 def test_explicit_gmres_is_honoured_and_unused_controls_rejected():
     with model_from(data=inputs(), formulation='mf6_6_6_2_npf') as model:
-        unused, info = model.solve(npf_krylov_method='gmres')
+        unused, info = model.solve(npf_preconditioner='diagonal', npf_krylov_method='gmres')
         assert info['krylov_method'] == 'GMRES'
         with pytest.raises(ValueError, match='npf_'):
             model.solve(npf_newton_controls=object())
@@ -197,7 +197,7 @@ def test_hierarchy_controls_and_contradictions():
 
 def test_public_timing_includes_independent_acceptance():
     with model_from(data=inputs(), formulation='mf6_6_6_2_npf') as model:
-        unused, info = model.solve(npf_krylov_method='gmres')
+        unused, info = model.solve(npf_preconditioner='diagonal', npf_krylov_method='gmres')
     assert info['public_total_seconds'] >= info['seconds'] >= 0.
     assert info['setup_seconds'] >= 0. and info['reference_setup_seconds'] >= 0.
     assert 'independent final acceptance' in info['public_timing_scope']

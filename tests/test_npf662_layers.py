@@ -74,7 +74,9 @@ def test_layered_faces_jacobian_and_complete_confined_solve(variation,device):
         cpu,ci,unused=reference.solve()
         solved,info=model.solve(max_outer=50,max_cycles=2000)
         assert ci['independent_accepted'] and info['converged'],info
-        assert info['preconditioner']=='fixed diagonal within each GMRES solve'
+        assert info['npf_preconditioner'] == 'kcycle'
+        assert info['krylov_method'] == 'FGMRES'
+        assert info['preconditioner_cycles'] > 0
         np.testing.assert_allclose(solved[reference.free],cpu[reference.free],rtol=0.,atol=1e-7)
 
 

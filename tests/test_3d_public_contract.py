@@ -144,7 +144,7 @@ def test_npf_returned_cpu_heads_remain_owned_across_reuse(geometry, unconfined, 
     fields["initial_head"] = fields["bc_values"].copy()
     if all_fixed:
         fields["bc_mask"][:] = 1
-    controls = {"unconfined": unconfined, "max_cycles": 300, "max_outer": 40, "npf_krylov_method": "gmres"}
+    controls = {"unconfined": unconfined, "max_cycles": 300, "max_outer": 40, "npf_krylov_method": "gmres", "npf_preconditioner": "diagonal"}
     if geometry == "cartesian" and unconfined:
         controls["top_elevation"] = 3.0
     with new_model(formulation="mf6_6_6_2_npf") as model:
