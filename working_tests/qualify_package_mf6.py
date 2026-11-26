@@ -36,7 +36,7 @@ def native_boundary_rows(*, fields, package, stage_offset):
 
 def run_native(*, fields, durations, well_factors, recharge_factors, stage_offsets, transient,
                ss, sy, cell_type, ims_controls, executable, repeats, directory,
-               well_precision='float64', newton=False):
+               well_precision='float64', newton=None):
     """Build and repeatedly run the exact pinned native reference.
 
     :param fields: Identical grid, material, sources and entry definitions.
@@ -53,7 +53,7 @@ def run_native(*, fields, durations, well_factors, recharge_factors, stage_offse
     :param repeats: Number of native engine measurements from identical inputs.
     :param directory: Native files and compact evidence destination.
     :param well_precision: Match actual source precision in the numerical model.
-    :param newton: Explicitly enable MF6's Newton formulation and under-relaxation.
+    :param newton: Enable MF6 Newton; None selects it for convertible NPF cells.
     :return: Compact native timing and physical-budget evidence.
     :raises RuntimeError: If MF6 fails or does not terminate normally.
     """
@@ -61,6 +61,8 @@ def run_native(*, fields, durations, well_factors, recharge_factors, stage_offse
     from DARCY_WARP_PACKAGE.validation.npf662_mf6 import pinned_native_executable
     from DARCY_WARP_PACKAGE.physics.recharge_3d import surface_recharge_cells
     from DARCY_WARP_PACKAGE.physics.wel import validate_well_entries
+    if newton is None:
+        newton = bool(np.any(np.asarray(cell_type) != 0))
     if str(ims_controls.get('complexity', '')).upper() != 'COMPLEX':
         raise ValueError('Final package references require the qualified COMPLEX MF6 profile')
     if newton and str(ims_controls.get('linear_acceleration', '')).upper() != 'BICGSTAB':
