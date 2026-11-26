@@ -91,14 +91,13 @@ planned capabilities, not features included in this GHB release.
 Qualification
 -------------
 
-``tests/test_3d_ghb.py`` covers analytical steady/transient exchange,
-GHB-only grounding, boundary updates, introduction after a cached no-GHB
-solve, input ownership and legacy Picard. ``tests/test_3d_ghb_mf6.py`` runs
-live pinned MF6 6.6.2 comparisons of heads, GHB flows and storage, including
-convertible NPF histories and confined Cartesian histories. CPU and CUDA
-are exercised. Small analytical cases target FP64 roundoff; live comparisons
-currently assert an absolute head/flow bound of ``2e-11``. This test bound
-is not a claim of bitwise equality between solvers.
+The maintained numerical checks are in ``tests/test_3d_groundwater.py``
+and ``tests/test_native_parity.py``. The latter compares aquifer and reservoir
+exchange with pinned MF6 6.6.2 runs. The original GHB qualification covered
+steady and transient flow, boundary updates, small positive conductances
+and input ownership on CPU and CUDA. Its analytical cases targeted FP64
+roundoff and its live comparisons used a ``2e-11`` absolute head/flow
+bound on those models.
 
 The final solver regression selection passed 961 tests on ``dev`` and 798
 on ``main`` (which excludes experimental terrain and includes the restored

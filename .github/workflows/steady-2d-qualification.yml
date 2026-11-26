@@ -1,4 +1,4 @@
-name: 3000 by 3000 steady MF6 comparison
+name: Regional MODFLOW parity
 
 on:
   workflow_dispatch:
@@ -7,19 +7,21 @@ on:
     paths:
       - '.github/workflows/steady-2d-qualification.yml'
       - 'tests/test_2d_unconfined.py'
-      - 'tests/fixtures/unconfined_2d/truth_3000x3000.npz.lzma'
+      - 'tests/test_unconfined_solvers_500x500.py'
+      - 'tests/test_comparison_results.py'
+      - 'tests/fixtures/unconfined_2d/truth_*.npz.lzma'
 
 permissions:
   contents: read
 
 jobs:
-  steady:
+  retained:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 360
     env:
       DARCY_FLOAT: float64
       DARCYWARP_TEST_CPU_ONLY: '1'
-      PYTHONPATH: .:working_tests
+      WARP_DEVICE: cpu
       OMP_NUM_THREADS: '1'
       OPENBLAS_NUM_THREADS: '1'
     steps:
@@ -27,6 +29,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m pip install warp-lang==1.17.0 numpy scipy pandas matplotlib flopy pytest
-      - name: Compare all active heads against the stored MODFLOW reference
-        run: python -m pytest -q -s 'tests/test_2d_unconfined.py::test_unconfined_warp_matches_mf6_truth_all_grids[3000x3000]'
+      - run: python -m pip install warp-lang==1.17.0 numpy scipy pandas matplotlib flopy pytest filelock
+      - name: Install MODFLOW 6.6.2 for the transient reference
+        run: |
+          mf6_dir="$RUNNER_TEMP/darcywarp-mf6"
+          mkdir -p "$mf6_dir"
+          curl -fsSL --retry 3 https://github.com/MODFLOW-ORG/modflow6/releases/download/6.6.2/mf6.6.2_linux.zip -o "$mf6_dir/release.zip"
+          unzip -p "$mf6_dir/release.zip" mf6.6.2_linux/bin/mf6 > "$mf6_dir/mf6"
+          printf '%s  %s\n' 9acdb07cae589555355b5d25b5ec1a7af7a0127ff95339ee14971ec7df6641ab "$mf6_dir/mf6" | sha256sum -c
+          chmod +x "$mf6_dir/mf6"
+          printf '%s\n' "$mf6_dir" >> "$GITHUB_PATH"
+      - name: Run retained field comparisons
+        run: python -m pytest -q -ra -m regional_parity

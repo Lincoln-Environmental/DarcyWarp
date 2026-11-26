@@ -21,92 +21,72 @@ flow problem and demonstrates the API, outputs and units.
 Numerical test coverage
 -----------------------
 
-The links point to the tests in the repository. Read the relevant test setup
-and tolerances when interpreting a result.
+The following modules live under ``tests/``. Their cases report which solver,
+physical inputs and numerical tolerances were used.
 
 .. list-table::
    :header-rows: 1
-   :widths: 25 40 35
+   :widths: 38 62
 
-   * - Area
-     - Checks represented
-     - Source
-   * - Linear operator and public API
-     - Sparse-system consistency, backend aliases, dispatch equivalence and
-       deterministic resource cleanup.
-     - `Sparse-system tests <https://github.com/Lincoln-Environmental/DarcyWarp/blob/main/tests/test_sparse_system_consistency.py>`_;
-       `registry tests <https://github.com/Lincoln-Environmental/DarcyWarp/blob/main/tests/test_solver_registry_2d.py>`_.
-   * - Unconfined steady flow
-     - Saturated-thickness/transmissivity updates, near-dry cells and comparison
-       with saved MODFLOW 6 head fixtures across several grids.
-     - `Unconfined tests <https://github.com/Lincoln-Environmental/DarcyWarp/blob/main/tests/test_2d_unconfined.py>`_.
-   * - Transient flow and storage
-     - Storage assembly, dense-reference comparison, head response to forcing,
-       confined/unconfined budgets and timestep controls.
-     - `Transient tests <https://github.com/Lincoln-Environmental/DarcyWarp/blob/main/tests/test_2d_transient.py>`_.
-   * - Nonlinear operator and Newton
-     - Residual consistency, exact storage, Jacobian-vector checks, head and
-       budget comparisons with Picard, and fallback behaviour.
-     - `Nonlinear operator tests <https://github.com/Lincoln-Environmental/DarcyWarp/blob/main/tests/test_nonlinear_operator_2d.py>`_;
-       `Newton tests <https://github.com/Lincoln-Environmental/DarcyWarp/blob/main/tests/test_semismooth_newton_2d.py>`_.
-   * - Fast and mixed-precision paths
-     - Fast/classic agreement, graph/eager agreement, FP32 correction
-       comparisons with FP64, reductions and operator-cache refresh.
-     - `Fast FP64 tests <https://github.com/Lincoln-Environmental/DarcyWarp/blob/main/tests/test_fast_confined_kcycle.py>`_;
-       `fast mixed-precision tests <https://github.com/Lincoln-Environmental/DarcyWarp/blob/main/tests/test_mixed_precision_fast.py>`_.
-   * - Transient replay
-     - Warm-start provenance, storage budgets, strict versus practical
-       convergence reporting and numerical acceptance rules.
-     - `Replay tests <https://github.com/Lincoln-Environmental/DarcyWarp/blob/main/tests/test_2d_transient_warm_start.py>`_.
-   * - Experimental FAS
-     - Multiple periods and timesteps, changed forcing/heads, rejected-step
-       retries, fallback and comparison of full histories with Picard.
-     - `FAS transient tests <https://github.com/Lincoln-Environmental/DarcyWarp/blob/main/tests/test_fas_transient_multistep.py>`_.
+   * - Module
+     - What it checks
+   * - ``test_2d_groundwater.py``
+     - Confined PCG and K-cycle solutions, transient storage, signed recharge,
+       wells, prescribed heads, GHB, DRN and RIV exchanges, Picard, Newton and
+       FAS histories, and FP32 forcing through the production entry points.
+   * - ``test_3d_groundwater.py``
+     - Cartesian and layered flow, package fluxes, resident histories, K-cycle
+       execution and source updates against analytical solutions.
+   * - ``test_reference_equations.py``
+     - Independent face, boundary, Jacobian and storage equations, including
+       local conservation and inactive-cell separation.
+   * - ``test_native_parity.py``
+     - Matched MODFLOW 6.6.2 heads, package exchanges and storage at corresponding
+       physical times.
+   * - ``test_qualification_evidence.py``
+     - Head-field coverage, integration over actual timesteps, gross package
+       fluxes and missing evidence in benchmark comparisons.
+   * - ``test_model_inputs.py``
+     - Georeferenced input orientation, boundary stages, 3D model geometry,
+       source units and transient restarts.
 
-3D Cartesian and NPF/STO validation
------------------------------------
+The original sparse-system tests compare the linear equations with an independent
+finite-difference assembly. The original unconfined tests compare heads against
+stored MF6 reference grids.
 
-The 3D tests cover Cartesian operator accuracy, layered analytical flow,
-CPU/MF6 6.6.2 NPF/STO comparisons, transient storage and stepwise physical
-acceptance, and device-resident multi-step histories.
+Running the checks
+------------------
 
-* `tests/test_3d_operator_analytical.py` and
-  `examples/verify_3d_series_flow.py`: Cartesian and layered analytical checks.
-* `tests/test_npf662_confined.py`, `tests/test_npf662_layered_unconfined.py`
-  and `tests/test_npf662_transient.py`: NPF/STO head, flux and storage checks.
-* `tests/test_npf662_device_native.py` and
-  `tests/test_npf662_history.py`: CPU/CUDA parity, device state reuse,
-  changing K between histories, rejected timesteps and independent audits.
-* `working_tests/run_3d_sanity.py`: portable comparisons with fingerprinted
-  MF6 references, independent physical audits, head/flux gates and distinct
-  timing intervals.
-
-The :doc:`npf_gpu_native` page summarises the current 500 x 500 x 5
-transient GPU qualification and the controls needed to reproduce it.
-The checked-in GitHub Actions workflows are CPU smoke tests; they do not
-repeat the GPU performance qualification at every commit.
-
-Run the existing CI smoke tests from the repository root:
+From the repository root in the project environment, run the default suite or
+select individual test modules.
 
 .. code-block:: bash
 
-   python -m pytest tests/test_sparse_system_consistency.py tests/test_solver_registry_2d.py -v
+   PYTHONPATH=.:working_tests python -m pytest -q -ra
+   PYTHONPATH=.:working_tests python -m pytest -q -ra tests/test_native_parity.py
 
-For wider changes, select tests that exercise the affected formulation, device
-and precision. CUDA-dependent tests skip when CUDA is unavailable. Some
-comparison workflows also need saved fixtures, FloPy and a MODFLOW 6 executable.
-A run containing skipped tests should be described with those exclusions.
+Default collection includes the retained regional parity cases. To run the
+regular CI selection, use ``python -m pytest -m "not regional_parity"``.
+Use ``python -m pytest -m regional_parity`` on a high-memory runner for the
+large saved grids and full transient histories.
 
-The 2D GPU release suites can also be run together using saved references:
+The native parity module requires FloPy and the pinned MODFLOW executable.
+Report any skips with the run. The solver tests use CUDA when available and
+CPU otherwise. Use ``DARCYWARP_TEST_CPU_ONLY=1`` for a CPU-only run.
+
+The dimensional runners select solver and reference modules that can run without
+invoking native MF6. The 2D runner also exercises the stored unconfined reference
+grids. They write JUnit XML to ``outputs/2d_gpu_tests.xml`` and
+``outputs/3d_gpu_tests.xml``, respectively.
 
 .. code-block:: bash
 
    DARCY_FLOAT=float64 PYTHONPATH=.:working_tests python -m working_tests.run_2d_gpu_tests
+   DARCY_FLOAT=float64 PYTHONPATH=.:working_tests python -m working_tests.run_3d_gpu_tests
 
-This runner excludes tests that launch native MF6 and reports the exclusions.
-The :doc:`release_2d` records the actual release run, GHB regressions and
-separate full-history benchmarks. A green unit-test run alone does not
-establish the runtime or MF6 parity of a new model.
+The :doc:`release_2d` documents the historical device qualification and
+full-history benchmarks. The :doc:`npf_gpu_native` records the 500 x 500 x 5
+transient GPU qualification and the controls used to reproduce it.
 
 MODFLOW 6 comparisons
 ---------------------

@@ -206,4 +206,5 @@ Run the wider numerical regression suites separately::
 Earlier campaign drivers are retained under
 ``release_evidence/source_snapshot/working_tests/`` for provenance. Use
 ``run_3d_sanity.py`` for new portable runs. The regression test runner
-explicitly excludes tests that launch MF6 and reports those exclusions.
+selects the 3D groundwater and independent equation modules. Run
+``python -m pytest tests/test_native_parity.py`` for live MF6 comparisons.

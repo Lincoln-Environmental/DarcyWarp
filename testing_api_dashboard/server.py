@@ -128,9 +128,9 @@ def _build_commands() -> dict[str, CommandSpec]:
     return {
         "tests": CommandSpec(
             key="tests",
-            label="Run Unit Tests",
-            description="Runs unittest discovery under tests/.",
-            base_cmd=(py, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py"),
+            label="Run Numerical Tests",
+            description="Runs the repository pytest suite and reports failures and skips.",
+            base_cmd=(py, "-m", "pytest", "-q", "-ra"),
         ),
         "bench_recharge_quick": CommandSpec(
             key="bench_recharge_quick",

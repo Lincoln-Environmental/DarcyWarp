@@ -155,7 +155,7 @@ Use `create_solver(dim=3, ...)` or the public `WarpDarcySolver3D` class for
 for an analytical layered NPF check on CPU.
 
 For other formulations, start with the [capability guide](source/capabilities.rst)
-and the [confined/transient](tests/test_2d_transient.py) or
+and the [confined and transient](tests/test_2d_groundwater.py) or
 [unconfined](tests/test_2d_unconfined.py) examples exercised by the test suite.
 Keep units consistent across conductivity, transmissivity, recharge, storage
 and simulation time. Inspect convergence diagnostics and water balance for the

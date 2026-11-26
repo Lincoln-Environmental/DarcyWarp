@@ -34,30 +34,31 @@ Preserve attribution and licence notices.
 
 ## Check what changed
 
-The CI workflow runs Python 3.12 with NumPy, SciPy, pandas, pytest and
-Warp 1.17.0, checks imports and syntax, then runs these CPU smoke tests:
+Run these checks from the repository root with the project environment active.
 
 ```bash
 python -m compileall -q DARCY_WARP_PACKAGE tests working_tests
-python -m pytest tests/test_sparse_system_consistency.py tests/test_solver_registry_2d.py -v
+PYTHONPATH=.:working_tests python -m pytest -q -ra
 ```
 
-Run additional existing tests for the formulation, backend, precision and
-device affected by a numerical change. Report passes, failures and skips
-separately. A CPU run does not exercise CUDA-only paths. See the
-[verification guide](source/validation.rst) for the test map and the
-[capability guide](source/capabilities.rst) for supported combinations.
+For a focused run, give pytest the module that covers the changed equation or
+interface. The [verification guide](source/validation.rst) maps test modules to
+physical checks. The [capability guide](source/capabilities.rst) lists supported
+solver combinations. Record the device alongside pass, failure and skip counts.
+The native parity suite uses FloPy and the pinned MODFLOW 6.6.2 executable.
 
-For the fast 2D release suites, including GHB, mixed precision and saved MF6
-fixtures, run:
+For dimensional solver runs and JUnit XML reports, use these commands.
 
 ```bash
 DARCY_FLOAT=float64 PYTHONPATH=.:working_tests python -m working_tests.run_2d_gpu_tests
+DARCY_FLOAT=float64 PYTHONPATH=.:working_tests python -m working_tests.run_3d_gpu_tests
 ```
 
-The runner excludes native MF6 generation;
-inspect CUDA skips and use the [2D release guide](docs/2D_GPU_RELEASE_NOTES.rst)
-for separate performance and full-history MF6 checks.
+The 2D runner includes the stored unconfined reference grids. The 3D runner
+includes the independent equation checks. Both can run without a native MF6
+executable. The maintained solver tests select CUDA when available and fall
+back to CPU. The [2D release guide](docs/2D_GPU_RELEASE_NOTES.rst) records the
+separate performance and full-history MF6 qualification.
 
 For documentation changes, check the relevant example and build the docs:
 
