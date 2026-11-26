@@ -621,6 +621,20 @@ def share_component_restraint(labels: wp.array(dtype=wp.int32), sums: wp.array(d
 
 
 @wp.kernel
+def detect_connectivity_change(conductance: wp.array2d(dtype=wp.float64),
+    right: wp.array2d(dtype=wp.int32), cached: wp.array2d(dtype=wp.int32),
+    changed: wp.array(dtype=wp.int32)):
+    """Update the conducting-face mask and reduce any change to one scalar."""
+    i, axis = wp.tid()
+    current = wp.int32(0)
+    if right[i, axis] >= 0 and conductance[i, axis] > wp.float64(0.):
+        current = wp.int32(1)
+    if cached[i, axis] != current:
+        cached[i, axis] = current
+        wp.atomic_max(changed, 0, wp.int32(1))
+
+
+@wp.kernel
 def drn_riv_budget(head: wp.array(dtype=wp.float64),
     drn_offsets: wp.array(dtype=wp.int32), drn_c: wp.array(dtype=wp.float64),
     drn_elevation: wp.array(dtype=wp.float64),

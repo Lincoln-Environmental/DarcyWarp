@@ -125,11 +125,18 @@ class NPF662Workspace:
             conductance=None, active=case.active, fixed=case.fixed,
             return_layout=True)
         self._right_host = right
-        self._component_edge_mask = None
+        self._static_component_labels = labels.ravel().copy()
+        self._static_component_weights = weights.ravel().copy()
         self.component_labels = wp.array(labels.ravel(), dtype=wp.int32, device=self.device)
         self.component_weight = wp.array(weights.ravel(), dtype=wp.float64, device=self.device)
         self.component_sums = wp.zeros(self.n, dtype=wp.float64, device=self.device)
         self.active_component_anchor = wp.zeros(self.n, dtype=wp.float64, device=self.device)
+        self.component_face_mask = wp.zeros(shape=(self.n, 3), dtype=wp.int32, device=self.device)
+        self.component_connectivity_changed = wp.zeros(1, dtype=wp.int32, device=self.device)
+        self._component_layout_static = None
+        self.connectivity_scalar_readbacks = 0
+        self.connectivity_full_grid_readbacks = 0
+        self.connectivity_label_rebuilds = 0
         self.anchor_revision = None
         self.roundoff_acceptance = False
         self.physical_tolerance = 1.0e-12
@@ -141,11 +148,19 @@ class NPF662Workspace:
 
     def _refresh_component_layout(self, *, conductance):
         """Refresh restraint components when the set of wet faces changes."""
-        current = np.asarray(conductance.numpy(), dtype=np.float64).reshape((self.n, 3))
-        edge_mask = (self._right_host >= 0) & (current > 0.)
-        if (self._component_edge_mask is not None
-                and np.array_equal(edge_mask, self._component_edge_mask)):
+        if self._component_layout_static:
             return
+        self.component_connectivity_changed.zero_()
+        wp.launch(kernel=kernels.detect_connectivity_change, dim=(self.n, 3),
+            inputs=[conductance, self.right, self.component_face_mask,
+                    self.component_connectivity_changed], device=self.device)
+        if wp.get_device(ident=self.device).is_cuda:
+            self.connectivity_scalar_readbacks += 1
+        if self.component_connectivity_changed.numpy()[0] == 0:
+            return
+        current = np.asarray(conductance.numpy(), dtype=np.float64).reshape((self.n, 3))
+        if wp.get_device(ident=self.device).is_cuda:
+            self.connectivity_full_grid_readbacks += 1
         left = np.broadcast_to(
             np.arange(self.n, dtype=np.int64)[:, None], (self.n, 3)).ravel()
         unused_anchor, labels, weights = npf_ghb_component_anchor(
@@ -159,7 +174,7 @@ class NPF662Workspace:
         )
         self.component_labels.assign(labels.ravel())
         self.component_weight.assign(weights.ravel())
-        self._component_edge_mask = edge_mask.copy()
+        self.connectivity_label_rebuilds += 1
 
     def select_krylov(self,*,method,krylov_budget):
         """Own only the selected basis; share all hydraulic/operator buffers."""
@@ -238,6 +253,13 @@ class NPF662Workspace:
         if not static_reused or not np.array_equal(self._types_snapshot, case.cell_type):
             self.types.assign(case.cell_types.astype(np.int32).ravel())
             self._types_snapshot = np.asarray(case.cell_type).copy()
+        static_connectivity = not np.any(case.cell_types != 0)
+        if static_connectivity and self._component_layout_static is not True:
+            self.component_labels.assign(self._static_component_labels)
+            self.component_weight.assign(self._static_component_weights)
+        elif not static_connectivity and self._component_layout_static is not False:
+            self.component_face_mask.fill_(-1)
+        self._component_layout_static = static_connectivity
         self.head.assign(np.where(case.active,np.where(case.fixed,case.values,case.initial),0.).ravel())
         # Production C0 comes from the Cartesian session, not the CPU oracle.
         faces=model._session.faces
@@ -283,6 +305,7 @@ class NPF662Workspace:
         if native and self.maximum.numpy()[0] != 0.:
             raise ValueError('Invalid device previous-state storage tangent')
         self.jv_counter.zero_();self.preconditioner_counter.zero_();self.residual_evaluations=0;self.candidate_evaluations=0
+        self.connectivity_scalar_readbacks=0;self.connectivity_full_grid_readbacks=0;self.connectivity_label_rebuilds=0
 
     def _load_boundary_entries(self, *, case):
         """Rebuild owned CSR entry arrays from the case boundary inputs.
@@ -295,19 +318,17 @@ class NPF662Workspace:
         :return: None.
         """
         from DARCY_WARP_PACKAGE.physics.drn_riv_3d import (csr_from_boundary_field,
-            validate_boundary_entries, validate_drn_fields, validate_riv_fields)
+            validate_drn_fields, validate_riv_fields)
         drn_c, drn_e = validate_drn_fields(conductance=case.drn_conductance,
             elevation=case.drn_elevation, mask=case.drn_mask, active=case.active, fixed=case.fixed)
         riv_c, riv_s, riv_b = validate_riv_fields(conductance=case.riv_conductance,
             stage=case.riv_stage, bottom=case.riv_bottom, mask=case.riv_mask,
             active=case.active, fixed=case.fixed)
-        drn_list = (validate_boundary_entries(entries=case.drn_entries, package='DRN',
-            shape=self.shape, active=case.active, fixed=case.fixed)
+        drn_list = (case.drn_entries
             if case.drn_entries is not None
             else (csr_from_boundary_field(conductance=drn_c, levels=[drn_e], shape=self.shape)
                 if drn_c is not None else None))
-        riv_list = (validate_boundary_entries(entries=case.riv_entries, package='RIV',
-            shape=self.shape, active=case.active, fixed=case.fixed)
+        riv_list = (case.riv_entries
             if case.riv_entries is not None
             else (csr_from_boundary_field(conductance=riv_c, levels=[riv_s, riv_b], shape=self.shape)
                 if riv_c is not None else None))
@@ -647,6 +668,7 @@ class NPF662Workspace:
         self.predictor_increment = self.predictor_older_increment = self.predictor_checkpoint = None
         self.roundoff_partials = self.roundoff_zero = None
         self.component_anchor = None
+        self.component_face_mask = self.component_connectivity_changed = None
         for name in ('head','prescribed','trial','source','bottom','thickness','scale','rhs','trial_rhs','residual','trial_residual','delta',
             'c0','q','c','trial_q','trial_c','dl','dr','trial_dl','trial_dr','free','fixed','types','left','right','metrics','maximum','mode','jv_counter','preconditioner_counter',
             'storage_previous','storage_ss','storage_sy','storage_rate','storage_tangent','trial_storage_rate','trial_storage_tangent','certificate','metric_partials'):
@@ -671,7 +693,7 @@ def refine_confined_component_datum(*, case, reference, head):
     subtracting large opposing intercell fluxes to determine this weak mode.
     This changes no conductance and introduces no artificial constraint.
 
-    :param case: Solved confined steady equation without switching packages.
+    :param case: Solved steady equation with hydraulically confined components.
     :param reference: Independent reference owning the physical connectivity.
     :param head: Current numerical head grid.
     :return: Candidate heads, or None when every component has prescribed heads.
@@ -679,12 +701,15 @@ def refine_confined_component_datum(*, case, reference, head):
     from math import fsum
     from scipy.sparse import coo_matrix
     from scipy.sparse.csgraph import connected_components
-    labels = getattr(reference, '_datum_component_labels', None)
-    if labels is None:
-        graph = coo_matrix((np.ones(reference.left.size), (reference.left, reference.right)),
-            shape=(case.active.size, case.active.size)).tocsr()
-        unused, labels = connected_components(csgraph=graph, directed=False)
-        reference._datum_component_labels = labels
+    current_conductance, unused_dl, unused_dr, unused_saturation = reference.face_terms(head=head)
+    conducting = current_conductance > 0.
+    graph = coo_matrix((np.ones(int(np.sum(conducting))),
+        (reference.left[conducting], reference.right[conducting])),
+        shape=(case.active.size, case.active.size)).tocsr()
+    unused, labels = connected_components(csgraph=graph, directed=False)
+    unused_drn, initial_drain, unused_riv, initial_river = reference.boundary_terms(head=head)
+    initial_drain_active = initial_drain.diagonal > 0.
+    initial_river_active = initial_river.diagonal > 0.
     corrected = None
     active = np.asarray(case.active).ravel() != 0
     fixed = np.asarray(case.fixed).ravel() != 0
@@ -696,9 +721,9 @@ def refine_confined_component_datum(*, case, reference, head):
         component = (labels == label) & active
         if np.any(fixed[component]) or np.any(case.cell_types.ravel()[component]):
             continue
-        unused_drn, drain, unused_riv, river = reference.boundary_terms(head=head)
         if any(np.any(field.ravel()[component] != 0.) for field in
-                (drain.discharge, drain.diagonal, river.discharge, river.diagonal)):
+                (initial_drain.discharge, initial_drain.diagonal,
+                 initial_river.discharge, initial_river.diagonal)):
             continue
         restraint = fsum(conductance[component])
         if restraint <= 0.:
@@ -710,7 +735,13 @@ def refine_confined_component_datum(*, case, reference, head):
             continue
         trial = np.array(head, copy=True, order='C')
         trial.ravel()[component] += shift
+        trial_conductance, unused_dl, unused_dr, unused_saturation = reference.face_terms(head=trial)
+        if not np.array_equal(trial_conductance > 0., conducting):
+            continue
         unused_drn, drain, unused_riv, river = reference.boundary_terms(head=trial)
+        if (not np.array_equal(drain.diagonal > 0., initial_drain_active)
+                or not np.array_equal(river.diagonal > 0., initial_river_active)):
+            continue
         if any(np.any(field.ravel()[component] != 0.) for field in
                 (drain.discharge, drain.diagonal, river.discharge, river.diagonal)):
             continue
@@ -1001,6 +1032,12 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
         max_krylov_per_outer=krylov_budget,max_outer=max_outer,krylov_restart=restart,
         scaling='fixed full-saturated principal diagonal; S*J and S*R',preconditioner='fixed diagonal within each GMRES solve')
     result['component_datum_refined'] = datum_refined
+    result['component_connectivity'] = dict(
+        static=bool(workspace._component_layout_static),
+        scalar_device_to_host_transfers=workspace.connectivity_scalar_readbacks,
+        full_grid_device_to_host_transfers=workspace.connectivity_full_grid_readbacks,
+        label_rebuilds=workspace.connectivity_label_rebuilds,
+    )
     result['krylov_method']=method.upper()
     if roundoff_acceptance:
         result.update(roundoff_accepted=converged,requested_thresholds_met=requested_met,

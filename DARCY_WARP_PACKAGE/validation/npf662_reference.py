@@ -100,17 +100,10 @@ def digest_with_boundary_entries(*, digest, case):
     :param case: Case owning optional ``drn_entries``/``riv_entries``.
     :return: The same digest with entry cells, conductances and levels mixed in.
     """
-    from DARCY_WARP_PACKAGE.physics.drn_riv_3d import BoundaryEntryList, validate_boundary_entries
     for name in ('drn_entries', 'riv_entries'):
         entries = getattr(case, name, None)
         if entries is None:
             continue
-        if not isinstance(entries, BoundaryEntryList):
-            package = 'DRN' if name == 'drn_entries' else 'RIV'
-            entries = validate_boundary_entries(entries=entries, package=package,
-                shape=case.active.shape, active=case.active, fixed=case.fixed)
-            if entries is None:
-                continue
         digest.update(name.encode())
         digest.update(np.ascontiguousarray(entries.cells, dtype=np.int64).tobytes())
         digest.update(np.ascontiguousarray(entries.conductance, dtype=np.float64).tobytes())
@@ -187,14 +180,12 @@ class NPF662Case:
             active=self.active, fixed=self.fixed)
         riv_entries = validate_boundary_entries(entries=self.riv_entries, package='RIV', shape=shape,
             active=self.active, fixed=self.fixed)
-        if self.drn_entries is not None and drn_entries is None:
-            self.drn_entries = None
-        if self.riv_entries is not None and riv_entries is None:
-            self.riv_entries = None
         if drn_entries is not None and (self.drn_conductance is not None or self.drn_elevation is not None):
             raise ValueError('Supply DRN through dense fields or sparse entries, not both')
         if riv_entries is not None and (self.riv_conductance is not None or self.riv_stage is not None):
             raise ValueError('Supply RIV through dense fields or sparse entries, not both')
+        self.drn_entries = drn_entries
+        self.riv_entries = riv_entries
         validate_drn_fields(conductance=self.drn_conductance, elevation=self.drn_elevation,
                             active=self.active, fixed=self.fixed, mask=self.drn_mask)
         validate_riv_fields(conductance=self.riv_conductance, stage=self.riv_stage,
@@ -233,6 +224,7 @@ class NPF662Case:
         return 'NPF662_CARTESIAN_V1'
 
     def digest(self):
+        self.validate()
         digest=hashlib.sha256()
         for name in serialized_case_fields(case=self):
             value=np.ascontiguousarray(getattr(self,name))
@@ -303,6 +295,7 @@ class NPF662LayeredCase:
         return 'NPF662_LAYERED_DIS_V2'
 
     def digest(self):
+        self.validate()
         digest=hashlib.sha256(b'NPF662_LAYERED_DIS_V2')
         for name in serialized_case_fields(case=self):
             value=np.ascontiguousarray(getattr(self,name))
@@ -311,14 +304,10 @@ class NPF662LayeredCase:
 
 
 def save_npf662_case(*,case,path):
+    case.validate()
     arrays={name:np.asarray(getattr(case,name)) for name in serialized_case_fields(case=case)}
-    from DARCY_WARP_PACKAGE.physics.drn_riv_3d import validate_boundary_entries
     for name, package in (('drn_entries', 'DRN'), ('riv_entries', 'RIV')):
-        supplied = getattr(case, name, None)
-        if supplied is None:
-            continue
-        entries = validate_boundary_entries(entries=supplied, package=package,
-            shape=case.active.shape, active=case.active, fixed=case.fixed)
+        entries = getattr(case, name, None)
         if entries is None:
             continue
         prefix = name + '_'
@@ -422,7 +411,7 @@ class NPF662Reference:
         :raises ValueError: If package fields are invalid for the case grid.
         """
         from DARCY_WARP_PACKAGE.physics.drn_riv_3d import (csr_from_boundary_field,
-            validate_boundary_entries, validate_drn_fields, validate_riv_fields)
+            validate_drn_fields, validate_riv_fields)
 
         drain_conductance, drain_elevation = validate_drn_fields(
             conductance=case.drn_conductance, elevation=case.drn_elevation,
@@ -438,12 +427,8 @@ class NPF662Reference:
             else river_conductance)
         self.riv_stage = np.zeros(self.shape) if river_stage is None else river_stage
         self.riv_bottom = np.zeros(self.shape) if river_bottom is None else river_bottom
-        self.drn_entries = (validate_boundary_entries(entries=case.drn_entries, package='DRN',
-            shape=self.shape, active=case.active, fixed=case.fixed)
-            if case.drn_entries is not None else None)
-        self.riv_entries = (validate_boundary_entries(entries=case.riv_entries, package='RIV',
-            shape=self.shape, active=case.active, fixed=case.fixed)
-            if case.riv_entries is not None else None)
+        self.drn_entries = case.drn_entries
+        self.riv_entries = case.riv_entries
         self.drn_csr = (self.drn_entries if self.drn_entries is not None else
             (csr_from_boundary_field(conductance=self.drn_conductance, levels=[self.drn_elevation],
                 shape=self.shape) if drain_conductance is not None else None))

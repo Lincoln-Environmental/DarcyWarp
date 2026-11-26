@@ -54,6 +54,17 @@ class BoundaryEntryList:
     def __len__(self) -> int:
         return int(self.conductance.shape[0])
 
+    def __iter__(self):
+        """Expose canonical records for inspection without surrendering ownership."""
+        for index, cell in enumerate(self.cells):
+            prefix = (tuple(int(value) for value in cell),
+                      float(self.conductance[index]))
+            if self.first_level is not None:
+                yield (*prefix, float(self.first_level[index]))
+            else:
+                yield (*prefix, float(self.second_level[index]),
+                       float(self.third_level[index]))
+
 
 def _entry_cell_index(cell, shape):
     """Validate one integer entry cell tuple against the grid shape."""

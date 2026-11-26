@@ -284,7 +284,7 @@ class NPF662TransientState:
         if self._entry_lists_revision != (int(self._session.revision),
                                           int(self._session.topology_revision)):
             from DARCY_WARP_PACKAGE.physics.drn_riv_3d import (csr_from_boundary_field,
-                validate_boundary_entries, validate_drn_fields, validate_riv_fields)
+                validate_drn_fields, validate_riv_fields)
             case = self.case
             drn_c, drn_e = validate_drn_fields(conductance=case.drn_conductance,
                 elevation=case.drn_elevation, mask=case.drn_mask,
@@ -292,13 +292,11 @@ class NPF662TransientState:
             riv_c, riv_s, riv_b = validate_riv_fields(conductance=case.riv_conductance,
                 stage=case.riv_stage, bottom=case.riv_bottom, mask=case.riv_mask,
                 active=case.active, fixed=case.fixed)
-            self._drn_entries_list = (validate_boundary_entries(entries=case.drn_entries,
-                package='DRN', shape=self.shape, active=case.active, fixed=case.fixed)
+            self._drn_entries_list = (case.drn_entries
                 if case.drn_entries is not None
                 else (csr_from_boundary_field(conductance=drn_c, levels=[drn_e], shape=self.shape)
                     if drn_c is not None else None))
-            self._riv_entries_list = (validate_boundary_entries(entries=case.riv_entries,
-                package='RIV', shape=self.shape, active=case.active, fixed=case.fixed)
+            self._riv_entries_list = (case.riv_entries
                 if case.riv_entries is not None
                 else (csr_from_boundary_field(conductance=riv_c, levels=[riv_s, riv_b],
                     shape=self.shape) if riv_c is not None else None))
