@@ -46,8 +46,6 @@ if __name__ == "__main__":
     output = Path('/tmp/darcywarp-package-2d-mf6-exact')
     if arguments.profile == 'strict':
         output = output / 'strict'
-    if arguments.newton:
-        output = output / 'newton'
     controls = json.loads((root / 'working_tests/wel_regional_qualification_controls.json').read_text())
     controls.update(confined_thickness=10., unconfined_top=100., unconfined_sy=.15)
     grids = {'100k': (320, 320), '1M': (1000, 1000)}
@@ -62,8 +60,10 @@ if __name__ == "__main__":
                 continue
             fields, dx = fields_for_grid(shape=shape, controls=controls)
             convertible = mode == 'picard'
-            mode_newton = arguments.newton
-            case_output = output
+            # DarcyWarp's convertible 2D Picard path uses harmonic face
+            # transmissivity, so its physical MF6 twin is always standard NPF.
+            mode_newton = bool(arguments.newton and not convertible)
+            case_output = output / ('newton' if mode_newton else 'standard')
             if convertible:
                 fields['R_field'] = np.full(shape, np.mean(fields['R_field']))
             native = native_fields(fields=fields, dx=dx, controls=controls, convertible=convertible)

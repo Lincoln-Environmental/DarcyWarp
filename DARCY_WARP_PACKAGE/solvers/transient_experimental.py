@@ -77,7 +77,7 @@ _PICARD_FALLBACK_CONTROL_KEYS = (
 )
 
 _BUDGET_RATE_KEYS = (
-    "rcha_in", "rcha_out", "chd_in", "chd_out", "ghb_in", "ghb_out",
+    "rcha_in", "rcha_out", "wel_in", "wel_out", "chd_in", "chd_out", "ghb_in", "ghb_out",
     "drn_in", "drn_out", "riv_in", "riv_out", "storage_in", "storage_out",
     "free_chd_in", "free_chd_out", "free_total_in", "free_total_out",
 )
@@ -103,7 +103,7 @@ def _merge_timestep_budgets(records: list[dict]) -> dict:
     if total_weight > 0.0:
         for key in _BUDGET_RATE_KEYS:
             merged[key] /= total_weight
-    packages = ("rcha", "chd", "ghb", "drn", "riv", "storage")
+    packages = ("rcha", "wel", "chd", "ghb", "drn", "riv", "storage")
     total_in = sum(merged[f"{package}_in"] for package in packages)
     total_out = sum(merged[f"{package}_out"] for package in packages)
     for package in ("chd", "ghb", "drn", "riv"):
@@ -301,7 +301,7 @@ def solve_transient_unconfined_experimental(
     from DARCY_WARP_PACKAGE.physics.wel import validate_well_schedule
     built_wells = model.wel_entries
     well_schedule = validate_well_schedule(wel_rates=wel_rates, periods=int(rates.size) if source_fields is None else n_periods,
-        shape=h0.shape, active=active_i, dtype=NP_FLOAT)
+        shape=h0.shape, active=active_i, dtype=np.float64)
     if well_schedule is not None:
         model._track_well_sources = True
     model.build_from_fields(

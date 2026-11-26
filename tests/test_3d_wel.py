@@ -28,7 +28,7 @@ def _cuda_available(device):
 
 
 def _anchored_model(device, shape=(1, 3, 3), k=10., dz=5., well=0., recharge=None,
-                    rhs=None, cell=(0, 1, 1), dx=20., dy=20.):
+                    rhs=None, cell=(0, 1, 1), dx=20., dy=20., formulation="mf6_6_6_2_npf"):
     """One-layer confined model anchored by a prescribed-head column."""
     active = np.ones(shape, dtype=np.int32)
     fixed = np.zeros(shape, dtype=np.int32)
@@ -36,7 +36,7 @@ def _anchored_model(device, shape=(1, 3, 3), k=10., dz=5., well=0., recharge=Non
     values = np.zeros(shape)
     entries = None if well == 0. else [((shape[0] - 1, cell[1], cell[2]), well)]
     model = WarpDarcySolver3D(nx=shape[2], ny=shape[1], nz=shape[0], dx=dx, dy=dy, dz=dz,
-        formulation="mf6_6_6_2_npf", solver="kcycle", implementation="fast", device=device)
+        formulation=formulation, solver="kcycle", implementation="fast", device=device)
     model.build_from_K_fields(kx_field=np.full(shape, k), ky_field=np.full(shape, k),
         kz_field=np.full(shape, k), active=active, bc_mask=fixed, bc_values=values,
         rhs=rhs, R_field=recharge, wel_entries=entries, initial_head=np.zeros(shape))
@@ -117,6 +117,41 @@ def test_multiple_and_opposing_entries_keep_gross_budgets(device):
         assert np.count_nonzero(source) == 1
     finally:
         model.close()
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_chd_well_budget_with_explicit_zero_storage_is_signed_once(device):
+    """A requested CHD-cell WEL keeps nonnegative gross CHD accounting."""
+    if not _cuda_available(device):
+        pytest.skip("CUDA is unavailable")
+    shape = (1, 2, 2)
+    model = _anchored_model(
+        device, shape=shape, well=-100., cell=(0, 0, 0), formulation="legacy")
+    try:
+        zeros = np.zeros(shape)
+        head, info = model.solve(
+            transient=True, storage_diag=zeros, storage_coeff=0., dt=1., head_prev=zeros)
+        assert info["converged"]
+        np.testing.assert_allclose(head, 0., rtol=0., atol=0.)
+        budget = info["budget"]
+        assert budget["chd_inflow"] == pytest.approx(100.)
+        assert budget["chd_outflow"] == pytest.approx(0.)
+        assert budget["boundary_inflow"] == pytest.approx(100.)
+        assert budget["boundary_outflow"] == pytest.approx(0.)
+        assert budget["source_all_total"] == pytest.approx(-100.)
+        assert budget["chd_cell_rate"].sum() == pytest.approx(100.)
+        assert info["source_budgets"]["wel"] == pytest.approx(
+            dict(inflow=0., outflow=100., net=-100.))
+    finally:
+        model.close()
+
+
+def test_well_entries_require_parallel_cell_and_rate_arrays():
+    """A prebuilt sparse value cannot silently truncate unequal arrays."""
+    from DARCY_WARP_PACKAGE.physics.wel import WellEntries
+    entries = WellEntries(cells=np.array([[0, 0, 0], [0, 1, 1]]), rates=np.array([-1.]))
+    with pytest.raises(ValueError, match='one volumetric rate per well entry'):
+        validate_well_entries(entries=entries, shape=(1, 2, 2), active=np.ones((1, 2, 2)))
 
 
 @pytest.mark.parametrize("device", DEVICES)

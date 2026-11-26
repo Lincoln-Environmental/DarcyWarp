@@ -181,7 +181,7 @@ def solve_transient_unconfined_backend(
     from DARCY_WARP_PACKAGE.physics.wel import validate_well_schedule
     built_wells = self.wel_entries
     well_schedule = validate_well_schedule(wel_rates=wel_rates, periods=int(rates.size),
-        shape=h0.shape, active=active_i, dtype=NP_FLOAT)
+        shape=h0.shape, active=active_i, dtype=np.float64)
     if well_schedule is not None:
         self._track_well_sources = True
     self.build_from_fields(

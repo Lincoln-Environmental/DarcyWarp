@@ -35,7 +35,7 @@ def compare_accepted_boundary_volumes(*, accepted_totals, native_periods, entry_
     return result
 
 
-def compare_outputs(*, gpu_directory, native_directory, output, head_gate, rate_gate, history):
+def _compare_complete_outputs(*, gpu_directory, native_directory, output, head_gate, rate_gate, history):
     """Check every matched accepted endpoint and individual switching entry.
 
     :param gpu_directory: Accepted GPU arrays and actual execution diagnostics.
@@ -52,36 +52,67 @@ def compare_outputs(*, gpu_directory, native_directory, output, head_gate, rate_
     periods = gpu_info['warm'][-1]['periods'] if history else [gpu_info['cold'], *gpu_info['warm_start_calibration']]
     comparisons = []
     with np.load(gpu_directory / 'accepted_heads.npz') as numerical, np.load(native_directory / 'reference_outputs.npz') as native:
-        assert len(periods) == len(native['heads'])
+        assert len(periods) == len(native['heads']) == len(native_info['periods'])
+        assert all(period.get('converged') for period in periods)
+        np.testing.assert_allclose(native['times'], np.cumsum([
+            row['dt'] for row in native_info['periods']]), rtol=0., atol=1.e-12)
+        if history:
+            numerical_dt = [period.get('dt', gpu_info['controls'].get('history_dt_days')) for period in periods]
+            assert all(value is not None for value in numerical_dt)
+            np.testing.assert_allclose(numerical_dt,
+                [row['dt'] for row in native_info['periods']], rtol=0., atol=1.e-12)
         for index, period in enumerate(periods):
             assert period['converged'], (index, period.get('stop_reason'))
             difference = numerical[f'head_{index}'] - native['heads'][index]
             row = dict(index=index, head_max_m=float(np.max(np.abs(difference))),
                 head_rms_m=float(np.sqrt(np.mean(difference * difference))), entry_rates={}, budgets={})
+            expected_packages = set(native_info['packages'])
+            assert set(native_info['periods'][index]['packages']) == expected_packages
+            package_counts = {}
+            for package in expected_packages:
+                native_key = f'{package}_{index}'
+                assert native_key in native, f'missing native {native_key} array'
+                package_counts[package] = int(native[native_key].size)
             for package in ('DRN', 'RIV'):
-                key = f'{package.lower()}_{index}'
-                if key not in numerical:
+                if package not in expected_packages:
                     continue
+                key = f'{package.lower()}_{index}'
+                assert key in numerical, f'missing numerical {key} entry array'
                 physical = numerical[key]
+                assert physical.size == package_counts[package]
                 error = physical + native[f'{package}_{index}']
                 row['entry_rates'][package] = dict(max_absolute_error_m3_day=float(np.max(np.abs(error), initial=0.)),
                     count=int(error.size), gross_inflow=float(np.sum(np.maximum(-physical, 0.))),
                     gross_outflow=float(np.sum(np.maximum(physical, 0.))))
             source = period.get('source_budgets') or {}
+            acceptance = period.get('physical_acceptance') or {}
+            raw_chd = period.get('chd_budget') or acceptance
+            chd = ({name: raw_chd.get('chd_' + name, raw_chd.get(name))
+                for name in ('inflow', 'outflow')} if raw_chd else None)
+            if chd is not None and all(chd.get(name) is not None for name in ('inflow', 'outflow')):
+                chd = dict(inflow=chd['inflow'], outflow=chd['outflow'],
+                    net=chd['inflow'] - chd['outflow'])
             for package, numerical_budget in [('DRN', period.get('drn_budget')), ('RIV', period.get('riv_budget')),
-                ('GHB', period.get('ghb_budget')), ('WEL', source.get('wel')), ('RCH', source.get('recharge'))]:
-                if numerical_budget is None or package not in native_info['periods'][index]['packages']:
+                ('GHB', period.get('ghb_budget')), ('WEL', source.get('wel')),
+                ('RCH', source.get('recharge')), ('CHD', chd)]:
+                if package not in expected_packages:
                     continue
+                assert numerical_budget is not None, f'missing numerical {package} budget'
                 if package == 'GHB':
                     numerical_budget = {name: numerical_budget['ghb_' + name] for name in ('inflow', 'outflow', 'net')}
                 reference = native_info['periods'][index]['packages'][package]
                 errors = {name: float(numerical_budget[name] - reference[name]) for name in ('inflow', 'outflow', 'net')}
+                bound = max(1, package_counts[package]) * rate_gate
                 row['budgets'][package] = dict(rate_errors_m3_day=errors,
-                    volume_errors_m3={name: value * native_info['periods'][index]['dt'] for name, value in errors.items()})
+                    volume_errors_m3={name: value * native_info['periods'][index]['dt'] for name, value in errors.items()},
+                    rate_bound_m3_day=bound,
+                    passed=all(abs(value) <= bound for value in errors.values()))
+            assert set(row['budgets']) == expected_packages
             row['passed'] = row['head_max_m'] <= head_gate and all(
-                item['max_absolute_error_m3_day'] <= rate_gate for item in row['entry_rates'].values())
+                item['max_absolute_error_m3_day'] <= rate_gate for item in row['entry_rates'].values()) and all(
+                item['passed'] for item in row['budgets'].values())
             comparisons.append(row)
-    result = dict(native_version=native_info['version'], native_sha256=native_info['sha256'],
+    result = dict(status='complete', native_version=native_info['version'], native_sha256=native_info['sha256'],
         gates=dict(head_m=head_gate, entry_rate_m3_day=rate_gate), periods=comparisons,
         passed=all(row['passed'] for row in comparisons))
     if history:
@@ -94,6 +125,34 @@ def compare_outputs(*, gpu_directory, native_directory, output, head_gate, rate_
     output.write_text(json.dumps(result, indent=2))
     assert result['passed'], result
     return result
+
+
+def compare_outputs(*, gpu_directory, native_directory, output, head_gate, rate_gate, history):
+    """Write an explicit complete, incomplete or failed comparison verdict.
+
+    Missing arrays/files are incomplete evidence. Numerical disagreement or
+    inconsistent accepted metadata is failed evidence. Both reject the caller
+    after leaving a machine-readable receipt at ``output``.
+    """
+    try:
+        return _compare_complete_outputs(gpu_directory=gpu_directory,
+            native_directory=native_directory, output=output, head_gate=head_gate,
+            rate_gate=rate_gate, history=history)
+    except (AssertionError, KeyError, OSError, ValueError) as error:
+        message = str(error)
+        incomplete = isinstance(error, (FileNotFoundError, KeyError)) or 'missing' in message.lower()
+        if output.exists():
+            try:
+                result = json.loads(output.read_text())
+            except (OSError, json.JSONDecodeError):
+                result = {}
+        else:
+            result = {}
+        result.update(status='incomplete' if incomplete else 'failed', passed=False,
+            error_type=type(error).__name__, error=message)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(result, indent=2))
+        raise
 
 
 if __name__ == "__main__":

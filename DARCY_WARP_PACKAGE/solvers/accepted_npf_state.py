@@ -5,9 +5,45 @@ owned equation inputs or outputs with caller-provided arrays or hashes.
 """
 from dataclasses import dataclass
 from uuid import uuid4
+import weakref
 
 import numpy as np
 import warp as wp
+
+
+class RetainedStateToken(dict):
+    """Opaque public token whose lifetime owns one session snapshot."""
+
+    def __init__(self, *, session, identifier, dt):
+        super().__init__(identifier=identifier, dt=dt)
+        self._session = weakref.ref(session)
+
+    def __deepcopy__(self, memo):
+        """Diagnostic copies verify the live original without acquiring ownership."""
+        return dict(self)
+
+    def __del__(self):
+        session = self._session()
+        if session is not None:
+            getattr(session, '_accepted_equations', {}).pop(self.get('identifier'), None)
+
+
+class RetainedStateIdentifier(str):
+    """String-compatible identifier owning one model-side source snapshot."""
+
+    def __new__(cls, value, *, owner, attribute):
+        instance = super().__new__(cls, value)
+        instance._owner = weakref.ref(owner)
+        instance._attribute = attribute
+        return instance
+
+    def __deepcopy__(self, memo):
+        return self
+
+    def __del__(self):
+        owner = self._owner()
+        if owner is not None:
+            getattr(owner, self._attribute, {}).pop(str(self), None)
 
 
 @dataclass(frozen=True, eq=False)
@@ -28,6 +64,7 @@ class AcceptedNPFState:
     storage_factor: float
     shape: tuple
     resident_outputs: bool
+    enabled_packages: tuple
 
 
 def own_accepted_state(*, session, workspace, dt, resident_outputs):
@@ -61,12 +98,14 @@ def own_accepted_state(*, session, workspace, dt, resident_outputs):
             fields[name] = wp.clone(src=field)
     state = AcceptedNPFState(head=wp.clone(src=workspace.head), fields=fields,
         dt=dt, storage_factor=workspace.storage_factor, shape=workspace.shape,
-        resident_outputs=resident_outputs)
+        resident_outputs=resident_outputs,
+        enabled_packages=tuple(name for name, enabled in
+            (('drn', workspace.has_drn), ('riv', workspace.has_riv)) if enabled))
     if not hasattr(session, '_accepted_equations'):
         session._accepted_equations = {}
     identifier = uuid4().hex
     session._accepted_equations[identifier] = state
-    return dict(identifier=identifier, dt=dt)
+    return RetainedStateToken(session=session, identifier=identifier, dt=dt)
 
 
 def verified_package_rates(*, session, head, info, package, entries=False):
@@ -90,6 +129,8 @@ def verified_package_rates(*, session, head, info, package, entries=False):
         raise RuntimeError('Accepted state does not belong to this model session')
     if token.get('dt') != state.dt or ('dt' in info and info['dt'] != state.dt):
         raise ValueError('Timestep metadata does not match the accepted equation')
+    if package not in state.enabled_packages:
+        raise RuntimeError(f'The accepted equation has no {package.upper()} package output')
     accepted_head = state.head.numpy().reshape(state.shape)
     if not np.array_equal(np.asarray(head), accepted_head):
         raise ValueError('head does not match the accepted solve state')

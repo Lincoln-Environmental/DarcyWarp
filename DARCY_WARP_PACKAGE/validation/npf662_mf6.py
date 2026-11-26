@@ -94,6 +94,8 @@ def run_reference_mf6(*,case,directory,executable,prescribed_state=None,head_tol
     import flopy
     from flopy.mf6.utils.binarygrid_util import MfGrdFile
     reference=NPF662Reference(case=case)
+    if prescribed_state is not None and (reference.drn_csr is not None or reference.riv_csr is not None):
+        raise ValueError('All-CHD prescribed-state probes do not support simultaneous DRN/RIV packages')
     if source_package not in ('wel','rch'):raise ValueError('source_package must be wel or rch')
     if source_package=='rch' and (np.any(case.source[1:]!=0.) or np.any(case.source<0.) or np.any(case.source[case.fixed!=0]!=0.)):
         raise ValueError('Explicit fixed-top RCH mapping requires nonnegative source only in free top cells')
@@ -146,6 +148,19 @@ def run_reference_mf6(*,case,directory,executable,prescribed_state=None,head_tol
     if bc:flopy.mf6.ModflowGwfchd(gwf,stress_period_data=bc,save_flows=True)
     ghb = ghb_stress_period_data(case=case)
     if ghb:flopy.mf6.ModflowGwfghb(gwf,stress_period_data=ghb,save_flows=True)
+    if reference.drn_csr is not None:
+        drn = [((int(cell[0]), ny - 1 - int(cell[1]), int(cell[2])),
+            float(elevation), float(conductance)) for cell, conductance, elevation in zip(
+                reference.drn_csr.cells, reference.drn_csr.conductance,
+                reference.drn_csr.first_level)]
+        flopy.mf6.ModflowGwfdrn(gwf, pname='DRN', stress_period_data=drn, save_flows=True)
+    if reference.riv_csr is not None:
+        riv = [((int(cell[0]), ny - 1 - int(cell[1]), int(cell[2])),
+            float(stage), float(conductance), float(bottom))
+            for cell, conductance, stage, bottom in zip(reference.riv_csr.cells,
+                reference.riv_csr.conductance, reference.riv_csr.second_level,
+                reference.riv_csr.third_level)]
+        flopy.mf6.ModflowGwfriv(gwf, pname='RIV', stress_period_data=riv, save_flows=True)
     if sources:
         if source_package=='wel':
             flopy.mf6.ModflowGwfwel(gwf,pname='SOURCE',stress_period_data=sources,auto_flow_reduce=None,save_flows=True)
@@ -227,13 +242,24 @@ def run_reference_mf6(*,case,directory,executable,prescribed_state=None,head_tol
     ghb_tolerance=np.maximum(1e-14,16.*np.finfo(float).eps*np.maximum(
         np.abs(ghb_native),np.abs(reference.ghb_conductance*raw)+np.abs(reference.ghb_conductance*reference.ghb_head)))
     ghb_valid=bool(np.all(np.isfinite(ghb_native)) and np.all(np.abs(ghb_native+fields['ghb_outflow'])<=ghb_tolerance))
+    drn_native = decode_list_budget(budget=budget, mapping=mapping, shape=case.active.shape, text='DRN')
+    riv_native = decode_list_budget(budget=budget, mapping=mapping, shape=case.active.shape, text='RIV')
+    drn_error = float(np.max(np.abs(drn_native + fields['drn_outflow'])))
+    riv_error = float(np.max(np.abs(riv_native + fields['riv_outflow'])))
+    drn_scale = np.maximum(np.abs(drn_native), np.abs(fields['drn_outflow']))
+    riv_scale = np.maximum(np.abs(riv_native), np.abs(fields['riv_outflow']))
+    drn_valid = bool(np.all(np.isfinite(drn_native)) and np.all(
+        np.abs(drn_native + fields['drn_outflow']) <= np.maximum(1.e-14, 32.*np.finfo(float).eps*drn_scale)))
+    riv_valid = bool(np.all(np.isfinite(riv_native)) and np.all(
+        np.abs(riv_native + fields['riv_outflow']) <= np.maximum(1.e-14, 32.*np.finfo(float).eps*riv_scale)))
     chd_native = decode_list_budget(budget=budget, mapping=mapping, shape=case.active.shape, text='CHD')
     chd_valid = native_chd_flow_valid(case=case, reference=reference, flow=flux, chd=chd_native, prescribed=fixed)
     # A prescribed-state probe measures faces with all active cells held at
     # the supplied heads. Apply canonical forcing when reconstructing those
     # original rows, since the probe has no native source package.
     row_source = case.source if prescribed_state is not None else realised.reshape(case.active.shape)
-    physical=np.where(reference.free,row_source+ghb_native-(reference.incidence@flux).reshape(case.active.shape),0.)
+    physical=np.where(reference.free,row_source+ghb_native+drn_native+riv_native-
+        (reference.incidence@flux).reshape(case.active.shape),0.)
     native_l1=stable_sum(values=np.abs(physical[reference.free]))
     native_relative=native_l1/max(checks['gross_throughput'],np.finfo(float).tiny)
     native_rms=stable_rms(values=physical[reference.free])
@@ -241,14 +267,18 @@ def run_reference_mf6(*,case,directory,executable,prescribed_state=None,head_tol
         if not np.array_equal(raw[case.active!=0],values[case.active!=0]):raise ValueError('Supplied-head verification advanced a head')
         checks['independent_accepted']=False  # A constitutive check is not a root solve.
     result.update(independent=checks,source_allocation_max_error=source_error,reciprocity_max=reciprocity,saturation_max_error=saturation_error,
-        ghb_flux_max_error=ghb_error,ghb_law_valid=ghb_valid,chd_budget_valid=chd_valid,
+        ghb_flux_max_error=ghb_error,ghb_law_valid=ghb_valid,
+        drn_flux_max_error=drn_error,drn_law_valid=drn_valid,
+        riv_flux_max_error=riv_error,riv_law_valid=riv_valid,chd_budget_valid=chd_valid,
         source_allocation_valid=source_allocation_valid,source_allocation_max_tolerance=float(np.max(source_tolerance)),
         native_flux_residual_rms=native_rms,native_flux_residual_relative=native_relative,
-        independent_conservation=bool(native and source_allocation_valid and ghb_valid and checks['input_valid'] and
+        independent_conservation=bool(native and source_allocation_valid and ghb_valid and drn_valid and riv_valid and checks['input_valid'] and
             checks['boundary_condition_valid'] and checks['physical_metrics_valid'] and
             np.all(np.isfinite([native_rms,native_relative])) and (native_rms<=1e-12 or native_relative<=1e-8)))
     fields.update(raw_head=raw,native_saturation=native_sat,active=case.active,flux_native=flux,
-        native_residual=physical,source_realised=realised.reshape(case.active.shape),node_to_user=mapping,ghb_native_inflow=ghb_native,chd_native_inflow=chd_native)
+        native_residual=physical,source_realised=realised.reshape(case.active.shape),node_to_user=mapping,
+        ghb_native_inflow=ghb_native,drn_native_inflow=drn_native,riv_native_inflow=riv_native,
+        chd_native_inflow=chd_native)
     np.savez_compressed(directory/'result.npz',**fields,head=raw)
     atomic_json(path=directory/'summary.json',value=finite_diagnostics(value=result))
     budget.close()

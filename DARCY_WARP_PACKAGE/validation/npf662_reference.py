@@ -308,6 +308,21 @@ class NPF662LayeredCase:
 
 def save_npf662_case(*,case,path):
     arrays={name:np.asarray(getattr(case,name)) for name in serialized_case_fields(case=case)}
+    from DARCY_WARP_PACKAGE.physics.drn_riv_3d import validate_boundary_entries
+    for name, package in (('drn_entries', 'DRN'), ('riv_entries', 'RIV')):
+        supplied = getattr(case, name, None)
+        if supplied is None:
+            continue
+        entries = validate_boundary_entries(entries=supplied, package=package,
+            shape=case.active.shape, active=case.active, fixed=case.fixed)
+        prefix = name + '_'
+        arrays[prefix + 'cells'] = entries.cells
+        arrays[prefix + 'conductance'] = entries.conductance
+        if package == 'DRN':
+            arrays[prefix + 'elevation'] = entries.first_level
+        else:
+            arrays[prefix + 'stage'] = entries.second_level
+            arrays[prefix + 'bottom'] = entries.third_level
     if isinstance(case,NPF662LayeredCase):arrays['schema_version']=np.asarray(2)
     np.savez_compressed(path,**arrays)
 
@@ -323,7 +338,18 @@ def load_npf662_case(*,path):
         missing=set(cls.__dataclass_fields__)-set(saved.files)-optional_fields
         implicit=bool(schema==1 and missing=={'cell_type'})
         if missing and not implicit:raise ValueError(f'Missing NPF input fields: {sorted(missing)}')
-        case=cls(**{name:saved[name].copy() for name in cls.__dataclass_fields__ if name in saved})
+        values = {name:saved[name].copy() for name in cls.__dataclass_fields__ if name in saved}
+        for name, level_names in (('drn_entries', ('elevation',)),
+                                  ('riv_entries', ('stage', 'bottom'))):
+            prefix = name + '_'
+            if prefix + 'cells' not in saved:
+                continue
+            cells = saved[prefix + 'cells']
+            conductance = saved[prefix + 'conductance']
+            levels = [saved[prefix + level] for level in level_names]
+            values[name] = [(tuple(cell), float(conductance[index]),
+                *[float(level[index]) for level in levels]) for index, cell in enumerate(cells)]
+        case=cls(**values)
         # NPZ scalars are zero-dimensional arrays; FloPy DIS expects actual
         # scalar spacing, not an array that it tries to index as delr/delc.
         for name in ('dx','dy','dz','top'):
@@ -470,11 +496,11 @@ class NPF662Reference:
         drn = np.zeros(self.case.active.size, dtype=bool)
         riv = np.zeros(self.case.active.size, dtype=bool)
         if self.drn_csr is not None:
-            drn[self.drn_csr.flat_cells] = self.drn_csr.conductance > 0.
+            np.logical_or.at(drn, self.drn_csr.flat_cells, self.drn_csr.conductance > 0.)
         else:
             drn |= (self.drn_conductance.ravel() > 0.)
         if self.riv_csr is not None:
-            riv[self.riv_csr.flat_cells] = self.riv_csr.conductance > 0.
+            np.logical_or.at(riv, self.riv_csr.flat_cells, self.riv_csr.conductance > 0.)
         else:
             riv |= (self.riv_conductance.ravel() > 0.)
         return drn, riv
@@ -688,8 +714,9 @@ class NPF662Reference:
         outflow=stable_sum(values=[chd_out,ghb_out,drn_out,riv_out])
         gross_source = np.abs(c.source) if c.source_gross is None else np.asarray(c.source_gross)
         throughput=stable_sum(values=np.concatenate([gross_source[self.free],np.abs(free_exchange)]))
+        equation_throughput=stable_sum(values=np.concatenate([np.abs(c.source[self.free]),np.abs(free_exchange)]))
         rms=stable_rms(values=residual[self.free]);hrms=stable_rms(values=scaled[self.free])
-        l1=stable_sum(values=np.abs(residual[self.free]));relative=l1/max(throughput,np.finfo(float).tiny)
+        l1=stable_sum(values=np.abs(residual[self.free]));relative=l1/max(equation_throughput,np.finfo(float).tiny)
         active=c.active!=0
         metrics_valid=all(np.all(np.isfinite(value)) for value in
             (flux,conductance,dl,dr,saturation[active],diagonal[active],divergence[active],residual[self.free],scaled[self.free]))
@@ -702,7 +729,7 @@ class NPF662Reference:
         ungrounded=len(active_labels-grounded_labels)
         result=dict(**checks,head_residual_rms=hrms,physical_rms=rms,
             physical_max=float(np.abs(residual).max()),residual_l1=l1,relative_cell_imbalance=relative,
-            gross_throughput=throughput,signed_imbalance=stable_sum(values=residual[self.free]),boundary_inflow=inflow,boundary_outflow=outflow,
+            gross_throughput=throughput,equation_throughput=equation_throughput,signed_imbalance=stable_sum(values=residual[self.free]),boundary_inflow=inflow,boundary_outflow=outflow,
             free_boundary_inflow=free_in,free_boundary_outflow=free_out,
             ghb_inflow=ghb_in,ghb_outflow=ghb_out,drn_inflow=drn_in,drn_outflow=drn_out,
             drn_net=drn_in-drn_out,riv_inflow=riv_in,riv_outflow=riv_out,riv_net=riv_in-riv_out,
@@ -730,7 +757,7 @@ class NPF662Reference:
             apply_roundoff_acceptance(checks=result,certificate=self.certify_roundoff(
                 head=head,residual=residual,conductance=conductance))
         return result,dict(flux=flux,residual=residual,fixed_reservoir_required_inflow=np.where(c.fixed,divergence-c.source,0.),
-            chd_cell_rate=np.where(fixed,divergence,0.),
+            chd_cell_rate=np.where(fixed,divergence-c.source,0.),
             principal_diagonal=diagonal,saturation=saturation,ghb_outflow=ghb_exchange,
             drn_outflow=drain.discharge,riv_outflow=river.discharge,boundary_throughput=boundary_gross,
             conductance=conductance,dflux_left=dl,dflux_right=dr)

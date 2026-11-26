@@ -332,7 +332,7 @@ def check_local_balance(head: wp.array(dtype=wp.float64), free: wp.array(dtype=w
                 if q != wp.float64(0.0):
                     roundoff += (eps * wp.abs(head[i]) + eps * wp.abs(head[j])) * c
     if has_component_anchor != 0 and component_anchor[i] > wp.float64(0.0):
-        anchor = tangent[i] + component_anchor[i]
+        anchor = component_anchor[i]
     allowance = wp.max(absolute_tolerance, relative_tolerance * throughput)
     if anchor > wp.float64(0.0):
         allowance = anchor * wp.float64(1.0e-6)
@@ -549,7 +549,7 @@ def check_local_balance_drn_riv(head: wp.array(dtype=wp.float64), free: wp.array
     flux: wp.array2d(dtype=wp.float64), conductance: wp.array2d(dtype=wp.float64),
     storage: wp.array(dtype=wp.float64), storage_tangent: wp.array(dtype=wp.float64),
     residual: wp.array(dtype=wp.float64), boundary_throughput: wp.array(dtype=wp.float64),
-    boundary_tangent: wp.array(dtype=wp.float64), absolute_tolerance: wp.float64,
+    boundary_tangent: wp.array(dtype=wp.float64), component_anchor: wp.array(dtype=wp.float64), absolute_tolerance: wp.float64,
     relative_tolerance: wp.float64, failed: wp.array(dtype=wp.float64)):
     """Check independently assembled cell balances including package flow.
 
@@ -594,11 +594,30 @@ def check_local_balance_drn_riv(head: wp.array(dtype=wp.float64), free: wp.array
                 if q != wp.float64(0.0):
                     roundoff += (eps * wp.abs(head[i]) + eps * wp.abs(head[j])) * c
     allowance = wp.max(absolute_tolerance, relative_tolerance * throughput)
+    if component_anchor[i] > wp.float64(0.0):
+        anchor = component_anchor[i]
     if anchor > wp.float64(0.0):
         allowance = anchor * wp.float64(1.0e-6)
     allowance += roundoff
     if not wp.isfinite(allowance) or wp.abs(residual[i]) > allowance:
         wp.atomic_max(failed, 0, wp.float64(1.0))
+
+
+@wp.kernel
+def sum_component_restraint(labels: wp.array(dtype=wp.int32), weights: wp.array(dtype=wp.float64),
+    storage: wp.array(dtype=wp.float64), boundary: wp.array(dtype=wp.float64),
+    sums: wp.array(dtype=wp.float64)):
+    """Average actual external derivatives within each physical component."""
+    i = wp.tid()
+    wp.atomic_add(sums, labels[i], weights[i] * (storage[i] + boundary[i]))
+
+
+@wp.kernel
+def share_component_restraint(labels: wp.array(dtype=wp.int32), sums: wp.array(dtype=wp.float64),
+    anchor: wp.array(dtype=wp.float64)):
+    """Broadcast each component's common-head restraint to its local checks."""
+    i = wp.tid()
+    anchor[i] = sums[labels[i]]
 
 
 @wp.kernel
@@ -1011,6 +1030,15 @@ def add_sparse_period_wells(cells: wp.array(dtype=wp.int32), rates: wp.array(dty
     source[cell] += rates[entry]
     if has_gross != 0:
         source_gross[cell] += gross_rates[entry]
+
+
+@wp.kernel
+def gross_source_correction(source: wp.array(dtype=wp.float64), gross: wp.array(dtype=wp.float64),
+    free: wp.array(dtype=wp.int32), correction: wp.array(dtype=wp.float64)):
+    """Retain gross source reporting separately from equation acceptance."""
+    i = wp.tid()
+    if free[i] != 0:
+        wp.atomic_add(correction, 0, gross[i] - wp.abs(source[i]))
 
 
 @wp.kernel

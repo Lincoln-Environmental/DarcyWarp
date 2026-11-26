@@ -82,10 +82,11 @@ class NPF662TransientReference(NPF662Reference):
         equivalent = np.divide(residual, diagonal, out=np.zeros_like(residual), where=diagonal > 0.)
         equivalent[(diagonal <= 0.)&(residual != 0.)] = np.inf
         throughput = checks['gross_throughput']+stable_sum(values=np.abs(storage[self.free]))
+        equation_throughput = checks['equation_throughput']+stable_sum(values=np.abs(storage[self.free]))
         rms = stable_rms(values=residual[self.free])
         hrms = stable_rms(values=equivalent[self.free])
         l1 = stable_sum(values=np.abs(residual[self.free]))
-        relative = l1/max(throughput, np.finfo(float).tiny)
+        relative = l1/max(equation_throughput, np.finfo(float).tiny)
         edges = fields['conductance'] > 0.
         graph = sparse.coo_matrix((np.ones(int(edges.sum())), (self.left[edges], self.right[edges])),
             shape=(self.case.active.size, self.case.active.size)).tocsr()
@@ -103,7 +104,7 @@ class NPF662TransientReference(NPF662Reference):
             and np.isfinite([rms, hrms, l1, relative, throughput]).all())
         checks.update(physical_rms=rms, physical_max=float(np.max(np.abs(residual))),
             head_residual_rms=hrms, residual_l1=l1, relative_cell_imbalance=relative,
-            gross_throughput=throughput, signed_imbalance=stable_sum(values=residual[self.free]),
+            gross_throughput=throughput, equation_throughput=equation_throughput, signed_imbalance=stable_sum(values=residual[self.free]),
             ungrounded_current_components=ungrounded, physical_metrics_valid=valid,
             storage_accumulation_m3_day=stable_sum(values=storage[self.free]))
         limits = checks['final_acceptance_thresholds']
@@ -113,7 +114,7 @@ class NPF662TransientReference(NPF662Reference):
         checks['local_balance_valid'] = None
         if checks['independent_accepted'] or roundoff_acceptance:
             from DARCY_WARP_PACKAGE.physics.ghb_3d import npf_ghb_component_anchor
-            component_anchor = npf_ghb_component_anchor(conductance=boundary_tangent,
+            component_anchor = npf_ghb_component_anchor(conductance=boundary_tangent + tangent,
                 active=self.case.active, fixed=self.case.fixed)
             checks['local_balance_valid'] = local_balance_valid(case=self.case, free=self.free, left=self.left,
                 right=self.right, head=head, residual=residual, flux=fields['flux'], conductance=fields['conductance'],

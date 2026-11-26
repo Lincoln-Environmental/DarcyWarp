@@ -2202,6 +2202,7 @@ def _picard_unconfined_7point_3d(
             "final_physical_residual_rms": float(budget["cell_residual_rms"]),
             "final_physical_residual_max": float(budget["cell_residual_max"]),
             "budget": budget,
+            "_accepted_budget_faces": faces_final,
             "final_budget_acceptance": final_budget_acceptance,
             "final_budget_relative_tolerance": float(final_budget_relative_tol),
             "dry_cell_approximation": dry_diagnostics,

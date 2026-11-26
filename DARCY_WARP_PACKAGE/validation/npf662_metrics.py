@@ -15,17 +15,18 @@ def local_balance_valid(*, case, free, left, right, head, residual, flux, conduc
     """
     head = np.asarray(head, dtype=np.float64).ravel()
     fixed = case.fixed.ravel() != 0
-    gross_source = getattr(case, 'source_gross', None)
-    source_throughput = np.abs(case.source.ravel()) if gross_source is None else np.asarray(gross_source).ravel()
+    # Package entry magnitudes are a reporting quantity. The numerical row
+    # sees only their signed cell sum, including exact cancellation.
+    source_throughput = np.abs(case.source.ravel())
     boundary_gross = np.abs(ghb_exchange.ravel()) if boundary_throughput is None else np.asarray(boundary_throughput).ravel()
     throughput = source_throughput + boundary_gross
     anchor = ghb_conductance.ravel().copy()
-    if component_anchor is not None:
-        shared = component_anchor.ravel()
-        anchor = np.where(shared > 0.0, shared, anchor)
     if storage is not None:
         throughput += np.abs(storage.ravel())
         anchor += tangent.ravel()
+    if component_anchor is not None:
+        shared = component_anchor.ravel()
+        anchor = np.where(shared > 0.0, shared, anchor)
     roundoff = np.zeros_like(head)
     eps = np.finfo(np.float64).eps
     for owner, neighbour in ((left, right), (right, left)):

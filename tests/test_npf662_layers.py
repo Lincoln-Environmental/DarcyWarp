@@ -15,6 +15,27 @@ from validate_npf662_confined import make_gpu_model
 from test_npf662_confined import confined_case
 
 
+def test_generic_layered_auditor_and_mf6_include_drain_equation(tmp_path, pinned_mf6):
+    """A unit drain halves the free head connected to a 10 m fixed head."""
+    from DARCY_WARP_PACKAGE.validation.npf662_matrix_free import NPF662MatrixFreeReference
+    shape = (1, 1, 2)
+    ones = np.ones(shape)
+    case = NPF662LayeredCase(kx=ones, ky=ones, kz=ones,
+        active=ones.astype(np.int32), fixed=np.array([[[1, 0]]], dtype=np.int32),
+        values=np.full(shape, 10.), source=np.zeros(shape), initial=np.full(shape, 10.),
+        dx=1., dy=1., z_interfaces=np.array([np.ones((1, 2)), np.zeros((1, 2))]),
+        drn_entries=[((0, 0, 1), 1., 0.)])
+    analytical = np.array([[[10., 5.]]])
+    checks, fields = NPF662MatrixFreeReference(case=case).evaluate(head=analytical)
+    assert checks['independent_accepted']
+    assert fields['drn_outflow'][0, 0, 1] == pytest.approx(5.)
+    native, info, native_fields = run_reference_mf6(case=case,
+        directory=tmp_path / 'drain', executable=pinned_mf6)
+    assert info['native_success'] and info['drn_law_valid'] and info['independent_conservation']
+    np.testing.assert_allclose(native, analytical, atol=1.e-10, rtol=0.)
+    assert native_fields['drn_native_inflow'][0, 0, 1] == pytest.approx(-5.)
+
+
 def layered_case(*, variation='independent', masked=False, shape=(3, 4, 5), seed=121):
     k,j,i = np.indices(shape)
     thickness = 1.+.4*k+.08*i+.1*j

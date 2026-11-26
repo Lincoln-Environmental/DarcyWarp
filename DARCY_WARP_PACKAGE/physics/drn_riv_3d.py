@@ -57,9 +57,14 @@ class BoundaryEntryList:
 
 def _entry_cell_index(cell, shape):
     """Validate one integer entry cell tuple against the grid shape."""
-    if isinstance(cell, (int, np.integer)) or len(tuple(cell)) != len(shape):
-        raise ValueError(f"Each entry cell must be an index tuple of length {len(shape)}")
-    index = tuple(int(value) for value in cell)
+    try:
+        values = tuple(cell)
+    except TypeError as error:
+        raise ValueError('Entry cells must be integer index tuples') from error
+    if len(values) != len(shape) or any(isinstance(value, (bool, np.bool_)) or
+            not isinstance(value, (int, np.integer)) for value in values):
+        raise ValueError(f"Each entry cell must be an integer index tuple of length {len(shape)}")
+    index = tuple(int(value) for value in values)
     for axis, (value, size) in enumerate(zip(index, shape)):
         if value < 0 or value >= size:
             raise ValueError(f"Entry index {axis} outside grid dimension {size}")

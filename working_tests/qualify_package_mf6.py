@@ -130,10 +130,15 @@ def run_native(*, fields, durations, well_factors, recharge_factors, stage_offse
     input_suffixes = {'.nam', '.tdis', '.ims', '.dis', '.ic', '.npf', '.sto', '.rch', '.wel', '.drn', '.riv', '.ghb', '.chd', '.oc'}
     input_hashes = {path.name: hashlib.sha256(path.read_bytes()).hexdigest()
         for path in directory.iterdir() if path.suffix in input_suffixes}
+    input_digest = hashlib.sha256(json.dumps(
+        input_hashes, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
     input_audit_seconds = perf_counter() - started
     manifest = dict(version=version, sha256=checksum, build=build, shape=list(shape), transient=transient,
         npf_cell_types=np.unique(np.asarray(cell_type)).tolist(),
-        well_precision=well_precision, ims_controls=ims_controls, construction_seconds=construction,
+        well_precision=well_precision, ims_controls=ims_controls, ims_settings=ims_controls,
+        output_path=str(directory.resolve()), input_digest=input_digest,
+        formulation='mf6_6_6_2_npf_newton' if newton else 'mf6_6_6_2_npf_standard',
+        construction_seconds=construction,
         input_precision=17, input_float_characters=25, input_sha256=input_hashes,
         input_audit_seconds=input_audit_seconds, durations=[float(value) for value in durations],
         packages=packages, engine_seconds=[], engine_logs=[], requested_repeats=repeats)
@@ -248,9 +253,8 @@ if __name__ == "__main__":
     else:
         steady_ims = dict(ims_controls)
         history_ims = dict(ims_controls)
-    arguments.output = arguments.output / arguments.profile
-    if arguments.newton:
-        arguments.output = arguments.output / 'newton'
+    arguments.output = (arguments.output / arguments.profile /
+        ('newton' if arguments.newton else 'standard'))
     if arguments.strategy == 'ilut8':
         overrides = dict(under_relaxation='NONE', backtracking_number=0,
             preconditioner_levels=8, preconditioner_drop_tolerance=1.e-4,

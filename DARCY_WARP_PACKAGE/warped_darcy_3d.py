@@ -617,11 +617,12 @@ class WarpDarcySolver3D:
         result = self._solve(**kwargs)
         if isinstance(result, tuple):
             budget = result[1].get('budget')
-            if budget is not None and kwargs.get('storage_diag') is None:
+            if budget is not None:
                 from DARCY_WARP_PACKAGE.physics.budget_3d import include_gross_source_throughput
+                accepted_faces = result[1].pop('_accepted_budget_faces', self._session.faces)
                 include_gross_source_throughput(budget=budget, source=self._rhs,
                     gross_source=self._gross_source_field(), active=self._active, fixed=self._bc_mask,
-                    wel_entries=self._wel_entries, head=result[0], faces=self._session.faces)
+                    wel_entries=self._wel_entries, head=result[0], faces=accepted_faces)
                 result[1]['converged'] = bool(result[1]['converged'] and budget['physical_metrics_valid'])
             if (getattr(self, '_track_well_sources', False)
                     and not getattr(self, '_npf_history_running', False)):

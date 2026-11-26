@@ -66,7 +66,7 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
     # signature default (e.g. max_levels=6 with a two-level NPF hierarchy).
     legacy_overrides = any(value is not None for value in (rel_tol, max_levels, min_coarse_n))
     iteration_overrides = max_outer is not None or krylov_restart is not None
-    preconditioner_selected = npf_preconditioner is not None
+    preconditioner_selected = npf_preconditioner is not None or npf_kcycle_controls is not None
     rel_tol = 1e-12 if rel_tol is None else rel_tol
     max_levels = 6 if max_levels is None else max_levels
     min_coarse_n = 2 if min_coarse_n is None else min_coarse_n
@@ -154,7 +154,8 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
             krylov_budget=max_cycles,restart=krylov_restart,controls=controls,
             physical_tolerance=abs_tol_min,relative_tolerance=relative_tolerance,
             npf_preconditioner=npf_preconditioner,npf_kcycle_controls=npf_kcycle_controls,
-            npf_krylov_method=npf_krylov_method,device_native=npf_device_native,roundoff_acceptance=npf_roundoff_acceptance)
+            npf_krylov_method=npf_krylov_method,device_native=npf_device_native,
+            roundoff_acceptance=npf_roundoff_acceptance, retain_accepted_state=return_info)
         info.update(formulation='mf6_6_6_2_npf',geometry=case.geometry,
             device=model.device,precision='float64',
             implementation='device_newton_fgmres' if info['krylov_method']=='FGMRES' else 'device_newton_gmres',session_backend='npf662_newton',
@@ -163,8 +164,8 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
             effective_options=dict(xt3d=False,newton=unconfined,cell_type=case.cell_types.tolist(),saturation_epsilon=1e-6,
                 conductance_floor_m=0.,variablecv=False,perched=False,thickstrt=False,rewet=False,storage=bool(transient),
                 packages=['CHD','WEL_SOURCE']+(['GHB'] if case.ghb_conductance is not None else [])
-                +(['DRN'] if case.drn_conductance is not None else [])
-                +(['RIV'] if case.riv_conductance is not None else [])+(['STO'] if transient else [])))
+                +(['DRN'] if case.drn_conductance is not None or case.drn_entries is not None else [])
+                +(['RIV'] if case.riv_conductance is not None or case.riv_entries is not None else [])+(['STO'] if transient else [])))
         if transient:
             info.update(dt=float(dt),storage_formulation='MF6 6.6.2 default SsTerms/SyTerms; Newton saturation smoothing',
                 storage_previous_fixed=True,
@@ -177,6 +178,7 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
             restart=krylov_restart, krylov_budget_per_outer=max_cycles, max_outer=max_outer,
             nonlinear=asdict(controls), hierarchy=info.get('multigrid'),
             preconditioner=npf_preconditioner, convergence=thresholds)
+        info['enabled_packages'] = info['effective_options']['packages']
         if npf_final_relative_tolerance is not None:
             info['acceptance_override'] = dict(relative_cell_imbalance=relative_tolerance,
                 default_relative_cell_imbalance=1e-8)

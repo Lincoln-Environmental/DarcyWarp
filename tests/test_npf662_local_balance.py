@@ -106,3 +106,43 @@ def test_common_head_shift_with_opposing_large_wells(device, steady):
         head, info = model.solve(**solve)
         assert info['converged']
         np.testing.assert_allclose(head, expected, rtol=0.0, atol=1.0e-6)
+
+
+@pytest.mark.parametrize('device', ['cpu', 'cuda:0'])
+def test_cancelling_well_entries_cannot_relax_the_solved_equation(device):
+    """Gross WEL reporting cannot accept the deliberately wrong initial head."""
+    shape = (1, 1, 1)
+    initial = np.ones(shape)
+    with WarpDarcySolver3D(nx=1, ny=1, nz=1, dx=1., dy=1., dz=1., device=device,
+            solver='kcycle', implementation='fast', formulation='mf6_6_6_2_npf') as model:
+        model.build_from_K_fields(kx_field=np.ones(shape), ky_field=np.ones(shape),
+            kz_field=np.ones(shape), active=np.ones(shape), bc_mask=np.zeros(shape),
+            bc_values=np.zeros(shape), initial_head=initial,
+            ghb_conductance=np.ones(shape), ghb_head=np.zeros(shape),
+            riv_entries=[((0, 0, 0), 1., 0., -1.)],
+            wel_entries=[((0, 0, 0), 1.e9), ((0, 0, 0), -1.e9)])
+        head, info = model.solve()
+        assert info['converged']
+        assert info['krylov_iterations'] > 0
+        assert info['device_final_metrics']['gross_throughput'] >= 2.e9
+        assert info['device_final_metrics']['equation_throughput'] < 1.e-10
+        np.testing.assert_allclose(head, np.zeros(shape), atol=1.e-12, rtol=0.)
+
+
+@pytest.mark.parametrize('device', ['cpu', 'cuda:0'])
+@pytest.mark.parametrize('steady', [False, True])
+def test_permanently_inactive_drain_does_not_change_weak_component(device, steady):
+    """An allocated DRN contributes restraint only when its derivative is active."""
+    model, initial = aquifer_model(device=device, connected=False, steady=steady)
+    with model:
+        model.update_drn_entries(entries=[((0, 2, 1), 1., 1000.)])
+        if steady:
+            head, info = model.solve()
+            expected = 20.
+        else:
+            heads, info = model.solve_transient_npf(source_factors=[1.], dt=365.,
+                head_prev=initial, ss=1.e-5, sy=0.)
+            head = heads[0]
+            expected = 10.292
+        assert info['converged']
+        np.testing.assert_allclose(head[0, 2:, 1], expected, atol=1.e-6, rtol=0.)

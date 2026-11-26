@@ -58,7 +58,7 @@ def _history_inputs(*, dt, source_factors, recharge_rates, wel_rates, surface_sh
     wells = None
     if wel_rates is not None:
         from DARCY_WARP_PACKAGE.physics.wel import validate_well_entries
-        if isinstance(wel_rates, (str, bytes)) or not isinstance(wel_rates, (list, tuple)):
+        if isinstance(wel_rates, (str, bytes)) or not isinstance(wel_rates, (list, tuple)) or not wel_rates:
             raise ValueError("wel_rates must be None or a per-step sequence of entry values")
         wells = [validate_well_entries(entries=entries, shape=model.shape, active=model._active)
                  for entries in wel_rates]
@@ -132,10 +132,10 @@ class HistorySources:
                                else np.abs(self.volumetric))
             if self.built_recharge is not None:
                 selected = np.broadcast_to(np.abs(self.built_recharge), self.base.shape[1:]).ravel()
-                self.gross_base.ravel()[self.budget_receivers] += selected[self.budget_receivers % self.column_count] * self.area
+                self.gross_base.flat[self.budget_receivers] += selected[self.budget_receivers % self.column_count] * self.area
             cells, unused_signed, gross = sparse_well_cell_rates(entries=self.built_well_entries,
                 shape=self.base.shape)
-            self.gross_base.ravel()[cells] += gross
+            self.gross_base.flat[cells] += gross
 
     def host_gross_source(self, *, index):
         """Own gross throughput of the exact period-specific physical sources.
@@ -150,10 +150,10 @@ class HistorySources:
             rate = np.abs(self.rate_at(index))
             if rate.ndim == 2:
                 rate = rate.ravel()[self.receivers % self.column_count]
-            gross.ravel()[self.receivers] += rate * self.area
+            gross.flat[self.receivers] += rate * self.area
         if self.sparse_wells is not None:
             cells, unused_signed, rates = self.sparse_wells[index]
-            gross.ravel()[cells] += rates
+            gross.flat[cells] += rates
         return gross
 
     def rate_at(self, index):
@@ -216,7 +216,7 @@ class HistorySources:
             source.flat[self.receivers] += rate * self.area
         if self.sparse_wells is not None:
             cells, rates, unused_gross = self.sparse_wells[index]
-            source.ravel()[cells] += rates
+            source.flat[cells] += rates
         return source
 
     def upload(self, device):
@@ -490,6 +490,7 @@ def solve_transient_history(*, model, dt, head_prev, ss, sy,
                 dt=reference.dt, area=base.dx*base.dy)
             if activation_watch:
                 previous_host = workspace.storage_previous.numpy().reshape(base.active.shape)
+                head_readbacks += 1
                 step_case = replace(base, source=sources.host_source(index=index), source_gross=sources.host_gross_source(index=index))
                 activation_reference = NPF662TransientReference(case=step_case,
                     previous=previous_host, dt=reference.dt, ss=state.ss, sy=state.sy)

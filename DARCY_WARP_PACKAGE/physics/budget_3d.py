@@ -539,19 +539,27 @@ def include_gross_source_throughput(*, budget, source, gross_source, active, fix
         from DARCY_WARP_PACKAGE.physics.wel import sparse_well_cell_rates
         cells, rates, gross = sparse_well_cell_rates(entries=wel_entries, shape=np.asarray(source).shape)
         on_fixed = (selected & (np.asarray(fixed) != 0)).ravel()[cells]
-        inflow_change, outflow_change = [], []
+        fixed_mask = selected & (np.asarray(fixed) != 0)
+        if 'chd_cell_rate' in budget:
+            accepted_exchange = np.array(budget['chd_cell_rate'], dtype=np.float64, copy=True)
+        else:
+            accepted_exchange = np.zeros_like(np.asarray(source), dtype=np.float64)
+            for fixed_cell in np.argwhere(fixed_mask):
+                fixed_cell = tuple(int(value) for value in fixed_cell)
+                accepted_exchange[fixed_cell] = prescribed_cell_face_discharge(
+                    head=head, faces=faces, cell=fixed_cell)
         for index in np.flatnonzero(on_fixed):
             cell = tuple(int(value) for value in np.unravel_index(cells[index], head.shape))
-            original = prescribed_cell_face_discharge(head=head, faces=faces, cell=cell)
-            accepted = original - rates[index]
-            inflow_change.append(max(accepted, 0.) - max(original, 0.))
-            outflow_change.append(max(-accepted, 0.) - max(-original, 0.))
-            if 'chd_cell_rate' in budget:
-                budget['chd_cell_rate'][cell] = accepted
-        delta_in = stable_sum(values=inflow_change)
-        delta_out = stable_sum(values=outflow_change)
-        budget['chd_inflow'] += delta_in
-        budget['chd_outflow'] += delta_out
+            accepted_exchange[cell] -= rates[index]
+        chd_values = accepted_exchange[fixed_mask]
+        chd_inflow = stable_sum(values=np.maximum(chd_values, 0.))
+        chd_outflow = stable_sum(values=np.maximum(-chd_values, 0.))
+        delta_in = chd_inflow - budget['chd_inflow']
+        delta_out = chd_outflow - budget['chd_outflow']
+        budget['chd_inflow'] = chd_inflow
+        budget['chd_outflow'] = chd_outflow
+        if 'chd_cell_rate' in budget:
+            budget['chd_cell_rate'] = accepted_exchange
         budget['boundary_inflow'] += delta_in
         budget['boundary_outflow'] -= delta_out
         budget['boundary_net'] = stable_sum(values=[budget['boundary_inflow'], budget['boundary_outflow']])

@@ -1,10 +1,50 @@
 """Assemble matched physical comparisons from owned accepted output files."""
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import shutil
 
 import numpy as np
+
+
+def reference_identity(*, directory):
+    """Validate and return the native output identity consumed by a comparison."""
+    reference = json.loads((directory / 'reference.json').read_text())
+    input_hashes = reference['input_sha256']
+    digest = hashlib.sha256(json.dumps(
+        input_hashes, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+    assert reference.get('input_digest', digest) == digest
+    recorded_path = reference.get('output_path')
+    if recorded_path is not None:
+        assert Path(recorded_path).resolve() == directory.resolve()
+    newton = bool(reference.get('mf6_newton', False))
+    formulation = 'mf6_6_6_2_npf_newton' if newton else 'mf6_6_6_2_npf_standard'
+    assert reference.get('formulation', formulation) == formulation
+    ims = reference.get('ims_settings', reference.get('ims_controls'))
+    assert isinstance(ims, dict) and str(ims.get('complexity', '')).upper() == 'COMPLEX'
+    if newton:
+        assert str(ims.get('linear_acceleration', '')).upper() == 'BICGSTAB'
+    return dict(output_path=str(directory.resolve()), input_digest=digest,
+        formulation=formulation, ims_settings=ims, legacy_identity_fields=recorded_path is None)
+
+
+def locate_reference(*, root, profile, formulation, label, mode):
+    """Find explicit final-driver layouts first, then compatible archived layouts."""
+    profile_root = root / profile if profile else root
+    candidates = [profile_root / formulation / label / mode]
+    if formulation == 'newton':
+        candidates.append(profile_root / 'newton' / label / mode)
+    else:
+        candidates.append(profile_root / 'standard' / label / mode)
+        candidates.append(profile_root / label / mode)
+    for candidate in candidates:
+        if (candidate / 'reference.json').exists():
+            identity = reference_identity(directory=candidate)
+            expected = f'mf6_6_6_2_npf_{formulation}'
+            if identity['formulation'] == expected:
+                return candidate, identity
+    return candidates[0], None
 
 
 def compare_2d_heads(*, numerical, native, transient, target):
@@ -16,18 +56,30 @@ def compare_2d_heads(*, numerical, native, transient, target):
     :param target: Preferred head parity target, independently specified in metres.
     :return: Measured errors and explicit preferred-target status.
     """
+    numerical_info = json.loads((numerical / 'result.json').read_text())
+    native_info = json.loads((native / 'reference.json').read_text())
+    periods = (numerical_info['warm'][-1]['periods'] if transient else
+        [numerical_info['cold'], *numerical_info.get('calibration', [])])
     with np.load(numerical / 'heads.npz') as computed, np.load(native / 'reference_outputs.npz') as reference:
         native_endpoints = len(reference['heads'])
         if transient or 'heads' in computed:
             pairs = [(index, head) for index, head in enumerate(computed['heads'])]
         else:
             pairs = [(0, computed['cold']), (len(reference['heads']) - 1, computed['calibration'])]
+        assert len(pairs) == len(periods) == native_endpoints == len(native_info['periods'])
+        assert all(period.get('converged') for period in periods)
+        np.testing.assert_allclose(reference['times'], np.cumsum(
+            [period['dt'] for period in native_info['periods']]), rtol=0., atol=1.e-12)
+        if transient:
+            np.testing.assert_allclose(
+                np.full(len(periods), numerical_info['dt_days']),
+                [period['dt'] for period in native_info['periods']], rtol=0., atol=1.e-12)
         rows = []
         for index, head in pairs:
             difference = head - reference['heads'][index, 0]
             rows.append(dict(index=index, maximum_m=float(np.max(np.abs(difference))),
                 rms_m=float(np.sqrt(np.mean(difference * difference)))))
-    result = dict(periods=rows, compared_endpoints=len(rows), native_endpoints=native_endpoints,
+    result = dict(status='complete', periods=rows, compared_endpoints=len(rows), native_endpoints=native_endpoints,
         preferred_head_target_m=target,
         preferred_target_met=all(row['maximum_m'] <= target for row in rows))
     (numerical / 'mf6_exact_head_comparison.json').write_text(json.dumps(result, indent=2))
@@ -82,8 +134,9 @@ def collect_comparisons(*, evidence, native_3d, native_2d, controls, shapes, sto
     result = dict(comparisons={}, pending=[])
     for label, shape in shapes.items():
         for mode in ('steady', 'history'):
-            native = native_3d / 'strict' / label / mode
-            if not (native / 'reference.json').exists():
+            native, identity = locate_reference(root=native_3d, profile='strict',
+                formulation='standard', label=label, mode=mode)
+            if identity is None:
                 result['pending'].append(str(native))
                 continue
             profiles = ('history',) if mode == 'history' else ('saturated_fp64', 'current_fp64', 'qualified_current_fp32')
@@ -94,6 +147,7 @@ def collect_comparisons(*, evidence, native_3d, native_2d, controls, shapes, sto
                 result['comparisons'][key] = compare_outputs(gpu_directory=numerical, native_directory=native,
                     output=numerical / 'mf6_exact_comparison.json', head_gate=controls['head_gate_m'],
                     rate_gate=controls['entry_rate_gate_m3_day'], history=mode == 'history')
+                result['comparisons'][key]['native_identity'] = identity
                 compare_sources(numerical=numerical / 'result.json', native=native / 'reference.json',
                     output=numerical / 'mf6_exact_source_comparison.json', transient=mode == 'history',
                     dimensionality=3, summation_ulps=controls['source_summation_ulps'])
@@ -102,8 +156,11 @@ def collect_comparisons(*, evidence, native_3d, native_2d, controls, shapes, sto
                         native=native, previous=np.full(shape, controls['initial_head']),
                         coefficient=storage_coefficient, dt=controls['history_dt_days'], fixed_columns=fixed_columns)
         for mode in ('steady', 'mixed', 'transient', 'picard'):
-            native = native_2d / label / mode
-            if not (native / 'reference.json').exists():
+            # The maintained convertible Picard face law is standard MF6
+            # harmonic transmissivity, never the upstream-saturation Newton law.
+            native, identity = locate_reference(root=native_2d, profile='',
+                formulation='standard', label=label, mode=mode)
+            if identity is None:
                 result['pending'].append(str(native))
                 continue
             numerical = evidence / 'production_2d' / label / mode
@@ -113,6 +170,7 @@ def collect_comparisons(*, evidence, native_3d, native_2d, controls, shapes, sto
             key = f'2d/{label}/{mode}'
             result['comparisons'][key] = compare_2d_heads(numerical=numerical, native=native,
                 transient=transient, target=controls['head_gate_m'])
+            result['comparisons'][key]['native_identity'] = identity
             compare_sources(numerical=numerical / 'result.json', native=native / 'reference.json',
                 output=numerical / 'mf6_exact_source_comparison.json', transient=transient,
                 dimensionality=2, summation_ulps=controls['source_summation_ulps'])
@@ -121,6 +179,11 @@ def collect_comparisons(*, evidence, native_3d, native_2d, controls, shapes, sto
             destination = evidence / category / path.relative_to(origin)
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src=path, dst=destination)
+    misses = [key for key, value in result['comparisons'].items()
+        if key.startswith('2d/') and not value.get('preferred_target_met', True)]
+    result['preferred_2d_head_target_m'] = controls['head_gate_m']
+    result['preferred_2d_target_misses'] = misses
+    result['preferred_2d_target_miss_count'] = len(misses)
     (evidence / 'exact_reference_summary.json').write_text(json.dumps(result, indent=2))
     return result
 

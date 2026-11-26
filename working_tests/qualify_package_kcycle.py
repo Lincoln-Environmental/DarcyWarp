@@ -141,9 +141,9 @@ def compact_info(*, info, elapsed):
     names = ('converged', 'stop_reason', 'implementation', 'session_backend', 'krylov_method',
         'npf_preconditioner', 'outer_iterations', 'krylov_iterations', 'preconditioner_cycles',
         'cuda_graph_captures', 'cuda_graph_replays', 'seconds', 'public_total_seconds',
-        'device_final_metrics', 'physical_acceptance', 'ghb_budget', 'drn_budget', 'riv_budget',
+        'device_final_metrics', 'physical_acceptance', 'chd_budget', 'ghb_budget', 'drn_budget', 'riv_budget',
         'source_budgets', 'multigrid', 'n_cycles_used', 'graph_count', 'graph_replays',
-        'linear_acceleration', 'preconditioner_applications', 'cuda_graph_replayed', 'r_rms_end', 'h_rms_end')
+        'linear_acceleration', 'preconditioner_applications', 'cuda_graph_replayed', 'r_rms_end', 'h_rms_end', 'dt')
     result = {name: info.get(name) for name in names}
     result.update(public_seconds=elapsed, gpu_used_bytes=int(wp.get_mempool_used_mem_current()),
         process_gpu_high_water_bytes=int(wp.get_mempool_used_mem_high()))

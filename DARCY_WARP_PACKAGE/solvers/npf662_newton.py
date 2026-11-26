@@ -81,9 +81,11 @@ class NPF662Workspace:
         self.commit_graph=None;self.commit_graph_failed=False;self.reuse_trial_state=False
         self.ghb_conductance = self.ghb_head = self.ghb_totals = None
         self.ghb_operator = self.trial_ghb_operator = None
-        self.has_drn_riv = case.drn_conductance is not None or case.riv_conductance is not None \
-            or case.drn_entries is not None or case.riv_entries is not None
+        self.has_drn = case.drn_conductance is not None or case.drn_entries is not None
+        self.has_riv = case.riv_conductance is not None or case.riv_entries is not None
+        self.has_drn_riv = self.has_drn or self.has_riv
         self.source_gross = None
+        self.source_gross_correction = wp.zeros(1, dtype=wp.float64, device=self.device)
         self.zero = wp.zeros(shape=self.n, dtype=wp.float64, device=self.device)
         # Combined previous-state restraint diagonal shared by GHB-only and
         # DRN/RIV workspaces; singular boundary-dominated rows stay nonsingular.
@@ -119,6 +121,17 @@ class NPF662Workspace:
             self.drn_entry_rate = wp.zeros(shape=0, dtype=wp.float64, device=self.device)
             self.riv_entry_rate = wp.zeros(shape=0, dtype=wp.float64, device=self.device)
         self.component_anchor = None
+        from scipy.ndimage import label
+        labels, count = label(case.active != 0)
+        sizes = np.bincount(labels.ravel(), minlength=count + 1)
+        eligible = np.ones(count + 1, dtype=np.float64)
+        eligible[0] = 0.
+        eligible[labels[case.fixed != 0]] = 0.
+        self.component_labels = wp.array(labels.ravel(), dtype=wp.int32, device=self.device)
+        self.component_weight = wp.array((eligible[labels] / sizes[labels]).ravel(),
+            dtype=wp.float64, device=self.device)
+        self.component_sums = wp.zeros(count + 1, dtype=wp.float64, device=self.device)
+        self.active_component_anchor = wp.zeros(self.n, dtype=wp.float64, device=self.device)
         self.anchor_revision = None
         self.roundoff_acceptance = False
         self.physical_tolerance = 1.0e-12
@@ -150,9 +163,10 @@ class NPF662Workspace:
         return reused
 
     def compatible(self,*,model,case,restart):
-        package_mode = (case.drn_conductance is not None or case.riv_conductance is not None
-            or case.drn_entries is not None or case.riv_entries is not None)
-        return not self.closed and self.device==model.device and self.shape==case.active.shape and self.restart==restart and self.has_drn_riv==package_mode and np.array_equal(
+        has_drn = case.drn_conductance is not None or case.drn_entries is not None
+        has_riv = case.riv_conductance is not None or case.riv_entries is not None
+        return not self.closed and self.device==model.device and self.shape==case.active.shape and self.restart==restart \
+            and self.has_drn == has_drn and self.has_riv == has_riv and np.array_equal(
             self.active_snapshot,case.active) and np.array_equal(self.fixed_snapshot,case.fixed)
 
     def load(self,*,model,case,reference=None):
@@ -449,18 +463,21 @@ class NPF662Workspace:
             row_inputs.extend((self.ghb_conductance,self.ghb_head))
         wp.launch(kernel=row_kernel,dim=self.n,inputs=row_inputs,
             device=self.device,block_dim=self.metric_block_size)
-        if self.source_gross is not None:
-            wp.launch(kernel=kernels.add_gross_source_metrics, dim=self.n,
-                inputs=[self.source, self.source_gross, self.free, self.metric_partials, block_size],
-                device=self.device)
         wp.launch(kernel=kernels.combine_metrics_tiled if tiled else kernels.combine_physical_metrics,dim=2304 if tiled else 9,
             inputs=[self.metric_partials,self.metrics,(self.n+block_size-1)//block_size],device=self.device,block_dim=256)
         self.residual_evaluations+=1
         if trial:self.candidate_evaluations+=1
         m=self.metrics.numpy()
+        gross_correction = 0.
+        if self.source_gross is not None:
+            self.source_gross_correction.zero_()
+            wp.launch(kernel=kernels.gross_source_correction, dim=self.n,
+                inputs=[self.source, self.source_gross, self.free, self.source_gross_correction], device=self.device)
+            gross_correction = float(self.source_gross_correction.numpy()[0])
         count=max(self.free_count,1)
         result=dict(physical_rms=float(np.sqrt(m[0]/count)),head_residual_rms=float(np.sqrt(m[2]/count)),
-            relative_cell_imbalance=float(m[1]/max(m[3],np.finfo(float).tiny)),gross_throughput=float(m[3]),
+            relative_cell_imbalance=float(m[1]/max(m[3],np.finfo(float).tiny)),gross_throughput=float(m[3] + gross_correction),
+            equation_throughput=float(m[3]),
             residual_l1=float(m[1]),signed_imbalance=float(m[8]),boundary_inflow=float(m[4]),boundary_outflow=float(m[5]),
             scaled_l2=float(np.sqrt(m[7])),finite=bool(m[6]==0 and np.all(np.isfinite(m[[0,1,3,4,5,7,8]]))))
         roundoff_candidate = (self.roundoff_acceptance and result['finite'] and
@@ -468,22 +485,32 @@ class NPF662Workspace:
             (result['physical_rms'] <= 1e-12 or result['relative_cell_imbalance'] <= 1e-8))
         if roundoff_candidate or device_accepted(metrics=result, physical_tolerance=self.physical_tolerance,
                                                  relative_tolerance=self.relative_tolerance):
-            # The extra reduction is needed only when the domain could accept.
+            # Share actual active external derivatives across unprescribed
+            # components. An allocated but inactive package supplies no restraint.
+            self.component_sums.zero_()
+            wp.launch(kernel=kernels.sum_component_restraint, dim=self.n,
+                inputs=[self.component_labels, self.component_weight, tangent,
+                    (self.trial_boundary_tangent if trial else self.boundary_tangent)
+                    if self.has_drn_riv else (self.ghb_conductance if self.ghb_conductance is not None else self.zero),
+                    self.component_sums], device=self.device)
+            wp.launch(kernel=kernels.share_component_restraint, dim=self.n,
+                inputs=[self.component_labels, self.component_sums, self.active_component_anchor], device=self.device)
             self.maximum.zero_()
             if self.has_drn_riv:
                 wp.launch(kernel=kernels.check_local_balance_drn_riv, dim=self.n,
                     inputs=[head, self.free, self.fixed,
-                        self.source if self.source_gross is None else self.source_gross, self.left, self.right, q, c,
+                        self.source, self.left, self.right, q, c,
                         storage, tangent, r,
                         self.trial_boundary_throughput if trial else self.boundary_throughput,
                         self.trial_boundary_tangent if trial else self.boundary_tangent,
+                        self.active_component_anchor,
                         self.physical_tolerance, self.relative_tolerance, self.maximum], device=self.device)
             else:
                 wp.launch(kernel=kernels.check_local_balance, dim=self.n,
                     inputs=[head, self.free, self.fixed,
-                        self.source if self.source_gross is None else self.source_gross, self.left, self.right, q, c,
+                        self.source, self.left, self.right, q, c,
                             storage, tangent, r, int(self.ghb_conductance is not None),
-                            self.ghb_conductance, self.ghb_head, self.component_anchor, int(self.component_anchor is not None),
+                            self.ghb_conductance, self.ghb_head, self.active_component_anchor, 1,
                             self.physical_tolerance, self.relative_tolerance,
                             self.maximum], device=self.device)
             result['local_balance_valid'] = bool(self.maximum.numpy()[0] == 0.0)
@@ -646,7 +673,11 @@ def refine_confined_component_datum(*, case, reference, head):
     flat = np.asarray(head).ravel()
     for label in np.unique(labels[active]):
         component = (labels == label) & active
-        if np.any(fixed[component]):
+        if np.any(fixed[component]) or np.any(case.cell_types.ravel()[component]):
+            continue
+        unused_drn, drain, unused_riv, river = reference.boundary_terms(head=head)
+        if any(np.any(field.ravel()[component] != 0.) for field in
+                (drain.discharge, drain.diagonal, river.discharge, river.diagonal)):
             continue
         restraint = fsum(conductance[component])
         if restraint <= 0.:
@@ -655,6 +686,12 @@ def refine_confined_component_datum(*, case, reference, head):
         boundary_outflow = fsum(conductance[component] * (flat[component] - boundary_head[component]))
         shift = (net_source - boundary_outflow) / restraint
         if not np.isfinite(shift) or shift == 0.:
+            continue
+        trial = np.array(head, copy=True, order='C')
+        trial.ravel()[component] += shift
+        unused_drn, drain, unused_riv, river = reference.boundary_terms(head=trial)
+        if any(np.any(field.ravel()[component] != 0.) for field in
+                (drain.discharge, drain.diagonal, river.discharge, river.diagonal)):
             continue
         if corrected is None:
             corrected = np.array(head, copy=True)
@@ -696,7 +733,8 @@ def search_direction(*,workspace,current,controls,physical_tolerance=1e-12,relat
 def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,controls,
                         physical_tolerance=1e-12,relative_tolerance=1e-8,
                         npf_preconditioner='diagonal',npf_kcycle_controls=None,npf_krylov_method=None,
-                        device_native=False,prepared_workspace=None,device_sequence=False,roundoff_acceptance=False):
+                        device_native=False,prepared_workspace=None,device_sequence=False,roundoff_acceptance=False,
+                        retain_accepted_state=True):
     controls.validate()
     setup_start=perf_counter()
     if max_outer<0 or krylov_budget<0 or restart<2:raise ValueError('Nonnegative budgets and restart>=2 required')
@@ -880,8 +918,7 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
     seconds=perf_counter()-start
     head=None if device_sequence else workspace.head.numpy().reshape(case.active.shape).copy()
     datum_refined = False
-    if (not workspace.transient and not workspace.has_drn_riv
-            and case.ghb_conductance is not None and not np.any(case.cell_types)):
+    if not workspace.transient and case.ghb_conductance is not None:
         corrected = refine_confined_component_datum(case=case, reference=reference, head=head)
         if corrected is not None:
             workspace.trial.assign(corrected.ravel())
@@ -963,9 +1000,10 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
             if len(workspace.riv_entry_rate):
                 result['riv_entry_rates'] = workspace.riv_entry_rate.numpy().copy()
         result['package_outputs_resident'] = bool(device_sequence)
-    if converged and (workspace.has_drn_riv or getattr(model, '_track_well_sources', False)):
+    accepted_state = None
+    if retain_accepted_state and converged and (workspace.has_drn_riv or getattr(model, '_track_well_sources', False)):
         from .accepted_npf_state import own_accepted_state
-        result['accepted_state'] = own_accepted_state(session=model._session,
+        accepted_state = own_accepted_state(session=model._session,
             workspace=workspace, dt=float(reference.dt) if workspace.transient else None,
             resident_outputs=bool(device_sequence))
     result['krylov_workspace_reused']=krylov_reused
@@ -1007,4 +1045,9 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
                 synchronization_seconds=sum(row['synchronization_seconds'] for row in linear_history),
                 device_apply_seconds=sum(row['multigrid_device_seconds'] for row in linear_history),
                 preconditioner_enqueue_seconds=sum(row['preconditioner_enqueue_seconds'] for row in linear_history)))
-    return head,finite_diagnostics(value=result)
+    result = finite_diagnostics(value=result)
+    if accepted_state is not None:
+        # Keep the owning token out of the JSON diagnostic normaliser.  Turning
+        # this dict subclass into a plain dict releases its session snapshot.
+        result['accepted_state'] = accepted_state
+    return head,result

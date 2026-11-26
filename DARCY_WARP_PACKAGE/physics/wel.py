@@ -92,6 +92,8 @@ def validate_well_entries(*, entries, shape, active, dtype=np.float64):
     if isinstance(entries, WellEntries):
         if entries.cells.shape[1:] != (len(shape),):
             raise ValueError(f"Well cells must have {len(shape)} indices per entry")
+        if entries.rates.ndim != 1 or entries.cells.shape[0] != entries.rates.size:
+            raise ValueError("Supply exactly one volumetric rate per well entry")
         pairs = list(zip(map(tuple, entries.cells.tolist()), entries.rates.tolist()))
     elif isinstance(entries, Mapping):
         pairs = list(entries.items())
@@ -322,7 +324,9 @@ def attach_accepted_source_state(*, model, head, info, dt, entries, budgets, sou
         model._accepted_well_states = {}
     identifier = uuid4().hex
     model._accepted_well_states[identifier] = state
-    info['accepted_source_state'] = identifier
+    from DARCY_WARP_PACKAGE.solvers.accepted_npf_state import RetainedStateIdentifier
+    info['accepted_source_state'] = RetainedStateIdentifier(identifier, owner=model,
+        attribute='_accepted_well_states')
     info['accepted_source_dt'] = state.dt
     info['source_budgets'] = {name: dict(inflow=inflow, outflow=outflow, net=net)
         for name, inflow, outflow, net in owned_budgets}
@@ -345,7 +349,7 @@ def accepted_well_rates(*, model, head, info):
     """
     if not isinstance(info, dict) or not info.get('converged', False):
         raise RuntimeError('Accepted WEL rates require a converged solve')
-    state = getattr(model, '_accepted_well_states', {}).get(info.get('accepted_source_state'))
+    state = getattr(model, '_accepted_well_states', {}).get(str(info.get('accepted_source_state')))
     if state is None:
         raise RuntimeError('Accepted WEL state does not belong to this model')
     accepted_head = (np.frombuffer(state.head_bytes, dtype=np.float64).reshape(state.shape)
@@ -397,7 +401,7 @@ def combine_well_depth_source(*, model, recharge):
         raise ValueError('WEL requires a positive representable cell area')
     cells, net_rates, unused_gross_rates = sparse_well_cell_rates(
         entries=entries, shape=(model.ny, model.nx))
-    combined = np.array(np.broadcast_to(rate, (model.ny, model.nx)), copy=True)
+    combined = np.array(np.broadcast_to(rate, (model.ny, model.nx)), copy=True, order='C')
     with np.errstate(over='ignore', invalid='ignore'):
         changed = combined.ravel()[cells] + net_rates / area
     if not np.all(np.isfinite(changed)):

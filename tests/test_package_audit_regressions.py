@@ -388,16 +388,54 @@ def test_resident_entry_exchange_is_materialized_from_owned_state(device):
         rates = model.accepted_boundary_entry_rates(package='DRN', head=heads[1], info=period)
         np.testing.assert_allclose(rates, [max(heads[1].item() - 2., 0.)], atol=1.e-12)
         model.update_drn_entries(entries=None)
-        np.testing.assert_array_equal(model.accepted_boundary_entry_rates(package='DRN', head=heads[1], info=period), rates)
+        np.testing.assert_array_equal(model.accepted_boundary_entry_rates(
+            package='DRN', head=heads[1], info=period), rates)
 
 
-@pytest.mark.parametrize('scalar_recharge', [False, True])
-def test_mixed_source_assembly_owns_recharge_and_preserves_duplicate_wells(scalar_recharge):
+@pytest.mark.parametrize('device', ['cpu', 'cuda:0'])
+def test_accepted_snapshot_lifetime_follows_retained_results(device):
+    """Head-only and discarded results do not accumulate full equation snapshots."""
+    import gc
+    from test_3d_drn_riv_entries import _one_cell_model
+    with _one_cell_model(device=device, drn_entries=[((0, 0, 0), 1., 2.)]) as model:
+        retained_head, retained_info = model.solve()
+        assert len(model._session._accepted_equations) == 1
+        head_only = model.solve(return_info=False)
+        assert head_only.item() == pytest.approx(retained_head.item())
+        assert len(model._session._accepted_equations) == 1
+        discarded = model.solve()
+        assert len(model._session._accepted_equations) == 2
+        del discarded
+        gc.collect()
+        assert len(model._session._accepted_equations) == 1
+        model.update_drn_entries(entries=[((0, 0, 0), 2., 1.)])
+        np.testing.assert_allclose(model.accepted_drn_discharge(
+            head=retained_head, info=retained_info), [[[1.]]], atol=1.e-12)
+        del retained_info
+        gc.collect()
+        assert len(model._session._accepted_equations) == 0
+
+
+@pytest.mark.parametrize('device', ['cpu', 'cuda:0'])
+def test_sparse_river_metadata_and_accessors_follow_authoritative_package(device):
+    """RIV-only state advertises RIV and rejects an absent DRN accessor."""
+    from test_3d_drn_riv_entries import _one_cell_model
+    with _one_cell_model(device=device, riv_entries=[((0, 0, 0), 1., 4., 2.)]) as model:
+        head, info = model.solve()
+        assert info['enabled_packages'].count('RIV') == 1
+        assert 'DRN' not in info['enabled_packages']
+        model.accepted_riv_discharge(head=head, info=info)
+        with pytest.raises(RuntimeError, match='no DRN package output'):
+            model.accepted_drn_discharge(head=head, info=info)
+
+
+@pytest.mark.parametrize('layout', ['c', 'f', 'scalar'])
+def test_mixed_source_assembly_owns_recharge_and_preserves_duplicate_wells(layout):
     """Physical volumetric rates survive sparse assembly with either recharge API form."""
     from DARCY_WARP_PACKAGE.physics.wel import combine_well_depth_source
     from DARCY_WARP_PACKAGE.warped_darcy import WarpDarcySolver
     shape = (4, 4)
-    recharge = np.array(.01) if scalar_recharge else np.full(shape, .01)
+    recharge = np.array(.01) if layout == 'scalar' else np.full(shape, .01, order=layout.upper())
     original = recharge.copy()
     with WarpDarcySolver(nx=4, ny=4, dx=10., device='cpu') as model:
         model.build_from_fields(T_field=np.ones(shape), R_field=0., active=np.ones(shape),

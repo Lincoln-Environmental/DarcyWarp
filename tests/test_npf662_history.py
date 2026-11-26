@@ -93,6 +93,38 @@ def test_history_changes_k_between_calls_and_matches_fresh(device):
     np.testing.assert_allclose(actual=updated, desired=fresh, rtol=0., atol=1e-9)
 
 
+def test_fortran_raw_rhs_scheduled_wells_match_each_period_equation(device):
+    """Host first-step assembly and resident later steps use identical WEL forcing."""
+    case = make_case(convertible=False, shape=(2, 4, 6))
+    case = replace(case, source=np.asfortranarray(case.source))
+    assert case.source.flags.f_contiguous and not case.source.flags.c_contiguous
+    schedule = [
+        [((1, 2, 4), -0.08), ((1, 2, 4), 0.03)],
+        [((1, 1, 3), 0.04)],
+    ]
+    options = history_options(case=case, precision='float64', predictor=True)
+    previous = case.initial.copy()
+    with make_model(case=case, device=device) as model:
+        heads, info = model.solve_transient_npf(
+            source_factors=[1., 1.], dt=[3., 5.], head_prev=previous,
+            ss=1.e-3, sy=0., wel_rates=schedule, **options)
+        assert info['converged'] and info['accepted_steps'] == 2
+        for index, (head, entries, dt) in enumerate(zip(heads, schedule, (3., 5.))):
+            source = np.array(case.source, copy=True, order='C')
+            for cell, rate in entries:
+                source[cell] += rate
+            checks, unused = NPF662TransientReference(
+                case=replace(case, source=source), previous=previous,
+                dt=dt, ss=1.e-3, sy=0.).evaluate(head=head)
+            assert checks['independent_accepted']
+            np.testing.assert_allclose(
+                model.accepted_wel_rates(head=head, info=info['periods'][index]),
+                [entry[1] for entry in entries], rtol=0., atol=0.)
+            assert info['periods'][index]['source_budgets']['wel']['net'] == pytest.approx(
+                sum(entry[1] for entry in entries))
+            previous = head
+
+
 @pytest.mark.parametrize("first_step_fails", [False, True])
 def test_history_stops_at_first_failed_step_and_restores_inputs(device, first_step_fails, monkeypatch):
     case = make_case(convertible=True)

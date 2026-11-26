@@ -1,7 +1,52 @@
 """Independent one-cell checks for native NPF DRN/RIV equations."""
 import numpy as np
+import pytest
 
 from DARCY_WARP_PACKAGE.validation.npf662_reference import NPF662Case, NPF662Reference
+
+
+@pytest.mark.parametrize('package,entry', [
+    ('DRN', ((0, 0, 0.5), 1., 0.)),
+    ('RIV', ((0, 0.5, 0), 1., 1., 0.)),
+])
+def test_sparse_boundaries_reject_fractional_coordinates(package, entry):
+    from DARCY_WARP_PACKAGE.physics.drn_riv_3d import validate_boundary_entries
+    shape = (1, 1, 1)
+    with pytest.raises(ValueError, match='integer index tuple'):
+        validate_boundary_entries(entries=[entry], package=package, shape=shape,
+            active=np.ones(shape), fixed=np.zeros(shape))
+
+
+def test_duplicate_boundary_occupancy_keeps_any_positive_conductance():
+    """A trailing zero duplicate cannot erase a conducting package entry."""
+    case = NPF662Case(kx=np.ones((1, 1, 1)), ky=np.ones((1, 1, 1)),
+        kz=np.ones((1, 1, 1)), active=np.ones((1, 1, 1), dtype=np.int32),
+        fixed=np.zeros((1, 1, 1), dtype=np.int32), values=np.zeros((1, 1, 1)),
+        source=np.zeros((1, 1, 1)), initial=np.ones((1, 1, 1)),
+        dx=1., dy=1., dz=1.,
+        drn_entries=[((0, 0, 0), 1., 0.), ((0, 0, 0), 0., 0.)])
+    reference = NPF662Reference(case=case)
+    occupied, unused = reference.boundary_occupancy()
+    assert occupied[0]
+
+
+def test_sparse_boundary_case_round_trip_preserves_entries_and_digest(tmp_path):
+    """Canonical files retain duplicate entry order and every physical level."""
+    from DARCY_WARP_PACKAGE.validation.npf662_reference import load_npf662_case, save_npf662_case
+    shape = (1, 1, 2)
+    ones = np.ones(shape)
+    case = NPF662Case(kx=ones, ky=ones, kz=ones, active=ones.astype(np.int32),
+        fixed=np.zeros(shape, dtype=np.int32), values=np.zeros(shape), source=np.zeros(shape),
+        initial=np.ones(shape), dx=1., dy=1., dz=1.,
+        drn_entries=[((0, 0, 0), 2., 3.), ((0, 0, 0), 0., 4.)],
+        riv_entries=[((0, 0, 1), 5., 6., 1.), ((0, 0, 1), 7., 8., 2.)])
+    path = tmp_path / 'case.npz'
+    save_npf662_case(case=case, path=path)
+    loaded = load_npf662_case(path=path)
+    assert loaded.digest() == case.digest()
+    np.testing.assert_array_equal(loaded.drn_entries[0][0], (0, 0, 0))
+    assert loaded.drn_entries == case.drn_entries
+    assert loaded.riv_entries == case.riv_entries
 
 
 def single_cell_case(*, head, source, drn=None, riv=None):
