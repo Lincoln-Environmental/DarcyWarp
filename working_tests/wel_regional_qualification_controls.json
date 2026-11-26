@@ -12,15 +12,40 @@
   "river_second_bottom_offset": 0.05,
   "ghb_conductance": 2.0,
   "ghb_column_stride": 7,
-  "calibration_wel_factors": [1.05, 1.1, 1.15],
-  "calibration_recharge_factors": [1.0, 1.02, 1.04],
-  "calibration_stage_offsets": [0.0, 0.02, 0.04],
-  "head_gate_m": 0.000001,
-  "entry_rate_gate_m3_day": 0.00001,
+  "calibration_wel_factors": [
+    1.05,
+    1.1,
+    1.15
+  ],
+  "calibration_recharge_factors": [
+    1.0,
+    1.02,
+    1.04
+  ],
+  "calibration_stage_offsets": [
+    0.0,
+    0.02,
+    0.04
+  ],
+  "head_gate_m": 1e-06,
+  "entry_rate_gate_m3_day": 1e-05,
   "history_steps": 20,
   "history_dt_days": 7.0,
-  "specific_storage_per_m": 0.00001,
+  "specific_storage_per_m": 1e-05,
   "specific_yield": 0.0,
-  "history_wel_pattern": [1.0, 0.8, 1.2, 1.0],
-  "history_recharge_pattern": [1.0, 1.1, 0.9, 1.0]
+  "history_wel_pattern": [
+    1.0,
+    0.8,
+    1.2,
+    1.0
+  ],
+  "history_recharge_pattern": [
+    1.0,
+    1.1,
+    0.9,
+    1.0
+  ],
+  "contrasting_river_middle_stage": 29.5,
+  "contrasting_river_second_stage_offset": 8.0,
+  "contrasting_river_bottom": 28.0
 }

@@ -161,12 +161,13 @@ def run_native(*, fields, durations, well_factors, recharge_factors, stage_offse
 
 if __name__ == "__main__":
     os.environ.setdefault('DARCY_FLOAT', 'float64')
-    from qualify_package_kcycle import regional_fields
+    from qualify_package_kcycle import boundary_controls, regional_fields
     from DARCY_WARP_PACKAGE.project_base import require_mf6
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--grid', choices=('100k', '1M', 'all'), default='all')
     parser.add_argument('--mode', choices=('steady', 'history', 'all'), default='all')
-    parser.add_argument('--strategy', choices=('original', 'ilut8'), default='original')
+    parser.add_argument('--boundary-case', choices=('packages', 'gaining_losing'), default='packages')
+    parser.add_argument('--strategy', choices=('original', 'ilut8', 'cg_ilu0'), default='original')
     parser.add_argument('--repeats', type=int, default=3)
     parser.add_argument('--output', type=Path, default=Path('/tmp/darcywarp-package-mf6-qualification'))
     arguments = parser.parse_args()
@@ -182,6 +183,15 @@ if __name__ == "__main__":
             preconditioner_levels=8, preconditioner_drop_tolerance=1.e-4,
             number_orthogonalizations=8, relaxation_factor=0.)
         arguments.output = arguments.output / 'ilut8'
+    if arguments.strategy == 'cg_ilu0':
+        # Archived confined CG/ILU(0) strategy, retaining original final gates.
+        ims_controls.update(complexity='SIMPLE', under_relaxation='NONE', backtracking_number=0,
+            linear_acceleration='CG', preconditioner_levels=0, preconditioner_drop_tolerance=0.,
+            number_orthogonalizations=0, relaxation_factor=0.)
+        arguments.output = arguments.output / 'cg_ilu0'
+    controls = boundary_controls(controls=controls, variant=arguments.boundary_case)
+    if arguments.boundary_case != 'packages':
+        arguments.output = arguments.output / arguments.boundary_case
     executable = require_mf6()
     for label, shape in grids.items():
         if arguments.grid not in ('all', label):

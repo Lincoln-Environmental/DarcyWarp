@@ -466,6 +466,7 @@ def solve_confined_kcycle_fast_backend(
         float(omega),
     )
     graph_built_this_call = False
+    graph_replays = 0
     graph_capture_failed = False
     use_cuda_graph = str(device).startswith("cuda")
 
@@ -510,8 +511,10 @@ def solve_confined_kcycle_fast_backend(
                 # ScopedCapture records without executing; launch immediately
                 # so every counted cycle is an executed cycle.
                 wp.capture_launch(self._kcycle_fast_graph)
+                graph_replays += 1
         else:
             wp.capture_launch(self._kcycle_fast_graph)
+            graph_replays += 1
 
         if (cyc % int(check_every)) != (int(check_every) - 1):
             continue
@@ -647,6 +650,8 @@ def solve_confined_kcycle_fast_backend(
         "cuda_graph_reused": bool((not graph_built_this_call) and (self._kcycle_fast_graph is not None)),
         "cuda_graph_built_this_call": bool(graph_built_this_call),
         "cuda_graph_capture_failed": bool(graph_capture_failed),
+        "cuda_graph_captures": int(graph_built_this_call and self._kcycle_fast_graph is not None),
+        "cuda_graph_replays": graph_replays,
         "check_every": int(check_every),
         "min_coarse_cells": None if min_coarse_cells is None else int(min_coarse_cells),
     }

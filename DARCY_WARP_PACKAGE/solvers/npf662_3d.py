@@ -61,7 +61,7 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
     transient=False,dt=None,head_prev=None,ss=None,sy=None,npf_final_relative_tolerance=None,
     npf_device_native=False,npf_roundoff_acceptance=False,**unsupported):
     started = perf_counter()
-    # Omission retains historical backend defaults. Explicit selections must
+    # Omitted controls stay with their numerical backend. Explicit selections must
     # either reach their backend or be rejected, even when equal to a former
     # signature default (e.g. max_levels=6 with a two-level NPF hierarchy).
     legacy_overrides = any(value is not None for value in (rel_tol, max_levels, min_coarse_n))

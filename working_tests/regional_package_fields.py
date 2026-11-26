@@ -58,4 +58,3 @@ def heterogeneous_fields(*, shape, seed=11, wells_top=True, drain=True, river=Tr
         R_field=recharge, dx=dx, dy=dy, dz=dz,
         wel_entries=entries, drn_entries=drn_entries, riv_entries=riv_entries,
     )
-

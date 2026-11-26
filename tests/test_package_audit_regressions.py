@@ -389,3 +389,25 @@ def test_resident_entry_exchange_is_materialized_from_owned_state(device):
         np.testing.assert_allclose(rates, [max(heads[1].item() - 2., 0.)], atol=1.e-12)
         model.update_drn_entries(entries=None)
         np.testing.assert_array_equal(model.accepted_boundary_entry_rates(package='DRN', head=heads[1], info=period), rates)
+
+
+@pytest.mark.parametrize('scalar_recharge', [False, True])
+def test_mixed_source_assembly_owns_recharge_and_preserves_duplicate_wells(scalar_recharge):
+    """Physical volumetric rates survive sparse assembly with either recharge API form."""
+    from DARCY_WARP_PACKAGE.physics.wel import combine_well_depth_source
+    from DARCY_WARP_PACKAGE.warped_darcy import WarpDarcySolver
+    shape = (4, 4)
+    recharge = np.array(.01) if scalar_recharge else np.full(shape, .01)
+    original = recharge.copy()
+    with WarpDarcySolver(nx=4, ny=4, dx=10., device='cpu') as model:
+        model.build_from_fields(T_field=np.ones(shape), R_field=0., active=np.ones(shape),
+            bc_mask=np.zeros(shape), bc_values=np.zeros(shape),
+            wel_entries=[((3, 2), -200.), ((3, 2), 100.)])
+        source = combine_well_depth_source(model=model, recharge=recharge)
+        expected = np.ones(shape)
+        expected[3, 2] = -99.
+        np.testing.assert_allclose(source * 100., expected, rtol=0., atol=2.e-14)
+        np.testing.assert_array_equal(recharge, original)
+        assert not np.shares_memory(source, recharge)
+        source.fill(0.)
+        np.testing.assert_array_equal(recharge, original)

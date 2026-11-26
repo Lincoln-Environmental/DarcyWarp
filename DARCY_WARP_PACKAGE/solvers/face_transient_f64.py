@@ -938,6 +938,8 @@ def solve_kcycle_face_transient_device_buffers(
     # behavior for capture, fallback, and graph replay.  Capture is deliberately
     # deferred until after the initial convergence short-circuit above.
     graph_entry = None
+    graph_captures = 0
+    graph_replays = 0
     graph_null_executed = False
     graph_key = None
     if graph_cache is not None and str(device).startswith("cuda"):
@@ -973,11 +975,14 @@ def solve_kcycle_face_transient_device_buffers(
                     graph_cache[graph_key] = False
                 else:
                     graph_entry = capture.graph
+                    graph_captures += 1
                     graph_cache[graph_key] = graph_entry
 
     def run_one_cycle(cycle_index: int) -> None:
+        nonlocal graph_replays
         if graph_entry is not None:
             wp.capture_launch(graph_entry)
+            graph_replays += 1
         elif graph_null_executed and int(cycle_index) == 0:
             return
         else:
@@ -1063,6 +1068,8 @@ def solve_kcycle_face_transient_device_buffers(
         "gpu_scalar_synchronization_count": int(gpu_scalar_sync_count),
         "coarse_operator_mode": coarse_operator_mode,
         "fine_operator_residual_checked": True,
+        "cuda_graph_captures": graph_captures,
+        "cuda_graph_replays": graph_replays,
         "implementation": "face_f64",
     }
 

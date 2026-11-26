@@ -1,0 +1,35 @@
+Warp 1.17.0 initialized:
+   CUDA Toolkit 12.9, Driver 13.2
+   Devices:
+     "cpu"      : "x86_64"
+     "cuda:0"   : "NVIDIA GeForce RTX 4070 Ti SUPER" (16 GiB, sm_89, mempool enabled)
+   Kernel cache:
+     /home/patrickdurney/.cache/warp/1.17.0
+✅ CUDA driver reports 1 device(s).
+cuda_device_found = True
+Module DARCY_WARP_PACKAGE.warped_darcy 47c5a11 load on device 'cuda:0' took 5.00 ms  (cached)
+Module DARCY_WARP_PACKAGE.solvers.face_kernels_f64 6a0ef72 load on device 'cuda:0' took 0.70 ms  (cached)
+Module DARCY_WARP_PACKAGE.solvers.face_kernels_f64 af88844 load on device 'cuda:0' took 0.95 ms  (cached)
+Module DARCY_WARP_PACKAGE.solvers.face_kernels_f64 446c42d load on device 'cuda:0' took 0.87 ms  (cached)
+Module DARCY_WARP_PACKAGE.solvers.face_kernels_f64 6de7025 load on device 'cuda:0' took 0.93 ms  (cached)
+Module DARCY_WARP_PACKAGE.solvers.face_kernels_f64 8fb0fc0 load on device 'cuda:0' took 1.21 ms  (cached)
+Module DARCY_WARP_PACKAGE.solvers.face_kernels_f64 2db5106 load on device 'cuda:0' took 1.61 ms  (cached)
+(320, 320) fast confined True {'median': 0.05065941601060331, 'minimum': 0.05030127099598758, 'maximum': 0.05103253299603239}
+(320, 320) fast confined False {'median': 0.04815855799824931, 'minimum': 0.04808393301209435, 'maximum': 0.04826442898774985}
+Traceback (most recent call last):
+  File "/tmp/darcywarp-sfr-3d-boundaries/working_tests/qualify_package_2d.py", line 252, in <module>
+    qualify_steady(fields=fields, dx=dx, controls=controls, profiles=profiles,
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        mixed=arguments.mode == 'mixed', repeats=repeats, source_control=source_control,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        device=device, directory=output / label / arguments.mode / ('source_control' if source_control else 'wel'))
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/darcywarp-sfr-3d-boundaries/working_tests/qualify_package_2d.py", line 123, in qualify_steady
+    head, info = run_confined(model=model, fields=fields, initial=initial,
+                 ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        options=profiles['steady']['fast'], mixed=mixed, config=config)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/darcywarp-sfr-3d-boundaries/working_tests/qualify_package_2d.py", line 93, in run_confined
+    assert info['cuda_graph_built_this_call'] or info['cuda_graph_reused'], info
+           ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyError: 'cuda_graph_built_this_call'

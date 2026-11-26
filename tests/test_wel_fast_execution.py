@@ -31,6 +31,7 @@ def test_two_dimensional_confined_backend_after_source_updates(device, implement
             expected_implementation = 'fast_transient_face_f64' if transient and implementation == 'fast' else implementation
             assert info.get('implementation', 'classic') == expected_implementation
             if transient and implementation == 'fast' and device.startswith('cuda'):
+                assert info['cuda_graph_replays'] == info['n_cycles_used'] > 0
                 assert info['graph_count'] > 0
                 assert info['graph_fallback_count'] == 0
             denominator = 20. + (500. if transient else 0.)

@@ -141,31 +141,25 @@ Validation
 * Regression: full suite on CPU and CUDA; the merged baseline reported
   1,475 passed, 21 expected FP32/graph skips and the one pre-existing
   CUDA precision case documented above, since resolved.
-* Benchmark: ``working_tests/qualify_package_kcycle.py`` replaces the original
-  diagonal-preconditioned timing programme and measures
-  heterogeneous multilayer workloads with substantial abstraction,
-  nonzero recharge, gaining/losing rivers, extensive drainage and
-  multi-entry cells at ~100k and 1M+ cells, separating construction
-  from warm solves and recording update, stage-update and 20-step
-  history timings (``benchmark_results/wel_boundaries_3d/``). Recorded
-  CUDA runs (RTX 4070 Ti SUPER, diagonal-preconditioner default path):
-  the 100,800-cell grid builds in 0.035 s, warm steady solves take
-  0.97-1.0 s (9 Newton outers, 3,216 Krylov), pumping and stage updates
-  re-solve in 0.86 s and 1.46 s, and a 20-step device-resident history
-  runs in 16.8 s with 20/20 accepted steps. The 1,012,500-cell grid
-  (1,632 well entries, 16,688 drains, 224 river entries) builds in
-  0.27 s, warm steady solves take 179 s (68 outers, 97,524 Krylov on
-  the default diagonal path), parameter updates re-solve in about
-  100 s, the 20-step history runs in 11.6 s (fully accepted), and peak
-  mempool use is 1.29 GB. Each history step costs about 0.58 s because
-  warm Newton starts reuse the resident workspace from the previous
-  accepted head, far below the cold steady cost; the kcycle
-  preconditioner path remains the tuned qualification choice for large
-  heterogeneous grids.
+* Benchmark correction: the original million-cell steady result of 179 s and
+  97,524 Krylov iterations executed diagonal GMRES. It is retained as historical
+  evidence in ``benchmark_results/wel_boundaries_3d/`` and is not a production
+  K-cycle qualification. Repeated solves in that programme did not explicitly
+  supply the previous accepted head. Its alternating-stage expression also
+  assigned the same stage to every selected odd river column, so it did not
+  establish simultaneous gaining and losing river exchange.
+  ``working_tests/qualify_package_kcycle.py`` replaces that programme with
+  explicit FGMRES/K-cycle, actual backend/graph assertions, repeated public
+  timings, true warm-start calibration, separate updates and owned accepted
+  output extraction. Current controls, measured results, preserved failures
+  and remaining work are documented in
+  ``WEL_DRN_RIV_AUDIT_REPAIR_2026-11-26.rst`` and
+  ``benchmark_results/package_audit_repair/``. The new regional forcing and
+  controls differ, so the old 179 s cannot support a direct speedup ratio.
 * Regional MF6 parity: ``working_tests/mf6_parity_3d_wel_boundaries.py``
   solves the matched MF6 twin of the small benchmark grid (100,800
   heterogeneous cells, 84 well entries including shared cells, 792
-  active drains, 44 gaining/losing river entries, receiving-cell
+  configured drain entries, 44 configured river entries, receiving-cell
   recharge). With anisotropic horizontal K matched via ``k22``, heads
   agree to RMSE 1.66e-8 m (max 1.17e-6 m), gross WEL rates agree
   exactly (231000 L3/T), and DRN and RIV net rates agree to relative

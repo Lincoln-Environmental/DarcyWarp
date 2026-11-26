@@ -1,0 +1,28 @@
+Warp 1.17.0 initialized:
+   CUDA Toolkit 12.9, Driver 13.2
+   Devices:
+     "cpu"      : "x86_64"
+     "cuda:0"   : "NVIDIA GeForce RTX 4070 Ti SUPER" (16 GiB, sm_89, mempool enabled)
+   Kernel cache:
+     /home/patrickdurney/.cache/warp/1.17.0
+✅ CUDA driver reports 1 device(s).
+cuda_device_found = True
+Module DARCY_WARP_PACKAGE.warped_darcy 47c5a11 load on device 'cuda:0' took 4.90 ms  (cached)
+Module DARCY_WARP_PACKAGE.solvers.face_transient_f64 17e8286 load on device 'cuda:0' took 0.44 ms  (cached)
+Module DARCY_WARP_PACKAGE.solvers.face_kernels_f64 d3bd4f7 load on device 'cuda:0' took 0.59 ms  (cached)
+Module DARCY_WARP_PACKAGE.solvers.face_kernels_f64 8df6359 load on device 'cuda:0' took 0.62 ms  (cached)
+Module DARCY_WARP_PACKAGE.solvers.face_kernels_f64 0be4a34 load on device 'cuda:0' took 0.71 ms  (cached)
+Module DARCY_WARP_PACKAGE.solvers.face_kernels_f64 a2b79fa load on device 'cuda:0' took 0.81 ms  (cached)
+Module DARCY_WARP_PACKAGE.solvers.face_kernels_f64 e4e8a7e load on device 'cuda:0' took 1.28 ms  (cached)
+Module DARCY_WARP_PACKAGE.solvers.face_transient_f64 324b2af load on device 'cuda:0' took 0.60 ms  (cached)
+(320, 320) fast transient {'median': 1.1186198710056487, 'minimum': 1.1172327480016975, 'maximum': 1.121691042004386}
+Traceback (most recent call last):
+  File "/tmp/darcywarp-sfr-3d-boundaries/working_tests/qualify_package_2d.py", line 253, in <module>
+    qualify_transient(fields=fields, dx=dx, controls=controls, profiles=profiles, repeats=repeats,
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        unconfined=arguments.mode == 'picard', device=device, directory=output / label / arguments.mode)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/darcywarp-sfr-3d-boundaries/working_tests/qualify_package_2d.py", line 205, in qualify_transient
+    assert period['converged'] and period['implementation'] == 'fast_transient_face_f64', period
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {'converged': False, 'n_cycles_used': 200, 'r_rms_end': 2353.7135130293423, 'h_rms_end': 9.549502301611865, 'dh_rms_lastcheck': 60.17762419108098, 'dh_max_lastcheck': 26953.277614115486, 'tol_abs': 1.1357190219718736e-06, 'gpu_scalar_synchronization_count': 603, 'coarse_operator_mode': 'device_refreshed_dynamic_coarse_operator', 'fine_operator_residual_checked': True, 'implementation': 'fast_transient_face_f64', 'solver_type': 'kcycle', 'transient': True, 'storage_active': True, 'cuda_graph_built_this_call': True, 'cuda_graph_reused': False, 'cuda_graph_fallback': False, 'graph_count': 1, 'graph_fallback_count': 0, 'formulation': 'confined', 'solver_backend': 'confined_kcycle'}

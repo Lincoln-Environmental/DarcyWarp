@@ -395,11 +395,16 @@ def combine_well_depth_source(*, model, recharge):
     area = model.dx * model.dx
     if not np.isfinite(area) or area <= 0.:
         raise ValueError('WEL requires a positive representable cell area')
-    wells = well_cell_volume_rates(entries=entries, shape=(model.ny, model.nx), dtype=np.float64)
+    cells, net_rates, unused_gross_rates = sparse_well_cell_rates(
+        entries=entries, shape=(model.ny, model.nx))
+    combined = np.array(np.broadcast_to(rate, (model.ny, model.nx)), copy=True)
     with np.errstate(over='ignore', invalid='ignore'):
-        combined = rate + wells / (model.dx * model.dx)
-    if not np.all(np.isfinite(combined)):
+        changed = combined.ravel()[cells] + net_rates / area
+    if not np.all(np.isfinite(changed)):
         raise ValueError('Combined mixed recharge and WEL rates are not representable')
+    # Recharge remains caller-owned. Only WEL cells change, so a dense well
+    # scratch array and full-grid division/addition are unnecessary.
+    combined.ravel()[cells] = changed
     return combined
 
 

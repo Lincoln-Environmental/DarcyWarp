@@ -46,13 +46,15 @@ Exterior face arrays remain no-flow; they cannot encode a GHB.
 NPF requires `DARCY_FLOAT=float64` before import. Use Python 3.12 and Warp
 1.17.0 for the validated configuration. Convertible, layered and transient
 NPF use `implementation="fast"` and `solver="kcycle"` on the model. The
-default Krylov choice for those NPF solves is diagonal GMRES. Select
-`npf_preconditioner="kcycle"` for flexible GMRES with a K-cycle
-preconditioner, or `npf_krylov_method="fgmres"` for diagonal flexible GMRES.
+default Krylov choice for those NPF solves is K-cycle-preconditioned FGMRES.
+Explicit `npf_preconditioner="kcycle", npf_krylov_method="fgmres"` selects
+the same path. Diagonal GMRES remains an explicit reference selected with
+`npf_preconditioner="diagonal"`; pair it with `npf_krylov_method="fgmres"`
+only when diagonal FGMRES is specifically intended.
 `NPF662NewtonControls` and `NPF662KCycleControls` are package exports.
 See the [GPU implementation guide](3D_IMPLEMENTATIONS.rst) for the measured
 K-cycle configuration, Cartesian fast-path selection and timing conventions.
-Existing defaults remain unchanged.
+Physical acceptance thresholds are unchanged.
 Uniform confined steady NPF retains the direct Cartesian solver when Krylov
 controls are omitted.
 

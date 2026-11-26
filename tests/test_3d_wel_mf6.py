@@ -83,7 +83,8 @@ def _run_mf6_wel_case(*, workspace, nlay=1, transient=False, schedule=None, rech
 
 @pytest.mark.parametrize("device", DEVICES)
 @pytest.mark.parametrize("nlay", [1, 2])
-def test_confined_multilayer_wel_matches_mf6(tmp_path, device, nlay):
+@pytest.mark.parametrize("formulation", ["legacy", "mf6_6_6_2_npf"])
+def test_confined_multilayer_wel_matches_mf6(tmp_path, device, nlay, formulation):
     """Matched steady multilayer pumping agrees on heads and rates."""
     pytest.importorskip("flopy")
     require_mf6()
@@ -92,7 +93,7 @@ def test_confined_multilayer_wel_matches_mf6(tmp_path, device, nlay):
     shape = (nlay, 1, 3)
     entries = [((layer, 0, 1), -3.0 - layer) for layer in range(nlay)]
     with WarpDarcySolver3D(nx=3, ny=1, nz=nlay, dx=2.0, dy=3.0, dz=10.0,
-            device=device, implementation="fast", formulation="mf6_6_6_2_npf") as solver:
+            device=device, implementation="fast", formulation=formulation) as solver:
         anchored = np.zeros((nlay, 1, 3), dtype=np.int32)
         anchored[:, 0, 0] = 1
         anchored[:, 0, 2] = 1
@@ -100,7 +101,14 @@ def test_confined_multilayer_wel_matches_mf6(tmp_path, device, nlay):
             kz_field=np.full(shape, 1.0), active=np.ones(shape, dtype=np.int32),
             bc_mask=anchored, bc_values=np.where(anchored > 0, 8.0, 0.0),
             wel_entries=entries)
-        head, info = solver.solve(npf_roundoff_acceptance=True)
+        if formulation == "legacy":
+            head, info = solver.solve(rel_tol=1.e-12, abs_tol_min=1.e-12)
+            assert info["session_backend"] == "fast_3d"
+            assert "npf_preconditioner" not in info
+        else:
+            head, info = solver.solve(npf_roundoff_acceptance=True)
+            assert info["krylov_method"] == "FGMRES" and info["npf_preconditioner"] == "kcycle"
+            assert info["preconditioner_cycles"] > 0
     mf6_heads, mf6_rates = _run_mf6_wel_case(workspace=tmp_path, nlay=nlay)
     assert info["converged"]
     np.testing.assert_allclose(head, mf6_heads, rtol=0.0, atol=1e-9)

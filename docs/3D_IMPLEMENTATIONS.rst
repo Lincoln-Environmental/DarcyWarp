@@ -67,14 +67,15 @@ default MF6 6.6.2 storage/saturation law with backward Euler time integration.
 It does not use the legacy saturated-thickness floor. XT3D, VARIABLECV,
 PERCHED, rewetting and alternative STO options remain unsupported.
 
-Diagonal GMRES remains the public default for layered, convertible and
-transient NPF. Select it with ``npf_preconditioner="diagonal"``. Diagonal
+K-cycle-preconditioned FGMRES is the public default for layered, convertible
+and transient NPF. Diagonal GMRES remains an explicit reference selected with ``npf_preconditioner="diagonal"``. Diagonal
 FGMRES is a diagnostic control selected with
 ``npf_preconditioner="diagonal", npf_krylov_method="fgmres"``; it is not the
 recommended performance choice on the retained large models. Ordinary
 GMRES with K-cycle preconditioning is rejected. Uniform confined steady
 NPF retains its direct Cartesian dispatch when Krylov controls are omitted.
-No default or physical acceptance threshold is changed by this qualification.
+The default preconditioner/Krylov selection changed during the WEL/DRN/RIV
+audit repair. Physical acceptance thresholds are unchanged.
 
 For an explicit tolerance experiment, pass
 ``npf_final_relative_tolerance=1e-7`` to ``model.solve()`` or use the runner's

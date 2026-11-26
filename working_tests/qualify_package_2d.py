@@ -55,7 +55,7 @@ def capture_info(*, info, elapsed):
     :return: Compact JSON-safe diagnostics.
     """
     keys = ('converged', 'solver_backend', 'implementation', 'production_precision_path',
-        'n_cycles_used', 'outer_iterations', 'cuda_graph_built_this_call', 'cuda_graph_reused',
+        'n_cycles_used', 'outer_iterations', 'cuda_graph_captures', 'cuda_graph_replays', 'cuda_graph_built_this_call', 'cuda_graph_reused',
         'graph_count', 'graph_fallback_count', 'device_side_picard_fast_path_active',
         'transient_face_graphs', 'transient_face_kcycle_graph_count', 'transient_face_refresh_graph_count',
         'seconds', 'residual_norm', 'head_residual_rms', 'physical_period_balance',
@@ -90,6 +90,7 @@ def run_confined(*, model, fields, initial, options, mixed, config):
     else:
         head, info = model.solve(implementation='fast', initial_head=initial, **options)
         assert info['solver_backend'] == 'confined_kcycle' and info['implementation'] == 'fast' and info['converged'], info
+        assert not info.get('fallback_from'), info
         assert info['cuda_graph_built_this_call'] or info['cuda_graph_reused'], info
     return head, info
 
@@ -110,7 +111,7 @@ def qualify_steady(*, fields, dx, controls, profiles, mixed, repeats, source_con
     """
     from DARCY_WARP_PACKAGE.solvers.mixed_fast import MixedFastConfig
     from qualify_package_kcycle import summary
-    config = MixedFastConfig()
+    config = MixedFastConfig(smoother=controls['mixed_smoother'])
     initial = np.full(fields['active'].shape, controls['initial_head'])
     directory.mkdir(parents=True, exist_ok=True)
     started = perf_counter()
@@ -233,10 +234,11 @@ if __name__ == "__main__":
     profiles = read_profiles(root=root)
     from DARCY_WARP_PACKAGE.solvers.mixed_fast import MixedFastConfig
     spectrum = MixedFastConfig()
-    profiles['steady']['fast'].update(cheby_lambda_min=spectrum.cheby_lambda_min, cheby_lambda_max=spectrum.cheby_lambda_max)
+    profiles['steady']['fast'].update(cheby_lambda_min=spectrum.cheby_lambda_min, cheby_lambda_max=spectrum.cheby_lambda_max, smoother='jacobi', fallback_to_pcg=False)
     profiles['transient'] = dict(profiles['steady']['fast'])
+    profiles['transient'].pop('fallback_to_pcg')
     controls = json.loads((root / 'working_tests/wel_regional_qualification_controls.json').read_text())
-    controls.update(runtime_2d=json.loads((root / 'working_tests/2d_transient_runtime_controls.json').read_text())['runtime']['solve_controls'],
+    controls.update(mixed_smoother='jacobi', runtime_2d=json.loads((root / 'working_tests/2d_transient_runtime_controls.json').read_text())['runtime']['solve_controls'],
         confined_thickness=10., unconfined_top=100., unconfined_sy=.15)
     shapes = {'100k': (320, 320), '1M': (1000, 1000)}
     repeats = 3

@@ -447,6 +447,8 @@ class MixedPrecisionFastSession(MixedPrecisionDefectCorrectionSession):
         # by the solve-control values that affect the launch sequence.
         self._correction_graph = None
         self._correction_graph_key = None
+        self.graph_captures = 0
+        self.graph_replays = 0
         # Hierarchy identity + operator generation at construction time; a
         # rebuilt hierarchy (different level objects) or an in-place
         # T/GHB update invalidates the cached face arrays.
@@ -546,10 +548,13 @@ class MixedPrecisionFastSession(MixedPrecisionDefectCorrectionSession):
         detected and refreshed automatically before solving.
         """
         self._ensure_operator_current()
+        captures_before, replays_before = self.graph_captures, self.graph_replays
         head, info = super().solve(initial_head_f64, **controls)
         production_info = dict(info)
         production_info["experimental"] = False
         production_info["production_precision_path"] = True
+        production_info["cuda_graph_captures"] = self.graph_captures - captures_before
+        production_info["cuda_graph_replays"] = self.graph_replays - replays_before
         from DARCY_WARP_PACKAGE.physics.wel import attach_accepted_well_state
         attach_accepted_well_state(model=self.model, head=head, info=production_info,
             dt=None, recharge_field=self._recharge_input_f64)
@@ -598,8 +603,6 @@ class MixedPrecisionFastSession(MixedPrecisionDefectCorrectionSession):
         from .mixed_precision import _mp_cast_r64_to_r32_kernel
 
         model = self.model
-        from DARCY_WARP_PACKAGE.physics.wel import combine_well_depth_source
-        self._R_f64_host = combine_well_depth_source(model=model, recharge=self._recharge_input_f64)
         wp.launch(
             kernel=_mp_cast_r64_to_r32_kernel,
             dim=(self.ny, self.nx),
@@ -631,6 +634,7 @@ class MixedPrecisionFastSession(MixedPrecisionDefectCorrectionSession):
         try:
             if self._correction_graph is not None and self._correction_graph_key == key:
                 wp.capture_launch(self._correction_graph)
+                self.graph_replays += 1
                 return
             # Capture once (launches do not execute during capture), restore
             # the level-0 wiring, then replay so this outer step still does
@@ -638,6 +642,7 @@ class MixedPrecisionFastSession(MixedPrecisionDefectCorrectionSession):
             with wp.ScopedCapture(device=self.device) as cap:
                 self._launch_correction_block(solve_controls)
             self._correction_graph = cap.graph
+            self.graph_captures += int(cap.graph is not None)
             self._correction_graph_key = key
         finally:
             (
@@ -649,6 +654,7 @@ class MixedPrecisionFastSession(MixedPrecisionDefectCorrectionSession):
             # already executed eagerly inside the capture context.
             return
         wp.capture_launch(self._correction_graph)
+        self.graph_replays += 1
 
     def _true_residual(self) -> float:
         f0 = self.face0_f64

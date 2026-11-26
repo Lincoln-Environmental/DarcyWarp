@@ -1,0 +1,37 @@
+Warp 1.17.0 initialized:
+   CUDA Toolkit 12.9, Driver 13.2
+   Devices:
+     "cpu"      : "x86_64"
+     "cuda:0"   : "NVIDIA GeForce RTX 4070 Ti SUPER" (16 GiB, sm_89, mempool enabled)
+   Kernel cache:
+     /home/patrickdurney/.cache/warp/1.17.0
+✅ CUDA driver reports 1 device(s).
+cuda_device_found = True
+Module DARCY_WARP_PACKAGE.warped_darcy 1373438 load on device 'cuda:0' took 4.65 ms  (cached)
+Module DARCY_WARP_PACKAGE.solvers.mixed_fast_kernels 120c681 load on device 'cuda:0' took 0.56 ms  (cached)
+Module DARCY_WARP_PACKAGE.solvers.face_kernels_f64 983c464 load on device 'cuda:0' took 0.63 ms  (cached)
+Module DARCY_WARP_PACKAGE.solvers.mixed_fast_kernels 91ae7e5 load on device 'cuda:0' took 0.56 ms  (cached)
+Module DARCY_WARP_PACKAGE.solvers.mixed_precision 283dc4e load on device 'cuda:0' took 0.32 ms  (cached)
+Module DARCY_WARP_PACKAGE.solvers.mixed_fast_kernels 326739b load on device 'cuda:0' took 0.76 ms  (cached)
+Module DARCY_WARP_PACKAGE.solvers.mixed_fast_kernels e892bc4 load on device 'cuda:0' took 0.89 ms  (cached)
+Module DARCY_WARP_PACKAGE.solvers.mixed_fast_kernels a68f16f load on device 'cuda:0' took 0.98 ms  (cached)
+Module DARCY_WARP_PACKAGE.solvers.mixed_fast_kernels a6b5289 load on device 'cuda:0' took 1.12 ms  (cached)
+(320, 320) mixed True {'median': 0.036893811004119925, 'minimum': 0.035723569002584554, 'maximum': 0.03747338100220077}
+(320, 320) mixed False {'median': 0.03678411999135278, 'minimum': 0.03672868700232357, 'maximum': 0.036981621000450104}
+Traceback (most recent call last):
+  File "/tmp/darcywarp-sfr-3d-boundaries/working_tests/qualify_package_2d.py", line 249, in <module>
+    qualify_steady(fields=fields, dx=dx, controls=controls, profiles=profiles,
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        mixed=arguments.mode == 'mixed', repeats=repeats, source_control=source_control,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        device=device, directory=output / label / arguments.mode / ('source_control' if source_control else 'wel'))
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/darcywarp-sfr-3d-boundaries/working_tests/qualify_package_2d.py", line 123, in qualify_steady
+    head, info = run_confined(model=model, fields=fields, initial=initial,
+                 ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        options=profiles['steady']['fast'], mixed=mixed, config=config)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/darcywarp-sfr-3d-boundaries/working_tests/qualify_package_2d.py", line 88, in run_confined
+    assert info['production_precision_path'] and info['converged'], info
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {'precision_mode': 'mixed_defect_correction', 'experimental': False, 'converged': False, 'outer_iterations': 40, 'inner_kcycles_per_outer': 5, 'total_kcycles': 200, 'r_rms0_64': 2.2714380439437667, 'r_rms_end_64': 391.25942128196357, 'dh_max_last': 2027.968505859375, 'dh_rms_last': 5.3614904560359165, 'tol_abs': 1.1357190219718833e-06, 'history': [{'outer': 0, 'r_rms64': 2.2714380439437667, 'dh_max': None, 'dh_rms': None}, {'outer': 1, 'r_rms64': 1.4153980687176264, 'dh_max': 171.93238830566406, 'dh_rms': 122.4729111525987}, {'outer': 2, 'r_rms64': 1.1850589059124752, 'dh_max': 35.6435661315918, 'dh_rms': 24.892192225078087}, {'outer': 3, 'r_rms64': 2.2310629738132906, 'dh_max': 12.263603210449219, 'dh_rms': 4.204940274221655}, {'outer': 4, 'r_rms64': 2.714097574201503, 'dh_max': 12.805102348327637, 'dh_rms': 1.3904831163932692}, {'outer': 5, 'r_rms64': 3.1514712872980453, 'dh_max': 16.647987365722656, 'dh_rms': 0.5678559917312065}, {'outer': 6, 'r_rms64': 3.6288315061531837, 'dh_max': 18.608470916748047, 'dh_rms': 0.2581212804917249}, {'outer': 7, 'r_rms64': 4.169351212412828, 'dh_max': 21.684724807739258, 'dh_rms': 0.11907023905591736}, {'outer': 8, 'r_rms64': 4.786434302353433, 'dh_max': 24.775943756103516, 'dh_rms': 0.07684634578903073}, {'outer': 9, 'r_rms64': 5.493591637867319, 'dh_max': 28.495525360107422, 'dh_rms': 0.08028460434616855}, {'outer': 10, 'r_rms64': 6.304671633614175, 'dh_max': 32.66269302368164, 'dh_rms': 0.0886882532890482}, {'outer': 11, 'r_rms64': 7.235170620662017, 'dh_max': 37.51451110839844, 'dh_rms': 0.10079710977105308}, {'outer': 12, 'r_rms64': 8.30280018870402, 'dh_max': 43.02381896972656, 'dh_rms': 0.11472327658185509}, {'outer': 13, 'r_rms64': 9.527830017304453, 'dh_max': 49.394691467285156, 'dh_rms': 0.13137533471309096}, {'outer': 14, 'r_rms64': 10.933508878711283, 'dh_max': 56.66142654418945, 'dh_rms': 0.15030100362497065}, {'outer': 15, 'r_rms64': 12.546488427355907, 'dh_max': 65.03926086425781, 'dh_rms': 0.17239393829889146}, {'outer': 16, 'r_rms64': 14.39737354882141, 'dh_max': 74.61663818359375, 'dh_rms': 0.19754443809590513}, {'outer': 17, 'r_rms64': 16.521237327536635, 'dh_max': 85.63997650146484, 'dh_rms': 0.22668257688429588}, {'outer': 18, 'r_rms64': 18.958395030109543, 'dh_max': 98.25823974609375, 'dh_rms': 0.25992565292742487}, {'outer': 19, 'r_rms64': 21.75506474180823, 'dh_max': 112.76692962646484, 'dh_rms': 0.2983010116126455}, {'outer': 20, 'r_rms64': 24.964249368107538, 'dh_max': 129.38848876953125, 'dh_rms': 0.3421576076324866}, {'outer': 21, 'r_rms64': 28.646785922475694, 'dh_max': 148.48736572265625, 'dh_rms': 0.3926788585527475}, {'outer': 22, 'r_rms64': 32.872572191202075, 'dh_max': 170.37948608398438, 'dh_rms': 0.4504882881817864}, {'outer': 23, 'r_rms64': 37.72169389471144, 'dh_max': 195.52365112304688, 'dh_rms': 0.5169959298154881}, {'outer': 24, 'r_rms64': 43.286129719578554, 'dh_max': 224.35545349121094, 'dh_rms': 0.5931651593655689}, {'outer': 25, 'r_rms64': 49.671324308790425, 'dh_max': 257.4604187011719, 'dh_rms': 0.6807203410435348}, {'outer': 26, 'r_rms64': 56.99853306250721, 'dh_max': 295.4298400878906, 'dh_rms': 0.7810563862577095}, {'outer': 27, 'r_rms64': 65.40651181751683, 'dh_max': 339.0184326171875, 'dh_rms': 0.896327147877671}, {'outer': 28, 'r_rms64': 75.05475275894307, 'dh_max': 389.01934814453125, 'dh_rms': 1.0284788494249195}, {'outer': 29, 'r_rms64': 86.12617512461574, 'dh_max': 446.411865234375, 'dh_rms': 1.180242106445609}, {'outer': 30, 'r_rms64': 98.83089471241334, 'dh_max': 512.2555541992188, 'dh_rms': 1.3542839231963586}, {'outer': 31, 'r_rms64': 113.40976512195589, 'dh_max': 587.8270874023438, 'dh_rms': 1.5541062131669021}, {'outer': 32, 'r_rms64': 130.139095587582, 'dh_max': 674.5324096679688, 'dh_rms': 1.7833057051637913}, {'outer': 33, 'r_rms64': 149.33623528436775, 'dh_max': 774.04052734375, 'dh_rms': 2.046408830268574}, {'outer': 34, 'r_rms64': 171.3648935102507, 'dh_max': 888.2147827148438, 'dh_rms': 2.3482337180898765}, {'outer': 35, 'r_rms64': 196.6430580320221, 'dh_max': 1019.2418212890625, 'dh_rms': 2.694663589795821}, {'outer': 36, 'r_rms64': 225.65011631380716, 'dh_max': 1169.585693359375, 'dh_rms': 3.092116141901337}, {'outer': 37, 'r_rms64': 258.9362785794434, 'dh_max': 1342.118408203125, 'dh_rms': 3.5482755781556197}, {'outer': 38, 'r_rms64': 297.13239612914185, 'dh_max': 1540.091796875, 'dh_rms': 4.071651969685691}, {'outer': 39, 'r_rms64': 340.96286329878836, 'dh_max': 1767.2772216796875, 'dh_rms': 4.672299171391009}, {'outer': 40, 'r_rms64': 391.25942128196357, 'dh_max': 2027.968505859375, 'dh_rms': 5.3614904560359165}], 'production_precision_path': True}

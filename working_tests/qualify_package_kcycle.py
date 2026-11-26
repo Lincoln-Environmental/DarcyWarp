@@ -22,6 +22,7 @@ def regional_fields(*, shape, abstraction_fraction, packages, seed, regional_con
     :param abstraction_fraction: Net abstraction divided by actual recharge.
     :param packages: Enable sparse DRN/RIV/GHB.
     :param seed: Existing field generator seed.
+    :param regional_controls: Explicit physical stages, conductances and datum.
     :return: Builder fields, retaining physical geometry.
     """
     from regional_package_fields import heterogeneous_fields
@@ -38,6 +39,7 @@ def regional_fields(*, shape, abstraction_fraction, packages, seed, regional_con
             drains.extend([(cell, conductance * regional_controls['drain_first_fraction'], elevation), (cell, conductance * (1. - regional_controls['drain_first_fraction']), elevation + regional_controls['drain_second_offset'])])
         rivers = []
         for index, (cell, conductance, stage, bottom) in enumerate(fields['riv_entries']):
+            bottom = regional_controls.get('riverbed_bottom_override', bottom)
             stage = regional_controls['river_middle_stage'] + regional_controls['river_stage_amplitude'] * (1. if index % 2 else -1.)
             rivers.extend([(cell, conductance * regional_controls['river_first_fraction'], stage, bottom),
                            (cell, conductance * (1. - regional_controls['river_first_fraction']), stage + regional_controls['river_second_stage_offset'], bottom + regional_controls['river_second_bottom_offset'])])
@@ -50,6 +52,21 @@ def regional_fields(*, shape, abstraction_fraction, packages, seed, regional_con
     fields['initial_head'] = np.full(shape, regional_controls['initial_head'])
     fields['top_elevation'] = regional_controls['top_elevation']
     return fields
+
+
+def boundary_controls(*, controls, variant):
+    """Own explicit stages for the separate gaining/losing river comparison.
+
+    :param controls: Baseline physical controls.
+    :param variant: Baseline or gaining_losing boundary workload.
+    :return: Physical control mapping for this exact numerical/native twin.
+    """
+    selected = dict(controls)
+    if variant == 'gaining_losing':
+        selected.update(river_middle_stage=controls['contrasting_river_middle_stage'],
+            river_second_stage_offset=controls['contrasting_river_second_stage_offset'],
+            riverbed_bottom_override=controls['contrasting_river_bottom'])
+    return selected
 
 
 def build_model(*, fields, device, formulation, raw_control):
@@ -77,7 +94,7 @@ def build_model(*, fields, device, formulation, raw_control):
     return model
 
 
-def options_for(*, saved, state, precision, preconditioner, graphs, line_smoother, levels, restart=None):
+def options_for(*, saved, state, precision, preconditioner, graphs, line_smoother, levels, restart=None, optimized=None, cached_lines=None, inner_forcing=None):
     """Use saved qualified controls with explicit diagnostic choices.
 
     :param saved: Existing qualification JSON.
@@ -87,6 +104,10 @@ def options_for(*, saved, state, precision, preconditioner, graphs, line_smoothe
     :param graphs: Enable qualified graph/tiled execution.
     :param line_smoother: Existing line smoother.
     :param levels: Existing coarsening depth.
+    :param restart: Optional explicitly measured Krylov restart override.
+    :param optimized: Enable tiled reductions and trial-state reuse independently.
+    :param cached_lines: Override cached vertical line factors when comparing FP64.
+    :param inner_forcing: Optional existing qualified forcing control.
     :return: Explicit public NPF solve options.
     """
     from DARCY_WARP_PACKAGE.solvers.npf662_kcycle import NPF662KCycleControls
@@ -96,11 +117,16 @@ def options_for(*, saved, state, precision, preconditioner, graphs, line_smoothe
     options.update(npf_preconditioner=preconditioner, npf_krylov_method='fgmres')
     if restart is not None:
         options['krylov_restart'] = restart
-    nonlinear = dict(saved['newton'], tiled_reductions=graphs, reuse_trial_state=graphs)
+    native_optimized = graphs if optimized is None else optimized
+    nonlinear = dict(saved['newton'], tiled_reductions=native_optimized, reuse_trial_state=native_optimized)
+    if inner_forcing is not None:
+        nonlinear['inner_forcing'] = inner_forcing
     options['npf_newton_controls'] = NPF662NewtonControls(**nonlinear)
     if preconditioner == 'kcycle':
         controls = dict(saved['multigrid'], coefficient_state=state, preconditioner_precision=precision,
             use_cuda_graph=graphs, line_smoother=line_smoother, levels=levels)
+        if cached_lines is not None:
+            controls['cached_line_factors'] = cached_lines
         options['npf_kcycle_controls'] = NPF662KCycleControls(**controls)
     return options
 
@@ -170,6 +196,7 @@ def qualify_case(*, fields, configuration, repeats, saved, direct_controls, outp
     :param output: Per-case evidence directory.
     :param device: CUDA device.
     :param raw_control: Use equivalent raw WEL rates.
+    :param regional_controls: Independent source update schedules and head gate.
     :return: Qualification evidence.
     """
     output.mkdir(parents=True, exist_ok=True)
@@ -230,7 +257,9 @@ def qualify_case(*, fields, configuration, repeats, saved, direct_controls, outp
         extraction = perf_counter() - started
         arrays = {f'{name}_{index}': value for index, snapshot in enumerate(snapshots) for name, value in snapshot.items()}
         np.savez_compressed(output / 'accepted_heads.npz', **arrays)
-        result = dict(configuration=configuration, shape=list(model.shape), construction_seconds=construction,
+        if fields['riv_entries'] is not None and fields['riv_entries'][0][2] < regional_controls['contrasting_river_middle_stage'] + regional_controls['river_stage_amplitude']:
+            assert cold['riv_budget']['inflow'] > 0. and cold['riv_budget']['outflow'] > 0., cold
+        result = dict(commit=subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(), configuration=configuration, shape=list(model.shape), construction_seconds=construction,
             cold=cold, identical_initial=identical, identical_summary=summary(rows=identical),
             warm_start_calibration=calibration, calibration_summary=summary(rows=calibration),
             source_updates=update_costs, accepted_output_extraction_seconds=extraction,
@@ -250,9 +279,12 @@ def run_matrix(*, grids, configurations, variants, repeats, saved, direct_contro
         stored = json.loads(previous.read_text())
         if stored['commit'] == report['commit']:
             report = stored
+        else:
+            previous.rename(output / f"qualification_{stored['commit'][:8]}.json")
     for label, shape in grids.items():
         for variant, packages, raw in variants:
-            fields = regional_fields(shape=shape, abstraction_fraction=abstraction_fraction, packages=packages, seed=seed, regional_controls=regional_controls)
+            physical_controls = boundary_controls(controls=regional_controls, variant=variant)
+            fields = regional_fields(shape=shape, abstraction_fraction=abstraction_fraction, packages=packages, seed=seed, regional_controls=physical_controls)
             for configuration in configurations:
                 if configuration['name'].startswith('cartesian_') and packages:
                     continue
@@ -356,7 +388,7 @@ if __name__ == "__main__":
     parser.add_argument('--grid', choices=('100k', '1M', 'all'), default='all')
     parser.add_argument('--mode', choices=('steady', 'history', 'all'), default='all')
     parser.add_argument('--configuration', default='fast')
-    parser.add_argument('--variant', choices=('all', 'raw_control', 'wel_only', 'packages'), default='all')
+    parser.add_argument('--variant', choices=('all', 'raw_control', 'wel_only', 'packages', 'gaining_losing'), default='all')
     arguments = parser.parse_args()
     grids = {'100k': (10, 112, 90), '1M': (5, 450, 450)}
     grids = {name: shape for name, shape in grids.items() if arguments.grid in ('all', name)}
@@ -366,7 +398,17 @@ if __name__ == "__main__":
         dict(name='qualified_current_fp32', state='current', precision='float32', preconditioner='kcycle', graphs=True, line_smoother='jacobi', levels=5),
         dict(name='diagonal_restart48', restart=48, state='current', precision='float64', preconditioner='diagonal', graphs=True, line_smoother='jacobi', levels=5),
         dict(name='diagonal_fgmres', state='current', precision='float64', preconditioner='diagonal', graphs=True, line_smoother='jacobi', levels=5)]
-    variants = [('raw_control', False, True), ('wel_only', False, False), ('packages', True, False)]
+    alternatives = [
+        dict(name='saturated_fp32', state='saturated', precision='float32', preconditioner='kcycle', graphs=True, line_smoother='jacobi', levels=5),
+        dict(name='current_fp32_red_black', state='current', precision='float32', preconditioner='kcycle', graphs=True, line_smoother='red_black', levels=5),
+        dict(name='current_fp32_three_levels', state='current', precision='float32', preconditioner='kcycle', graphs=True, line_smoother='jacobi', levels=3),
+        dict(name='current_fp32_eager', state='current', precision='float32', preconditioner='kcycle', graphs=False, optimized=False, line_smoother='jacobi', levels=5),
+        dict(name='current_fp32_mg_eager', state='current', precision='float32', preconditioner='kcycle', graphs=False, optimized=True, line_smoother='jacobi', levels=5),
+        dict(name='current_fp64_uncached', state='current', precision='float64', preconditioner='kcycle', graphs=True, line_smoother='jacobi', levels=5, cached_lines=False)]
+    fast_names = {item['name'] for item in configurations if not item['name'].startswith('diagonal') and item['name'] != 'cartesian_fast'}
+    configurations += alternatives
+    alternative_names = {item['name'] for item in alternatives}
+    variants = [('raw_control', False, True), ('wel_only', False, False), ('packages', True, False), ('gaining_losing', True, False)]
     variants = [item for item in variants if arguments.variant in ('all', item[0])]
     repeats = 3
     output = root / 'benchmark_results/package_audit_repair/production_3d'
@@ -375,7 +417,9 @@ if __name__ == "__main__":
     abstraction_fraction = regional_controls['abstraction_fraction']
     seed = regional_controls['seed']
     wp.init()
-    configurations = [item for item in configurations if arguments.configuration in ('all', item['name']) or (arguments.configuration == 'fast' and not item['name'].startswith('diagonal') and item['name'] != 'cartesian_fast')]
+    configurations = [item for item in configurations if (arguments.configuration == 'all' and not item['name'].startswith('diagonal') and item['name'] != 'cartesian_fast') or arguments.configuration == item['name'] or (arguments.configuration == 'fast' and item['name'] in fast_names) or (arguments.configuration == 'alternatives' and item['name'] in alternative_names)]
+    if not configurations:
+        raise ValueError('Unknown or empty numerical configuration selection')
     if arguments.mode in ('steady', 'all'):
         run_matrix(grids=grids, configurations=configurations, variants=variants, repeats=repeats,
         saved=saved, direct_controls=direct_controls, output=output, device=device,

@@ -73,7 +73,9 @@ def _run_mf6_2d_wel(*, workspace, wells, recharge=0.0):
 
 
 @pytest.mark.parametrize("device", DEVICES)
-def test_2d_confined_wel_matches_mf6(tmp_path, device):
+@pytest.mark.parametrize("backend,implementation", [("confined_pcg", "classic"),
+    ("confined_kcycle", "classic"), ("confined_kcycle", "fast")])
+def test_2d_confined_wel_matches_mf6(tmp_path, device, backend, implementation):
     """Matched confined pumping agrees with MF6 on the same grid."""
     pytest.importorskip("flopy")
     require_mf6()
@@ -89,8 +91,17 @@ def test_2d_confined_wel_matches_mf6(tmp_path, device):
         active=active, bc_mask=bc_mask, bc_values=np.full((ny, nx), 12.0),
         wel_entries=[((2, 3), -400.0), ((1, 4), -250.0)])
     try:
-        head, info = solver.solve()
+        options = dict(initial_head=np.full((ny, nx), 12.), rel_tol=1.e-12, abs_tol_min=1.e-12)
+        if backend == "confined_kcycle":
+            options.update(implementation=implementation, max_cycles=200, min_coarse_cells=2,
+                check_every_no=1, nu_coarse=10, smoother="jacobi", fallback_to_pcg=False)
+        head, info = solver.solve(solver=backend, **options)
         assert info["converged"]
+        assert info["solver_backend"] == backend
+        if implementation == "fast":
+            assert info["implementation"] == "fast"
+            if device.startswith("cuda"):
+                assert info["cuda_graph_built_this_call"] or info["cuda_graph_reused"]
         mf6_heads = _run_mf6_2d_wel(workspace=tmp_path, wells=wells)
         # The 2D confined PCG solve closes at its documented head tolerance;
         # agreement at this grid sits near 1e-7 m.
@@ -101,7 +112,9 @@ def test_2d_confined_wel_matches_mf6(tmp_path, device):
 
 
 @pytest.mark.parametrize("device", DEVICES)
-def test_2d_recharge_with_wel_matches_mf6(tmp_path, device):
+@pytest.mark.parametrize("backend,implementation", [("confined_pcg", "classic"),
+    ("confined_kcycle", "classic"), ("confined_kcycle", "fast")])
+def test_2d_recharge_with_wel_matches_mf6(tmp_path, device, backend, implementation):
     """Combined recharge and pumping agree with MF6 including budgets."""
     pytest.importorskip("flopy")
     require_mf6()
@@ -117,8 +130,17 @@ def test_2d_recharge_with_wel_matches_mf6(tmp_path, device):
         active=active, bc_mask=bc_mask, bc_values=np.full((ny, nx), 12.0),
         wel_entries=[((3, 2), -900.0)])
     try:
-        head, info = solver.solve()
+        options = dict(initial_head=np.full((ny, nx), 12.), rel_tol=1.e-12, abs_tol_min=1.e-12)
+        if backend == "confined_kcycle":
+            options.update(implementation=implementation, max_cycles=200, min_coarse_cells=2,
+                check_every_no=1, nu_coarse=10, smoother="jacobi", fallback_to_pcg=False)
+        head, info = solver.solve(solver=backend, **options)
         assert info["converged"]
+        assert info["solver_backend"] == backend
+        if implementation == "fast":
+            assert info["implementation"] == "fast"
+            if device.startswith("cuda"):
+                assert info["cuda_graph_built_this_call"] or info["cuda_graph_reused"]
         mf6_heads = _run_mf6_2d_wel(workspace=tmp_path, wells=wells, recharge=5e-4)
         np.testing.assert_allclose(head, mf6_heads[0], rtol=0.0, atol=1e-6)
         assert solver.wel_budget()["outflow"] == pytest.approx(900.0)

@@ -48,6 +48,7 @@ def run_mixed_case(*, device, shape, dx, transmissivity, fixed_head, well_rates,
                 bc_values_f64=values, gh_head_f64=None, R_f64=pure_recharge,
                 config=MixedFastConfig(**mixed_controls))
             assert info['converged'] and info['production_precision_path'], info
+            assert info['cuda_graph_replays'] > 0, info
             source = pure_recharge * dx * dx
             source[cell] += well
             expected = independent_heads(shape=shape, transmissivity=transmissivity,
