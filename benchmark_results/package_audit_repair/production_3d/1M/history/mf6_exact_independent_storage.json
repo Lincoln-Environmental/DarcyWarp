@@ -1,0 +1,146 @@
+{
+  "periods": [
+    {
+      "index": 0,
+      "maximum_rate_error_m3_day": 1.1657341758564144e-13,
+      "net_volume_error_m3": 3.1763796368329544e-08,
+      "accepted_accumulation_m3": -1619931.9966178806,
+      "native_accumulation_m3": -1619931.996617912
+    },
+    {
+      "index": 1,
+      "maximum_rate_error_m3_day": 2.079601681831411e-12,
+      "net_volume_error_m3": 2.3053951622767604e-08,
+      "accepted_accumulation_m3": -87633.9377355949,
+      "native_accumulation_m3": -87633.93773561795
+    },
+    {
+      "index": 2,
+      "maximum_rate_error_m3_day": 1.9569771150806936e-12,
+      "net_volume_error_m3": 3.5929560940244965e-07,
+      "accepted_accumulation_m3": -20469.198443417386,
+      "native_accumulation_m3": -20469.19844377668
+    },
+    {
+      "index": 3,
+      "maximum_rate_error_m3_day": 5.629655379021936e-12,
+      "net_volume_error_m3": -3.4310989741531545e-07,
+      "accepted_accumulation_m3": 5590.408664775914,
+      "native_accumulation_m3": 5590.408665119023
+    },
+    {
+      "index": 4,
+      "maximum_rate_error_m3_day": 6.602732331153702e-12,
+      "net_volume_error_m3": 4.706962828475052e-07,
+      "accepted_accumulation_m3": 443.7624782315165,
+      "native_accumulation_m3": 443.7624777608203
+    },
+    {
+      "index": 5,
+      "maximum_rate_error_m3_day": 1.3717352991340914e-11,
+      "net_volume_error_m3": -3.1245677447239544e-07,
+      "accepted_accumulation_m3": 7098.616679043025,
+      "native_accumulation_m3": 7098.616679355483
+    },
+    {
+      "index": 6,
+      "maximum_rate_error_m3_day": 1.3402255867600577e-11,
+      "net_volume_error_m3": 1.2956343223691333e-07,
+      "accepted_accumulation_m3": -13746.045834329305,
+      "native_accumulation_m3": -13746.04583445887
+    },
+    {
+      "index": 7,
+      "maximum_rate_error_m3_day": 6.1375242995515e-12,
+      "net_volume_error_m3": -1.3171004047816512e-06,
+      "accepted_accumulation_m3": 6152.566282314423,
+      "native_accumulation_m3": 6152.566283631524
+    },
+    {
+      "index": 8,
+      "maximum_rate_error_m3_day": 6.7622961131543965e-12,
+      "net_volume_error_m3": 3.4971042582415536e-08,
+      "accepted_accumulation_m3": 490.5497728814497,
+      "native_accumulation_m3": 490.54977284647873
+    },
+    {
+      "index": 9,
+      "maximum_rate_error_m3_day": 1.3491585019315133e-11,
+      "net_volume_error_m3": 6.15972392892657e-07,
+      "accepted_accumulation_m3": 7102.570805770954,
+      "native_accumulation_m3": 7102.570805154984
+    },
+    {
+      "index": 10,
+      "maximum_rate_error_m3_day": 1.3441984938328266e-11,
+      "net_volume_error_m3": 1.5735080129393664e-07,
+      "accepted_accumulation_m3": -13745.718631977088,
+      "native_accumulation_m3": -13745.718632134442
+    },
+    {
+      "index": 11,
+      "maximum_rate_error_m3_day": 6.7838408501774694e-12,
+      "net_volume_error_m3": 5.667644808997278e-07,
+      "accepted_accumulation_m3": 6152.595301759001,
+      "native_accumulation_m3": 6152.595301192236
+    },
+    {
+      "index": 12,
+      "maximum_rate_error_m3_day": 6.813033305379766e-12,
+      "net_volume_error_m3": -7.74158474119537e-07,
+      "accepted_accumulation_m3": 490.55228581855937,
+      "native_accumulation_m3": 490.55228659271785
+    },
+    {
+      "index": 13,
+      "maximum_rate_error_m3_day": 1.3624220458405278e-11,
+      "net_volume_error_m3": 6.29279441296478e-07,
+      "accepted_accumulation_m3": 7102.571024097268,
+      "native_accumulation_m3": 7102.571023467987
+    },
+    {
+      "index": 14,
+      "maximum_rate_error_m3_day": 1.3444050993988155e-11,
+      "net_volume_error_m3": -4.7018130841236923e-07,
+      "accepted_accumulation_m3": -13745.718613496925,
+      "native_accumulation_m3": -13745.718613026746
+    },
+    {
+      "index": 15,
+      "maximum_rate_error_m3_day": 6.482543451688527e-12,
+      "net_volume_error_m3": -1.0941554506600009e-07,
+      "accepted_accumulation_m3": 6152.595303421571,
+      "native_accumulation_m3": 6152.595303530987
+    },
+    {
+      "index": 16,
+      "maximum_rate_error_m3_day": 6.587636469310154e-12,
+      "net_volume_error_m3": -2.0126112920516764e-07,
+      "accepted_accumulation_m3": 490.5522859641364,
+      "native_accumulation_m3": 490.5522861653974
+    },
+    {
+      "index": 17,
+      "maximum_rate_error_m3_day": 1.3676426310893497e-11,
+      "net_volume_error_m3": 1.38972424479364e-06,
+      "accepted_accumulation_m3": 7102.571024110022,
+      "native_accumulation_m3": 7102.571022720299
+    },
+    {
+      "index": 18,
+      "maximum_rate_error_m3_day": 1.3806273398836444e-11,
+      "net_volume_error_m3": -9.785265927491252e-07,
+      "accepted_accumulation_m3": -13745.718613495837,
+      "native_accumulation_m3": -13745.71861251731
+    },
+    {
+      "index": 19,
+      "maximum_rate_error_m3_day": 6.590799520728163e-12,
+      "net_volume_error_m3": 6.725462683657095e-08,
+      "accepted_accumulation_m3": 6152.595303421669,
+      "native_accumulation_m3": 6152.595303354414
+    }
+  ],
+  "maximum_rate_error_m3_day": 1.3806273398836444e-11,
+  "total_accumulation_error_m3": -3.0520023148169795e-08
+}

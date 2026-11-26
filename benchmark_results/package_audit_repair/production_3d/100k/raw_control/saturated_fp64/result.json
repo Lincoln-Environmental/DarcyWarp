@@ -1,4 +1,5 @@
 {
+  "commit": "e5caf522b4621e4dd04bf5e2624e0eefaf2fc771",
   "configuration": {
     "name": "saturated_fp64",
     "state": "saturated",
@@ -13,7 +14,7 @@
     112,
     90
   ],
-  "construction_seconds": 0.012760056997649372,
+  "construction_seconds": 0.009058094990905374,
   "cold": {
     "converged": true,
     "stop_reason": "converged",
@@ -26,8 +27,8 @@
     "preconditioner_cycles": 28,
     "cuda_graph_captures": null,
     "cuda_graph_replays": null,
-    "seconds": 0.07900670199887827,
-    "public_total_seconds": 0.2611287429899676,
+    "seconds": 0.0760834880056791,
+    "public_total_seconds": 0.2033170470094774,
     "device_final_metrics": {
       "physical_rms": 4.363575258346587e-11,
       "head_residual_rms": 2.0359336583110693e-13,
@@ -36,12 +37,12 @@
       "residual_l1": 1.8496209728692092e-06,
       "signed_imbalance": 2.6216646646895568e-08,
       "boundary_inflow": 0.005073591597925131,
-      "boundary_outflow": 1226.7570735653799,
+      "boundary_outflow": 1226.7570735653812,
       "scaled_l2": 6.391664484815252e-11,
       "finite": true,
       "local_balance_valid": true,
       "chd_inflow": 0.005073591597925131,
-      "chd_outflow": 1226.7570735653799,
+      "chd_outflow": 1226.7570735653812,
       "ghb_inflow": 0.0,
       "ghb_outflow": 0.0,
       "ghb_net": 0.0,
@@ -194,7 +195,7 @@
           2
         ]
       ],
-      "construction_seconds": 0.02793912599736359,
+      "construction_seconds": 0.02590967100695707,
       "hierarchy_reused": false,
       "coefficients_refreshed": false,
       "value_refresh_count": 0,
@@ -211,14 +212,19 @@
       "graph_error": null,
       "inner_scalar_readbacks": 0,
       "scalar_readbacks": 36,
-      "synchronization_seconds": 0.06579137903463561,
-      "device_apply_seconds": 0.06947606444358824,
-      "preconditioner_enqueue_seconds": 0.0036433150089578703
+      "synchronization_seconds": 0.06579926199628972,
+      "device_apply_seconds": 0.06881875133514405,
+      "preconditioner_enqueue_seconds": 0.003282819961896166
     },
     "n_cycles_used": null,
     "graph_count": null,
     "graph_replays": null,
-    "public_seconds": 0.26117702599731274,
+    "linear_acceleration": null,
+    "preconditioner_applications": 28,
+    "cuda_graph_replayed": null,
+    "r_rms_end": null,
+    "h_rms_end": null,
+    "public_seconds": 0.2033475170028396,
     "gpu_used_bytes": 86348660,
     "process_gpu_high_water_bytes": 86348676
   },
@@ -235,8 +241,8 @@
       "preconditioner_cycles": 28,
       "cuda_graph_captures": null,
       "cuda_graph_replays": null,
-      "seconds": 0.07627527799922973,
-      "public_total_seconds": 0.16761301500082482,
+      "seconds": 0.07529622799484059,
+      "public_total_seconds": 0.14201176300412044,
       "device_final_metrics": {
         "physical_rms": 4.363575258346587e-11,
         "head_residual_rms": 2.0359336583110693e-13,
@@ -420,14 +426,19 @@
         "graph_error": null,
         "inner_scalar_readbacks": 0,
         "scalar_readbacks": 36,
-        "synchronization_seconds": 0.06855583397555165,
-        "device_apply_seconds": 0.06892784047126772,
-        "preconditioner_enqueue_seconds": 0.0029773900023428723
+        "synchronization_seconds": 0.06824202506686561,
+        "device_apply_seconds": 0.06844518303871154,
+        "preconditioner_enqueue_seconds": 0.0028474989521782845
       },
       "n_cycles_used": null,
       "graph_count": null,
       "graph_replays": null,
-      "public_seconds": 0.16764964700269047,
+      "linear_acceleration": null,
+      "preconditioner_applications": 28,
+      "cuda_graph_replayed": null,
+      "r_rms_end": null,
+      "h_rms_end": null,
+      "public_seconds": 0.14204110301216133,
       "gpu_used_bytes": 86348660,
       "process_gpu_high_water_bytes": 86348676,
       "head_difference_from_cold_m": 0.0
@@ -444,8 +455,8 @@
       "preconditioner_cycles": 28,
       "cuda_graph_captures": null,
       "cuda_graph_replays": null,
-      "seconds": 0.07632449000084307,
-      "public_total_seconds": 0.1629263950017048,
+      "seconds": 0.0752491079911124,
+      "public_total_seconds": 0.13970093199168332,
       "device_final_metrics": {
         "physical_rms": 4.363575258346587e-11,
         "head_residual_rms": 2.0359336583110693e-13,
@@ -454,8 +465,222 @@
         "residual_l1": 1.8496209728692092e-06,
         "signed_imbalance": 2.6216646646895568e-08,
         "boundary_inflow": 0.005073591597925131,
-        "boundary_outflow": 1226.7570735653806,
+        "boundary_outflow": 1226.7570735653785,
         "scaled_l2": 6.391664484815252e-11,
+        "finite": true,
+        "local_balance_valid": true,
+        "chd_inflow": 0.005073591597925131,
+        "chd_outflow": 1226.7570735653785,
+        "ghb_inflow": 0.0,
+        "ghb_outflow": 0.0,
+        "ghb_net": 0.0,
+        "drn_inflow": 0.0,
+        "drn_outflow": 0.0,
+        "drn_net": 0.0,
+        "riv_inflow": 0.0,
+        "riv_outflow": 0.0,
+        "riv_net": 0.0,
+        "free_boundary_inflow": 0.005073591597925131,
+        "free_boundary_outflow": 1226.757073565381
+      },
+      "physical_acceptance": {
+        "prescribed_cells_checked": 2240,
+        "prescribed_head_error_max_m": 0.0,
+        "prescribed_head_tolerance_m": 1e-10,
+        "boundary_condition_valid": true,
+        "invalid_active_heads": 0,
+        "inactive_marker_cells": 0,
+        "active_cells_checked": 100800,
+        "input_valid": true,
+        "head_residual_rms": 2.035933651461598e-13,
+        "physical_rms": 4.363575283439584e-11,
+        "physical_max": 1.342539690529776e-09,
+        "residual_l1": 1.849620978138006e-06,
+        "relative_cell_imbalance": 3.015471616580401e-10,
+        "gross_throughput": 6133.770147156979,
+        "signed_imbalance": 2.621664792595598e-08,
+        "boundary_inflow": 0.005073591597925131,
+        "boundary_outflow": 1226.757073565381,
+        "free_boundary_inflow": 0.005073591597925131,
+        "free_boundary_outflow": 1226.757073565381,
+        "ghb_inflow": 0.0,
+        "ghb_outflow": 0.0,
+        "drn_inflow": 0.0,
+        "drn_outflow": 0.0,
+        "drn_net": 0.0,
+        "riv_inflow": 0.0,
+        "riv_outflow": 0.0,
+        "riv_net": 0.0,
+        "chd_inflow": 0.005073591597925131,
+        "chd_outflow": 1226.757073565381,
+        "fixed_cell_source_total": 0.0,
+        "free_cells": 98560,
+        "fixed_reservoir_required_inflow": -1226.751999973783,
+        "ungrounded_current_components": 0,
+        "physical_metrics_valid": true,
+        "final_acceptance_thresholds": {
+          "physical_rms_m3_day": 1e-12,
+          "relative_cell_imbalance": 1e-07,
+          "head_equivalent_rms_m": 1e-06,
+          "prescribed_head_error_m": 1e-10
+        },
+        "independent_accepted": true,
+        "local_balance_valid": true
+      },
+      "ghb_budget": {
+        "ghb_inflow": 0.0,
+        "ghb_outflow": 0.0,
+        "ghb_net": 0.0,
+        "drn_inflow": 0.0,
+        "drn_outflow": 0.0,
+        "drn_net": 0.0,
+        "riv_inflow": 0.0,
+        "riv_outflow": 0.0,
+        "riv_net": 0.0
+      },
+      "drn_budget": null,
+      "riv_budget": null,
+      "source_budgets": {
+        "wel": {
+          "inflow": 0.0,
+          "outflow": 0.0,
+          "net": 0.0
+        },
+        "recharge": {
+          "inflow": 3066.88,
+          "outflow": 0.0,
+          "net": 3066.88
+        },
+        "volumetric": {
+          "inflow": 0.0,
+          "outflow": 1840.1280000000004,
+          "net": -1840.1280000000004
+        }
+      },
+      "multigrid": {
+        "controls": {
+          "levels": 5,
+          "min_coarse_n": 2,
+          "pre_sweeps": 2,
+          "post_sweeps": 2,
+          "coarse_sweeps": 2,
+          "cycles": 1,
+          "omega": 0.8,
+          "use_cuda_graph": true,
+          "cycle_kind": "k",
+          "cached_line_factors": true,
+          "preconditioner_precision": "float64",
+          "coefficient_state": "saturated",
+          "line_smoother": "jacobi",
+          "device_hierarchy_build": true
+        },
+        "smoother": "vertical_line",
+        "coefficient_state": "saturated",
+        "precision": "float64",
+        "dimensions": [
+          [
+            10,
+            112,
+            90
+          ],
+          [
+            10,
+            56,
+            45
+          ],
+          [
+            10,
+            28,
+            23
+          ],
+          [
+            10,
+            14,
+            12
+          ],
+          [
+            10,
+            7,
+            6
+          ]
+        ],
+        "actual_levels": 5,
+        "coarsening_factors": [
+          [
+            2,
+            2
+          ],
+          [
+            2,
+            2
+          ],
+          [
+            2,
+            2
+          ],
+          [
+            2,
+            2
+          ]
+        ],
+        "construction_seconds": 0.0,
+        "hierarchy_reused": true,
+        "coefficients_refreshed": false,
+        "value_refresh_count": 0,
+        "device_storage_refresh_count": 1,
+        "refresh_graph_captures": 1,
+        "refresh_graph_replays": 1,
+        "refresh_graph_fallback": false,
+        "allocated_device_bytes": 22611328,
+        "applications": 28,
+        "cycles": 28,
+        "graph_captures": 0,
+        "graph_replays": 28,
+        "graph_capture_failed": false,
+        "graph_error": null,
+        "inner_scalar_readbacks": 0,
+        "scalar_readbacks": 36,
+        "synchronization_seconds": 0.06821432206197642,
+        "device_apply_seconds": 0.06845427060127257,
+        "preconditioner_enqueue_seconds": 0.002863795933080837
+      },
+      "n_cycles_used": null,
+      "graph_count": null,
+      "graph_replays": null,
+      "linear_acceleration": null,
+      "preconditioner_applications": 28,
+      "cuda_graph_replayed": null,
+      "r_rms_end": null,
+      "h_rms_end": null,
+      "public_seconds": 0.13972750600078143,
+      "gpu_used_bytes": 86348660,
+      "process_gpu_high_water_bytes": 86348676,
+      "head_difference_from_cold_m": 0.0
+    },
+    {
+      "converged": true,
+      "stop_reason": "converged",
+      "implementation": "device_newton_fgmres",
+      "session_backend": "npf662_newton",
+      "krylov_method": "FGMRES",
+      "npf_preconditioner": "kcycle",
+      "outer_iterations": 4,
+      "krylov_iterations": 28,
+      "preconditioner_cycles": 28,
+      "cuda_graph_captures": null,
+      "cuda_graph_replays": null,
+      "seconds": 0.07534754500375129,
+      "public_total_seconds": 0.14399461800348945,
+      "device_final_metrics": {
+        "physical_rms": 4.363575363490783e-11,
+        "head_residual_rms": 2.0359337944471451e-13,
+        "relative_cell_imbalance": 3.015471836171549e-10,
+        "gross_throughput": 6133.770147156979,
+        "residual_l1": 1.8496211128301687e-06,
+        "signed_imbalance": 2.621664662260944e-08,
+        "boundary_inflow": 0.005073591597925131,
+        "boundary_outflow": 1226.7570735653806,
+        "scaled_l2": 6.391664912204483e-11,
         "finite": true,
         "local_balance_valid": true,
         "chd_inflow": 0.005073591597925131,
@@ -481,13 +706,13 @@
         "inactive_marker_cells": 0,
         "active_cells_checked": 100800,
         "input_valid": true,
-        "head_residual_rms": 2.035933651461598e-13,
-        "physical_rms": 4.363575283439584e-11,
+        "head_residual_rms": 2.0359337875957052e-13,
+        "physical_rms": 4.3635753885913514e-11,
         "physical_max": 1.342539690529776e-09,
-        "residual_l1": 1.849620978138006e-06,
-        "relative_cell_imbalance": 3.015471616580401e-10,
+        "residual_l1": 1.8496211180850876e-06,
+        "relative_cell_imbalance": 3.0154718447387413e-10,
         "gross_throughput": 6133.770147156979,
-        "signed_imbalance": 2.621664792595598e-08,
+        "signed_imbalance": 2.621664792248653e-08,
         "boundary_inflow": 0.005073591597925131,
         "boundary_outflow": 1226.757073565381,
         "free_boundary_inflow": 0.005073591597925131,
@@ -629,232 +854,28 @@
         "graph_error": null,
         "inner_scalar_readbacks": 0,
         "scalar_readbacks": 36,
-        "synchronization_seconds": 0.06860831601079553,
-        "device_apply_seconds": 0.06892947292327878,
-        "preconditioner_enqueue_seconds": 0.00293893001799006
+        "synchronization_seconds": 0.06819770304718986,
+        "device_apply_seconds": 0.0684540150165559,
+        "preconditioner_enqueue_seconds": 0.0028729359910357744
       },
       "n_cycles_used": null,
       "graph_count": null,
       "graph_replays": null,
-      "public_seconds": 0.16296364899608307,
+      "linear_acceleration": null,
+      "preconditioner_applications": 28,
+      "cuda_graph_replayed": null,
+      "r_rms_end": null,
+      "h_rms_end": null,
+      "public_seconds": 0.14402058999985456,
       "gpu_used_bytes": 86348660,
       "process_gpu_high_water_bytes": 86348676,
-      "head_difference_from_cold_m": 0.0
-    },
-    {
-      "converged": true,
-      "stop_reason": "converged",
-      "implementation": "device_newton_fgmres",
-      "session_backend": "npf662_newton",
-      "krylov_method": "FGMRES",
-      "npf_preconditioner": "kcycle",
-      "outer_iterations": 4,
-      "krylov_iterations": 28,
-      "preconditioner_cycles": 28,
-      "cuda_graph_captures": null,
-      "cuda_graph_replays": null,
-      "seconds": 0.0762260080082342,
-      "public_total_seconds": 0.16514027399534825,
-      "device_final_metrics": {
-        "physical_rms": 4.363575258346587e-11,
-        "head_residual_rms": 2.0359336583110693e-13,
-        "relative_cell_imbalance": 3.0154716079905836e-10,
-        "gross_throughput": 6133.770147156979,
-        "residual_l1": 1.8496209728692092e-06,
-        "signed_imbalance": 2.6216646646895568e-08,
-        "boundary_inflow": 0.005073591597925131,
-        "boundary_outflow": 1226.75707356538,
-        "scaled_l2": 6.391664484815252e-11,
-        "finite": true,
-        "local_balance_valid": true,
-        "chd_inflow": 0.005073591597925131,
-        "chd_outflow": 1226.75707356538,
-        "ghb_inflow": 0.0,
-        "ghb_outflow": 0.0,
-        "ghb_net": 0.0,
-        "drn_inflow": 0.0,
-        "drn_outflow": 0.0,
-        "drn_net": 0.0,
-        "riv_inflow": 0.0,
-        "riv_outflow": 0.0,
-        "riv_net": 0.0,
-        "free_boundary_inflow": 0.005073591597925131,
-        "free_boundary_outflow": 1226.757073565381
-      },
-      "physical_acceptance": {
-        "prescribed_cells_checked": 2240,
-        "prescribed_head_error_max_m": 0.0,
-        "prescribed_head_tolerance_m": 1e-10,
-        "boundary_condition_valid": true,
-        "invalid_active_heads": 0,
-        "inactive_marker_cells": 0,
-        "active_cells_checked": 100800,
-        "input_valid": true,
-        "head_residual_rms": 2.035933651461598e-13,
-        "physical_rms": 4.363575283439584e-11,
-        "physical_max": 1.342539690529776e-09,
-        "residual_l1": 1.849620978138006e-06,
-        "relative_cell_imbalance": 3.015471616580401e-10,
-        "gross_throughput": 6133.770147156979,
-        "signed_imbalance": 2.621664792595598e-08,
-        "boundary_inflow": 0.005073591597925131,
-        "boundary_outflow": 1226.757073565381,
-        "free_boundary_inflow": 0.005073591597925131,
-        "free_boundary_outflow": 1226.757073565381,
-        "ghb_inflow": 0.0,
-        "ghb_outflow": 0.0,
-        "drn_inflow": 0.0,
-        "drn_outflow": 0.0,
-        "drn_net": 0.0,
-        "riv_inflow": 0.0,
-        "riv_outflow": 0.0,
-        "riv_net": 0.0,
-        "chd_inflow": 0.005073591597925131,
-        "chd_outflow": 1226.757073565381,
-        "fixed_cell_source_total": 0.0,
-        "free_cells": 98560,
-        "fixed_reservoir_required_inflow": -1226.751999973783,
-        "ungrounded_current_components": 0,
-        "physical_metrics_valid": true,
-        "final_acceptance_thresholds": {
-          "physical_rms_m3_day": 1e-12,
-          "relative_cell_imbalance": 1e-07,
-          "head_equivalent_rms_m": 1e-06,
-          "prescribed_head_error_m": 1e-10
-        },
-        "independent_accepted": true,
-        "local_balance_valid": true
-      },
-      "ghb_budget": {
-        "ghb_inflow": 0.0,
-        "ghb_outflow": 0.0,
-        "ghb_net": 0.0,
-        "drn_inflow": 0.0,
-        "drn_outflow": 0.0,
-        "drn_net": 0.0,
-        "riv_inflow": 0.0,
-        "riv_outflow": 0.0,
-        "riv_net": 0.0
-      },
-      "drn_budget": null,
-      "riv_budget": null,
-      "source_budgets": {
-        "wel": {
-          "inflow": 0.0,
-          "outflow": 0.0,
-          "net": 0.0
-        },
-        "recharge": {
-          "inflow": 3066.88,
-          "outflow": 0.0,
-          "net": 3066.88
-        },
-        "volumetric": {
-          "inflow": 0.0,
-          "outflow": 1840.1280000000004,
-          "net": -1840.1280000000004
-        }
-      },
-      "multigrid": {
-        "controls": {
-          "levels": 5,
-          "min_coarse_n": 2,
-          "pre_sweeps": 2,
-          "post_sweeps": 2,
-          "coarse_sweeps": 2,
-          "cycles": 1,
-          "omega": 0.8,
-          "use_cuda_graph": true,
-          "cycle_kind": "k",
-          "cached_line_factors": true,
-          "preconditioner_precision": "float64",
-          "coefficient_state": "saturated",
-          "line_smoother": "jacobi",
-          "device_hierarchy_build": true
-        },
-        "smoother": "vertical_line",
-        "coefficient_state": "saturated",
-        "precision": "float64",
-        "dimensions": [
-          [
-            10,
-            112,
-            90
-          ],
-          [
-            10,
-            56,
-            45
-          ],
-          [
-            10,
-            28,
-            23
-          ],
-          [
-            10,
-            14,
-            12
-          ],
-          [
-            10,
-            7,
-            6
-          ]
-        ],
-        "actual_levels": 5,
-        "coarsening_factors": [
-          [
-            2,
-            2
-          ],
-          [
-            2,
-            2
-          ],
-          [
-            2,
-            2
-          ],
-          [
-            2,
-            2
-          ]
-        ],
-        "construction_seconds": 0.0,
-        "hierarchy_reused": true,
-        "coefficients_refreshed": false,
-        "value_refresh_count": 0,
-        "device_storage_refresh_count": 1,
-        "refresh_graph_captures": 1,
-        "refresh_graph_replays": 1,
-        "refresh_graph_fallback": false,
-        "allocated_device_bytes": 22611328,
-        "applications": 28,
-        "cycles": 28,
-        "graph_captures": 0,
-        "graph_replays": 28,
-        "graph_capture_failed": false,
-        "graph_error": null,
-        "inner_scalar_readbacks": 0,
-        "scalar_readbacks": 36,
-        "synchronization_seconds": 0.06858376305899583,
-        "device_apply_seconds": 0.0689311680793763,
-        "preconditioner_enqueue_seconds": 0.0029701080202357844
-      },
-      "n_cycles_used": null,
-      "graph_count": null,
-      "graph_replays": null,
-      "public_seconds": 0.1651868140033912,
-      "gpu_used_bytes": 86348660,
-      "process_gpu_high_water_bytes": 86348676,
-      "head_difference_from_cold_m": 0.0
+      "head_difference_from_cold_m": 7.105427357601002e-15
     }
   ],
   "identical_summary": {
-    "median": 0.1651868140033912,
-    "minimum": 0.16296364899608307,
-    "maximum": 0.16764964700269047
+    "median": 0.14204110301216133,
+    "minimum": 0.13972750600078143,
+    "maximum": 0.14402058999985456
   },
   "warm_start_calibration": [
     {
@@ -869,8 +890,8 @@
       "preconditioner_cycles": 21,
       "cuda_graph_captures": null,
       "cuda_graph_replays": null,
-      "seconds": 0.057214927990571596,
-      "public_total_seconds": 0.14462457699119113,
+      "seconds": 0.05646150201209821,
+      "public_total_seconds": 0.12095532202511095,
       "device_final_metrics": {
         "physical_rms": 3.443634408405544e-10,
         "head_residual_rms": 1.588108145706052e-12,
@@ -879,12 +900,12 @@
         "residual_l1": 1.4739905895983269e-05,
         "signed_imbalance": 3.606540260608017e-07,
         "boundary_inflow": 0.2843655389274666,
-        "boundary_outflow": 1135.0299651782725,
+        "boundary_outflow": 1135.0299651782723,
         "scaled_l2": 4.985749113935157e-10,
         "finite": true,
         "local_balance_valid": true,
         "chd_inflow": 0.2843655389274666,
-        "chd_outflow": 1135.0299651782725,
+        "chd_outflow": 1135.0299651782723,
         "ghb_inflow": 0.0,
         "ghb_outflow": 0.0,
         "ghb_net": 0.0,
@@ -1054,14 +1075,19 @@
         "graph_error": null,
         "inner_scalar_readbacks": 0,
         "scalar_readbacks": 27,
-        "synchronization_seconds": 0.05142506999254692,
-        "device_apply_seconds": 0.05168822383880611,
-        "preconditioner_enqueue_seconds": 0.0022334230307023972
+        "synchronization_seconds": 0.05119271395960823,
+        "device_apply_seconds": 0.05134934353828441,
+        "preconditioner_enqueue_seconds": 0.002147465100279078
       },
       "n_cycles_used": null,
       "graph_count": null,
       "graph_replays": null,
-      "public_seconds": 0.1446593310101889,
+      "linear_acceleration": null,
+      "preconditioner_applications": 21,
+      "cuda_graph_replayed": null,
+      "r_rms_end": null,
+      "h_rms_end": null,
+      "public_seconds": 0.12098414500360377,
       "gpu_used_bytes": 86348660,
       "process_gpu_high_water_bytes": 86348676
     },
@@ -1077,8 +1103,8 @@
       "preconditioner_cycles": 21,
       "cuda_graph_captures": null,
       "cuda_graph_replays": null,
-      "seconds": 0.0572877550002886,
-      "public_total_seconds": 0.1479320380021818,
+      "seconds": 0.05639408700517379,
+      "public_total_seconds": 0.12412887898972258,
       "device_final_metrics": {
         "physical_rms": 4.329423353704177e-10,
         "head_residual_rms": 2.0871610916395208e-12,
@@ -1087,12 +1113,12 @@
         "residual_l1": 1.8068165387824008e-05,
         "signed_imbalance": 1.0538554518445938e-06,
         "boundary_inflow": 0.6472264819930529,
-        "boundary_outflow": 1104.7240254281378,
+        "boundary_outflow": 1104.7240254281396,
         "scaled_l2": 6.552489256740937e-10,
         "finite": true,
         "local_balance_valid": true,
         "chd_inflow": 0.6472264819930529,
-        "chd_outflow": 1104.7240254281378,
+        "chd_outflow": 1104.7240254281396,
         "ghb_inflow": 0.0,
         "ghb_outflow": 0.0,
         "ghb_net": 0.0,
@@ -1262,14 +1288,19 @@
         "graph_error": null,
         "inner_scalar_readbacks": 0,
         "scalar_readbacks": 27,
-        "synchronization_seconds": 0.051443832024233416,
-        "device_apply_seconds": 0.051705056190490595,
-        "preconditioner_enqueue_seconds": 0.002238196015241556
+        "synchronization_seconds": 0.051181515998905525,
+        "device_apply_seconds": 0.05132899093627935,
+        "preconditioner_enqueue_seconds": 0.0021395010116975754
       },
       "n_cycles_used": null,
       "graph_count": null,
       "graph_replays": null,
-      "public_seconds": 0.14796854800079018,
+      "linear_acceleration": null,
+      "preconditioner_applications": 21,
+      "cuda_graph_replayed": null,
+      "r_rms_end": null,
+      "h_rms_end": null,
+      "public_seconds": 0.12415590099408291,
       "gpu_used_bytes": 86348660,
       "process_gpu_high_water_bytes": 86348676
     },
@@ -1285,8 +1316,8 @@
       "preconditioner_cycles": 21,
       "cuda_graph_captures": null,
       "cuda_graph_replays": null,
-      "seconds": 0.057288392999907956,
-      "public_total_seconds": 0.1423072400066303,
+      "seconds": 0.05649065398029052,
+      "public_total_seconds": 0.12263630199595354,
       "device_final_metrics": {
         "physical_rms": 4.3294407070426467e-10,
         "head_residual_rms": 2.0871715368211177e-12,
@@ -1295,12 +1326,12 @@
         "residual_l1": 1.806810243138497e-05,
         "signed_imbalance": 1.053847569986441e-06,
         "boundary_inflow": 1.1248809837506506,
-        "boundary_outflow": 1074.5328799299039,
+        "boundary_outflow": 1074.5328799299034,
         "scaled_l2": 6.552522048622921e-10,
         "finite": true,
         "local_balance_valid": true,
         "chd_inflow": 1.1248809837506506,
-        "chd_outflow": 1074.5328799299039,
+        "chd_outflow": 1074.5328799299034,
         "ghb_inflow": 0.0,
         "ghb_outflow": 0.0,
         "ghb_net": 0.0,
@@ -1470,41 +1501,46 @@
         "graph_error": null,
         "inner_scalar_readbacks": 0,
         "scalar_readbacks": 27,
-        "synchronization_seconds": 0.05144491998362355,
-        "device_apply_seconds": 0.051696383953094505,
-        "preconditioner_enqueue_seconds": 0.002227756005595438
+        "synchronization_seconds": 0.051154421002138406,
+        "device_apply_seconds": 0.051341567516327014,
+        "preconditioner_enqueue_seconds": 0.0021664910309482366
       },
       "n_cycles_used": null,
       "graph_count": null,
       "graph_replays": null,
-      "public_seconds": 0.14234606399259064,
+      "linear_acceleration": null,
+      "preconditioner_applications": 21,
+      "cuda_graph_replayed": null,
+      "r_rms_end": null,
+      "h_rms_end": null,
+      "public_seconds": 0.12266594200627878,
       "gpu_used_bytes": 86348660,
       "process_gpu_high_water_bytes": 86348676
     }
   ],
   "calibration_summary": {
-    "median": 0.1446593310101889,
-    "minimum": 0.14234606399259064,
-    "maximum": 0.14796854800079018
+    "median": 0.12266594200627878,
+    "minimum": 0.12098414500360377,
+    "maximum": 0.12415590099408291
   },
   "source_updates": [
     {
-      "wel_or_raw_seconds": 0.0014161580038489774,
-      "recharge_seconds": 0.0006035389960743487,
+      "wel_or_raw_seconds": 0.0011128599871881306,
+      "recharge_seconds": 0.0005139530112501234,
       "river_stage_seconds": null
     },
     {
-      "wel_or_raw_seconds": 0.0014119639963610098,
-      "recharge_seconds": 0.0006352100026560947,
+      "wel_or_raw_seconds": 0.0012038619897793978,
+      "recharge_seconds": 0.0005552049842663109,
       "river_stage_seconds": null
     },
     {
-      "wel_or_raw_seconds": 0.0014250479871407151,
-      "recharge_seconds": 0.0006178799958433956,
+      "wel_or_raw_seconds": 0.0011865710257552564,
+      "recharge_seconds": 0.0005179910222068429,
       "river_stage_seconds": null
     }
   ],
-  "accepted_output_extraction_seconds": 2.5599729269742966e-07,
+  "accepted_output_extraction_seconds": 3.20986146107316e-07,
   "forcing": {
     "abstraction": null
   },

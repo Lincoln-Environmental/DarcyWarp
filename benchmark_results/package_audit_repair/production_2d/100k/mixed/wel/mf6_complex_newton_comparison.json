@@ -1,0 +1,42 @@
+{
+  "mf6_newton": true,
+  "mf6_newton_options": [
+    "NEWTON  UNDER_RELAXATION"
+  ],
+  "complexity": "COMPLEX",
+  "ims_controls": {
+    "pname": "ims",
+    "print_option": "SUMMARY",
+    "complexity": "COMPLEX",
+    "linear_acceleration": "BICGSTAB",
+    "outer_maximum": 500,
+    "outer_dvclose": 1e-06,
+    "inner_maximum": 500,
+    "inner_dvclose": 1e-08,
+    "rcloserecord": [
+      1e-06,
+      "RELATIVE_RCLOSE"
+    ],
+    "scaling_method": "DIAGONAL"
+  },
+  "preferred_head_target_m": 1e-06,
+  "preferred_target_met": false,
+  "periods": [
+    {
+      "index": 0,
+      "maximum_m": 1.3089893876383485e-05,
+      "rms_m": 9.098007546529897e-06
+    },
+    {
+      "index": 3,
+      "maximum_m": 5.177092766928126e-06,
+      "rms_m": 3.5408620040433855e-06
+    }
+  ],
+  "native_engine_summary": {
+    "median": 5.783451816008892,
+    "minimum": 5.620607846009079,
+    "maximum": 5.853114561003167
+  },
+  "repeats": 3
+}

@@ -1,0 +1,339 @@
+{
+  "native_version": "mf6: 6.6.2 05/12/2025",
+  "native_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+  "gates": {
+    "head_m": 1e-06,
+    "entry_rate_m3_day": 1e-05
+  },
+  "periods": [
+    {
+      "index": 0,
+      "head_max_m": 6.331035251605499e-09,
+      "head_rms_m": 1.141002290574605e-09,
+      "entry_rates": {
+        "DRN": {
+          "max_absolute_error_m3_day": 6.973583310809772e-08,
+          "count": 1584,
+          "gross_inflow": 0.0,
+          "gross_outflow": 67686.99663776215
+        },
+        "RIV": {
+          "max_absolute_error_m3_day": 5.250618073660007e-08,
+          "count": 88,
+          "gross_inflow": 3988.376696528023,
+          "gross_outflow": 0.0
+        }
+      },
+      "budgets": {
+        "DRN": {
+          "rate_errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 7.924099918454885e-06,
+            "net": -7.924099918454885e-06
+          },
+          "volume_errors_m3": {
+            "inflow": 0.0,
+            "outflow": 7.924099918454885e-06,
+            "net": -7.924099918454885e-06
+          }
+        },
+        "RIV": {
+          "rate_errors_m3_day": {
+            "inflow": -4.486068974074442e-07,
+            "outflow": 0.0,
+            "net": -4.486068974074442e-07
+          },
+          "volume_errors_m3": {
+            "inflow": -4.486068974074442e-07,
+            "outflow": 0.0,
+            "net": -4.486068974074442e-07
+          }
+        },
+        "GHB": {
+          "rate_errors_m3_day": {
+            "inflow": 1.2258283277333248e-10,
+            "outflow": 0.0,
+            "net": 1.2258283277333248e-10
+          },
+          "volume_errors_m3": {
+            "inflow": 1.2258283277333248e-10,
+            "outflow": 0.0,
+            "net": 1.2258283277333248e-10
+          }
+        },
+        "WEL": {
+          "rate_errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "volume_errors_m3": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          }
+        },
+        "RCH": {
+          "rate_errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "volume_errors_m3": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          }
+        }
+      },
+      "passed": true
+    },
+    {
+      "index": 1,
+      "head_max_m": 7.729212825324794e-10,
+      "head_rms_m": 1.2957042058147985e-10,
+      "entry_rates": {
+        "DRN": {
+          "max_absolute_error_m3_day": 7.958703918120591e-09,
+          "count": 1584,
+          "gross_inflow": 0.0,
+          "gross_outflow": 67626.49488592558
+        },
+        "RIV": {
+          "max_absolute_error_m3_day": 3.234390533179976e-09,
+          "count": 88,
+          "gross_inflow": 3989.467192709226,
+          "gross_outflow": 0.0
+        }
+      },
+      "budgets": {
+        "DRN": {
+          "rate_errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": -2.142769517377019e-07,
+            "net": 2.142769517377019e-07
+          },
+          "volume_errors_m3": {
+            "inflow": 0.0,
+            "outflow": -2.142769517377019e-07,
+            "net": 2.142769517377019e-07
+          }
+        },
+        "RIV": {
+          "rate_errors_m3_day": {
+            "inflow": 1.5237219486152753e-08,
+            "outflow": 0.0,
+            "net": 1.5237219486152753e-08
+          },
+          "volume_errors_m3": {
+            "inflow": 1.5237219486152753e-08,
+            "outflow": 0.0,
+            "net": 1.5237219486152753e-08
+          }
+        },
+        "GHB": {
+          "rate_errors_m3_day": {
+            "inflow": -1.922217052197084e-09,
+            "outflow": 0.0,
+            "net": -1.922217052197084e-09
+          },
+          "volume_errors_m3": {
+            "inflow": -1.922217052197084e-09,
+            "outflow": 0.0,
+            "net": -1.922217052197084e-09
+          }
+        },
+        "WEL": {
+          "rate_errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "volume_errors_m3": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          }
+        },
+        "RCH": {
+          "rate_errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "volume_errors_m3": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          }
+        }
+      },
+      "passed": true
+    },
+    {
+      "index": 2,
+      "head_max_m": 4.04405398057861e-11,
+      "head_rms_m": 1.415136528446356e-11,
+      "entry_rates": {
+        "DRN": {
+          "max_absolute_error_m3_day": 4.735625225293916e-10,
+          "count": 1584,
+          "gross_inflow": 0.0,
+          "gross_outflow": 67720.4370974616
+        },
+        "RIV": {
+          "max_absolute_error_m3_day": 2.673630206118105e-10,
+          "count": 88,
+          "gross_inflow": 4145.63172383446,
+          "gross_outflow": 0.0
+        }
+      },
+      "budgets": {
+        "DRN": {
+          "rate_errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 1.802982296794653e-08,
+            "net": -1.802982296794653e-08
+          },
+          "volume_errors_m3": {
+            "inflow": 0.0,
+            "outflow": 1.802982296794653e-08,
+            "net": -1.802982296794653e-08
+          }
+        },
+        "RIV": {
+          "rate_errors_m3_day": {
+            "inflow": -1.2587406672537327e-09,
+            "outflow": 0.0,
+            "net": -1.2587406672537327e-09
+          },
+          "volume_errors_m3": {
+            "inflow": -1.2587406672537327e-09,
+            "outflow": 0.0,
+            "net": -1.2587406672537327e-09
+          }
+        },
+        "GHB": {
+          "rate_errors_m3_day": {
+            "inflow": -4.728519797936315e-10,
+            "outflow": 0.0,
+            "net": -4.728519797936315e-10
+          },
+          "volume_errors_m3": {
+            "inflow": -4.728519797936315e-10,
+            "outflow": 0.0,
+            "net": -4.728519797936315e-10
+          }
+        },
+        "WEL": {
+          "rate_errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "volume_errors_m3": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          }
+        },
+        "RCH": {
+          "rate_errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "volume_errors_m3": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          }
+        }
+      },
+      "passed": true
+    },
+    {
+      "index": 3,
+      "head_max_m": 2.5010393756019766e-09,
+      "head_rms_m": 4.764442167672864e-10,
+      "entry_rates": {
+        "DRN": {
+          "max_absolute_error_m3_day": 2.1591532117781753e-08,
+          "count": 1584,
+          "gross_inflow": 0.0,
+          "gross_outflow": 67810.86455762583
+        },
+        "RIV": {
+          "max_absolute_error_m3_day": 1.4481940979749197e-08,
+          "count": 88,
+          "gross_inflow": 4294.739774605792,
+          "gross_outflow": 0.0
+        }
+      },
+      "budgets": {
+        "DRN": {
+          "rate_errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 4.1197927203029394e-07,
+            "net": -4.1197927203029394e-07
+          },
+          "volume_errors_m3": {
+            "inflow": 0.0,
+            "outflow": 4.1197927203029394e-07,
+            "net": -4.1197927203029394e-07
+          }
+        },
+        "RIV": {
+          "rate_errors_m3_day": {
+            "inflow": -1.9470462575554848e-08,
+            "outflow": 0.0,
+            "net": -1.9470462575554848e-08
+          },
+          "volume_errors_m3": {
+            "inflow": -1.9470462575554848e-08,
+            "outflow": 0.0,
+            "net": -1.9470462575554848e-08
+          }
+        },
+        "GHB": {
+          "rate_errors_m3_day": {
+            "inflow": 1.0737721822806634e-10,
+            "outflow": 0.0,
+            "net": 1.0737721822806634e-10
+          },
+          "volume_errors_m3": {
+            "inflow": 1.0737721822806634e-10,
+            "outflow": 0.0,
+            "net": 1.0737721822806634e-10
+          }
+        },
+        "WEL": {
+          "rate_errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "volume_errors_m3": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          }
+        },
+        "RCH": {
+          "rate_errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "volume_errors_m3": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          }
+        }
+      },
+      "passed": true
+    }
+  ],
+  "passed": true
+}

@@ -91,7 +91,7 @@
     {
       "index": 1,
       "head_max_m": 3.367378980101421e-07,
-      "head_rms_m": 2.6093296041903564e-09,
+      "head_rms_m": 2.609329604190356e-09,
       "entry_rates": {
         "DRN": {
           "max_absolute_error_m3_day": 1.1225246652202259e-06,
@@ -255,7 +255,7 @@
     {
       "index": 3,
       "head_max_m": 3.3568217361334973e-07,
-      "head_rms_m": 2.704099413083405e-09,
+      "head_rms_m": 2.7040994130834045e-09,
       "entry_rates": {
         "DRN": {
           "max_absolute_error_m3_day": 1.121984510632501e-06,

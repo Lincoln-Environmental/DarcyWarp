@@ -1,0 +1,219 @@
+{
+  "version": "mf6: 6.6.2 05/12/2025",
+  "sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+  "build": "historical-local-6.6.2",
+  "shape": [
+    1,
+    1000,
+    1000
+  ],
+  "transient": false,
+  "well_precision": "float32",
+  "ims_controls": {
+    "pname": "ims",
+    "print_option": "SUMMARY",
+    "complexity": "SIMPLE",
+    "linear_acceleration": "CG",
+    "outer_maximum": 10,
+    "outer_dvclose": 0.0001,
+    "inner_maximum": 2000,
+    "inner_dvclose": 0.0001,
+    "rcloserecord": [
+      1e-06,
+      "RELATIVE_RCLOSE"
+    ],
+    "scaling_method": "DIAGONAL"
+  },
+  "construction_seconds": 31.76435864699306,
+  "input_precision": 17,
+  "input_float_characters": 25,
+  "input_sha256": {
+    "pkgqual.ic": "a0f4d6aae621c1d3932e3ccc4b8df9ccf7eb543963a24583b6764e3a2ea7e62c",
+    "pkgqual.oc": "696665f4dcdad1508beee086b3499f1917f413838b086f94d9ffceb31f22f9ea",
+    "pkgqual.dis": "0c357062123f345cd3dbe2e3e0b24033ae03c2c81dd8896675fda6a95af39ff3",
+    "pkgqual.ims": "1c2d8e8996481144a3850dc01e6e73367aca907e4b36a1fc92577e368c72ff49",
+    "pkgqual.rch": "1eb97d76a96d34a5ed01b6d33fc5439eb0ae2aed786a7c7a92acaca147301057",
+    "pkgqual.wel": "006a96fb029411338902583e14410e0fb90808e1dd395ef4e2db14e893cad4d4",
+    "pkgqual.nam": "a1058e925aa23680737d1e42b0500f34bab766e6a0c5ed58e49513882fc99333",
+    "mfsim.nam": "5d92db307be84da8f432a419bfba0acd1c107afe71f9566da07deb3d43861c44",
+    "pkgqual.npf": "50627d66426af805109ccf9b4ee50e4076d18b51022d47b636ba277300d27bc9",
+    "pkgqual.tdis": "46f6dfa4b55579d03089e296dd13eea434a97106bab68bef0ac4a024119f8b7d",
+    "pkgqual.chd": "e2a47a58bd246f2fe79dfb6bd3d8362497efbd669972c2e0432b7148989f73b0"
+  },
+  "input_audit_seconds": 0.1515067110012751,
+  "durations": [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+  ],
+  "packages": [
+    "WEL",
+    "RCH",
+    "CHD"
+  ],
+  "engine_seconds": [
+    108.25635097300983
+  ],
+  "engine_logs": [
+    "engine_0.txt"
+  ],
+  "requested_repeats": 1,
+  "periods": [
+    {
+      "dt": 1.0,
+      "packages": {
+        "WEL": {
+          "inflow": 0.0,
+          "outflow": 186152.25022888184,
+          "net": -186152.25022888184
+        },
+        "RCH": {
+          "inflow": 310253.75999999995,
+          "outflow": 0.0,
+          "net": 310253.75999999995
+        },
+        "CHD": {
+          "inflow": 0.0,
+          "outflow": 124101.51099923035,
+          "net": -124101.51099923035
+        }
+      },
+      "volumes": {
+        "WEL": {
+          "inflow": 0.0,
+          "outflow": 186152.25022888184,
+          "net": -186152.25022888184
+        },
+        "RCH": {
+          "inflow": 310253.75999999995,
+          "outflow": 0.0,
+          "net": 310253.75999999995
+        },
+        "CHD": {
+          "inflow": 0.0,
+          "outflow": 124101.51099923035,
+          "net": -124101.51099923035
+        }
+      }
+    },
+    {
+      "dt": 1.0,
+      "packages": {
+        "WEL": {
+          "inflow": 0.0,
+          "outflow": 195459.86564826965,
+          "net": -195459.86564826965
+        },
+        "RCH": {
+          "inflow": 310253.75999999995,
+          "outflow": 0.0,
+          "net": 310253.75999999995
+        },
+        "CHD": {
+          "inflow": 0.0,
+          "outflow": 114793.89438654656,
+          "net": -114793.89438654656
+        }
+      },
+      "volumes": {
+        "WEL": {
+          "inflow": 0.0,
+          "outflow": 195459.86564826965,
+          "net": -195459.86564826965
+        },
+        "RCH": {
+          "inflow": 310253.75999999995,
+          "outflow": 0.0,
+          "net": 310253.75999999995
+        },
+        "CHD": {
+          "inflow": 0.0,
+          "outflow": 114793.89438654656,
+          "net": -114793.89438654656
+        }
+      }
+    },
+    {
+      "dt": 1.0,
+      "packages": {
+        "WEL": {
+          "inflow": 0.0,
+          "outflow": 204767.48106765747,
+          "net": -204767.48106765747
+        },
+        "RCH": {
+          "inflow": 316458.8352,
+          "outflow": 0.0,
+          "net": 316458.8352
+        },
+        "CHD": {
+          "inflow": 0.0,
+          "outflow": 111691.35592746531,
+          "net": -111691.35592746531
+        }
+      },
+      "volumes": {
+        "WEL": {
+          "inflow": 0.0,
+          "outflow": 204767.48106765747,
+          "net": -204767.48106765747
+        },
+        "RCH": {
+          "inflow": 316458.8352,
+          "outflow": 0.0,
+          "net": 316458.8352
+        },
+        "CHD": {
+          "inflow": 0.0,
+          "outflow": 111691.35592746531,
+          "net": -111691.35592746531
+        }
+      }
+    },
+    {
+      "dt": 1.0,
+      "packages": {
+        "WEL": {
+          "inflow": 0.0,
+          "outflow": 214075.0964870453,
+          "net": -214075.0964870453
+        },
+        "RCH": {
+          "inflow": 322663.91040000005,
+          "outflow": 0.0,
+          "net": 322663.91040000005
+        },
+        "CHD": {
+          "inflow": 0.0,
+          "outflow": 108588.81876340031,
+          "net": -108588.81876340031
+        }
+      },
+      "volumes": {
+        "WEL": {
+          "inflow": 0.0,
+          "outflow": 214075.0964870453,
+          "net": -214075.0964870453
+        },
+        "RCH": {
+          "inflow": 322663.91040000005,
+          "outflow": 0.0,
+          "net": 322663.91040000005
+        },
+        "CHD": {
+          "inflow": 0.0,
+          "outflow": 108588.81876340031,
+          "net": -108588.81876340031
+        }
+      }
+    }
+  ],
+  "engine_summary": {
+    "median": 108.25635097300983,
+    "minimum": 108.25635097300983,
+    "maximum": 108.25635097300983
+  },
+  "extraction_seconds": 0.8179820950026624,
+  "output_sha256": "d0d3df19e6a47c007510721b410795c88760ea0a96286e1f8f68281e24ee7de9"
+}

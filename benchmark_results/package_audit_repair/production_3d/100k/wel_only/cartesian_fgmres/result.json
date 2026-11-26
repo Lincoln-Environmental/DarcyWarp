@@ -1,4 +1,5 @@
 {
+  "commit": "e5caf522b4621e4dd04bf5e2624e0eefaf2fc771",
   "configuration": {
     "name": "cartesian_fgmres"
   },
@@ -7,7 +8,7 @@
     112,
     90
   ],
-  "construction_seconds": 0.00793950400839094,
+  "construction_seconds": 0.006334009987767786,
   "cold": {
     "converged": true,
     "stop_reason": null,
@@ -21,7 +22,7 @@
     "cuda_graph_captures": null,
     "cuda_graph_replays": null,
     "seconds": null,
-    "public_total_seconds": 0.12618861500232015,
+    "public_total_seconds": 0.11312192099285312,
     "device_final_metrics": null,
     "physical_acceptance": null,
     "ghb_budget": null,
@@ -52,10 +53,10 @@
     "preconditioner_applications": 26,
     "cuda_graph_replayed": true,
     "r_rms_end": 2.6048010106804867e-10,
-    "h_rms_end": 1.1819423698557127e-12,
-    "public_seconds": 0.1262448400084395,
-    "gpu_used_bytes": 101205052,
-    "process_gpu_high_water_bytes": 101205052
+    "h_rms_end": 1.181942369855713e-12,
+    "public_seconds": 0.11314735701307654,
+    "gpu_used_bytes": 83153516,
+    "process_gpu_high_water_bytes": 96573720
   },
   "identical_initial": [
     {
@@ -71,107 +72,7 @@
       "cuda_graph_captures": null,
       "cuda_graph_replays": null,
       "seconds": null,
-      "public_total_seconds": 0.08586761199694593,
-      "device_final_metrics": null,
-      "physical_acceptance": null,
-      "ghb_budget": null,
-      "drn_budget": null,
-      "riv_budget": null,
-      "source_budgets": {
-        "wel": {
-          "inflow": 0.0,
-          "outflow": 1840.1280000000006,
-          "net": -1840.1280000000006
-        },
-        "recharge": {
-          "inflow": 3066.88,
-          "outflow": 0.0,
-          "net": 3066.88
-        },
-        "volumetric": {
-          "inflow": 0.0,
-          "outflow": 0.0,
-          "net": 0.0
-        }
-      },
-      "multigrid": null,
-      "n_cycles_used": 26,
-      "graph_count": null,
-      "graph_replays": null,
-      "linear_acceleration": "fgmres",
-      "preconditioner_applications": 26,
-      "cuda_graph_replayed": true,
-      "r_rms_end": 2.6048010106804867e-10,
-      "h_rms_end": 1.1819423698557127e-12,
-      "public_seconds": 0.08592161000706255,
-      "gpu_used_bytes": 101205052,
-      "process_gpu_high_water_bytes": 101205052,
-      "head_difference_from_cold_m": 0.0
-    },
-    {
-      "converged": true,
-      "stop_reason": null,
-      "implementation": "fast",
-      "session_backend": "fast_3d",
-      "krylov_method": null,
-      "npf_preconditioner": null,
-      "outer_iterations": null,
-      "krylov_iterations": 26,
-      "preconditioner_cycles": null,
-      "cuda_graph_captures": null,
-      "cuda_graph_replays": null,
-      "seconds": null,
-      "public_total_seconds": 0.08550928100885358,
-      "device_final_metrics": null,
-      "physical_acceptance": null,
-      "ghb_budget": null,
-      "drn_budget": null,
-      "riv_budget": null,
-      "source_budgets": {
-        "wel": {
-          "inflow": 0.0,
-          "outflow": 1840.1280000000006,
-          "net": -1840.1280000000006
-        },
-        "recharge": {
-          "inflow": 3066.88,
-          "outflow": 0.0,
-          "net": 3066.88
-        },
-        "volumetric": {
-          "inflow": 0.0,
-          "outflow": 0.0,
-          "net": 0.0
-        }
-      },
-      "multigrid": null,
-      "n_cycles_used": 26,
-      "graph_count": null,
-      "graph_replays": null,
-      "linear_acceleration": "fgmres",
-      "preconditioner_applications": 26,
-      "cuda_graph_replayed": true,
-      "r_rms_end": 2.6048010106804867e-10,
-      "h_rms_end": 1.1819423698557127e-12,
-      "public_seconds": 0.08556487198802643,
-      "gpu_used_bytes": 101205052,
-      "process_gpu_high_water_bytes": 101205052,
-      "head_difference_from_cold_m": 0.0
-    },
-    {
-      "converged": true,
-      "stop_reason": null,
-      "implementation": "fast",
-      "session_backend": "fast_3d",
-      "krylov_method": null,
-      "npf_preconditioner": null,
-      "outer_iterations": null,
-      "krylov_iterations": 26,
-      "preconditioner_cycles": null,
-      "cuda_graph_captures": null,
-      "cuda_graph_replays": null,
-      "seconds": null,
-      "public_total_seconds": 0.08549140598915983,
+      "public_total_seconds": 0.07817086999421008,
       "device_final_metrics": null,
       "physical_acceptance": null,
       "ghb_budget": null,
@@ -203,16 +104,116 @@
       "cuda_graph_replayed": true,
       "r_rms_end": 2.6048010106804867e-10,
       "h_rms_end": 1.181942369855713e-12,
-      "public_seconds": 0.08554226500564255,
-      "gpu_used_bytes": 101205052,
-      "process_gpu_high_water_bytes": 101205052,
+      "public_seconds": 0.07819818699499592,
+      "gpu_used_bytes": 83153516,
+      "process_gpu_high_water_bytes": 96573720,
+      "head_difference_from_cold_m": 0.0
+    },
+    {
+      "converged": true,
+      "stop_reason": null,
+      "implementation": "fast",
+      "session_backend": "fast_3d",
+      "krylov_method": null,
+      "npf_preconditioner": null,
+      "outer_iterations": null,
+      "krylov_iterations": 26,
+      "preconditioner_cycles": null,
+      "cuda_graph_captures": null,
+      "cuda_graph_replays": null,
+      "seconds": null,
+      "public_total_seconds": 0.07820342399645597,
+      "device_final_metrics": null,
+      "physical_acceptance": null,
+      "ghb_budget": null,
+      "drn_budget": null,
+      "riv_budget": null,
+      "source_budgets": {
+        "wel": {
+          "inflow": 0.0,
+          "outflow": 1840.1280000000006,
+          "net": -1840.1280000000006
+        },
+        "recharge": {
+          "inflow": 3066.88,
+          "outflow": 0.0,
+          "net": 3066.88
+        },
+        "volumetric": {
+          "inflow": 0.0,
+          "outflow": 0.0,
+          "net": 0.0
+        }
+      },
+      "multigrid": null,
+      "n_cycles_used": 26,
+      "graph_count": null,
+      "graph_replays": null,
+      "linear_acceleration": "fgmres",
+      "preconditioner_applications": 26,
+      "cuda_graph_replayed": true,
+      "r_rms_end": 2.604801010680487e-10,
+      "h_rms_end": 1.181942369855713e-12,
+      "public_seconds": 0.07823923899559304,
+      "gpu_used_bytes": 83153516,
+      "process_gpu_high_water_bytes": 96573720,
+      "head_difference_from_cold_m": 0.0
+    },
+    {
+      "converged": true,
+      "stop_reason": null,
+      "implementation": "fast",
+      "session_backend": "fast_3d",
+      "krylov_method": null,
+      "npf_preconditioner": null,
+      "outer_iterations": null,
+      "krylov_iterations": 26,
+      "preconditioner_cycles": null,
+      "cuda_graph_captures": null,
+      "cuda_graph_replays": null,
+      "seconds": null,
+      "public_total_seconds": 0.0785081030044239,
+      "device_final_metrics": null,
+      "physical_acceptance": null,
+      "ghb_budget": null,
+      "drn_budget": null,
+      "riv_budget": null,
+      "source_budgets": {
+        "wel": {
+          "inflow": 0.0,
+          "outflow": 1840.1280000000006,
+          "net": -1840.1280000000006
+        },
+        "recharge": {
+          "inflow": 3066.88,
+          "outflow": 0.0,
+          "net": 3066.88
+        },
+        "volumetric": {
+          "inflow": 0.0,
+          "outflow": 0.0,
+          "net": 0.0
+        }
+      },
+      "multigrid": null,
+      "n_cycles_used": 26,
+      "graph_count": null,
+      "graph_replays": null,
+      "linear_acceleration": "fgmres",
+      "preconditioner_applications": 26,
+      "cuda_graph_replayed": true,
+      "r_rms_end": 2.6048010106804867e-10,
+      "h_rms_end": 1.1819423698557132e-12,
+      "public_seconds": 0.07854255300480872,
+      "gpu_used_bytes": 83153516,
+      "process_gpu_high_water_bytes": 96573720,
       "head_difference_from_cold_m": 0.0
     }
   ],
   "identical_summary": {
-    "median": 0.08556487198802643,
-    "minimum": 0.08554226500564255,
-    "maximum": 0.08592161000706255
+    "median": 0.07823923899559304,
+    "minimum": 0.07819818699499592,
+    "maximum": 0.07854255300480872
   },
   "warm_start_calibration": [
     {
@@ -228,7 +229,7 @@
       "cuda_graph_captures": null,
       "cuda_graph_replays": null,
       "seconds": null,
-      "public_total_seconds": 0.06568526200135238,
+      "public_total_seconds": 0.059750022017396986,
       "device_final_metrics": null,
       "physical_acceptance": null,
       "ghb_budget": null,
@@ -258,11 +259,11 @@
       "linear_acceleration": "fgmres",
       "preconditioner_applications": 18,
       "cuda_graph_replayed": true,
-      "r_rms_end": 5.4945071281444016e-09,
-      "h_rms_end": 2.562660501229171e-11,
-      "public_seconds": 0.06574077499681152,
-      "gpu_used_bytes": 101205052,
-      "process_gpu_high_water_bytes": 101205052
+      "r_rms_end": 5.494507128144402e-09,
+      "h_rms_end": 2.5626605012291714e-11,
+      "public_seconds": 0.059778653987450525,
+      "gpu_used_bytes": 83153516,
+      "process_gpu_high_water_bytes": 96573720
     },
     {
       "converged": true,
@@ -277,7 +278,7 @@
       "cuda_graph_captures": null,
       "cuda_graph_replays": null,
       "seconds": null,
-      "public_total_seconds": 0.06449999898904935,
+      "public_total_seconds": 0.05740541097475216,
       "device_final_metrics": null,
       "physical_acceptance": null,
       "ghb_budget": null,
@@ -308,10 +309,10 @@
       "preconditioner_applications": 17,
       "cuda_graph_replayed": true,
       "r_rms_end": 8.069722490708397e-09,
-      "h_rms_end": 4.183720746126014e-11,
-      "public_seconds": 0.06455231600557454,
-      "gpu_used_bytes": 101205052,
-      "process_gpu_high_water_bytes": 101205052
+      "h_rms_end": 4.183720746126015e-11,
+      "public_seconds": 0.05744124500779435,
+      "gpu_used_bytes": 83153516,
+      "process_gpu_high_water_bytes": 96573720
     },
     {
       "converged": true,
@@ -326,7 +327,7 @@
       "cuda_graph_captures": null,
       "cuda_graph_replays": null,
       "seconds": null,
-      "public_total_seconds": 0.06410856200091075,
+      "public_total_seconds": 0.057294181984616444,
       "device_final_metrics": null,
       "physical_acceptance": null,
       "ghb_budget": null,
@@ -358,34 +359,34 @@
       "cuda_graph_replayed": true,
       "r_rms_end": 8.069721434963278e-09,
       "h_rms_end": 4.1837233871362636e-11,
-      "public_seconds": 0.06415798600937705,
-      "gpu_used_bytes": 101205052,
-      "process_gpu_high_water_bytes": 101205052
+      "public_seconds": 0.05732095299754292,
+      "gpu_used_bytes": 83153516,
+      "process_gpu_high_water_bytes": 96573720
     }
   ],
   "calibration_summary": {
-    "median": 0.06455231600557454,
-    "minimum": 0.06415798600937705,
-    "maximum": 0.06574077499681152
+    "median": 0.05744124500779435,
+    "minimum": 0.05732095299754292,
+    "maximum": 0.059778653987450525
   },
   "source_updates": [
     {
-      "wel_or_raw_seconds": 0.0013016440061619505,
-      "recharge_seconds": 0.0006254449981497601,
+      "wel_or_raw_seconds": 0.0010644530120771378,
+      "recharge_seconds": 0.000551327015273273,
       "river_stage_seconds": null
     },
     {
-      "wel_or_raw_seconds": 0.0013207510055508465,
-      "recharge_seconds": 0.0006319130043266341,
+      "wel_or_raw_seconds": 0.001082853996194899,
+      "recharge_seconds": 0.0005574020033236593,
       "river_stage_seconds": null
     },
     {
-      "wel_or_raw_seconds": 0.001288500992814079,
-      "recharge_seconds": 0.0006761990080121905,
+      "wel_or_raw_seconds": 0.001051466999342665,
+      "recharge_seconds": 0.0005775050085503608,
       "river_stage_seconds": null
     }
   ],
-  "accepted_output_extraction_seconds": 6.305599526967853e-05,
+  "accepted_output_extraction_seconds": 3.937899600714445e-05,
   "forcing": {
     "abstraction": {
       "inflow": 0.0,

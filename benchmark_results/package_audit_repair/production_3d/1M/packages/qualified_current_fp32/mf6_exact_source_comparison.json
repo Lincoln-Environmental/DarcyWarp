@@ -1,0 +1,97 @@
+{
+  "passed": true,
+  "native_version": "mf6: 6.6.2 05/12/2025",
+  "native_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+  "summation_ulps": 64.0,
+  "periods": [
+    {
+      "index": 0,
+      "rates": {
+        "wel": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 5.34278115082998e-10
+        },
+        "recharge": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 8.904635251383295e-10
+        }
+      },
+      "volumes": {}
+    },
+    {
+      "index": 1,
+      "rates": {
+        "wel": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 5.60992020837148e-10
+        },
+        "recharge": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 8.904635251383295e-10
+        }
+      },
+      "volumes": {}
+    },
+    {
+      "index": 2,
+      "rates": {
+        "wel": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 5.877059265912978e-10
+        },
+        "recharge": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 9.082727956410964e-10
+        }
+      },
+      "volumes": {}
+    },
+    {
+      "index": 3,
+      "rates": {
+        "wel": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 6.144198323454476e-10
+        },
+        "recharge": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 9.260820661438632e-10
+        }
+      },
+      "volumes": {}
+    }
+  ],
+  "resident_volume_totals": {}
+}

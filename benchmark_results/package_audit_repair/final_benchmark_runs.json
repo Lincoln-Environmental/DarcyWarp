@@ -1,0 +1,153 @@
+{
+  "runs": [
+    {
+      "name": "analytical",
+      "command": [
+        "/home/patrickdurney/miniconda3/envs/darcywarp/bin/python",
+        "/tmp/measure_package_analytical_errors.py"
+      ],
+      "returncode": 0,
+      "wall_seconds": 1.1436433310154825,
+      "log": "/tmp/package-final-analytical.log"
+    },
+    {
+      "name": "3d-fast",
+      "command": [
+        "/home/patrickdurney/miniconda3/envs/darcywarp/bin/python",
+        "working_tests/qualify_package_kcycle.py",
+        "--mode",
+        "steady",
+        "--configuration",
+        "fast"
+      ],
+      "returncode": 0,
+      "wall_seconds": 137.43544974300312,
+      "log": "/tmp/package-final-3d-fast.log"
+    },
+    {
+      "name": "3d-history",
+      "command": [
+        "/home/patrickdurney/miniconda3/envs/darcywarp/bin/python",
+        "working_tests/qualify_package_kcycle.py",
+        "--mode",
+        "history",
+        "--configuration",
+        "fast"
+      ],
+      "returncode": 0,
+      "wall_seconds": 99.28643340300187,
+      "log": "/tmp/package-final-3d-history.log"
+    },
+    {
+      "name": "3d-alternatives",
+      "command": [
+        "/home/patrickdurney/miniconda3/envs/darcywarp/bin/python",
+        "working_tests/qualify_package_kcycle.py",
+        "--mode",
+        "steady",
+        "--configuration",
+        "alternatives",
+        "--variant",
+        "packages"
+      ],
+      "returncode": 0,
+      "wall_seconds": 84.04968088600435,
+      "log": "/tmp/package-final-3d-alternatives.log"
+    },
+    {
+      "name": "2d-steady",
+      "command": [
+        "/home/patrickdurney/miniconda3/envs/darcywarp/bin/python",
+        "working_tests/qualify_package_2d.py",
+        "--mode",
+        "steady"
+      ],
+      "returncode": 0,
+      "wall_seconds": 5.534743725002045,
+      "log": "/tmp/package-final-2d-steady.log"
+    },
+    {
+      "name": "2d-mixed",
+      "command": [
+        "/home/patrickdurney/miniconda3/envs/darcywarp/bin/python",
+        "working_tests/qualify_package_2d.py",
+        "--mode",
+        "mixed"
+      ],
+      "returncode": 0,
+      "wall_seconds": 4.998994527995819,
+      "log": "/tmp/package-final-2d-mixed.log"
+    },
+    {
+      "name": "2d-transient",
+      "command": [
+        "/home/patrickdurney/miniconda3/envs/darcywarp/bin/python",
+        "working_tests/qualify_package_2d.py",
+        "--mode",
+        "transient"
+      ],
+      "returncode": 0,
+      "wall_seconds": 62.48232951099635,
+      "log": "/tmp/package-final-2d-transient.log"
+    },
+    {
+      "name": "2d-picard",
+      "command": [
+        "/home/patrickdurney/miniconda3/envs/darcywarp/bin/python",
+        "working_tests/qualify_package_2d.py",
+        "--mode",
+        "picard"
+      ],
+      "returncode": 0,
+      "wall_seconds": 30.778928893996635,
+      "log": "/tmp/package-final-2d-picard.log"
+    },
+    {
+      "name": "2d-no-wel-transient",
+      "command": [
+        "/home/patrickdurney/miniconda3/envs/darcywarp/bin/python",
+        "working_tests/qualify_package_2d.py",
+        "--mode",
+        "transient",
+        "--without-wells"
+      ],
+      "returncode": 0,
+      "wall_seconds": 59.47982378699817,
+      "log": "/tmp/package-final-2d-no-wel-transient.log"
+    },
+    {
+      "name": "2d-no-wel-picard",
+      "command": [
+        "/home/patrickdurney/miniconda3/envs/darcywarp/bin/python",
+        "working_tests/qualify_package_2d.py",
+        "--mode",
+        "picard",
+        "--without-wells"
+      ],
+      "returncode": 0,
+      "wall_seconds": 26.552481380000245,
+      "log": "/tmp/package-final-2d-no-wel-picard.log"
+    },
+    {
+      "name": "original-forcing",
+      "command": [
+        "/home/patrickdurney/miniconda3/envs/darcywarp/bin/python",
+        "working_tests/qualify_original_package_forcing.py"
+      ],
+      "returncode": 0,
+      "wall_seconds": 90.42546703401604,
+      "log": "/tmp/package-final-original-forcing.log"
+    },
+    {
+      "name": "exact-comparisons",
+      "command": [
+        "/home/patrickdurney/miniconda3/envs/darcywarp/bin/python",
+        "working_tests/summarize_package_qualification.py"
+      ],
+      "returncode": 0,
+      "wall_seconds": 40.53125692199683,
+      "log": "/tmp/package-final-exact-comparisons.log"
+    }
+  ],
+  "complete": true
+}

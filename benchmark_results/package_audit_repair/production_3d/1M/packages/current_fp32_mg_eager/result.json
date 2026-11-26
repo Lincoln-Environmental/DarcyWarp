@@ -1,0 +1,1609 @@
+{
+  "commit": "608dc6111abeafe46571669101663bea1debbaf2",
+  "configuration": {
+    "name": "current_fp32_mg_eager",
+    "state": "current",
+    "precision": "float32",
+    "preconditioner": "kcycle",
+    "graphs": false,
+    "optimized": true,
+    "line_smoother": "jacobi",
+    "levels": 5
+  },
+  "shape": [
+    5,
+    450,
+    450
+  ],
+  "construction_seconds": 0.26262051999219693,
+  "cold": {
+    "converged": true,
+    "stop_reason": "converged",
+    "implementation": "device_newton_fgmres",
+    "session_backend": "npf662_newton",
+    "krylov_method": "FGMRES",
+    "npf_preconditioner": "kcycle",
+    "outer_iterations": 7,
+    "krylov_iterations": 35,
+    "preconditioner_cycles": 35,
+    "cuda_graph_captures": null,
+    "cuda_graph_replays": null,
+    "seconds": 0.2358182810130529,
+    "public_total_seconds": 1.8675789900007658,
+    "device_final_metrics": {
+      "physical_rms": 9.781697863858127e-12,
+      "head_residual_rms": 4.7445961186301245e-14,
+      "relative_cell_imbalance": 2.3637507392899558e-12,
+      "gross_throughput": 625251.891183697,
+      "residual_l1": 1.4779396200279068e-06,
+      "signed_imbalance": 3.840095317251368e-08,
+      "boundary_inflow": 249965.14559186797,
+      "boundary_outflow": 275029.46559182985,
+      "scaled_l2": 4.761714441415599e-11,
+      "finite": true,
+      "local_balance_valid": true,
+      "chd_inflow": 186630.93505762363,
+      "chd_outflow": 0.0,
+      "ghb_inflow": 1185.094993327936,
+      "ghb_outflow": 0.0,
+      "ghb_net": 1185.094993327936,
+      "drn_inflow": 0.0,
+      "drn_outflow": 274962.5533312526,
+      "drn_net": -274962.5533312526,
+      "riv_inflow": 62149.115540916384,
+      "riv_outflow": 66.91226057727633,
+      "riv_net": 62082.203280339105,
+      "free_boundary_inflow": 249965.1455918678,
+      "free_boundary_outflow": 275029.4655918293
+    },
+    "physical_acceptance": {
+      "prescribed_cells_checked": 4500,
+      "prescribed_head_error_max_m": 0.0,
+      "prescribed_head_tolerance_m": 1e-10,
+      "boundary_condition_valid": true,
+      "invalid_active_heads": 0,
+      "inactive_marker_cells": 0,
+      "active_cells_checked": 1012500,
+      "input_valid": true,
+      "head_residual_rms": 4.744598685741803e-14,
+      "physical_rms": 9.781703517645273e-12,
+      "physical_max": 1.2957809825131505e-09,
+      "residual_l1": 1.4779408923727036e-06,
+      "relative_cell_imbalance": 2.3637527742215e-12,
+      "gross_throughput": 625251.8911836972,
+      "signed_imbalance": 3.840057235141103e-08,
+      "boundary_inflow": 249965.14559186774,
+      "boundary_outflow": 275029.4655918293,
+      "free_boundary_inflow": 249965.14559186777,
+      "free_boundary_outflow": 275029.4655918294,
+      "ghb_inflow": 1185.0949933279362,
+      "ghb_outflow": 0.0,
+      "drn_inflow": 0.0,
+      "drn_outflow": 274962.5533312521,
+      "drn_net": -274962.5533312521,
+      "riv_inflow": 62149.115540916515,
+      "riv_outflow": 66.91226057727633,
+      "riv_net": 62082.203280339236,
+      "chd_inflow": 186630.9350576233,
+      "chd_outflow": 0.0,
+      "fixed_cell_source_total": 0.0,
+      "free_cells": 1008000,
+      "fixed_reservoir_required_inflow": 186630.9350576233,
+      "ungrounded_current_components": 0,
+      "physical_metrics_valid": true,
+      "final_acceptance_thresholds": {
+        "physical_rms_m3_day": 1e-12,
+        "relative_cell_imbalance": 1e-07,
+        "head_equivalent_rms_m": 1e-06,
+        "prescribed_head_error_m": 1e-10
+      },
+      "independent_accepted": true,
+      "local_balance_valid": true
+    },
+    "ghb_budget": {
+      "ghb_inflow": 1185.094993327936,
+      "ghb_outflow": 0.0,
+      "ghb_net": 1185.094993327936,
+      "drn_inflow": 0.0,
+      "drn_outflow": 274962.5533312526,
+      "drn_net": -274962.5533312526,
+      "riv_inflow": 62149.115540916384,
+      "riv_outflow": 66.91226057727633,
+      "riv_net": 62082.203280339105
+    },
+    "drn_budget": {
+      "inflow": 0.0,
+      "outflow": 274962.5533312526,
+      "net": -274962.5533312526
+    },
+    "riv_budget": {
+      "inflow": 62149.115540916384,
+      "outflow": 66.91226057727633,
+      "net": 62082.203280339105
+    },
+    "source_budgets": {
+      "wel": {
+        "inflow": 0.0,
+        "outflow": 37596.48000000001,
+        "net": -37596.48000000001
+      },
+      "recharge": {
+        "inflow": 62660.79999999999,
+        "outflow": 0.0,
+        "net": 62660.79999999999
+      },
+      "volumetric": {
+        "inflow": 0.0,
+        "outflow": 0.0,
+        "net": 0.0
+      }
+    },
+    "multigrid": {
+      "controls": {
+        "levels": 5,
+        "min_coarse_n": 2,
+        "pre_sweeps": 2,
+        "post_sweeps": 2,
+        "coarse_sweeps": 2,
+        "cycles": 1,
+        "omega": 0.8,
+        "use_cuda_graph": false,
+        "cycle_kind": "k",
+        "cached_line_factors": true,
+        "preconditioner_precision": "float32",
+        "coefficient_state": "current",
+        "line_smoother": "jacobi",
+        "device_hierarchy_build": true
+      },
+      "smoother": "vertical_line",
+      "coefficient_state": "current",
+      "precision": "float32",
+      "dimensions": [
+        [
+          5,
+          450,
+          450
+        ],
+        [
+          5,
+          225,
+          225
+        ],
+        [
+          5,
+          113,
+          113
+        ],
+        [
+          5,
+          57,
+          57
+        ],
+        [
+          5,
+          29,
+          29
+        ]
+      ],
+      "actual_levels": 5,
+      "coarsening_factors": [
+        [
+          2,
+          2
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          2,
+          2
+        ]
+      ],
+      "construction_seconds": 0.08040337800048292,
+      "hierarchy_reused": false,
+      "coefficients_refreshed": false,
+      "value_refresh_count": 0,
+      "device_storage_refresh_count": 8,
+      "refresh_graph_captures": 0,
+      "refresh_graph_replays": 0,
+      "refresh_graph_fallback": false,
+      "allocated_device_bytes": 329465056,
+      "applications": 35,
+      "cycles": 35,
+      "graph_captures": 0,
+      "graph_replays": 0,
+      "graph_capture_failed": false,
+      "graph_error": null,
+      "inner_scalar_readbacks": 0,
+      "scalar_readbacks": 49,
+      "synchronization_seconds": 0.02735516690881923,
+      "device_apply_seconds": 0.18451267051696782,
+      "preconditioner_enqueue_seconds": 0.17772683603106998
+    },
+    "n_cycles_used": null,
+    "graph_count": null,
+    "graph_replays": null,
+    "linear_acceleration": null,
+    "preconditioner_applications": 35,
+    "cuda_graph_replayed": null,
+    "r_rms_end": null,
+    "h_rms_end": null,
+    "public_seconds": 1.867609186010668,
+    "gpu_used_bytes": 1250762536,
+    "process_gpu_high_water_bytes": 2300554744
+  },
+  "identical_initial": [
+    {
+      "converged": true,
+      "stop_reason": "converged",
+      "implementation": "device_newton_fgmres",
+      "session_backend": "npf662_newton",
+      "krylov_method": "FGMRES",
+      "npf_preconditioner": "kcycle",
+      "outer_iterations": 7,
+      "krylov_iterations": 35,
+      "preconditioner_cycles": 35,
+      "cuda_graph_captures": null,
+      "cuda_graph_replays": null,
+      "seconds": 0.2349112629890442,
+      "public_total_seconds": 1.4692427810223307,
+      "device_final_metrics": {
+        "physical_rms": 9.781697863858127e-12,
+        "head_residual_rms": 4.7445961186301245e-14,
+        "relative_cell_imbalance": 2.3637507392899558e-12,
+        "gross_throughput": 625251.891183697,
+        "residual_l1": 1.4779396200279068e-06,
+        "signed_imbalance": 3.840095317251368e-08,
+        "boundary_inflow": 249965.14559186812,
+        "boundary_outflow": 275029.46559182974,
+        "scaled_l2": 4.761714441415599e-11,
+        "finite": true,
+        "local_balance_valid": true,
+        "chd_inflow": 186630.93505762378,
+        "chd_outflow": 0.0,
+        "ghb_inflow": 1185.0949933279358,
+        "ghb_outflow": 0.0,
+        "ghb_net": 1185.0949933279358,
+        "drn_inflow": 0.0,
+        "drn_outflow": 274962.5533312525,
+        "drn_net": -274962.5533312525,
+        "riv_inflow": 62149.11554091639,
+        "riv_outflow": 66.91226057727633,
+        "riv_net": 62082.20328033911,
+        "free_boundary_inflow": 249965.1455918678,
+        "free_boundary_outflow": 275029.4655918293
+      },
+      "physical_acceptance": {
+        "prescribed_cells_checked": 4500,
+        "prescribed_head_error_max_m": 0.0,
+        "prescribed_head_tolerance_m": 1e-10,
+        "boundary_condition_valid": true,
+        "invalid_active_heads": 0,
+        "inactive_marker_cells": 0,
+        "active_cells_checked": 1012500,
+        "input_valid": true,
+        "head_residual_rms": 4.744598685741803e-14,
+        "physical_rms": 9.781703517645273e-12,
+        "physical_max": 1.2957809825131505e-09,
+        "residual_l1": 1.4779408923727036e-06,
+        "relative_cell_imbalance": 2.3637527742215e-12,
+        "gross_throughput": 625251.8911836972,
+        "signed_imbalance": 3.840057235141103e-08,
+        "boundary_inflow": 249965.14559186774,
+        "boundary_outflow": 275029.4655918293,
+        "free_boundary_inflow": 249965.14559186777,
+        "free_boundary_outflow": 275029.4655918294,
+        "ghb_inflow": 1185.0949933279362,
+        "ghb_outflow": 0.0,
+        "drn_inflow": 0.0,
+        "drn_outflow": 274962.5533312521,
+        "drn_net": -274962.5533312521,
+        "riv_inflow": 62149.115540916515,
+        "riv_outflow": 66.91226057727633,
+        "riv_net": 62082.203280339236,
+        "chd_inflow": 186630.9350576233,
+        "chd_outflow": 0.0,
+        "fixed_cell_source_total": 0.0,
+        "free_cells": 1008000,
+        "fixed_reservoir_required_inflow": 186630.9350576233,
+        "ungrounded_current_components": 0,
+        "physical_metrics_valid": true,
+        "final_acceptance_thresholds": {
+          "physical_rms_m3_day": 1e-12,
+          "relative_cell_imbalance": 1e-07,
+          "head_equivalent_rms_m": 1e-06,
+          "prescribed_head_error_m": 1e-10
+        },
+        "independent_accepted": true,
+        "local_balance_valid": true
+      },
+      "ghb_budget": {
+        "ghb_inflow": 1185.0949933279358,
+        "ghb_outflow": 0.0,
+        "ghb_net": 1185.0949933279358,
+        "drn_inflow": 0.0,
+        "drn_outflow": 274962.5533312525,
+        "drn_net": -274962.5533312525,
+        "riv_inflow": 62149.11554091639,
+        "riv_outflow": 66.91226057727633,
+        "riv_net": 62082.20328033911
+      },
+      "drn_budget": {
+        "inflow": 0.0,
+        "outflow": 274962.5533312525,
+        "net": -274962.5533312525
+      },
+      "riv_budget": {
+        "inflow": 62149.11554091639,
+        "outflow": 66.91226057727633,
+        "net": 62082.20328033911
+      },
+      "source_budgets": {
+        "wel": {
+          "inflow": 0.0,
+          "outflow": 37596.48000000001,
+          "net": -37596.48000000001
+        },
+        "recharge": {
+          "inflow": 62660.79999999999,
+          "outflow": 0.0,
+          "net": 62660.79999999999
+        },
+        "volumetric": {
+          "inflow": 0.0,
+          "outflow": 0.0,
+          "net": 0.0
+        }
+      },
+      "multigrid": {
+        "controls": {
+          "levels": 5,
+          "min_coarse_n": 2,
+          "pre_sweeps": 2,
+          "post_sweeps": 2,
+          "coarse_sweeps": 2,
+          "cycles": 1,
+          "omega": 0.8,
+          "use_cuda_graph": false,
+          "cycle_kind": "k",
+          "cached_line_factors": true,
+          "preconditioner_precision": "float32",
+          "coefficient_state": "current",
+          "line_smoother": "jacobi",
+          "device_hierarchy_build": true
+        },
+        "smoother": "vertical_line",
+        "coefficient_state": "current",
+        "precision": "float32",
+        "dimensions": [
+          [
+            5,
+            450,
+            450
+          ],
+          [
+            5,
+            225,
+            225
+          ],
+          [
+            5,
+            113,
+            113
+          ],
+          [
+            5,
+            57,
+            57
+          ],
+          [
+            5,
+            29,
+            29
+          ]
+        ],
+        "actual_levels": 5,
+        "coarsening_factors": [
+          [
+            2,
+            2
+          ],
+          [
+            2,
+            2
+          ],
+          [
+            2,
+            2
+          ],
+          [
+            2,
+            2
+          ]
+        ],
+        "construction_seconds": 0.0,
+        "hierarchy_reused": true,
+        "coefficients_refreshed": false,
+        "value_refresh_count": 0,
+        "device_storage_refresh_count": 15,
+        "refresh_graph_captures": 0,
+        "refresh_graph_replays": 0,
+        "refresh_graph_fallback": false,
+        "allocated_device_bytes": 329465056,
+        "applications": 35,
+        "cycles": 35,
+        "graph_captures": 0,
+        "graph_replays": 0,
+        "graph_capture_failed": false,
+        "graph_error": null,
+        "inner_scalar_readbacks": 0,
+        "scalar_readbacks": 49,
+        "synchronization_seconds": 0.027869977900991216,
+        "device_apply_seconds": 0.18503507184982285,
+        "preconditioner_enqueue_seconds": 0.17848654199042358
+      },
+      "n_cycles_used": null,
+      "graph_count": null,
+      "graph_replays": null,
+      "linear_acceleration": null,
+      "preconditioner_applications": 35,
+      "cuda_graph_replayed": null,
+      "r_rms_end": null,
+      "h_rms_end": null,
+      "public_seconds": 1.4692757669836283,
+      "gpu_used_bytes": 1425727904,
+      "process_gpu_high_water_bytes": 2300554744,
+      "head_difference_from_cold_m": 0.0
+    },
+    {
+      "converged": true,
+      "stop_reason": "converged",
+      "implementation": "device_newton_fgmres",
+      "session_backend": "npf662_newton",
+      "krylov_method": "FGMRES",
+      "npf_preconditioner": "kcycle",
+      "outer_iterations": 7,
+      "krylov_iterations": 35,
+      "preconditioner_cycles": 35,
+      "cuda_graph_captures": null,
+      "cuda_graph_replays": null,
+      "seconds": 0.2359765800065361,
+      "public_total_seconds": 1.410341710987268,
+      "device_final_metrics": {
+        "physical_rms": 9.781697863858127e-12,
+        "head_residual_rms": 4.7445961186301245e-14,
+        "relative_cell_imbalance": 2.3637507392899558e-12,
+        "gross_throughput": 625251.891183697,
+        "residual_l1": 1.4779396200279068e-06,
+        "signed_imbalance": 3.840095317251368e-08,
+        "boundary_inflow": 249965.14559186823,
+        "boundary_outflow": 275029.46559182974,
+        "scaled_l2": 4.761714441415599e-11,
+        "finite": true,
+        "local_balance_valid": true,
+        "chd_inflow": 186630.93505762392,
+        "chd_outflow": 0.0,
+        "ghb_inflow": 1185.094993327936,
+        "ghb_outflow": 0.0,
+        "ghb_net": 1185.094993327936,
+        "drn_inflow": 0.0,
+        "drn_outflow": 274962.5533312525,
+        "drn_net": -274962.5533312525,
+        "riv_inflow": 62149.11554091637,
+        "riv_outflow": 66.91226057727633,
+        "riv_net": 62082.20328033909,
+        "free_boundary_inflow": 249965.1455918678,
+        "free_boundary_outflow": 275029.4655918293
+      },
+      "physical_acceptance": {
+        "prescribed_cells_checked": 4500,
+        "prescribed_head_error_max_m": 0.0,
+        "prescribed_head_tolerance_m": 1e-10,
+        "boundary_condition_valid": true,
+        "invalid_active_heads": 0,
+        "inactive_marker_cells": 0,
+        "active_cells_checked": 1012500,
+        "input_valid": true,
+        "head_residual_rms": 4.744598685741803e-14,
+        "physical_rms": 9.781703517645273e-12,
+        "physical_max": 1.2957809825131505e-09,
+        "residual_l1": 1.4779408923727036e-06,
+        "relative_cell_imbalance": 2.3637527742215e-12,
+        "gross_throughput": 625251.8911836972,
+        "signed_imbalance": 3.840057235141103e-08,
+        "boundary_inflow": 249965.14559186774,
+        "boundary_outflow": 275029.4655918293,
+        "free_boundary_inflow": 249965.14559186777,
+        "free_boundary_outflow": 275029.4655918294,
+        "ghb_inflow": 1185.0949933279362,
+        "ghb_outflow": 0.0,
+        "drn_inflow": 0.0,
+        "drn_outflow": 274962.5533312521,
+        "drn_net": -274962.5533312521,
+        "riv_inflow": 62149.115540916515,
+        "riv_outflow": 66.91226057727633,
+        "riv_net": 62082.203280339236,
+        "chd_inflow": 186630.9350576233,
+        "chd_outflow": 0.0,
+        "fixed_cell_source_total": 0.0,
+        "free_cells": 1008000,
+        "fixed_reservoir_required_inflow": 186630.9350576233,
+        "ungrounded_current_components": 0,
+        "physical_metrics_valid": true,
+        "final_acceptance_thresholds": {
+          "physical_rms_m3_day": 1e-12,
+          "relative_cell_imbalance": 1e-07,
+          "head_equivalent_rms_m": 1e-06,
+          "prescribed_head_error_m": 1e-10
+        },
+        "independent_accepted": true,
+        "local_balance_valid": true
+      },
+      "ghb_budget": {
+        "ghb_inflow": 1185.094993327936,
+        "ghb_outflow": 0.0,
+        "ghb_net": 1185.094993327936,
+        "drn_inflow": 0.0,
+        "drn_outflow": 274962.5533312525,
+        "drn_net": -274962.5533312525,
+        "riv_inflow": 62149.11554091637,
+        "riv_outflow": 66.91226057727633,
+        "riv_net": 62082.20328033909
+      },
+      "drn_budget": {
+        "inflow": 0.0,
+        "outflow": 274962.5533312525,
+        "net": -274962.5533312525
+      },
+      "riv_budget": {
+        "inflow": 62149.11554091637,
+        "outflow": 66.91226057727633,
+        "net": 62082.20328033909
+      },
+      "source_budgets": {
+        "wel": {
+          "inflow": 0.0,
+          "outflow": 37596.48000000001,
+          "net": -37596.48000000001
+        },
+        "recharge": {
+          "inflow": 62660.79999999999,
+          "outflow": 0.0,
+          "net": 62660.79999999999
+        },
+        "volumetric": {
+          "inflow": 0.0,
+          "outflow": 0.0,
+          "net": 0.0
+        }
+      },
+      "multigrid": {
+        "controls": {
+          "levels": 5,
+          "min_coarse_n": 2,
+          "pre_sweeps": 2,
+          "post_sweeps": 2,
+          "coarse_sweeps": 2,
+          "cycles": 1,
+          "omega": 0.8,
+          "use_cuda_graph": false,
+          "cycle_kind": "k",
+          "cached_line_factors": true,
+          "preconditioner_precision": "float32",
+          "coefficient_state": "current",
+          "line_smoother": "jacobi",
+          "device_hierarchy_build": true
+        },
+        "smoother": "vertical_line",
+        "coefficient_state": "current",
+        "precision": "float32",
+        "dimensions": [
+          [
+            5,
+            450,
+            450
+          ],
+          [
+            5,
+            225,
+            225
+          ],
+          [
+            5,
+            113,
+            113
+          ],
+          [
+            5,
+            57,
+            57
+          ],
+          [
+            5,
+            29,
+            29
+          ]
+        ],
+        "actual_levels": 5,
+        "coarsening_factors": [
+          [
+            2,
+            2
+          ],
+          [
+            2,
+            2
+          ],
+          [
+            2,
+            2
+          ],
+          [
+            2,
+            2
+          ]
+        ],
+        "construction_seconds": 0.0,
+        "hierarchy_reused": true,
+        "coefficients_refreshed": false,
+        "value_refresh_count": 0,
+        "device_storage_refresh_count": 22,
+        "refresh_graph_captures": 0,
+        "refresh_graph_replays": 0,
+        "refresh_graph_fallback": false,
+        "allocated_device_bytes": 329465056,
+        "applications": 35,
+        "cycles": 35,
+        "graph_captures": 0,
+        "graph_replays": 0,
+        "graph_capture_failed": false,
+        "graph_error": null,
+        "inner_scalar_readbacks": 0,
+        "scalar_readbacks": 49,
+        "synchronization_seconds": 0.027835112065076828,
+        "device_apply_seconds": 0.18595878505706775,
+        "preconditioner_enqueue_seconds": 0.17942220394616015
+      },
+      "n_cycles_used": null,
+      "graph_count": null,
+      "graph_replays": null,
+      "linear_acceleration": null,
+      "preconditioner_applications": 35,
+      "cuda_graph_replayed": null,
+      "r_rms_end": null,
+      "h_rms_end": null,
+      "public_seconds": 1.4103804899787065,
+      "gpu_used_bytes": 1600693272,
+      "process_gpu_high_water_bytes": 2300554744,
+      "head_difference_from_cold_m": 0.0
+    },
+    {
+      "converged": true,
+      "stop_reason": "converged",
+      "implementation": "device_newton_fgmres",
+      "session_backend": "npf662_newton",
+      "krylov_method": "FGMRES",
+      "npf_preconditioner": "kcycle",
+      "outer_iterations": 7,
+      "krylov_iterations": 35,
+      "preconditioner_cycles": 35,
+      "cuda_graph_captures": null,
+      "cuda_graph_replays": null,
+      "seconds": 0.23387473900220357,
+      "public_total_seconds": 1.4530029710149392,
+      "device_final_metrics": {
+        "physical_rms": 9.781697863858127e-12,
+        "head_residual_rms": 4.7445961186301245e-14,
+        "relative_cell_imbalance": 2.3637507392899558e-12,
+        "gross_throughput": 625251.891183697,
+        "residual_l1": 1.4779396200279068e-06,
+        "signed_imbalance": 3.840095317251368e-08,
+        "boundary_inflow": 249965.1455918681,
+        "boundary_outflow": 275029.46559182997,
+        "scaled_l2": 4.761714441415599e-11,
+        "finite": true,
+        "local_balance_valid": true,
+        "chd_inflow": 186630.93505762375,
+        "chd_outflow": 0.0,
+        "ghb_inflow": 1185.094993327936,
+        "ghb_outflow": 0.0,
+        "ghb_net": 1185.094993327936,
+        "drn_inflow": 0.0,
+        "drn_outflow": 274962.5533312527,
+        "drn_net": -274962.5533312527,
+        "riv_inflow": 62149.11554091639,
+        "riv_outflow": 66.91226057727633,
+        "riv_net": 62082.20328033911,
+        "free_boundary_inflow": 249965.1455918678,
+        "free_boundary_outflow": 275029.4655918293
+      },
+      "physical_acceptance": {
+        "prescribed_cells_checked": 4500,
+        "prescribed_head_error_max_m": 0.0,
+        "prescribed_head_tolerance_m": 1e-10,
+        "boundary_condition_valid": true,
+        "invalid_active_heads": 0,
+        "inactive_marker_cells": 0,
+        "active_cells_checked": 1012500,
+        "input_valid": true,
+        "head_residual_rms": 4.744598685741803e-14,
+        "physical_rms": 9.781703517645273e-12,
+        "physical_max": 1.2957809825131505e-09,
+        "residual_l1": 1.4779408923727036e-06,
+        "relative_cell_imbalance": 2.3637527742215e-12,
+        "gross_throughput": 625251.8911836972,
+        "signed_imbalance": 3.840057235141103e-08,
+        "boundary_inflow": 249965.14559186774,
+        "boundary_outflow": 275029.4655918293,
+        "free_boundary_inflow": 249965.14559186777,
+        "free_boundary_outflow": 275029.4655918294,
+        "ghb_inflow": 1185.0949933279362,
+        "ghb_outflow": 0.0,
+        "drn_inflow": 0.0,
+        "drn_outflow": 274962.5533312521,
+        "drn_net": -274962.5533312521,
+        "riv_inflow": 62149.115540916515,
+        "riv_outflow": 66.91226057727633,
+        "riv_net": 62082.203280339236,
+        "chd_inflow": 186630.9350576233,
+        "chd_outflow": 0.0,
+        "fixed_cell_source_total": 0.0,
+        "free_cells": 1008000,
+        "fixed_reservoir_required_inflow": 186630.9350576233,
+        "ungrounded_current_components": 0,
+        "physical_metrics_valid": true,
+        "final_acceptance_thresholds": {
+          "physical_rms_m3_day": 1e-12,
+          "relative_cell_imbalance": 1e-07,
+          "head_equivalent_rms_m": 1e-06,
+          "prescribed_head_error_m": 1e-10
+        },
+        "independent_accepted": true,
+        "local_balance_valid": true
+      },
+      "ghb_budget": {
+        "ghb_inflow": 1185.094993327936,
+        "ghb_outflow": 0.0,
+        "ghb_net": 1185.094993327936,
+        "drn_inflow": 0.0,
+        "drn_outflow": 274962.5533312527,
+        "drn_net": -274962.5533312527,
+        "riv_inflow": 62149.11554091639,
+        "riv_outflow": 66.91226057727633,
+        "riv_net": 62082.20328033911
+      },
+      "drn_budget": {
+        "inflow": 0.0,
+        "outflow": 274962.5533312527,
+        "net": -274962.5533312527
+      },
+      "riv_budget": {
+        "inflow": 62149.11554091639,
+        "outflow": 66.91226057727633,
+        "net": 62082.20328033911
+      },
+      "source_budgets": {
+        "wel": {
+          "inflow": 0.0,
+          "outflow": 37596.48000000001,
+          "net": -37596.48000000001
+        },
+        "recharge": {
+          "inflow": 62660.79999999999,
+          "outflow": 0.0,
+          "net": 62660.79999999999
+        },
+        "volumetric": {
+          "inflow": 0.0,
+          "outflow": 0.0,
+          "net": 0.0
+        }
+      },
+      "multigrid": {
+        "controls": {
+          "levels": 5,
+          "min_coarse_n": 2,
+          "pre_sweeps": 2,
+          "post_sweeps": 2,
+          "coarse_sweeps": 2,
+          "cycles": 1,
+          "omega": 0.8,
+          "use_cuda_graph": false,
+          "cycle_kind": "k",
+          "cached_line_factors": true,
+          "preconditioner_precision": "float32",
+          "coefficient_state": "current",
+          "line_smoother": "jacobi",
+          "device_hierarchy_build": true
+        },
+        "smoother": "vertical_line",
+        "coefficient_state": "current",
+        "precision": "float32",
+        "dimensions": [
+          [
+            5,
+            450,
+            450
+          ],
+          [
+            5,
+            225,
+            225
+          ],
+          [
+            5,
+            113,
+            113
+          ],
+          [
+            5,
+            57,
+            57
+          ],
+          [
+            5,
+            29,
+            29
+          ]
+        ],
+        "actual_levels": 5,
+        "coarsening_factors": [
+          [
+            2,
+            2
+          ],
+          [
+            2,
+            2
+          ],
+          [
+            2,
+            2
+          ],
+          [
+            2,
+            2
+          ]
+        ],
+        "construction_seconds": 0.0,
+        "hierarchy_reused": true,
+        "coefficients_refreshed": false,
+        "value_refresh_count": 0,
+        "device_storage_refresh_count": 29,
+        "refresh_graph_captures": 0,
+        "refresh_graph_replays": 0,
+        "refresh_graph_fallback": false,
+        "allocated_device_bytes": 329465056,
+        "applications": 35,
+        "cycles": 35,
+        "graph_captures": 0,
+        "graph_replays": 0,
+        "graph_capture_failed": false,
+        "graph_error": null,
+        "inner_scalar_readbacks": 0,
+        "scalar_readbacks": 49,
+        "synchronization_seconds": 0.027920022985199466,
+        "device_apply_seconds": 0.18397014379501309,
+        "preconditioner_enqueue_seconds": 0.17738020405522548
+      },
+      "n_cycles_used": null,
+      "graph_count": null,
+      "graph_replays": null,
+      "linear_acceleration": null,
+      "preconditioner_applications": 35,
+      "cuda_graph_replayed": null,
+      "r_rms_end": null,
+      "h_rms_end": null,
+      "public_seconds": 1.4530461390095297,
+      "gpu_used_bytes": 1775658640,
+      "process_gpu_high_water_bytes": 2300554744,
+      "head_difference_from_cold_m": 0.0
+    }
+  ],
+  "identical_summary": {
+    "median": 1.4530461390095297,
+    "minimum": 1.4103804899787065,
+    "maximum": 1.4692757669836283
+  },
+  "warm_start_calibration": [
+    {
+      "converged": true,
+      "stop_reason": "converged",
+      "implementation": "device_newton_fgmres",
+      "session_backend": "npf662_newton",
+      "krylov_method": "FGMRES",
+      "npf_preconditioner": "kcycle",
+      "outer_iterations": 4,
+      "krylov_iterations": 21,
+      "preconditioner_cycles": 21,
+      "cuda_graph_captures": null,
+      "cuda_graph_replays": null,
+      "seconds": 0.14149715099483728,
+      "public_total_seconds": 1.544091904972447,
+      "device_final_metrics": {
+        "physical_rms": 4.132068462043021e-12,
+        "head_residual_rms": 1.7502669302409027e-14,
+        "relative_cell_imbalance": 2.7870046070041474e-12,
+        "gross_throughput": 625403.4300007789,
+        "residual_l1": 1.7430022406483666e-06,
+        "signed_imbalance": 1.4093071626327136e-08,
+        "boundary_inflow": 250040.91500039626,
+        "boundary_outflow": 273225.4110003821,
+        "scaled_l2": 1.7571590839446312e-11,
+        "finite": true,
+        "local_balance_valid": true,
+        "chd_inflow": 186699.5732444043,
+        "chd_outflow": 0.0,
+        "ghb_inflow": 1185.7599738897138,
+        "ghb_outflow": 0.0,
+        "ghb_net": 1185.7599738897138,
+        "drn_inflow": 0.0,
+        "drn_outflow": 273158.5792064162,
+        "drn_net": -273158.5792064162,
+        "riv_inflow": 62155.58178210224,
+        "riv_outflow": 66.83179396585999,
+        "riv_net": 62088.749988136384,
+        "free_boundary_inflow": 250040.91500039652,
+        "free_boundary_outflow": 273225.4110003824
+      },
+      "physical_acceptance": {
+        "prescribed_cells_checked": 4500,
+        "prescribed_head_error_max_m": 0.0,
+        "prescribed_head_tolerance_m": 1e-10,
+        "boundary_condition_valid": true,
+        "invalid_active_heads": 0,
+        "inactive_marker_cells": 0,
+        "active_cells_checked": 1012500,
+        "input_valid": true,
+        "head_residual_rms": 1.7502697250696274e-14,
+        "physical_rms": 4.132074452000837e-12,
+        "physical_max": 2.534290000077988e-10,
+        "residual_l1": 1.7430066578246596e-06,
+        "relative_cell_imbalance": 2.7870116699271844e-12,
+        "gross_throughput": 625403.4300007789,
+        "signed_imbalance": 1.4092894573901656e-08,
+        "boundary_inflow": 250040.91500039652,
+        "boundary_outflow": 273225.4110003824,
+        "free_boundary_inflow": 250040.9150003965,
+        "free_boundary_outflow": 273225.4110003824,
+        "ghb_inflow": 1185.7599738897134,
+        "ghb_outflow": 0.0,
+        "drn_inflow": 0.0,
+        "drn_outflow": 273158.5792064165,
+        "drn_net": -273158.5792064165,
+        "riv_inflow": 62155.58178210237,
+        "riv_outflow": 66.83179396585999,
+        "riv_net": 62088.74998813651,
+        "chd_inflow": 186699.57324440443,
+        "chd_outflow": 0.0,
+        "fixed_cell_source_total": 0.0,
+        "free_cells": 1008000,
+        "fixed_reservoir_required_inflow": 186699.57324440443,
+        "ungrounded_current_components": 0,
+        "physical_metrics_valid": true,
+        "final_acceptance_thresholds": {
+          "physical_rms_m3_day": 1e-12,
+          "relative_cell_imbalance": 1e-07,
+          "head_equivalent_rms_m": 1e-06,
+          "prescribed_head_error_m": 1e-10
+        },
+        "independent_accepted": true,
+        "local_balance_valid": true
+      },
+      "ghb_budget": {
+        "ghb_inflow": 1185.7599738897138,
+        "ghb_outflow": 0.0,
+        "ghb_net": 1185.7599738897138,
+        "drn_inflow": 0.0,
+        "drn_outflow": 273158.5792064162,
+        "drn_net": -273158.5792064162,
+        "riv_inflow": 62155.58178210224,
+        "riv_outflow": 66.83179396585999,
+        "riv_net": 62088.749988136384
+      },
+      "drn_budget": {
+        "inflow": 0.0,
+        "outflow": 273158.5792064162,
+        "net": -273158.5792064162
+      },
+      "riv_budget": {
+        "inflow": 62155.58178210224,
+        "outflow": 66.83179396585999,
+        "net": 62088.749988136384
+      },
+      "source_budgets": {
+        "wel": {
+          "inflow": 0.0,
+          "outflow": 39476.30400000002,
+          "net": -39476.30400000002
+        },
+        "recharge": {
+          "inflow": 62660.79999999999,
+          "outflow": 0.0,
+          "net": 62660.79999999999
+        },
+        "volumetric": {
+          "inflow": 0.0,
+          "outflow": 0.0,
+          "net": 0.0
+        }
+      },
+      "multigrid": {
+        "controls": {
+          "levels": 5,
+          "min_coarse_n": 2,
+          "pre_sweeps": 2,
+          "post_sweeps": 2,
+          "coarse_sweeps": 2,
+          "cycles": 1,
+          "omega": 0.8,
+          "use_cuda_graph": false,
+          "cycle_kind": "k",
+          "cached_line_factors": true,
+          "preconditioner_precision": "float32",
+          "coefficient_state": "current",
+          "line_smoother": "jacobi",
+          "device_hierarchy_build": true
+        },
+        "smoother": "vertical_line",
+        "coefficient_state": "current",
+        "precision": "float32",
+        "dimensions": [
+          [
+            5,
+            450,
+            450
+          ],
+          [
+            5,
+            225,
+            225
+          ],
+          [
+            5,
+            113,
+            113
+          ],
+          [
+            5,
+            57,
+            57
+          ],
+          [
+            5,
+            29,
+            29
+          ]
+        ],
+        "actual_levels": 5,
+        "coarsening_factors": [
+          [
+            2,
+            2
+          ],
+          [
+            2,
+            2
+          ],
+          [
+            2,
+            2
+          ],
+          [
+            2,
+            2
+          ]
+        ],
+        "construction_seconds": 0.07769955301773734,
+        "hierarchy_reused": false,
+        "coefficients_refreshed": false,
+        "value_refresh_count": 0,
+        "device_storage_refresh_count": 5,
+        "refresh_graph_captures": 0,
+        "refresh_graph_replays": 0,
+        "refresh_graph_fallback": false,
+        "allocated_device_bytes": 329465056,
+        "applications": 21,
+        "cycles": 21,
+        "graph_captures": 0,
+        "graph_replays": 0,
+        "graph_capture_failed": false,
+        "graph_error": null,
+        "inner_scalar_readbacks": 0,
+        "scalar_readbacks": 29,
+        "synchronization_seconds": 0.016991359007079154,
+        "device_apply_seconds": 0.11109977531433105,
+        "preconditioner_enqueue_seconds": 0.10718833198188804
+      },
+      "n_cycles_used": null,
+      "graph_count": null,
+      "graph_replays": null,
+      "linear_acceleration": null,
+      "preconditioner_applications": 21,
+      "cuda_graph_replayed": null,
+      "r_rms_end": null,
+      "h_rms_end": null,
+      "public_seconds": 1.544132986018667,
+      "gpu_used_bytes": 1950624008,
+      "process_gpu_high_water_bytes": 2300554744
+    },
+    {
+      "converged": true,
+      "stop_reason": "converged",
+      "implementation": "device_newton_fgmres",
+      "session_backend": "npf662_newton",
+      "krylov_method": "FGMRES",
+      "npf_preconditioner": "kcycle",
+      "outer_iterations": 5,
+      "krylov_iterations": 22,
+      "preconditioner_cycles": 22,
+      "cuda_graph_captures": null,
+      "cuda_graph_replays": null,
+      "seconds": 0.15111420198809355,
+      "public_total_seconds": 1.497239194024587,
+      "device_final_metrics": {
+        "physical_rms": 8.414780768969865e-11,
+        "head_residual_rms": 3.641474583903817e-13,
+        "relative_cell_imbalance": 2.2675864311471732e-11,
+        "gross_throughput": 630866.3483614099,
+        "residual_l1": 1.4305439714116986e-05,
+        "signed_imbalance": 6.443466492245453e-08,
+        "boundary_inflow": 251519.15818073603,
+        "boundary_outflow": 274077.04618067155,
+        "scaled_l2": 3.6581620765617304e-10,
+        "finite": true,
+        "local_balance_valid": true,
+        "chd_inflow": 186685.90315992225,
+        "chd_outflow": 0.0,
+        "ghb_inflow": 1185.9053650864548,
+        "ghb_outflow": 0.0,
+        "ghb_net": 1185.9053650864548,
+        "drn_inflow": 0.0,
+        "drn_outflow": 274011.8523695234,
+        "drn_net": -274011.8523695234,
+        "riv_inflow": 63647.34965572733,
+        "riv_outflow": 65.19381114817051,
+        "riv_net": 63582.15584457916,
+        "free_boundary_inflow": 251519.15818073705,
+        "free_boundary_outflow": 274077.04618067265
+      },
+      "physical_acceptance": {
+        "prescribed_cells_checked": 4500,
+        "prescribed_head_error_max_m": 0.0,
+        "prescribed_head_tolerance_m": 1e-10,
+        "boundary_condition_valid": true,
+        "invalid_active_heads": 0,
+        "inactive_marker_cells": 0,
+        "active_cells_checked": 1012500,
+        "input_valid": true,
+        "head_residual_rms": 3.641474289573281e-13,
+        "physical_rms": 8.41478015399254e-11,
+        "physical_max": 6.573355637584655e-09,
+        "residual_l1": 1.4305439971615998e-05,
+        "relative_cell_imbalance": 2.2675864719639032e-11,
+        "gross_throughput": 630866.3483614097,
+        "signed_imbalance": 6.443474030294949e-08,
+        "boundary_inflow": 251519.15818073705,
+        "boundary_outflow": 274077.04618067265,
+        "free_boundary_inflow": 251519.15818073708,
+        "free_boundary_outflow": 274077.04618067265,
+        "ghb_inflow": 1185.905365086455,
+        "ghb_outflow": 0.0,
+        "drn_inflow": 0.0,
+        "drn_outflow": 274011.8523695245,
+        "drn_net": -274011.8523695245,
+        "riv_inflow": 63647.34965572755,
+        "riv_outflow": 65.19381114817051,
+        "riv_net": 63582.15584457938,
+        "chd_inflow": 186685.90315992307,
+        "chd_outflow": 0.0,
+        "fixed_cell_source_total": 0.0,
+        "free_cells": 1008000,
+        "fixed_reservoir_required_inflow": 186685.90315992307,
+        "ungrounded_current_components": 0,
+        "physical_metrics_valid": true,
+        "final_acceptance_thresholds": {
+          "physical_rms_m3_day": 1e-12,
+          "relative_cell_imbalance": 1e-07,
+          "head_equivalent_rms_m": 1e-06,
+          "prescribed_head_error_m": 1e-10
+        },
+        "independent_accepted": true,
+        "local_balance_valid": true
+      },
+      "ghb_budget": {
+        "ghb_inflow": 1185.9053650864548,
+        "ghb_outflow": 0.0,
+        "ghb_net": 1185.9053650864548,
+        "drn_inflow": 0.0,
+        "drn_outflow": 274011.8523695234,
+        "drn_net": -274011.8523695234,
+        "riv_inflow": 63647.34965572733,
+        "riv_outflow": 65.19381114817051,
+        "riv_net": 63582.15584457916
+      },
+      "drn_budget": {
+        "inflow": 0.0,
+        "outflow": 274011.8523695234,
+        "net": -274011.8523695234
+      },
+      "riv_budget": {
+        "inflow": 63647.34965572733,
+        "outflow": 65.19381114817051,
+        "net": 63582.15584457916
+      },
+      "source_budgets": {
+        "wel": {
+          "inflow": 0.0,
+          "outflow": 41356.12800000001,
+          "net": -41356.12800000001
+        },
+        "recharge": {
+          "inflow": 63914.016,
+          "outflow": 0.0,
+          "net": 63914.016
+        },
+        "volumetric": {
+          "inflow": 0.0,
+          "outflow": 0.0,
+          "net": 0.0
+        }
+      },
+      "multigrid": {
+        "controls": {
+          "levels": 5,
+          "min_coarse_n": 2,
+          "pre_sweeps": 2,
+          "post_sweeps": 2,
+          "coarse_sweeps": 2,
+          "cycles": 1,
+          "omega": 0.8,
+          "use_cuda_graph": false,
+          "cycle_kind": "k",
+          "cached_line_factors": true,
+          "preconditioner_precision": "float32",
+          "coefficient_state": "current",
+          "line_smoother": "jacobi",
+          "device_hierarchy_build": true
+        },
+        "smoother": "vertical_line",
+        "coefficient_state": "current",
+        "precision": "float32",
+        "dimensions": [
+          [
+            5,
+            450,
+            450
+          ],
+          [
+            5,
+            225,
+            225
+          ],
+          [
+            5,
+            113,
+            113
+          ],
+          [
+            5,
+            57,
+            57
+          ],
+          [
+            5,
+            29,
+            29
+          ]
+        ],
+        "actual_levels": 5,
+        "coarsening_factors": [
+          [
+            2,
+            2
+          ],
+          [
+            2,
+            2
+          ],
+          [
+            2,
+            2
+          ],
+          [
+            2,
+            2
+          ]
+        ],
+        "construction_seconds": 0.07555525199859403,
+        "hierarchy_reused": false,
+        "coefficients_refreshed": false,
+        "value_refresh_count": 0,
+        "device_storage_refresh_count": 6,
+        "refresh_graph_captures": 0,
+        "refresh_graph_replays": 0,
+        "refresh_graph_fallback": false,
+        "allocated_device_bytes": 329465056,
+        "applications": 22,
+        "cycles": 22,
+        "graph_captures": 0,
+        "graph_replays": 0,
+        "graph_capture_failed": false,
+        "graph_error": null,
+        "inner_scalar_readbacks": 0,
+        "scalar_readbacks": 32,
+        "synchronization_seconds": 0.01798152204719372,
+        "device_apply_seconds": 0.11629664039611819,
+        "preconditioner_enqueue_seconds": 0.11199995395145379
+      },
+      "n_cycles_used": null,
+      "graph_count": null,
+      "graph_replays": null,
+      "linear_acceleration": null,
+      "preconditioner_applications": 22,
+      "cuda_graph_replayed": null,
+      "r_rms_end": null,
+      "h_rms_end": null,
+      "public_seconds": 1.4972703300009016,
+      "gpu_used_bytes": 2125589376,
+      "process_gpu_high_water_bytes": 2300554744
+    },
+    {
+      "converged": true,
+      "stop_reason": "converged",
+      "implementation": "device_newton_fgmres",
+      "session_backend": "npf662_newton",
+      "krylov_method": "FGMRES",
+      "npf_preconditioner": "kcycle",
+      "outer_iterations": 4,
+      "krylov_iterations": 20,
+      "preconditioner_cycles": 20,
+      "cuda_graph_captures": null,
+      "cuda_graph_replays": null,
+      "seconds": 0.1358864110079594,
+      "public_total_seconds": 1.4618898589978926,
+      "device_final_metrics": {
+        "physical_rms": 9.426043634863573e-11,
+        "head_residual_rms": 4.3989270157821886e-13,
+        "relative_cell_imbalance": 2.9887631479639776e-11,
+        "gross_throughput": 636196.8627073357,
+        "residual_l1": 1.9014417381099834e-05,
+        "signed_imbalance": -2.664426608567131e-07,
+        "boundary_inflow": 252931.1993535343,
+        "boundary_outflow": 274862.4793538021,
+        "scaled_l2": 4.446740871146956e-10,
+        "finite": true,
+        "local_balance_valid": true,
+        "chd_inflow": 186675.07308409625,
+        "chd_outflow": 0.0,
+        "ghb_inflow": 1186.0517481460738,
+        "ghb_outflow": 0.0,
+        "ghb_net": 1186.0517481460738,
+        "drn_inflow": 0.0,
+        "drn_outflow": 274798.92752770317,
+        "drn_net": -274798.92752770317,
+        "riv_inflow": 65070.07452129197,
+        "riv_outflow": 63.551826098957775,
+        "riv_net": 65006.522695193016,
+        "free_boundary_inflow": 252931.19935353464,
+        "free_boundary_outflow": 274862.4793538011
+      },
+      "physical_acceptance": {
+        "prescribed_cells_checked": 4500,
+        "prescribed_head_error_max_m": 0.0,
+        "prescribed_head_tolerance_m": 1e-10,
+        "boundary_condition_valid": true,
+        "invalid_active_heads": 0,
+        "inactive_marker_cells": 0,
+        "active_cells_checked": 1012500,
+        "input_valid": true,
+        "head_residual_rms": 4.398927122801411e-13,
+        "physical_rms": 9.426041563757141e-11,
+        "physical_max": 9.941231837728992e-09,
+        "residual_l1": 1.901441459597993e-05,
+        "relative_cell_imbalance": 2.9887627101875487e-11,
+        "gross_throughput": 636196.8627073359,
+        "signed_imbalance": -2.664427920257427e-07,
+        "boundary_inflow": 252931.1993535347,
+        "boundary_outflow": 274862.4793538012,
+        "free_boundary_inflow": 252931.19935353467,
+        "free_boundary_outflow": 274862.4793538011,
+        "ghb_inflow": 1186.0517481460738,
+        "ghb_outflow": 0.0,
+        "drn_inflow": 0.0,
+        "drn_outflow": 274798.9275277022,
+        "drn_net": -274798.9275277022,
+        "riv_inflow": 65070.07452129215,
+        "riv_outflow": 63.55182609895777,
+        "riv_net": 65006.52269519319,
+        "chd_inflow": 186675.07308409648,
+        "chd_outflow": 0.0,
+        "fixed_cell_source_total": 0.0,
+        "free_cells": 1008000,
+        "fixed_reservoir_required_inflow": 186675.07308409648,
+        "ungrounded_current_components": 0,
+        "physical_metrics_valid": true,
+        "final_acceptance_thresholds": {
+          "physical_rms_m3_day": 1e-12,
+          "relative_cell_imbalance": 1e-07,
+          "head_equivalent_rms_m": 1e-06,
+          "prescribed_head_error_m": 1e-10
+        },
+        "independent_accepted": true,
+        "local_balance_valid": true
+      },
+      "ghb_budget": {
+        "ghb_inflow": 1186.0517481460738,
+        "ghb_outflow": 0.0,
+        "ghb_net": 1186.0517481460738,
+        "drn_inflow": 0.0,
+        "drn_outflow": 274798.92752770317,
+        "drn_net": -274798.92752770317,
+        "riv_inflow": 65070.07452129197,
+        "riv_outflow": 63.551826098957775,
+        "riv_net": 65006.522695193016
+      },
+      "drn_budget": {
+        "inflow": 0.0,
+        "outflow": 274798.92752770317,
+        "net": -274798.92752770317
+      },
+      "riv_budget": {
+        "inflow": 65070.07452129197,
+        "outflow": 63.551826098957775,
+        "net": 65006.522695193016
+      },
+      "source_budgets": {
+        "wel": {
+          "inflow": 0.0,
+          "outflow": 43235.952000000005,
+          "net": -43235.952000000005
+        },
+        "recharge": {
+          "inflow": 65167.23200000002,
+          "outflow": 0.0,
+          "net": 65167.23200000002
+        },
+        "volumetric": {
+          "inflow": 0.0,
+          "outflow": 0.0,
+          "net": 0.0
+        }
+      },
+      "multigrid": {
+        "controls": {
+          "levels": 5,
+          "min_coarse_n": 2,
+          "pre_sweeps": 2,
+          "post_sweeps": 2,
+          "coarse_sweeps": 2,
+          "cycles": 1,
+          "omega": 0.8,
+          "use_cuda_graph": false,
+          "cycle_kind": "k",
+          "cached_line_factors": true,
+          "preconditioner_precision": "float32",
+          "coefficient_state": "current",
+          "line_smoother": "jacobi",
+          "device_hierarchy_build": true
+        },
+        "smoother": "vertical_line",
+        "coefficient_state": "current",
+        "precision": "float32",
+        "dimensions": [
+          [
+            5,
+            450,
+            450
+          ],
+          [
+            5,
+            225,
+            225
+          ],
+          [
+            5,
+            113,
+            113
+          ],
+          [
+            5,
+            57,
+            57
+          ],
+          [
+            5,
+            29,
+            29
+          ]
+        ],
+        "actual_levels": 5,
+        "coarsening_factors": [
+          [
+            2,
+            2
+          ],
+          [
+            2,
+            2
+          ],
+          [
+            2,
+            2
+          ],
+          [
+            2,
+            2
+          ]
+        ],
+        "construction_seconds": 0.07976735700503923,
+        "hierarchy_reused": false,
+        "coefficients_refreshed": false,
+        "value_refresh_count": 0,
+        "device_storage_refresh_count": 5,
+        "refresh_graph_captures": 0,
+        "refresh_graph_replays": 0,
+        "refresh_graph_fallback": false,
+        "allocated_device_bytes": 329465056,
+        "applications": 20,
+        "cycles": 20,
+        "graph_captures": 0,
+        "graph_replays": 0,
+        "graph_capture_failed": false,
+        "graph_error": null,
+        "inner_scalar_readbacks": 0,
+        "scalar_readbacks": 28,
+        "synchronization_seconds": 0.016546446015127003,
+        "device_apply_seconds": 0.1057951364517212,
+        "preconditioner_enqueue_seconds": 0.10190237101051025
+      },
+      "n_cycles_used": null,
+      "graph_count": null,
+      "graph_replays": null,
+      "linear_acceleration": null,
+      "preconditioner_applications": 20,
+      "cuda_graph_replayed": null,
+      "r_rms_end": null,
+      "h_rms_end": null,
+      "public_seconds": 1.4619288689864334,
+      "gpu_used_bytes": 2300554744,
+      "process_gpu_high_water_bytes": 2300554744
+    }
+  ],
+  "calibration_summary": {
+    "median": 1.4972703300009016,
+    "minimum": 1.4619288689864334,
+    "maximum": 1.544132986018667
+  },
+  "source_updates": [
+    {
+      "wel_or_raw_seconds": 0.018358639994403347,
+      "recharge_seconds": 0.01054468599613756,
+      "river_stage_seconds": 0.004234810010530055
+    },
+    {
+      "wel_or_raw_seconds": 0.019605299981776625,
+      "recharge_seconds": 0.011255703982897103,
+      "river_stage_seconds": 0.004413599002873525
+    },
+    {
+      "wel_or_raw_seconds": 0.01776557700941339,
+      "recharge_seconds": 0.01052440598141402,
+      "river_stage_seconds": 0.004372419003630057
+    }
+  ],
+  "accepted_output_extraction_seconds": 0.015816721017472446,
+  "forcing": {
+    "abstraction": {
+      "inflow": 0.0,
+      "outflow": 43235.952000000005,
+      "net": -43235.952000000005
+    }
+  },
+  "raw_control": false
+}

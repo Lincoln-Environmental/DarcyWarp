@@ -1,0 +1,69 @@
+{
+  "passed": true,
+  "rows": [
+    {
+      "device": "cpu",
+      "case": "drain_activation",
+      "head_error_m": 0.0,
+      "target_m": 1e-12,
+      "implementation": "device_newton_fgmres",
+      "preconditioner": "kcycle"
+    },
+    {
+      "device": "cpu",
+      "case": "disconnected_river_activation",
+      "head_error_m": 0.0,
+      "target_m": 1e-12,
+      "implementation": "device_newton_fgmres",
+      "preconditioner": "kcycle"
+    },
+    {
+      "device": "cuda:0",
+      "case": "drain_activation",
+      "head_error_m": 0.0,
+      "target_m": 1e-12,
+      "implementation": "device_newton_fgmres",
+      "preconditioner": "kcycle"
+    },
+    {
+      "device": "cuda:0",
+      "case": "disconnected_river_activation",
+      "head_error_m": 0.0,
+      "target_m": 1e-12,
+      "implementation": "device_newton_fgmres",
+      "preconditioner": "kcycle"
+    },
+    {
+      "device": "cpu",
+      "case": "weak_common_mode_steady",
+      "head_error_m": 3.552713678800501e-15,
+      "target_m": 1e-06,
+      "implementation": "device_newton_fgmres",
+      "preconditioner": "kcycle"
+    },
+    {
+      "device": "cpu",
+      "case": "weak_common_mode_transient",
+      "head_error_m": 7.372289445584101e-10,
+      "target_m": 1e-06,
+      "implementation": "device_newton_fgmres",
+      "preconditioner": "kcycle"
+    },
+    {
+      "device": "cuda:0",
+      "case": "weak_common_mode_steady",
+      "head_error_m": 0.0,
+      "target_m": 1e-06,
+      "implementation": "device_newton_fgmres",
+      "preconditioner": "kcycle"
+    },
+    {
+      "device": "cuda:0",
+      "case": "weak_common_mode_transient",
+      "head_error_m": 9.319531812934656e-10,
+      "target_m": 1e-06,
+      "implementation": "device_newton_fgmres",
+      "preconditioner": "kcycle"
+    }
+  ]
+}

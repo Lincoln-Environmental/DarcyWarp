@@ -1,0 +1,324 @@
+{
+  "version": "mf6: 6.6.2 05/12/2025",
+  "sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+  "build": "historical-local-6.6.2",
+  "shape": [
+    5,
+    450,
+    450
+  ],
+  "transient": false,
+  "well_precision": "float64",
+  "ims_controls": {
+    "complexity": "COMPLEX",
+    "linear_acceleration": "BICGSTAB",
+    "outer_maximum": 200,
+    "outer_dvclose": 1e-11,
+    "inner_maximum": 200,
+    "inner_dvclose": 1e-12,
+    "rcloserecord": [
+      1e-12,
+      "strict"
+    ]
+  },
+  "engine_seconds": [
+    1061.5059006569936
+  ],
+  "construction_seconds": 10.104625744002988,
+  "input_precision": 17,
+  "input_float_characters": 25,
+  "input_sha256": {
+    "pkgqual.ic": "538eb171507061592123704f0ba2e0079697a4cce6aca934d7ff9988058450d9",
+    "pkgqual.oc": "cd16d447665736e6c486eaf3924f98476bb0db39f125759c7da06d72b88295d3",
+    "pkgqual.dis": "7c2391ec03e77289ceeede2160c5d7d2764dd9b372f7e149470b9a00733912a9",
+    "pkgqual.ghb": "2eb24b9b4eed17b96dd3a16dd8524f1913fef763181c601e29f86a7d53196664",
+    "pkgqual.ims": "ff1eb8ea6547db619bb2a4679393d2f6b92acc91d979bcbc35f7d54d42255feb",
+    "pkgqual.rch": "4c348b5f2af2dffd23250ff933ded493d04049208c2a942b81635ec278d5a944",
+    "pkgqual.wel": "f9ed6c6ec8b53a715420be93f725e7ae9b65e4d9a47098e01641a71b47195f3f",
+    "pkgqual.nam": "02187c414bfb99d61b1fd4062e696ac312a4d0dfe13da40dac10ca2a6e4188c8",
+    "pkgqual.riv": "eb70b8ce9b9f76894847780d2ade4ed3ad713c101c92b1887593f7de801819b3",
+    "mfsim.nam": "4e5c86b646539fc3ac80c368a407adf4eec7f12b7f2516ecfd88844fcc072d35",
+    "pkgqual.npf": "cc4e48ae929a8dca5250bd1088dabc90e7d83920047d391d9bb03049ea7f7d62",
+    "pkgqual.drn": "536c6401a6789ef8e8369d425807eccb3de00a534f8ca4476190ff70e4dc4d63",
+    "pkgqual.tdis": "11b7cce1c33b1663138f3e4946f88c43924efc28a6d5acd6b8cd2997576fb9f8",
+    "pkgqual.chd": "619cf24c1131c8c861cb7d0060310691dfeb763c3d93ff873861f2bd350b9f88"
+  },
+  "input_audit_seconds": 0.08510548699996434,
+  "engine_summary": {
+    "median": 1061.5059006569936,
+    "minimum": 1061.5059006569936,
+    "maximum": 1061.5059006569936
+  },
+  "extraction_seconds": 1.0628308820014354,
+  "periods": [
+    {
+      "dt": 1.0,
+      "packages": {
+        "WEL": {
+          "inflow": 0.0,
+          "outflow": 37596.48000000001,
+          "net": -37596.48000000001
+        },
+        "RCH": {
+          "inflow": 62660.79999999999,
+          "outflow": 0.0,
+          "net": 62660.79999999999
+        },
+        "CHD": {
+          "inflow": 186630.9350575779,
+          "outflow": 0.0,
+          "net": 186630.9350575779
+        },
+        "DRN": {
+          "inflow": 0.0,
+          "outflow": 274962.55333168677,
+          "net": -274962.55333168677
+        },
+        "RIV": {
+          "inflow": 62149.11554091587,
+          "outflow": 66.91226057734684,
+          "net": 62082.20328033852
+        },
+        "GHB": {
+          "inflow": 1185.0949933279348,
+          "outflow": 0.0,
+          "net": 1185.0949933279348
+        }
+      },
+      "volumes": {
+        "WEL": {
+          "inflow": 0.0,
+          "outflow": 37596.48000000001,
+          "net": -37596.48000000001
+        },
+        "RCH": {
+          "inflow": 62660.79999999999,
+          "outflow": 0.0,
+          "net": 62660.79999999999
+        },
+        "CHD": {
+          "inflow": 186630.9350575779,
+          "outflow": 0.0,
+          "net": 186630.9350575779
+        },
+        "DRN": {
+          "inflow": 0.0,
+          "outflow": 274962.55333168677,
+          "net": -274962.55333168677
+        },
+        "RIV": {
+          "inflow": 62149.11554091587,
+          "outflow": 66.91226057734684,
+          "net": 62082.20328033852
+        },
+        "GHB": {
+          "inflow": 1185.0949933279348,
+          "outflow": 0.0,
+          "net": 1185.0949933279348
+        }
+      }
+    },
+    {
+      "dt": 1.0,
+      "packages": {
+        "WEL": {
+          "inflow": 0.0,
+          "outflow": 39476.30400000002,
+          "net": -39476.30400000002
+        },
+        "RCH": {
+          "inflow": 62660.79999999999,
+          "outflow": 0.0,
+          "net": 62660.79999999999
+        },
+        "CHD": {
+          "inflow": 186699.5732444019,
+          "outflow": 0.0,
+          "net": 186699.5732444019
+        },
+        "DRN": {
+          "inflow": 0.0,
+          "outflow": 273158.57920597127,
+          "net": -273158.57920597127
+        },
+        "RIV": {
+          "inflow": 62155.58178210205,
+          "outflow": 66.83179396595597,
+          "net": 62088.749988136085
+        },
+        "GHB": {
+          "inflow": 1185.7599738899057,
+          "outflow": 0.0,
+          "net": 1185.7599738899057
+        }
+      },
+      "volumes": {
+        "WEL": {
+          "inflow": 0.0,
+          "outflow": 39476.30400000002,
+          "net": -39476.30400000002
+        },
+        "RCH": {
+          "inflow": 62660.79999999999,
+          "outflow": 0.0,
+          "net": 62660.79999999999
+        },
+        "CHD": {
+          "inflow": 186699.5732444019,
+          "outflow": 0.0,
+          "net": 186699.5732444019
+        },
+        "DRN": {
+          "inflow": 0.0,
+          "outflow": 273158.57920597127,
+          "net": -273158.57920597127
+        },
+        "RIV": {
+          "inflow": 62155.58178210205,
+          "outflow": 66.83179396595597,
+          "net": 62088.749988136085
+        },
+        "GHB": {
+          "inflow": 1185.7599738899057,
+          "outflow": 0.0,
+          "net": 1185.7599738899057
+        }
+      }
+    },
+    {
+      "dt": 1.0,
+      "packages": {
+        "WEL": {
+          "inflow": 0.0,
+          "outflow": 41356.12800000001,
+          "net": -41356.12800000001
+        },
+        "RCH": {
+          "inflow": 63914.016,
+          "outflow": 0.0,
+          "net": 63914.016
+        },
+        "CHD": {
+          "inflow": 186685.90315999446,
+          "outflow": 0.0,
+          "net": 186685.90315999446
+        },
+        "DRN": {
+          "inflow": 0.0,
+          "outflow": 274011.85237016995,
+          "net": -274011.85237016995
+        },
+        "RIV": {
+          "inflow": 63647.34965573194,
+          "outflow": 65.19381115195301,
+          "net": 63582.15584457998
+        },
+        "GHB": {
+          "inflow": 1185.90536508656,
+          "outflow": 0.0,
+          "net": 1185.90536508656
+        }
+      },
+      "volumes": {
+        "WEL": {
+          "inflow": 0.0,
+          "outflow": 41356.12800000001,
+          "net": -41356.12800000001
+        },
+        "RCH": {
+          "inflow": 63914.016,
+          "outflow": 0.0,
+          "net": 63914.016
+        },
+        "CHD": {
+          "inflow": 186685.90315999446,
+          "outflow": 0.0,
+          "net": 186685.90315999446
+        },
+        "DRN": {
+          "inflow": 0.0,
+          "outflow": 274011.85237016995,
+          "net": -274011.85237016995
+        },
+        "RIV": {
+          "inflow": 63647.34965573194,
+          "outflow": 65.19381115195301,
+          "net": 63582.15584457998
+        },
+        "GHB": {
+          "inflow": 1185.90536508656,
+          "outflow": 0.0,
+          "net": 1185.90536508656
+        }
+      }
+    },
+    {
+      "dt": 1.0,
+      "packages": {
+        "WEL": {
+          "inflow": 0.0,
+          "outflow": 43235.952000000005,
+          "net": -43235.952000000005
+        },
+        "RCH": {
+          "inflow": 65167.23200000002,
+          "outflow": 0.0,
+          "net": 65167.23200000002
+        },
+        "CHD": {
+          "inflow": 186675.07308438048,
+          "outflow": 0.0,
+          "net": 186675.07308438048
+        },
+        "DRN": {
+          "inflow": 0.0,
+          "outflow": 274798.92752836284,
+          "net": -274798.92752836284
+        },
+        "RIV": {
+          "inflow": 65070.07452125929,
+          "outflow": 63.551826099358095,
+          "net": 65006.52269515993
+        },
+        "GHB": {
+          "inflow": 1186.0517481462716,
+          "outflow": 0.0,
+          "net": 1186.0517481462716
+        }
+      },
+      "volumes": {
+        "WEL": {
+          "inflow": 0.0,
+          "outflow": 43235.952000000005,
+          "net": -43235.952000000005
+        },
+        "RCH": {
+          "inflow": 65167.23200000002,
+          "outflow": 0.0,
+          "net": 65167.23200000002
+        },
+        "CHD": {
+          "inflow": 186675.07308438048,
+          "outflow": 0.0,
+          "net": 186675.07308438048
+        },
+        "DRN": {
+          "inflow": 0.0,
+          "outflow": 274798.92752836284,
+          "net": -274798.92752836284
+        },
+        "RIV": {
+          "inflow": 65070.07452125929,
+          "outflow": 63.551826099358095,
+          "net": 65006.52269515993
+        },
+        "GHB": {
+          "inflow": 1186.0517481462716,
+          "outflow": 0.0,
+          "net": 1186.0517481462716
+        }
+      }
+    }
+  ],
+  "output_sha256": "ca6bfd47c39400e832a7abded67de3622c4a0b7a872fe9352a4ff0714c420ae2"
+}

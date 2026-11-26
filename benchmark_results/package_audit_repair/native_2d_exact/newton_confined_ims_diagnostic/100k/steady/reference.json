@@ -1,0 +1,226 @@
+{
+  "version": "mf6: 6.6.2 05/12/2025",
+  "sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+  "build": "historical-local-6.6.2",
+  "shape": [
+    1,
+    320,
+    320
+  ],
+  "transient": false,
+  "npf_cell_types": [
+    0
+  ],
+  "well_precision": "float64",
+  "ims_controls": {
+    "pname": "ims",
+    "print_option": "SUMMARY",
+    "complexity": "SIMPLE",
+    "linear_acceleration": "BICGSTAB",
+    "outer_maximum": 10,
+    "outer_dvclose": 0.0001,
+    "inner_maximum": 2000,
+    "inner_dvclose": 0.0001,
+    "rcloserecord": [
+      1e-06,
+      "RELATIVE_RCLOSE"
+    ],
+    "scaling_method": "DIAGONAL"
+  },
+  "construction_seconds": 2.8505837870179676,
+  "input_precision": 17,
+  "input_float_characters": 25,
+  "input_sha256": {
+    "pkgqual.ic": "a40a96e7b41fdd934cf48b177b15d7ec9b6664ee5e8433a6d6b5f528ab0c9c0e",
+    "pkgqual.oc": "01df66bcd7a3f5e1d25de8e2bf125431567ea0e482e83e58bc7df1d00668b76f",
+    "pkgqual.dis": "433a709bf61f78ca9d051f871301a8d774276e19fd5a16fce16c1e0c91984138",
+    "pkgqual.ims": "ac2bc788600edf0391af71cb3a546eefbe8bef8559aed9c8055237e6fd349f76",
+    "pkgqual.rch": "00f318e58aa8962044e26c8a2a15de7583692a437ac22c6983e47082627b15c4",
+    "pkgqual.wel": "d367710f216e7fd989df896697545aba55ff5c8b14a0106f80475823920d3128",
+    "pkgqual.nam": "e61d431c36824ca3b57583cc05ee415f996c6b8d503f12d56c8333823c301ee6",
+    "mfsim.nam": "58f772f14a613b5c95aae21f941079d74690523584847d7981259b0cb890d5c7",
+    "pkgqual.npf": "f3017cfd1933ae28fcca836ec42f93983fdc719490b6bea4fd9dfef2aea44988",
+    "pkgqual.tdis": "248b57903b96a4cf4c4ff834ed56c5868a87d2f79780764e51e1e5d5b431ddd4",
+    "pkgqual.chd": "fe0a51a88f2ed1754498beee47eb6a2d412cbbbb8b65911a34535a816348d8e9"
+  },
+  "input_audit_seconds": 0.013934663991676643,
+  "durations": [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+  ],
+  "packages": [
+    "WEL",
+    "RCH",
+    "CHD"
+  ],
+  "engine_seconds": [
+    2.1281845400226302
+  ],
+  "engine_logs": [
+    "engine_0.txt"
+  ],
+  "requested_repeats": 1,
+  "periods": [
+    {
+      "dt": 1.0,
+      "packages": {
+        "WEL": {
+          "inflow": 0.0,
+          "outflow": 18981.504,
+          "net": -18981.504
+        },
+        "RCH": {
+          "inflow": 31635.839999999997,
+          "outflow": 0.0,
+          "net": 31635.839999999997
+        },
+        "CHD": {
+          "inflow": 0.0,
+          "outflow": 12650.614615773955,
+          "net": -12650.614615773955
+        }
+      },
+      "volumes": {
+        "WEL": {
+          "inflow": 0.0,
+          "outflow": 18981.504,
+          "net": -18981.504
+        },
+        "RCH": {
+          "inflow": 31635.839999999997,
+          "outflow": 0.0,
+          "net": 31635.839999999997
+        },
+        "CHD": {
+          "inflow": 0.0,
+          "outflow": 12650.614615773955,
+          "net": -12650.614615773955
+        }
+      }
+    },
+    {
+      "dt": 1.0,
+      "packages": {
+        "WEL": {
+          "inflow": 0.0,
+          "outflow": 19930.579200000007,
+          "net": -19930.579200000007
+        },
+        "RCH": {
+          "inflow": 31635.839999999997,
+          "outflow": 0.0,
+          "net": 31635.839999999997
+        },
+        "CHD": {
+          "inflow": 0.0,
+          "outflow": 11717.89751019081,
+          "net": -11717.89751019081
+        }
+      },
+      "volumes": {
+        "WEL": {
+          "inflow": 0.0,
+          "outflow": 19930.579200000007,
+          "net": -19930.579200000007
+        },
+        "RCH": {
+          "inflow": 31635.839999999997,
+          "outflow": 0.0,
+          "net": 31635.839999999997
+        },
+        "CHD": {
+          "inflow": 0.0,
+          "outflow": 11717.89751019081,
+          "net": -11717.89751019081
+        }
+      }
+    },
+    {
+      "dt": 1.0,
+      "packages": {
+        "WEL": {
+          "inflow": 0.0,
+          "outflow": 20879.654400000007,
+          "net": -20879.654400000007
+        },
+        "RCH": {
+          "inflow": 32268.5568,
+          "outflow": 0.0,
+          "net": 32268.5568
+        },
+        "CHD": {
+          "inflow": 0.0,
+          "outflow": 11391.837411988288,
+          "net": -11391.837411988288
+        }
+      },
+      "volumes": {
+        "WEL": {
+          "inflow": 0.0,
+          "outflow": 20879.654400000007,
+          "net": -20879.654400000007
+        },
+        "RCH": {
+          "inflow": 32268.5568,
+          "outflow": 0.0,
+          "net": 32268.5568
+        },
+        "CHD": {
+          "inflow": 0.0,
+          "outflow": 11391.837411988288,
+          "net": -11391.837411988288
+        }
+      }
+    },
+    {
+      "dt": 1.0,
+      "packages": {
+        "WEL": {
+          "inflow": 0.0,
+          "outflow": 21828.729600000002,
+          "net": -21828.729600000002
+        },
+        "RCH": {
+          "inflow": 32901.27360000001,
+          "outflow": 0.0,
+          "net": 32901.27360000001
+        },
+        "CHD": {
+          "inflow": 0.0,
+          "outflow": 11076.915291951616,
+          "net": -11076.915291951616
+        }
+      },
+      "volumes": {
+        "WEL": {
+          "inflow": 0.0,
+          "outflow": 21828.729600000002,
+          "net": -21828.729600000002
+        },
+        "RCH": {
+          "inflow": 32901.27360000001,
+          "outflow": 0.0,
+          "net": 32901.27360000001
+        },
+        "CHD": {
+          "inflow": 0.0,
+          "outflow": 11076.915291951616,
+          "net": -11076.915291951616
+        }
+      }
+    }
+  ],
+  "mf6_newton": true,
+  "mf6_newton_options": [
+    "NEWTON  UNDER_RELAXATION"
+  ],
+  "engine_summary": {
+    "median": 2.1281845400226302,
+    "minimum": 2.1281845400226302,
+    "maximum": 2.1281845400226302
+  },
+  "extraction_seconds": 0.08352385900798254,
+  "output_sha256": "d01876786c8cafad0d02890f2c177544a2d8159c899dd738f0cec6a5c8a9faef"
+}

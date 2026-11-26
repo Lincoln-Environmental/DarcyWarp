@@ -1,0 +1,1882 @@
+{
+  "100k/steady": {
+    "mf6_newton": true,
+    "mf6_newton_options": [
+      "NEWTON  UNDER_RELAXATION"
+    ],
+    "complexity": "COMPLEX",
+    "ims_controls": {
+      "pname": "ims",
+      "print_option": "SUMMARY",
+      "complexity": "COMPLEX",
+      "linear_acceleration": "BICGSTAB",
+      "outer_maximum": 500,
+      "outer_dvclose": 1e-06,
+      "inner_maximum": 500,
+      "inner_dvclose": 1e-08,
+      "rcloserecord": [
+        1e-06,
+        "RELATIVE_RCLOSE"
+      ],
+      "scaling_method": "DIAGONAL"
+    },
+    "preferred_head_target_m": 1e-06,
+    "preferred_target_met": false,
+    "periods": [
+      {
+        "index": 0,
+        "maximum_m": 1.3348780363742208e-05,
+        "rms_m": 9.208962388005096e-06
+      },
+      {
+        "index": 3,
+        "maximum_m": 5.474031986807404e-06,
+        "rms_m": 3.510381796225343e-06
+      }
+    ],
+    "native_engine_summary": {
+      "median": 5.572657119977521,
+      "minimum": 5.505630434985505,
+      "maximum": 5.59358647299814
+    },
+    "repeats": 3,
+    "sources": {
+      "passed": true,
+      "native_version": "mf6: 6.6.2 05/12/2025",
+      "native_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+      "summation_ulps": 64.0,
+      "periods": [
+        {
+          "index": 0,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 2.697433956200257e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.495723260333761e-10
+            }
+          },
+          "volumes": {}
+        },
+        {
+          "index": 1,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 2.832305654010271e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.495723260333761e-10
+            }
+          },
+          "volumes": {}
+        },
+        {
+          "index": 2,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 2.9671773518202836e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.5856377255404366e-10
+            }
+          },
+          "volumes": {}
+        },
+        {
+          "index": 3,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 3.102049049630296e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.675552190747113e-10
+            }
+          },
+          "volumes": {}
+        }
+      ],
+      "resident_volume_totals": {}
+    }
+  },
+  "100k/mixed": {
+    "mf6_newton": true,
+    "mf6_newton_options": [
+      "NEWTON  UNDER_RELAXATION"
+    ],
+    "complexity": "COMPLEX",
+    "ims_controls": {
+      "pname": "ims",
+      "print_option": "SUMMARY",
+      "complexity": "COMPLEX",
+      "linear_acceleration": "BICGSTAB",
+      "outer_maximum": 500,
+      "outer_dvclose": 1e-06,
+      "inner_maximum": 500,
+      "inner_dvclose": 1e-08,
+      "rcloserecord": [
+        1e-06,
+        "RELATIVE_RCLOSE"
+      ],
+      "scaling_method": "DIAGONAL"
+    },
+    "preferred_head_target_m": 1e-06,
+    "preferred_target_met": false,
+    "periods": [
+      {
+        "index": 0,
+        "maximum_m": 1.3089893876383485e-05,
+        "rms_m": 9.098007546529897e-06
+      },
+      {
+        "index": 3,
+        "maximum_m": 5.177092766928126e-06,
+        "rms_m": 3.5408620040433855e-06
+      }
+    ],
+    "native_engine_summary": {
+      "median": 5.783451816008892,
+      "minimum": 5.620607846009079,
+      "maximum": 5.853114561003167
+    },
+    "repeats": 3,
+    "sources": {
+      "passed": true,
+      "native_version": "mf6: 6.6.2 05/12/2025",
+      "native_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+      "summation_ulps": 64.0,
+      "periods": [
+        {
+          "index": 0,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 2.697433956200257e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.495723260333761e-10
+            }
+          },
+          "volumes": {}
+        },
+        {
+          "index": 1,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 2.832305654010271e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.495723260333761e-10
+            }
+          },
+          "volumes": {}
+        },
+        {
+          "index": 2,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 2.9671773518202836e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.5856377255404366e-10
+            }
+          },
+          "volumes": {}
+        },
+        {
+          "index": 3,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 3.102049049630296e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.675552190747113e-10
+            }
+          },
+          "volumes": {}
+        }
+      ],
+      "resident_volume_totals": {}
+    }
+  },
+  "100k/transient": {
+    "mf6_newton": true,
+    "mf6_newton_options": [
+      "NEWTON  UNDER_RELAXATION"
+    ],
+    "complexity": "COMPLEX",
+    "ims_controls": {
+      "pname": "ims",
+      "print_option": "SUMMARY",
+      "complexity": "COMPLEX",
+      "linear_acceleration": "BICGSTAB",
+      "outer_maximum": 150,
+      "outer_dvclose": 1e-06,
+      "inner_maximum": 500,
+      "inner_dvclose": 1e-08,
+      "rcloserecord": [
+        1e-06,
+        "RELATIVE_RCLOSE"
+      ],
+      "scaling_method": "DIAGONAL"
+    },
+    "preferred_head_target_m": 1e-06,
+    "preferred_target_met": false,
+    "periods": [
+      {
+        "index": 0,
+        "maximum_m": 1.991552977642641e-06,
+        "rms_m": 7.578176076060622e-07
+      },
+      {
+        "index": 1,
+        "maximum_m": 1.1349764221790792e-06,
+        "rms_m": 6.970466840675691e-07
+      },
+      {
+        "index": 2,
+        "maximum_m": 7.660683394306034e-07,
+        "rms_m": 3.5205759440834177e-07
+      },
+      {
+        "index": 3,
+        "maximum_m": 8.842307437362251e-07,
+        "rms_m": 5.216458636104748e-07
+      },
+      {
+        "index": 4,
+        "maximum_m": 8.17436990985243e-07,
+        "rms_m": 5.647778834133524e-07
+      },
+      {
+        "index": 5,
+        "maximum_m": 7.759144509122962e-07,
+        "rms_m": 5.419328173670136e-07
+      },
+      {
+        "index": 6,
+        "maximum_m": 8.816209415840603e-07,
+        "rms_m": 3.1050814655470286e-07
+      },
+      {
+        "index": 7,
+        "maximum_m": 4.915696436569306e-07,
+        "rms_m": 2.4656357724935523e-07
+      },
+      {
+        "index": 8,
+        "maximum_m": 9.589088563188852e-07,
+        "rms_m": 5.465038307996243e-07
+      },
+      {
+        "index": 9,
+        "maximum_m": 6.884446221988583e-07,
+        "rms_m": 4.859414576097614e-07
+      },
+      {
+        "index": 10,
+        "maximum_m": 4.6415912180464147e-07,
+        "rms_m": 2.542075306358046e-07
+      },
+      {
+        "index": 11,
+        "maximum_m": 9.666095692750787e-07,
+        "rms_m": 5.307513221060558e-07
+      },
+      {
+        "index": 12,
+        "maximum_m": 8.319324464878264e-07,
+        "rms_m": 5.79534308046955e-07
+      },
+      {
+        "index": 13,
+        "maximum_m": 8.762749814650306e-07,
+        "rms_m": 5.72312972853983e-07
+      },
+      {
+        "index": 14,
+        "maximum_m": 5.137645047170736e-07,
+        "rms_m": 3.093590084749997e-07
+      },
+      {
+        "index": 15,
+        "maximum_m": 8.309926471383733e-07,
+        "rms_m": 5.077123589415486e-07
+      },
+      {
+        "index": 16,
+        "maximum_m": 6.973720942937689e-07,
+        "rms_m": 4.897582048310042e-07
+      },
+      {
+        "index": 17,
+        "maximum_m": 1.2160103466385408e-06,
+        "rms_m": 7.903385369711793e-07
+      },
+      {
+        "index": 18,
+        "maximum_m": 7.377684312359634e-07,
+        "rms_m": 4.5621041252869366e-07
+      },
+      {
+        "index": 19,
+        "maximum_m": 9.520319963485235e-07,
+        "rms_m": 5.666397429081992e-07
+      }
+    ],
+    "native_engine_summary": {
+      "median": 11.344430969998939,
+      "minimum": 11.322971540008439,
+      "maximum": 11.620135506003862
+    },
+    "repeats": 3,
+    "sources": {
+      "passed": true,
+      "native_version": "mf6: 6.6.2 05/12/2025",
+      "native_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+      "summation_ulps": 64.0,
+      "periods": [
+        {
+          "index": 0,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 2.697433956200257e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.495723260333761e-10
+            }
+          },
+          "volumes": {
+            "wel": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            },
+            "recharge": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            }
+          }
+        },
+        {
+          "index": 1,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 2.157947164960206e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.945295586367138e-10
+            }
+          },
+          "volumes": {
+            "wel": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            },
+            "recharge": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            }
+          }
+        },
+        {
+          "index": 2,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 3.23692074744031e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.0461509343003866e-10
+            }
+          },
+          "volumes": {
+            "wel": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            },
+            "recharge": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            }
+          }
+        },
+        {
+          "index": 3,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 2.697433956200257e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.495723260333761e-10
+            }
+          },
+          "volumes": {
+            "wel": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            },
+            "recharge": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            }
+          }
+        },
+        {
+          "index": 4,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 2.697433956200257e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.495723260333761e-10
+            }
+          },
+          "volumes": {
+            "wel": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            },
+            "recharge": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            }
+          }
+        },
+        {
+          "index": 5,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 2.157947164960206e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.945295586367138e-10
+            }
+          },
+          "volumes": {
+            "wel": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            },
+            "recharge": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            }
+          }
+        },
+        {
+          "index": 6,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 3.23692074744031e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.0461509343003866e-10
+            }
+          },
+          "volumes": {
+            "wel": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            },
+            "recharge": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            }
+          }
+        },
+        {
+          "index": 7,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 2.697433956200257e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.495723260333761e-10
+            }
+          },
+          "volumes": {
+            "wel": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            },
+            "recharge": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            }
+          }
+        },
+        {
+          "index": 8,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 2.697433956200257e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.495723260333761e-10
+            }
+          },
+          "volumes": {
+            "wel": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            },
+            "recharge": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            }
+          }
+        },
+        {
+          "index": 9,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 2.157947164960206e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.945295586367138e-10
+            }
+          },
+          "volumes": {
+            "wel": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            },
+            "recharge": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            }
+          }
+        },
+        {
+          "index": 10,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 3.23692074744031e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.0461509343003866e-10
+            }
+          },
+          "volumes": {
+            "wel": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            },
+            "recharge": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            }
+          }
+        },
+        {
+          "index": 11,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 2.697433956200257e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.495723260333761e-10
+            }
+          },
+          "volumes": {
+            "wel": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            },
+            "recharge": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            }
+          }
+        },
+        {
+          "index": 12,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 2.697433956200257e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.495723260333761e-10
+            }
+          },
+          "volumes": {
+            "wel": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            },
+            "recharge": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            }
+          }
+        },
+        {
+          "index": 13,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 2.157947164960206e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.945295586367138e-10
+            }
+          },
+          "volumes": {
+            "wel": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            },
+            "recharge": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            }
+          }
+        },
+        {
+          "index": 14,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 3.23692074744031e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.0461509343003866e-10
+            }
+          },
+          "volumes": {
+            "wel": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            },
+            "recharge": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            }
+          }
+        },
+        {
+          "index": 15,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 2.697433956200257e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.495723260333761e-10
+            }
+          },
+          "volumes": {
+            "wel": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            },
+            "recharge": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            }
+          }
+        },
+        {
+          "index": 16,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 2.697433956200257e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.495723260333761e-10
+            }
+          },
+          "volumes": {
+            "wel": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            },
+            "recharge": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            }
+          }
+        },
+        {
+          "index": 17,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 2.157947164960206e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.945295586367138e-10
+            }
+          },
+          "volumes": {
+            "wel": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            },
+            "recharge": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            }
+          }
+        },
+        {
+          "index": 18,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 3.23692074744031e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.0461509343003866e-10
+            }
+          },
+          "volumes": {
+            "wel": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            },
+            "recharge": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            }
+          }
+        },
+        {
+          "index": 19,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 2.697433956200257e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.495723260333761e-10
+            }
+          },
+          "volumes": {
+            "wel": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            },
+            "recharge": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            }
+          }
+        }
+      ],
+      "resident_volume_totals": {}
+    }
+  },
+  "100k/picard": {
+    "mf6_newton": true,
+    "mf6_newton_options": [
+      "NEWTON  UNDER_RELAXATION"
+    ],
+    "complexity": "COMPLEX",
+    "ims_controls": {
+      "pname": "ims",
+      "print_option": "SUMMARY",
+      "complexity": "COMPLEX",
+      "linear_acceleration": "BICGSTAB",
+      "outer_maximum": 150,
+      "outer_dvclose": 1e-06,
+      "inner_maximum": 500,
+      "inner_dvclose": 1e-08,
+      "rcloserecord": [
+        1e-06,
+        "RELATIVE_RCLOSE"
+      ],
+      "scaling_method": "DIAGONAL"
+    },
+    "preferred_head_target_m": 1e-06,
+    "preferred_target_met": false,
+    "periods": [
+      {
+        "index": 0,
+        "maximum_m": 0.0033685476221734234,
+        "rms_m": 2.892314820091953e-05
+      },
+      {
+        "index": 1,
+        "maximum_m": 0.010200425882004538,
+        "rms_m": 7.132290067383028e-05
+      },
+      {
+        "index": 2,
+        "maximum_m": 0.025338936196071415,
+        "rms_m": 0.00016465218031548465
+      },
+      {
+        "index": 3,
+        "maximum_m": 0.0426360791182816,
+        "rms_m": 0.0002548533012695325
+      },
+      {
+        "index": 4,
+        "maximum_m": 0.06062119041436631,
+        "rms_m": 0.00034120102506354387
+      },
+      {
+        "index": 5,
+        "maximum_m": 0.07387979305122627,
+        "rms_m": 0.00039387358750622795
+      },
+      {
+        "index": 6,
+        "maximum_m": 0.09282990630019583,
+        "rms_m": 0.0004851111053661907
+      },
+      {
+        "index": 7,
+        "maximum_m": 0.10920497003182561,
+        "rms_m": 0.0005567072707699501
+      },
+      {
+        "index": 8,
+        "maximum_m": 0.12325492857240761,
+        "rms_m": 0.0006152155181392246
+      },
+      {
+        "index": 9,
+        "maximum_m": 0.13017794137480365,
+        "rms_m": 0.0006343908435729269
+      },
+      {
+        "index": 10,
+        "maximum_m": 0.14310008385417916,
+        "rms_m": 0.0006941178382293118
+      },
+      {
+        "index": 11,
+        "maximum_m": 0.15318404692116872,
+        "rms_m": 0.0007363593323341796
+      },
+      {
+        "index": 12,
+        "maximum_m": 0.16114275779455056,
+        "rms_m": 0.0007679846232682551
+      },
+      {
+        "index": 13,
+        "maximum_m": 0.16217503690625534,
+        "rms_m": 0.0007627974047707937
+      },
+      {
+        "index": 14,
+        "maximum_m": 0.17015879486933727,
+        "rms_m": 0.0008012395630202134
+      },
+      {
+        "index": 15,
+        "maximum_m": 0.17586855854912642,
+        "rms_m": 0.0008255174893512105
+      },
+      {
+        "index": 16,
+        "maximum_m": 0.18003037027222035,
+        "rms_m": 0.0008418842095131262
+      },
+      {
+        "index": 17,
+        "maximum_m": 0.17772123129675066,
+        "rms_m": 0.0008238146268931161
+      },
+      {
+        "index": 18,
+        "maximum_m": 0.18300015985889218,
+        "rms_m": 0.0008512100358239915
+      },
+      {
+        "index": 19,
+        "maximum_m": 0.18642816347691138,
+        "rms_m": 0.0008664788750865401
+      }
+    ],
+    "native_engine_summary": {
+      "median": 6.62871626400738,
+      "minimum": 6.626786873006495,
+      "maximum": 6.702563354978338
+    },
+    "repeats": 3,
+    "sources": {
+      "passed": true,
+      "native_version": "mf6: 6.6.2 05/12/2025",
+      "native_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+      "summation_ulps": 64.0,
+      "periods": [
+        {
+          "index": 0,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 2.697433956200257e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.4944681576453146e-10
+            }
+          },
+          "volumes": {
+            "wel": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            },
+            "recharge": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            }
+          }
+        },
+        {
+          "index": 1,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 2.157947164960206e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.943914973409849e-10
+            }
+          },
+          "volumes": {
+            "wel": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            },
+            "recharge": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            }
+          }
+        },
+        {
+          "index": 2,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 3.23692074744031e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.045021341880786e-10
+            }
+          },
+          "volumes": {
+            "wel": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            },
+            "recharge": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            }
+          }
+        },
+        {
+          "index": 3,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 2.697433956200257e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.4944681576453146e-10
+            }
+          },
+          "volumes": {
+            "wel": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            },
+            "recharge": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            }
+          }
+        },
+        {
+          "index": 4,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 2.697433956200257e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.4944681576453146e-10
+            }
+          },
+          "volumes": {
+            "wel": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            },
+            "recharge": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            }
+          }
+        },
+        {
+          "index": 5,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 2.157947164960206e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.943914973409849e-10
+            }
+          },
+          "volumes": {
+            "wel": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            },
+            "recharge": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            }
+          }
+        },
+        {
+          "index": 6,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 3.23692074744031e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.045021341880786e-10
+            }
+          },
+          "volumes": {
+            "wel": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            },
+            "recharge": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            }
+          }
+        },
+        {
+          "index": 7,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 2.697433956200257e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.4944681576453146e-10
+            }
+          },
+          "volumes": {
+            "wel": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            },
+            "recharge": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            }
+          }
+        },
+        {
+          "index": 8,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 2.697433956200257e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.4944681576453146e-10
+            }
+          },
+          "volumes": {
+            "wel": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            },
+            "recharge": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            }
+          }
+        },
+        {
+          "index": 9,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 2.157947164960206e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.943914973409849e-10
+            }
+          },
+          "volumes": {
+            "wel": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            },
+            "recharge": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            }
+          }
+        },
+        {
+          "index": 10,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 3.23692074744031e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.045021341880786e-10
+            }
+          },
+          "volumes": {
+            "wel": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            },
+            "recharge": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            }
+          }
+        },
+        {
+          "index": 11,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 2.697433956200257e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.4944681576453146e-10
+            }
+          },
+          "volumes": {
+            "wel": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            },
+            "recharge": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            }
+          }
+        },
+        {
+          "index": 12,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 2.697433956200257e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.4944681576453146e-10
+            }
+          },
+          "volumes": {
+            "wel": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            },
+            "recharge": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            }
+          }
+        },
+        {
+          "index": 13,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 2.157947164960206e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.943914973409849e-10
+            }
+          },
+          "volumes": {
+            "wel": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            },
+            "recharge": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            }
+          }
+        },
+        {
+          "index": 14,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 3.23692074744031e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.045021341880786e-10
+            }
+          },
+          "volumes": {
+            "wel": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            },
+            "recharge": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            }
+          }
+        },
+        {
+          "index": 15,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 2.697433956200257e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.4944681576453146e-10
+            }
+          },
+          "volumes": {
+            "wel": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            },
+            "recharge": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            }
+          }
+        },
+        {
+          "index": 16,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 2.697433956200257e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.4944681576453146e-10
+            }
+          },
+          "volumes": {
+            "wel": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            },
+            "recharge": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            }
+          }
+        },
+        {
+          "index": 17,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 2.157947164960206e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.943914973409849e-10
+            }
+          },
+          "volumes": {
+            "wel": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            },
+            "recharge": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            }
+          }
+        },
+        {
+          "index": 18,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 3.23692074744031e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.045021341880786e-10
+            }
+          },
+          "volumes": {
+            "wel": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            },
+            "recharge": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            }
+          }
+        },
+        {
+          "index": 19,
+          "rates": {
+            "wel": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 2.697433956200257e-10
+            },
+            "recharge": {
+              "errors_m3_day": {
+                "inflow": 0.0,
+                "outflow": 0.0,
+                "net": 0.0
+              },
+              "roundoff_bound_m3_day": 4.4944681576453146e-10
+            }
+          },
+          "volumes": {
+            "wel": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            },
+            "recharge": {
+              "inflow": 0.0,
+              "outflow": 0.0,
+              "net": 0.0
+            }
+          }
+        }
+      ],
+      "resident_volume_totals": {}
+    }
+  }
+}

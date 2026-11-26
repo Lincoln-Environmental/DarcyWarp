@@ -1,4 +1,5 @@
 {
+  "commit": "e5caf522b4621e4dd04bf5e2624e0eefaf2fc771",
   "configuration": {
     "name": "cartesian_fgmres"
   },
@@ -7,7 +8,7 @@
     112,
     90
   ],
-  "construction_seconds": 0.3297865970089333,
+  "construction_seconds": 0.24474459199700505,
   "cold": {
     "converged": true,
     "stop_reason": null,
@@ -21,7 +22,7 @@
     "cuda_graph_captures": null,
     "cuda_graph_replays": null,
     "seconds": null,
-    "public_total_seconds": 0.18016298799193464,
+    "public_total_seconds": 0.16628751601092517,
     "device_final_metrics": null,
     "physical_acceptance": null,
     "ghb_budget": null,
@@ -35,9 +36,9 @@
     "linear_acceleration": "fgmres",
     "preconditioner_applications": 26,
     "cuda_graph_replayed": true,
-    "r_rms_end": 2.604801010680487e-10,
+    "r_rms_end": 2.6048010106804867e-10,
     "h_rms_end": 1.181942369855713e-12,
-    "public_seconds": 0.18022420500346925,
+    "public_seconds": 0.16632366299745627,
     "gpu_used_bytes": 83153516,
     "process_gpu_high_water_bytes": 83153516
   },
@@ -55,7 +56,7 @@
       "cuda_graph_captures": null,
       "cuda_graph_replays": null,
       "seconds": null,
-      "public_total_seconds": 0.0846901040058583,
+      "public_total_seconds": 0.08433667500503361,
       "device_final_metrics": null,
       "physical_acceptance": null,
       "ghb_budget": null,
@@ -70,8 +71,8 @@
       "preconditioner_applications": 26,
       "cuda_graph_replayed": true,
       "r_rms_end": 2.6048010106804867e-10,
-      "h_rms_end": 1.181942369855713e-12,
-      "public_seconds": 0.08473911299370229,
+      "h_rms_end": 1.1819423698557127e-12,
+      "public_seconds": 0.08436828598496504,
       "gpu_used_bytes": 83153516,
       "process_gpu_high_water_bytes": 83153516,
       "head_difference_from_cold_m": 0.0
@@ -89,7 +90,7 @@
       "cuda_graph_captures": null,
       "cuda_graph_replays": null,
       "seconds": null,
-      "public_total_seconds": 0.08348534899414517,
+      "public_total_seconds": 0.08244647097308189,
       "device_final_metrics": null,
       "physical_acceptance": null,
       "ghb_budget": null,
@@ -105,7 +106,7 @@
       "cuda_graph_replayed": true,
       "r_rms_end": 2.6048010106804867e-10,
       "h_rms_end": 1.181942369855713e-12,
-      "public_seconds": 0.08353322399489116,
+      "public_seconds": 0.08248028700472787,
       "gpu_used_bytes": 83153516,
       "process_gpu_high_water_bytes": 83153516,
       "head_difference_from_cold_m": 0.0
@@ -123,7 +124,7 @@
       "cuda_graph_captures": null,
       "cuda_graph_replays": null,
       "seconds": null,
-      "public_total_seconds": 0.08411979900847655,
+      "public_total_seconds": 0.08081680300529115,
       "device_final_metrics": null,
       "physical_acceptance": null,
       "ghb_budget": null,
@@ -137,18 +138,18 @@
       "linear_acceleration": "fgmres",
       "preconditioner_applications": 26,
       "cuda_graph_replayed": true,
-      "r_rms_end": 2.604801010680487e-10,
+      "r_rms_end": 2.6048010106804867e-10,
       "h_rms_end": 1.181942369855713e-12,
-      "public_seconds": 0.08416906000638846,
+      "public_seconds": 0.08085361399571411,
       "gpu_used_bytes": 83153516,
       "process_gpu_high_water_bytes": 83153516,
       "head_difference_from_cold_m": 0.0
     }
   ],
   "identical_summary": {
-    "median": 0.08416906000638846,
-    "minimum": 0.08353322399489116,
-    "maximum": 0.08473911299370229
+    "median": 0.08248028700472787,
+    "minimum": 0.08085361399571411,
+    "maximum": 0.08436828598496504
   },
   "warm_start_calibration": [
     {
@@ -164,7 +165,7 @@
       "cuda_graph_captures": null,
       "cuda_graph_replays": null,
       "seconds": null,
-      "public_total_seconds": 0.06391928899392951,
+      "public_total_seconds": 0.060932313004741445,
       "device_final_metrics": null,
       "physical_acceptance": null,
       "ghb_budget": null,
@@ -179,8 +180,8 @@
       "preconditioner_applications": 18,
       "cuda_graph_replayed": true,
       "r_rms_end": 5.4945071281444016e-09,
-      "h_rms_end": 2.562660501229171e-11,
-      "public_seconds": 0.06396631299867295,
+      "h_rms_end": 2.5626605012291714e-11,
+      "public_seconds": 0.060970229998929426,
       "gpu_used_bytes": 83153516,
       "process_gpu_high_water_bytes": 83153516
     },
@@ -197,7 +198,7 @@
       "cuda_graph_captures": null,
       "cuda_graph_replays": null,
       "seconds": null,
-      "public_total_seconds": 0.06288223899900913,
+      "public_total_seconds": 0.059918565006228164,
       "device_final_metrics": null,
       "physical_acceptance": null,
       "ghb_budget": null,
@@ -211,9 +212,9 @@
       "linear_acceleration": "fgmres",
       "preconditioner_applications": 17,
       "cuda_graph_replayed": true,
-      "r_rms_end": 8.069722490708396e-09,
-      "h_rms_end": 4.183720746126015e-11,
-      "public_seconds": 0.06293390100472607,
+      "r_rms_end": 8.069722490708397e-09,
+      "h_rms_end": 4.183720746126014e-11,
+      "public_seconds": 0.05995329300640151,
       "gpu_used_bytes": 83153516,
       "process_gpu_high_water_bytes": 83153516
     },
@@ -230,7 +231,7 @@
       "cuda_graph_captures": null,
       "cuda_graph_replays": null,
       "seconds": null,
-      "public_total_seconds": 0.06179225898813456,
+      "public_total_seconds": 0.059324943023966625,
       "device_final_metrics": null,
       "physical_acceptance": null,
       "ghb_budget": null,
@@ -246,34 +247,34 @@
       "cuda_graph_replayed": true,
       "r_rms_end": 8.069721434963278e-09,
       "h_rms_end": 4.1837233871362636e-11,
-      "public_seconds": 0.061843014002079144,
+      "public_seconds": 0.05935956901521422,
       "gpu_used_bytes": 83153516,
       "process_gpu_high_water_bytes": 83153516
     }
   ],
   "calibration_summary": {
-    "median": 0.06293390100472607,
-    "minimum": 0.061843014002079144,
-    "maximum": 0.06396631299867295
+    "median": 0.05995329300640151,
+    "minimum": 0.05935956901521422,
+    "maximum": 0.060970229998929426
   },
   "source_updates": [
     {
-      "wel_or_raw_seconds": 0.0014008779980940744,
-      "recharge_seconds": 0.0006659040082013234,
+      "wel_or_raw_seconds": 0.0012277180212549865,
+      "recharge_seconds": 0.0005501889972947538,
       "river_stage_seconds": null
     },
     {
-      "wel_or_raw_seconds": 0.0014318260073196143,
-      "recharge_seconds": 0.0006302589899860322,
+      "wel_or_raw_seconds": 0.0011490710021462291,
+      "recharge_seconds": 0.0005296920135151595,
       "river_stage_seconds": null
     },
     {
-      "wel_or_raw_seconds": 0.0014134679950075224,
-      "recharge_seconds": 0.000642122991848737,
+      "wel_or_raw_seconds": 0.0011622099846135825,
+      "recharge_seconds": 0.0005459340172819793,
       "river_stage_seconds": null
     }
   ],
-  "accepted_output_extraction_seconds": 3.839959390461445e-07,
+  "accepted_output_extraction_seconds": 2.529995981603861e-07,
   "forcing": {
     "abstraction": null
   },

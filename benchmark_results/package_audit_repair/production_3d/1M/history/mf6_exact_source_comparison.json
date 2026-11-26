@@ -1,0 +1,466 @@
+{
+  "passed": true,
+  "native_version": "mf6: 6.6.2 05/12/2025",
+  "native_sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+  "summation_ulps": 64.0,
+  "periods": [
+    {
+      "index": 0,
+      "rates": {
+        "wel": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 5.34278115082998e-10
+        },
+        "recharge": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 8.904635251383295e-10
+        }
+      },
+      "volumes": {}
+    },
+    {
+      "index": 1,
+      "rates": {
+        "wel": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 4.274224920663985e-10
+        },
+        "recharge": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 9.795098776521628e-10
+        }
+      },
+      "volumes": {}
+    },
+    {
+      "index": 2,
+      "rates": {
+        "wel": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 6.411337380995976e-10
+        },
+        "recharge": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 8.01417172624497e-10
+        }
+      },
+      "volumes": {}
+    },
+    {
+      "index": 3,
+      "rates": {
+        "wel": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 5.34278115082998e-10
+        },
+        "recharge": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 8.904635251383295e-10
+        }
+      },
+      "volumes": {}
+    },
+    {
+      "index": 4,
+      "rates": {
+        "wel": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 5.34278115082998e-10
+        },
+        "recharge": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 8.904635251383295e-10
+        }
+      },
+      "volumes": {}
+    },
+    {
+      "index": 5,
+      "rates": {
+        "wel": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 4.274224920663985e-10
+        },
+        "recharge": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 9.795098776521628e-10
+        }
+      },
+      "volumes": {}
+    },
+    {
+      "index": 6,
+      "rates": {
+        "wel": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 6.411337380995976e-10
+        },
+        "recharge": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 8.01417172624497e-10
+        }
+      },
+      "volumes": {}
+    },
+    {
+      "index": 7,
+      "rates": {
+        "wel": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 5.34278115082998e-10
+        },
+        "recharge": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 8.904635251383295e-10
+        }
+      },
+      "volumes": {}
+    },
+    {
+      "index": 8,
+      "rates": {
+        "wel": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 5.34278115082998e-10
+        },
+        "recharge": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 8.904635251383295e-10
+        }
+      },
+      "volumes": {}
+    },
+    {
+      "index": 9,
+      "rates": {
+        "wel": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 4.274224920663985e-10
+        },
+        "recharge": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 9.795098776521628e-10
+        }
+      },
+      "volumes": {}
+    },
+    {
+      "index": 10,
+      "rates": {
+        "wel": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 6.411337380995976e-10
+        },
+        "recharge": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 8.01417172624497e-10
+        }
+      },
+      "volumes": {}
+    },
+    {
+      "index": 11,
+      "rates": {
+        "wel": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 5.34278115082998e-10
+        },
+        "recharge": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 8.904635251383295e-10
+        }
+      },
+      "volumes": {}
+    },
+    {
+      "index": 12,
+      "rates": {
+        "wel": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 5.34278115082998e-10
+        },
+        "recharge": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 8.904635251383295e-10
+        }
+      },
+      "volumes": {}
+    },
+    {
+      "index": 13,
+      "rates": {
+        "wel": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 4.274224920663985e-10
+        },
+        "recharge": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 9.795098776521628e-10
+        }
+      },
+      "volumes": {}
+    },
+    {
+      "index": 14,
+      "rates": {
+        "wel": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 6.411337380995976e-10
+        },
+        "recharge": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 8.01417172624497e-10
+        }
+      },
+      "volumes": {}
+    },
+    {
+      "index": 15,
+      "rates": {
+        "wel": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 5.34278115082998e-10
+        },
+        "recharge": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 8.904635251383295e-10
+        }
+      },
+      "volumes": {}
+    },
+    {
+      "index": 16,
+      "rates": {
+        "wel": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 5.34278115082998e-10
+        },
+        "recharge": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 8.904635251383295e-10
+        }
+      },
+      "volumes": {}
+    },
+    {
+      "index": 17,
+      "rates": {
+        "wel": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 4.274224920663985e-10
+        },
+        "recharge": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 9.795098776521628e-10
+        }
+      },
+      "volumes": {}
+    },
+    {
+      "index": 18,
+      "rates": {
+        "wel": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 6.411337380995976e-10
+        },
+        "recharge": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 8.01417172624497e-10
+        }
+      },
+      "volumes": {}
+    },
+    {
+      "index": 19,
+      "rates": {
+        "wel": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 5.34278115082998e-10
+        },
+        "recharge": {
+          "errors_m3_day": {
+            "inflow": 0.0,
+            "outflow": 0.0,
+            "net": 0.0
+          },
+          "roundoff_bound_m3_day": 8.904635251383295e-10
+        }
+      },
+      "volumes": {}
+    }
+  ],
+  "resident_volume_totals": {
+    "wel": {
+      "errors_m3": {
+        "inflow": 0.0,
+        "outflow": 0.0,
+        "net": 0.0
+      },
+      "roundoff_bound_m3": 7.479893611161973e-08
+    },
+    "recharge": {
+      "errors_m3": {
+        "inflow": 0.0,
+        "outflow": 0.0,
+        "net": 0.0
+      },
+      "roundoff_bound_m3": 1.2466489351936616e-07
+    }
+  }
+}

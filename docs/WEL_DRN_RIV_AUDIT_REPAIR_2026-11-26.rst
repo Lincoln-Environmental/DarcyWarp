@@ -1,5 +1,5 @@
 WEL/DRN/RIV audit repair: implementation and qualification status
-===============================================================
+=================================================================
 
 This is an intermediate status report, not an SFR readiness certificate.
 All work remains on ``feature/sfr-3d-boundaries``. Main at
@@ -7,7 +7,7 @@ All work remains on ``feature/sfr-3d-boundaries``. Main at
 campaign began. No SFR implementation or main merge is included.
 
 Implemented corrections
-----------------------
+-----------------------
 
 * Raw volumetric sources retain independent ownership when WEL is introduced,
   replaced or removed. Recharge keeps the established main convention.
@@ -53,7 +53,7 @@ reference tests now request diagonal, and default tests assert FGMRES/K-cycle
 and executed multigrid cycles. No physical tolerances were relaxed for that change.
 
 Measured production results so far
----------------------------------
+----------------------------------
 
 All figures below are synchronized public medians of three warm measurements,
 with identical original initial heads for steady runs. Calibration uses the
@@ -101,7 +101,7 @@ by at most 6.953e-9 m3/day per cell; the total history accumulation difference i
 runs remain in progress; their missing comparisons are not described as passes.
 
 Unresolved qualification and preserved failures
-----------------------------------------------
+-----------------------------------------------
 
 The original direct Cartesian Chebyshev controls reached their 200-cycle limit
 on the new heterogeneous regional field. Existing direct linear FGMRES/K-cycle

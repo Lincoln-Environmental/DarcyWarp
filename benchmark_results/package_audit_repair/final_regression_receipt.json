@@ -1,0 +1,150 @@
+{
+  "implementation_commit": "7111579",
+  "production_tree": "26bc03f75a5cf7dda71c7ef82b56d2b1322d2bf7",
+  "production_files_sha256": {
+    "DARCY_WARP_PACKAGE/physics/budget_3d.py": "9fdff76ac6b54f99a1bfc40f0bdc6b56b525511707f7714c59b9bc5b8f102f4d",
+    "DARCY_WARP_PACKAGE/physics/budgets_2d.py": "3758ba21382ecefc0ded9343d08db2331f037911af9577ac0ec1327efb429ca1",
+    "DARCY_WARP_PACKAGE/physics/wel.py": "cdb75fd70e10040161c3afff4df6600f5727ad512d78282b2c9b26a21cbc44a3",
+    "DARCY_WARP_PACKAGE/solvers/accepted_npf_state.py": "e0faf410071cca23d2cc2f65031bc20b8bbfb5a9407abbb8d37e5cc8e56795cd",
+    "DARCY_WARP_PACKAGE/solvers/face_transient_f64.py": "016121cfd2c52082dfb8f7286bf8604dc798f16a5b1ee7838dd449d2035ea5dc",
+    "DARCY_WARP_PACKAGE/solvers/fas.py": "1171368b1a083a0e6255584518bb1112b31509017d0b3d76462911b50c550f53",
+    "DARCY_WARP_PACKAGE/solvers/fast_confined_kcycle.py": "9945d2f6e09b7698f4beb2066ad868d5bfc701e9d913faec05fe63e8f2f9b85e",
+    "DARCY_WARP_PACKAGE/solvers/mixed_fast.py": "9ae1d4e5fc28e4a585d660e88e2ab46afc1578c8dbd867095249cae00a2907b5",
+    "DARCY_WARP_PACKAGE/solvers/npf662_3d.py": "8c5a23b66d94a5c6a04e6fa412cc7fc8eafd3de20faa8454f597b1df5b9f0134",
+    "DARCY_WARP_PACKAGE/solvers/npf662_history.py": "efc2f8ed1e7bc6318afd9c10517b2726e6c78d8aea1989e7b4439984aedce9f6",
+    "DARCY_WARP_PACKAGE/solvers/npf662_kernels.py": "9b782d8a4776036b54d65c18e8212fea6e3d02ad1014c91517d2be41dbb1c406",
+    "DARCY_WARP_PACKAGE/solvers/npf662_newton.py": "0bd39a804869b98d3fc7a67042222057a5ead66200add62322be7bde58cbd8b7",
+    "DARCY_WARP_PACKAGE/solvers/npf662_state.py": "1bdd0b795cfec51844202b7ec840dee0013a767a7928fff09ee386fd63e479c4",
+    "DARCY_WARP_PACKAGE/solvers/semismooth_newton.py": "964f95fca97a94b53a26835901d46cad5c83320e1d11bcaab950ae9f2ec03be2",
+    "DARCY_WARP_PACKAGE/solvers/session_3d.py": "0cfbc735fc07e49c270f313fc4e3849d44580f217a73449fd39e36a9001d8931",
+    "DARCY_WARP_PACKAGE/solvers/transient_experimental.py": "f746b90b5c9ae219dfbb374c4df88d8c427989d4ab007f43d882a1007b8ae089",
+    "DARCY_WARP_PACKAGE/solvers/transient_unconfined.py": "92a6c0494f8f8aff4fdd5699a02056e90782d6ae3a4357697232b60d7d1ee43e",
+    "DARCY_WARP_PACKAGE/validation/npf662_metrics.py": "92f481d35ed83bf66a7e38e9fee5a4a559a453f9f797a7c1eea0ac34cef8003b",
+    "DARCY_WARP_PACKAGE/validation/npf662_reference.py": "9435139c407c3d1277d028e603e16d51c5cca1c331cd5ff96d92f19c4213606c",
+    "DARCY_WARP_PACKAGE/validation/npf662_transient_reference.py": "c43153fe2dbe87e946d45ca03f4e09b02aede948ec1ec18826ed5c1c1ddc670e",
+    "DARCY_WARP_PACKAGE/warped_darcy.py": "9e03a19a9800e07ab28f6647e6e2136d0927eedf11136ff223016611d7d1781d",
+    "DARCY_WARP_PACKAGE/warped_darcy_3d.py": "59c7ce61fe165e3bc6f228e1729828bcd87a8ed1b08906eb5fee60bb73c1b364"
+  },
+  "suites": {
+    "full": {
+      "tests": 1676,
+      "passed": 1655,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 21,
+      "elapsed_seconds": 945.211,
+      "explicitly_cuda_parameterized_passes": 337,
+      "explicitly_cpu_parameterized_passes": 347,
+      "skip_reasons": [
+        {
+          "test": "tests.test_2d_main_audit::test_fp32_picard_rejects_requested_face_profiles[settings0]",
+          "reason": "Checks the FP32 package precision contract."
+        },
+        {
+          "test": "tests.test_2d_main_audit::test_fp32_picard_rejects_requested_face_profiles[settings1]",
+          "reason": "Checks the FP32 package precision contract."
+        },
+        {
+          "test": "tests.test_2d_main_audit::test_fp32_picard_rejects_requested_face_profiles[settings2]",
+          "reason": "Checks the FP32 package precision contract."
+        },
+        {
+          "test": "tests.test_2d_main_audit::test_fp32_ghb_preserves_explicit_device_requirements[settings0]",
+          "reason": "Checks the FP32 package precision contract."
+        },
+        {
+          "test": "tests.test_2d_main_audit::test_fp32_ghb_preserves_explicit_device_requirements[settings1]",
+          "reason": "Checks the FP32 package precision contract."
+        },
+        {
+          "test": "tests.test_3d_session::test_failed_fp32_face_update_preserves_model[kcycle-cpu]",
+          "reason": "Exercises the FP32 coefficient conversion"
+        },
+        {
+          "test": "tests.test_3d_session::test_failed_fp32_face_update_preserves_model[kcycle-cuda:0]",
+          "reason": "Exercises the FP32 coefficient conversion"
+        },
+        {
+          "test": "tests.test_3d_session::test_failed_fp32_face_update_preserves_model[chebyshev-cpu]",
+          "reason": "Exercises the FP32 coefficient conversion"
+        },
+        {
+          "test": "tests.test_3d_session::test_failed_fp32_face_update_preserves_model[chebyshev-cuda:0]",
+          "reason": "Exercises the FP32 coefficient conversion"
+        },
+        {
+          "test": "tests.test_confined_steady_acceptance::test_pcg_fp32_verifies_emitted_heads[65-True-cpu]",
+          "reason": "This grid probes FP32 rounding at a 100 m datum."
+        },
+        {
+          "test": "tests.test_confined_steady_acceptance::test_pcg_fp32_verifies_emitted_heads[65-True-cuda:0]",
+          "reason": "This grid probes FP32 rounding at a 100 m datum."
+        },
+        {
+          "test": "tests.test_confined_steady_acceptance::test_pcg_fp32_verifies_emitted_heads[8-False-cpu]",
+          "reason": "This grid probes FP32 rounding at a 100 m datum."
+        },
+        {
+          "test": "tests.test_confined_steady_acceptance::test_pcg_fp32_verifies_emitted_heads[8-False-cuda:0]",
+          "reason": "This grid probes FP32 rounding at a 100 m datum."
+        },
+        {
+          "test": "tests.test_confined_steady_acceptance::test_mixed_workspace_tracks_mutated_and_replaced_forcing[cpu]",
+          "reason": "The mixed driver requires an FP32 model."
+        },
+        {
+          "test": "tests.test_confined_steady_acceptance::test_mixed_workspace_tracks_mutated_and_replaced_forcing[cuda:0]",
+          "reason": "The mixed driver requires an FP32 model."
+        },
+        {
+          "test": "tests.test_nov25_audit_regressions::test_cartesian_fp32_forms_face_before_narrowing[cpu]",
+          "reason": "FP32 underflow contract"
+        },
+        {
+          "test": "tests.test_nov25_audit_regressions::test_cartesian_fp32_forms_face_before_narrowing[cuda:0]",
+          "reason": "FP32 underflow contract"
+        },
+        {
+          "test": "tests.test_npf662_device_native::test_refresh_graph_capture_failure_runs_eager_and_preserves_physics[cpu]",
+          "reason": "CUDA graph failure path"
+        },
+        {
+          "test": "tests.test_npf662_device_native::test_tiled_physical_reductions_match_atomic_metrics[cpu-shape0]",
+          "reason": "CUDA tiled reductions"
+        },
+        {
+          "test": "tests.test_npf662_device_native::test_tiled_physical_reductions_match_atomic_metrics[cpu-shape1]",
+          "reason": "CUDA tiled reductions"
+        },
+        {
+          "test": "tests.test_npf662_device_native::test_tiled_toggle_replaces_captured_arnoldi_graphs[cpu]",
+          "reason": "CUDA graph identity"
+        }
+      ]
+    },
+    "fp32": {
+      "tests": 17,
+      "passed": 17,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "elapsed_seconds": 1.559,
+      "explicitly_cuda_parameterized_passes": 6,
+      "explicitly_cpu_parameterized_passes": 6,
+      "skip_reasons": []
+    }
+  },
+  "environment": {
+    "python": "3.14",
+    "warp": "1.17.0",
+    "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+    "gpu_memory_gib": 16,
+    "mf6": "6.6.2",
+    "plotting_backend": "Agg"
+  },
+  "notes": [
+    "Suite includes actual CPU, CUDA and live pinned MF6 execution.",
+    "Explicit device-parameter counts are lower bounds; other tests run CUDA internally.",
+    "Later benchmark and documentation commits retain this exact production source tree."
+  ]
+}

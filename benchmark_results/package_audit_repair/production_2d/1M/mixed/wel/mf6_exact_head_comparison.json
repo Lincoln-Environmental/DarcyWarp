@@ -1,0 +1,16 @@
+{
+  "periods": [
+    {
+      "index": 0,
+      "maximum_m": 0.00010919737479753167,
+      "rms_m": 3.9211111129280136e-05
+    },
+    {
+      "index": 3,
+      "maximum_m": 0.00011751530820447442,
+      "rms_m": 3.5486297508645946e-05
+    }
+  ],
+  "preferred_head_target_m": 1e-06,
+  "preferred_target_met": false
+}
