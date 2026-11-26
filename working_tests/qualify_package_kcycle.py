@@ -320,7 +320,7 @@ def accepted_snapshot(*, model, head, info, fields):
     return arrays
 
 
-def qualify_history(*, fields, saved, controls, repeats, output, device):
+def qualify_history(*, fields, saved, controls, repeats, output, device, raw_control):
     """Measure actual resident NPF/STO histories from the same physical IC.
 
     :param fields: Fixed geometry and package definitions.
@@ -329,6 +329,7 @@ def qualify_history(*, fields, saved, controls, repeats, output, device):
     :param repeats: Warm repeated history measurements.
     :param output: Evidence directory.
     :param device: CUDA device.
+    :param raw_control: Express WEL as equivalent scheduled raw volumetric sources.
     :return: Public and numerical history measurements with accepted budgets.
     """
     output.mkdir(parents=True, exist_ok=True)
@@ -341,13 +342,14 @@ def qualify_history(*, fields, saved, controls, repeats, output, device):
         graphs=True, line_smoother='jacobi', levels=saved['multigrid']['levels'])
     options.update(top_elevation=fields['top_elevation'])
     rows = []
-    with build_model(fields=fields, device=device, formulation='mf6_6_6_2_npf', raw_control=False) as model:
+    with build_model(fields=fields, device=device, formulation='mf6_6_6_2_npf', raw_control=raw_control) as model:
         for repeat in range(repeats + 1):
             wp.synchronize_device(device=device)
             started = perf_counter()
             heads, info = model.solve_transient_npf(dt=[controls['history_dt_days']] * steps,
                 head_prev=fields['initial_head'], ss=controls['specific_storage_per_m'], sy=controls['specific_yield'],
-                wel_rates=wells, recharge_rates=recharge, **options)
+                wel_rates=None if raw_control else wells,
+                source_factors=well_factors if raw_control else None, recharge_rates=recharge, **options)
             wp.synchronize_device(device=device)
             elapsed = perf_counter() - started
             assert info['converged'] and info['accepted_steps'] == steps, info
@@ -427,5 +429,10 @@ if __name__ == "__main__":
 
     if arguments.mode in ('history', 'all'):
         for label, shape in grids.items():
-            fields = regional_fields(shape=shape, abstraction_fraction=abstraction_fraction, packages=True, seed=seed, regional_controls=regional_controls)
-            qualify_history(fields=fields, saved=saved, controls=regional_controls, repeats=repeats, output=output / label / 'history', device=device)
+            for variant, packages, raw in variants:
+                physical_controls = boundary_controls(controls=regional_controls, variant=variant)
+                fields = regional_fields(shape=shape, abstraction_fraction=abstraction_fraction,
+                    packages=packages, seed=seed, regional_controls=physical_controls)
+                directory = output / label / 'history' if variant == 'packages' else output / label / variant / 'history'
+                qualify_history(fields=fields, saved=saved, controls=regional_controls,
+                    repeats=repeats, output=directory, device=device, raw_control=raw)

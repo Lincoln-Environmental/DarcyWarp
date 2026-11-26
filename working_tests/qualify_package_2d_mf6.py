@@ -62,6 +62,8 @@ if __name__ == "__main__":
                 fields['R_field'] = np.full(shape, np.mean(fields['R_field']))
             native = native_fields(fields=fields, dx=dx, controls=controls, convertible=convertible)
             if mode == 'mixed':
+                # The hierarchy stores T in FP32; physical WEL entries and the
+                # explicit recharge used by the mixed master equation stay FP64.
                 for name in ('kx_field', 'ky_field', 'kz_field'):
                     native[name] = fields['T_field'].astype(np.float32).astype(np.float64)[None] / controls['confined_thickness']
             if mode in ('steady', 'mixed'):
@@ -82,4 +84,4 @@ if __name__ == "__main__":
                 stage_offsets=[0.] * len(durations), transient=mode not in ('steady', 'mixed'),
                 ss=controls['specific_storage_per_m'], sy=controls['unconfined_sy'] if convertible else 0.,
                 cell_type=int(convertible), ims_controls=ims, executable=executable, repeats=arguments.repeats,
-                directory=output / label / mode, well_precision='float32' if mode == 'mixed' else 'float64')
+                directory=output / label / mode, well_precision='float64')

@@ -231,7 +231,8 @@ def qualify_transient(*, fields, dx, controls, profiles, repeats, unconfined, de
     steps, dt = controls['history_steps'], controls['history_dt_days']
     well_factors = np.resize(controls['history_wel_pattern'], steps)
     recharge_factors = np.resize(controls['history_recharge_pattern'], steps)
-    schedules = [[(cell, rate * factor) for cell, rate in fields['wel_entries']] for factor in well_factors]
+    schedules = (None if fields['wel_entries'] is None else
+        [[(cell, rate * factor) for cell, rate in fields['wel_entries']] for factor in well_factors])
     recharge = [fields['R_field'] * factor for factor in recharge_factors]
     rows = []
     with make_model(fields=fields, dx=dx, device=device, source_control=False) as model:
@@ -255,7 +256,8 @@ def qualify_transient(*, fields, dx, controls, profiles, repeats, unconfined, de
                 previous, history, periods = initial, [], []
                 options = dict(profiles['transient'])
                 for index in range(steps):
-                    model.update_wel_in_place(wel_entries=schedules[index])
+                    if schedules is not None:
+                        model.update_wel_in_place(wel_entries=schedules[index])
                     model.update_R_in_place(R_field=recharge[index])
                     head, period = model.solve(implementation='fast', initial_head=previous,
                         transient=True, dt=dt, head_prev=previous,
@@ -284,6 +286,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--mode', choices=('steady', 'mixed', 'transient', 'picard'), required=True)
     parser.add_argument('--grid', choices=('100k', '1M', 'all'), default='all')
+    parser.add_argument('--without-wells', action='store_true',
+        help='Measure the existing recharge-only transient path without a WEL schedule.')
     arguments = parser.parse_args()
     os.environ['DARCY_FLOAT'] = 'float32' if arguments.mode == 'mixed' else 'float64'
     root = Path(__file__).resolve().parents[1]
@@ -301,11 +305,17 @@ if __name__ == "__main__":
     repeats = 3
     device = 'cuda:0'
     output = root / 'benchmark_results/package_audit_repair/production_2d'
+    if arguments.without_wells:
+        if arguments.mode in ('steady', 'mixed'):
+            raise ValueError('--without-wells is a transient control; steady modes already include equivalent source controls')
+        output = output / 'recharge_only'
     wp.init()
     for label, shape in shapes.items():
         if arguments.grid not in ('all', label):
             continue
         fields, dx = fields_for_grid(shape=shape, controls=controls)
+        if arguments.without_wells:
+            fields['wel_entries'] = None
         if arguments.mode in ('steady', 'mixed'):
             for source_control in (True, False):
                 qualify_steady(fields=fields, dx=dx, controls=controls, profiles=profiles,
