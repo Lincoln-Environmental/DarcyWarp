@@ -1,0 +1,20 @@
+{
+  "complete": false,
+  "runs": [
+    {
+      "name": "mf6-complex-newton-2d",
+      "command": [
+        "/home/patrickdurney/miniconda3/envs/darcywarp/bin/python",
+        "working_tests/qualify_package_2d_mf6.py",
+        "--mode",
+        "all",
+        "--newton",
+        "--repeats",
+        "3"
+      ],
+      "wall_seconds": 1087.3135919990018,
+      "returncode": 1
+    }
+  ],
+  "interruption_reason": "Redundant forced-Newton confined diagnostic stopped deliberately. Completed native references are retained. Matched harmonic-T and confined references use COMPLEX without unnecessary Newton continuation."
+}

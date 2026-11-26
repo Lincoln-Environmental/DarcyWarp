@@ -1,0 +1,32 @@
+{
+  "complete": false,
+  "runs": [
+    {
+      "name": "history-clean",
+      "command": [
+        "/home/patrickdurney/miniconda3/envs/darcywarp/bin/python",
+        "working_tests/qualify_package_kcycle.py",
+        "--mode",
+        "history",
+        "--configuration",
+        "fast"
+      ],
+      "wall_seconds": 76.54801207201672,
+      "returncode": 0
+    },
+    {
+      "name": "matched-complex-2d-steady",
+      "command": [
+        "/home/patrickdurney/miniconda3/envs/darcywarp/bin/python",
+        "working_tests/qualify_package_2d_mf6.py",
+        "--mode",
+        "steady",
+        "--no-newton",
+        "--repeats",
+        "3"
+      ],
+      "wall_seconds": 433.52199277601903,
+      "returncode": 0
+    }
+  ]
+}

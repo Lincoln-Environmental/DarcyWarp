@@ -1,0 +1,11 @@
+{
+  "state": "stopped_at_user_request",
+  "qualification_complete": false,
+  "source_checkpoint_commit": "7686fa2daf46d5cef251f0733f646924f8ba4e45",
+  "notes": [
+    "Running qualification and MF6 jobs were terminated at the user request.",
+    "Later qualification-harness changes have not completed their final validation.",
+    "Completed measurements and interrupted native manifests are retained separately.",
+    "Full-grid NPZ, HDS, CBC files and generated simulation caches remain local."
+  ]
+}

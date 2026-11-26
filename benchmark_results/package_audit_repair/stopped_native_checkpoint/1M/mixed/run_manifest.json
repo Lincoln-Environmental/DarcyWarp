@@ -1,0 +1,65 @@
+{
+  "version": "mf6: 6.6.2 05/12/2025",
+  "sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+  "build": "historical-local-6.6.2",
+  "shape": [
+    1,
+    1000,
+    1000
+  ],
+  "transient": false,
+  "npf_cell_types": [
+    0
+  ],
+  "well_precision": "float64",
+  "ims_controls": {
+    "pname": "ims",
+    "print_option": "SUMMARY",
+    "complexity": "COMPLEX",
+    "linear_acceleration": "BICGSTAB",
+    "outer_maximum": 500,
+    "outer_dvclose": 1e-06,
+    "inner_maximum": 500,
+    "inner_dvclose": 1e-08,
+    "rcloserecord": [
+      1e-06,
+      "RELATIVE_RCLOSE"
+    ],
+    "scaling_method": "DIAGONAL"
+  },
+  "construction_seconds": 27.871497170010116,
+  "input_precision": 17,
+  "input_float_characters": 25,
+  "input_sha256": {
+    "pkgqual.ic": "9063b8a4761b49b2e5143003514767e57750dcd422c9fb52720bf3ad20fe12b1",
+    "pkgqual.oc": "7e927b1732bf2183dead78bd2dec392cfd916619610d7a68610dac40f5a64f96",
+    "pkgqual.dis": "ce849bc6523aeb3fe98da8e448f941551c4feb544629af86f6f2f7184318bfd7",
+    "pkgqual.ims": "475079abe1699e29085c7fde14228176ab699c3cfc2381992bb68d50f6ee23fa",
+    "pkgqual.rch": "4fc5b10d8fbf5fbdf5473bf023d5aa7e6357e4c2f77d4e96df04742339be8431",
+    "pkgqual.wel": "242a6e4bd30c475764364e9bb3630f7a57655ddf387c3e3d6813968adec4e8f6",
+    "pkgqual.nam": "e7bc6f08e3f5cc44c6adc279b3c76850e24e5982e498df4b7348ec55c88513d5",
+    "mfsim.nam": "95a0bfce4b563dd27bea27dd68636fa79212eee228d01b4fd448d902b0325dc3",
+    "pkgqual.npf": "ccadde9c77bc5a35be84d2875d8e3d8024337b53ca199fe7c86068180d0060df",
+    "pkgqual.tdis": "43ace764087fd9c879cab13f119879ce6eff08ed47a76469993c5c6ab701340e",
+    "pkgqual.chd": "b114979500889d710b664977ccf5cf134f68767182ceaf8aa9effe2bef085bb2"
+  },
+  "input_audit_seconds": 0.13499081900226884,
+  "durations": [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+  ],
+  "packages": [
+    "WEL",
+    "RCH",
+    "CHD"
+  ],
+  "engine_seconds": [
+    232.75598923800862
+  ],
+  "engine_logs": [
+    "engine_0.txt"
+  ],
+  "requested_repeats": 3
+}

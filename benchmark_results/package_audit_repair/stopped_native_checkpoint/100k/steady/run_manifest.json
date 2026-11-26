@@ -1,0 +1,69 @@
+{
+  "version": "mf6: 6.6.2 05/12/2025",
+  "sha256": "21efe1534afd1d9f19227938ff70cca4b2f216d326f7d73073b4d8ebe1ed7176",
+  "build": "historical-local-6.6.2",
+  "shape": [
+    1,
+    320,
+    320
+  ],
+  "transient": false,
+  "npf_cell_types": [
+    0
+  ],
+  "well_precision": "float64",
+  "ims_controls": {
+    "pname": "ims",
+    "print_option": "SUMMARY",
+    "complexity": "COMPLEX",
+    "linear_acceleration": "BICGSTAB",
+    "outer_maximum": 500,
+    "outer_dvclose": 1e-06,
+    "inner_maximum": 500,
+    "inner_dvclose": 1e-08,
+    "rcloserecord": [
+      1e-06,
+      "RELATIVE_RCLOSE"
+    ],
+    "scaling_method": "DIAGONAL"
+  },
+  "construction_seconds": 2.798154240997974,
+  "input_precision": 17,
+  "input_float_characters": 25,
+  "input_sha256": {
+    "pkgqual.ic": "a12929b2a8171410fcd6ed122ae3212c4340053262f7cebd36b5341c48acde97",
+    "pkgqual.oc": "8e457970ccfc39dcada01b760e445324b43924ea0b8cca9eec5b6cac6c9db528",
+    "pkgqual.dis": "c80fd94cd23be326eca104bdfd4e22c49bfb9a012e12a622f9d3416a7d1c91d5",
+    "pkgqual.ims": "eb157376ef325daee49558eea65d7b58b071c8d3b2e142d9f4b03ba20515ef8e",
+    "pkgqual.rch": "6f72ec68b3847a79277d44787a70a1f69e0a1bf95c066efb57098f1ef6698e22",
+    "pkgqual.wel": "f695b4d396c7b2e0abe4beb5dc1f7217beda74cc9666e573a39f7d6ab4d30637",
+    "pkgqual.nam": "250ca9b372788b57448d06e483ae4147f6336a23b55a08cea5c20dcff56daf8a",
+    "mfsim.nam": "0b829bcf832d324be78dfa311d53441109380e425d29b453a5a61bef4eafd0ea",
+    "pkgqual.npf": "66457c3a0597f19040ac039a9a8337b527526df0a349baa1bb52d55094a39c32",
+    "pkgqual.tdis": "646aa04f921f3e260a905077550774bf02e23c47aa4136ec2b7841c659fdb77d",
+    "pkgqual.chd": "fbcb79d92b13d5f77c8a532b9cad1dcae247061f66b415afb423908f55b42559"
+  },
+  "input_audit_seconds": 0.013712838990613818,
+  "durations": [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+  ],
+  "packages": [
+    "WEL",
+    "RCH",
+    "CHD"
+  ],
+  "engine_seconds": [
+    3.2363471029966604,
+    3.435721595014911,
+    3.359380226000212
+  ],
+  "engine_logs": [
+    "engine_0.txt",
+    "engine_1.txt",
+    "engine_2.txt"
+  ],
+  "requested_repeats": 3
+}
