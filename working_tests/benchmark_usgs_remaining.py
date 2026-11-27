@@ -175,6 +175,15 @@ def consolidate(*, results, output):
                        darcywarp_wall_seconds=result.get(
                            "darcywarp_wall_seconds", report.get("run_seconds", "")),
                        end_to_end_seconds=report.get("run_seconds", ""))
+        if not row["active_cells"]:
+            native_audit_path = output / result["model"] / "native_heads.json"
+            if native_audit_path.is_file():
+                native_audit = json.loads(native_audit_path.read_text())
+                shape = native_audit.get("shape")
+                if shape:
+                    row.update(layers=shape[0], rows=shape[1], columns=shape[2],
+                               total_cells=int(np.prod(shape)),
+                               active_cells=native_audit.get("active", ""))
         if steps:
             step = steps[-1]
             row.update(

@@ -342,13 +342,20 @@ def test_canonical_archive_restores_cell_and_threshold_of_each_sparse_reach(tmp_
 
 
 def test_closed_component_with_inactive_drain_opens_only_at_its_threshold(solver_device):
-    with groundwater_model(solver_device, initial_head=np.full((1, 1, 1), -3.),
-            wel_entries=[(CELL, 5.)], drn_entries=[(CELL, 2., 4.), (CELL, 3., 10.)]) as model:
+    shape = (1, 1, 5)
+    active = np.array([[[1, 0, 1, 0, 1]]], dtype=np.int32)
+    wells = [((0, 0, 0), 5.), ((0, 0, 2), 5.), ((0, 0, 4), 5.)]
+    drains = [((0, 0, 0), 2., 4.), ((0, 0, 0), 3., 10.),
+              ((0, 0, 2), 2., 4.), ((0, 0, 2), 3., 10.),
+              ((0, 0, 4), 2., 4.), ((0, 0, 4), 3., 10.)]
+    with groundwater_model(solver_device, shape=shape, active=active,
+            initial_head=np.full(shape, -3.), wel_entries=wells,
+            drn_entries=drains) as model:
         head, info = model.solve()
-        assert info["converged"] and info["active_set_seeds"]
-        assert head.item() == pytest.approx(6.5, abs=1e-8)
+        assert info["converged"] and len(info["active_set_seeds"]) == 3
+        np.testing.assert_allclose(head[active != 0], 6.5, rtol=0., atol=1e-8)
         rates = model.accepted_boundary_entry_rates(package="drn", head=head, info=info)
-        np.testing.assert_allclose(rates, [5., 0.], atol=1e-8, rtol=0.)
+        np.testing.assert_allclose(rates, [5., 0., 5., 0., 5., 0.], atol=1e-8, rtol=0.)
 
 
 

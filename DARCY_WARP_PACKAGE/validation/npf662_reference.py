@@ -677,14 +677,47 @@ class NPF662Reference:
             unused_storage, storage_tangent = self.storage(head=candidate)
         seeds = []
         active = self.case.active.ravel() != 0
-        for label in np.unique(labels[active]):
-            component = (labels == label) & active
-            if np.any(self.case.fixed.ravel()[component] != 0) or np.any(self.ghb_conductance.ravel()[component] > 0.):
+        active_cells = np.flatnonzero(active)
+        active_labels = labels[active_cells]
+        label_count = int(labels.max()) + 1
+        fixed = self.case.fixed.ravel() != 0
+        restrained = np.zeros(label_count, dtype=bool)
+        for restraint in (fixed, self.ghb_conductance.ravel() > 0.,
+                          package_tangent.ravel() > 0., storage_tangent.ravel() > 0.):
+            counts = np.bincount(active_labels, weights=restraint[active_cells],
+                                  minlength=label_count)
+            restrained |= counts > 0.
+        free_cells = active_cells[self.free.ravel()[active_cells]]
+        free_labels = labels[free_cells]
+        residual = fields['residual'].ravel()
+        residual_mass = np.bincount(free_labels, weights=np.abs(residual[free_cells]),
+                                    minlength=label_count)
+        candidate_labels = np.flatnonzero((~restrained) & (residual_mass > 0.))
+
+        # Group cell and boundary entries by component once. Scanning a full
+        # grid and every package entry for every disconnected dry component
+        # makes this setup path quadratic on regional models with many dry
+        # cells.
+        active_order = np.argsort(active_labels, kind='stable')
+        sorted_active_labels = active_labels[active_order]
+        sorted_active_cells = active_cells[active_order]
+        package_groups = []
+        for entries, package, level in ((self.drn_csr, 'DRN', 'first_level'),
+                                        (self.riv_csr, 'RIV', 'third_level')):
+            if entries is None:
+                package_groups.append(None)
                 continue
-            if np.any(package_tangent.ravel()[component] > 0.) or np.any(storage_tangent.ravel()[component] > 0.):
-                continue
-            free_component = component & self.free.ravel()
-            net_need = stable_sum(values=fields['residual'].ravel()[free_component])
+            entry_labels = labels[entries.flat_cells]
+            entry_order = np.argsort(entry_labels, kind='stable')
+            package_groups.append((entries, package, level,
+                                   entry_labels[entry_order], entry_order))
+
+        for label in candidate_labels:
+            start = int(np.searchsorted(sorted_active_labels, label, side='left'))
+            stop = int(np.searchsorted(sorted_active_labels, label, side='right'))
+            component_cells = sorted_active_cells[start:stop]
+            free_component_cells = component_cells[self.free.ravel()[component_cells]]
+            net_need = stable_sum(values=residual[free_component_cells])
             if not np.isfinite(net_need) or net_need == 0.:
                 continue
             direction = 1. if net_need > 0. else -1.
@@ -693,24 +726,35 @@ class NPF662Reference:
                 # Enter the existing constitutive transition, rather than
                 # pretending a positive parameter implies a positive tangent.
                 # 1e-6 is the fixed MF6 saturation smoothing width.
-                for cell in np.flatnonzero(free_component & (self.case.cell_types.ravel() != 0)):
-                    current_head = candidate.ravel()[cell]
-                    bottom = self.case.bottoms.ravel()[cell]
-                    thickness = self.case.thicknesses.ravel()[cell]
-                    top = bottom + thickness
-                    if direction > 0. and current_head <= bottom and (self.ss.ravel()[cell] > 0. or self.sy.ravel()[cell] > 0.):
-                        threshold_candidates.append((int(cell), float(bottom + 1.e-6 * thickness), 'STO'))
-                    if direction < 0. and current_head >= top and self.sy.ravel()[cell] > 0.:
-                        threshold_candidates.append((int(cell), float(top - 1.e-6 * thickness), 'STO'))
-            for entries, package in ((self.drn_csr, 'DRN'), (self.riv_csr, 'RIV')):
-                if entries is None or direction < 0.:
+                cells = free_component_cells
+                convertible = self.case.cell_types.ravel()[cells] != 0
+                current_head = candidate.ravel()[cells]
+                bottom = self.case.bottoms.ravel()[cells]
+                thickness = self.case.thicknesses.ravel()[cells]
+                top = bottom + thickness
+                sy = self.sy.ravel()[cells]
+                ss = self.ss.ravel()[cells]
+                if direction > 0.:
+                    selected = convertible & (current_head <= bottom) & ((ss > 0.) | (sy > 0.))
+                    for cell, threshold in zip(cells[selected],
+                            (bottom + 1.e-6 * thickness)[selected]):
+                        threshold_candidates.append((int(cell), float(threshold), 'STO'))
+                else:
+                    selected = convertible & (current_head >= top) & (sy > 0.)
+                    for cell, threshold in zip(cells[selected],
+                            (top - 1.e-6 * thickness)[selected]):
+                        threshold_candidates.append((int(cell), float(threshold), 'STO'))
+            for group in package_groups:
+                if group is None or direction < 0.:
                     continue
-                for entry in range(len(entries)):
+                entries, package, level, entry_labels, entry_order = group
+                start = int(np.searchsorted(entry_labels, label, side='left'))
+                stop = int(np.searchsorted(entry_labels, label, side='right'))
+                for entry in entry_order[start:stop]:
                     cell = int(entries.flat_cells[entry])
-                    if not free_component[cell]:
+                    if not self.free.ravel()[cell]:
                         continue
-                    threshold = float(entries.first_level[entry] if package == 'DRN'
-                                      else entries.third_level[entry])
+                    threshold = float(getattr(entries, level)[entry])
                     if candidate.ravel()[cell] <= threshold:
                         threshold_candidates.append((cell, threshold, package))
             if not threshold_candidates:
@@ -724,7 +768,7 @@ class NPF662Reference:
             if not directional_shifts:
                 continue
             unused_distance, shift, index, threshold, package = min(directional_shifts)
-            candidate.ravel()[component] += shift
+            candidate.ravel()[component_cells] += shift
             # The uniform shift addition can round the threshold cell back onto
             # the boundary value. Enforce the intended active branch explicitly
             # instead of trusting the representability of the shift.

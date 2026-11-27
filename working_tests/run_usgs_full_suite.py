@@ -22,7 +22,7 @@ def find_native_reference(*, model_name, native_roots):
 
 
 def run_suite(*, model_root, suite_root, native_roots, executable, device,
-              device_index, tolerances, poll_seconds):
+              device_index, tolerances, poll_seconds, retry_failed):
     """Run/resume all archived workspaces as native references become ready.
 
     :param model_root: Root containing the archived USGS workspaces.
@@ -33,6 +33,7 @@ def run_suite(*, model_root, suite_root, native_roots, executable, device,
     :param device_index: CUDA device index for peak-memory sampling.
     :param tolerances: Qualified parity gates shared by every model.
     :param poll_seconds: Delay before checking for a missing native receipt.
+    :param retry_failed: Rerun terminal failures instead of reusing their receipts.
     :return: Per-model result records.
     """
     archives = sorted(path.parent for path in model_root.rglob("mfsim.nam"))
@@ -45,9 +46,9 @@ def run_suite(*, model_root, suite_root, native_roots, executable, device,
         receipt = output / "case_status.json"
         if receipt.is_file():
             result = json.loads(receipt.read_text())
-            if result["status"] == "passed":
+            if result["status"] == "passed" or not retry_failed:
                 results.append(result)
-                print(f"[{index}/74] reused {archive.name}: passed", flush=True)
+                print(f"[{index}/74] reused {archive.name}: {result['status']}", flush=True)
                 continue
             print(f"[{index}/74] retrying previous failure: {archive.name}", flush=True)
         native_directory = find_native_reference(model_name=archive.name,
@@ -85,7 +86,8 @@ if __name__ == "__main__":
         saturation_head_gate=0.1, flow_atol=1e-6, flow_rtol=1e-10,
         budget_rtol=1e-3)
     poll_seconds = 30
+    retry_failed = False
     run_suite(model_root=model_root, suite_root=suite_root,
         native_roots=native_roots, executable=executable, device=device,
         device_index=device_index, tolerances=tolerances,
-        poll_seconds=poll_seconds)
+        poll_seconds=poll_seconds, retry_failed=retry_failed)
