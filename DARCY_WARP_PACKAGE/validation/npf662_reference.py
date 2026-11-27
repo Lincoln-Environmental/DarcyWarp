@@ -480,6 +480,29 @@ class NPF662Reference:
         dr=-conductance+np.where(~choose_left,extra,0.)
         return conductance,dl,dr,saturation
 
+    def _face_flux_subset(self, *, head, face_indices):
+        """Evaluate only faces incident to one exact-zero row.
+
+        :param head: Current candidate head field.
+        :param face_indices: Flat indices into the prebuilt face arrays.
+        :return: Physical face flows for the selected faces.
+        """
+        c = self.case
+        edges = np.asarray(face_indices, dtype=np.int64)
+        left = self.left[edges]
+        right = self.right[edges]
+        h = np.where(c.active, head, 0.).ravel()
+        choose_left = (h[left] > h[right]) | (
+            (h[left] == h[right]) & (self.axes[edges] == 1))
+        donor = np.where(choose_left, left, right)
+        variable = ((self.axes[edges] != 0) &
+            ((c.cell_types.ravel()[left] != 0) | (c.cell_types.ravel()[right] != 0)))
+        saturation, unused_derivative = quadratic_saturation_derivative(
+            head=h[donor], bottom=c.bottoms.ravel()[donor],
+            thickness=c.thicknesses.ravel()[donor], cell_type=c.cell_types.ravel()[donor])
+        conductance = self.c0[edges] * np.where(variable, saturation, 1.)
+        return conductance * (h[left] - h[right])
+
     def jacobian(self,*,head):
         unused,dl,dr,unused_saturation=self.face_terms(head=head)
         unused_drn_ed, drain, unused_riv_ed, river = self.boundary_terms(head=head)
@@ -891,7 +914,17 @@ class NPF662Reference:
                     (self.case.cell_types.ravel()[cell] != 0 and self.sy.ravel()[cell] > 0.))
                 if has_storage_capacity and self.case.thicknesses.ravel()[cell] > 0.:
                     continue
+            first_face = self.incidence.indptr[cell]
+            last_face = self.incidence.indptr[cell + 1]
+            face_indices = self.incidence.indices[first_face:last_face]
+            before_flux = self._face_flux_subset(head=candidate,
+                face_indices=face_indices)
             flat[cell] = datum
+            after_flux = self._face_flux_subset(head=candidate,
+                face_indices=face_indices)
+            if not np.array_equal(before_flux, after_flux):
+                flat[cell] = previous
+                continue
             records.append(dict(kind='exact_zero_equation_row', cell=int(cell),
                 cells=1, datum_head_m=float(datum),
                 previous_mean_head_m=float(previous), applied_shift_m=float(shift)))

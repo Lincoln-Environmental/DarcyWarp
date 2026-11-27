@@ -45,9 +45,11 @@ def run_suite(*, model_root, suite_root, native_roots, executable, device,
         receipt = output / "case_status.json"
         if receipt.is_file():
             result = json.loads(receipt.read_text())
-            results.append(result)
-            print(f"[{index}/74] reused {archive.name}: {result['status']}", flush=True)
-            continue
+            if result["status"] == "passed":
+                results.append(result)
+                print(f"[{index}/74] reused {archive.name}: passed", flush=True)
+                continue
+            print(f"[{index}/74] retrying previous failure: {archive.name}", flush=True)
         native_directory = find_native_reference(model_name=archive.name,
             native_roots=native_roots)
         while native_directory is None:

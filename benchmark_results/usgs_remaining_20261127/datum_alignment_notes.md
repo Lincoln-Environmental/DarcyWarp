@@ -17,6 +17,12 @@ shifts reduce the aligned RMSE to `3.967e-8 m` and maximum error to
 `2.650e-5 m`; the unchanged head gates then pass. The 0414 audit also passes
 the existing face-flow, package-budget, and physical-residual checks.
 
+For 0101, the raw maximum head difference is `0.01691 m`. Independent
+alignment of the native and DarcyWarp endpoints moves only exact-zero rows
+whose incident flows and boundary branches remain unchanged; the aligned RMSE
+is `8.980e-6 m` and maximum error is `6.976e-4 m`. The raw difference remains
+recorded and unchanged.
+
 Machine-readable metrics and spatial maps are retained in each model's
 `datum_alignment_audit/` directory. The full 74-model qualification is still
 in progress; these two audits do not establish suite-wide compatibility.
