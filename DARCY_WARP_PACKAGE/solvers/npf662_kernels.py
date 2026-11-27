@@ -956,10 +956,14 @@ def candidate_head(head:wp.array(dtype=wp.float64),delta:wp.array(dtype=wp.float
 
 
 @wp.kernel
-def shift_linear_diagonal(physical: wp.array(dtype=wp.float64), shift: wp.float64,
-                          linear: wp.array(dtype=wp.float64)):
+def shift_linear_diagonal(physical: wp.array(dtype=wp.float64),
+                          scale: wp.array(dtype=wp.float64), shift: wp.float64,
+                          typical_scale: wp.float64, linear: wp.array(dtype=wp.float64)):
     i = wp.tid()
-    linear[i] = physical[i] + shift
+    weight = wp.float64(1.)
+    if typical_scale > wp.float64(0.):
+        weight = wp.max(weight, scale[i] / typical_scale)
+    linear[i] = physical[i] + shift * weight
 
 
 @wp.kernel

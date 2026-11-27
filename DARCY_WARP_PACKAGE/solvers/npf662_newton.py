@@ -422,10 +422,12 @@ class NPF662Workspace:
         """Return the tangent used only for a numerical correction."""
         return self.operator_tangent if self.linear_diagonal is None else self.linear_diagonal
 
-    def set_linear_shift(self, *, value):
+    def set_linear_shift(self, *, value, typical_scale=0.):
         """Refresh the correction diagonal without changing physical state.
 
         :param value: Nonnegative diagonal shift in conductance units.
+        :param typical_scale: Median saturated principal diagonal for the
+            spatial correction shift. Zero selects a uniform shift.
         """
         if self.linear_diagonal is None:
             if value == 0.:
@@ -433,7 +435,8 @@ class NPF662Workspace:
             self.linear_diagonal = wp.empty_like(self.operator_tangent)
             self.krylov = None
         wp.launch(kernel=kernels.shift_linear_diagonal, dim=self.n,
-                  inputs=[self.operator_tangent, value, self.linear_diagonal], device=self.device)
+                  inputs=[self.operator_tangent, self.scale, value, typical_scale,
+                          self.linear_diagonal], device=self.device)
 
     def refresh_previous_operator(self, *, activation_head=None):
         """Rebuild the previous-state diagonal from storage, GHB, DRN and RIV.
@@ -874,7 +877,13 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
     if initial_shift and (workspace.transient or not np.any(case.cell_types[case.active != 0])):
         raise ValueError('Steady continuation requires a convertible steady model')
     workspace.damp_drying = initial_shift > 0.
-    workspace.set_linear_shift(value=initial_shift)
+    typical_scale = 0.
+    if initial_shift:
+        principal = workspace.principal.numpy()
+        selected = workspace.free.numpy().astype(bool) & (principal > 0.)
+        if np.any(selected):
+            typical_scale = float(np.median(principal[selected]))
+    workspace.set_linear_shift(value=initial_shift, typical_scale=typical_scale)
     krylov_reused=workspace.select_krylov(method=method,krylov_budget=krylov_budget)
     tiled = bool(controls.tiled_reductions and wp.get_device(ident=model.device).is_cuda)
     if tiled != getattr(workspace,'device_tiled',False) and workspace.flexible is not None:
@@ -972,7 +981,7 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
     forcing_previous=current['scaled_l2']
     initial_physical_rms = current['physical_rms']
     dry_projection_used = False
-    dry_balance_unscaled = False
+    physical_balance_unscaled = False
     stalled_linear_solves = 0
     saturated_preconditioner_retries = 0
     diagonal_preconditioner_retries = 0
@@ -981,7 +990,8 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
         shift = 0.
         if initial_shift:
             ratio = current['physical_rms']/max(initial_physical_rms,physical_tolerance)
-            if ratio > 1e-10 and current['relative_cell_imbalance'] > relative_tolerance:
+            if (not physical_balance_unscaled and ratio > 1e-10
+                    and current['relative_cell_imbalance'] > relative_tolerance):
                 shift = initial_shift * min(ratio, 1.)
             if shift == 0. and current['relative_cell_imbalance'] <= relative_tolerance:
                 projected = workspace.dry_projection(head_tolerance=1e-6)
@@ -1004,21 +1014,26 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
                 elif (projected['finite']
                         and projected['head_residual_rms'] < current['head_residual_rms']
                         and projected['relative_cell_imbalance'] <= relative_tolerance):
-                    # Remove near-zero dry rows before finishing the local
-                    # flow balances. Use the line search's physical norm for
-                    # the remaining corrections so high-conductance rows
-                    # are still visible to Krylov.
+                    # Remove near-zero dry rows before finishing local balance.
                     current = workspace.accept_trial(metrics=projected)
                     dry_projection_used = True
-                    if not dry_balance_unscaled:
-                        workspace.scale.fill_(1.)
-                        current = workspace.evaluate(trial=False, linearize=True)
-                        forcing_previous = current['scaled_l2']
-                        dry_balance_unscaled = True
                     if progress_callback is not None:
                         progress_callback("Dry-cell projection before local balance",
                                           head_rms=current["head_residual_rms"])
-        workspace.set_linear_shift(value=shift)
+            full_step = (bool(history) and history[-1]['accepted']
+                         and history[-1]['attempts'][-1]['search']['alpha'] == 1.)
+            small_shift = typical_scale > 0. and shift <= relative_tolerance * typical_scale
+            if (not physical_balance_unscaled
+                    and (current['relative_cell_imbalance'] <= relative_tolerance
+                         or (full_step and small_shift))):
+                # A full step with a negligible dimensionless shift can
+                # enter physical refinement before the bulk balance check.
+                workspace.scale.fill_(1.)
+                current = workspace.evaluate(trial=False, linearize=True)
+                forcing_previous = current['scaled_l2']
+                physical_balance_unscaled = True
+                shift = 0.
+        workspace.set_linear_shift(value=shift, typical_scale=typical_scale)
         if progress_callback is not None:
             progress_callback("Newton outer", outer=outer+1, max_outer=max_outer,
                               head_rms=current["head_residual_rms"],
@@ -1066,7 +1081,17 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
                     retry_newton = False
                 continue
             if mode==2:saturated+=1
-            allowance=min(remaining,max(1,int(controls.newton_budget_fraction*krylov_budget))) if mode==1 else max(1,remaining//2) if mode==0 else remaining
+            if mode == 1 and physical_balance_unscaled and full_step:
+                # Full steps in the refinement phase can spend the existing
+                # per-outer budget on cell balance instead of reserving work
+                # for Picard and saturated fallback directions.
+                allowance = remaining
+            elif mode == 1:
+                allowance = min(remaining, max(1, int(controls.newton_budget_fraction * krylov_budget)))
+            elif mode == 0:
+                allowance = max(1, remaining // 2)
+            else:
+                allowance = remaining
             workspace.mode.fill_(mode);workspace.delta.zero_()
             linear_pc = flex_preconditioner if method == 'fgmres' else None
             if pc_choice == 'diagonal_retry':
@@ -1163,7 +1188,7 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
                             workspace.scale, workspace.maximum], device=workspace.device)
                     if workspace.maximum.numpy()[0] != 0.:
                         raise ValueError('Invalid active-set recovery restraint diagonal')
-                    if dry_balance_unscaled:
+                    if physical_balance_unscaled:
                         workspace.scale.fill_(1.)
                     if workspace.multigrid is not None:
                         wp.copy(dest=workspace.multigrid.levels[0]['storage'].flatten(),
@@ -1264,8 +1289,8 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
         device_final_metrics=current,workspace_reused=reused,seconds=seconds,setup_seconds=setup_seconds,controls=asdict(controls),
         linear_budget_units='Krylov iterations shared across Newton and Picard per outer',
         max_krylov_per_outer=krylov_budget,max_outer=max_outer,krylov_restart=restart,
-        scaling=('fixed full-saturated principal diagonal until dry projection, then physical residual'
-                 if dry_balance_unscaled else 'fixed full-saturated principal diagonal; S*J and S*R'),
+        scaling=('fixed full-saturated principal diagonal until local balance refinement, then physical residual'
+                 if physical_balance_unscaled else 'fixed full-saturated principal diagonal; S*J and S*R'),
         preconditioner='fixed diagonal within each GMRES solve')
     result['balanced_nullspace_datum'] = nullspace_datum
     result['component_datum_refined'] = datum_refined
