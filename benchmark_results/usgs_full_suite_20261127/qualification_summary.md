@@ -24,7 +24,7 @@ Failure groups:
 
 ## Native tolerance check
 
-Five saved tighter MF6 references were re-audited on CUDA against the DarcyWarp solutions. All passed the existing head, face-flow, and package gates. This establishes that the original head-only misses in these five cases came from the looser original MF6 solution, not a relaxed DarcyWarp criterion:
+Seven saved tighter MF6 references were re-audited on CUDA against the DarcyWarp solutions. All passed the existing head, face-flow, and package gates. This establishes that the original head-only misses in these seven cases came from the looser original MF6 solution, not a relaxed DarcyWarp criterion:
 
 | Model | Tight MF6 seconds | Datum-aligned head RMSE (m) | Maximum absolute difference (m) | Tight comparison |
 |---|---:|---:|---:|---|
@@ -33,14 +33,16 @@ Five saved tighter MF6 references were re-audited on CUDA against the DarcyWarp 
 | 0405_0409_0410_MF6_SS_Unconfined_250 | 227.4 | 1.31e-06 | 4.81e-05 | passed |
 | 0406_0407_0408_0416_MF6_SS_Unconfined_250 | 262.8 | 1.45e-07 | 4.52e-06 | passed |
 | 0414_0415_MF6_SS_Unconfined_250 | 792.7 | 3.96e-08 | 2.65e-05 | passed |
+| 1201_1202_1203_1204_MF6_SS_Unconfined_250 | 109.7 | 1.90e-10 | 1.39e-08 | passed |
+| 1408_MF6_SS_Unconfined_250 | 228.5 | 1.03e-06 | 1.96e-05 | passed |
 
-The other 20 head-parity misses have not yet been checked against a tighter native reference. Their saved native-head equation audits passed, but the head mismatches remain unresolved until tighter references are evaluated.
+The other 18 head-parity misses have not yet been checked against a tighter native reference. Their saved native-head equation audits passed, but the head mismatches remain unresolved until tighter references are evaluated.
 
 ## Physical audit failures and solver failures
 
-Two native-head audits stop before a DarcyWarp solve because an individual DRN entry differs from the native budget by 1.4833e-6 and 1.2065e-6 m³/day, respectively, just above the unchanged 1e-6 absolute gate. In both cases CPU and GPU DRN entry calculations agree exactly, input arrays agree exactly, and aggregate DRN budgets pass. The per-entry gate failures remain open; no tolerance was raised.
+Two native-head audits stop before a DarcyWarp solve because an individual DRN entry differs from the native budget by 1.4833e-6 and 1.2065e-6 m³/day, respectively, just above the unchanged 1e-6 absolute gate. Independent FloPy reconstruction shows the discrepancy is one HDS double-precision ULP at the worst high-conductance entries: cell (0, 1146, 828), conductance 3.3125e6, in 1301/1302; and cell (0, 1099, 1378), conductance 5.4612e6, in 1303/1305/1306. The native CBC flux implies a head 4.55e-13 m and 2.27e-13 m from the saved head, respectively. CPU and GPU DRN calculations agree exactly at the saved heads, the imported arrays match, and aggregate DRN budgets pass. The per-entry gate failures remain open; no tolerance was raised.
 
-The remaining 19 failures are solver failures: 14 reach the Newton outer limit, four end with ungrounded saturation components, and one fails line search. Rejected states and solver histories are retained under each model directory.
+The remaining 19 failures are solver failures: 14 reach the Newton outer limit, four end with ungrounded saturation components, and one fails line search. A few are close but still fail physical balance (1015/1020/1021/1022/1023 ends at 0.0448 m head-equivalent RMS and 0.00582 relative cell imbalance; 1103/1104/1105/1106 at 0.0188 m and 0.00317; 1308/1309 at 0.000692 m and 0.00234). Several others diverge severely, with head-equivalent residuals from thousands to 1e14 m. Rejected states and solver histories are retained under each model directory.
 
 The 1602/1603 IndexError from the first batch did not reproduce. A fresh run under the same defaults ended at the Newton outer limit with a very large head residual; its official receipt now records that reproducible outcome.
 
@@ -50,4 +52,4 @@ Dry-state active-set seeding previously rebuilt full-grid component masks and re
 
 ## Retained diagnostics
 
-Each case directory retains the native-head audit JSON, raw spatial arrays and maps, solver report, and rejected head/residual output when a solve failed. Five tighter-reference audits and their solution maps are under `darcywarp_qualification/tight_reference_audit/`. The summary plot is `darcywarp_qualification/qualification_summary_plots.png`. Selected maps and the five tight-reference audit JSON reports are committed under `qualification_evidence/`.
+Each case directory retains the native-head audit JSON, raw spatial arrays and maps, solver report, and rejected head/residual output when a solve failed. Seven tighter-reference audits and their solution maps are under `darcywarp_qualification/tight_reference_audit/`. The summary plot is `darcywarp_qualification/qualification_summary_plots.png`. Selected maps and the seven tight-reference audit JSON reports are committed under `qualification_evidence/`.

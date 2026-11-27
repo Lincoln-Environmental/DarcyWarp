@@ -1,0 +1,10 @@
+{
+  "native": {
+    "seconds": 109.73294759800774,
+    "version": "mf6: 6.6.2 05/12/2025",
+    "ims_dvclose": 1e-06
+  },
+  "stages": {
+    "solution": "passed"
+  }
+}

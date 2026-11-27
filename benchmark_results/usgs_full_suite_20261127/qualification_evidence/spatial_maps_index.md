@@ -1,6 +1,6 @@
 # Selected spatial difference plots
 
-These committed maps show five tight-reference head comparisons, two unresolved original-reference head differences, and the two DRN entry-audit misses. The complete per-model maps remain in `../darcywarp_qualification/<model>/` in the benchmark workspace.
+These committed maps show seven tight-reference head comparisons, two unresolved original-reference head differences, and the two DRN entry-audit misses. The complete per-model maps remain in `../darcywarp_qualification/<model>/` in the benchmark workspace.
 
 - `0308_0309_0310_MF6_SS_Unconfined_250`: [solution_head_difference_m.png](spatial/0308_0309_0310_MF6_SS_Unconfined_250_solution_head_difference_m.png)
 - `0403_0404_0707_0709_0712_MF6_SS_Unconfined_250`: [solution_head_difference_m.png](spatial/0403_0404_0707_0709_0712_MF6_SS_Unconfined_250_solution_head_difference_m.png)
