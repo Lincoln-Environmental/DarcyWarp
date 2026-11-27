@@ -759,6 +759,20 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
              periods=len(model.periods), steps=total_steps,
              units=f"{model.length_units}/{model.time_units}",
              packages=",".join(sorted({p.package_type.upper() for p in model.packages})))
+    # Keep the native initial condition; report the state before any numerical
+    # active-set recovery. Do not use reference output as an initial guess.
+    active_head = model.initial[model.active]
+    convertible = model.active & (model.cell_type != 0)
+    thickness = (model.interfaces[:-1] - model.interfaces[1:])[model.active]
+    initial_diagnostics = dict(
+        head_min=float(active_head.min()), head_max=float(active_head.max()),
+        thickness_min=float(thickness.min()), thickness_max=float(thickness.max()),
+        conductivity_min=float(model.kx[model.active].min()),
+        conductivity_max=float(model.kx[model.active].max()),
+        initially_dry=int(np.count_nonzero(convertible & (model.initial <= model.interfaces[1:]))),
+        initially_saturated=int(np.count_nonzero(convertible & (model.initial >= model.interfaces[:-1]))),
+    )
+    progress("Initial hydraulic state", **initial_diagnostics)
     profile, options = _import_solver_options(model=model, device=device,
                                               precision=precision, solver_options=options)
     resolved = _serialisable_controls(options)
@@ -853,8 +867,28 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
                              solve_seconds=info.get("seconds"),
                              total_seconds=info.get("public_total_seconds"))
                     if not info["converged"]:
+                        failed = dict(model=model.name, shape=list(model.shape),
+                            device=device, precision_profile=precision,
+                            benchmark_profile=profile, resolved_solver_controls=resolved,
+                            initial_hydraulic_state=initial_diagnostics,
+                            accepted_steps=len(steps), steps=steps, converged=False,
+                            excluded_boundary_entries=excluded_boundaries,
+                            failed_step=dict(kper=kper+1, kstp=kstp+1,
+                                stop_reason=info.get("stop_reason"),
+                                final_metrics=metrics,
+                                outer_iterations=info.get("outer_iterations"),
+                                krylov_iterations=info.get("krylov_iterations"),
+                                stalled_linear_solves=info.get("stalled_linear_solves"),
+                                saturated_preconditioner_retries=info.get("saturated_preconditioner_retries"),
+                                diagonal_preconditioner_retries=info.get("diagonal_preconditioner_retries"),
+                                outer_history=info.get("outer_history"),
+                                effective_solver_settings=info.get("effective_solver_settings")),
+                            run_seconds=perf_counter()-started)
+                        report_path.write_text(json.dumps(_serialisable_controls(failed),
+                            indent=2, allow_nan=False) + "\n")
                         raise RuntimeError(f"DarcyWarp failed at period {kper + 1}, "
-                                           f"step {kstp + 1}: {info.get('stop_reason')}")
+                                           f"step {kstp + 1}: {info.get('stop_reason')}; "
+                                           f"diagnostics: {report_path}")
                     head = np.asarray(head, dtype=float)
                     if not np.all(np.isfinite(head[model.active]) &
                                   (np.abs(head[model.active]) < 1e20)):
@@ -872,6 +906,9 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
                                       final_metrics=_numeric_summary(metrics),
                                       outer_iterations=info.get("outer_iterations"),
                                       krylov_iterations=info.get("krylov_iterations"),
+                                      stalled_linear_solves=info.get("stalled_linear_solves", 0),
+                                      saturated_preconditioner_retries=info.get("saturated_preconditioner_retries", 0),
+                                      diagonal_preconditioner_retries=info.get("diagonal_preconditioner_retries", 0),
                                       budget=_numeric_summary(info.get("budget")),
                                       sources=_numeric_summary(info.get("source_budgets")),
                                       drn=_numeric_summary(info.get("drn_budget")),
@@ -881,6 +918,7 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
     report = dict(model=model.name, shape=list(model.shape), device=device,
                   precision_profile=precision,
                   benchmark_profile=profile, resolved_solver_controls=resolved,
+                  initial_hydraulic_state=initial_diagnostics,
                   ignore_inactive_boundaries=bool(ignore_inactive_boundaries),
                   excluded_boundary_entries=excluded_boundaries,
                   length_units=model.length_units, time_units=model.time_units,

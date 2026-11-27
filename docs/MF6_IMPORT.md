@@ -45,7 +45,21 @@ residual readbacks at restart boundaries, throttled to approximately five
 seconds after the first block; it adds no GPU synchronisation.
 Pass verbose=False to suppress these messages. The JSON report records the
 selected profile, resolved options, per-step effective solver settings,
-iteration counts and final physical metrics.
+iteration counts and final physical metrics. Initial head, thickness and
+conductivity ranges and dry/saturated convertible-cell counts are reported
+without changing the MF6 initial condition.
+
+The Newton solver now detects stagnation using the measured true FGMRES
+residual (four restart blocks with less than 0.1% reduction). It rejects
+failed directions with less than 1% total linear residual reduction, first
+retrying the unchanged Newton Jacobian with fully saturated K-cycle
+coefficients and then with diagonal preconditioning when the selected
+K-cycle stagnates. Existing Picard and full-saturated correction directions
+remain available. These are numerical recovery paths, not changes to the
+accepted physical equations or convergence criteria. Progress reports
+the preconditioner, residual reduction and line-search damping. A rejected
+timestep retains a JSON failure report with nonlinear history; no rejected
+head is written to the accepted output.
 
 ## Initial supported contract
 

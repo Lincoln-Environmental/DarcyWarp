@@ -176,7 +176,8 @@ class RestartedFGMRES3D:
         self.owner.matvec(x=x, y=out, z=out, alpha=1., beta=0.)
 
     def solve(self, *, preconditioner, max_iterations, absolute_tolerance,
-              progress_callback=None):
+              progress_callback=None, stagnation_restarts=0,
+              stagnation_min_reduction=1e-3):
         if self.closed:
             raise RuntimeError('FGMRES workspace is closed')
         self.readbacks = 0
@@ -184,6 +185,7 @@ class RestartedFGMRES3D:
         self.owner.delta.zero_()
         self._copy(src=self.owner.rhs, dst=self.r)
         beta = self._norm(x=self.r)
+        initial_residual = beta
         history = [dict(iterations=0, true_residual=beta)]
         used = blocks = 0
         mg_device_start = preconditioner.device_seconds
@@ -271,13 +273,31 @@ class RestartedFGMRES3D:
                     last_progress = now
             if breakdown or not columns:
                 break
+            # A restarted Krylov solve can repeat an invariant subspace
+            # indefinitely. Use the already measured true residual, not the
+            # Hessenberg estimate, and give the nonlinear driver its unused
+            # budget back. Ordinary decreasing residual histories are unchanged.
+            if (stagnation_restarts > 0 and blocks >= stagnation_restarts
+                    and beta > absolute_tolerance and np.isfinite(beta)):
+                previous = history[-1-stagnation_restarts]["true_residual"]
+                if beta >= previous * (1. - stagnation_min_reduction):
+                    reason = 'stagnation'
+                    if progress_callback is not None:
+                        progress_callback("FGMRES stagnation", iterations=used,
+                                          residual=beta, window_start=previous,
+                                          target=absolute_tolerance)
+                    break
         if not np.isfinite(beta):
             reason = 'nonfinite_true_residual'
         elif beta <= absolute_tolerance:
             reason = 'target'
         self.last_info = dict(iterations=used, restarts=max(blocks - 1, 0), blocks=blocks,
             true_residual=beta, target=absolute_tolerance, converged=bool(np.isfinite(beta) and beta <= absolute_tolerance),
-            stopping=reason, history=history, scalar_readbacks=self.readbacks,
+            stopping=reason, history=history, initial_residual=initial_residual,
+            relative_reduction=(1. - beta/initial_residual
+                if np.isfinite(initial_residual) and initial_residual > 0.
+                and np.isfinite(beta) else 0.),
+            scalar_readbacks=self.readbacks,
             device_arnoldi=bool(getattr(self.owner, 'device_arnoldi', False)),
             arnoldi_graphs=len(self.arnoldi_graphs), arnoldi_graph_fallback=self.arnoldi_graph_failed,
             synchronization_seconds=self.synchronization_seconds,

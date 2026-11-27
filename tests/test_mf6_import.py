@@ -432,3 +432,22 @@ def test_import_progress_and_effective_controls(tmp_path, solver_device, capsys)
                           verbose=False)
     assert quiet["accepted_steps"] == report["accepted_steps"]
     assert "[DarcyWarp MF6" not in capsys.readouterr().out
+
+
+
+def test_failed_import_writes_solver_diagnostics(tmp_path, solver_device):
+    """A rejected solve leaves diagnostic JSON but no completed head history."""
+    import json
+
+    workspace = tmp_path / "mf6"
+    make_simulation(workspace)
+    output = tmp_path / "dw"
+    with pytest.raises(RuntimeError, match="diagnostics"):
+        run_mf6_model(workspace, output, device=solver_device,
+                      solver_options={"max_outer": 0}, verbose=False)
+    report = json.loads((output / "darcywarp_report.json").read_text())
+    assert report["converged"] is False
+    assert report["accepted_steps"] == 0
+    assert report["failed_step"]["kper"] == 1
+    assert "final_metrics" in report["failed_step"]
+    assert not (output / "darcywarp.hds").exists()
