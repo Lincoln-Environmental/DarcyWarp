@@ -3,6 +3,30 @@ import math
 import numpy as np
 
 
+def exact_dry_zero_rows(*, case, head, free, diagonal, residual,
+                        boundary_throughput, storage=None):
+    """Identify only indeterminate, fully dry, exactly zero physical equations.
+
+    :param case: Canonical NPF physical inputs.
+    :param head: Evaluated total heads, not a numerical trial surrogate.
+    :param free: Free-cell mask.
+    :param diagonal: Physical conductance plus boundary and storage tangents.
+    :param residual: Unmodified physical balance residual.
+    :param boundary_throughput: Gross physical package exchange by cell.
+    :param storage: Optional actual accumulation rate; a dry transient cell
+        that is still releasing stored water is not a zero equation.
+    :return: Boolean mask of dry zero rows; no tolerances or physical floors.
+    """
+    dry = (free & (case.cell_types > 0) & (head <= case.bottoms)
+           & (diagonal == 0.) & (residual == 0.) & (case.source == 0.)
+           & (boundary_throughput == 0.))
+    if case.source_gross is not None:
+        dry &= np.asarray(case.source_gross) == 0.
+    if storage is not None:
+        dry &= storage == 0.
+    return dry
+
+
 def local_balance_valid(*, case, free, left, right, head, residual, flux, conductance, ghb_conductance,
                         ghb_exchange, component_anchor, thresholds, storage=None, tangent=None,
                         boundary_throughput=None):

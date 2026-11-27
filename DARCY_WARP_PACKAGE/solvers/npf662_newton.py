@@ -14,6 +14,12 @@ from DARCY_WARP_PACKAGE.physics.ghb_3d import npf_ghb_component_anchor, validate
 
 @dataclass(frozen=True)
 class NPF662NewtonControls:
+    """Control numerical directions and line searches for NPF.
+
+    :param steady_initial_shift: Initial correction-diagonal shift in
+        conductance units for steady convertible continuation in any number
+        of layers. Zero disables it; transient storage is not regularised.
+    """
     inner_forcing: float = .01
     newton_budget_fraction: float = .75
     line_search_steps: int = 20
@@ -27,6 +33,10 @@ class NPF662NewtonControls:
     timestep_predictor_order: int = 1
     tiled_reductions: bool = False
     reuse_trial_state: bool = False
+    linear_stagnation_restarts: int = 4
+    linear_stagnation_min_reduction: float = 1e-3
+    linear_minimum_reduction: float = 1e-2
+    steady_initial_shift: float = 0.
 
     def validate(self):
         if not isinstance(self.line_search_steps, (int, np.integer)):
@@ -37,12 +47,21 @@ class NPF662NewtonControls:
         if self.line_search_steps<1 or not np.isfinite(self.max_head_change_m) or self.max_head_change_m<=0.:
             raise ValueError('Positive finite step/search controls required')
         if not 1.<=self.recovery_growth<=1.10:raise ValueError('Recovery growth must be between1 and1.10')
+        if not np.isfinite(self.steady_initial_shift) or self.steady_initial_shift < 0.:
+            raise ValueError('The steady continuation shift must be finite and nonnegative')
         if not 0. < self.forcing_min <= self.forcing_max < 1. or not np.isfinite(self.forcing_power) or self.forcing_power <= 0.:
             raise ValueError('Adaptive forcing bounds/power must be positive, with bounds below one')
         if any(not isinstance(value, (bool, np.bool_)) for value in (self.adaptive_forcing, self.timestep_predictor, self.tiled_reductions, self.reuse_trial_state)):
             raise ValueError('Adaptive forcing and timestep predictor switches must be Boolean')
         if isinstance(self.timestep_predictor_order, (bool, np.bool_)) or self.timestep_predictor_order not in (1, 2):
             raise ValueError('Timestep predictor order must be 1 or 2')
+        positive_integer(value=self.linear_stagnation_restarts,
+                         name='linear_stagnation_restarts', minimum=0)
+        if (not np.isfinite(self.linear_stagnation_min_reduction)
+                or not 0. < self.linear_stagnation_min_reduction < 1.
+                or not np.isfinite(self.linear_minimum_reduction)
+                or not 0. <= self.linear_minimum_reduction < 1.):
+            raise ValueError('Linear stagnation and minimum progress fractions must lie in [0,1)')
 
 
 class NPF662Workspace:
@@ -142,6 +161,8 @@ class NPF662Workspace:
         self.physical_tolerance = 1.0e-12
         self.relative_tolerance = 1.0e-8
         self.roundoff_partials = self.roundoff_zero = None
+        self.linear_diagonal = None
+        self.damp_drying = False
         self.device_native = bool(getattr(reference, 'device_storage_state', False))
         self.load(model=model,case=case,reference=reference)
         self.evaluate(trial=False,linearize=True)
@@ -396,6 +417,24 @@ class NPF662Workspace:
             return self.previous_ghb_operator
         return self.previous_storage_tangent
 
+    @property
+    def linear_operator_tangent(self):
+        """Return the tangent used only for a numerical correction."""
+        return self.operator_tangent if self.linear_diagonal is None else self.linear_diagonal
+
+    def set_linear_shift(self, *, value):
+        """Refresh the correction diagonal without changing physical state.
+
+        :param value: Nonnegative diagonal shift in conductance units.
+        """
+        if self.linear_diagonal is None:
+            if value == 0.:
+                return
+            self.linear_diagonal = wp.empty_like(self.operator_tangent)
+            self.krylov = None
+        wp.launch(kernel=kernels.shift_linear_diagonal, dim=self.n,
+                  inputs=[self.operator_tangent, value, self.linear_diagonal], device=self.device)
+
     def refresh_previous_operator(self, *, activation_head=None):
         """Rebuild the previous-state diagonal from storage, GHB, DRN and RIV.
 
@@ -585,15 +624,28 @@ class NPF662Workspace:
 
     def matvec(self,x,y,z,alpha,beta):
         wp.launch(kernel=kernels.jacobian_action,dim=self.n,inputs=[x,y,z,self.free,self.left,self.right,
-            self.dl,self.dr,self.c,self.c0,self.scale,self.mode,self.jv_counter,alpha,beta,self.operator_tangent],device=self.device)
+            self.dl,self.dr,self.c,self.c0,self.scale,self.mode,self.jv_counter,alpha,beta,self.linear_operator_tangent],device=self.device)
 
     def precondition(self,x,y,z,alpha,beta):
         wp.launch(kernel=increment_work, dim=1, inputs=[self.preconditioner_counter, 0], device=self.device)
         wp.launch(kernel=kernels.diagonal_action,dim=self.n,inputs=[x,y,z,self.free,self.left,self.right,
-            self.dl,self.dr,self.c,self.c0,self.scale,self.mode,alpha,beta,self.operator_tangent],device=self.device)
+            self.dl,self.dr,self.c,self.c0,self.scale,self.mode,alpha,beta,self.linear_operator_tangent],device=self.device)
 
     def candidate(self,*,alpha):
-        wp.launch(kernel=kernels.candidate_head,dim=self.n,inputs=[self.head,self.delta,self.free,self.trial,alpha],device=self.device)
+        wp.launch(kernel=kernels.candidate_head,dim=self.n,inputs=[self.head,self.delta,self.free,self.trial,
+            alpha,self.bottom,self.types,int(self.damp_drying),self.left,self.c0,self.source],
+            device=self.device)
+        return self.evaluate(trial=True)
+
+    def dry_projection(self, *, head_tolerance):
+        """Try exact dry endpoints for nearly dry, unforced free cells.
+
+        :param head_tolerance: Maximum allowed head displacement.
+        """
+        wp.launch(kernel=kernels.project_dry_trial, dim=self.n,
+                  inputs=[self.head,self.bottom,self.types,self.free,self.source,
+                          self.zero if self.ghb_conductance is None else self.ghb_conductance,
+                          head_tolerance,self.trial,self.left,self.c0], device=self.device)
         return self.evaluate(trial=True)
 
     def _enqueue_commit(self):
@@ -667,6 +719,7 @@ class NPF662Workspace:
         self.package_totals = None
         self.predictor_increment = self.predictor_older_increment = self.predictor_checkpoint = None
         self.roundoff_partials = self.roundoff_zero = None
+        self.linear_diagonal = None
         self.component_anchor = None
         self.component_face_mask = self.component_connectivity_changed = None
         for name in ('head','prescribed','trial','source','bottom','thickness','scale','rhs','trial_rhs','residual','trial_residual','delta',
@@ -766,16 +819,22 @@ def search_direction(*,workspace,current,controls,physical_tolerance=1e-12,relat
         return dict(accepted=False,alpha=0.,mode='zero_or_nonfinite_direction',metrics=current,trials=[],raw_max=maximum)
     first=min(1.,controls.max_head_change_m/max(maximum,np.finfo(float).tiny))
     old=residual_merit(candidate=current,current=current)
+    continuation = controls.steady_initial_shift > 0.
     rows=[];best=None;best_value=np.inf
     for attempt in range(controls.line_search_steps):
         alpha=first*2.**(-attempt)
         trial=workspace.candidate(alpha=alpha)
         value=residual_merit(candidate=trial,current=current)
+        threshold = old
+        if continuation:
+            value = (trial['physical_rms']/max(current['physical_rms'],physical_tolerance))**2 if trial['finite'] else np.inf
+            threshold = 1. - 1e-4 * alpha
         rows.append(dict(alpha=alpha,merit=value if np.isfinite(value) else None,metrics=trial))
         if value<best_value:best=(alpha,trial);best_value=value
-        if device_accepted(metrics=trial,physical_tolerance=physical_tolerance,relative_tolerance=relative_tolerance) or value<old:
-            return dict(accepted=True,alpha=alpha,mode='dual_descent',metrics=trial,trials=rows,raw_max=maximum)
-    if best is not None and best_value<=controls.recovery_growth**2*old:
+        if device_accepted(metrics=trial,physical_tolerance=physical_tolerance,relative_tolerance=relative_tolerance) or value<threshold:
+            return dict(accepted=True,alpha=alpha,mode='physical_descent' if continuation else 'dual_descent',
+                        metrics=trial,trials=rows,raw_max=maximum)
+    if not continuation and best is not None and best_value<=controls.recovery_growth**2*old:
         alpha,unused=best
         trial=workspace.candidate(alpha=alpha)
         return dict(accepted=True,alpha=alpha,mode='bounded_recovery',metrics=trial,trials=rows,raw_max=maximum)
@@ -786,7 +845,7 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
                         physical_tolerance=1e-12,relative_tolerance=1e-8,
                         npf_preconditioner='diagonal',npf_kcycle_controls=None,npf_krylov_method=None,
                         device_native=False,prepared_workspace=None,device_sequence=False,roundoff_acceptance=False,
-                        retain_accepted_state=True):
+                        retain_accepted_state=True,progress_callback=None):
     controls.validate()
     setup_start=perf_counter()
     if max_outer<0 or krylov_budget<0 or restart<2:raise ValueError('Nonnegative budgets and restart>=2 required')
@@ -803,11 +862,19 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
         reused=True
     else:
         reused=workspace is not None and workspace.compatible(model=model,case=case,restart=restart)
+    if progress_callback is not None:
+        progress_callback("Preparing Newton workspace", reused=reused, method=method.upper(),
+                          restart=restart, max_outer=max_outer, krylov_per_outer=krylov_budget)
     if not reused:
         if workspace is not None:workspace.close()
         workspace=NPF662Workspace(model=model,case=case,restart=restart,krylov_budget=krylov_budget,reference=reference)
         holder['workspace']=workspace
     elif prepared_workspace is None:workspace.load(model=model,case=case,reference=reference)
+    initial_shift = controls.steady_initial_shift
+    if initial_shift and (workspace.transient or not np.any(case.cell_types[case.active != 0])):
+        raise ValueError('Steady continuation requires a convertible steady model')
+    workspace.damp_drying = initial_shift > 0.
+    workspace.set_linear_shift(value=initial_shift)
     krylov_reused=workspace.select_krylov(method=method,krylov_budget=krylov_budget)
     tiled = bool(controls.tiled_reductions and wp.get_device(ident=model.device).is_cuda)
     if tiled != getattr(workspace,'device_tiled',False) and workspace.flexible is not None:
@@ -827,6 +894,10 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
         mg_controls=NPF662KCycleControls() if npf_kcycle_controls is None else npf_kcycle_controls
         if not isinstance(mg_controls,NPF662KCycleControls):raise ValueError('npf_kcycle_controls must be NPF662KCycleControls')
         mg_controls.validate()
+        if progress_callback is not None:
+            progress_callback("Preparing K-cycle hierarchy", levels=mg_controls.levels,
+                              precision=mg_controls.preconditioner_precision,
+                              coefficient_state=mg_controls.coefficient_state)
         direct_refresh = (device_native and workspace.multigrid is not None
             and not workspace.multigrid.closed and workspace.multigrid.controls == mg_controls
             and not workspace.faces_changed)
@@ -875,6 +946,12 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
     if wp.get_device(ident=model.device).is_cuda:wp.synchronize_device(device=model.device)
     start=perf_counter();total=0;fallbacks=0;saturated=0;backtracks=0;history=[];reason='outer_budget'
     setup_seconds=start-setup_start
+    if progress_callback is not None:
+        level_shapes = ([level['dim'] for level in workspace.multigrid.levels]
+                        if npf_preconditioner == 'kcycle' else None)
+        progress_callback("Solver setup complete", seconds=setup_seconds,
+                          hierarchy_reused=mg_reused, hierarchy_shapes=level_shapes)
+        progress_callback("Evaluating initial residual")
     current=workspace.evaluate(trial=False,linearize=True)
     predictor_used=False
     predictor_continuation=False
@@ -893,50 +970,166 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
                 current=workspace.accept_trial(metrics=predicted)
                 predictor_used=True
     forcing_previous=current['scaled_l2']
+    initial_physical_rms = current['physical_rms']
+    dry_projection_used = False
+    stalled_linear_solves = 0
+    saturated_preconditioner_retries = 0
+    diagonal_preconditioner_retries = 0
     for outer in range(max_outer):
         if device_accepted(metrics=current,physical_tolerance=physical_tolerance,relative_tolerance=relative_tolerance):reason='converged';break
+        shift = 0.
+        if initial_shift:
+            ratio = current['physical_rms']/max(initial_physical_rms,physical_tolerance)
+            if ratio > 1e-10 and current['relative_cell_imbalance'] > relative_tolerance:
+                shift = initial_shift * min(ratio, 1.)
+            if shift == 0. and current['relative_cell_imbalance'] <= relative_tolerance:
+                projected = workspace.dry_projection(head_tolerance=1e-6)
+                if device_accepted(metrics=projected,physical_tolerance=physical_tolerance,relative_tolerance=relative_tolerance):
+                    # A dry projection changes a numerical head guess, not
+                    # the physical equation. Require the same independent
+                    # acceptance before committing the candidate.
+                    projected_head = workspace.trial.numpy().reshape(case.active.shape)
+                    projected_checks, unused = reference.evaluate(
+                        head=projected_head, physical_tolerance=physical_tolerance,
+                        relative_tolerance=relative_tolerance,
+                        roundoff_acceptance=roundoff_acceptance)
+                    if projected_checks['independent_accepted']:
+                        current=workspace.accept_trial(metrics=projected)
+                        dry_projection_used = True
+                        reason='converged'
+                        if progress_callback is not None:
+                            progress_callback("Accepted dry-cell projection", head_rms=current["head_residual_rms"])
+                        break
+        workspace.set_linear_shift(value=shift)
+        if progress_callback is not None:
+            progress_callback("Newton outer", outer=outer+1, max_outer=max_outer,
+                              head_rms=current["head_residual_rms"],
+                              relative_imbalance=current["relative_cell_imbalance"],
+                              scaled_l2=current["scaled_l2"], linear_shift=shift)
         forcing=controls.inner_forcing
         if controls.adaptive_forcing and outer:
             forcing=float(np.clip((current['scaled_l2']/max(forcing_previous,np.finfo(float).tiny))**controls.forcing_power,
                 controls.forcing_min,controls.forcing_max))
         forcing_previous=current['scaled_l2']
         remaining=krylov_budget;accepted=False;attempts=[]
-        for mode in (1,0,2):
+        # Keep the benchmarked direction/preconditioner first. Retry the same
+        # physical Newton Jacobian with alternative preconditioners only when
+        # the primary linear solve fails to make useful progress. A saturated
+        # preconditioner is an approximate inverse, not saturated physics.
+        retry_newton = False
+        directions = [(1, 'selected'), (1, 'saturated_retry'),
+                      (1, 'diagonal_retry'), (0, 'selected'), (2, 'selected')]
+        for mode, pc_choice in directions:
+            if pc_choice != 'selected':
+                if not retry_newton or method != 'fgmres' or npf_preconditioner != 'kcycle':
+                    continue
+                if (pc_choice == 'saturated_retry'
+                        and workspace.multigrid.controls.coefficient_state != 'current'):
+                    continue
+            if pc_choice == 'saturated_retry':
+                saturated_preconditioner_retries += 1
+            elif pc_choice == 'diagonal_retry':
+                diagonal_preconditioner_retries += 1
             if remaining<=0:reason='krylov_budget';break
             direction={1:'newton',0:'picard',2:'full_saturated_safeguard'}[mode]
             if mode!=1:fallbacks+=1
             workspace.maximum.zero_()
             wp.launch(kernel=kernels.impossible_linear_rows,dim=workspace.n,inputs=[workspace.rhs,workspace.free,
                 workspace.left,workspace.right,workspace.dl,workspace.dr,workspace.c,workspace.c0,mode,workspace.maximum,
-                workspace.operator_tangent],device=workspace.device)
+                workspace.linear_operator_tangent],device=workspace.device)
             impossible=int(workspace.maximum.numpy()[0])
             if impossible:
-                attempts.append(dict(direction=direction,krylov=0,remaining=remaining,stopping='zero_row_nonzero_rhs',zero_rows=impossible))
+                attempts.append(dict(direction=direction,preconditioner=pc_choice,krylov=0,remaining=remaining,stopping='zero_row_nonzero_rhs',zero_rows=impossible))
+                if progress_callback is not None:
+                    progress_callback("Linear direction skipped", direction=direction,
+                                      zero_rows=impossible)
+                # A different preconditioner cannot repair a zero Jacobian row.
+                if mode == 1:
+                    retry_newton = False
                 continue
             if mode==2:saturated+=1
             allowance=min(remaining,max(1,int(controls.newton_budget_fraction*krylov_budget))) if mode==1 else max(1,remaining//2) if mode==0 else remaining
             workspace.mode.fill_(mode);workspace.delta.zero_()
-            if npf_preconditioner == 'kcycle' and workspace.multigrid.controls.coefficient_state == 'current':
-                workspace.multigrid.refresh_current_operator(workspace=workspace, mode=mode)
+            linear_pc = flex_preconditioner if method == 'fgmres' else None
+            if pc_choice == 'diagonal_retry':
+                if workspace.diagonal_flexible is None:
+                    from .npf662_fgmres import DiagonalFGMRESPreconditioner
+                    workspace.diagonal_flexible = DiagonalFGMRESPreconditioner(workspace=workspace)
+                linear_pc = workspace.diagonal_flexible
+            pc_label = npf_preconditioner if pc_choice == 'selected' else pc_choice
+            if progress_callback is not None:
+                progress_callback("Linear solve", direction=direction, preconditioner=pc_label,
+                                  budget=allowance,
+                                  target=max(forcing*current['scaled_l2'],np.finfo(float).tiny))
+            if (npf_preconditioner == 'kcycle' and pc_choice != 'diagonal_retry'
+                    and workspace.multigrid.controls.coefficient_state == 'current'):
+                workspace.multigrid.refresh_current_operator(
+                    workspace=workspace, mode=2 if pc_choice == 'saturated_retry' else mode)
             if method=='gmres':
                 workspace.krylov._maxiter=allowance
                 workspace.krylov._atol=max(forcing*current['scaled_l2'],np.finfo(float).tiny)
                 used,error,target=workspace.krylov()
             else:
-                used,error,target=workspace.flexible.solve(preconditioner=flex_preconditioner,max_iterations=allowance,
-                    absolute_tolerance=max(forcing*current['scaled_l2'],np.finfo(float).tiny))
-                linear_history.append(dict(outer=outer+1,direction=direction,**workspace.flexible.last_info))
+                used,error,target=workspace.flexible.solve(preconditioner=linear_pc,max_iterations=allowance,
+                    absolute_tolerance=max(forcing*current['scaled_l2'],np.finfo(float).tiny),
+                    progress_callback=progress_callback,
+                    stagnation_restarts=controls.linear_stagnation_restarts,
+                    stagnation_min_reduction=controls.linear_stagnation_min_reduction)
+                linear_history.append(dict(outer=outer+1,direction=direction,
+                                           preconditioner=pc_label,**workspace.flexible.last_info))
             total+=int(used);remaining-=int(used)
+            initial_linear = (workspace.flexible.last_info['initial_residual']
+                              if method == 'fgmres' else current['scaled_l2'])
+            reduction = (1. - error/initial_linear if np.isfinite(error)
+                         and np.isfinite(initial_linear) and initial_linear > 0. else 0.)
+            stopping = (workspace.flexible.last_info['stopping'] if method == 'fgmres'
+                        else ('target' if error <= target else 'budget_or_breakdown'))
+            if progress_callback is not None:
+                progress_callback("Linear solve complete", krylov=int(used), residual=float(error),
+                                  target=float(target), stopping=stopping, relative_reduction=reduction)
+            # Never accept a nearly unchanged linear residual as a Newton
+            # update just because nonlinear damping yields a tiny decrease in
+            # one physical metric. Retain useful inexact corrections, but
+            # reject a nonfinite or negligible failed direction before search.
+            inadequate = (not np.isfinite(error) or
+                          (controls.linear_stagnation_restarts > 0 and error > target
+                           and reduction < controls.linear_minimum_reduction))
+            if inadequate:
+                stalled_linear_solves += 1
+                attempts.append(dict(direction=direction,preconditioner=pc_label,
+                    krylov=int(used),remaining=remaining,achieved_scaled_l2=float(error),
+                    requested_scaled_l2=float(target),target_reached=False,
+                    stopping=stopping,relative_reduction=float(reduction),
+                    rejected='inadequate_linear_progress'))
+                if mode == 1 and pc_choice == 'selected':
+                    retry_newton = True
+                if progress_callback is not None:
+                    progress_callback("Rejecting stalled linear direction", direction=direction,
+                                      preconditioner=pc_label, relative_reduction=reduction)
+                continue
             search=search_direction(workspace=workspace,current=current,controls=controls,
                 physical_tolerance=physical_tolerance,relative_tolerance=relative_tolerance)
             backtracks+=max(len(search['trials'])-1,0)
-            attempts.append(dict(direction=direction,krylov=int(used),remaining=remaining,
+            attempts.append(dict(direction=direction,preconditioner=pc_label,krylov=int(used),remaining=remaining,
                 achieved_scaled_l2=float(error),requested_scaled_l2=float(target),target_reached=bool(error<=target),
-                stopping='target' if error<=target else 'budget_or_breakdown',search=search))
+                stopping=stopping,relative_reduction=float(reduction),search=search))
+            if progress_callback is not None:
+                progress_callback("Line search", direction=direction, accepted=search['accepted'],
+                                  mode=search['mode'], alpha=search['alpha'],
+                                  maximum_correction=search['raw_max'])
+            if mode == 1 and pc_choice != 'selected':
+                # A usable alternate solve whose line search rejects should
+                # move on to a different nonlinear direction.
+                retry_newton = False
             if search['accepted']:
                 current=workspace.accept_trial(metrics=search['metrics'])
                 accepted=True;break
-        history.append(dict(outer=outer+1,accepted=accepted,krylov=krylov_budget-remaining,attempts=attempts,metrics=current,inner_forcing=forcing))
+        history.append(dict(outer=outer+1,accepted=accepted,krylov=krylov_budget-remaining,attempts=attempts,
+                            metrics=current,inner_forcing=forcing,linear_shift=shift))
+        if progress_callback is not None:
+            progress_callback("Newton update", outer=outer+1, accepted=accepted,
+                              krylov_total=total, head_rms=current["head_residual_rms"],
+                              relative_imbalance=current["relative_cell_imbalance"])
         if not accepted:
             if hasattr(reference, 'seed_unanchored_boundary_components'):
                 numerical_head = workspace.head.numpy().reshape(case.active.shape)
@@ -960,14 +1153,22 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
                     current = workspace.evaluate(trial=False, linearize=True)
                     history[-1]['active_set_recovery'] = recovery_seeds
                     continue
-            if reason!='krylov_budget':reason='line_search_failed'
+            if reason!='krylov_budget':
+                reason = ('linear_stagnation' if attempts and all(
+                    attempt.get('rejected') == 'inadequate_linear_progress'
+                    or attempt.get('stopping') == 'zero_row_nonzero_rhs'
+                    for attempt in attempts) else 'line_search_failed')
             break
     workspace.mode.fill_(1)
+    workspace.set_linear_shift(value=0.)
     # No head/source/storage/scaling mutation follows the accepted evaluation.
     # Rejected trials have separate flux, derivative and storage buffers.
     if not controls.reuse_trial_state:current=workspace.evaluate(trial=False,linearize=True)
     if wp.get_device(ident=model.device).is_cuda:wp.synchronize_device(device=model.device)
     seconds=perf_counter()-start
+    if progress_callback is not None:
+        progress_callback("Final physical acceptance", seconds=seconds,
+                          outer=len(history), krylov=total)
     head=None if device_sequence else workspace.head.numpy().reshape(case.active.shape).copy()
     datum_refined = False
     if not workspace.transient and case.ghb_conductance is not None:
@@ -1024,6 +1225,10 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
         krylov_iterations=total,jacobian_vector_products=int(workspace.jv_counter.numpy()[0]),
         nonlinear_residual_evaluations=workspace.residual_evaluations,candidate_evaluations=workspace.candidate_evaluations,
         nonlinear_backtracks=backtracks,fallback_count=fallbacks,outer_history=history,
+        stalled_linear_solves=stalled_linear_solves,
+        saturated_preconditioner_retries=saturated_preconditioner_retries,
+        diagonal_preconditioner_retries=diagonal_preconditioner_retries,
+        dry_projection_used=dry_projection_used,
         independent_acceptance=checks if independent_performed else None,physical_acceptance=checks,
         independent_audit_performed=independent_performed,device_native=device_native,tiled_reductions=tiled,
         full_saturated_safeguard_solves=saturated,timestep_predictor_used=predictor_used,

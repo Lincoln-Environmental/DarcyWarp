@@ -7,6 +7,38 @@ release milestones selected from the recorded main history, not releases
 published on those original dates. Historical snapshots retain their original
 source, documentation, licences and validation evidence.
 
+## v0.4.1
+
+Numerical maintenance release of the fast MF6 6.6.2 NPF/STO backend.
+
+- Include the upstream saturation derivative in the diagonal of the
+  current-coefficient K-cycle approximation by default. The physical
+  Newton Jacobian and the saturated/Picard preconditioners are unchanged.
+- Detect true-residual FGMRES stagnation, reject ineffective linear
+  directions, and retry with alternative preconditioners before nonlinear
+  safeguards.
+- Correct acceptance of exactly zero, isolated dry equations consistently
+  in steady, transient and matrix-free physical audits. Wet floating
+  components, nonzero gross forcing, storage exchange and vertically
+  connected cells are not exempt.
+- Add optional steady Newton diagonal continuation and guarded dry-cell
+  trial projection for single-layer and multilayer convertible models.
+  The shift is on the correction equation only and is removed before
+  final physical acceptance. It defaults to zero; no automatic regional
+  tuning or physical convergence tolerance changes are introduced.
+- Retain the existing precision and public API contracts. Optional
+  progress callbacks report solver convergence without changing it.
+
+See [the structured 3D guide](docs/3D_CARTESIAN_NPF.md) for configuration.
+The numerical changes originate in the regional qualification and
+multilayer work on development commits
+[6e878a0](https://github.com/Lincoln-Environmental/DarcyWarp/commit/6e878a02f287d6702c702043d0dc85020d3462a6),
+[e1d3556](https://github.com/Lincoln-Environmental/DarcyWarp/commit/e1d35564450a806be88be06a5c7d19b69199ccd9)
+and [37a11b8](https://github.com/Lincoln-Environmental/DarcyWarp/commit/37a11b83809758c79bd1e96b86c68db30e88a224).
+Regional CUDA timings refer to those development experiments, not a new
+benchmark of this maintenance release. The MF6 workspace importer and its
+automatic regional profile selection remain under development.
+
 ## v0.4.0
 
 ### Added and improved

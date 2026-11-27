@@ -349,3 +349,83 @@ def test_closed_component_with_inactive_drain_opens_only_at_its_threshold(solver
         assert head.item() == pytest.approx(6.5, abs=1e-8)
         rates = model.accepted_boundary_entry_rates(package="drn", head=head, info=info)
         np.testing.assert_allclose(rates, [5., 0.], atol=1e-8, rtol=0.)
+
+
+
+def test_fgmres_true_residual_stagnation_stops_before_budget():
+    """Restart-2 GMRES on a cyclic permutation has no decreasing residual."""
+    import warp as wp
+    from DARCY_WARP_PACKAGE.solvers.npf662_fgmres import RestartedFGMRES3D
+
+    class CyclicOperator:
+        device = "cpu"
+        shape = (1, 1, 3)
+        n = 3
+
+        def __init__(self):
+            self.rhs = wp.array([1., 0., 0.], dtype=wp.float64, device=self.device)
+            self.delta = wp.zeros(3, dtype=wp.float64, device=self.device)
+            self.free = wp.ones(3, dtype=wp.int32, device=self.device)
+
+        def matvec(self, x, y, z, alpha, beta):
+            z.assign(alpha * np.roll(x.numpy(), 1) + beta * y.numpy())
+
+    class IdentityPreconditioner:
+        device_seconds = 0.
+
+        def apply(self, *, vector, out, diagonal, free):
+            wp.copy(dest=out, src=vector)
+
+        def collect_timing(self):
+            pass
+
+    operator = CyclicOperator()
+    operator.scale = wp.ones(3, dtype=wp.float64, device="cpu")
+    solver = RestartedFGMRES3D(workspace=operator, restart=2)
+    try:
+        used, residual, target = solver.solve(
+            preconditioner=IdentityPreconditioner(), max_iterations=3000,
+            absolute_tolerance=1e-8, stagnation_restarts=4)
+        assert solver.last_info["stopping"] == "stagnation"
+        assert used == 8
+        assert residual == pytest.approx(1.)
+        assert solver.last_info["relative_reduction"] == pytest.approx(0.)
+    finally:
+        solver.close()
+
+
+def test_stalled_current_preconditioner_retries_same_jacobian(solver_device, monkeypatch):
+    """The nonlinear driver must reject a stalled direction and recover."""
+    from DARCY_WARP_PACKAGE.solvers.npf662_fgmres import RestartedFGMRES3D
+    from DARCY_WARP_PACKAGE.solvers.npf662_newton import NPF662NewtonControls
+
+    original_solve = RestartedFGMRES3D.solve
+    calls = []
+
+    def stalled_once(self, **kwargs):
+        calls.append(int(self.owner.mode.numpy()[0]))
+        if len(calls) == 1:
+            initial = self._norm(x=self.owner.rhs)
+            self.owner.delta.zero_()
+            self.last_info = dict(stopping="stagnation", initial_residual=initial,
+                relative_reduction=0., restarts=3, blocks=4,
+                scalar_readbacks=0, synchronization_seconds=0.,
+                multigrid_device_seconds=0., preconditioner_enqueue_seconds=0.)
+            return 4, initial, kwargs["absolute_tolerance"]
+        return original_solve(self, **kwargs)
+
+    monkeypatch.setattr(RestartedFGMRES3D, "solve", stalled_once)
+    shape, fields, exact = strip_problem(shape=(1, 8, 16))
+    controls = NPF662KCycleControls(levels=4, cached_line_factors=True,
+        coefficient_state="current", preconditioner_precision="float32")
+    with groundwater_model(solver_device, shape, **fields) as model:
+        head, info = model.solve(npf_kcycle_controls=controls,
+            npf_newton_controls=NPF662NewtonControls(), krylov_restart=8)
+        assert info["converged"]
+        assert info["stalled_linear_solves"] >= 1
+        assert info["saturated_preconditioner_retries"] >= 1
+        assert calls[:2] == [1, 1]
+        first = info["outer_history"][0]["attempts"][0]
+        assert first["rejected"] == "inadequate_linear_progress"
+        assert first["relative_reduction"] == 0.
+        np.testing.assert_allclose(head, exact, rtol=0., atol=1e-6)

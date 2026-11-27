@@ -69,6 +69,59 @@ only when diagonal FGMRES is specifically intended.
 See the [GPU implementation guide](3D_IMPLEMENTATIONS.rst) for the measured
 K-cycle configuration, Cartesian fast-path selection and timing conventions.
 Physical acceptance thresholds are unchanged.
+
+### NPF numerical robustness (v0.4.1)
+
+Current-coefficient K-cycle preconditioning includes the upstream saturation
+derivative on its Newton diagonal by default. The physical Jacobian is
+unchanged. Set newton_diagonal=False on NPF662KCycleControls only for
+diagnostic comparisons with the earlier approximation. Saturated-coefficient
+preconditioning and Picard directions are unaffected.
+
+FGMRES detects true-residual stagnation and the nonlinear solver can retry
+an ineffective Newton direction with a saturated-coefficient or diagonal
+preconditioner before trying its existing nonlinear safeguards. The
+independent physical auditors recognise a fully dry isolated zero equation
+only if its physical diagonal, residual, gross forcing and package/storage
+exchange are zero. No head or conductance floor is added.
+
+For difficult steady convertible models, an optional numerical continuation
+shift can be supplied on NPF662NewtonControls. For example, use the
+qualified current-coefficient mixed-preconditioner configuration, choosing
+a shift in integrated conductance units from the actual model:
+
+    from DARCY_WARP_PACKAGE import NPF662NewtonControls, NPF662KCycleControls
+
+    controls = NPF662NewtonControls(
+        steady_initial_shift=initial_conductance_shift,
+        reuse_trial_state=True,
+        tiled_reductions=True,
+    )
+    multigrid = NPF662KCycleControls(
+        levels=5, coarse_sweeps=2, cached_line_factors=True,
+        coefficient_state="current", preconditioner_precision="float32",
+        device_hierarchy_build=True, use_cuda_graph=True,
+    )
+    head, info = model.solve(
+        unconfined=True, npf_cell_type=cell_types,
+        npf_newton_controls=controls, npf_kcycle_controls=multigrid,
+        krylov_restart=16, max_outer=80, max_cycles=500,
+    )
+
+Here the initial_conductance_shift is a caller-supplied nonnegative
+coefficient with units L2/T. In the regional development experiments an
+initial shift of 0.08 times the median full-thickness horizontal conductance
+scale was effective. This is an empirical starting value, not a universal
+default. The public continuation default is zero (disabled); explicit
+steady continuation is available for any number of convertible layers.
+It is not a transient storage term. When enabled, the drying safeguard
+does not clip a vertically connected head or a pumped cell, and an exact
+dry endpoint projection must pass the independent physical audit before
+being accepted. Full drying/rewetting parity remains outside the release
+qualification. Existing precision selection, solver profiles and tolerances
+remain unchanged. MF6 workspace import and automatic regional tuning are
+not part of v0.4.1.
+
 Uniform confined steady NPF retains the direct Cartesian solver when Krylov
 controls are omitted.
 

@@ -10,7 +10,7 @@ project = 'DarcyWarp'
 copyright = '2026, Patrick Durney and Jaco Fourie'
 author = 'Patrick Durney and Jaco Fourie'
 version = '0.4'
-release = '0.4.0'
+release = '0.4.1'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

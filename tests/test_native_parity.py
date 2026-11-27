@@ -362,3 +362,193 @@ def test_convertible_upstream_face_flows_balance_well_withdrawal(convertible):
     assert info["chd_budget"]["chd_inflow"] == pytest.approx(q[0], abs=2.e-7)
     assert info["chd_budget"]["chd_outflow"] == pytest.approx(-q[1], abs=2.e-7)
     assert sum(q) == pytest.approx(2., abs=1.e-8)
+
+
+def test_multilayer_convertible_newton_matches_native_mf6(tmp_path, solver_device, pinned_mf6):
+    """Verify the full 3D correction operator and the independent MF6 endpoint."""
+    import flopy
+    import warp as wp
+    from flopy.mf6.utils import MfGrdFile
+
+    from DARCY_WARP_PACKAGE.warped_darcy_3d import WarpDarcySolver3D
+    from DARCY_WARP_PACKAGE.solvers.npf662_3d import case_from_model, independent_reference
+    from DARCY_WARP_PACKAGE.solvers.npf662_newton import NPF662Workspace, NPF662NewtonControls
+    from DARCY_WARP_PACKAGE.solvers.npf662_kcycle import NPF662KCycleWorkspace, NPF662KCycleControls
+
+    # A genuinely layered problem: nonparallel interfaces, anisotropic K,
+    # two convertible layers, one confined layer, irregular active domain,
+    # vertical exchange and head-dependent boundary conditions.
+    shape = (3, 5, 9)
+    nz, ny, nx = shape
+    j, i = np.indices((ny, nx))
+    top = 35. + 0.2 * i + 0.1 * j
+    bottom = np.stack((top - 14. - 0.05 * j,
+                       top - 28. - 0.1 * i,
+                       top - 46. - 0.1 * j))
+    active = np.ones(shape, dtype=int)
+    active[:, 2, 4] = 0
+    active[2, 0, 5] = 0
+    types = np.ones(shape, dtype=int)
+    types[2] = 0
+    k = np.stack((2. + 0.7 * i + 0.1 * j,
+                  1. + 0.4 * j + 0.2 * i,
+                  5. + 0.3 * i + 0.2 * j))
+    initial = np.stack((top - 5. - 0.3 * i,
+                        top - 17. - 0.2 * j,
+                        top - 23. - 0.1 * i))
+    directory = tmp_path / "mf6_layered"
+    sim = flopy.mf6.MFSimulation(sim_name="layered", sim_ws=str(directory),
+                                 exe_name=str(pinned_mf6))
+    flopy.mf6.ModflowTdis(sim, time_units="DAYS", nper=1, perioddata=[(1., 1, 1.)])
+    gwf = flopy.mf6.ModflowGwf(sim, modelname="aquifer", save_flows=True,
+                              newtonoptions="UNDER_RELAXATION")
+    flopy.mf6.ModflowIms(sim, complexity="COMPLEX", outer_maximum=200,
+        inner_maximum=500, outer_dvclose=1e-10, inner_dvclose=1e-12,
+        rcloserecord=[1e-9, "STRICT"], linear_acceleration="BICGSTAB")
+    flopy.mf6.ModflowGwfdis(gwf, nlay=nz, nrow=ny, ncol=nx,
+        top=top, botm=bottom, idomain=active, delr=20., delc=15., length_units="METERS")
+    flopy.mf6.ModflowGwfic(gwf, strt=initial)
+    flopy.mf6.ModflowGwfnpf(gwf, icelltype=types, k=k, k22=0.6*k,
+                            k33=0.05*k, save_flows=True, save_saturation=True)
+    chd = [((layer, row, col), float(value))
+           for layer, heads in enumerate(((30., 27.), (23., 19.), (20., 17.)))
+           for row in range(ny) for col, value in zip((0, nx-1), heads)]
+    flopy.mf6.ModflowGwfchd(gwf, stress_period_data=chd, save_flows=True)
+    flopy.mf6.ModflowGwfghb(gwf, stress_period_data=[
+        ((0, 1, 4), 26., 3.), ((2, 3, 6), 18., 5.)], save_flows=True)
+    flopy.mf6.ModflowGwfdrn(gwf, stress_period_data=[
+        ((0, 1, 3), 27., 1.), ((0, 3, 5), 28., 2.)], save_flows=True)
+    irch = np.zeros((ny, nx), dtype=int)
+    irch[1, 1] = 1
+    flopy.mf6.ModflowGwfrcha(gwf, fixed_cell=True, irch=irch,
+                            recharge=0.001, save_flows=True)
+    flopy.mf6.ModflowGwfoc(gwf, head_filerecord="aquifer.hds",
+        budget_filerecord="aquifer.cbc", saverecord=[("HEAD", "ALL"), ("BUDGET", "ALL")])
+    sim.write_simulation(silent=True)
+    success, messages = sim.run_simulation(silent=True, report=True)
+    assert success, messages
+
+    # Inspect the real correction operator at the original heads, where the
+    # saturation derivative is nonzero, rather than at an already converged
+    # or confined linear solution.
+    # Build the same physical model through the production public API. The
+    # maintenance release deliberately does not include the MF6 importer.
+    interfaces = np.concatenate((top[None], bottom), axis=0)
+    fixed = np.zeros(shape, dtype=int)
+    values = np.zeros(shape)
+    for cell, head_value in chd:
+        fixed[cell] = 1
+        values[cell] = head_value
+    ghb_c = np.zeros(shape)
+    ghb_h = np.zeros(shape)
+    ghb_c[0, 1, 4], ghb_h[0, 1, 4] = 3., 26.
+    ghb_c[2, 3, 6], ghb_h[2, 3, 6] = 5., 18.
+    source = np.zeros(shape)
+    receiving = (active[irch, j, i] != 0) & (fixed[irch, j, i] == 0)
+    source[irch, j, i] = np.where(receiving, 0.001*20.*15., 0.)
+    selected = (active != 0) & (types != 0)
+    thickness = (interfaces[:-1]-interfaces[1:])[selected]
+    cx = k[selected]*thickness*15./20.
+    cy = 0.6*k[selected]*thickness*20./15.
+    shift = 0.08 * float(np.median(0.5*cx + 0.5*cy))
+    controls = NPF662NewtonControls(
+        steady_initial_shift=shift, max_head_change_m=5.*float(np.median(thickness)),
+        inner_forcing=0.01, tiled_reductions=True, reuse_trial_state=True)
+    multigrid = NPF662KCycleControls(levels=5, coarse_sweeps=2,
+        cached_line_factors=True, device_hierarchy_build=True,
+        preconditioner_precision="float32", coefficient_state="current")
+    with WarpDarcySolver3D(nx=nx, ny=ny, nz=nz, dx=20., dy=15.,
+                           device=solver_device, formulation="mf6_6_6_2_npf",
+                           implementation="fast", solver="kcycle") as solver:
+        solver.build_from_layers(z_interfaces=interfaces, kx_field=k,
+            ky_field=0.6*k, kz_field=0.05*k, active=active, bc_mask=fixed,
+            bc_values=values, rhs=source, initial_head=initial,
+            ghb_conductance=ghb_c, ghb_head=ghb_h,
+            drn_entries=[((0, 1, 3), 1., 27.), ((0, 3, 5), 2., 28.)])
+        case = case_from_model(model=solver, top=0., cell_type=types)
+        reference, unused = independent_reference(model=solver, case=case)
+        state = NPF662Workspace(model=solver, case=case, restart=16,
+                                krylov_budget=500, reference=reference)
+        hierarchy = None
+        try:
+            start = state.head.numpy().reshape(shape).copy()
+            jacobian = reference.jacobian(head=start)
+            free = reference.free.ravel()
+            diagonal = jacobian.diagonal()
+            _, physical = reference.evaluate(head=start)
+            # Prove the case exercises the missing Newton derivative.
+            assert np.max(np.abs(diagonal[free] -
+                          physical["principal_diagonal"].ravel()[free])) > 0.1
+            original_residual = state.residual.numpy().copy()
+            hierarchy = NPF662KCycleWorkspace(faces=solver._session.faces,
+                active=case.active, fixed=case.fixed, device=solver_device,
+                controls=multigrid,
+                storage_diag=state.operator_tangent.numpy().reshape(shape))
+            direction = np.where(free, np.linspace(-0.4, 0.7, state.n), 0.)
+            x = wp.array(direction, dtype=wp.float64, device=solver_device)
+            y = wp.zeros_like(x)
+            state.mode.fill_(1)
+            # Check both the regularised correction and its removal.
+            for value in (shift, 0.):
+                state.set_linear_shift(value=value)
+                hierarchy.refresh_current_operator(workspace=state, mode=1)
+                actual = hierarchy.levels[0]["diag"].numpy().ravel()
+                np.testing.assert_allclose(actual[free], diagonal[free]+value,
+                                           rtol=1e-12, atol=1e-10)
+                state.matvec(x, y, y, 1., 0.)
+                expected = (jacobian @ direction + value*direction)/state.scale.numpy()
+                np.testing.assert_allclose(y.numpy()[free], expected[free],
+                                           rtol=1e-12, atol=1e-12)
+                np.testing.assert_array_equal(state.residual.numpy(), original_residual)
+            # A dry but vertically connected convertible cell has a physical
+            # head, not an arbitrary zero row. The damping must not clip it.
+            cell = (0, 1, 2)
+            delta = np.zeros(shape)
+            target = case.bottoms[cell] - 1.
+            delta[cell] = target - start[cell]
+            state.delta.assign(delta.ravel())
+            state.damp_drying = True
+            state.candidate(alpha=1.)
+            assert state.trial.numpy().reshape(shape)[cell] == pytest.approx(target)
+        finally:
+            if hierarchy is not None:
+                hierarchy.close()
+            state.close()
+
+        head, info = solver.solve(unconfined=True, npf_cell_type=types,
+            npf_newton_controls=controls, npf_kcycle_controls=multigrid,
+            max_outer=80, max_cycles=500, krylov_restart=16,
+            npf_final_relative_tolerance=1e-7)
+        assert_npf(info)
+        assert info["physical_acceptance"]["independent_accepted"]
+        _, physical = reference.evaluate(head=head, relative_tolerance=1e-7)
+        with flopy.utils.HeadFile(directory / "aquifer.hds", precision="double") as reader:
+            native = reader.get_data()
+        selected = active != 0
+        np.testing.assert_allclose(head[selected], native[selected], atol=1e-6, rtol=0.)
+        # Compare real native face and package budgets. The GRB may use full
+        # user-grid CSR or reduced-node CSR, so explicitly map both.
+        grid = MfGrdFile(next(directory.glob("*.grb")))
+        mapping = (np.arange(active.size) if grid.ia.size == active.size+1
+                   else np.flatnonzero(selected))
+        assert grid.ia.size == mapping.size+1
+        rows = np.repeat(mapping, np.diff(grid.ia))
+        columns = mapping[grid.ja]
+        faces = rows != columns
+        keys = rows[faces]*active.size + columns[faces]
+        order = np.argsort(keys)
+        expected_keys = reference.left*active.size + reference.right
+        indices = np.searchsorted(keys[order], expected_keys)
+        np.testing.assert_array_equal(keys[order][indices], expected_keys)
+        with flopy.utils.CellBudgetFile(directory / "aquifer.cbc", precision="double") as reader:
+            native_faces = reader.get_data(text="FLOW-JA-FACE")[-1].ravel()[faces]
+            np.testing.assert_allclose(physical["flux"], -native_faces[order][indices],
+                                       atol=1e-5, rtol=1e-9)
+            for package, field, sign in (("CHD", "chd_cell_rate", 1.),
+                                         ("GHB", "ghb_outflow", -1.),
+                                         ("DRN", "drn_outflow", -1.)):
+                records = reader.get_data(text=package)[-1]
+                native_grid = np.bincount(records["node"]-1, weights=records["q"],
+                                          minlength=active.size)
+                np.testing.assert_allclose(sign*physical[field].ravel(), native_grid,
+                                           atol=1e-5, rtol=1e-9)

@@ -4,7 +4,7 @@ message: >-
   software commit or release, formulation, solver and precision used. The paper
   describes the original steady, fixed-transmissivity implementation.
 type: software
-version: "0.4.0"
+version: "0.4.1"
 title: "DarcyWarp: structured groundwater flow on CPUs and NVIDIA GPUs"
 authors:
   - family-names: Durney

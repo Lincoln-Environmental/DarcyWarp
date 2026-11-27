@@ -29,6 +29,38 @@ def layered_column():
     )
 
 
+def test_exact_dry_zero_row_checks_the_unmodified_equation():
+    """A dry isolated zero row can coexist with wet, grounded cells."""
+    shape = (1, 1, 3)
+    ones = np.ones(shape)
+    head = np.array([[[0.5, 0.5, 2.0]]])
+    case = NPF662LayeredCase(kx=ones, ky=ones, kz=ones, active=ones.astype(int),
+        fixed=np.array([[[1, 0, 0]]]), values=head, source=np.zeros(shape), initial=head,
+        dx=1., dy=1., z_interfaces=np.array([[[1., 1., 3.]], [[0., 0., 2.]]]), cell_type=1)
+    forced = replace(case, source=np.array([[[0., 0., 1.]]]))
+    # The three acceptance paths must agree on the physical zero equation.
+    # STO is zero at this endpoint, but a previous wet state must not be
+    # exempt merely because the current cell is dry.
+    for evaluator in (NPF662Reference(case=case), NPF662MatrixFreeReference(case=case),
+                      NPF662TransientReference(case=case, previous=head, dt=1., ss=0.1, sy=0.2)):
+        accepted, _ = evaluator.evaluate(head=head)
+        assert accepted["independent_accepted"]
+        assert accepted["exact_dry_zero_rows"] == 1
+    for evaluator in (NPF662Reference(case=forced), NPF662MatrixFreeReference(case=forced),
+                      NPF662TransientReference(case=forced, previous=head, dt=1., ss=0.1, sy=0.2)):
+        rejected, fields = evaluator.evaluate(head=head)
+        assert not rejected["independent_accepted"]
+        assert rejected["exact_dry_zero_rows"] == 0
+        assert fields["residual"][0, 0, 2] == 1.
+    previous_wet = head.copy()
+    previous_wet[0, 0, 2] = 2.5
+    draining = NPF662TransientReference(case=case, previous=previous_wet,
+                                        dt=1., ss=0.1, sy=0.2)
+    rejected, _ = draining.evaluate(head=head)
+    assert not rejected["independent_accepted"]
+    assert rejected["exact_dry_zero_rows"] == 0
+
+
 def test_legacy_archives_replay_the_confined_gradient_and_reservoir_exchange():
     archived = Path(__file__).parent / 'fixtures' / 'npf662'
     implicit = load_npf662_case(path=archived / 'experiments_v1.npz')

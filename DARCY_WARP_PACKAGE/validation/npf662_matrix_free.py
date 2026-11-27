@@ -8,7 +8,9 @@ from scipy import sparse
 from scipy.sparse.csgraph import connected_components
 
 from DARCY_WARP_PACKAGE.validation.head_checks import inspect_heads
-from DARCY_WARP_PACKAGE.validation.npf662_metrics import final_tolerances, stable_rms, stable_sum, local_balance_valid
+from DARCY_WARP_PACKAGE.validation.npf662_metrics import (
+    exact_dry_zero_rows, final_tolerances, stable_rms, stable_sum, local_balance_valid,
+)
 from DARCY_WARP_PACKAGE.physics.ghb_3d import npf_ghb_component_anchor
 from DARCY_WARP_PACKAGE.validation.npf662_reference import quadratic_saturation_derivative
 from DARCY_WARP_PACKAGE.physics.drn_riv_3d import (csr_entry_terms,
@@ -129,7 +131,10 @@ class NPF662MatrixFreeReference:
         # Graph connectivity is a topology check, not a physical flow matrix.
         graph = sparse.coo_matrix((np.ones(shape=int(edges.sum())), (self.left[edges], self.right[edges])), shape=(n, n)).tocsr()
         unused, labels = connected_components(csgraph=graph, directed=False)
-        active_labels = set(labels[case.active.ravel() != 0])
+        boundary_gross = np.abs(ghb_exchange) + drain[2] + river[2]
+        dry_zero = exact_dry_zero_rows(case=case, head=head, free=self.free,
+            diagonal=diagonal, residual=residual, boundary_throughput=boundary_gross)
+        active_labels = set(labels[(case.active.ravel() != 0) & ~dry_zero.ravel()])
         boundary_tangent = self.ghb_conductance + drain[1] + river[1]
         grounded_labels = set(labels[(case.active.ravel() != 0)&((case.fixed.ravel() != 0)|(boundary_tangent.ravel()>0.))])
         ungrounded = len(active_labels-grounded_labels)
@@ -149,7 +154,8 @@ class NPF662MatrixFreeReference:
             riv_outflow=stable_sum(values=np.maximum(river_rates,0.)),
             fixed_cell_source_total=stable_sum(values=case.source[case.fixed != 0]), free_cells=int(self.free.sum()),
             fixed_reservoir_required_inflow=stable_sum(values=(divergence-case.source)[case.fixed != 0]),
-            ungrounded_current_components=ungrounded, physical_metrics_valid=valid, final_acceptance_thresholds=thresholds,
+            ungrounded_current_components=ungrounded, exact_dry_zero_rows=int(dry_zero.sum()),
+            physical_metrics_valid=valid, final_acceptance_thresholds=thresholds,
             evaluator='matrix-free physical incidence; connectivity graph only')
         result['physical_metrics_valid'] = bool(valid and np.all(np.isfinite([
             result['signed_imbalance'], result['fixed_cell_source_total'], result['fixed_reservoir_required_inflow']])))

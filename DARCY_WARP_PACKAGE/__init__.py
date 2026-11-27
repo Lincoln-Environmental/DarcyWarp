@@ -5,7 +5,7 @@ DarcyWarp groundwater flow solvers and benchmarks.
 
 from __future__ import annotations
 
-__version__ = "0.4.0"
+__version__ = "0.4.1"
 
 # Lazy exports: importing the package must not require optional dependencies
 # such as warp or MODFLOW 6 to be installed until a solver is actually created.
