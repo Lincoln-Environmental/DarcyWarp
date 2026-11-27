@@ -57,8 +57,9 @@ definitions. `accepted_drn_discharge()`, `accepted_riv_discharge()` and
 positive out of the aquifer. Legacy Cartesian and experimental terrain DRN/RIV
 are not supported. See the [current package release](../source/package_audit.rst).
 
-NPF requires `DARCY_FLOAT=float64` before import. Use Python 3.12 and Warp
-1.17.0 for the validated configuration. Convertible, layered and transient
+The fast NPF implementation owns its FP64 physical fields independently of
+`DARCY_FLOAT`. The classic NPF path still requires a globally FP64 configuration.
+Use Python 3.12 and Warp 1.17.0 for the validated configuration. Convertible, layered and transient
 NPF use `implementation="fast"` and `solver="kcycle"` on the model. The
 default Krylov choice for those NPF solves is K-cycle-preconditioned FGMRES.
 Explicit `npf_preconditioner="kcycle", npf_krylov_method="fgmres"` selects
@@ -123,7 +124,7 @@ For repeated transient steps, the explicitly selected `solve_transient_npf()`
 API keeps intermediate heads on the device and returns the full history
 after the final step. The following self-contained example uses the same
 two-layer DIS configuration and physical units as the small NPF tests.
-Set `DARCY_FLOAT=float64` before importing Warp.
+The fast NPF implementation does not require a global precision override.
 
 ```python
 import numpy as np

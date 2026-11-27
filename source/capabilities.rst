@@ -181,7 +181,7 @@ each stress period and omits the optional diagnostic head and storage histories.
 Precision and performance
 -------------------------
 
-The standard solver module defaults to ``DARCY_FLOAT=float64``. DarcyWarp also
+The shared configuration defaults to ``DARCY_FLOAT=float32``. DarcyWarp also
 contains a fast confined FP64 path and a mixed-precision confined steady path
 that retains a FP64 master solution while using FP32 corrections.
 
@@ -269,7 +269,9 @@ K-cycle-preconditioned FGMRES is the default for nonlinear 3D NPF solves.
 Explicit diagonal preconditioning remains available. Eligible uniform
 confined cases retain direct fast Cartesian dispatch. The qualified mixed path
 uses FP64 heads, residuals and outer FGMRES with an FP32 K-cycle
-preconditioner.
+preconditioner. The MF6 importer selects mixed-fast by default; pass
+``precision="float64"`` for a full FP64 preconditioner. The fast NPF backend
+owns its numerical precision independently of the global configuration.
 
 The `3D guide <https://github.com/Lincoln-Environmental/DarcyWarp/blob/main/docs/3D_CARTESIAN_NPF.md>`_
 describes the public API, the layered example and CPU FP64 validation.

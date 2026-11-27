@@ -111,9 +111,10 @@ in length per unit time, positive into the aquifer. For example, in a
 metre/day model, 1 mm/day is `0.001` on any grid. In 3D you can also
 supply explicit sparse `wel_entries` or raw volumetric per-cell `rhs`; these
 sources are independently owned. WEL rates are signed volumes per unit time,
-negative for abstraction and positive for injection. Mixed precision is
-explicitly selected and retains FP64 heads, residuals, outer FGMRES and
-physical acceptance in the qualified fast NPF history.
+negative for abstraction and positive for injection. The MF6 importer defaults
+to mixed-fast execution: FP32 K-cycle preconditioning with FP64 heads,
+residuals, outer FGMRES and physical acceptance. Native NPF history calls
+can select mixed precision explicitly.
 
 SFR, UZF and transport are not included. Legacy Cartesian and experimental
 terrain DRN/RIV, automatic dry-cell well-rate reduction and comprehensive
