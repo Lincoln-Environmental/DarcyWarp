@@ -306,3 +306,11 @@ The isolated runs are in `weight_checkpoint_01`, `weight_dbd_only_01`,
 `mf6_backtrack_dvclose_01` and `adaptive_backtrack_continuation_01`.
 All three models remain in the eight outstanding original-start solver
 failures alongside 1404, 1502, 1503, 1504 and 1809.
+
+A further 1606 continuation (`adaptive_backtrack_continuation_02`) used
+the previous endpoint and its saved shift of 0.0003515478833. Through
+66 accepted updates in 181.6 s it reduced flow RMS from 0.8524 to
+0.3637 m³/day and relative imbalance from 0.386% to 0.137%. The process
+terminated with SIGSEGV during the linear solve at update 67. The last
+accepted metrics come from the progress log. The most recent saved heads
+are still those at the end of `adaptive_backtrack_continuation_01`.
