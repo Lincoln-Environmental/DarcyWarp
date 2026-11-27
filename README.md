@@ -185,6 +185,14 @@ Keep units consistent across conductivity, transmissivity, recharge, storage
 and simulation time. Inspect convergence diagnostics and water balance for the
 case being modelled.
 
+## Import an existing MODFLOW 6 model
+
+The initial structured GWF importer reads native MF6 files through FloPy and
+runs the supported NPF/STO physics directly in DarcyWarp. See the
+[MF6 import guide](docs/MF6_IMPORT.md) for the current restrictions and the
+manually executable example. This development interface is not yet a general
+MF6 replacement.
+
 ## Validation and performance
 
 The repository contains analytical checks, independent CPU comparisons,

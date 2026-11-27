@@ -21,7 +21,9 @@ reference_head_file points to an existing native MF6 binary head file.
 - CHD, GHB, WEL, RCH/RCHA, DRN and RIV. Multiple packages are combined;
   multiple GHB entries in a cell are conductance-weighted, and DRN/RIV/WEL
   entries retain individual physical inputs. Recharge receiving cells are
-  resolved and recharge is passed as volumetric RHS forcing.
+  resolved from the original MF6 list or IRCH array. IDOMAIN-excluded and
+  prescribed-head RCHA cells receive no recharge; list recharge on excluded
+  cells is rejected. Recharge is passed as volumetric RHS forcing.
 - TDIS fixed timesteps (including TSMULT) and steady/transient transitions.
   Inherited periods and explicitly empty list stress periods are distinguished.
 - MF6 row/layer ordering and original model length/time units are retained.

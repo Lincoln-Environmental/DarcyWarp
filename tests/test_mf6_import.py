@@ -8,7 +8,7 @@ flopy = pytest.importorskip("flopy")
 
 from DARCY_WARP_PACKAGE.mf6_import import (
     UnsupportedMF6Model, import_simulation, run_mf6_model,
-    timestep_lengths, _schedules, _stress_period,
+    timestep_lengths, _schedules, _stress_period, _add_array_recharge,
 )
 
 
@@ -120,3 +120,22 @@ def test_native_parity(tmp_path, solver_device, pinned_mf6):
     assert len(report["head_comparison"]) == 4
     for comparison in report["head_comparison"]:
         assert comparison["max_abs"] < 1e-6, comparison
+
+
+def test_array_recharge_idomain_and_irch(tmp_path):
+    """Excluded IDOMAIN and fixed-head cells do not receive array recharge."""
+    sim = make_simulation(tmp_path)
+    model = import_simulation(sim)
+    model.active[0, 1, 1] = False
+    fixed = np.zeros(model.shape, dtype=bool)
+    fixed[0, :, 0] = True
+    rhs = np.zeros(model.shape)
+    _add_array_recharge(rhs, model, 0.01, 0, fixed)
+    assert rhs[0, 1, 1] == rhs[1, 1, 1] == 0.0
+    assert rhs.sum() == pytest.approx(22.0)
+    rhs.fill(0)
+    irch = np.zeros(model.shape[1:], dtype=int)
+    irch[1, 1] = 1
+    _add_array_recharge(rhs, model, 0.01, irch, fixed)
+    assert rhs[1, 1, 1] == pytest.approx(2.0)
+    assert rhs.sum() == pytest.approx(24.0)

@@ -186,12 +186,14 @@ def import_simulation(simulation):
         if np.any(_array(npf, name, shape, default=0)[active] != 0):
             raise UnsupportedMF6Model(f"NPF: rotated anisotropy ({name}) is unsupported")
     kx = _array(npf, "k", shape)
-    ky = _array(npf, "k22", shape, default=kx)
-    kz = _array(npf, "k33", shape, default=kx)
-    if _present(_data(npf, "k22overk")):
-        ky = ky * kx
-    if _present(_data(npf, "k33overk")):
-        kz = kz * kx
+    ky_ratio = _present(_data(npf, "k22overk"))
+    kz_ratio = _present(_data(npf, "k33overk"))
+    ky = _array(npf, "k22", shape, default=None if ky_ratio else kx)
+    kz = _array(npf, "k33", shape, default=None if kz_ratio else kx)
+    if ky_ratio:
+        ky *= kx
+    if kz_ratio:
+        kz *= kx
     for field in (kx, ky, kz):
         if not np.all(np.isfinite(field[active]) & (field[active] > 0)):
             raise UnsupportedMF6Model("NPF requires positive finite active conductivity")
@@ -319,26 +321,46 @@ def _number(value, label):
     return number
 
 
-def _add_recharge(rhs, model, cell, rate, fixed, fixed_cell):
-    """Convert one areal recharge entry to a volumetric receiving-cell source.
+def _add_recharge(rhs, model, cell, rate, fixed):
+    """Convert list recharge on an existing MF6 node to volumetric forcing.
 
-    :param rhs: Dense volumetric recharge source, updated in place.
+    :param rhs: Dense volumetric source, updated in place.
     :param model: Imported static geometry.
     :param cell: Requested recharge cell.
     :param rate: Signed recharge depth per model time.
     :param fixed: Current CHD mask.
-    :param fixed_cell: MF6 FIXED_CELL option.
     """
-    k, j, i = cell
     if not model.active[cell]:
-        if fixed_cell:
-            return
-        below = np.flatnonzero(model.active[k:, j, i])
-        if not below.size:
-            return
-        cell = (k + int(below[0]), j, i)
+        raise UnsupportedMF6Model(f"RCH: list entry on an excluded IDOMAIN cell {cell}")
     if not fixed[cell]:
         rhs[cell] += rate * model.dx * model.dy
+
+
+def _add_array_recharge(rhs, model, rate, layers, fixed):
+    """Apply RCHA directly to the specified reduced-grid nodes.
+
+    MF6 6.6.2 maps IRCH to reduced node numbers before formulating
+    recharge. IDOMAIN-excluded nodes have no equation and receive no
+    recharge, even without FIXED_CELL. Dynamic dry-cell reassignment is
+    outside this adapter's native NEWTON-only convertible contract.
+
+    :param rhs: Dense volumetric source, updated in place.
+    :param model: Imported static geometry.
+    :param rate: Horizontal recharge field in length per time.
+    :param layers: Zero-based FloPy IRCH values (default zero).
+    :param fixed: Current CHD mask.
+    """
+    horizontal = model.shape[1:]
+    rate = np.broadcast_to(np.asarray(rate, dtype=float), horizontal)
+    irch = np.broadcast_to(np.asarray(layers, dtype=int), horizontal)
+    if np.any((irch < 0) | (irch >= model.shape[0])):
+        raise UnsupportedMF6Model("RCHA: IRCH outside the structured grid")
+    j, i = np.indices(horizontal)
+    receiving = model.active[irch, j, i] & ~fixed[irch, j, i]
+    if not np.isfinite(rate[receiving]).all():
+        raise UnsupportedMF6Model("RCHA: nonfinite recharge on receiving cells")
+    k, j, i = irch[receiving], j[receiving], i[receiving]
+    rhs[k, j, i] += rate[receiving] * model.dx * model.dy
 
 
 def _stress_period(model, schedules, kper):
@@ -370,18 +392,12 @@ def _stress_period(model, schedules, kper):
         if kind == "chd":
             continue
         if kind == "rcha":
-            rate = np.broadcast_to(np.asarray(rows[kper], dtype=float), model.shape[1:])
-            irch = np.broadcast_to(np.asarray(layers[kper], dtype=int), model.shape[1:])
-            for j, i in np.ndindex(model.shape[1:]):
-                cell = _cell((irch[j, i], j, i), model.shape)
-                _add_recharge(rhs, model, cell, _number(rate[j, i], "RCHA"),
-                              fixed, _present(_data(package, "fixed_cell")))
+            _add_array_recharge(rhs, model, rows[kper], layers[kper], fixed)
             continue
         for record in rows[kper]:
             cell = _cell(record["cellid"], model.shape)
             if kind == "rch":
-                _add_recharge(rhs, model, cell, _number(record["recharge"], "RCH"),
-                              fixed, _present(_data(package, "fixed_cell")))
+                _add_recharge(rhs, model, cell, _number(record["recharge"], "RCH"), fixed)
                 continue
             if not model.active[cell] or fixed[cell]:
                 raise UnsupportedMF6Model(f"{kind.upper()}: inactive or CHD cell {cell}")
@@ -566,9 +582,15 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
         reference = flopy.utils.HeadFile(str(reference_head_file))
         actual = flopy.utils.HeadFile(str(head_path), precision="double")
         try:
-            common = set(reference.get_kstpkper()).intersection(actual.get_kstpkper())
+            reference_times = dict(zip(reference.get_kstpkper(), reference.get_times()))
+            actual_times = dict(zip(actual.get_kstpkper(), actual.get_times()))
+            common = set(reference_times).intersection(actual_times)
             comparisons = []
             for kstp, kper in sorted(common, key=_step_order):
+                step = (kstp, kper)
+                if not np.isclose(reference_times[step], actual_times[step],
+                                  rtol=1e-7, atol=1e-12):
+                    raise ValueError(f"Reference elapsed time differs at {step}")
                 expected = reference.get_data(kstpkper=(kstp, kper))
                 calculated = actual.get_data(kstpkper=(kstp, kper))
                 if expected.shape != model.shape:
