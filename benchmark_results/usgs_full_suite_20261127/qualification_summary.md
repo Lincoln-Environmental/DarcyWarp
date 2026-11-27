@@ -81,6 +81,10 @@ FP64 preconditioning did not restore balance. Seven levels improved the endpoint
 
 The largest rejected residual rows inspected in 1018 and 1304 lie on listed high-conductance drains, but the rejected heads there are respectively 96.8 m and 68.2 m below drain elevation. Those entries are inactive at those heads, so their drain discharge does not explain the large local residuals. The residual is concentrated in the regional flow field; its nonlinear cause remains unresolved.
 
+### Controlled 1015 iteration-cap diagnostic
+
+The 1015 case was rerun from the archived initial heads with the mixed-fast defaults and only the diagnostic `max_outer` raised from 80 to 240. DarcyWarp converged at outer step 161 (5,668 Krylov iterations; 62.2 s numerical solve, 119 s end to end). Independent CPU physical acceptance passed with 9.19e-6 m³/day RMS residual and 1.10e-8 relative cell imbalance. Against a separate native MF6 6.6.2 run at `dvclose=1e-6` (584.1 s), the unchanged comparison gates all passed: head RMSE 2.88e-6 m, maximum absolute head difference 8.46e-5 m, and face flows, package budgets, and physical residual checks within tolerance. Raw and datum-aligned head errors are identical because this case has no floating datum. This establishes that the original 80-step cap alone prevented this case from reaching its valid solution. It is a controlled diagnostic, not an official qualification pass; defaults and the 28/74 official result have not been changed. Full comparison maps and JSON receipts are retained under `solver_diagnostics/outer_240/1015_1020_1021_1022_1023_MF6_SS_Unconfined_250/`.
+
 ## Setup cost correction
 
 Dry-state active-set seeding previously rebuilt full-grid component masks and rescanned all boundary entries for every component. On model 1606 this stage exceeded 17 minutes without entering Newton. The revised CPU reference groups cells and package entries by component once; the same case reached Newton in about 114 seconds. Its solver then failed on physical convergence, which remains a separate issue. A regression now exercises three disconnected components with separate drain activation thresholds.
