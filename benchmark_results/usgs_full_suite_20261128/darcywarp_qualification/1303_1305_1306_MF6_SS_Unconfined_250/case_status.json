@@ -1,0 +1,10 @@
+{
+  "model": "1303_1305_1306_MF6_SS_Unconfined_250",
+  "status": "failed",
+  "native": {
+    "seconds": 8690.25103571199,
+    "version": "mf6: 6.6.2 05/12/2025",
+    "ims_dvclose": null
+  },
+  "failure": "RuntimeError: native_heads parity failed: DRN: native entry exchange; see /home/patrickdurney/PycharmProjects/DarcyWarp/benchmark_results/usgs_full_suite_20261128/darcywarp_qualification/1303_1305_1306_MF6_SS_Unconfined_250/native_heads.json"
+}
