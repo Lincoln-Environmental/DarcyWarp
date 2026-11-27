@@ -187,3 +187,38 @@ Cell indices are zero-based in layer, row, column order.
 |---|---:|---|---:|---:|---:|---:|
 | (0, 580, 758) | 29.54957 | none | 0.428511 | 3.61271395625 | 3.61271395712 | −8.71e-10 |
 | (0, 504, 714) | 48.29021 | none | 0.228234 | 3.22035316250 | 3.22035316041 | 2.09e-9 |
+
+### Saved-state and MF6 safeguard diagnostics
+
+The archived IMS files for the remaining steady convertible cases use
+`COMPLEX`. MF6 6.6.2 applies delta-bar-delta to the raw correction, adjusts
+below-bottom heads when requested, and backtracks along the resulting step.
+The preset reduces the weight by 0.8 on a sign reversal, restores it by
+0.0001 otherwise, and backtracks by a factor of 0.1 when the flow norm grows
+by more than 5%. It repairs a near-zero linear diagonal before adding the
+steady pseudo-transient shift. GWF starts that shift from the maximum
+absolute cell residual divided by cell volume. These are numerical
+correction rules. [MF6 numerical solution](https://github.com/MODFLOW-ORG/modflow6/blob/6.6.2/src/Solution/NumericalSolution.f90) · [MF6 GWF model](https://github.com/MODFLOW-ORG/modflow6/blob/6.6.2/src/Model/GroundWaterFlow/gwf.f90)
+
+On the saved 1102 failure, the spatially shifted Newton solve with physical
+Krylov weighting used 39 iterations and left 461 for recovery. The full
+trial clipped 57 cells and raised flow RMS from 5.246 to 60.649 m³/day.
+The accepted one-eighth trial clipped four cells and reduced RMS to
+4.977 m³/day. This replay did not exhaust the fallback budget.
+
+At the previously identified 1606 row `(0, 1599, 775)`, the spatial shift
+was 956.05 m²/day against a current Newton diagonal of 53.89 m²/day. Its
+full-saturated principal diagonal was 47,802.57 m²/day and the grid median
+was 277.17 m²/day. The MF6 residual-based initial shift computed from the
+archived heads was 0.105324. Testing the MF6 relaxation sequence with that
+shift and physical Krylov weighting still ended short of acceptance at
+0.293 relative imbalance. A saved-state replay isolated the weighting
+issue by reducing imbalance from 0.743 to 0.012 in six steps.
+
+1504 and 1807 remain unqualified. The from-original runs with `cbe5d5d`
+reached relative imbalance of 8.07e-5 and 1.25e-4, respectively, before
+line-search rejection. The saved 1807 state produced a descending Newton
+trial when Krylov used the physical residual. The accepted one-quarter
+trial reduced flow RMS from 0.04492 to 0.04289 m³/day and head-equivalent
+RMS from 16.10 to 0.02392 m. The replay does not change the qualification
+count.
