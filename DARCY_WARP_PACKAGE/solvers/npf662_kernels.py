@@ -913,15 +913,35 @@ def diagonal_action(x:wp.array(dtype=wp.float64),y:wp.array(dtype=wp.float64),z:
     z[i]=alpha*x[i]*scale[i]/wp.abs(diag)+old
 
 
+@wp.func
+def has_vertical_connection(cell: int, left: wp.array2d(dtype=wp.int32),
+                            c0: wp.array2d(dtype=wp.float64)) -> bool:
+    """Default NPF vertical faces retain full conductance even for dry cells."""
+    if c0[cell, 2] > wp.float64(0.):
+        return True
+    above = left[cell, 2]
+    if above >= 0:
+        return c0[above, 2] > wp.float64(0.)
+    return False
+
+
 @wp.kernel
 def candidate_head(head:wp.array(dtype=wp.float64),delta:wp.array(dtype=wp.float64),
     free:wp.array(dtype=wp.int32),trial:wp.array(dtype=wp.float64),alpha:wp.float64,
-    bottom:wp.array(dtype=wp.float64),types:wp.array(dtype=wp.int32),damp_drying:int):
+    bottom:wp.array(dtype=wp.float64),types:wp.array(dtype=wp.int32),damp_drying:int,
+    left:wp.array2d(dtype=wp.int32),c0:wp.array2d(dtype=wp.float64),
+    source:wp.array(dtype=wp.float64)):
     i=wp.tid()
     trial[i]=head[i]
     if free[i]!=0:
         candidate=head[i]+alpha*delta[i]
-        if damp_drying!=0 and types[i]>0 and candidate<bottom[i]:
+        # Dampen a crossing from wet to dry only where loss of horizontal
+        # saturation can remove the hydraulic coupling. A vertically connected
+        # NPF cell can have a determined head below its bottom. A pumped cell
+        # or an already dry cell must also be free to move below that datum.
+        if (damp_drying!=0 and types[i]>0 and head[i]>bottom[i]
+                and candidate<bottom[i] and source[i]>=wp.float64(0.)
+                and not has_vertical_connection(i,left,c0)):
             candidate=bottom[i]+wp.float64(0.1)*(head[i]-bottom[i])
         trial[i]=candidate
 
@@ -937,10 +957,12 @@ def shift_linear_diagonal(physical: wp.array(dtype=wp.float64), shift: wp.float6
 def project_dry_trial(head: wp.array(dtype=wp.float64), bottom: wp.array(dtype=wp.float64),
                       types: wp.array(dtype=wp.int32), free: wp.array(dtype=wp.int32),
                       source: wp.array(dtype=wp.float64), ghb: wp.array(dtype=wp.float64),
-                      head_tolerance: wp.float64, trial: wp.array(dtype=wp.float64)):
+                      head_tolerance: wp.float64, trial: wp.array(dtype=wp.float64),
+                      left: wp.array2d(dtype=wp.int32), c0: wp.array2d(dtype=wp.float64)):
     i = wp.tid()
     trial[i] = head[i]
-    if free[i] != 0 and types[i] > 0 and source[i] == wp.float64(0.) and ghb[i] == wp.float64(0.):
+    if (free[i] != 0 and types[i] > 0 and source[i] == wp.float64(0.)
+            and ghb[i] == wp.float64(0.) and not has_vertical_connection(i,left,c0)):
         if wp.abs(head[i] - bottom[i]) <= head_tolerance:
             trial[i] = bottom[i]
 

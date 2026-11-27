@@ -17,7 +17,8 @@ class NPF662NewtonControls:
     """Control numerical directions and line searches for NPF.
 
     :param steady_initial_shift: Initial correction-diagonal shift in
-        conductance units for single-layer steady continuation. Zero disables it.
+        conductance units for steady convertible continuation in any number
+        of layers. Zero disables it; transient storage is not regularised.
     """
     inner_forcing: float = .01
     newton_budget_fraction: float = .75
@@ -632,7 +633,8 @@ class NPF662Workspace:
 
     def candidate(self,*,alpha):
         wp.launch(kernel=kernels.candidate_head,dim=self.n,inputs=[self.head,self.delta,self.free,self.trial,
-            alpha,self.bottom,self.types,int(self.damp_drying)],device=self.device)
+            alpha,self.bottom,self.types,int(self.damp_drying),self.left,self.c0,self.source],
+            device=self.device)
         return self.evaluate(trial=True)
 
     def dry_projection(self, *, head_tolerance):
@@ -643,7 +645,7 @@ class NPF662Workspace:
         wp.launch(kernel=kernels.project_dry_trial, dim=self.n,
                   inputs=[self.head,self.bottom,self.types,self.free,self.source,
                           self.zero if self.ghb_conductance is None else self.ghb_conductance,
-                          head_tolerance,self.trial], device=self.device)
+                          head_tolerance,self.trial,self.left,self.c0], device=self.device)
         return self.evaluate(trial=True)
 
     def _enqueue_commit(self):
@@ -869,8 +871,8 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
         holder['workspace']=workspace
     elif prepared_workspace is None:workspace.load(model=model,case=case,reference=reference)
     initial_shift = controls.steady_initial_shift
-    if initial_shift and (workspace.transient or case.active.shape[0] != 1 or not case.cell_types.any()):
-        raise ValueError('Steady continuation requires a single-layer convertible steady model')
+    if initial_shift and (workspace.transient or not np.any(case.cell_types[case.active != 0])):
+        raise ValueError('Steady continuation requires a convertible steady model')
     workspace.damp_drying = initial_shift > 0.
     workspace.set_linear_shift(value=initial_shift)
     krylov_reused=workspace.select_krylov(method=method,krylov_budget=krylov_budget)
@@ -983,12 +985,21 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
             if shift == 0. and current['relative_cell_imbalance'] <= relative_tolerance:
                 projected = workspace.dry_projection(head_tolerance=1e-6)
                 if device_accepted(metrics=projected,physical_tolerance=physical_tolerance,relative_tolerance=relative_tolerance):
-                    current=workspace.accept_trial(metrics=projected)
-                    dry_projection_used = True
-                    reason='converged'
-                    if progress_callback is not None:
-                        progress_callback("Accepted dry-cell projection", head_rms=current["head_residual_rms"])
-                    break
+                    # A dry projection changes a numerical head guess, not
+                    # the physical equation. Require the same independent
+                    # acceptance before committing the candidate.
+                    projected_head = workspace.trial.numpy().reshape(case.active.shape)
+                    projected_checks, unused = reference.evaluate(
+                        head=projected_head, physical_tolerance=physical_tolerance,
+                        relative_tolerance=relative_tolerance,
+                        roundoff_acceptance=roundoff_acceptance)
+                    if projected_checks['independent_accepted']:
+                        current=workspace.accept_trial(metrics=projected)
+                        dry_projection_used = True
+                        reason='converged'
+                        if progress_callback is not None:
+                            progress_callback("Accepted dry-cell projection", head_rms=current["head_residual_rms"])
+                        break
         workspace.set_linear_shift(value=shift)
         if progress_callback is not None:
             progress_callback("Newton outer", outer=outer+1, max_outer=max_outer,

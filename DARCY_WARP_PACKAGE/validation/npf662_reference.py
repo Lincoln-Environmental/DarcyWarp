@@ -11,7 +11,9 @@ from scipy import sparse
 from scipy.sparse.csgraph import connected_components
 from scipy.sparse.linalg import spsolve
 from DARCY_WARP_PACKAGE.validation.head_checks import inspect_heads
-from DARCY_WARP_PACKAGE.validation.npf662_metrics import final_tolerances, stable_rms, stable_sum, local_balance_valid
+from DARCY_WARP_PACKAGE.validation.npf662_metrics import (
+    exact_dry_zero_rows, final_tolerances, stable_rms, stable_sum, local_balance_valid,
+)
 from DARCY_WARP_PACKAGE.physics.ghb_3d import npf_ghb_component_anchor
 
 
@@ -718,9 +720,8 @@ class NPF662Reference:
         # A fully dry isolated convertible cell with an exact zero equation
         # has no head to solve for. A wet floating component or any dry row
         # with nonzero flux or forcing still requires a hydraulic restraint.
-        dry_zero = (self.free & (c.cell_types > 0) & (head <= c.bottoms) &
-                    (diagonal == 0.) & (residual == 0.) & (c.source == 0.) &
-                    (boundary_gross == 0.))
+        dry_zero = exact_dry_zero_rows(case=c, head=head, free=self.free,
+            diagonal=diagonal, residual=residual, boundary_throughput=boundary_gross)
         active_labels=set(labels[active.ravel() & ~dry_zero.ravel()])
         grounded_labels=set(labels[(c.active.ravel()!=0)&((c.fixed.ravel()!=0)|(boundary_tangent.ravel()>0.))])
         ungrounded=len(active_labels-grounded_labels)

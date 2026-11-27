@@ -663,8 +663,9 @@ def _import_solver_options(*, model, device, precision, solver_options):
     if precision not in ("mixed_fast", "float64"):
         raise ValueError("precision must be 'mixed_fast' or 'float64'")
     convertible = bool(model.cell_type.any())
+    steady_convertible = convertible and all(not transient for transient, _ in model.periods)
     kinds = {package.package_type for package in model.packages}
-    if kinds.intersection({"ghb", "drn", "riv"}) or ("wel" in kinds and not convertible):
+    if steady_convertible or kinds.intersection({"ghb", "drn", "riv"}) or ("wel" in kinds and not convertible):
         profile = "npf_ghb_five_level_controls.json"
     elif convertible:
         profile = "npf_runtime_controls.json"
@@ -674,11 +675,10 @@ def _import_solver_options(*, model, device, precision, solver_options):
     saved = json.loads(path.read_text())
     overrides = dict(solver_options or {})
     options = dict(saved["solve"], npf_preconditioner="kcycle", npf_krylov_method="fgmres")
-    regional = (str(device).startswith("cuda") and model.shape[0] == 1
-                and np.count_nonzero(model.cell_type) >= 100_000
-                and np.all(model.cell_type[model.active] != 0)
-                and {"ghb", "drn"} <= kinds and all(not transient for transient, _ in model.periods))
-    if regional:
+    if steady_convertible:
+        # The qualified regional steady profile is a numerical starting
+        # point for every convertible steady DIS model, not a size-, device-
+        # or package-specific exception. Explicit controls still take precedence.
         options.update(krylov_restart=16, max_cycles=500)
     # The saved runtime profiles are for CUDA transient histories. Steady
     # solves use the independent endpoint audit; CPU uses host acceptance.
@@ -693,18 +693,22 @@ def _import_solver_options(*, model, device, precision, solver_options):
             multigrid = dict(saved["multigrid"],
                 preconditioner_precision="float32" if precision == "mixed_fast" else "float64",
                 use_cuda_graph=True)
-            if regional:
-                multigrid["newton_diagonal"] = True
             options["npf_kcycle_controls"] = NPF662KCycleControls(**multigrid)
     if options.get("npf_newton_controls") is None:
         newton = NPF662NewtonControls(**saved["newton"])
-        if regional:
-            # Use the full-thickness horizontal conductance scale so the
-            # correction shift follows the model's length and time units.
-            thickness = (model.interfaces[0] - model.interfaces[1])[model.active[0]]
-            typical_transmissivity = np.median(model.kx[model.active] * thickness)
-            newton = replace(newton, steady_initial_shift=0.08 * typical_transmissivity,
-                             max_head_change_m=5. * np.median(thickness), inner_forcing=0.01)
+        if steady_convertible:
+            # Conductance, rather than K alone, sets the dimensional shift.
+            # The vertical line smoother handles vertical stiffness; use
+            # horizontal full-thickness half-cell scales in both directions.
+            # This reduces to the regional median K*b on a square isotropic
+            # single-layer grid. Use convertible cells in mixed-type models.
+            selected = model.active & (model.cell_type != 0)
+            thickness = (model.interfaces[:-1] - model.interfaces[1:])[selected]
+            cx = model.kx[selected] * thickness * (model.dy / model.dx)
+            cy = model.ky[selected] * thickness * (model.dx / model.dy)
+            typical_conductance = float(np.median(0.5 * cx + 0.5 * cy))
+            newton = replace(newton, steady_initial_shift=0.08 * typical_conductance,
+                             max_head_change_m=5. * float(np.median(thickness)), inner_forcing=0.01)
         options["npf_newton_controls"] = newton
     return profile, options
 

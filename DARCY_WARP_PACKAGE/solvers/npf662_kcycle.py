@@ -31,6 +31,7 @@ class NPF662KCycleControls:
 
     :param newton_diagonal: Include the upstream saturation derivative on the
         diagonal of the current-coefficient preconditioner for Newton steps.
+        Ignored by saturated-coefficient preconditioning and Picard steps.
     """
     levels: int = 5
     min_coarse_n: int = 2
@@ -46,7 +47,7 @@ class NPF662KCycleControls:
     coefficient_state: str = 'saturated'
     line_smoother: str = 'jacobi'
     device_hierarchy_build: bool = False
-    newton_diagonal: bool = False
+    newton_diagonal: bool = True
 
     def validate(self):
         if not isinstance(self.device_hierarchy_build, (bool, np.bool_)):
@@ -63,8 +64,6 @@ class NPF662KCycleControls:
             raise ValueError('coefficient_state must be saturated or current')
         if not isinstance(self.newton_diagonal, (bool, np.bool_)):
             raise ValueError('newton_diagonal must be Boolean')
-        if self.newton_diagonal and self.coefficient_state != 'current':
-            raise ValueError('newton_diagonal requires current coefficients')
         if self.line_smoother not in ('jacobi', 'red_black'):
             raise ValueError('line_smoother must be jacobi or red_black')
         if self.line_smoother == 'red_black' and not self.cached_line_factors:
@@ -397,7 +396,8 @@ class NPF662KCycleWorkspace:
         wp.launch(kernel=unpack_current_faces, dim=workspace.n,
             inputs=[coefficients, workspace.left, *(face.flatten() for face in fine['faces'])], device=self.device)
         tangent = workspace.linear_operator_tangent
-        if mode == 1 and self.controls.newton_diagonal:
+        if (mode == 1 and self.controls.coefficient_state == 'current'
+                and self.controls.newton_diagonal):
             wp.launch(kernel=add_newton_diagonal, dim=workspace.n, device=self.device,
                       inputs=[tangent,workspace.left,workspace.c,workspace.dl,workspace.dr,
                               fine['storage'].flatten()])

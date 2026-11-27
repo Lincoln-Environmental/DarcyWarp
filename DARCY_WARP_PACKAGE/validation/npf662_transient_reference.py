@@ -3,7 +3,9 @@ import numpy as np
 from scipy import sparse
 from scipy.sparse.csgraph import connected_components
 from DARCY_WARP_PACKAGE.validation.npf662_reference import NPF662Reference, quadratic_saturation_derivative
-from DARCY_WARP_PACKAGE.validation.npf662_metrics import stable_rms, stable_sum, local_balance_valid
+from DARCY_WARP_PACKAGE.validation.npf662_metrics import (
+    exact_dry_zero_rows, stable_rms, stable_sum, local_balance_valid,
+)
 from DARCY_WARP_PACKAGE.validation.head_checks import invalid_head_values
 
 
@@ -91,7 +93,10 @@ class NPF662TransientReference(NPF662Reference):
         graph = sparse.coo_matrix((np.ones(int(edges.sum())), (self.left[edges], self.right[edges])),
             shape=(self.case.active.size, self.case.active.size)).tocsr()
         unused, labels = connected_components(csgraph=graph, directed=False)
-        active_labels = set(labels[self.case.active.ravel() != 0])
+        dry_zero = exact_dry_zero_rows(case=self.case, head=head, free=self.free,
+            diagonal=diagonal, residual=residual,
+            boundary_throughput=fields['boundary_throughput'], storage=storage)
+        active_labels = set(labels[(self.case.active.ravel() != 0) & ~dry_zero.ravel()])
         unused_drain_entries, drain, unused_river_entries, river = self.boundary_terms(head=head)
         boundary_tangent = self.ghb_conductance + drain.diagonal + river.diagonal
         anchors = (self.case.fixed != 0)|(boundary_tangent > 0.)|((tangent > 0.)&self.free)
@@ -105,7 +110,8 @@ class NPF662TransientReference(NPF662Reference):
         checks.update(physical_rms=rms, physical_max=float(np.max(np.abs(residual))),
             head_residual_rms=hrms, residual_l1=l1, relative_cell_imbalance=relative,
             gross_throughput=throughput, equation_throughput=equation_throughput, signed_imbalance=stable_sum(values=residual[self.free]),
-            ungrounded_current_components=ungrounded, physical_metrics_valid=valid,
+            ungrounded_current_components=ungrounded, exact_dry_zero_rows=int(dry_zero.sum()),
+            physical_metrics_valid=valid,
             storage_accumulation_m3_day=stable_sum(values=storage[self.free]))
         limits = checks['final_acceptance_thresholds']
         checks['independent_accepted'] = bool(checks['input_valid'] and checks['boundary_condition_valid']
