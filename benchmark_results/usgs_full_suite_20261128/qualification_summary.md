@@ -89,3 +89,47 @@ Prior tight-reference evidence records 23 head-comparison cases passing all exis
 Acceptance thresholds remain head maximum 0.005 m, head RMSE 1e-4 m, saturation thickness 0.1 m, flow absolute 1e-6 and relative 1e-10, and gross package-budget relative 1e-3.
 
 See [`darcywarp_qualification/usgs_regional_results.csv`](darcywarp_qualification/usgs_regional_results.csv) for all 74 records.
+
+## Targeted follow-up to `20d4381`
+
+Saved receipts establish 54 distinct fully qualified workspaces. The 28
+archived-reference passes and 26 tighter-reference passes are disjoint. Six
+additional DarcyWarp solutions passed the physical checks and still need
+sufficiently accurate MF6 comparisons.
+
+The two native DRN audits now pass with the cached MF6 outputs. The saved
+rates match the expanded expression `C*z - C*h` exactly. The independent
+factored expression differed by at most 1.4833e-6 m³/day in 1301 and
+1.2065e-6 m³/day in 1303. The audit uses a per-entry bound on the rounding
+of these operations. The newly unblocked DarcyWarp runs from original
+heads took 70.8 and 78.7 s, respectively, and both ended with three
+ungrounded saturation components.
+
+The initial Newton directions for 1304 and 1606 reduced the physical
+residual at small steps. Maximum corrections of 67,382 m and 1,363,259 m
+restricted the step taken across each grid. In 1606 the worst row was
+nearly dry, with a current Newton diagonal of 53.9 and a full-saturated
+scaling diagonal of 47,803 m²/day. The drying guard changed none of the
+heads in the small-step comparisons. In 1304, increasing the correction
+shift in high-conductance rows cut the first maximum correction to
+1,566 m and the 240-step physical RMS residual from 2,670 to 11.9 m³/day.
+Two ungrounded components remained after 184.4 s. A fully saturated
+preliminary solve stopped at its line search after 13 steps and yielded
+no starting guess.
+
+At the 1102 rejected state, the scaled Newton solve met its linear
+target with a 72% defect in the physical norm. Physical weighting cut
+that defect to 0.98%, but the tested trial steps still increased the
+physical residual. At the 1801 rejected state, physical weighting
+changed the initial slope of the squared physical residual from +0.520
+to −1.987, normalized by its starting value.
+
+A subsequent 1801 run reached a relative flow imbalance of 1.6e-11
+but stopped after 285.6 s with a head-equivalent RMS error of 0.022 m.
+Projecting three unforced, nearly dry cells to their bottoms cleared the
+head-error check. The existing scaled solve still stalled on the
+cell-by-cell flow check. From that saved projected state, physical
+weighting cleared the unchanged physical gates in two steps with a
+head-equivalent RMS error of 9.7e-11 m. This restart provides numerical
+evidence for the correction. Full qualification requires a run from the
+original heads and a comparison with the cached MF6 endpoint.
