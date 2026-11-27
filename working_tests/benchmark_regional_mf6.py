@@ -34,13 +34,15 @@ def describe(*, values):
                 max_abs=float(np.abs(values).max()))
 
 
-def comparison_gate(*, actual, expected, atol, rtol=0.):
+def comparison_gate(*, actual, expected, atol, rtol=0., roundoff=0.):
     """Check every value against an explicit absolute and relative tolerance.
 
     :param actual: Evaluated physical quantity.
     :param expected: Independent reference quantity.
     :param atol: Absolute tolerance in the quantity's units.
     :param rtol: Relative tolerance at each reference value.
+    :param roundoff: Optional entrywise arithmetic error bound. The existing
+        absolute and relative tolerance still applies wherever it is larger.
     :return: Pass/fail and maximum error, retaining diagnostics on failure.
     """
     actual = np.asarray(actual, dtype=np.float64)
@@ -48,7 +50,7 @@ def comparison_gate(*, actual, expected, atol, rtol=0.):
     if actual.shape != expected.shape:
         raise ValueError("Parity gate arrays have different shapes")
     difference = np.abs(actual - expected)
-    allowed = atol + rtol * np.abs(expected)
+    allowed = np.maximum(atol + rtol * np.abs(expected), roundoff)
     passed = bool(np.isfinite(actual).all() and np.isfinite(expected).all()
                   and np.all(difference <= allowed))
     return dict(passed=passed, max_abs=float(difference.max(initial=0.)),
@@ -281,10 +283,30 @@ def package_metrics(*, records, entries, case, head, fields,
             source_ids, rows = entries[kind]
             entry = data["node2"] - 1
             np.testing.assert_array_equal(ids, source_ids[entry])
+        roundoff = 0.
         if kind == "GHB":
             expected = rows["cond"][entry] * (rows["bhead"][entry]-head.ravel()[ids])
         elif kind == "DRN":
-            expected = -rows["cond"][entry] * np.maximum(head.ravel()[ids]-rows["elev"][entry], 0.)
+            conductance = rows["cond"][entry]
+            elevation = rows["elev"][entry]
+            saved_head = head.ravel()[ids]
+            drawdown = np.maximum(saved_head - elevation, 0.)
+            expected = -conductance * drawdown
+            if native_divergence is not None:
+                # MF6 saves C*z - C*h; the independent law evaluates -C*(h-z).
+                # Each rounded product C*h or C*z can contribute half a local
+                # ULP even when the head difference is small. Include rounding
+                # of the two subtractions and the factored product as well.
+                rounded_head = conductance * saved_head
+                rounded_elevation = conductance * elevation
+                expanded = rounded_elevation - rounded_head
+                bound = 0.5 * (
+                    np.spacing(np.abs(rounded_head)) + np.spacing(np.abs(rounded_elevation))
+                    + np.spacing(np.abs(expanded)) + np.spacing(np.abs(expected))
+                    + conductance * np.spacing(drawdown)
+                )
+                flowing = (drawdown > 0.) & ~case.fixed.ravel()[ids]
+                roundoff = np.where(flowing, np.nextafter(bound, np.inf), 0.)
         elif kind == "CHD":
             expected = (fields["chd_cell_rate"] if native_divergence is None else
                         native_divergence - case.source).ravel()[ids]
@@ -296,7 +318,7 @@ def package_metrics(*, records, entries, case, head, fields,
             summary.update(chd_overlap=int(overlap.sum()), flowing_overlap=int(np.count_nonzero(q[overlap])))
         summary["entry_difference"] = describe(values=expected-q)
         summary["entry_gate"] = comparison_gate(actual=expected, expected=q,
-                                                  atol=flow_atol, rtol=flow_rtol)
+            atol=flow_atol, rtol=flow_rtol, roundoff=roundoff)
         predicted = np.array([expected[expected > 0].sum(), -expected[expected < 0].sum()])
         native = np.array([summary["inflow"], summary["outflow"]])
         summary["computed_inflow"], summary["computed_outflow"] = map(float, predicted)
