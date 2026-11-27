@@ -13,7 +13,7 @@ flopy = pytest.importorskip("flopy")
 from DARCY_WARP_PACKAGE.mf6_import import (
     UnsupportedMF6Model, import_simulation, run_mf6_model,
     timestep_lengths, _schedules, _stress_period, _add_array_recharge,
-    _prepare_interfaces,
+    _prepare_interfaces, _prepare_run_outputs,
 )
 
 
@@ -298,3 +298,84 @@ def test_uniform_fast_npf_in_fp32_process():
         "assert np.dtype(NP_FLOAT) == np.dtype(np.float32)\n"
     )
     subprocess.run([sys.executable, "-c", code], env=env, check=True)
+
+
+
+def test_chd_overlaps_native_parity(tmp_path, solver_device, pinned_mf6):
+    """MF6 suppresses GHB, WEL, DRN and RIV on prescribed-head cells."""
+    workspace = tmp_path / "mf6"
+    sim = make_simulation(workspace)
+    gwf = sim.get_model("aquifer")
+    fixed = (0, 1, 0)
+    ghb = gwf.get_package("ghb")
+    ghb.maxbound.set_data(3)
+    ghb.stress_period_data.set_data({
+        0: [((0, 1, 4), 8., 2.), ((0, 1, 4), 9., 1.), (fixed, 4., 500.)],
+        2: [],
+    })
+    wel = gwf.get_package("wel")
+    wel.maxbound.set_data(3)
+    wel.stress_period_data.set_data({
+        0: [((1, 1, 3), -.25), ((1, 1, 3), .05), (fixed, -100.)],
+        2: [],
+    })
+    drn = gwf.get_package("drn")
+    drn.maxbound.set_data(2)
+    drn.stress_period_data.set_data({0: [((0, 0, 3), 8.5, .1), (fixed, 6., 100.)]})
+    riv = gwf.get_package("riv")
+    riv.maxbound.set_data(2)
+    riv.stress_period_data.set_data({0: [((0, 2, 3), 8.7, .2, 7.), (fixed, 7., 100., 6.)]})
+    sim.write_simulation(silent=True)
+    sim.exe_name = str(pinned_mf6)
+    success, output = sim.run_simulation(silent=True, report=True)
+    assert success, output
+    report = run_mf6_model(workspace, tmp_path / "dw", device=solver_device,
+                           reference_head_file=workspace / "aquifer.hds")
+    assert len(report["head_comparison"]) == 4
+    assert all(row["max_abs"] < 1e-6 for row in report["head_comparison"])
+    periods = report["excluded_boundary_entries"]
+    for kind in ("GHB", "WEL", "DRN", "RIV"):
+        assert periods[0]["packages"][kind]["chd"]["count"] == 1
+        assert periods[1]["packages"][kind]["chd"]["first_cell"] == list(fixed)
+    assert "GHB" not in periods[2]["packages"]
+
+
+def test_inactive_list_entries_require_explicit_opt_in(tmp_path):
+    """Never conflate native CHD suppression with invalid inactive list data."""
+    sim = make_simulation(tmp_path)
+    model = import_simulation(sim)
+    model.active[0, 1, 4] = False
+    schedules = _schedules(model)
+    with pytest.raises(UnsupportedMF6Model, match="IDOMAIN=0"):
+        _stress_period(model, schedules, 0)
+    diagnostics = {}
+    with pytest.warns(UserWarning, match="omitting list entries"):
+        forcing = _stress_period(model, schedules, 0, ignore_inactive_boundaries=True,
+                                 diagnostics=diagnostics)
+    assert forcing["ghb_conductance"] is None
+    assert diagnostics["GHB"]["inactive"]["count"] == 2
+    assert diagnostics["GHB"]["inactive"]["first_cell"] == [0, 1, 4]
+
+
+def test_overwrite_replaces_only_run_files(tmp_path, solver_device):
+    """Reuse a failed or completed output workspace without deleting unrelated files."""
+    workspace = tmp_path / "mf6"
+    make_simulation(workspace)
+    output = tmp_path / "dw"
+    output.mkdir()
+    unrelated = output / "keep.txt"
+    unrelated.write_text("retain")
+    partial = output / "darcywarp.hds.partial"
+    partial.write_bytes(b"incomplete")
+    with pytest.raises(FileExistsError, match="overwrite=True"):
+        run_mf6_model(workspace, output, device=solver_device)
+    assert partial.read_bytes() == b"incomplete"
+    first = run_mf6_model(workspace, output, device=solver_device, overwrite=True)
+    second = run_mf6_model(workspace, output, device=solver_device, overwrite=True)
+    assert first["accepted_steps"] == second["accepted_steps"] == 4
+    assert unrelated.read_text() == "retain"
+    assert not partial.exists()
+    with pytest.raises(ValueError, match="Reference head file"):
+        _prepare_run_outputs(output, overwrite=True,
+                             reference_head_file=output / "darcywarp.hds")
+    assert (output / "darcywarp.hds").is_file()

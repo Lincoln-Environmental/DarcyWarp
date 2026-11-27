@@ -11,6 +11,11 @@ including external array files, and DarcyWarp solves the imported model.
 The original files are not rewritten and MF6 is not executed. An optional
 reference_head_file points to an existing native MF6 binary head file.
 
+Existing output directories are allowed. The example passes overwrite=True,
+which replaces only darcywarp.hds, darcywarp.hds.partial and
+darcywarp_report.json; all unrelated files are retained. The library
+defaults to overwrite=False to protect previous run results.
+
 The default precision profile is mixed_fast: FP64 geometry, physical
 coefficients, heads, outer FGMRES, residuals and acceptance, with a fast FP32
 K-cycle preconditioner, cached line factors and CUDA graphs where supported.
@@ -53,9 +58,15 @@ Unsupported packages or physical options raise UnsupportedMF6Model rather
 than being silently substituted. Current exclusions include DISV/DISU,
 vertical pass-through cells, active-cell pinch-outs, rotated anisotropy, XT3D, alternative
 conductance/storage options, time-series inputs, auxiliary multipliers, ATS,
-SFR/UZF and coupled models. Non-recharge stress entries on inactive or CHD
-cells are rejected. Inactive/dry head markers in native reference active
-cells are not compared. Full drying/rewetting parity is outside the native
+SFR/UZF and coupled models. GHB, WEL, DRN, RIV and RCH list entries on
+CHD cells are suppressed, matching native MF6 zero exchange on prescribed
+heads. These suppressed records are counted by package and stress period.
+List stresses on IDOMAIN=0 cells are invalid in native MF6 and are rejected
+by default. Explicitly set ignore_inactive_boundaries=True to omit invalid
+non-CHD records, with a warning and counts in the JSON report; this repairs
+invalid input rather than establishing parity with the original input.
+Inactive or duplicate CHD entries remain errors. Inactive/dry head markers
+in native reference active cells are not compared. Full drying/rewetting parity is outside the native
 solver's current qualification.
 
 This is a correctness-first single-step driver. It updates package data

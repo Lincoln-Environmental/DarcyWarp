@@ -21,6 +21,7 @@ if __name__ == "__main__":
         output_directory=output_directory,
         device=device,
         reference_head_file=reference_head_file,
+        overwrite=True,
     )
     print(f"Accepted steps: {report['accepted_steps']}")
     print(f"Run time: {report['run_seconds']:.3f} s")

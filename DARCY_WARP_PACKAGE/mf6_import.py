@@ -11,6 +11,7 @@ from pathlib import Path
 import json
 import math
 import struct
+import warnings
 from time import perf_counter
 
 import numpy as np
@@ -441,14 +442,32 @@ def _add_array_recharge(rhs, model, rate, layers, fixed):
     rhs[k, j, i] += rate[receiving] * model.dx * model.dy
 
 
-def _stress_period(model, schedules, kper):
+def _record_ignored_boundary(diagnostics, kind, reason, cell):
+    """Count excluded stress entries and retain one example cell.
+
+    :param diagnostics: Mutable dictionary for the current stress period.
+    :param kind: MF6 package type.
+    :param reason: Either prescribed-head suppression or inactive exclusion.
+    :param cell: Zero-based DIS cell identifier.
+    """
+    package = diagnostics.setdefault(kind.upper(), {})
+    entry = package.setdefault(reason, {"count": 0, "first_cell": list(cell)})
+    entry["count"] += 1
+
+
+def _stress_period(model, schedules, kper, *, ignore_inactive_boundaries=False,
+                   diagnostics=None):
     """Translate all packages for one stress period.
 
     :param model: Imported static geometry.
     :param schedules: List of package and resolved data tuples.
     :param kper: Zero-based stress period.
+    :param ignore_inactive_boundaries: Explicitly allow list stresses on
+        IDOMAIN=0 cells to be omitted. Native MF6 rejects such list input.
+    :param diagnostics: Optional dictionary populated with excluded-entry counts.
     :return: Keyword arguments for the native layered model builder.
     """
+    ignored = {} if diagnostics is None else diagnostics
     fixed = np.zeros(model.shape, dtype=bool)
     values = np.zeros(model.shape)
     for package, rows, unused in schedules:
@@ -474,11 +493,26 @@ def _stress_period(model, schedules, kper):
             continue
         for record in rows[kper]:
             cell = _cell(record["cellid"], model.shape)
+            if not model.active[cell]:
+                if not ignore_inactive_boundaries:
+                    raise UnsupportedMF6Model(
+                        f"{kind.upper()}: list entry on IDOMAIN=0 cell {cell} "
+                        f"(stress period {kper + 1}; zero-based indices). "
+                        "MF6 rejects excluded list cells. To explicitly omit "
+                        "these records, pass ignore_inactive_boundaries=True."
+                    )
+                _record_ignored_boundary(ignored, kind, "inactive", cell)
+                continue
+            # Native MF6 formulations set HCOF/RHS (and reported package
+            # exchange) to zero on prescribed-head cells, irrespective of
+            # package ordering. Preserve the CHD equation and suppress only
+            # the other stress entry, not the cell itself.
+            if fixed[cell]:
+                _record_ignored_boundary(ignored, kind, "chd", cell)
+                continue
             if kind == "rch":
                 _add_recharge(rhs, model, cell, _number(record["recharge"], "RCH"), fixed)
                 continue
-            if not model.active[cell] or fixed[cell]:
-                raise UnsupportedMF6Model(f"{kind.upper()}: inactive or CHD cell {cell}")
             if kind == "wel":
                 wel.append((cell, _number(record["q"], "WEL rate")))
                 continue
@@ -493,6 +527,15 @@ def _stress_period(model, schedules, kper):
             elif kind == "riv":
                 riv.append((cell, cond, _number(record["stage"], "RIV stage"),
                             _number(record["rbot"], "RIV bottom")))
+    inactive_counts = {kind: reasons["inactive"]["count"]
+                       for kind, reasons in ignored.items() if "inactive" in reasons}
+    if inactive_counts:
+        warnings.warn(
+            f"MF6 import period {kper + 1}: explicitly omitting list entries "
+            f"on excluded IDOMAIN=0 cells: {inactive_counts}. "
+            "This is a repair of invalid native MF6 list input, not exact input parity.",
+            UserWarning, stacklevel=2,
+        )
     # Parallel GHB entries are algebraically equivalent to one conductance-
     # weighted boundary per cell. Individual GHB fluxes are not exported here.
     ghb_head = np.divide(ghb_weighted, ghb_cond, out=np.zeros(model.shape),
@@ -596,8 +639,37 @@ def _import_solver_options(*, model, device, precision, solver_options):
     return options
 
 
+def _prepare_run_outputs(output, *, overwrite, reference_head_file=None):
+    """Prepare only the three files owned by the import driver.
+
+    :param output: Resolved output directory.
+    :param overwrite: Replace existing run files when explicitly enabled.
+    :param reference_head_file: Optional external MF6 reference, never replaced.
+    :return: Final head path, partial head path and report path.
+    """
+    paths = tuple(output / name for name in
+                  ("darcywarp.hds", "darcywarp.hds.partial", "darcywarp_report.json"))
+    if reference_head_file is not None:
+        reference = Path(reference_head_file).expanduser().resolve()
+        if any(path.resolve() == reference for path in paths):
+            raise ValueError("Reference head file must not be a DarcyWarp output being replaced")
+    output.mkdir(parents=True, exist_ok=True)
+    existing = [path for path in paths if path.exists() or path.is_symlink()]
+    if existing and not overwrite:
+        raise FileExistsError(
+            f"Run files already exist in {output}; pass overwrite=True to replace them"
+        )
+    for path in existing:
+        if path.is_dir() and not path.is_symlink():
+            raise IsADirectoryError(path)
+    for path in existing:
+        path.unlink()
+    return paths
+
+
 def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
-                  precision="mixed_fast", solver_options=None, reference_head_file=None):
+                  precision="mixed_fast", solver_options=None, reference_head_file=None,
+                  overwrite=False, ignore_inactive_boundaries=False):
     """Run an existing MF6 workspace without invoking or modifying MF6.
 
     :param model_directory: Directory containing mfsim.nam.
@@ -609,6 +681,11 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
     :param solver_options: Optional native NPF solver controls, not MF6 IMS controls.
     :param reference_head_file: Optional existing MF6 binary head file for
         comparison at common (kstp, kper) records.
+    :param overwrite: Replace previous DarcyWarp head, partial head and report
+        files, leaving every unrelated file in the directory untouched.
+    :param ignore_inactive_boundaries: Explicitly omit non-CHD list stress
+        entries on excluded IDOMAIN cells; default is strict MF6 validation.
+        Counts are reported by period and package.
     :return: Report containing run metadata and accepted-step diagnostics.
     """
     import flopy
@@ -632,24 +709,31 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
     options = _import_solver_options(model=model, device=device,
                                      precision=precision, solver_options=options)
     schedules = _schedules(model)
-    output.mkdir(parents=True, exist_ok=True)
-    head_path = output / "darcywarp.hds"
-    partial_path = output / "darcywarp.hds.partial"
-    report_path = output / "darcywarp_report.json"
-    if any(path.exists() for path in (head_path, partial_path, report_path)):
-        raise FileExistsError("Choose an output directory without existing run files")
+    head_path, partial_path, report_path = _prepare_run_outputs(
+        output, overwrite=overwrite, reference_head_file=reference_head_file
+    )
 
     nz, ny, nx = model.shape
     previous = model.initial.copy()
     current_mask = None
+    previous_ghb = False
     elapsed = 0.0
     steps = []
+    excluded_boundaries = []
     with partial_path.open("xb") as stream:
         with WarpDarcySolver3D(nx=nx, ny=ny, nz=nz, dx=model.dx, dy=model.dy,
                                device=device, formulation="mf6_6_6_2_npf",
                                implementation="fast", solver="kcycle") as solver:
             for kper, (transient, lengths) in enumerate(model.periods):
-                forcing = _stress_period(model, schedules, kper)
+                diagnostics = {}
+                forcing = _stress_period(
+                    model, schedules, kper,
+                    ignore_inactive_boundaries=ignore_inactive_boundaries,
+                    diagnostics=diagnostics,
+                )
+                if diagnostics:
+                    excluded_boundaries.append(dict(kper=kper + 1, packages=diagnostics))
+                has_ghb = forcing["ghb_conductance"] is not None
                 if current_mask is None or not np.array_equal(current_mask, forcing["bc_mask"]):
                     solver.build_from_layers(z_interfaces=model.interfaces,
                         kx_field=model.kx, ky_field=model.ky, kz_field=model.kz,
@@ -659,10 +743,16 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
                     solver.update_boundary_values(forcing["bc_values"])
                     solver.update_rhs(forcing["rhs"])
                     solver.update_wel(forcing["wel_entries"])
-                    solver.update_ghb(ghb_conductance=forcing["ghb_conductance"],
-                                      ghb_head=forcing["ghb_head"])
+                    if has_ghb:
+                        solver.update_ghb(ghb_conductance=forcing["ghb_conductance"],
+                                          ghb_head=forcing["ghb_head"])
+                    elif previous_ghb:
+                        # The native GHB update API disables existing entries
+                        # with zero conductance, not None.
+                        solver.update_ghb(ghb_conductance=0.0, ghb_head=0.0)
                     solver.update_drn_entries(forcing["drn_entries"])
                     solver.update_riv_entries(forcing["riv_entries"])
+                previous_ghb = has_ghb
                 pertim = 0.0
                 for kstp, dt in enumerate(lengths):
                     solver.update_initial_head(previous)
@@ -698,6 +788,8 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
     partial_path.rename(head_path)
     report = dict(model=model.name, shape=list(model.shape), device=device,
                   precision_profile=precision,
+                  ignore_inactive_boundaries=bool(ignore_inactive_boundaries),
+                  excluded_boundary_entries=excluded_boundaries,
                   length_units=model.length_units, time_units=model.time_units,
                   head_file=str(head_path), accepted_steps=len(steps), steps=steps,
                   run_seconds=perf_counter() - started,
