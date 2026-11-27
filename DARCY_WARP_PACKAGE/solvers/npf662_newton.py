@@ -422,7 +422,7 @@ class NPF662Workspace:
         """Return the tangent used only for a numerical correction."""
         return self.operator_tangent if self.linear_diagonal is None else self.linear_diagonal
 
-    def set_linear_shift(self, *, value, typical_scale=0.):
+    def set_linear_shift(self, *, value, typical_scale=0., conductance_scale=None):
         """Refresh the correction diagonal without changing physical state.
 
         :param value: Nonnegative diagonal shift in conductance units.
@@ -434,8 +434,9 @@ class NPF662Workspace:
                 return
             self.linear_diagonal = wp.empty_like(self.operator_tangent)
             self.krylov = None
+        weights = self.scale if conductance_scale is None else conductance_scale
         wp.launch(kernel=kernels.shift_linear_diagonal, dim=self.n,
-                  inputs=[self.operator_tangent, self.scale, value, typical_scale,
+                  inputs=[self.operator_tangent, weights, value, typical_scale,
                           self.linear_diagonal], device=self.device)
 
     def refresh_previous_operator(self, *, activation_head=None):
@@ -841,6 +842,29 @@ def search_direction(*,workspace,current,controls,physical_tolerance=1e-12,relat
         alpha,unused=best
         trial=workspace.candidate(alpha=alpha)
         return dict(accepted=True,alpha=alpha,mode='bounded_recovery',metrics=trial,trials=rows,raw_max=maximum)
+    if continuation and getattr(workspace, 'backtracking', None) is not None:
+        # MF6 6.6.2 sln_backtracking_xupdate interpolates the already
+        # bottom-relaxed displacement. get_backtracking_flag stops before
+        # the next reduction would take its maximum below DVCLOSE.
+        count, tolerance, reduction, head_limit = workspace.backtracking
+        alpha = first
+        trial = workspace.candidate(alpha=alpha)
+        for index in range(count + 1):
+            factor = 1. if index == 0 else reduction
+            workspace.maximum.zero_()
+            wp.launch(kernel=kernels.backtrack_head, dim=workspace.n, device=workspace.device,
+                      inputs=[workspace.head, workspace.trial, factor, workspace.maximum])
+            displacement = float(workspace.maximum.numpy()[0])
+            if index:
+                alpha *= reduction
+                trial = workspace.evaluate(trial=True)
+            ratio = trial['physical_rms'] / max(current['physical_rms'], physical_tolerance)
+            rows.append(dict(alpha=alpha, merit=ratio**2 if np.isfinite(ratio) else None, metrics=trial))
+            if displacement == 0.:
+                break
+            if trial['finite'] and (ratio <= tolerance or reduction * displacement < head_limit):
+                return dict(accepted=True, alpha=alpha, mode='ims_backtracking',
+                            metrics=trial, trials=rows, raw_max=maximum)
     return dict(accepted=False,alpha=0.,mode='rejected',metrics=current,trials=rows,raw_max=maximum)
 
 
@@ -877,13 +901,23 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
     if initial_shift and (workspace.transient or not np.any(case.cell_types[case.active != 0])):
         raise ValueError('Steady continuation requires a convertible steady model')
     workspace.damp_drying = getattr(model, '_mf6_newton_under_relaxation', False)
+    workspace.backtracking = getattr(model, '_mf6_backtracking', None) if initial_shift else None
+    if workspace.backtracking is not None and workspace.backtracking[0] == 0:
+        workspace.backtracking = None
+    conductance_scale = None
+    if workspace.backtracking is not None:
+        # The correction shift still uses saturated conductance units when
+        # FGMRES measures error in the flow units used by IMS backtracking.
+        conductance_scale = wp.clone(workspace.scale)
+        workspace.scale.fill_(1.)
     typical_scale = 0.
     if initial_shift:
         principal = workspace.principal.numpy()
         selected = workspace.free.numpy().astype(bool) & (principal > 0.)
         if np.any(selected):
             typical_scale = float(np.median(principal[selected]))
-    workspace.set_linear_shift(value=initial_shift, typical_scale=typical_scale)
+    workspace.set_linear_shift(value=initial_shift, typical_scale=typical_scale,
+                               conductance_scale=conductance_scale)
     krylov_reused=workspace.select_krylov(method=method,krylov_budget=krylov_budget)
     tiled = bool(controls.tiled_reductions and wp.get_device(ident=model.device).is_cuda)
     if tiled != getattr(workspace,'device_tiled',False) and workspace.flexible is not None:
@@ -1022,6 +1056,10 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
                                           head_rms=current["head_residual_rms"])
             full_step = (bool(history) and history[-1]['accepted']
                          and history[-1]['attempts'][-1]['search']['alpha'] == 1.)
+            if full_step and workspace.backtracking is not None:
+                previous_attempt = history[-1]['attempts'][-1]
+                full_step = (previous_attempt['direction'] == 'newton'
+                             and previous_attempt['search']['mode'] == 'physical_descent')
             small_shift = typical_scale > 0. and shift <= relative_tolerance * typical_scale
             if (not physical_balance_unscaled
                     and (current['relative_cell_imbalance'] <= relative_tolerance
@@ -1033,7 +1071,8 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
                 forcing_previous = current['scaled_l2']
                 physical_balance_unscaled = True
                 shift = 0.
-        workspace.set_linear_shift(value=shift, typical_scale=typical_scale)
+        workspace.set_linear_shift(value=shift, typical_scale=typical_scale,
+                                   conductance_scale=conductance_scale)
         if progress_callback is not None:
             progress_callback("Newton outer", outer=outer+1, max_outer=max_outer,
                               head_rms=current["head_residual_rms"],
@@ -1188,7 +1227,9 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
                             workspace.scale, workspace.maximum], device=workspace.device)
                     if workspace.maximum.numpy()[0] != 0.:
                         raise ValueError('Invalid active-set recovery restraint diagonal')
-                    if physical_balance_unscaled:
+                    if conductance_scale is not None:
+                        wp.copy(dest=conductance_scale, src=workspace.scale)
+                    if physical_balance_unscaled or conductance_scale is not None:
                         workspace.scale.fill_(1.)
                     if workspace.multigrid is not None:
                         wp.copy(dest=workspace.multigrid.levels[0]['storage'].flatten(),
@@ -1292,6 +1333,8 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
         scaling=('fixed full-saturated principal diagonal until local balance refinement, then physical residual'
                  if physical_balance_unscaled else 'fixed full-saturated principal diagonal; S*J and S*R'),
         preconditioner='fixed diagonal within each GMRES solve')
+    if conductance_scale is not None:
+        result['scaling'] = 'physical flow residual throughout IMS backtracking'
     result['balanced_nullspace_datum'] = nullspace_datum
     result['component_datum_refined'] = datum_refined
     result['component_connectivity'] = dict(

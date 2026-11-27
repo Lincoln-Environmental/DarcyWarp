@@ -222,3 +222,28 @@ trial when Krylov used the physical residual. The accepted one-quarter
 trial reduced flow RMS from 0.04492 to 0.04289 m³/day and head-equivalent
 RMS from 16.10 to 0.02392 m. The replay does not change the qualification
 count.
+
+### 1807 original-head convergence with IMS backtracking
+
+The highest-residual cell in the stalled 1807 checkpoint was 27.62 m
+above bottom with four conducting faces. Ten neighbours contributed 40%
+of the squared flow residual. An independent direct solve of the shifted
+Newton matrix reduced the relative linear defect to 5.5e-12, yet the full
+trial increased the physical flow norm by a factor of 449,000. Taking
+1/128 of the direction reduced the flow norm by only 0.73%.
+
+MF6 6.6.2 stops backtracking when another reduction would take the maximum
+head displacement below DVCLOSE. The archived 1807 listing used this exit
+at outer 88. Applying it after ordinary descent failed, with physical
+Krylov weighting, allowed two Picard recovery steps in the original-head
+DarcyWarp run. Independent physical acceptance passed in 204 outers and
+43,989 Krylov iterations. Mixed-fast CUDA took 211.13 s including import,
+with 177.71 s in the solve. Head-equivalent RMS was 1.90e-10 m and relative
+cell imbalance was 1.92e-10.
+
+Only head parity failed against the archived MF6 result, with 0.0014470 m
+RMS and 0.0295536 m maximum difference. The last native head change was
+0.09367 m. The original-start receipt is under
+`remaining_20d4381/ims_head_limit_original_01/1807_1810_MF6_SS_Unconfined_250/`.
+This brings the tally to 66 physically accepted, 59 fully qualified and
+eight solver failures pending further comparisons.

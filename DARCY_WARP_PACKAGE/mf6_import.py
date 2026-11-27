@@ -875,6 +875,16 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
                                device=device, formulation="mf6_6_6_2_npf",
                                implementation="fast", solver="kcycle") as solver:
             solver._mf6_newton_under_relaxation = model.newton_under_relaxation
+            ims = simulation.get_package("ims")
+            if (str(_data(ims, "complexity", "")).upper() == "COMPLEX"
+                    and str(_data(ims, "under_relaxation", "DBD")).upper() != "NONE"):
+                # MODFLOW 6.6.2 sln_setouter, with explicit IMS overrides.
+                solver._mf6_backtracking = (
+                    int(_data(ims, "backtracking_number", 20)),
+                    float(_data(ims, "backtracking_tolerance", 1.05)),
+                    float(_data(ims, "backtracking_reduction_factor", 0.1)),
+                    float(_data(ims, "outer_dvclose", 0.1)),
+                )
             for kper, (transient, lengths) in enumerate(model.periods):
                 progress("Translating stress period", period=f"{kper + 1}/{len(model.periods)}",
                          mode="transient" if transient else "steady", steps=len(lengths))

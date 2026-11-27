@@ -981,6 +981,15 @@ def project_dry_trial(head: wp.array(dtype=wp.float64), bottom: wp.array(dtype=w
 
 
 @wp.kernel
+def backtrack_head(head: wp.array(dtype=wp.float64), trial: wp.array(dtype=wp.float64),
+                   factor: wp.float64, maximum: wp.array(dtype=wp.float64)):
+    i = wp.tid()
+    if factor != wp.float64(1.):
+        trial[i] = head[i] + factor * (trial[i] - head[i])
+    wp.atomic_max(maximum, 0, wp.abs(trial[i] - head[i]))
+
+
+@wp.kernel
 def correction_max(delta:wp.array(dtype=wp.float64),maximum:wp.array(dtype=wp.float64)):
     i=wp.tid()
     wp.atomic_max(maximum,0,wp.abs(delta[i]))
