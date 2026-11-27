@@ -30,7 +30,7 @@ def exact_zero_equation_rows(*, case, head, free, diagonal, residual,
 exact_dry_zero_rows = exact_zero_equation_rows
 
 
-def balanced_nullspace_components(*, labels, active, grounded, source, residual,
+def balanced_nullspace_components(*, labels, active, grounded, source,
                                   left, right, face_left_derivative,
                                   face_right_derivative,
                                   boundary_tangent, boundary_throughput,
@@ -39,17 +39,15 @@ def balanced_nullspace_components(*, labels, active, grounded, source, residual,
 
     A qualifying component has no fixed or head-dependent restraint or
     external exchange, and its physical Jacobian annihilates a uniform head
-    increment. Its total source plus storage rate is exactly balanced and its
-    cell residuals are exactly zero. This is a true Jacobian datum nullspace,
-    not a tolerance-based residual exemption. A shifted candidate is checked
-    again against the full nonlinear equations before it can be accepted.
+    increment. Its total source plus storage rate is exactly balanced. Final
+    residual acceptance is evaluated separately, and a shifted candidate is
+    checked against the full nonlinear equations before it can be accepted.
 
     :param labels: Connected-component labels from positive physical face
         conductances.
     :param active: Active-cell mask.
     :param grounded: Cells with a fixed head or positive external tangent.
     :param source: Signed source rate by cell.
-    :param residual: Unmodified physical balance residual by cell.
     :param left: First cell index for each conducting face.
     :param right: Second cell index for each conducting face.
     :param face_left_derivative: Face-flow derivative with respect to its
@@ -66,7 +64,6 @@ def balanced_nullspace_components(*, labels, active, grounded, source, residual,
     active = np.asarray(active).ravel() != 0
     grounded = np.asarray(grounded).ravel() != 0
     source = np.asarray(source, dtype=np.float64).ravel()
-    residual = np.asarray(residual, dtype=np.float64).ravel()
     boundary_tangent = np.asarray(boundary_tangent, dtype=np.float64).ravel()
     boundary_throughput = np.asarray(boundary_throughput, dtype=np.float64).ravel()
     storage = None if storage is None else np.asarray(storage).ravel()
@@ -80,8 +77,10 @@ def balanced_nullspace_components(*, labels, active, grounded, source, residual,
     active_labels = set(np.unique(labels[active]))
     grounded_labels = set(np.unique(labels[active & grounded]))
     candidates = active_labels - grounded_labels
-    bad_cells = (grounded | (boundary_tangent != 0.)
-                 | (residual != 0.) | (boundary_throughput != 0.))
+    # Residual size belongs to final acceptance. A balanced isolated system
+    # can have a nonzero local residual while Newton is solving it; that does
+    # not remove its constant-head nullspace.
+    bad_cells = grounded | (boundary_tangent != 0.) | (boundary_throughput != 0.)
     if storage is not None:
         bad_cells |= storage != 0.
     if storage_tangent is not None:
@@ -111,6 +110,30 @@ def balanced_nullspace_components(*, labels, active, grounded, source, residual,
         if balanced_rate == 0.:
             eligible[int(label)] = cells
     return eligible
+
+
+def unbalanced_ungrounded_components(*, labels, active, grounded, source):
+    """Find unrestrained components whose signed source cannot balance.
+
+    :param labels: Connected-component labels for potentially conducting faces.
+    :param active: Active-cell mask.
+    :param grounded: Cells with a fixed head, potential boundary, or storage
+        restraint.
+    :param source: Signed source rate by cell.
+    :return: Component labels and signed net rates for unbalanced components.
+    """
+    labels = np.asarray(labels).ravel()
+    active = np.asarray(active).ravel() != 0
+    grounded = np.asarray(grounded).ravel() != 0
+    source = np.asarray(source, dtype=np.float64).ravel()
+    candidates = set(np.unique(labels[active])) - set(np.unique(labels[active & grounded]))
+    unbalanced = []
+    for label in candidates:
+        cells = active & (labels == label)
+        net_source = stable_sum(values=source[cells])
+        if net_source != 0.:
+            unbalanced.append((int(label), int(cells.sum()), float(net_source)))
+    return unbalanced
 
 
 def local_balance_valid(*, case, free, left, right, head, residual, flux, conductance, ghb_conductance,

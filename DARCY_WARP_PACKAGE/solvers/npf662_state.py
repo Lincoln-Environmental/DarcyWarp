@@ -150,12 +150,22 @@ class NPF662TransientState:
         return self._audit
 
     def check_components(self):
-        potential = (self.case.fixed != 0)|((self.ss > 0.)|((self.sy > 0.)&(self.case.cell_types != 0)))
+        storage_potential=(self.case.thicknesses>0.)&(
+            (self.ss>0.)|((self.sy>0.)&(self.case.cell_types!=0)))
+        potential = (self.case.fixed != 0)|storage_potential
         if self.case.ghb_conductance is not None:
             potential |= self.case.ghb_conductance > 0.
         if np.all(potential[self.case.active != 0]):
             return
         self.independent().check_components()
+
+    def apply_nullspace_datum(self, *, head):
+        """Use the independent transient audit to retain a physical datum.
+
+        :param head: Converged heads copied from the device history state.
+        :return: Datum-adjusted heads and the audit's component records.
+        """
+        return self.independent().apply_nullspace_datum(head=head)
 
     def _activation_component_labels(self):
         """Build positive-conductance connected-component labels once."""

@@ -13,7 +13,7 @@ from scipy.sparse.linalg import spsolve
 from DARCY_WARP_PACKAGE.validation.head_checks import inspect_heads
 from DARCY_WARP_PACKAGE.validation.npf662_metrics import (
     balanced_nullspace_components, exact_zero_equation_rows, final_tolerances,
-    stable_rms, stable_sum, local_balance_valid,
+    stable_rms, stable_sum, local_balance_valid, unbalanced_ungrounded_components,
 )
 from DARCY_WARP_PACKAGE.physics.ghb_3d import npf_ghb_component_anchor
 
@@ -362,6 +362,7 @@ class NPF662Reference:
         case.validate()
         self.case=case
         self.shape=case.active.shape
+        self.initial_datum=np.array(case.initial,dtype=np.float64,copy=True)
         self.free=case.active.astype(bool)&~case.fixed.astype(bool)
         self.ghb_conductance = (np.zeros(self.shape) if case.ghb_conductance is None
                                 else np.broadcast_to(case.ghb_conductance, self.shape).copy())
@@ -499,17 +500,113 @@ class NPF662Reference:
             riv |= (self.riv_conductance.ravel() > 0.)
         return drn, riv
 
+    def _datum_preserves_boundary_activation(self, *, cell, old_head, new_head):
+        """Check whether one exact-zero row shift crosses a DRN/RIV branch.
+
+        :param cell: Flat cell index.
+        :param old_head: Evaluated head before the datum shift.
+        :param new_head: Proposed datum head.
+        :return: Whether every package entry stays on its current branch.
+        """
+        if self.drn_csr is None:
+            if (self.drn_conductance.ravel()[cell] > 0.
+                    and (old_head > self.drn_elevation.ravel()[cell])
+                    != (new_head > self.drn_elevation.ravel()[cell])):
+                return False
+        else:
+            start, stop = self.drn_csr.offsets[cell:cell + 2]
+            enabled = self.drn_csr.conductance[start:stop] > 0.
+            elevations = self.drn_csr.first_level[start:stop][enabled]
+            if np.any((old_head > elevations) != (new_head > elevations)):
+                return False
+        if self.riv_csr is None:
+            if (self.riv_conductance.ravel()[cell] > 0.
+                    and (old_head > self.riv_bottom.ravel()[cell])
+                    != (new_head > self.riv_bottom.ravel()[cell])):
+                return False
+        else:
+            start, stop = self.riv_csr.offsets[cell:cell + 2]
+            enabled = self.riv_csr.conductance[start:stop] > 0.
+            bottoms = self.riv_csr.third_level[start:stop][enabled]
+            if np.any((old_head > bottoms) != (new_head > bottoms)):
+                return False
+        return True
+
+    def _datum_preserves_zero_row_physics(self, *, cell, head, datum, fields):
+        """Check local face, boundary and storage terms for a zero-row shift.
+
+        :param cell: Flat exact-zero row index.
+        :param head: Evaluated head field before datum adjustment.
+        :param datum: Proposed head for this row.
+        :param fields: Physical fields evaluated at ``head``.
+        :return: Whether the proposed value leaves every local physical term
+            unchanged.
+        """
+        if not self._datum_preserves_boundary_activation(cell=cell,
+                old_head=float(head.ravel()[cell]), new_head=float(datum)):
+            return False
+        trial = np.array(head, dtype=np.float64, copy=True)
+        trial.ravel()[cell] = datum
+        incident = (self.left == cell) | (self.right == cell)
+        if np.any(incident):
+            conductance, unused_left, unused_right, unused_saturation = self.face_terms(
+                head=trial)
+            flux = conductance * (trial.ravel()[self.left] - trial.ravel()[self.right])
+            if not np.array_equal(flux[incident], fields['flux'][incident]):
+                return False
+        if hasattr(self, 'storage'):
+            storage_rate, storage_tangent = self.storage(head=trial)
+            if storage_rate.ravel()[cell] != fields['storage_rate'].ravel()[cell]:
+                return False
+            if storage_tangent.ravel()[cell] != fields['storage_tangent'].ravel()[cell]:
+                return False
+        return True
+
+    def _datum_state_is_unchanged(self, *, before_head, before_fields, after_head):
+        """Compare equation terms before accepting one datum adjustment.
+
+        :param before_head: Current head field.
+        :param before_fields: Physical fields evaluated at ``before_head``.
+        :param after_head: Proposed head field.
+        :return: Whether residuals, physical flows, boundary branches and
+            storage are unchanged, plus the evaluated fields at ``after_head``.
+        """
+        unused_checks, after_fields = self.evaluate(head=after_head)
+        unchanged = all(name not in before_fields or name not in after_fields or
+            np.array_equal(before_fields[name], after_fields[name])
+            for name in ('residual', 'flux', 'ghb_outflow', 'drn_outflow',
+                         'riv_outflow', 'boundary_throughput', 'storage_rate',
+                         'storage_tangent'))
+        before_drn_entries, before_drain, before_riv_entries, before_river = (
+            self.boundary_terms(head=before_head))
+        after_drn_entries, after_drain, after_riv_entries, after_river = (
+            self.boundary_terms(head=after_head))
+        for before, after in ((before_drn_entries, after_drn_entries),
+                              (before_riv_entries, after_riv_entries)):
+            if before is None or after is None:
+                unchanged &= before is after
+            else:
+                unchanged &= np.array_equal(before, after)
+        for before, after in ((before_drain, after_drain),
+                              (before_river, after_river)):
+            unchanged &= np.array_equal(before.discharge, after.discharge)
+            unchanged &= np.array_equal(before.diagonal, after.diagonal)
+            unchanged &= np.array_equal(before.rhs, after.rhs)
+        return bool(unchanged), after_fields
+
     def check_components(self):
         n=self.case.active.size
         graph=sparse.coo_matrix((np.ones(self.left.size),(self.left,self.right)),shape=(n,n)).tocsr()
         unused,labels=connected_components(csgraph=graph,directed=False)
         drn_occupied, riv_occupied = self.boundary_occupancy()
-        for label in np.unique(labels[self.case.active.ravel()!=0]):
-            mask=(labels==label)&(self.case.active.ravel()!=0)
-            potential_boundary = drn_occupied[mask] | riv_occupied[mask]
-            if not np.any((self.case.fixed.ravel()!=0)[mask] |
-                          (self.ghb_conductance.ravel()[mask]>0.) | potential_boundary):
-                raise ValueError(f'Ungrounded active component; net source={self.case.source.ravel()[mask].sum():.17g}')
+        grounded=(self.case.fixed.ravel()!=0)|(self.ghb_conductance.ravel()>0.)
+        grounded|=drn_occupied|riv_occupied
+        unbalanced=unbalanced_ungrounded_components(labels=labels,active=self.case.active,
+            grounded=grounded,source=self.case.source)
+        if unbalanced:
+            label,cells,net_source=unbalanced[0]
+            raise ValueError(f'Ungrounded active component {label} with {cells} cells has '
+                             f'nonzero net source={net_source:.17g}')
 
     def certify_roundoff(self, *, head, residual, conductance, storage=None, tangent=None):
         from .npf662_metrics import componentwise_roundoff
@@ -728,7 +825,7 @@ class NPF662Reference:
         grounded_labels=set(labels[grounded_mask])
         ungrounded_labels=active_labels-grounded_labels
         nullspaces=balanced_nullspace_components(labels=labels,active=c.active,
-            grounded=grounded_mask,source=c.source,residual=residual,
+            grounded=grounded_mask,source=c.source,
             left=self.left,right=self.right,
             face_left_derivative=dl,face_right_derivative=dr,
             boundary_tangent=boundary_tangent,
@@ -780,65 +877,98 @@ class NPF662Reference:
         """Retain the original mean head on eligible balanced components.
 
         Only balanced components with an exact constant-head Jacobian mode
-        are shifted to their original mean head. Components containing a
-        DRN/RIV entry keep the existing head because a datum shift could change
-        that package's active branch. The final state is independently
-        re-evaluated before it is returned.
+        are shifted to their original mean head. Each shift is accepted only
+        when residuals, physical flows, boundary branches and storage remain
+        unchanged.
 
         :param head: Converged total-head grid.
         :return: Candidate heads and a record of applied datum shifts.
         """
-        candidate = np.array(head, dtype=np.float64, copy=True, order='C')
-        checks, fields = self.evaluate(head=candidate)
-        if checks['balanced_nullspace_components'] == 0:
-            return candidate, []
-        active = np.asarray(self.case.active).ravel() != 0
-        conducting = np.asarray(fields['conductance']) > 0.
-        graph = sparse.coo_matrix((np.ones(int(conducting.sum())),
-            (self.left[conducting], self.right[conducting])),
-            shape=(self.case.active.size, self.case.active.size)).tocsr()
-        unused, labels = connected_components(csgraph=graph, directed=False)
-        unused_drn, drain, unused_riv, river = self.boundary_terms(head=candidate)
+        original = np.array(head, dtype=np.float64, copy=True, order='C')
+        candidate = original.copy()
+        checks, fields = self.evaluate(head=original)
+        unused_drn_entries, before_drain, unused_riv_entries, before_river = self.boundary_terms(
+            head=original)
+        drain, river = before_drain, before_river
         boundary_tangent = self.ghb_conductance + drain.diagonal + river.diagonal
-        storage = storage_tangent = None
-        if hasattr(self, 'storage'):
-            storage, storage_tangent = self.storage(head=candidate)
+        # TransientReference.evaluate() already returns the physical residual
+        # and principal diagonal with STO added. Reuse those evaluated values;
+        # subtracting storage here would count accumulation twice.
         physical_residual = fields['residual']
-        if storage is not None:
-            physical_residual = physical_residual - storage
-        grounded = ((self.case.fixed != 0) | (boundary_tangent > 0.)).ravel()
-        if storage_tangent is not None:
-            grounded |= (storage_tangent > 0.).ravel()
-        nullspaces = balanced_nullspace_components(labels=labels, active=self.case.active,
-            grounded=grounded, source=self.case.source, residual=physical_residual,
-            left=self.left, right=self.right,
-            face_left_derivative=fields['dflux_left'],
-            face_right_derivative=fields['dflux_right'],
-            boundary_tangent=boundary_tangent,
-            boundary_throughput=fields['boundary_throughput'],
-            storage=storage,
-            storage_tangent=storage_tangent)
-        drn_occupied, riv_occupied = self.boundary_occupancy()
-        initial = np.asarray(self.case.initial, dtype=np.float64).ravel()
+        diagonal = fields['principal_diagonal']
+        storage = fields.get('storage_rate')
+        storage_tangent = fields.get('storage_tangent')
+        zero_rows = exact_zero_equation_rows(case=self.case, head=candidate,
+            free=self.free, diagonal=diagonal, residual=physical_residual,
+            boundary_throughput=fields['boundary_throughput'], storage=storage)
+        datum_heads = (np.asarray(self.previous, dtype=np.float64) if storage is not None
+                       else self.initial_datum)
+        datum_heads = datum_heads.ravel()
         flat = candidate.ravel()
         records = []
-        for label, cells in nullspaces.items():
-            if np.any(drn_occupied.ravel()[cells] | riv_occupied.ravel()[cells]):
-                continue
-            current_mean = stable_sum(values=flat[cells]) / cells.size
-            initial_mean = stable_sum(values=initial[cells]) / cells.size
-            shift = initial_mean - current_mean
-            if shift != 0.:
-                flat[cells] += shift
-            records.append(dict(component=int(label), cells=int(cells.size),
-                initial_mean_head_m=float(initial_mean),
-                previous_mean_head_m=float(current_mean),
-                applied_shift_m=float(shift)))
+        zero_cells = np.flatnonzero(zero_rows.ravel())
+        for cell in zero_cells:
+            previous = float(flat[cell])
+            datum = float(datum_heads[cell])
+            shift = datum - previous
+            if (shift != 0. and self._datum_preserves_zero_row_physics(
+                    cell=int(cell), head=original, datum=datum, fields=fields)):
+                flat[cell] = datum
+                records.append(dict(kind='exact_zero_equation_row', cell=int(cell),
+                    cells=1, datum_head_m=float(datum),
+                    previous_mean_head_m=float(previous), applied_shift_m=float(shift)))
+        current_fields = fields
+        if records:
+            unchanged, current_fields = self._datum_state_is_unchanged(
+                before_head=original, before_fields=fields, after_head=candidate)
+            if not unchanged:
+                candidate = original.copy()
+                records = []
+                current_fields = fields
+        if checks['balanced_nullspace_components'] > 0:
+            conducting = np.asarray(fields['conductance']) > 0.
+            graph = sparse.coo_matrix((np.ones(int(conducting.sum())),
+                (self.left[conducting], self.right[conducting])),
+                shape=(self.case.active.size, self.case.active.size)).tocsr()
+            unused, labels = connected_components(csgraph=graph, directed=False)
+            grounded = ((self.case.fixed != 0) | (boundary_tangent > 0.)).ravel()
+            if storage_tangent is not None:
+                grounded |= (storage_tangent > 0.).ravel()
+            nullspaces = balanced_nullspace_components(labels=labels, active=self.case.active,
+                grounded=grounded, source=self.case.source,
+                left=self.left, right=self.right,
+                face_left_derivative=fields['dflux_left'],
+                face_right_derivative=fields['dflux_right'],
+                boundary_tangent=boundary_tangent,
+                boundary_throughput=fields['boundary_throughput'],
+                storage=storage,
+                storage_tangent=storage_tangent)
+            for label, cells in nullspaces.items():
+                if np.all(zero_rows.ravel()[cells]):
+                    continue
+                current_flat = candidate.ravel()
+                current_mean = stable_sum(values=current_flat[cells]) / cells.size
+                datum_mean = stable_sum(values=datum_heads[cells]) / cells.size
+                shift = datum_mean - current_mean
+                if shift == 0.:
+                    continue
+                trial = candidate.copy()
+                trial.ravel()[cells] += shift
+                unchanged, trial_fields = self._datum_state_is_unchanged(
+                    before_head=candidate, before_fields=current_fields, after_head=trial)
+                if not unchanged:
+                    continue
+                candidate = trial
+                current_fields = trial_fields
+                records.append(dict(kind='balanced_nullspace_component',
+                    component=int(label), cells=int(cells.size),
+                    datum_mean_head_m=float(datum_mean),
+                    previous_mean_head_m=float(current_mean),
+                    applied_shift_m=float(shift)))
         if not records:
             return candidate, []
-        final_checks, unused_fields = self.evaluate(head=candidate)
-        if not final_checks['independent_accepted']:
-            return np.array(head, dtype=np.float64, copy=True), []
+        for record in records:
+            record['flux_boundary_storage_unchanged'] = True
         return candidate, records
 
     def solve(self,*,max_outer=200):

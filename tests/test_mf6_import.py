@@ -132,6 +132,50 @@ def test_import_run(tmp_path, solver_device):
         heads.close()
 
 
+def test_importer_solves_balanced_floating_component(tmp_path, solver_device):
+    """The public MF6 solver solves a balanced, hydraulically floating island."""
+    workspace = tmp_path / "floating_mf6"
+    sim = flopy.mf6.MFSimulation(sim_name="floating", sim_ws=str(workspace))
+    flopy.mf6.ModflowTdis(sim, time_units="DAYS", nper=1,
+                          perioddata=[(1., 1, 1.)])
+    gwf = flopy.mf6.ModflowGwf(sim, modelname="aquifer", save_flows=True)
+    flopy.mf6.ModflowIms(sim, complexity="COMPLEX", outer_dvclose=1e-10,
+        inner_dvclose=1e-12, rcloserecord=[1e-10, "STRICT"],
+        linear_acceleration="BICGSTAB")
+    flopy.mf6.ModflowGwfdis(gwf, nlay=1, nrow=1, ncol=4, top=20.,
+        botm=0., idomain=np.array([[[1, 0, 1, 1]]]), delr=10., delc=10.,
+        length_units="METERS")
+    flopy.mf6.ModflowGwfic(gwf, strt=10.)
+    flopy.mf6.ModflowGwfnpf(gwf, icelltype=0, k=1., k33=1., save_flows=True)
+    flopy.mf6.ModflowGwfsto(gwf, iconvert=0, ss=0., sy=0.,
+        steady_state={}, transient={0: True})
+    flopy.mf6.ModflowGwfchd(gwf, stress_period_data=[((0, 0, 0), 10.)])
+    flopy.mf6.ModflowGwfwel(gwf, stress_period_data=[
+        ((0, 0, 2), -1.), ((0, 0, 3), 1.)])
+    flopy.mf6.ModflowGwfoc(gwf, head_filerecord="aquifer.hds",
+        budget_filerecord="aquifer.cbc",
+        saverecord=[("HEAD", "ALL"), ("BUDGET", "ALL")])
+    sim.write_simulation(silent=True)
+
+    report = run_mf6_model(workspace, tmp_path / "dw_floating", device=solver_device,
+                            solver_options={"npf_device_native": True})
+    assert report["accepted_steps"] == 1
+    assert report["resolved_solver_controls"]["npf_device_native"]
+    step = report["steps"][-1]
+    assert step["transient"]
+    assert step["converged"]
+    assert step["physical_acceptance"]["independent_accepted"]
+    assert step["physical_acceptance"]["balanced_nullspace_components"] == 1
+    heads = flopy.utils.HeadFile(report["head_file"], precision="double")
+    try:
+        final = heads.get_data()
+    finally:
+        heads.close()
+    pair = final[0, 0, 2:4]
+    assert pair[0] != pytest.approx(pair[1])
+    assert np.mean(pair) == pytest.approx(10., abs=1e-8)
+
+
 def test_native_parity(tmp_path, solver_device, pinned_mf6):
     """Compare an independently executed MF6 workspace at each time step."""
     workspace = tmp_path / "mf6"

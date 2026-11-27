@@ -5,7 +5,7 @@ from scipy.sparse.csgraph import connected_components
 from DARCY_WARP_PACKAGE.validation.npf662_reference import NPF662Reference, quadratic_saturation_derivative
 from DARCY_WARP_PACKAGE.validation.npf662_metrics import (
     balanced_nullspace_components, exact_zero_equation_rows, stable_rms,
-    stable_sum, local_balance_valid,
+    stable_sum, local_balance_valid, unbalanced_ungrounded_components,
 )
 from DARCY_WARP_PACKAGE.validation.head_checks import invalid_head_values
 
@@ -67,12 +67,16 @@ class NPF662TransientReference(NPF662Reference):
         graph = sparse.coo_matrix((np.ones(self.left.size), (self.left, self.right)), shape=(n, n)).tocsr()
         unused, labels = connected_components(csgraph=graph, directed=False)
         drn_occupied, riv_occupied = self.boundary_occupancy()
-        potential_boundary = (drn_occupied | riv_occupied).reshape(self.shape)
-        anchors = ((self.case.fixed != 0)|(self.ghb_conductance > 0.)|potential_boundary|
-                   ((self.ss > 0.)|((self.sy > 0.)&(self.case.cell_types != 0))))
-        for label in np.unique(labels[self.case.active.ravel() != 0]):
-            if not np.any(anchors.ravel()[labels == label]):
-                raise ValueError('Ungrounded transient component without boundary or storage')
+        storage_potential=(self.case.thicknesses>0.)&(
+            (self.ss>0.)|((self.sy>0.)&(self.case.cell_types!=0)))
+        grounded=((self.case.fixed!=0)|(self.ghb_conductance>0.)|
+                  (drn_occupied|riv_occupied).reshape(self.shape)|storage_potential)
+        unbalanced=unbalanced_ungrounded_components(labels=labels,active=self.case.active,
+            grounded=grounded,source=self.case.source)
+        if unbalanced:
+            label,cells,net_source=unbalanced[0]
+            raise ValueError(f'Ungrounded transient component {label} with {cells} cells has '
+                             f'nonzero net source={net_source:.17g}')
 
     def jacobian(self, *, head):
         return super().jacobian(head=head)+sparse.diags(self.storage(head=head)[1].ravel())
@@ -106,7 +110,7 @@ class NPF662TransientReference(NPF662Reference):
         ungrounded_labels = active_labels-grounded
         boundary_throughput = fields['boundary_throughput']
         nullspaces = balanced_nullspace_components(labels=labels, active=self.case.active,
-            grounded=grounded_mask, source=self.case.source, residual=residual,
+            grounded=grounded_mask, source=self.case.source,
             left=self.left, right=self.right,
             face_left_derivative=fields['dflux_left'],
             face_right_derivative=fields['dflux_right'],

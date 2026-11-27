@@ -141,7 +141,7 @@ class NPF662MatrixFreeReference:
         grounded_labels = set(labels[grounded_mask])
         ungrounded_labels = active_labels-grounded_labels
         nullspaces = balanced_nullspace_components(labels=labels, active=case.active,
-            grounded=grounded_mask, source=case.source, residual=residual,
+            grounded=grounded_mask, source=case.source,
             left=self.left, right=self.right, face_left_derivative=dl,
             face_right_derivative=dr,
             boundary_tangent=boundary_tangent,

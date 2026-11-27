@@ -80,6 +80,17 @@ def test_exact_dry_zero_row_checks_the_unmodified_equation():
         assert checks['independent_accepted']
         assert checks['exact_dry_zero_rows'] == 1
 
+    shifted_head = isolated_head.copy()
+    shifted_head[0, 0, 0] = 1.
+    for evaluator in (NPF662Reference(case=isolated),
+                      NPF662TransientReference(case=isolated, previous=isolated_head,
+                          dt=1., ss=0., sy=0.)):
+        restored, records = evaluator.apply_nullspace_datum(head=shifted_head)
+        np.testing.assert_array_equal(restored, isolated.initial)
+        assert len(records) == 1
+        assert records[0]['kind'] == 'exact_zero_equation_row'
+        assert records[0]['applied_shift_m'] == 0.5
+
 
 def test_balanced_ungrounded_component_uses_initial_mean_as_head_datum():
     case = layered_column()
@@ -101,11 +112,23 @@ def test_balanced_ungrounded_component_uses_initial_mean_as_head_datum():
     balanced_case.fixed[:] = 0
     balanced_case.source[:, 0, 0] = [3., -3.]
     balanced_head = np.array([[[10.5]], [[9.5]]])
+    NPF662Reference(case=balanced_case).check_components()
     for evaluator in (NPF662Reference(case=balanced_case),
                       NPF662MatrixFreeReference(case=balanced_case)):
         checks, unused = evaluator.evaluate(head=balanced_head)
         assert checks['independent_accepted']
         assert checks['balanced_nullspace_components'] == 1
+
+    unbalanced_case = replace(balanced_case, source=np.array([[[3.]], [[-2.]]]))
+    with pytest.raises(ValueError, match='nonzero net source'):
+        NPF662Reference(case=unbalanced_case).check_components()
+    transient_balanced = NPF662TransientReference(case=balanced_case,
+        previous=balanced_case.initial, dt=1., ss=0., sy=0.)
+    transient_balanced.check_components()
+    transient_unbalanced = NPF662TransientReference(case=unbalanced_case,
+        previous=unbalanced_case.initial, dt=1., ss=0., sy=0.)
+    with pytest.raises(ValueError, match='nonzero net source'):
+        transient_unbalanced.check_components()
 
     transient = NPF662TransientReference(case=case, previous=case.initial,
         dt=1., ss=0., sy=0.)

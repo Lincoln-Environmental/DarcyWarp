@@ -369,6 +369,7 @@ def audit(*, archive, directory, output, device, use_darcywarp_heads=False,
             with flopy.utils.HeadFile(output / "darcywarp.hds") as reader:
                 head = reader.get_data()
         reference, _ = independent_reference(model=solver, case=case)
+        datum_native_head, datum_records = reference.apply_nullspace_datum(head=native_head)
         # Check the accepted physical equations at the evaluated heads. The
         # native baseline can have a looser IMS accuracy than DarcyWarp.
         metrics, cpu = reference.evaluate(head=head, relative_tolerance=1e-7)
@@ -424,6 +425,15 @@ def audit(*, archive, directory, output, device, use_darcywarp_heads=False,
                       native_residual=describe(values=native_residual[free]),
                       native_residual_reassembly=describe(values=(reassembled_native-native_residual)[free]),
                       head_difference=describe(values=(head-native_head)[raw["active"]]),
+                      datum_aligned_head_difference=describe(
+                          values=(head-datum_native_head)[raw["active"]]),
+                      native_datum_adjustments=datum_records,
+                      raw_head_gates=dict(
+                          maximum=comparison_gate(actual=head[raw["active"]],
+                              expected=native_head[raw["active"]], atol=head_gate),
+                          rms=comparison_gate(actual=(head-native_head)[raw["active"]],
+                              expected=np.zeros(int(raw["active"].sum())),
+                              atol=head_rmse_gate)),
                       face_antisymmetry=describe(values=native_flows[pos]+native_flows[rev]),
                       cpu_face_difference=describe(values=face_delta),
                       gpu_face_difference=describe(values=gpu_flows-native_q),
@@ -443,6 +453,7 @@ def audit(*, archive, directory, output, device, use_darcywarp_heads=False,
                       cpu_residual_difference=describe(values=(cpu["residual"]-native_residual)[free]),
                       gpu_residual_difference=describe(values=(gpu_residual.reshape(head.shape)-native_residual)[free]))
         maps = {"Head difference (m)": head-native_head,
+                "Datum-aligned head difference (m)": head-datum_native_head,
                 "CPU residual difference (m³/day)": cpu["residual"]-native_residual,
                 "GHB difference (m³/day)": -cpu["ghb_outflow"]-package_cells["GHB"],
                 "DRN difference (m³/day)": -cpu["drn_outflow"]-package_cells["DRN"]}
@@ -497,9 +508,11 @@ def audit(*, archive, directory, output, device, use_darcywarp_heads=False,
             gates["native face law"] = comparison_gate(actual=cpu["flux"], expected=native_q,
                                                          atol=flow_atol, rtol=flow_rtol)
         if use_darcywarp_heads:
-            gates["head maximum"] = comparison_gate(actual=head[active], expected=native_head[active],
+            gates["datum-aligned head maximum"] = comparison_gate(
+                                                     actual=head[active], expected=datum_native_head[active],
                                                      atol=head_gate)
-            gates["head RMS"] = comparison_gate(actual=report["head_difference"]["rms"],
+            gates["datum-aligned head RMS"] = comparison_gate(
+                                                actual=report["datum_aligned_head_difference"]["rms"],
                                                 expected=0., atol=head_rmse_gate)
             gates["DarcyWarp independent physical acceptance"] = dict(passed=bool(metrics["independent_accepted"]))
         gates["GPU finite physical metrics"] = dict(passed=bool(gpu_metrics["finite"]))

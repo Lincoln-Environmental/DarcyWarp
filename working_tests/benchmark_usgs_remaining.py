@@ -139,7 +139,9 @@ def consolidate(*, results, output):
         "operator_seconds", "reference_setup_seconds", "solver_setup_seconds",
         "solver_seconds", "darcywarp_wall_seconds", "end_to_end_seconds", "peak_gpu_mib",
         "newton_iterations", "krylov_iterations", "head_rmse_m", "head_max_abs_m",
-        "head_mae_m", "head_bias_m", "head_p01_m", "head_p50_m", "head_p95_m", "head_p99_m",
+        "head_rmse_raw_m", "head_max_abs_raw_m", "head_mae_m", "head_bias_m",
+        "head_p01_m", "head_p50_m", "head_p95_m", "head_p99_m",
+        "head_p01_raw_m", "head_p50_raw_m", "head_p95_raw_m", "head_p99_raw_m",
         "face_flow_rmse", "face_flow_max_abs", "physical_residual_rms",
         "relative_cell_imbalance", "chd_inflow", "chd_outflow", "ghb_inflow",
         "ghb_outflow", "drn_inflow", "drn_outflow", "rcha_inflow", "rcha_outflow",
@@ -191,11 +193,14 @@ def consolidate(*, results, output):
         solution_path = output / result["model"] / "solution.json"
         if solution_path.is_file():
             solution = json.loads(solution_path.read_text())
-            difference = solution.get("head_difference", {})
+            raw_difference = solution.get("head_difference", {})
+            difference = solution.get("datum_aligned_head_difference", raw_difference)
             flows = solution.get("cpu_face_difference", {})
             cpu = solution.get("cpu", {})
             row.update(head_rmse_m=difference.get("rms", ""),
                        head_max_abs_m=difference.get("max_abs", ""),
+                       head_rmse_raw_m=raw_difference.get("rms", ""),
+                       head_max_abs_raw_m=raw_difference.get("max_abs", ""),
                        head_mae_m=difference.get("mae", ""),
                        head_bias_m=difference.get("mean", ""),
                        face_flow_rmse=flows.get("rms", ""),
@@ -204,6 +209,7 @@ def consolidate(*, results, output):
                        relative_cell_imbalance=cpu.get("relative_cell_imbalance", ""))
             for percentile in ("p01", "p50", "p95", "p99"):
                 row[f"head_{percentile}_m"] = difference.get("percentiles", {}).get(percentile, "")
+                row[f"head_{percentile}_raw_m"] = raw_difference.get("percentiles", {}).get(percentile, "")
             for package in ("CHD", "GHB", "DRN", "RCHA"):
                 summary = solution.get("packages", {}).get(package, {})
                 row[f"{package.lower()}_inflow"] = summary.get("inflow", "")

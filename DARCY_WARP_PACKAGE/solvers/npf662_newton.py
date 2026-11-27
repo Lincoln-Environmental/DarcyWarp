@@ -1171,8 +1171,10 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
                           outer=len(history), krylov=total)
     head=None if device_sequence else workspace.head.numpy().reshape(case.active.shape).copy()
     nullspace_datum = []
-    if head is not None and hasattr(reference, 'apply_nullspace_datum'):
-        datum_head, nullspace_datum = reference.apply_nullspace_datum(head=head)
+    if hasattr(reference, 'apply_nullspace_datum'):
+        datum_input = (workspace.head.numpy().reshape(case.active.shape).copy()
+                       if head is None else head)
+        datum_head, nullspace_datum = reference.apply_nullspace_datum(head=datum_input)
         if nullspace_datum:
             workspace.head.assign(datum_head.ravel())
             current = workspace.evaluate(trial=False, linearize=True)
