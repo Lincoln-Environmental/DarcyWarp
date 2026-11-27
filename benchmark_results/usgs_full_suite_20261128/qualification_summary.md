@@ -92,10 +92,11 @@ See [`darcywarp_qualification/usgs_regional_results.csv`](darcywarp_qualificatio
 
 ## Targeted follow-up to `20d4381`
 
-Saved receipts establish 54 distinct fully qualified workspaces. The 28
-archived-reference passes and 26 tighter-reference passes are disjoint. Six
-additional DarcyWarp solutions passed the physical checks and still need
-sufficiently accurate MF6 comparisons.
+Saved receipts establish 55 distinct fully qualified workspaces, including
+1801 from this follow-up. The 28 archived-reference passes and 27
+tighter-reference passes are disjoint. Six additional DarcyWarp solutions
+passed the physical checks and still need sufficiently accurate MF6
+comparisons.
 
 The two native DRN audits now pass with the cached MF6 outputs. The saved
 rates match the expanded expression `C*z - C*h` exactly. The independent
@@ -113,9 +114,11 @@ scaling diagonal of 47,803 m²/day. The drying guard changed none of the
 heads in the small-step comparisons. In 1304, increasing the correction
 shift in high-conductance rows cut the first maximum correction to
 1,566 m and the 240-step physical RMS residual from 2,670 to 11.9 m³/day.
-Two ungrounded components remained after 184.4 s. A fully saturated
-preliminary solve stopped at its line search after 13 steps and yielded
-no starting guess.
+Two ungrounded components remained after 184.4 s. Each was a single
+recharged cell with zero flow paths. The cached MF6 heads put the two
+cells 0.43 and 0.23 mm above their bottoms, where they can pass the
+recharge onward. A fully saturated preliminary solve stopped at its
+line search after 13 steps and yielded no starting guess.
 
 At the 1102 rejected state, the scaled Newton solve met its linear
 target with a 72% defect in the physical norm. Physical weighting cut
@@ -130,6 +133,13 @@ Projecting three unforced, nearly dry cells to their bottoms cleared the
 head-error check. The existing scaled solve still stalled on the
 cell-by-cell flow check. From that saved projected state, physical
 weighting cleared the unchanged physical gates in two steps with a
-head-equivalent RMS error of 9.7e-11 m. This restart provides numerical
-evidence for the correction. Full qualification requires a run from the
-original heads and a comparison with the cached MF6 endpoint.
+head-equivalent RMS error of 9.7e-11 m.
+
+With the corrected solver, 1801 passed the physical checks from its
+original heads in 142 Newton steps and 132.6 s, including 78.4 s in
+Newton and 7,933 CUDA graph replays. Its final head-equivalent RMS
+error was 9.8e-11 m and its relative cell imbalance was 1.2e-12.
+The archived MF6 comparison missed only the two head gates. A new
+MF6 reference at `dvclose=1e-6` took 135.4 s. The same DarcyWarp heads
+passed every comparison gate against that reference, with datum-aligned
+RMSE 4.02e-8 m and maximum difference 9.00e-6 m.
