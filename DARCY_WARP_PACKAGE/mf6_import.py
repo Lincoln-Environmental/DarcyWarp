@@ -90,6 +90,85 @@ def _spacing(package, name, count):
     return float(values[0])
 
 
+def _prepare_interfaces(interfaces, active):
+    """Provide valid dummy geometry for excluded DIS cells only.
+
+    The native layered solver currently requires every cell, including
+    IDOMAIN=0 placeholders, to have positive thickness. Preserve both
+    interfaces of every active cell exactly, and modify only unowned
+    interfaces in columns with invalid excluded-cell geometry. Never
+    alter hydraulic connectivity or manufacture thickness in active cells.
+
+    :param interfaces: Original MF6 interfaces (nlay+1, nrow, ncol).
+    :param active: Boolean active-cell mask (nlay, nrow, ncol).
+    :return: Validated solver geometry; original MF6 arrays are untouched.
+    """
+    z = np.asarray(interfaces, dtype=np.float64)
+    with np.errstate(over="ignore", invalid="ignore"):
+        thickness = z[:-1] - z[1:]
+    bad = ~(np.isfinite(thickness) & (thickness > 0))
+    invalid_active = bad & active
+    if np.any(invalid_active):
+        k, j, i = np.argwhere(invalid_active)[0]
+        raise UnsupportedMF6Model(
+            f"DIS: {np.count_nonzero(invalid_active)} active cells have invalid "
+            f"thickness; first at zero-based ({k}, {j}, {i}), "
+            f"top={z[k, j, i]}, bottom={z[k + 1, j, i]}"
+        )
+    affected = np.any(bad, axis=0)
+    if not np.any(affected):
+        return z
+    z = z.copy()
+    # Entirely inactive columns are common in regional models. Vectorise
+    # them rather than walking millions of excluded cells in Python.
+    empty = affected & ~np.any(active, axis=0)
+    if np.any(empty):
+        z[:, empty] = -np.arange(z.shape[0], dtype=float)[:, None]
+    for j, i in np.argwhere(affected & ~empty):
+        column = z[:, j, i]
+        live = active[:, j, i]
+        # Interface k is immutable when either adjacent cell is active.
+        anchored = np.zeros(column.size, dtype=bool)
+        anchored[:-1] |= live
+        anchored[1:] |= live
+        anchors = np.flatnonzero(anchored)
+        first, last = int(anchors[0]), int(anchors[-1])
+        # Dummy top and bottom extensions, chosen large enough to remain
+        # representable even at unusually large finite vertical datums.
+        upper_step = max(1.0, abs(column[first]) * 1e-12)
+        lower_step = max(1.0, abs(column[last]) * 1e-12)
+        column[:first] = column[first] + upper_step * np.arange(first, 0, -1)
+        column[last + 1:] = column[last] - lower_step * np.arange(
+            1, column.size - last
+        )
+        for left, right in zip(anchors[:-1], anchors[1:]):
+            if right - left <= 1:
+                continue
+            # An internal inactive gap must have sufficient space between
+            # its immutable active interfaces. A zero-width gap cannot be
+            # represented by positive-thickness dummy cells without moving
+            # an active interface, so reject rather than change the model.
+            if column[left] <= column[right]:
+                raise UnsupportedMF6Model(
+                    f"DIS: inactive internal gap at row {j}, column {i} "
+                    f"between interfaces {left} and {right} cannot be "
+                    "represented without moving active-cell elevations"
+                )
+            column[left + 1:right] = np.linspace(
+                column[left], column[right], int(right - left + 1)
+            )[1:-1]
+    with np.errstate(over="ignore", invalid="ignore"):
+        thickness = z[:-1] - z[1:]
+    if not np.all(np.isfinite(thickness) & (thickness > 0)):
+        raise UnsupportedMF6Model("DIS: excluded-cell dummy geometry is not representable")
+    # This invariant is checked explicitly because active elevations define
+    # NPF saturation, face conductances and STO volumes.
+    if (not np.array_equal(z[:-1][active], interfaces[:-1][active]) or
+            not np.array_equal(z[1:][active], interfaces[1:][active])):
+        raise RuntimeError("DIS: active-cell geometry changed during import")
+    return z
+
+
 def timestep_lengths(perlen, nstp, tsmult):
     """Reproduce the geometric MF6 TDIS timestep sequence.
 
@@ -172,8 +251,7 @@ def import_simulation(simulation):
     top = _array(dis, "top", (ny, nx))
     bottom = _array(dis, "botm", shape)
     interfaces = np.concatenate((top[None], bottom), axis=0)
-    if not np.isfinite(interfaces).all() or np.any(interfaces[:-1] <= interfaces[1:]):
-        raise UnsupportedMF6Model("DIS: nonpositive thickness or pinch-outs are unsupported")
+    interfaces = _prepare_interfaces(interfaces, active)
 
     initial = _array(ic, "strt", shape)
     raw_types = _array(npf, "icelltype", shape, dtype=int)
@@ -599,7 +677,7 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
                 if not np.array_equal(valid, model.active):
                     raise ValueError("Reference has dry or invalid active head markers")
                 delta = calculated[valid] - expected[valid]
-                comparisons.append(dict(kstp=kstp + 1, kper=kper + 1,
+                comparisons.append(dict(kstp=int(kstp) + 1, kper=int(kper) + 1,
                                         rmse=float(np.sqrt(np.mean(delta ** 2))),
                                         max_abs=float(np.max(np.abs(delta)))))
             if not comparisons:

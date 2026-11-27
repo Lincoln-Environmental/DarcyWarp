@@ -14,7 +14,11 @@ reference_head_file points to an existing native MF6 binary head file.
 ## Initial supported contract
 
 - Single GWF model, structured DIS with uniform DELR/DELC and positive
-  thickness in all cells. Layer interfaces may vary spatially.
+  thickness in active cells. Layer interfaces may vary spatially. Invalid
+  IDOMAIN=0 geometry is replaced with positive-thickness dummy geometry
+  only where active interfaces can remain unchanged. An internal excluded
+  gap whose bounding active elevations cannot accommodate positive dummy
+  thickness is rejected. No original input files or active geometry change.
 - IC, default NPF conductance and axis-aligned anisotropy; confined or NEWTON
   convertible cells; default STO specific storage and specific yield with
   matching ICONVERT and ICELLTYPE.
@@ -36,7 +40,7 @@ reference_head_file points to an existing native MF6 binary head file.
 
 Unsupported packages or physical options raise UnsupportedMF6Model rather
 than being silently substituted. Current exclusions include DISV/DISU,
-vertical pass-through cells, pinch-outs, rotated anisotropy, XT3D, alternative
+vertical pass-through cells, active-cell pinch-outs, rotated anisotropy, XT3D, alternative
 conductance/storage options, time-series inputs, auxiliary multipliers, ATS,
 SFR/UZF and coupled models. Non-recharge stress entries on inactive or CHD
 cells are rejected. Inactive/dry head markers in native reference active

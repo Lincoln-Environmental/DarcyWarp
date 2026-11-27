@@ -9,6 +9,7 @@ flopy = pytest.importorskip("flopy")
 from DARCY_WARP_PACKAGE.mf6_import import (
     UnsupportedMF6Model, import_simulation, run_mf6_model,
     timestep_lengths, _schedules, _stress_period, _add_array_recharge,
+    _prepare_interfaces,
 )
 
 
@@ -139,3 +140,90 @@ def test_array_recharge_idomain_and_irch(tmp_path):
     _add_array_recharge(rhs, model, 0.01, irch, fixed)
     assert rhs[1, 1, 1] == pytest.approx(2.0)
     assert rhs.sum() == pytest.approx(24.0)
+
+
+def test_excluded_geometry_preserves_active_interfaces():
+    """Repair excluded columns, end cells and internal gaps without changing live cells."""
+    # Columns: entirely inactive, top excluded, bottom excluded, internal gap.
+    original = np.array([
+        [0, 5, 10, 10],
+        [0, 5, 8, 8],
+        [0, 3, 4, 9],
+        [0, 0, 4, 4],
+        [0, -1, 4, 0],
+    ], dtype=float)[:, None, :]
+    active = np.array([
+        [0, 0, 1, 1],
+        [0, 1, 1, 0],
+        [0, 1, 0, 0],
+        [0, 1, 0, 1],
+    ], dtype=bool)[:, None, :]
+    original_copy = original.copy()
+    geometry = _prepare_interfaces(original, active)
+    assert np.all(geometry[:-1] > geometry[1:])
+    np.testing.assert_array_equal(geometry[:-1][active], original[:-1][active])
+    np.testing.assert_array_equal(geometry[1:][active], original[1:][active])
+    np.testing.assert_array_equal(original, original_copy)
+
+
+def test_active_zero_thickness_rejected():
+    """A real active-cell pinch-out must not be silently changed."""
+    interfaces = np.array([10., 10., 0.])[:, None, None]
+    with pytest.raises(UnsupportedMF6Model, match="active cells"):
+        _prepare_interfaces(interfaces, np.ones((2, 1, 1), dtype=bool))
+
+
+def test_unrepresentable_inactive_internal_gap_rejected():
+    """Both bounding active elevations must remain fixed."""
+    interfaces = np.array([10., 5., 5., 0.])[:, None, None]
+    active = np.array([True, False, True])[:, None, None]
+    with pytest.raises(UnsupportedMF6Model, match="inactive internal gap"):
+        _prepare_interfaces(interfaces, active)
+
+
+def test_single_layer_excluded_geometry(tmp_path):
+    """Read a native DIS with a completely excluded zero-thickness column."""
+    sim = flopy.mf6.MFSimulation(sim_name="single", sim_ws=str(tmp_path))
+    flopy.mf6.ModflowTdis(sim)
+    gwf = flopy.mf6.ModflowGwf(sim, modelname="aquifer")
+    flopy.mf6.ModflowIms(sim)
+    flopy.mf6.ModflowGwfdis(gwf, nlay=1, nrow=1, ncol=3, delr=10,
+                          delc=10, top=[[10., 0., 10.]],
+                          botm=[[[0., 0., 0.]]], idomain=[[[1, 0, 1]]])
+    flopy.mf6.ModflowGwfic(gwf, strt=5.)
+    flopy.mf6.ModflowGwfnpf(gwf, k=1.)
+    flopy.mf6.ModflowGwfchd(gwf, stress_period_data=[
+        ((0, 0, 0), 5.), ((0, 0, 2), 5.)])
+    sim.write_simulation(silent=True)
+    loaded = flopy.mf6.MFSimulation.load(sim_ws=str(tmp_path), verbosity_level=0)
+    model = import_simulation(loaded)
+    assert model.active.sum() == 2
+    assert np.all(model.interfaces[:-1] > model.interfaces[1:])
+    np.testing.assert_array_equal(model.interfaces[:, 0, 0], [10., 0.])
+
+
+def test_excluded_geometry_native_parity(tmp_path, solver_device, pinned_mf6):
+    """Import inactive zero-thickness cells and compare untouched native MF6."""
+    workspace = tmp_path / "mf6"
+    sim = make_simulation(workspace)
+    dis = sim.get_model("aquifer").dis
+    active = np.ones((2, 3, 5), dtype=int)
+    active[0, 0, 1] = 0
+    active[:, 0, 2] = 0
+    top = np.full((3, 5), 10.)
+    top[0, 1] = 5.
+    top[0, 2] = 0.
+    bottom = np.broadcast_to(np.array([5., 0.])[:, None, None], active.shape).copy()
+    bottom[:, 0, 2] = 0.
+    dis.idomain.set_data(active)
+    dis.top.set_data(top)
+    dis.botm.set_data(bottom)
+    sim.write_simulation(silent=True)
+    sim.exe_name = str(pinned_mf6)
+    success, output = sim.run_simulation(silent=True, report=True)
+    assert success, output
+    report = run_mf6_model(workspace, tmp_path / "dw", device=solver_device,
+                           reference_head_file=workspace / "aquifer.hds")
+    assert len(report["head_comparison"]) == 4
+    for comparison in report["head_comparison"]:
+        assert comparison["max_abs"] < 1e-6, comparison
