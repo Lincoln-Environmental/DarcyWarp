@@ -10,7 +10,9 @@ from dataclasses import dataclass
 from pathlib import Path
 import json
 import math
+import os
 import struct
+import sys
 from time import perf_counter
 
 import numpy as np
@@ -142,8 +144,6 @@ def _prepare_interfaces(interfaces, active):
             1, column.size - last
         )
         for left, right in zip(anchors[:-1], anchors[1:]):
-            if right - left <= 1:
-                continue
             # An internal inactive gap must have sufficient space between
             # its immutable active interfaces. A zero-width gap cannot be
             # represented by positive-thickness dummy cells without moving
@@ -154,6 +154,8 @@ def _prepare_interfaces(interfaces, active):
                     f"between interfaces {left} and {right} cannot be "
                     "represented without moving active-cell elevations"
                 )
+            if right - left <= 1:
+                continue
             column[left + 1:right] = np.linspace(
                 column[left], column[right], int(right - left + 1)
             )[1:-1]
@@ -558,6 +560,26 @@ def _numeric_summary(values):
     return result
 
 
+def _initialise_npf_precision():
+    """Select required FP64 precision before the first solver import.
+
+    DarcyWarp fixes its shared precision when config is imported. The MF6
+    adapter always uses the FP64 NPF/STO formulation, irrespective of the
+    default precision for other formulations. Never reload a configured
+    process or change already-imported Warp kernels.
+    """
+    config_name = "DARCY_WARP_PACKAGE.config"
+    if config_name not in sys.modules:
+        os.environ["DARCY_FLOAT"] = "float64"
+    from DARCY_WARP_PACKAGE.config import NP_FLOAT
+    if np.dtype(NP_FLOAT) != np.dtype(np.float64):
+        raise RuntimeError(
+            "MF6 import requires FP64, but DarcyWarp is already initialised "
+            "in FP32. Restart Python with DARCY_FLOAT=float64 before any "
+            "DarcyWarp solver or config imports."
+        )
+
+
 def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
                   solver_options=None, reference_head_file=None):
     """Run an existing MF6 workspace without invoking or modifying MF6.
@@ -570,6 +592,7 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
         comparison at common (kstp, kper) records.
     :return: Report containing run metadata and accepted-step diagnostics.
     """
+    _initialise_npf_precision()
     import flopy
     from DARCY_WARP_PACKAGE.warped_darcy_3d import WarpDarcySolver3D
 

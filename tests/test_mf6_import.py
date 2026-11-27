@@ -1,6 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Regression tests for the MF6 input adapter and its binary output."""
 
+import os
+import subprocess
+import sys
+
 import numpy as np
 import pytest
 
@@ -227,3 +231,42 @@ def test_excluded_geometry_native_parity(tmp_path, solver_device, pinned_mf6):
     assert len(report["head_comparison"]) == 4
     for comparison in report["head_comparison"]:
         assert comparison["max_abs"] < 1e-6, comparison
+
+
+@pytest.mark.parametrize("precision", [None, "float32", "float64"])
+def test_mf6_import_initialises_fp64_in_fresh_process(precision):
+    """The standalone adapter must not depend on the pytest FP64 environment."""
+    env = os.environ.copy()
+    if precision is None:
+        env.pop("DARCY_FLOAT", None)
+    else:
+        env["DARCY_FLOAT"] = precision
+    code = (
+        "import numpy as np\n"
+        "from DARCY_WARP_PACKAGE.mf6_import import _initialise_npf_precision\n"
+        "_initialise_npf_precision()\n"
+        "from DARCY_WARP_PACKAGE.config import NP_FLOAT\n"
+        "assert np.dtype(NP_FLOAT) == np.dtype(np.float64)\n"
+    )
+    subprocess.run([sys.executable, "-c", code], env=env, check=True)
+
+
+def test_mf6_import_rejects_already_initialised_fp32():
+    """Do not change precision after solver configuration has been imported."""
+    env = dict(os.environ, DARCY_FLOAT="float32")
+    code = (
+        "from pathlib import Path\n"
+        "from tempfile import TemporaryDirectory\n"
+        "from DARCY_WARP_PACKAGE.config import NP_FLOAT\n"
+        "from DARCY_WARP_PACKAGE.mf6_import import run_mf6_model\n"
+        "with TemporaryDirectory() as root:\n"
+        "    output = Path(root) / 'output'\n"
+        "    try:\n"
+        "        run_mf6_model(root, output, device='cpu')\n"
+        "    except RuntimeError as error:\n"
+        "        assert 'Restart Python' in str(error)\n"
+        "    else:\n"
+        "        raise AssertionError('Expected an initialised FP32 error')\n"
+        "    assert not output.exists()\n"
+    )
+    subprocess.run([sys.executable, "-c", code], env=env, check=True)

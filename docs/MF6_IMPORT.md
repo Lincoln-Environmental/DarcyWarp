@@ -11,6 +11,12 @@ including external array files, and DarcyWarp solves the imported model.
 The original files are not rewritten and MF6 is not executed. An optional
 reference_head_file points to an existing native MF6 binary head file.
 
+The adapter automatically selects FP64 before importing the solver when
+DarcyWarp precision has not yet been initialised. For a process that has
+already loaded FP32 configuration or kernels, restart Python with
+DARCY_FLOAT=float64. The adapter never reloads kernels or changes an
+initialised solver's precision.
+
 ## Initial supported contract
 
 - Single GWF model, structured DIS with uniform DELR/DELC and positive
