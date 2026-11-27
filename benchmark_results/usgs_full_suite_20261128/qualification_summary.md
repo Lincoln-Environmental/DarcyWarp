@@ -251,3 +251,58 @@ gate. Head RMSE was 1.69e-7 m and the maximum difference was 5.30e-6 m.
 The comparison receipts are under `remaining_20d4381/regional_tight_comparison/`.
 The tally is 60 fully qualified, six more physically accepted awaiting
 reference comparison, and eight solver failures.
+
+### 1301 and 1303 after IMS backtracking
+
+Both mixed-fast CUDA runs started from the archived initial heads and
+reached the 240-outer limit. The model-specific results below use the
+saved head at that limit for each follow-up. Directory names refer to
+`remaining_20d4381/`.
+
+| Model | Original run | Follow-up from the saved head |
+| --- | --- | --- |
+| 1301 | 340.4 s, relative cell imbalance 7.53e-5, head RMSE against cached MF6 0.01563 m | 96 accepted updates reduced flow RMS from 0.03431 to 0.0001722 m³/day and relative imbalance to 3.47e-7. |
+| 1303 | 564.1 s, relative cell imbalance 4.26e-8, head-equivalent RMS 0.01709 m | Holding the correction at zero for exactly disconnected, unforced dry rows gave independent physical acceptance in 35 further updates, 8,432 Krylov iterations and 148.0 s including setup. Final head-equivalent RMS was 1.06e-8 m and relative imbalance was 1.48e-9. |
+
+In 1303, cell `(0, 1926, 3)` ended one representable head above bottom in
+both solvers. Its flow residual was −2.99e-20 m³/day, but its diagonal of
+1.19e-21 m²/day translated that into a 25.15 m head-equivalent error.
+After projection to bottom, its residual and all incident flow derivatives
+were exactly zero. The linear solver could move this unconstrained head
+by roundoff and reopen the cell. The replay held it still only while the
+source, residual, package/storage tangent and incident face derivatives
+were all zero. The original-start receipts are in
+`ims_head_limit_original_01`. Replay receipts are in
+`ims_head_limit_continuation_01` and `dry_zero_hold_saved_01`.
+
+### 1606 nonlinear flow and checkpoint results
+
+At a saved 1606 state, a direct diagnostic solve reduced the relative
+linear defect to 2.82e-11. The resulting Newton step proposed a 471.6 m
+rise at a cell where the cached MF6 head was only 42.64 m higher. Even
+1/512 of the step increased the flow residual norm by a factor of 3.15.
+
+A separate check interpolated from a later saved state towards the
+cached MF6 heads. Moving 1% of the way increased flow RMS by a factor
+of 8.59. Halfway it was 214 times the starting value. At the dominant
+cell, the water table rose before the 15.33 m head difference with its
+eastern neighbour had flattened. The midpoint combined 22.27 m of wet
+thickness with a 7.67 m head difference. This produced about 27,100 m³/day
+of eastward flow, compared with 12.6 m³/day at the native endpoint.
+Neither the donor cell nor the drain branch changed at that row.
+
+| Saved-state trial | Measured outcome |
+| --- | --- |
+| Physical Krylov weighting | Two accepted updates reduced relative imbalance from 1.29% to 0.575%. The third line search stalled. |
+| Add delta-bar-delta relaxation alone | The second maximum correction fell from 67.90 to 54.32 m. Flow RMS reached 1.5854 m³/day and the third step still stalled. |
+| Add adaptive pseudo-transient continuation alone | The shift fell from 5.67e-4 to 1.74e-4. Flow RMS reached 1.5880 m³/day and the third step still stalled. |
+| Change the fine and coarse preconditioner | Including the receiving-cell derivative improved the first linear reduction from 0.23% to 0.99%. Using a conservative coarse operator then accepted seven steps, but raw corrections reached 41,340 m and relative imbalance increased from 0.575% to 0.590%. |
+| Permit IMS head-change backtracking after the stall | Over 80 updates, head RMSE against cached MF6 fell from 3.154 to 1.923 m. Relative imbalance rose from 0.575% to 0.636%. |
+| Continue with adaptive pseudo-transient continuation and IMS backtracking | Over the next 80 updates, flow RMS fell from 1.374 to 0.8524 m³/day, relative imbalance fell to 0.386%, and the final maximum proposed correction was 9.01 m. |
+
+The isolated runs are in `weight_checkpoint_01`, `weight_dbd_only_01`,
+`weight_ptc_only_01`, `directed_fine_saved_01` and
+`conservative_coarse_saved_01`. The two successive 80-update runs are in
+`mf6_backtrack_dvclose_01` and `adaptive_backtrack_continuation_01`.
+All three models remain in the eight outstanding original-start solver
+failures alongside 1404, 1502, 1503, 1504 and 1809.
