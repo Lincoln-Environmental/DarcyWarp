@@ -260,6 +260,7 @@ class ImportedModel:
     packages: tuple
     length_units: str
     time_units: str
+    newton_under_relaxation: bool = False
 
 
 def import_simulation(simulation):
@@ -306,8 +307,11 @@ def import_simulation(simulation):
     if np.any(raw_types[active] < 0):
         raise UnsupportedMF6Model("NPF: negative ICELLTYPE is unsupported")
     cell_type = np.where(active & (raw_types > 0), 1, 0)
-    if cell_type.any() and not _present(_data(gwf.name_file, "newtonoptions")):
+    newton_options = _data(gwf.name_file, "newtonoptions", default=())
+    if cell_type.any() and not _present(newton_options):
         raise UnsupportedMF6Model("Convertible NPF cells require the MF6 NEWTON option")
+    newton_under_relaxation = any(
+        str(keyword).upper() == "UNDER_RELAXATION" for record in newton_options for keyword in record)
     for name in ("angle1", "angle2", "angle3"):
         if np.any(_array(npf, name, shape, default=0)[active] != 0):
             raise UnsupportedMF6Model(f"NPF: rotated anisotropy ({name}) is unsupported")
@@ -371,7 +375,8 @@ def import_simulation(simulation):
     return ImportedModel(gwf.name, shape, dx, dy, interfaces, active, initial,
                          kx, ky, kz, cell_type, ss, sy, tuple(periods), boundaries,
                          str(_data(dis, "length_units", "UNSPECIFIED")),
-                         str(_data(tdis, "time_units", "UNSPECIFIED")))
+                         str(_data(tdis, "time_units", "UNSPECIFIED")),
+                         newton_under_relaxation=newton_under_relaxation)
 
 
 def _list_schedule(package, nper):
@@ -843,6 +848,7 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
     profile, options = _import_solver_options(model=model, device=device,
                                               precision=precision, solver_options=options)
     resolved = _serialisable_controls(options)
+    resolved["mf6_newton_under_relaxation"] = model.newton_under_relaxation
     progress("Benchmark profile", file=profile, precision=precision)
     progress("Resolved solver controls", krylov=options.get("npf_krylov_method"),
              preconditioner=options.get("npf_preconditioner"),
@@ -868,6 +874,7 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
         with WarpDarcySolver3D(nx=nx, ny=ny, nz=nz, dx=model.dx, dy=model.dy,
                                device=device, formulation="mf6_6_6_2_npf",
                                implementation="fast", solver="kcycle") as solver:
+            solver._mf6_newton_under_relaxation = model.newton_under_relaxation
             for kper, (transient, lengths) in enumerate(model.periods):
                 progress("Translating stress period", period=f"{kper + 1}/{len(model.periods)}",
                          mode="transient" if transient else "steady", steps=len(lengths))

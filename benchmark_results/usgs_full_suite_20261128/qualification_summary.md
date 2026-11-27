@@ -143,3 +143,47 @@ The archived MF6 comparison missed only the two head gates. A new
 MF6 reference at `dvclose=1e-6` took 135.4 s. The same DarcyWarp heads
 passed every comparison gate against that reference, with datum-aligned
 RMSE 4.02e-8 m and maximum difference 9.00e-6 m.
+
+## Targeted MF6 Newton-guard qualification
+
+The documented follow-up tally was 55 fully qualified, six awaiting a tight
+MF6 comparison, and 13 solver failures. Four of those solver failures now
+pass all gates from the archived initial heads. The tally is **59 fully
+qualified, six awaiting tighter comparisons, and nine solver failures**.
+The remaining failures are 1301, 1303, 1404, 1502, 1503, 1504, 1606, 1807,
+and 1809. These are targeted results, with no full-suite rerun.
+
+| Model | MF6 reference | DarcyWarp wall s | Newton / Krylov | Relative cell imbalance | Head RMSE m | Head maximum m |
+|---|---|---:|---:|---:|---:|---:|
+| 1018 | `dvclose=1e-6` | 91.7 | 112 / 2131 | 1.23e-10 | 1.09e-7 | 4.83e-6 |
+| 1102 | archived | 63.8 | 168 / 3854 | 9.20e-12 | 7.16e-5 | 4.77e-3 |
+| 1210 | `dvclose=1e-6` | 56.0 | 79 / 1224 | 9.79e-13 | 2.33e-7 | 1.58e-6 |
+| 1304 | archived | 185.3 | 239 / 16181 | 8.78e-10 | 4.83e-5 | 9.86e-4 |
+| 1801 regression | cached `dvclose=1e-6` | 106.7 | 44 / 5450 | 1.35e-12 | 4.02e-8 | 9.00e-6 |
+
+The 1018 and 1210 tight references took 1233.5 and 736.2 seconds. Their
+DarcyWarp solutions were reused for comparison. Their reports are in
+`remaining_20d4381/regional_tight_comparison/`. The original DarcyWarp
+reports for 1018 and 1102 are in `remaining_20d4381/refinement_krylov_budget/`.
+The 1210 DarcyWarp report is in `remaining_20d4381/spatial_refinement_pending/`.
+The 1304 and 1801 CUDA reruns, audits, and 1304 accepted-iterate trace are in
+`remaining_20d4381/mf6_guard_c8553b7ba7fa/`. The 1304 wall time includes
+recording the two-cell trace. The 1801 run used the dry projection and
+replayed its mixed-fast K-cycle graph 5450 times.
+
+Both 1304 and 1801 explicitly request `NEWTON UNDER_RELAXATION`. The importer
+now enables the column-bottom rule from that option. A NEWTON-only
+single-cell test with GHB inflow balancing a 2 m³/day well reaches −1 m
+from a 1 m wet start. An exact or rounded-to-bottom trial still preserves
+an isolated previously wet recharge outlet. A trial one representable value
+above bottom retains that value.
+
+Neither 1304 cell changed its four positive lateral connections on any
+accepted iterate. The minimum wet thicknesses were 9.91e-9 m and
+1.14e-12 m, respectively. Both drains stayed inactive at the endpoint.
+Cell indices are zero-based in layer, row, column order.
+
+| Cell | Starting wet thickness m | First accepted connectivity change | Final wet thickness mm | Recharge m³/day | Net face outflow m³/day | Local residual m³/day |
+|---|---:|---|---:|---:|---:|---:|
+| (0, 580, 758) | 29.54957 | none | 0.428511 | 3.61271395625 | 3.61271395712 | −8.71e-10 |
+| (0, 504, 714) | 48.29021 | none | 0.228234 | 3.22035316250 | 3.22035316041 | 2.09e-9 |

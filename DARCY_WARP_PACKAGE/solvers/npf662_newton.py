@@ -876,7 +876,7 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
     initial_shift = controls.steady_initial_shift
     if initial_shift and (workspace.transient or not np.any(case.cell_types[case.active != 0])):
         raise ValueError('Steady continuation requires a convertible steady model')
-    workspace.damp_drying = initial_shift > 0.
+    workspace.damp_drying = getattr(model, '_mf6_newton_under_relaxation', False)
     typical_scale = 0.
     if initial_shift:
         principal = workspace.principal.numpy()

@@ -935,22 +935,22 @@ def candidate_head(head:wp.array(dtype=wp.float64),delta:wp.array(dtype=wp.float
     trial[i]=head[i]
     if free[i]!=0:
         candidate=head[i]+alpha*delta[i]
-        # MF6 NPF under-relaxation uses the lowest bottom reached by
-        # following downward connections. It also applies when the old
-        # head is already at or below that bottom.
-        if damp_drying != 0 and types[i] > 0 and candidate <= bottom[i]:
-            relaxation_bottom = bottom[i]
-            below = right[i, 2]
-            while below >= 0 and bottom[below] < relaxation_bottom:
-                relaxation_bottom = bottom[below]
-                below = right[below, 2]
-            keep_wet = (source[i] > wp.float64(0.) and head[i] > relaxation_bottom
-                        and not has_vertical_connection(i, left, c0))
-            if candidate < relaxation_bottom or (keep_wet and candidate == relaxation_bottom):
-                candidate = relaxation_bottom + wp.float64(0.1) * (head[i] - relaxation_bottom)
-                # The blend is strictly wet in real arithmetic. Retain the
-                # old iterate if rounding would erase the recharge outlet.
-                if keep_wet and candidate == relaxation_bottom:
+        if types[i] > 0 and candidate <= bottom[i]:
+            if damp_drying != 0:
+                # MF6 follows the column down to its lowest connected bottom.
+                relaxation_bottom = bottom[i]
+                below = right[i, 2]
+                while below >= 0 and bottom[below] < relaxation_bottom:
+                    relaxation_bottom = bottom[below]
+                    below = right[below, 2]
+                if candidate < relaxation_bottom:
+                    candidate = relaxation_bottom + wp.float64(0.1) * (head[i] - relaxation_bottom)
+            if (candidate == bottom[i] and head[i] > bottom[i] and source[i] > wp.float64(0.)
+                    and not has_vertical_connection(i, left, c0)):
+                # An exact bottom head closes a previously wet recharge outlet.
+                # The one-tenth step can itself round to bottom.
+                candidate = bottom[i] + wp.float64(0.1) * (head[i] - bottom[i])
+                if candidate == bottom[i]:
                     candidate = head[i]
         trial[i]=candidate
 

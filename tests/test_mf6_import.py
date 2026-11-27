@@ -516,6 +516,53 @@ def test_failed_import_writes_solver_diagnostics(tmp_path, solver_device):
     assert not (output / "darcywarp.hds").exists()
 
 
+def test_newton_only_import_reaches_supported_below_bottom_head(tmp_path, solver_device):
+    directory = tmp_path / "source"
+    simulation = flopy.mf6.MFSimulation(sim_name="pumped", sim_ws=directory)
+    flopy.mf6.ModflowTdis(simulation, time_units="DAYS", perioddata=[(1., 1, 1.)])
+    gwf = flopy.mf6.ModflowGwf(simulation, modelname="aquifer", newtonoptions="NEWTON")
+    flopy.mf6.ModflowIms(simulation)
+    flopy.mf6.ModflowGwfdis(gwf, nlay=1, nrow=1, ncol=1, top=2., botm=0., length_units="METERS")
+    flopy.mf6.ModflowGwfic(gwf, strt=1.)
+    flopy.mf6.ModflowGwfnpf(gwf, icelltype=1, k=1.)
+    flopy.mf6.ModflowGwfghb(gwf, stress_period_data=[((0, 0, 0), 1., 1.)])
+    flopy.mf6.ModflowGwfwel(gwf, stress_period_data=[((0, 0, 0), -2.)])
+    simulation.write_simulation(silent=True)
+
+    report = run_mf6_model(model_directory=directory, output_directory=tmp_path / "darcywarp",
+                           device=solver_device, verbose=False)
+    controls = report["resolved_solver_controls"]
+    assert controls["npf_newton_controls"]["steady_initial_shift"] > 0.
+    assert controls["mf6_newton_under_relaxation"] is False
+    assert report["steps"][0]["physical_acceptance"]["independent_accepted"]
+    with flopy.utils.HeadFile(report["head_file"], precision="double") as reader:
+        assert reader.get_data().item() == pytest.approx(-1., abs=1e-8)
+
+
+@pytest.mark.parametrize("under_relaxation", [False, True])
+def test_recharge_trial_preserves_representable_wet_head(solver_device, under_relaxation):
+    import warp as wp
+    from DARCY_WARP_PACKAGE.solvers.npf662_kernels import candidate_head
+
+    bottom = 10.
+    wet = np.nextafter(bottom, np.inf)
+    drier = np.nextafter(bottom, -np.inf)
+    previous = np.array([wet, np.nextafter(wet, np.inf), wet])
+    targets = np.array([bottom, wet, drier])
+    head = wp.array(data=previous, dtype=wp.float64, device=solver_device)
+    delta = wp.array(data=targets - previous, dtype=wp.float64, device=solver_device)
+    free = wp.ones(shape=3, dtype=wp.int32, device=solver_device)
+    bottoms = wp.full(shape=3, value=bottom, dtype=wp.float64, device=solver_device)
+    neighbors = wp.full(shape=(3, 3), value=-1, dtype=wp.int32, device=solver_device)
+    conductance = wp.zeros(shape=(3, 3), dtype=wp.float64, device=solver_device)
+    source = wp.ones(shape=3, dtype=wp.float64, device=solver_device)
+    trial = wp.empty_like(head)
+    wp.launch(kernel=candidate_head, dim=3, device=solver_device,
+              inputs=[head, delta, free, trial, 1., bottoms, free, int(under_relaxation),
+                      neighbors, neighbors, conductance, source])
+    np.testing.assert_array_equal(trial.numpy(), [wet, wet, wet if under_relaxation else drier])
+
+
 def test_multilayer_convertible_newton_matches_native_mf6(tmp_path, solver_device, pinned_mf6):
     """Verify the full 3D correction operator and the independent MF6 endpoint."""
     import json
@@ -584,6 +631,7 @@ def test_multilayer_convertible_newton_matches_native_mf6(tmp_path, solver_devic
     # saturation derivative is nonzero, rather than at an already converged
     # or confined linear solution.
     model = import_simulation(simulation=load_mf6_workspace(directory=directory))
+    assert model.newton_under_relaxation
     profile, options = _import_solver_options(model=model, device=solver_device,
                                               precision="mixed_fast", solver_options=None)
     shift = options["npf_newton_controls"].steady_initial_shift
