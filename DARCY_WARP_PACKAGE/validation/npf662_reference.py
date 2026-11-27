@@ -532,36 +532,6 @@ class NPF662Reference:
                 return False
         return True
 
-    def _datum_preserves_zero_row_physics(self, *, cell, head, datum, fields):
-        """Check local face, boundary and storage terms for a zero-row shift.
-
-        :param cell: Flat exact-zero row index.
-        :param head: Evaluated head field before datum adjustment.
-        :param datum: Proposed head for this row.
-        :param fields: Physical fields evaluated at ``head``.
-        :return: Whether the proposed value leaves every local physical term
-            unchanged.
-        """
-        if not self._datum_preserves_boundary_activation(cell=cell,
-                old_head=float(head.ravel()[cell]), new_head=float(datum)):
-            return False
-        trial = np.array(head, dtype=np.float64, copy=True)
-        trial.ravel()[cell] = datum
-        incident = (self.left == cell) | (self.right == cell)
-        if np.any(incident):
-            conductance, unused_left, unused_right, unused_saturation = self.face_terms(
-                head=trial)
-            flux = conductance * (trial.ravel()[self.left] - trial.ravel()[self.right])
-            if not np.array_equal(flux[incident], fields['flux'][incident]):
-                return False
-        if hasattr(self, 'storage'):
-            storage_rate, storage_tangent = self.storage(head=trial)
-            if storage_rate.ravel()[cell] != fields['storage_rate'].ravel()[cell]:
-                return False
-            if storage_tangent.ravel()[cell] != fields['storage_tangent'].ravel()[cell]:
-                return False
-        return True
-
     def _datum_state_is_unchanged(self, *, before_head, before_fields, after_head):
         """Compare equation terms before accepting one datum adjustment.
 
@@ -911,12 +881,20 @@ class NPF662Reference:
             previous = float(flat[cell])
             datum = float(datum_heads[cell])
             shift = datum - previous
-            if (shift != 0. and self._datum_preserves_zero_row_physics(
-                    cell=int(cell), head=original, datum=datum, fields=fields)):
-                flat[cell] = datum
-                records.append(dict(kind='exact_zero_equation_row', cell=int(cell),
-                    cells=1, datum_head_m=float(datum),
-                    previous_mean_head_m=float(previous), applied_shift_m=float(shift)))
+            if shift == 0.:
+                continue
+            if not self._datum_preserves_boundary_activation(cell=int(cell),
+                    old_head=previous, new_head=datum):
+                continue
+            if storage is not None:
+                has_storage_capacity = (self.ss.ravel()[cell] > 0. or
+                    (self.case.cell_types.ravel()[cell] != 0 and self.sy.ravel()[cell] > 0.))
+                if has_storage_capacity and self.case.thicknesses.ravel()[cell] > 0.:
+                    continue
+            flat[cell] = datum
+            records.append(dict(kind='exact_zero_equation_row', cell=int(cell),
+                cells=1, datum_head_m=float(datum),
+                previous_mean_head_m=float(previous), applied_shift_m=float(shift)))
         current_fields = fields
         if records:
             unchanged, current_fields = self._datum_state_is_unchanged(

@@ -9,8 +9,8 @@
     250.0,
     250.0
   ],
-  "translation_seconds": 40.105690159020014,
-  "operator_seconds": 9.693414363020565,
+  "translation_seconds": 34.948918862006394,
+  "operator_seconds": 9.91773360100342,
   "translation": {
     "active": {
       "native": {
@@ -811,26 +811,26 @@
     "exact_dry_zero_rows": 25
   },
   "gpu": {
-    "physical_rms": 6.664551789614389e-07,
-    "head_residual_rms": 9.632794923186313e-09,
-    "relative_cell_imbalance": 3.495860313899117e-11,
-    "gross_throughput": 215643931.00763705,
-    "equation_throughput": 215643931.00763705,
-    "residual_l1": 0.007538610603427975,
-    "signed_imbalance": -0.0011994270998960301,
+    "physical_rms": 6.664551789614384e-07,
+    "head_residual_rms": 9.632794923186308e-09,
+    "relative_cell_imbalance": 3.4958603138991264e-11,
+    "gross_throughput": 215643931.0076365,
+    "equation_throughput": 215643931.0076365,
+    "residual_l1": 0.007538610603427976,
+    "signed_imbalance": -0.0011994270998960319,
     "boundary_inflow": 48398150.096263945,
-    "boundary_outflow": 107821965.5044193,
-    "scaled_l2": 1.868415571561059e-07,
+    "boundary_outflow": 107821965.50441934,
+    "scaled_l2": 1.8684155715610604e-07,
     "finite": true,
     "local_balance_valid": true
   },
   "gpu_package_totals": {
-    "ghb_inflow": 48398150.09626403,
-    "ghb_outflow": 46182706.00051828,
-    "ghb_net": 2215444.09574575,
+    "ghb_inflow": 48398150.096263856,
+    "ghb_outflow": 46182706.00051838,
+    "ghb_net": 2215444.095745474,
     "drn_inflow": 0.0,
-    "drn_outflow": 61639259.50390409,
-    "drn_net": -61639259.50390409,
+    "drn_outflow": 61639259.50390408,
+    "drn_net": -61639259.50390408,
     "riv_inflow": 0.0,
     "riv_outflow": 0.0,
     "riv_net": 0.0,
@@ -890,99 +890,27 @@
   },
   "datum_aligned_head_difference": {
     "count": 956378,
-    "min": -2.7085502551926766e-07,
-    "max": 6.8999999996322e-05,
-    "mean": 5.5590377964736e-10,
-    "mae": 9.406479441895815e-10,
-    "rms": 8.769793838173489e-08,
+    "min": -2.7085491183242993e-07,
+    "max": 2.6496443524592905e-05,
+    "mean": 4.4925138689778294e-10,
+    "mae": 8.339955561948959e-10,
+    "rms": 3.967493051537158e-08,
     "percentiles": {
       "p01": -4.629264367395081e-09,
       "p50": 5.684341886080802e-14,
       "p95": 3.4845015761675313e-10,
-      "p99": 5.799768985070841e-09
+      "p99": 5.798382858301919e-09
     },
-    "abs_p95": 1.4142244708636903e-09,
-    "abs_p99": 1.134740671204781e-08,
-    "max_abs": 6.8999999996322e-05
+    "abs_p95": 1.4140539406071078e-09,
+    "abs_p99": 1.1346746191520642e-08,
+    "max_abs": 2.6496443524592905e-05
   },
   "native_datum_adjustments": [
-    {
-      "kind": "exact_zero_equation_row",
-      "cell": 4882,
-      "cells": 1,
-      "initial_mean_head_m": 584.078,
-      "previous_mean_head_m": 584.0779999999999,
-      "applied_shift_m": 1.1368683772161603e-13,
-      "flux_boundary_storage_unchanged": true
-    },
-    {
-      "kind": "exact_zero_equation_row",
-      "cell": 93345,
-      "cells": 1,
-      "initial_mean_head_m": 539.935,
-      "previous_mean_head_m": 539.9349999999996,
-      "applied_shift_m": 3.410605131648481e-13,
-      "flux_boundary_storage_unchanged": true
-    },
-    {
-      "kind": "exact_zero_equation_row",
-      "cell": 103187,
-      "cells": 1,
-      "initial_mean_head_m": 561.244,
-      "previous_mean_head_m": 561.2440000000003,
-      "applied_shift_m": -2.2737367544323206e-13,
-      "flux_boundary_storage_unchanged": true
-    },
-    {
-      "kind": "exact_zero_equation_row",
-      "cell": 316922,
-      "cells": 1,
-      "initial_mean_head_m": 638.089,
-      "previous_mean_head_m": 638.0890000000009,
-      "applied_shift_m": -7.958078640513122e-13,
-      "flux_boundary_storage_unchanged": true
-    },
-    {
-      "kind": "exact_zero_equation_row",
-      "cell": 373448,
-      "cells": 1,
-      "initial_mean_head_m": 594.703,
-      "previous_mean_head_m": 594.7030000000008,
-      "applied_shift_m": -7.958078640513122e-13,
-      "flux_boundary_storage_unchanged": true
-    },
-    {
-      "kind": "exact_zero_equation_row",
-      "cell": 707539,
-      "cells": 1,
-      "initial_mean_head_m": 887.034,
-      "previous_mean_head_m": 887.0340000000007,
-      "applied_shift_m": -6.821210263296962e-13,
-      "flux_boundary_storage_unchanged": true
-    },
-    {
-      "kind": "exact_zero_equation_row",
-      "cell": 1422233,
-      "cells": 1,
-      "initial_mean_head_m": 432.94,
-      "previous_mean_head_m": 432.940033,
-      "applied_shift_m": -3.300000003036985e-05,
-      "flux_boundary_storage_unchanged": true
-    },
-    {
-      "kind": "exact_zero_equation_row",
-      "cell": 1422234,
-      "cells": 1,
-      "initial_mean_head_m": 424.458,
-      "previous_mean_head_m": 424.458069,
-      "applied_shift_m": -6.8999999996322e-05,
-      "flux_boundary_storage_unchanged": true
-    },
     {
       "kind": "balanced_nullspace_component",
       "component": 975329,
       "cells": 3,
-      "initial_mean_head_m": 871.6460000000001,
+      "datum_mean_head_m": 871.6460000000001,
       "previous_mean_head_m": 871.5246523589007,
       "applied_shift_m": 0.12134764109941898,
       "flux_boundary_storage_unchanged": true
@@ -991,7 +919,7 @@
       "kind": "balanced_nullspace_component",
       "component": 1014496,
       "cells": 2,
-      "initial_mean_head_m": 619.265,
+      "datum_mean_head_m": 619.265,
       "previous_mean_head_m": 619.2501422913722,
       "applied_shift_m": 0.014857708627801003,
       "flux_boundary_storage_unchanged": true
@@ -1445,13 +1373,13 @@
     },
     "datum-aligned head maximum": {
       "passed": true,
-      "max_abs": 6.8999999996322e-05,
+      "max_abs": 2.6496443524592905e-05,
       "atol": 0.005,
       "rtol": 0.0
     },
     "datum-aligned head RMS": {
       "passed": true,
-      "max_abs": 8.769793838173489e-08,
+      "max_abs": 3.967493051537158e-08,
       "atol": 0.0001,
       "rtol": 0.0
     },

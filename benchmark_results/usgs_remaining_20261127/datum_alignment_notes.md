@@ -12,9 +12,9 @@ its original head.
 Against the tightly converged 6.6.2 reference, 0403 passes without a datum
 shift: raw and aligned head RMSE are `1.055e-7 m`, and maximum error is
 `1.810e-5 m`. For 0414, the raw comparison remains visible and fails the head
-limits (RMSE `2.160e-4 m`, maximum `0.12135 m`). Ten physically invariant
-datum changes reduce the aligned RMSE to `8.770e-8 m` and maximum error to
-`6.90e-5 m`; the unchanged head gates then pass. The 0414 audit also passes
+limits (RMSE `2.160e-4 m`, maximum `0.12135 m`). Two balanced-component datum
+shifts reduce the aligned RMSE to `3.967e-8 m` and maximum error to
+`2.650e-5 m`; the unchanged head gates then pass. The 0414 audit also passes
 the existing face-flow, package-budget, and physical-residual checks.
 
 Machine-readable metrics and spatial maps are retained in each model's
