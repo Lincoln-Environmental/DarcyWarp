@@ -29,6 +29,25 @@ def layered_column():
     )
 
 
+def test_exact_dry_zero_row_checks_the_unmodified_equation():
+    """A dry isolated zero row can coexist with wet, grounded cells."""
+    shape = (1, 1, 3)
+    ones = np.ones(shape)
+    head = np.array([[[0.5, 0.5, 2.0]]])
+    case = NPF662LayeredCase(kx=ones, ky=ones, kz=ones, active=ones.astype(int),
+        fixed=np.array([[[1, 0, 0]]]), values=head, source=np.zeros(shape), initial=head,
+        dx=1., dy=1., z_interfaces=np.array([[[1., 1., 3.]], [[0., 0., 2.]]]), cell_type=1)
+    accepted, _ = NPF662Reference(case=case).evaluate(head=head)
+    assert accepted["independent_accepted"]
+    assert accepted["exact_dry_zero_rows"] == 1
+
+    forced = replace(case, source=np.array([[[0., 0., 1.]]]))
+    rejected, fields = NPF662Reference(case=forced).evaluate(head=head)
+    assert not rejected["independent_accepted"]
+    assert rejected["exact_dry_zero_rows"] == 0
+    assert fields["residual"][0, 0, 2] == 1.
+
+
 def test_legacy_archives_replay_the_confined_gradient_and_reservoir_exchange():
     archived = Path(__file__).parent / 'fixtures' / 'npf662'
     implicit = load_npf662_case(path=archived / 'experiments_v1.npz')

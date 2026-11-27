@@ -27,6 +27,11 @@ from .face_kernels_3d_f64 import (
 
 @dataclass(frozen=True)
 class NPF662KCycleControls:
+    """Control the multigrid approximation used by the outer Krylov solver.
+
+    :param newton_diagonal: Include the upstream saturation derivative on the
+        diagonal of the current-coefficient preconditioner for Newton steps.
+    """
     levels: int = 5
     min_coarse_n: int = 2
     pre_sweeps: int = 2
@@ -41,6 +46,7 @@ class NPF662KCycleControls:
     coefficient_state: str = 'saturated'
     line_smoother: str = 'jacobi'
     device_hierarchy_build: bool = False
+    newton_diagonal: bool = False
 
     def validate(self):
         if not isinstance(self.device_hierarchy_build, (bool, np.bool_)):
@@ -55,6 +61,10 @@ class NPF662KCycleControls:
             raise ValueError('FP32 preconditioner requires cached_line_factors')
         if self.coefficient_state not in ('saturated', 'current'):
             raise ValueError('coefficient_state must be saturated or current')
+        if not isinstance(self.newton_diagonal, (bool, np.bool_)):
+            raise ValueError('newton_diagonal must be Boolean')
+        if self.newton_diagonal and self.coefficient_state != 'current':
+            raise ValueError('newton_diagonal requires current coefficients')
         if self.line_smoother not in ('jacobi', 'red_black'):
             raise ValueError('line_smoother must be jacobi or red_black')
         if self.line_smoother == 'red_black' and not self.cached_line_factors:
@@ -95,6 +105,21 @@ def unpack_current_faces(coefficients: wp.array2d(dtype=wp.float64), left: wp.ar
     if left[i,0] >= 0: xm[i] = coefficients[left[i,0],0]
     if left[i,1] >= 0: ym[i] = coefficients[left[i,1],1]
     if left[i,2] >= 0: zm[i] = coefficients[left[i,2],2]
+
+
+@wp.kernel
+def add_newton_diagonal(tangent: wp.array(dtype=wp.float64), left: wp.array2d(dtype=wp.int32),
+                        c: wp.array2d(dtype=wp.float64), dl: wp.array2d(dtype=wp.float64),
+                        dr: wp.array2d(dtype=wp.float64), out: wp.array(dtype=wp.float64)):
+    # On an upstream-weighted face, only the donor's diagonal gains dC/dh * dh.
+    i = wp.tid()
+    extra = wp.float64(0.)
+    for axis in range(3):
+        extra += dl[i,axis] - c[i,axis]
+        j = left[i,axis]
+        if j >= 0:
+            extra -= dr[j,axis] + c[j,axis]
+    out[i] = tangent[i] + wp.max(extra, wp.float64(0.))
 
 
 @wp.kernel
@@ -362,11 +387,22 @@ class NPF662KCycleWorkspace:
             raise ValueError('NPF coefficients cannot be represented by the FP32 preconditioner; use float64')
 
     def refresh_current_operator(self, *, workspace, mode):
+        """Refresh the symmetric approximate inverse for this correction.
+
+        :param workspace: Current physical faces and linear correction tangent.
+        :param mode: Newton, Picard or saturated correction selector.
+        """
         fine = self.levels[0]
         coefficients = workspace.c0 if mode == 2 else workspace.c
         wp.launch(kernel=unpack_current_faces, dim=workspace.n,
             inputs=[coefficients, workspace.left, *(face.flatten() for face in fine['faces'])], device=self.device)
-        wp.copy(dest=fine['storage'].flatten(), src=workspace.operator_tangent)
+        tangent = workspace.linear_operator_tangent
+        if mode == 1 and self.controls.newton_diagonal:
+            wp.launch(kernel=add_newton_diagonal, dim=workspace.n, device=self.device,
+                      inputs=[tangent,workspace.left,workspace.c,workspace.dl,workspace.dr,
+                              fine['storage'].flatten()])
+        else:
+            wp.copy(dest=fine['storage'].flatten(), src=tangent)
         self.refresh_storage_device(refresh_faces=True)
 
     def _factor_lines(self, *, level):

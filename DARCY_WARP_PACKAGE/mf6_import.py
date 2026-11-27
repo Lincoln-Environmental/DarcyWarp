@@ -6,11 +6,12 @@ original model's consistent length and time units. This initial adapter is
 deliberately strict about unsupported physical options.
 """
 
-from dataclasses import asdict, dataclass, is_dataclass
+from dataclasses import asdict, dataclass, is_dataclass, replace
 from pathlib import Path
 import json
 import math
 import struct
+from tempfile import TemporaryDirectory
 import warnings
 from time import perf_counter
 
@@ -19,6 +20,52 @@ import numpy as np
 
 class UnsupportedMF6Model(ValueError):
     """An MF6 input requires physics outside the supported import contract."""
+
+
+def load_mf6_workspace(*, directory):
+    """Load FloPy data while preserving native solution-group option ordering.
+
+    MF6 accepts MXITER after an IMS6 record, but FloPy reads it as a
+    package. Move that option in a temporary copy of the name file only.
+
+    :param directory: Original workspace containing mfsim.nam.
+    :return: Loaded FloPy simulation with external arrays based at the original workspace.
+    """
+    import flopy
+
+    directory = Path(directory).resolve()
+    name = directory / "mfsim.nam"
+    original = name.read_text().splitlines(keepends=True)
+    normalized = []
+    group_start = None
+    solution_seen = False
+    for line in original:
+        fields = line.partition("#")[0].upper().split()
+        if fields[:2] == ["BEGIN", "SOLUTIONGROUP"]:
+            group_start = len(normalized)
+            solution_seen = False
+        elif fields[:2] == ["END", "SOLUTIONGROUP"]:
+            group_start = None
+        elif group_start is not None and fields:
+            if fields[0] == "MXITER" and solution_seen:
+                normalized.insert(group_start + 1, line)
+                continue
+            solution_seen |= fields[0].endswith("6")
+        normalized.append(line)
+    options = dict(strict=True, verbosity_level=0)
+    if normalized == original:
+        return flopy.mf6.MFSimulation.load(sim_ws=directory, **options)
+    warnings.warn("Reading the MF6 solution group through a temporary name file with MXITER before IMS6.",
+                  UserWarning, stacklevel=2)
+    with TemporaryDirectory(prefix=".darcywarp-mf6-", dir=directory.parent) as temporary:
+        staged = Path(temporary)
+        (staged / name.name).write_text("".join(normalized))
+        for path in directory.iterdir():
+            if path != name:
+                (staged / path.name).symlink_to(path, target_is_directory=path.is_dir())
+        simulation = flopy.mf6.MFSimulation.load(sim_ws=staged, **options)
+        simulation.set_sim_path(path=directory)
+    return simulation
 
 
 def _data(package, name, default=None):
@@ -627,6 +674,12 @@ def _import_solver_options(*, model, device, precision, solver_options):
     saved = json.loads(path.read_text())
     overrides = dict(solver_options or {})
     options = dict(saved["solve"], npf_preconditioner="kcycle", npf_krylov_method="fgmres")
+    regional = (str(device).startswith("cuda") and model.shape[0] == 1
+                and np.count_nonzero(model.cell_type) >= 100_000
+                and np.all(model.cell_type[model.active] != 0)
+                and {"ghb", "drn"} <= kinds and all(not transient for transient, _ in model.periods))
+    if regional:
+        options.update(krylov_restart=16, max_cycles=500)
     # The saved runtime profiles are for CUDA transient histories. Steady
     # solves use the independent endpoint audit; CPU uses host acceptance.
     options["npf_device_native"] = bool(
@@ -640,9 +693,19 @@ def _import_solver_options(*, model, device, precision, solver_options):
             multigrid = dict(saved["multigrid"],
                 preconditioner_precision="float32" if precision == "mixed_fast" else "float64",
                 use_cuda_graph=True)
+            if regional:
+                multigrid["newton_diagonal"] = True
             options["npf_kcycle_controls"] = NPF662KCycleControls(**multigrid)
     if options.get("npf_newton_controls") is None:
-        options["npf_newton_controls"] = NPF662NewtonControls(**saved["newton"])
+        newton = NPF662NewtonControls(**saved["newton"])
+        if regional:
+            # Use the full-thickness horizontal conductance scale so the
+            # correction shift follows the model's length and time units.
+            thickness = (model.interfaces[0] - model.interfaces[1])[model.active[0]]
+            typical_transmissivity = np.median(model.kx[model.active] * thickness)
+            newton = replace(newton, steady_initial_shift=0.08 * typical_transmissivity,
+                             max_head_change_m=5. * np.median(thickness), inner_forcing=0.01)
+        options["npf_newton_controls"] = newton
     return profile, options
 
 
@@ -681,15 +744,16 @@ class _ImportProgress:
 
 
 def _prepare_run_outputs(output, *, overwrite, reference_head_file=None):
-    """Prepare only the three files owned by the import driver.
+    """Prepare the files owned by the import driver.
 
     :param output: Resolved output directory.
     :param overwrite: Replace existing run files when explicitly enabled.
     :param reference_head_file: Optional external MF6 reference, never replaced.
-    :return: Final head path, partial head path and report path.
+    :return: Final head, partial head, report and rejected-state paths.
     """
     paths = tuple(output / name for name in
-                  ("darcywarp.hds", "darcywarp.hds.partial", "darcywarp_report.json"))
+                  ("darcywarp.hds", "darcywarp.hds.partial", "darcywarp_report.json",
+                   "darcywarp_rejected.npz"))
     if reference_head_file is not None:
         reference = Path(reference_head_file).expanduser().resolve()
         if any(path.resolve() == reference for path in paths):
@@ -722,8 +786,8 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
     :param solver_options: Optional native NPF solver controls, not MF6 IMS controls.
     :param reference_head_file: Optional existing MF6 binary head file for
         comparison at common (kstp, kper) records.
-    :param overwrite: Replace previous DarcyWarp head, partial head and report
-        files, leaving every unrelated file in the directory untouched.
+    :param overwrite: Replace the previous run's head, partial head, report and
+        rejected-state files.
     :param ignore_inactive_boundaries: Explicitly omit non-CHD list stress
         entries on excluded IDOMAIN cells; default is strict MF6 validation.
         Counts are reported by period and package.
@@ -748,8 +812,7 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
     if reserved.intersection(options):
         raise ValueError("Physical solver controls belong to the imported MF6 model")
     progress("Reading MF6 workspace", path=source)
-    simulation = flopy.mf6.MFSimulation.load(sim_ws=str(source), strict=True,
-                                              verbosity_level=0)
+    simulation = load_mf6_workspace(directory=source)
     progress("Translating static grid and properties")
     model = import_simulation(simulation)
     total_steps = sum(len(lengths) for transient, lengths in model.periods)
@@ -777,11 +840,15 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
                                               precision=precision, solver_options=options)
     resolved = _serialisable_controls(options)
     progress("Benchmark profile", file=profile, precision=precision)
-    progress("Resolved solver controls", controls=json.dumps(resolved, sort_keys=True))
+    progress("Resolved solver controls", krylov=options.get("npf_krylov_method"),
+             preconditioner=options.get("npf_preconditioner"),
+             restart=options.get("krylov_restart"),
+             krylov_per_outer=options.get("max_cycles"), max_outer=options.get("max_outer"),
+             initial_linear_shift=options["npf_newton_controls"].steady_initial_shift)
     progress("Reading stress-period schedules")
     schedules = _schedules(model)
     progress("Stress-period schedules ready")
-    head_path, partial_path, report_path = _prepare_run_outputs(
+    head_path, partial_path, report_path, rejected_path = _prepare_run_outputs(
         output, overwrite=overwrite, reference_head_file=reference_head_file
     )
 
@@ -790,6 +857,7 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
     current_mask = None
     previous_ghb = False
     elapsed = 0.0
+    import_seconds = perf_counter() - started
     steps = []
     excluded_boundaries = []
     with partial_path.open("xb") as stream:
@@ -799,6 +867,7 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
             for kper, (transient, lengths) in enumerate(model.periods):
                 progress("Translating stress period", period=f"{kper + 1}/{len(model.periods)}",
                          mode="transient" if transient else "steady", steps=len(lengths))
+                translation_started = perf_counter()
                 diagnostics = {}
                 forcing = _stress_period(
                     model, schedules, kper,
@@ -816,6 +885,7 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
                          riv=len(forcing["riv_entries"] or ()),
                          excluded=diagnostics)
                 build_started = perf_counter()
+                import_seconds += build_started - translation_started
                 rebuild = current_mask is None or not np.array_equal(current_mask, forcing["bc_mask"])
                 progress("Building layered operator" if rebuild else "Updating boundary/source fields")
                 if rebuild:
@@ -837,7 +907,8 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
                     solver.update_drn_entries(forcing["drn_entries"])
                     solver.update_riv_entries(forcing["riv_entries"])
                 previous_ghb = has_ghb
-                progress("Operator ready", seconds=perf_counter() - build_started)
+                operator_seconds = perf_counter() - build_started
+                progress("Operator ready", seconds=operator_seconds)
                 pertim = 0.0
                 for kstp, dt in enumerate(lengths):
                     solver.update_initial_head(previous)
@@ -867,6 +938,13 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
                              solve_seconds=info.get("seconds"),
                              total_seconds=info.get("public_total_seconds"))
                     if not info["converged"]:
+                        workspace = solver._session._npf662_workspace_holder.get("workspace")
+                        rejected = dict(head=np.asarray(head, dtype=np.float64),
+                                        active=model.active, fixed=forcing["bc_mask"])
+                        if workspace is not None:
+                            rejected["residual"] = workspace.residual.numpy().reshape(model.shape)
+                            rejected["scaled_residual"] = workspace.rhs.numpy().reshape(model.shape)
+                        np.savez(rejected_path, **rejected)
                         failed = dict(model=model.name, shape=list(model.shape),
                             device=device, precision_profile=precision,
                             benchmark_profile=profile, resolved_solver_controls=resolved,
@@ -874,6 +952,7 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
                             accepted_steps=len(steps), steps=steps, converged=False,
                             excluded_boundary_entries=excluded_boundaries,
                             failed_step=dict(kper=kper+1, kstp=kstp+1,
+                                rejected_state_file=str(rejected_path),
                                 stop_reason=info.get("stop_reason"),
                                 final_metrics=metrics,
                                 outer_iterations=info.get("outer_iterations"),
@@ -899,6 +978,11 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
                     steps.append(dict(kstp=kstp + 1, kper=kper + 1, dt=float(dt),
                                       totim=elapsed, transient=transient,
                                       converged=True, seconds=info.get("public_total_seconds"),
+                                      operator_seconds=operator_seconds if kstp == 0 else 0.,
+                                      reference_setup_seconds=info.get("reference_setup_seconds"),
+                                      solver_setup_seconds=info.get("setup_seconds"),
+                                      solve_seconds=info.get("seconds"),
+                                      dry_projection_used=info.get("dry_projection_used", False),
                                       head_precision=info.get("precision"),
                                       preconditioner_precision=info.get("multigrid", {}).get("precision"),
                                       effective_solver_settings=_serialisable_controls(
@@ -916,6 +1000,7 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
                     previous = head.copy()
     partial_path.rename(head_path)
     report = dict(model=model.name, shape=list(model.shape), device=device,
+                  active_cells=int(model.active.sum()), import_seconds=import_seconds,
                   precision_profile=precision,
                   benchmark_profile=profile, resolved_solver_controls=resolved,
                   initial_hydraulic_state=initial_diagnostics,

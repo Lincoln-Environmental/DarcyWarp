@@ -715,7 +715,13 @@ class NPF662Reference:
         edges=conductance>0.
         graph=sparse.coo_matrix((np.ones(int(edges.sum())),(self.left[edges],self.right[edges])),shape=self.matrix.shape).tocsr()
         unused,labels=connected_components(csgraph=graph,directed=False)
-        active_labels=set(labels[c.active.ravel()!=0])
+        # A fully dry isolated convertible cell with an exact zero equation
+        # has no head to solve for. A wet floating component or any dry row
+        # with nonzero flux or forcing still requires a hydraulic restraint.
+        dry_zero = (self.free & (c.cell_types > 0) & (head <= c.bottoms) &
+                    (diagonal == 0.) & (residual == 0.) & (c.source == 0.) &
+                    (boundary_gross == 0.))
+        active_labels=set(labels[active.ravel() & ~dry_zero.ravel()])
         grounded_labels=set(labels[(c.active.ravel()!=0)&((c.fixed.ravel()!=0)|(boundary_tangent.ravel()>0.))])
         ungrounded=len(active_labels-grounded_labels)
         result=dict(**checks,head_residual_rms=hrms,physical_rms=rms,
@@ -727,7 +733,8 @@ class NPF662Reference:
             chd_inflow=chd_in,chd_outflow=chd_out,
             fixed_cell_source_total=stable_sum(values=c.source[c.fixed!=0]),free_cells=int(self.free.sum()),
             fixed_reservoir_required_inflow=stable_sum(values=(divergence-c.source)[c.fixed!=0]),
-            ungrounded_current_components=ungrounded,physical_metrics_valid=metrics_valid,
+            ungrounded_current_components=ungrounded,exact_dry_zero_rows=int(dry_zero.sum()),
+            physical_metrics_valid=metrics_valid,
             final_acceptance_thresholds=thresholds)
         result['physical_metrics_valid']=bool(metrics_valid and np.all(np.isfinite([
             result['signed_imbalance'],result['fixed_cell_source_total'],result['fixed_reservoir_required_inflow']])))

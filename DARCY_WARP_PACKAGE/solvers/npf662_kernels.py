@@ -915,10 +915,34 @@ def diagonal_action(x:wp.array(dtype=wp.float64),y:wp.array(dtype=wp.float64),z:
 
 @wp.kernel
 def candidate_head(head:wp.array(dtype=wp.float64),delta:wp.array(dtype=wp.float64),
-    free:wp.array(dtype=wp.int32),trial:wp.array(dtype=wp.float64),alpha:wp.float64):
+    free:wp.array(dtype=wp.int32),trial:wp.array(dtype=wp.float64),alpha:wp.float64,
+    bottom:wp.array(dtype=wp.float64),types:wp.array(dtype=wp.int32),damp_drying:int):
     i=wp.tid()
     trial[i]=head[i]
-    if free[i]!=0:trial[i]=head[i]+alpha*delta[i]
+    if free[i]!=0:
+        candidate=head[i]+alpha*delta[i]
+        if damp_drying!=0 and types[i]>0 and candidate<bottom[i]:
+            candidate=bottom[i]+wp.float64(0.1)*(head[i]-bottom[i])
+        trial[i]=candidate
+
+
+@wp.kernel
+def shift_linear_diagonal(physical: wp.array(dtype=wp.float64), shift: wp.float64,
+                          linear: wp.array(dtype=wp.float64)):
+    i = wp.tid()
+    linear[i] = physical[i] + shift
+
+
+@wp.kernel
+def project_dry_trial(head: wp.array(dtype=wp.float64), bottom: wp.array(dtype=wp.float64),
+                      types: wp.array(dtype=wp.int32), free: wp.array(dtype=wp.int32),
+                      source: wp.array(dtype=wp.float64), ghb: wp.array(dtype=wp.float64),
+                      head_tolerance: wp.float64, trial: wp.array(dtype=wp.float64)):
+    i = wp.tid()
+    trial[i] = head[i]
+    if free[i] != 0 and types[i] > 0 and source[i] == wp.float64(0.) and ghb[i] == wp.float64(0.):
+        if wp.abs(head[i] - bottom[i]) <= head_tolerance:
+            trial[i] = bottom[i]
 
 
 @wp.kernel

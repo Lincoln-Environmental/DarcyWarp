@@ -11,7 +11,7 @@ import pytest
 flopy = pytest.importorskip("flopy")
 
 from DARCY_WARP_PACKAGE.mf6_import import (
-    UnsupportedMF6Model, import_simulation, run_mf6_model,
+    UnsupportedMF6Model, import_simulation, load_mf6_workspace, run_mf6_model,
     timestep_lengths, _schedules, _stress_period, _add_array_recharge,
     _prepare_interfaces, _prepare_run_outputs, _import_solver_options,
 )
@@ -62,6 +62,25 @@ def test_timestep_sequence():
     np.testing.assert_allclose(timestep_lengths(6, 3, 1), [2, 2, 2])
     with pytest.raises(UnsupportedMF6Model):
         timestep_lengths(1, 0, 1)
+
+
+def test_mxiter_after_ims_keeps_archived_inputs(tmp_path):
+    """FloPy can load a native-valid trailing MXITER without editing input."""
+    workspace = tmp_path / "archive"
+    original = make_simulation(workspace=workspace)
+    original.get_model().npf.k.store_as_external_file(external_file_path="conductivity.txt")
+    original.write_simulation(silent=True)
+    namefile = workspace / "mfsim.nam"
+    lines = namefile.read_text().splitlines(keepends=True)
+    ims = next(index for index, line in enumerate(lines) if line.lstrip().upper().startswith("IMS6 "))
+    lines.insert(ims + 1, "  MXITER 1\n")
+    namefile.write_text("".join(lines))
+    archived = namefile.read_bytes()
+
+    with pytest.warns(UserWarning, match="MXITER before IMS6"):
+        loaded = import_simulation(simulation=load_mf6_workspace(directory=workspace))
+    assert namefile.read_bytes() == archived
+    np.testing.assert_array_equal(loaded.kx[loaded.active], 2.)
 
 
 def test_import_translation(tmp_path):
