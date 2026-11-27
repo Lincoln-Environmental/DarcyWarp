@@ -2,7 +2,7 @@
   "solve": {
     "npf_device_native": true,
     "npf_final_relative_tolerance": 1e-7,
-    "max_outer": 80,
+    "max_outer": 240,
     "max_cycles": 4000,
     "krylov_restart": 8
   },

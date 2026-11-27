@@ -81,9 +81,16 @@ FP64 preconditioning did not restore balance. Seven levels improved the endpoint
 
 The largest rejected residual rows inspected in 1018 and 1304 lie on listed high-conductance drains, but the rejected heads there are respectively 96.8 m and 68.2 m below drain elevation. Those entries are inactive at those heads, so their drain discharge does not explain the large local residuals. The residual is concentrated in the regional flow field; its nonlinear cause remains unresolved.
 
-### Controlled 1015 iteration-cap diagnostic
+### Controlled iteration-cap diagnostics
 
-The 1015 case was rerun from the archived initial heads with the mixed-fast defaults and only the diagnostic `max_outer` raised from 80 to 240. DarcyWarp converged at outer step 161 (5,668 Krylov iterations; 62.2 s numerical solve, 119 s end to end). Independent CPU physical acceptance passed with 9.19e-6 m³/day RMS residual and 1.10e-8 relative cell imbalance. Against a separate native MF6 6.6.2 run at `dvclose=1e-6` (584.1 s), the unchanged comparison gates all passed: head RMSE 2.88e-6 m, maximum absolute head difference 8.46e-5 m, and face flows, package budgets, and physical residual checks within tolerance. Raw and datum-aligned head errors are identical because this case has no floating datum. This establishes that the original 80-step cap alone prevented this case from reaching its valid solution. It is a controlled diagnostic, not an official qualification pass; defaults and the 28/74 official result have not been changed. Full comparison maps and JSON receipts are retained under `solver_diagnostics/outer_240/1015_1020_1021_1022_1023_MF6_SS_Unconfined_250/`.
+Two independent outer-limit cases were rerun from archived initial heads with mixed-fast controls and only the diagnostic `max_outer` raised from 80 to 240:
+
+| Model | Accepted outer steps | Krylov iterations | DarcyWarp total (s) | Tight MF6 (s) | Head RMSE (m) | Maximum difference (m) | Physical RMS (m³/day) | Relative imbalance |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1015_1020_1021_1022_1023 | 161 | 5,668 | 119.0 | 584.1 | 2.88e-6 | 8.46e-5 | 9.19e-6 | 1.10e-8 |
+| 1308_1309 | 123 | 778 | 19.1 | 55.7 | 2.61e-7 | 2.20e-6 | 2.12e-10 | 3.76e-12 |
+
+Both independently pass the existing head, face-flow, package-budget and physical acceptance gates against separate native MF6 6.6.2 runs at `dvclose=1e-6`. Their unchanged inputs, equations, preconditioner, and tolerances show that the original 80-step cap alone prevented these two cases from reaching valid solutions. These are controlled diagnostics; the official 74-case table still records runs at the then-current 80-step cap. Per-case comparison maps and JSON receipts are retained under `solver_diagnostics/outer_240/`.
 
 ## Setup cost correction
 

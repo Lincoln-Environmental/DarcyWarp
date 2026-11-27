@@ -484,12 +484,12 @@ def test_import_progress_and_effective_controls(tmp_path, solver_device, capsys)
                    "Final physical acceptance", "Step accepted", "Run complete"):
         assert phrase in output
     assert report["benchmark_profile"] == "npf_ghb_five_level_controls.json"
-    assert report["resolved_solver_controls"]["max_outer"] == 80
+    assert report["resolved_solver_controls"]["max_outer"] == 240
     for step in report["steps"]:
         effective = step["effective_solver_settings"]
         assert effective["restart"] == 8
         assert effective["krylov_budget_per_outer"] == 4000
-        assert effective["max_outer"] == 80
+        assert effective["max_outer"] == 240
         assert effective["convergence"]["relative_cell_imbalance"] == 1e-7
     quiet = run_mf6_model(workspace, tmp_path / "quiet", device=solver_device,
                           verbose=False)
