@@ -630,8 +630,7 @@ def test_multilayer_convertible_newton_matches_native_mf6(tmp_path, solver_devic
                 np.testing.assert_allclose(y.numpy()[free], expected[free],
                                            rtol=1e-12, atol=1e-12)
                 np.testing.assert_array_equal(state.residual.numpy(), original_residual)
-            # A dry but vertically connected convertible cell has a physical
-            # head, not an arbitrary zero row. The damping must not clip it.
+            # An upper convertible cell may fall below its own bottom.
             cell = (0, 1, 2)
             delta = np.zeros(shape)
             target = case.bottoms[cell] - 1.
@@ -640,6 +639,20 @@ def test_multilayer_convertible_newton_matches_native_mf6(tmp_path, solver_devic
             state.damp_drying = True
             state.candidate(alpha=1.)
             assert state.trial.numpy().reshape(shape)[cell] == pytest.approx(target)
+
+            # MF6 follows the full downward connection, including confined
+            # layers, and applies the rule at and below the column bottom.
+            column_bottom = case.bottoms[-1, 1, 2]
+            target = column_bottom - 2.
+            for previous in (start[cell], column_bottom, column_bottom - 1.):
+                head = start.copy()
+                head[cell] = previous
+                delta[cell] = target - previous
+                state.head.assign(head.ravel())
+                state.delta.assign(delta.ravel())
+                state.candidate(alpha=1.)
+                expected = column_bottom + 0.1 * (previous - column_bottom)
+                assert state.trial.numpy().reshape(shape)[cell] == pytest.approx(expected)
         finally:
             if hierarchy is not None:
                 hierarchy.close()

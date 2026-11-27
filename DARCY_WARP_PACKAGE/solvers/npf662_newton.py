@@ -633,7 +633,7 @@ class NPF662Workspace:
 
     def candidate(self,*,alpha):
         wp.launch(kernel=kernels.candidate_head,dim=self.n,inputs=[self.head,self.delta,self.free,self.trial,
-            alpha,self.bottom,self.types,int(self.damp_drying),self.left,self.c0,self.source],
+            alpha,self.bottom,self.types,int(self.damp_drying),self.right,self.left,self.c0,self.source],
             device=self.device)
         return self.evaluate(trial=True)
 
