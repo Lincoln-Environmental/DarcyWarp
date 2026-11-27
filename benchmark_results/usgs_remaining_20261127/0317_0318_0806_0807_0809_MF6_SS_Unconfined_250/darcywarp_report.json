@@ -1,0 +1,301 @@
+{
+  "model": "gwf0",
+  "shape": [
+    1,
+    2125,
+    1381
+  ],
+  "device": "cuda:0",
+  "active_cells": 1684753,
+  "import_seconds": 19.018164837005315,
+  "precision_profile": "mixed_fast",
+  "benchmark_profile": "npf_ghb_five_level_controls.json",
+  "resolved_solver_controls": {
+    "npf_device_native": true,
+    "npf_final_relative_tolerance": 1e-07,
+    "max_outer": 80,
+    "max_cycles": 500,
+    "krylov_restart": 16,
+    "npf_preconditioner": "kcycle",
+    "npf_krylov_method": "fgmres",
+    "npf_kcycle_controls": {
+      "levels": 5,
+      "min_coarse_n": 2,
+      "pre_sweeps": 2,
+      "post_sweeps": 2,
+      "coarse_sweeps": 2,
+      "cycles": 1,
+      "omega": 0.8,
+      "use_cuda_graph": true,
+      "cycle_kind": "k",
+      "cached_line_factors": true,
+      "preconditioner_precision": "float32",
+      "coefficient_state": "current",
+      "line_smoother": "jacobi",
+      "device_hierarchy_build": true,
+      "newton_diagonal": true
+    },
+    "npf_newton_controls": {
+      "inner_forcing": 0.01,
+      "newton_budget_fraction": 0.75,
+      "line_search_steps": 20,
+      "max_head_change_m": 280.0,
+      "recovery_growth": 1.1,
+      "adaptive_forcing": false,
+      "forcing_min": 0.0001,
+      "forcing_max": 0.3,
+      "forcing_power": 1.5,
+      "timestep_predictor": true,
+      "timestep_predictor_order": 1,
+      "tiled_reductions": true,
+      "reuse_trial_state": true,
+      "linear_stagnation_restarts": 4,
+      "linear_stagnation_min_reduction": 0.001,
+      "linear_minimum_reduction": 0.01,
+      "steady_initial_shift": 7.488966399251104
+    }
+  },
+  "initial_hydraulic_state": {
+    "head_min": 0.0,
+    "head_max": 182.406,
+    "thickness_min": 4.999999995,
+    "thickness_max": 100.00000005000001,
+    "conductivity_min": 0.068575128,
+    "conductivity_max": 56.370155,
+    "initially_dry": 0,
+    "initially_saturated": 346185
+  },
+  "ignore_inactive_boundaries": false,
+  "excluded_boundary_entries": [
+    {
+      "kper": 1,
+      "packages": {
+        "GHB": {
+          "chd": {
+            "count": 3429,
+            "first_cell": [
+              0,
+              1448,
+              1288
+            ]
+          }
+        },
+        "DRN": {
+          "chd": {
+            "count": 799,
+            "first_cell": [
+              0,
+              1448,
+              1320
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "length_units": "meters",
+  "time_units": "days",
+  "head_file": "/home/patrickdurney/PycharmProjects/DarcyWarp/benchmark_results/usgs_remaining_20261127/0317_0318_0806_0807_0809_MF6_SS_Unconfined_250/darcywarp.hds",
+  "accepted_steps": 1,
+  "steps": [
+    {
+      "kstp": 1,
+      "kper": 1,
+      "dt": 1.0,
+      "totim": 1.0,
+      "transient": false,
+      "converged": true,
+      "seconds": 10.033775185002014,
+      "operator_seconds": 6.764606818993343,
+      "reference_setup_seconds": 4.827444706985261,
+      "solver_setup_seconds": 0.498281306005083,
+      "solve_seconds": 1.1177364150062203,
+      "dry_projection_used": false,
+      "head_precision": "float64",
+      "preconditioner_precision": "float32",
+      "effective_solver_settings": {
+        "backend": "device_newton_fgmres",
+        "krylov_method": "FGMRES",
+        "restart": 16,
+        "krylov_budget_per_outer": 500,
+        "max_outer": 80,
+        "nonlinear": {
+          "inner_forcing": 0.01,
+          "newton_budget_fraction": 0.75,
+          "line_search_steps": 20,
+          "max_head_change_m": 280.0,
+          "recovery_growth": 1.1,
+          "adaptive_forcing": false,
+          "forcing_min": 0.0001,
+          "forcing_max": 0.3,
+          "forcing_power": 1.5,
+          "timestep_predictor": true,
+          "timestep_predictor_order": 1,
+          "tiled_reductions": true,
+          "reuse_trial_state": true,
+          "linear_stagnation_restarts": 4,
+          "linear_stagnation_min_reduction": 0.001,
+          "linear_minimum_reduction": 0.01,
+          "steady_initial_shift": 7.488966399251104
+        },
+        "hierarchy": {
+          "controls": {
+            "levels": 5,
+            "min_coarse_n": 2,
+            "pre_sweeps": 2,
+            "post_sweeps": 2,
+            "coarse_sweeps": 2,
+            "cycles": 1,
+            "omega": 0.8,
+            "use_cuda_graph": true,
+            "cycle_kind": "k",
+            "cached_line_factors": true,
+            "preconditioner_precision": "float32",
+            "coefficient_state": "current",
+            "line_smoother": "jacobi",
+            "device_hierarchy_build": true,
+            "newton_diagonal": true
+          },
+          "smoother": "vertical_line",
+          "coefficient_state": "current",
+          "precision": "float32",
+          "dimensions": [
+            [
+              1,
+              2125,
+              1381
+            ],
+            [
+              1,
+              1063,
+              691
+            ],
+            [
+              1,
+              532,
+              346
+            ],
+            [
+              1,
+              266,
+              173
+            ],
+            [
+              1,
+              133,
+              87
+            ]
+          ],
+          "actual_levels": 5,
+          "coarsening_factors": [
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "construction_seconds": 0.2684916879807133,
+          "hierarchy_reused": false,
+          "coefficients_refreshed": false,
+          "value_refresh_count": 0,
+          "device_storage_refresh_count": 28,
+          "refresh_graph_captures": 1,
+          "refresh_graph_replays": 28,
+          "refresh_graph_fallback": false,
+          "allocated_device_bytes": 954484476,
+          "applications": 103,
+          "cycles": 103,
+          "graph_captures": 1,
+          "graph_replays": 103,
+          "graph_capture_failed": false,
+          "graph_error": null,
+          "inner_scalar_readbacks": 0,
+          "scalar_readbacks": 157,
+          "synchronization_seconds": 0.5245966950315051,
+          "device_apply_seconds": 0.40066358017921455,
+          "preconditioner_enqueue_seconds": 0.009952510008588433
+        },
+        "preconditioner": "kcycle",
+        "convergence": {
+          "physical_rms_m3_day": 1e-12,
+          "relative_cell_imbalance": 1e-07,
+          "head_equivalent_rms_m": 1e-06,
+          "prescribed_head_error_m": 1e-10
+        }
+      },
+      "final_metrics": {
+        "physical_rms": 4.441890997459297e-09,
+        "head_residual_rms": 2.753331983165154e-12,
+        "relative_cell_imbalance": 1.3801588262327087e-12,
+        "gross_throughput": 146799088.80515915,
+        "equation_throughput": 146799088.80515915,
+        "residual_l1": 0.00020260605809735964,
+        "signed_imbalance": -2.463680090499879e-05,
+        "boundary_inflow": 6113168.962412845,
+        "boundary_outflow": 73399544.40259108,
+        "scaled_l2": 2.1638276148989957e-09,
+        "finite": true,
+        "local_balance_valid": true,
+        "chd_inflow": 0.0,
+        "chd_outflow": 235651.55516302923,
+        "ghb_inflow": 6113168.962412845,
+        "ghb_outflow": 6010571.132637977,
+        "ghb_net": 102597.82977486867,
+        "drn_inflow": 0.0,
+        "drn_outflow": 67153321.71479008,
+        "drn_net": -67153321.71479008,
+        "riv_inflow": 0.0,
+        "riv_outflow": 0.0,
+        "riv_net": 0.0,
+        "free_boundary_inflow": 6113168.9624128435,
+        "free_boundary_outflow": 73399544.4025919
+      },
+      "outer_iterations": 27,
+      "krylov_iterations": 103,
+      "stalled_linear_solves": 0,
+      "saturated_preconditioner_retries": 0,
+      "diagonal_preconditioner_retries": 0,
+      "budget": {},
+      "sources": {
+        "wel": {
+          "inflow": 0.0,
+          "outflow": 0.0,
+          "net": 0.0
+        },
+        "recharge": {
+          "inflow": 0.0,
+          "outflow": 0.0,
+          "net": 0.0
+        },
+        "volumetric": {
+          "inflow": 67286375.44015437,
+          "outflow": 0.0,
+          "net": 67286375.44015437
+        }
+      },
+      "drn": {
+        "inflow": 0.0,
+        "outflow": 67153321.71479008,
+        "net": -67153321.71479008
+      },
+      "riv": {
+        "inflow": 0.0,
+        "outflow": 0.0,
+        "net": 0.0
+      }
+    }
+  ],
+  "run_seconds": 35.83821625201381,
+  "output_scope": "all accepted heads; scalar budget diagnostics, not MF6 CBC"
+}

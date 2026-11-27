@@ -1,0 +1,9 @@
+{
+  "model": "0414_0415_MF6_SS_Unconfined_250",
+  "status": "failed",
+  "native": {
+    "seconds": 23.95123635098571,
+    "version": "mf6: 6.6.2 05/12/2025"
+  },
+  "failure": "RuntimeError: DarcyWarp failed at period 1, step 1: ungrounded_saturation_components; diagnostics: /home/patrickdurney/PycharmProjects/DarcyWarp/benchmark_results/usgs_remaining_20261127/0414_0415_MF6_SS_Unconfined_250/darcywarp_report.json"
+}

@@ -6,6 +6,7 @@ Configure stages and paths in the execution guard. Native runs use fresh copies.
 import csv
 import json
 from pathlib import Path
+import re
 import shutil
 import subprocess
 from time import perf_counter
@@ -72,19 +73,30 @@ def finish_audit(*, output, label, report, maps, active, gates):
                            f"see {output / (label + '.json')}")
 
 
-def native_run(*, archive, directory, executable, save_saturation):
+def native_run(*, archive, directory, executable, save_saturation,
+               ims_dvclose=None):
     """Run native MF6 in a new workspace and retain the listing and timing.
 
     :param archive: Untouched MF6 input directory.
     :param directory: New native working directory.
     :param executable: Absolute path to the native executable.
     :param save_saturation: Insert the NPF output-only SAVE_SATURATION option.
+    :param ims_dvclose: Optional tighter outer/inner head closure for a separate
+        diagnostic reference run; None preserves the archived IMS settings.
     """
     shutil.copytree(archive, directory)
     if save_saturation:
         npf = next(directory.glob("*.npf"))
         text = npf.read_text()
         npf.write_text(text.replace("BEGIN OPTIONS", "BEGIN OPTIONS\n  SAVE_SATURATION", 1))
+    if ims_dvclose is not None:
+        for ims in directory.glob("*.ims"):
+            text = ims.read_text()
+            text = re.sub(r"(?im)^\s*outer_[dh]vclose\s+[^\n]*\n", "", text)
+            text = re.sub(r"(?im)^\s*inner_[dh]vclose\s+[^\n]*\n", "", text)
+            text = text.replace("BEGIN NONLINEAR", f"BEGIN NONLINEAR\n  OUTER_DVCLOSE {ims_dvclose}", 1)
+            text = text.replace("BEGIN LINEAR", f"BEGIN LINEAR\n  INNER_DVCLOSE {ims_dvclose}", 1)
+            ims.write_text(text)
     started = perf_counter()
     with (directory / "native.log").open(mode="w") as stream:
         process = subprocess.run(args=[str(executable)], cwd=directory, stdout=stream,
@@ -94,7 +106,8 @@ def native_run(*, archive, directory, executable, save_saturation):
     if process.returncode or "Normal termination of simulation." not in log:
         raise RuntimeError(f"Native MF6 failed. See {directory / 'native.log'}")
     result = dict(seconds=elapsed, version=subprocess.check_output(
-        args=[str(executable), "-v"], text=True).strip())
+        args=[str(executable), "-v"], text=True).strip(),
+        ims_dvclose=ims_dvclose)
     (directory / "native_run.json").write_text(json.dumps(result, indent=2) + "\n")
     return result
 
@@ -121,7 +134,15 @@ def independent_inputs(*, gwf):
     fixed_values = np.zeros_like(initial)
     entries = {}
     for kind in ("CHD", "DRN", "GHB"):
-        rows = gwf.get_package(kind).stress_period_data.get_data(key=0)
+        package = gwf.get_package(kind)
+        if package is None:
+            continue
+        package_list = package if isinstance(package, list) else [package]
+        if not package_list:
+            continue
+        package_rows = [item.stress_period_data.get_data(key=0)
+                        for item in package_list]
+        rows = np.concatenate(package_rows) if len(package_rows) > 1 else package_rows[0]
         ids = np.ravel_multi_index(np.asarray(rows["cellid"].tolist()).T, active.shape)
         entries[kind] = (ids, rows)
         if kind == "CHD":
@@ -199,8 +220,22 @@ def read_native(*, directory, active):
     with flopy.utils.HeadFile(next(directory.glob("*.hds"))) as reader:
         head = reader.get_data()
     with flopy.utils.CellBudgetFile(next(directory.glob("*.cbc")), precision="double") as reader:
-        budget = {name.decode().strip(): reader.get_data(text=name.decode().strip())[-1]
-                  for name in reader.get_unique_record_names()}
+        budget = {}
+        for name in reader.get_unique_record_names():
+            text = name.decode().strip()
+            records = reader.get_data(text=text)
+            if (len(records) > 1 and records[0].dtype.names is not None
+                    and "node2" in records[0].dtype.names):
+                adjusted, offset = [], 0
+                for record in records:
+                    item = record.copy()
+                    local_node = item["node2"].copy()
+                    item["node2"] = local_node + offset
+                    offset += int(local_node.max(initial=0))
+                    adjusted.append(item)
+                budget[text] = np.concatenate(adjusted)
+            else:
+                budget[text] = records[-1]
     mapping = (np.arange(active.size) if grid.ia.size == active.size+1
                else np.flatnonzero(active))
     if grid.ia.size != mapping.size+1:
@@ -234,6 +269,8 @@ def package_metrics(*, records, entries, case, head, fields,
     """
     cells, summaries = {}, {}
     for kind in ("CHD", "DRN", "GHB", "RCHA"):
+        if kind not in records:
+            continue
         data = records[kind]
         ids = data["node"].astype(np.int64) - 1
         q = data["q"]
@@ -304,8 +341,10 @@ def audit(*, archive, directory, output, device, use_darcywarp_heads=False,
     nz, ny, nx = model.shape
     if len(model.periods) != 1 or model.periods[0][0] or len(model.periods[0][1]) != 1:
         raise ValueError("This regional audit expects one steady step")
-    if {p.package_type for p in model.packages} != {"chd", "ghb", "drn", "rcha"}:
-        raise ValueError("This audit requires CHD, GHB, DRN and RCHA only")
+    package_types = {p.package_type for p in model.packages}
+    if not {"ghb", "drn", "rcha"}.issubset(package_types) or package_types - {
+            "chd", "ghb", "drn", "rcha"}:
+        raise ValueError("This audit requires GHB, DRN and RCHA, with optional CHD")
     raw, entries = independent_inputs(gwf=simulation.get_model())
     forcing = _stress_period(model=model, schedules=_schedules(model=model), kper=0)
     imported_seconds = perf_counter()-started
@@ -406,8 +445,10 @@ def audit(*, archive, directory, output, device, use_darcywarp_heads=False,
         maps = {"Head difference (m)": head-native_head,
                 "CPU residual difference (m³/day)": cpu["residual"]-native_residual,
                 "GHB difference (m³/day)": -cpu["ghb_outflow"]-package_cells["GHB"],
-                "DRN difference (m³/day)": -cpu["drn_outflow"]-package_cells["DRN"],
-                "CHD difference (m³/day)": cpu["chd_cell_rate"]-package_cells["CHD"]}
+                "DRN difference (m³/day)": -cpu["drn_outflow"]-package_cells["DRN"]}
+        if "CHD" in package_cells:
+            maps["CHD difference (m³/day)"] = (
+                cpu["chd_cell_rate"]-package_cells["CHD"])
         # These compare two different implementations at exactly the same
         # heads, independent of the native solver's convergence tolerance.
         gates["CPU/GPU face flow"] = comparison_gate(actual=gpu_flows, expected=cpu["flux"],
@@ -484,24 +525,18 @@ def write_audit(*, output, label, report, maps, active):
     if not maps:
         return
 
+    np.savez_compressed(output / f"{label}_maps.npz", **maps)
     import matplotlib.pyplot as plt
 
-    np.savez_compressed(output / f"{label}_maps.npz", **maps)
     for layer in range(active.shape[0]):
-        figure, axes = plt.subplots(nrows=(len(maps)+1)//2, ncols=2, figsize=(11, 12),
-                                   layout="constrained", squeeze=False)
-        for axis, (name, values) in zip(axes.flat, maps.items()):
+        for name, values in maps.items():
             grid = np.where(active[layer], values[layer], np.nan)
             finite = grid[np.isfinite(grid)]
             limit = float(np.max(np.abs(finite), initial=0.)) or 1.
-            image = axis.imshow(grid, cmap="RdBu_r", vmin=-limit, vmax=limit)
-            axis.set_title(name)
-            figure.colorbar(image, ax=axis, shrink=.7)
-        for axis in axes.flat[len(maps):]:
-            axis.set_visible(False)
-        suffix = "" if active.shape[0] == 1 else f"_layer_{layer+1:03d}"
-        figure.savefig(output / f"{label}_maps{suffix}.png", dpi=160)
-        plt.close(figure)
+            field_name = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+            suffix = "" if active.shape[0] == 1 else f"_layer_{layer+1:03d}"
+            plt.imsave(output / f"{label}_{field_name}{suffix}.png", grid,
+                       cmap="RdBu_r", vmin=-limit, vmax=limit)
 
 
 def benchmark_table(*, cases, output):

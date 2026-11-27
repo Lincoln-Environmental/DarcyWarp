@@ -1,0 +1,13 @@
+{
+  "model": "0406_0407_0408_0416_MF6_SS_Unconfined_250",
+  "ims_dvclose": 1e-10,
+  "stages": {
+    "native_heads": "passed",
+    "solution": "passed"
+  },
+  "native": {
+    "seconds": 262.81827066797996,
+    "version": "mf6: 6.6.2 05/12/2025",
+    "ims_dvclose": 1e-10
+  }
+}

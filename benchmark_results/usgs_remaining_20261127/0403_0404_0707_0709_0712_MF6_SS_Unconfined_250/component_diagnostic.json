@@ -1,0 +1,155 @@
+{
+  "model": "0403_0404_0707_0709_0712_MF6_SS_Unconfined_250",
+  "native": {
+    "metrics": {
+      "prescribed_cells_checked": 0,
+      "prescribed_head_error_max_m": null,
+      "prescribed_head_tolerance_m": 1e-10,
+      "boundary_condition_valid": true,
+      "invalid_active_heads": 0,
+      "inactive_marker_cells": 2748689,
+      "active_cells_checked": 2256192,
+      "input_valid": true,
+      "head_residual_rms": 4.5436439424616276e-07,
+      "physical_rms": 0.002784304642443498,
+      "physical_max": 3.367975933324086,
+      "residual_l1": 62.54305447111732,
+      "relative_cell_imbalance": 2.5976931597140105e-07,
+      "gross_throughput": 240763826.30965897,
+      "equation_throughput": 240763826.30965897,
+      "signed_imbalance": -51.09788681866858,
+      "boundary_inflow": 44024629.0560241,
+      "boundary_outflow": 120381938.70377289,
+      "free_boundary_inflow": 44024629.0560241,
+      "free_boundary_outflow": 120381938.70377289,
+      "ghb_inflow": 44024629.0560241,
+      "ghb_outflow": 29422414.983923722,
+      "drn_inflow": 0.0,
+      "drn_outflow": 90959523.71984917,
+      "drn_net": -90959523.71984917,
+      "riv_inflow": 0.0,
+      "riv_outflow": 0.0,
+      "riv_net": 0.0,
+      "chd_inflow": 0.0,
+      "chd_outflow": 0.0,
+      "fixed_cell_source_total": 0.0,
+      "free_cells": 2256192,
+      "fixed_reservoir_required_inflow": 0.0,
+      "ungrounded_current_components": 1,
+      "exact_dry_zero_rows": 0,
+      "physical_metrics_valid": true,
+      "final_acceptance_thresholds": {
+        "physical_rms_m3_day": 1e-12,
+        "relative_cell_imbalance": 1e-08,
+        "head_equivalent_rms_m": 1e-06,
+        "prescribed_head_error_m": 1e-10
+      },
+      "independent_accepted": false,
+      "local_balance_valid": null
+    },
+    "components": [
+      {
+        "label": 965294,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            935,
+            962
+          ]
+        ],
+        "head_min": 176.94166599999997,
+        "head_max": 176.94166599999997,
+        "saturated_fraction": 1.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      }
+    ]
+  },
+  "rejected": {
+    "metrics": {
+      "prescribed_cells_checked": 0,
+      "prescribed_head_error_max_m": null,
+      "prescribed_head_tolerance_m": 1e-10,
+      "boundary_condition_valid": true,
+      "invalid_active_heads": 0,
+      "inactive_marker_cells": 0,
+      "active_cells_checked": 2256192,
+      "input_valid": true,
+      "head_residual_rms": 1.3761435903453193e-08,
+      "physical_rms": 3.7560152310348342e-06,
+      "physical_max": 0.0009605492282389605,
+      "residual_l1": 0.1970882204530533,
+      "relative_cell_imbalance": 8.18595811065161e-10,
+      "gross_throughput": 240763778.39828074,
+      "equation_throughput": 240763778.39828074,
+      "signed_imbalance": -0.04102637391391334,
+      "boundary_inflow": 44024630.62876521,
+      "boundary_outflow": 120381889.21965353,
+      "free_boundary_inflow": 44024630.62876521,
+      "free_boundary_outflow": 120381889.21965353,
+      "ghb_inflow": 44024630.62876521,
+      "ghb_outflow": 29422414.579267938,
+      "drn_inflow": 0.0,
+      "drn_outflow": 90959474.6403856,
+      "drn_net": -90959474.6403856,
+      "riv_inflow": 0.0,
+      "riv_outflow": 0.0,
+      "riv_net": 0.0,
+      "chd_inflow": 0.0,
+      "chd_outflow": 0.0,
+      "fixed_cell_source_total": 0.0,
+      "free_cells": 2256192,
+      "fixed_reservoir_required_inflow": 0.0,
+      "ungrounded_current_components": 1,
+      "exact_dry_zero_rows": 0,
+      "physical_metrics_valid": true,
+      "final_acceptance_thresholds": {
+        "physical_rms_m3_day": 1e-12,
+        "relative_cell_imbalance": 1e-08,
+        "head_equivalent_rms_m": 1e-06,
+        "prescribed_head_error_m": 1e-10
+      },
+      "independent_accepted": false,
+      "local_balance_valid": null
+    },
+    "components": [
+      {
+        "label": 965294,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            935,
+            962
+          ]
+        ],
+        "head_min": 176.941666,
+        "head_max": 176.941666,
+        "saturated_fraction": 1.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      }
+    ]
+  }
+}

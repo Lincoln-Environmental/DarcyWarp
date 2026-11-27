@@ -1,0 +1,1417 @@
+{
+  "model": "0414_0415_MF6_SS_Unconfined_250",
+  "native": {
+    "metrics": {
+      "prescribed_cells_checked": 0,
+      "prescribed_head_error_max_m": null,
+      "prescribed_head_tolerance_m": 1e-10,
+      "boundary_condition_valid": true,
+      "invalid_active_heads": 0,
+      "inactive_marker_cells": 4385140,
+      "active_cells_checked": 956378,
+      "input_valid": true,
+      "head_residual_rms": 0.02381785473667398,
+      "physical_rms": 0.00014210914530321013,
+      "physical_max": 0.02412696653577484,
+      "residual_l1": 5.729409541209553,
+      "relative_cell_imbalance": 2.6568841399529702e-08,
+      "gross_throughput": 215643936.25801727,
+      "equation_throughput": 215643936.25801727,
+      "signed_imbalance": -5.487395753034111,
+      "boundary_inflow": 48398149.97835155,
+      "boundary_outflow": 107821970.8727065,
+      "free_boundary_inflow": 48398149.97835155,
+      "free_boundary_outflow": 107821970.87270652,
+      "ghb_inflow": 48398149.97835155,
+      "ghb_outflow": 46182706.48711993,
+      "drn_inflow": 0.0,
+      "drn_outflow": 61639264.38558658,
+      "drn_net": -61639264.38558658,
+      "riv_inflow": 0.0,
+      "riv_outflow": 0.0,
+      "riv_net": 0.0,
+      "chd_inflow": 0.0,
+      "chd_outflow": 0.0,
+      "fixed_cell_source_total": 0.0,
+      "free_cells": 956378,
+      "fixed_reservoir_required_inflow": 0.0,
+      "ungrounded_current_components": 24,
+      "exact_dry_zero_rows": 0,
+      "physical_metrics_valid": true,
+      "final_acceptance_thresholds": {
+        "physical_rms_m3_day": 1e-12,
+        "relative_cell_imbalance": 1e-08,
+        "head_equivalent_rms_m": 1e-06,
+        "prescribed_head_error_m": 1e-10
+      },
+      "independent_accepted": false,
+      "local_balance_valid": null
+    },
+    "components": [
+      {
+        "label": 4882,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            1,
+            2425
+          ]
+        ],
+        "head_min": 584.0779999999997,
+        "head_max": 584.0779999999997,
+        "saturated_fraction": 0.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 83520,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            33,
+            2439
+          ]
+        ],
+        "head_min": 523.4686279999996,
+        "head_max": 523.4686279999996,
+        "saturated_fraction": 1.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 93345,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            37,
+            2436
+          ]
+        ],
+        "head_min": 539.9349999999997,
+        "head_max": 539.9349999999997,
+        "saturated_fraction": 0.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 103183,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            41,
+            2446
+          ]
+        ],
+        "head_min": 580.2709999999997,
+        "head_max": 580.2709999999997,
+        "saturated_fraction": 0.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 103187,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            41,
+            2450
+          ]
+        ],
+        "head_min": 561.2439999999998,
+        "head_max": 561.2439999999998,
+        "saturated_fraction": 0.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 113002,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            45,
+            2437
+          ]
+        ],
+        "head_min": 569.9086299999998,
+        "head_max": 569.9086299999998,
+        "saturated_fraction": 1.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 147419,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            59,
+            2456
+          ]
+        ],
+        "head_min": 548.3065189999999,
+        "head_max": 548.3065189999999,
+        "saturated_fraction": 1.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 316922,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            128,
+            2426
+          ]
+        ],
+        "head_min": 638.0890000000002,
+        "head_max": 638.0890000000002,
+        "saturated_fraction": 0.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 334126,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            135,
+            2431
+          ]
+        ],
+        "head_min": 613.390564,
+        "head_max": 613.390564,
+        "saturated_fraction": 1.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 348873,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            141,
+            2436
+          ]
+        ],
+        "head_min": 917.969543,
+        "head_max": 917.969543,
+        "saturated_fraction": 1.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 373448,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            151,
+            2441
+          ]
+        ],
+        "head_min": 594.7029999999996,
+        "head_max": 594.7029999999996,
+        "saturated_fraction": 0.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 454498,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            184,
+            2410
+          ]
+        ],
+        "head_min": 743.696533,
+        "head_max": 743.696533,
+        "saturated_fraction": 1.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 628907,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            255,
+            2372
+          ]
+        ],
+        "head_min": 568.6188959999996,
+        "head_max": 568.6188959999996,
+        "saturated_fraction": 1.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 692786,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            281,
+            2370
+          ]
+        ],
+        "head_min": 692.274902,
+        "head_max": 692.274902,
+        "saturated_fraction": 1.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 707538,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            287,
+            2380
+          ]
+        ],
+        "head_min": 887.0339999999999,
+        "head_max": 887.0339999999999,
+        "saturated_fraction": 0.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 746875,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            303,
+            2405
+          ]
+        ],
+        "head_min": 1024.36829,
+        "head_max": 1024.36829,
+        "saturated_fraction": 1.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 768992,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            312,
+            2409
+          ]
+        ],
+        "head_min": 1066.5587199999998,
+        "head_max": 1066.5587199999998,
+        "saturated_fraction": 1.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 904016,
+        "cells": 2,
+        "first_cells": [
+          [
+            0,
+            367,
+            2298
+          ],
+          [
+            0,
+            368,
+            2298
+          ]
+        ],
+        "head_min": 882.7658689999998,
+        "head_max": 882.7658689999998,
+        "saturated_fraction": 0.5,
+        "dry_cells": 0,
+        "internal_faces": 1,
+        "total_face_conductance": 29.27492524174066,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 962965,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            391,
+            2280
+          ]
+        ],
+        "head_min": 772.564575,
+        "head_max": 772.564575,
+        "saturated_fraction": 1.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 975329,
+        "cells": 3,
+        "first_cells": [
+          [
+            0,
+            396,
+            2359
+          ],
+          [
+            0,
+            397,
+            2359
+          ],
+          [
+            0,
+            397,
+            2360
+          ]
+        ],
+        "head_min": 871.6460016082002,
+        "head_max": 871.6460016082002,
+        "saturated_fraction": 0.0,
+        "dry_cells": 0,
+        "internal_faces": 2,
+        "total_face_conductance": 91.33739759957224,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 1014496,
+        "cells": 2,
+        "first_cells": [
+          [
+            0,
+            412,
+            2216
+          ],
+          [
+            0,
+            413,
+            2216
+          ]
+        ],
+        "head_min": 619.2650018365532,
+        "head_max": 619.2650018365532,
+        "saturated_fraction": 0.0,
+        "dry_cells": 0,
+        "internal_faces": 1,
+        "total_face_conductance": 71.42930245201534,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 1031685,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            419,
+            2212
+          ]
+        ],
+        "head_min": 567.4799999999999,
+        "head_max": 567.4799999999999,
+        "saturated_fraction": 0.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 1093089,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            444,
+            2191
+          ]
+        ],
+        "head_min": 563.4029539999997,
+        "head_max": 563.4029539999997,
+        "saturated_fraction": 1.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 1095545,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            445,
+            2190
+          ]
+        ],
+        "head_min": 549.985779,
+        "head_max": 549.985779,
+        "saturated_fraction": 1.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      }
+    ]
+  },
+  "rejected": {
+    "metrics": {
+      "prescribed_cells_checked": 0,
+      "prescribed_head_error_max_m": null,
+      "prescribed_head_tolerance_m": 1e-10,
+      "boundary_condition_valid": true,
+      "invalid_active_heads": 0,
+      "inactive_marker_cells": 0,
+      "active_cells_checked": 956378,
+      "input_valid": true,
+      "head_residual_rms": 0.024057006799446702,
+      "physical_rms": 1.1385450746474207e-10,
+      "physical_max": 1.8382706912234426e-08,
+      "residual_l1": 2.3151825419480662e-05,
+      "relative_cell_imbalance": 1.0736135865898992e-13,
+      "gross_throughput": 215643931.00703406,
+      "equation_throughput": 215643931.00703406,
+      "signed_imbalance": -4.543506285654547e-08,
+      "boundary_inflow": 48398150.09655779,
+      "boundary_outflow": 107821965.50351705,
+      "free_boundary_inflow": 48398150.09655779,
+      "free_boundary_outflow": 107821965.50351706,
+      "ghb_inflow": 48398150.09655779,
+      "ghb_outflow": 46182706.00038476,
+      "drn_inflow": 0.0,
+      "drn_outflow": 61639259.50313229,
+      "drn_net": -61639259.50313229,
+      "riv_inflow": 0.0,
+      "riv_outflow": 0.0,
+      "riv_net": 0.0,
+      "chd_inflow": 0.0,
+      "chd_outflow": 0.0,
+      "fixed_cell_source_total": 0.0,
+      "free_cells": 956378,
+      "fixed_reservoir_required_inflow": 0.0,
+      "ungrounded_current_components": 25,
+      "exact_dry_zero_rows": 0,
+      "physical_metrics_valid": true,
+      "final_acceptance_thresholds": {
+        "physical_rms_m3_day": 1e-12,
+        "relative_cell_imbalance": 1e-08,
+        "head_equivalent_rms_m": 1e-06,
+        "prescribed_head_error_m": 1e-10
+      },
+      "independent_accepted": false,
+      "local_balance_valid": null
+    },
+    "components": [
+      {
+        "label": 4882,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            1,
+            2425
+          ]
+        ],
+        "head_min": 584.077999729145,
+        "head_max": 584.077999729145,
+        "saturated_fraction": 0.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 83520,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            33,
+            2439
+          ]
+        ],
+        "head_min": 523.4686279999988,
+        "head_max": 523.4686279999988,
+        "saturated_fraction": 1.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 93345,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            37,
+            2436
+          ]
+        ],
+        "head_min": 539.935,
+        "head_max": 539.935,
+        "saturated_fraction": 0.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 103183,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            41,
+            2446
+          ]
+        ],
+        "head_min": 580.271,
+        "head_max": 580.271,
+        "saturated_fraction": 0.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 103187,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            41,
+            2450
+          ]
+        ],
+        "head_min": 561.244,
+        "head_max": 561.244,
+        "saturated_fraction": 0.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 113002,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            45,
+            2437
+          ]
+        ],
+        "head_min": 569.9086299999989,
+        "head_max": 569.9086299999989,
+        "saturated_fraction": 1.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 147419,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            59,
+            2456
+          ]
+        ],
+        "head_min": 548.3065189999948,
+        "head_max": 548.3065189999948,
+        "saturated_fraction": 1.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 316922,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            128,
+            2426
+          ]
+        ],
+        "head_min": 638.0890000000002,
+        "head_max": 638.0890000000002,
+        "saturated_fraction": 0.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 334126,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            135,
+            2431
+          ]
+        ],
+        "head_min": 613.3905639999987,
+        "head_max": 613.3905639999987,
+        "saturated_fraction": 1.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 348873,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            141,
+            2436
+          ]
+        ],
+        "head_min": 917.969542999995,
+        "head_max": 917.969542999995,
+        "saturated_fraction": 1.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 373448,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            151,
+            2441
+          ]
+        ],
+        "head_min": 594.703,
+        "head_max": 594.703,
+        "saturated_fraction": 0.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 454498,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            184,
+            2410
+          ]
+        ],
+        "head_min": 743.696532999981,
+        "head_max": 743.696532999981,
+        "saturated_fraction": 1.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 628907,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            255,
+            2372
+          ]
+        ],
+        "head_min": 568.6188959999987,
+        "head_max": 568.6188959999987,
+        "saturated_fraction": 1.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 692786,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            281,
+            2370
+          ]
+        ],
+        "head_min": 692.274901999999,
+        "head_max": 692.274901999999,
+        "saturated_fraction": 1.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 707538,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            287,
+            2380
+          ]
+        ],
+        "head_min": 887.034,
+        "head_max": 887.034,
+        "saturated_fraction": 0.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 746875,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            303,
+            2405
+          ]
+        ],
+        "head_min": 1024.3682899999944,
+        "head_max": 1024.3682899999944,
+        "saturated_fraction": 1.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 768992,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            312,
+            2409
+          ]
+        ],
+        "head_min": 1066.558719999986,
+        "head_max": 1066.558719999986,
+        "saturated_fraction": 1.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 904016,
+        "cells": 2,
+        "first_cells": [
+          [
+            0,
+            367,
+            2298
+          ],
+          [
+            0,
+            368,
+            2298
+          ]
+        ],
+        "head_min": 882.7658689999868,
+        "head_max": 882.7658689999868,
+        "saturated_fraction": 0.5,
+        "dry_cells": 0,
+        "internal_faces": 1,
+        "total_face_conductance": 29.27492524173132,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 962965,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            391,
+            2280
+          ]
+        ],
+        "head_min": 772.5645749999953,
+        "head_max": 772.5645749999953,
+        "saturated_fraction": 1.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 975329,
+        "cells": 3,
+        "first_cells": [
+          [
+            0,
+            396,
+            2359
+          ],
+          [
+            0,
+            397,
+            2359
+          ],
+          [
+            0,
+            397,
+            2360
+          ]
+        ],
+        "head_min": 871.646,
+        "head_max": 871.646,
+        "saturated_fraction": 0.0,
+        "dry_cells": 0,
+        "internal_faces": 2,
+        "total_face_conductance": 91.33739499095806,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 1007184,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            409,
+            2275
+          ]
+        ],
+        "head_min": 965.4127809999993,
+        "head_max": 965.4127809999993,
+        "saturated_fraction": 1.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 1014496,
+        "cells": 2,
+        "first_cells": [
+          [
+            0,
+            412,
+            2216
+          ],
+          [
+            0,
+            413,
+            2216
+          ]
+        ],
+        "head_min": 619.2650004547412,
+        "head_max": 619.2650004547412,
+        "saturated_fraction": 0.0,
+        "dry_cells": 0,
+        "internal_faces": 1,
+        "total_face_conductance": 71.42930146499303,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 1031685,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            419,
+            2212
+          ]
+        ],
+        "head_min": 567.4800015258132,
+        "head_max": 567.4800015258132,
+        "saturated_fraction": 0.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 1093089,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            444,
+            2191
+          ]
+        ],
+        "head_min": 563.4029539999996,
+        "head_max": 563.4029539999996,
+        "saturated_fraction": 1.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      },
+      {
+        "label": 1095545,
+        "cells": 1,
+        "first_cells": [
+          [
+            0,
+            445,
+            2190
+          ]
+        ],
+        "head_min": 549.9857789999995,
+        "head_max": 549.9857789999995,
+        "saturated_fraction": 1.0,
+        "dry_cells": 0,
+        "internal_faces": 0,
+        "total_face_conductance": 0.0,
+        "source_net": 0.0,
+        "source_gross": 0.0,
+        "ghb_cells": 0,
+        "ghb_tangent": 0.0,
+        "active_drn_cells": 0,
+        "active_drn_tangent": 0.0,
+        "residual_rms": 0.0,
+        "residual_max_abs": 0.0,
+        "head_residual_max_abs": 0.0
+      }
+    ]
+  }
+}
