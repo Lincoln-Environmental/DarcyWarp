@@ -1,4 +1,4 @@
-"""Audit one-layer Zell–Sanford MF6 workspaces and benchmark the CUDA importer.
+"""Audit steady layered DIS workspaces and benchmark the CUDA importer.
 
 Run from the repository root with ``python -m working_tests.benchmark_regional_mf6``.
 Configure stages and paths in the execution guard. Native runs use fresh copies.
@@ -33,6 +33,45 @@ def describe(*, values):
                 max_abs=float(np.abs(values).max()))
 
 
+def comparison_gate(*, actual, expected, atol, rtol=0.):
+    """Check every value against an explicit absolute and relative tolerance.
+
+    :param actual: Evaluated physical quantity.
+    :param expected: Independent reference quantity.
+    :param atol: Absolute tolerance in the quantity's units.
+    :param rtol: Relative tolerance at each reference value.
+    :return: Pass/fail and maximum error, retaining diagnostics on failure.
+    """
+    actual = np.asarray(actual, dtype=np.float64)
+    expected = np.asarray(expected, dtype=np.float64)
+    if actual.shape != expected.shape:
+        raise ValueError("Parity gate arrays have different shapes")
+    difference = np.abs(actual - expected)
+    allowed = atol + rtol * np.abs(expected)
+    passed = bool(np.isfinite(actual).all() and np.isfinite(expected).all()
+                  and np.all(difference <= allowed))
+    return dict(passed=passed, max_abs=float(difference.max(initial=0.)),
+                atol=float(atol), rtol=float(rtol))
+
+
+def finish_audit(*, output, label, report, maps, active, gates):
+    """Persist the receipt before rejecting a failed physical comparison.
+
+    :param output: Audit artifact directory.
+    :param label: Audit stage name.
+    :param report: Complete diagnostic record.
+    :param maps: Optional spatial diagnostic arrays.
+    :param active: Active grid mask.
+    :param gates: Named parity checks.
+    """
+    failed = [name for name, check in gates.items() if not check["passed"]]
+    report.update(gates=gates, gates_passed=not failed)
+    write_audit(output=output, label=label, report=report, maps=maps, active=active)
+    if failed:
+        raise RuntimeError(f"{label} parity failed: {', '.join(failed)}; "
+                           f"see {output / (label + '.json')}")
+
+
 def native_run(*, archive, directory, executable, save_saturation):
     """Run native MF6 in a new workspace and retain the listing and timing.
 
@@ -63,7 +102,8 @@ def native_run(*, archive, directory, executable, save_saturation):
 def independent_inputs(*, gwf):
     """Read static arrays and stress entries from FloPy's package data.
 
-    :param gwf: FloPy groundwater model for a one-layer, steady one-step case.
+    :param gwf: FloPy structured groundwater model for a steady one-step case
+        with CHD, GHB, DRN and RCHA.
     """
     dis, npf = gwf.dis, gwf.npf
     active = dis.idomain.array > 0
@@ -74,7 +114,8 @@ def independent_inputs(*, gwf):
         ky = ky * kx
     if npf.k33overk.get_data():
         kz = kz * kx
-    top, bottom = dis.top.array[None], dis.botm.array
+    bottom = dis.botm.array
+    top = np.concatenate((dis.top.array[None], bottom[:-1]), axis=0)
     initial = gwf.ic.strt.array
     fixed = np.zeros_like(active)
     fixed_values = np.zeros_like(initial)
@@ -87,8 +128,19 @@ def independent_inputs(*, gwf):
             fixed.ravel()[ids] = True
             fixed_values.ravel()[ids] = rows["head"]
     dx, dy = dis.delr.array, dis.delc.array
-    recharge = gwf.get_package("RCHA").recharge.get_data(key=0)
-    source = np.where(active & ~fixed, recharge * dx[None, :] * dy[:, None], 0.)
+    rcha = gwf.get_package("RCHA")
+    horizontal = active.shape[1:]
+    recharge = np.asarray(rcha.recharge.get_data(key=0))
+    recharge = np.broadcast_to(recharge, horizontal) if recharge.ndim == 0 else recharge.reshape(horizontal)
+    layer_data = rcha.irch.get_data(key=0)
+    if layer_data is None:
+        layers = np.zeros(horizontal, dtype=int)
+    else:
+        layers = np.asarray(layer_data, dtype=int).reshape(horizontal)
+    j, i = np.indices(horizontal)
+    eligible = active[layers, j, i] & ~fixed[layers, j, i]
+    source = np.zeros(active.shape)
+    source[layers, j, i] = np.where(eligible, recharge * dx[None, :] * dy[:, None], 0.)
     return dict(active=active, kx=kx, ky=ky, kz=kz, tops=top, bottoms=bottom,
                 thicknesses=top-bottom, initial=initial, values=fixed_values, fixed=fixed,
                 cell_types=(npf.icelltype.array > 0), source=source), entries
@@ -107,18 +159,23 @@ def translation_metrics(*, raw, entries, case):
         mask = np.ones_like(active) if name in ("active", "fixed", "source") else active
         actual = np.asarray(getattr(case, name))
         report[name] = dict(native=describe(values=expected[mask]),
-                            difference=describe(values=actual[mask]-expected[mask].astype(float)))
+                            difference=describe(values=actual[mask]-expected[mask].astype(float)),
+                            gate=comparison_gate(actual=actual[mask], expected=expected[mask],
+                                atol=1e-12 if name == "source" else 0.,
+                                rtol=1e-14 if name == "source" else 0.))
     ids, ghb = entries["GHB"]
     keep = ~raw["fixed"].ravel()[ids]
     count = active.size
     cond = np.bincount(ids[keep], weights=ghb["cond"][keep], minlength=count)
     moment = np.bincount(ids[keep], weights=(ghb["cond"]*ghb["bhead"])[keep], minlength=count)
     report["ghb_conductance"] = dict(native=describe(values=ghb["cond"]),
-        difference=describe(values=case.ghb_conductance.ravel()-cond))
+        difference=describe(values=case.ghb_conductance.ravel()-cond),
+        gate=comparison_gate(actual=case.ghb_conductance.ravel(), expected=cond, atol=1e-12, rtol=1e-14))
     occupied = cond > 0
     expected_head = moment[occupied] / cond[occupied]
     report["ghb_head"] = dict(native=describe(values=ghb["bhead"]),
-        difference=describe(values=case.ghb_head.ravel()[occupied]-expected_head))
+        difference=describe(values=case.ghb_head.ravel()[occupied]-expected_head),
+        gate=comparison_gate(actual=case.ghb_head.ravel()[occupied], expected=expected_head, atol=1e-12, rtol=1e-14))
     ids, drn = entries["DRN"]
     keep = np.flatnonzero(~raw["fixed"].ravel()[ids])
     order = keep[np.argsort(ids[keep], kind="stable")]
@@ -127,7 +184,8 @@ def translation_metrics(*, raw, entries, case):
     for name, column, values in (("drn_conductance", "cond", case.drn_entries.conductance),
                                  ("drn_elevation", "elev", case.drn_entries.first_level)):
         report[name] = dict(native=describe(values=drn[column]),
-                            difference=describe(values=values-drn[column][order]))
+                            difference=describe(values=values-drn[column][order]),
+                            gate=comparison_gate(actual=values, expected=drn[column][order], atol=0.))
     return report
 
 
@@ -159,7 +217,8 @@ def read_native(*, directory, active):
     return head, keys, values, residual, budget
 
 
-def package_metrics(*, records, entries, case, head, fields):
+def package_metrics(*, records, entries, case, head, fields,
+                    flow_atol, flow_rtol, budget_rtol, native_divergence=None):
     """Verify CBC user-node IDs, CHD suppression and per-entry exchanges.
 
     :param records: Native final package budget arrays, with inflow positive.
@@ -167,6 +226,11 @@ def package_metrics(*, records, entries, case, head, fields):
     :param case: Effective DarcyWarp operator.
     :param head: Evaluation head field.
     :param fields: CPU reference physical fields.
+    :param flow_atol: Absolute entry exchange tolerance.
+    :param flow_rtol: Relative entry exchange tolerance.
+    :param budget_rtol: Relative gross package-budget tolerance.
+    :param native_divergence: Native face divergence for CHD consistency at
+        native heads; None compares actual DarcyWarp CHD exchange.
     """
     cells, summaries = {}, {}
     for kind in ("CHD", "DRN", "GHB", "RCHA"):
@@ -185,7 +249,8 @@ def package_metrics(*, records, entries, case, head, fields):
         elif kind == "DRN":
             expected = -rows["cond"][entry] * np.maximum(head.ravel()[ids]-rows["elev"][entry], 0.)
         elif kind == "CHD":
-            expected = fields["chd_cell_rate"].ravel()[ids]
+            expected = (fields["chd_cell_rate"] if native_divergence is None else
+                        native_divergence - case.source).ravel()[ids]
         else:
             expected = case.source.ravel()[ids]
         if kind != "CHD":
@@ -193,11 +258,21 @@ def package_metrics(*, records, entries, case, head, fields):
             expected = np.where(overlap, 0., expected)
             summary.update(chd_overlap=int(overlap.sum()), flowing_overlap=int(np.count_nonzero(q[overlap])))
         summary["entry_difference"] = describe(values=expected-q)
+        summary["entry_gate"] = comparison_gate(actual=expected, expected=q,
+                                                  atol=flow_atol, rtol=flow_rtol)
+        predicted = np.array([expected[expected > 0].sum(), -expected[expected < 0].sum()])
+        native = np.array([summary["inflow"], summary["outflow"]])
+        summary["computed_inflow"], summary["computed_outflow"] = map(float, predicted)
+        summary["gross_budget_gate"] = comparison_gate(
+            actual=predicted, expected=native, atol=flow_atol + budget_rtol * float(native.sum()))
         summaries[kind] = summary
     return summaries, cells
 
 
-def audit(*, archive, directory, output, device, use_darcywarp_heads=False, translation_only=False):
+def audit(*, archive, directory, output, device, use_darcywarp_heads=False,
+          translation_only=False, head_gate=0.005, head_rmse_gate=1e-4,
+          saturation_head_gate=0.1, flow_atol=1e-6, flow_rtol=1e-10,
+          budget_rtol=1e-3, write_maps=True):
     """Compare translation, native states and both DarcyWarp evaluators.
 
     :param archive: Original MF6 workspace.
@@ -206,6 +281,15 @@ def audit(*, archive, directory, output, device, use_darcywarp_heads=False, tran
     :param device: CUDA device to exercise the production physical kernels.
     :param use_darcywarp_heads: Evaluate a separately accepted importer result.
     :param translation_only: Audit operator inputs without requiring native outputs.
+    :param head_gate: Maximum head difference against the chosen MF6 reference.
+    :param head_rmse_gate: RMS head difference against the chosen reference.
+    :param saturation_head_gate: Saturated thickness tolerance at native heads;
+        allow explicitly for lagged native saturation in loosely converged runs.
+    :param flow_atol: Absolute face, coefficient, residual and entry tolerance
+        in the corresponding model units.
+    :param flow_rtol: Relative face and package entry tolerance.
+    :param budget_rtol: Gross inflow/outflow tolerance relative to package throughput.
+    :param write_maps: Write full spatial diagnostics and per-layer figures.
     """
     from DARCY_WARP_PACKAGE.mf6_import import (
         _schedules, _stress_period, import_simulation, load_mf6_workspace,
@@ -218,8 +302,10 @@ def audit(*, archive, directory, output, device, use_darcywarp_heads=False, tran
     simulation = load_mf6_workspace(directory=archive)
     model = import_simulation(simulation=simulation)
     nz, ny, nx = model.shape
-    if nz != 1 or len(model.periods) != 1 or model.periods[0][0] or len(model.periods[0][1]) != 1:
-        raise ValueError("This regional audit expects a one-layer, one-step steady model")
+    if len(model.periods) != 1 or model.periods[0][0] or len(model.periods[0][1]) != 1:
+        raise ValueError("This regional audit expects one steady step")
+    if {p.package_type for p in model.packages} != {"chd", "ghb", "drn", "rcha"}:
+        raise ValueError("This audit requires CHD, GHB, DRN and RCHA only")
     raw, entries = independent_inputs(gwf=simulation.get_model())
     forcing = _stress_period(model=model, schedules=_schedules(model=model), kper=0)
     imported_seconds = perf_counter()-started
@@ -232,8 +318,10 @@ def audit(*, archive, directory, output, device, use_darcywarp_heads=False, tran
         case = case_from_model(model=solver, top=0., cell_type=model.cell_type)
         build_seconds = perf_counter()-started
         translation = translation_metrics(raw=raw, entries=entries, case=case)
+        gates = {f"translation:{name}": record["gate"] for name, record in translation.items()}
         if translation_only:
-            write_audit(output=output, label="translation", report=translation, maps={}, active=raw["active"])
+            finish_audit(output=output, label="translation", report=dict(translation=translation),
+                         maps={}, active=raw["active"], gates=gates)
             return
         native_head, keys, native_flows, native_residual, budget = read_native(
             directory=directory, active=raw["active"])
@@ -242,14 +330,17 @@ def audit(*, archive, directory, output, device, use_darcywarp_heads=False, tran
             with flopy.utils.HeadFile(output / "darcywarp.hds") as reader:
                 head = reader.get_data()
         reference, _ = independent_reference(model=solver, case=case)
-        metrics, cpu = reference.evaluate(head=head)
+        # Check the accepted physical equations at the evaluated heads. The
+        # native baseline can have a looser IMS accuracy than DarcyWarp.
+        metrics, cpu = reference.evaluate(head=head, relative_tolerance=1e-7)
         initial = np.where(case.fixed, case.values, case.initial)
         initial_saturation = reference.face_terms(head=initial)[3]
         workspace = NPF662Workspace(model=solver, case=case, restart=2,
                                     krylov_budget=0, reference=reference)
         try:
             workspace.head.assign(np.where(case.active, head, 0.).ravel())
-            gpu_metrics = workspace.evaluate(trial=False)
+            workspace.relative_tolerance = 1e-7
+            gpu_metrics = workspace.evaluate(trial=False, linearize=True)
             gpu_flows = workspace.q.numpy()[reference.left, 2-reference.axes]
             gpu_conductance = workspace.c.numpy()[reference.left, 2-reference.axes]
             gpu_residual = workspace.residual.numpy()
@@ -266,10 +357,12 @@ def audit(*, archive, directory, output, device, use_darcywarp_heads=False, tran
             raise ValueError("Native and DarcyWarp face counts disagree")
         native_q = -native_flows[pos]
         native_residual = native_residual.reshape(head.shape)
-        packages, package_cells = package_metrics(records=budget, entries=entries,
-                                                  case=case, head=head, fields=cpu)
         reference_divergence = (np.bincount(left, weights=native_q, minlength=head.size)
                                 - np.bincount(right, weights=native_q, minlength=head.size))
+        packages, package_cells = package_metrics(records=budget, entries=entries,
+            case=case, head=head, fields=cpu, flow_atol=flow_atol, flow_rtol=flow_rtol,
+            budget_rtol=budget_rtol, native_divergence=None if use_darcywarp_heads
+            else reference_divergence.reshape(head.shape))
         reassembled_native = sum(package_cells.values()) - reference_divergence.reshape(head.shape)
         physical = {name: metrics[name] for name in ("physical_rms", "head_residual_rms",
                   "relative_cell_imbalance", "signed_imbalance", "independent_accepted",
@@ -315,20 +408,63 @@ def audit(*, archive, directory, output, device, use_darcywarp_heads=False, tran
                 "GHB difference (m³/day)": -cpu["ghb_outflow"]-package_cells["GHB"],
                 "DRN difference (m³/day)": -cpu["drn_outflow"]-package_cells["DRN"],
                 "CHD difference (m³/day)": cpu["chd_cell_rate"]-package_cells["CHD"]}
+        # These compare two different implementations at exactly the same
+        # heads, independent of the native solver's convergence tolerance.
+        gates["CPU/GPU face flow"] = comparison_gate(actual=gpu_flows, expected=cpu["flux"],
+                                                       atol=flow_atol, rtol=flow_rtol)
+        gates["CPU/GPU conductance"] = comparison_gate(actual=gpu_conductance,
+            expected=cpu["conductance"], atol=flow_atol, rtol=flow_rtol)
+        gates["CPU/GPU residual"] = comparison_gate(actual=gpu_residual.reshape(head.shape)[free],
+            expected=cpu["residual"][free], atol=flow_atol, rtol=flow_rtol)
+        gates["CPU/GPU DRN entries"] = comparison_gate(actual=gpu_drn, expected=cpu_drn,
+                                                       atol=flow_atol, rtol=flow_rtol)
+        gates["native face reciprocity"] = comparison_gate(actual=native_flows[pos],
+            expected=-native_flows[rev], atol=flow_atol, rtol=flow_rtol)
+        gates["native residual reassembly"] = comparison_gate(actual=reassembled_native[free],
+            expected=native_residual[free], atol=flow_atol, rtol=flow_rtol)
+        for kind, summary in packages.items():
+            if summary.get("flowing_overlap", 0):
+                gates[f"{kind}: CHD suppression"] = dict(passed=False)
+            if use_darcywarp_heads:
+                gates[f"{kind}: gross budget"] = summary["gross_budget_gate"]
+            else:
+                gates[f"{kind}: native entry exchange"] = summary["entry_gate"]
         if "DATA-SAT" in budget:
             data = budget["DATA-SAT"]
             saved = np.zeros(head.size)
             saved[data["node"]-1] = data["sat"]
             dh = native_head.ravel()[left]-native_head.ravel()[right]
             donor = np.where((dh > 0) | ((dh == 0) & (reference.axes == 1)), left, right)
-            c_native = reference.c0*saved[donor]
+            variable = (reference.axes != 0) & (
+                (case.cell_types.ravel()[left] != 0) | (case.cell_types.ravel()[right] != 0))
+            # Default vertical NPF conductance is full-thickness even when
+            # one cell is dry; only convertible horizontal faces use SAT.
+            c_native = reference.c0 * np.where(variable, saved[donor], 1.)
             report["saved_saturation_face_check"] = describe(values=c_native*dh-native_q)
             report["cpu_native_conductance"] = describe(values=cpu["conductance"]-c_native)
             saturation_delta = cpu["saturation"]-saved.reshape(head.shape)
             report["saturation_difference"] = describe(values=saturation_delta[raw["active"]])
             maps["Saturated thickness difference (m)"] = saturation_delta*raw["thicknesses"]
+            gates["native saved-saturation face law"] = comparison_gate(
+                actual=c_native*dh, expected=native_q, atol=flow_atol, rtol=flow_rtol)
+            if not use_darcywarp_heads:
+                gates["native saturated thickness"] = comparison_gate(
+                    actual=(cpu["saturation"]*thickness)[active],
+                    expected=(saved.reshape(head.shape)*thickness)[active], atol=saturation_head_gate)
+        elif not use_darcywarp_heads:
+            # No lagged saturation data: the face law must match directly.
+            gates["native face law"] = comparison_gate(actual=cpu["flux"], expected=native_q,
+                                                         atol=flow_atol, rtol=flow_rtol)
+        if use_darcywarp_heads:
+            gates["head maximum"] = comparison_gate(actual=head[active], expected=native_head[active],
+                                                     atol=head_gate)
+            gates["head RMS"] = comparison_gate(actual=report["head_difference"]["rms"],
+                                                expected=0., atol=head_rmse_gate)
+            gates["DarcyWarp independent physical acceptance"] = dict(passed=bool(metrics["independent_accepted"]))
+        gates["GPU finite physical metrics"] = dict(passed=bool(gpu_metrics["finite"]))
         label = "solution" if use_darcywarp_heads else "native_heads"
-        write_audit(output=output, label=label, report=report, maps=maps, active=raw["active"])
+        finish_audit(output=output, label=label, report=report,
+                     maps=maps if write_maps else {}, active=raw["active"], gates=gates)
 
 
 def write_audit(*, output, label, report, maps, active):
@@ -351,18 +487,21 @@ def write_audit(*, output, label, report, maps, active):
     import matplotlib.pyplot as plt
 
     np.savez_compressed(output / f"{label}_maps.npz", **maps)
-    figure, axes = plt.subplots(nrows=(len(maps)+1)//2, ncols=2, figsize=(11, 12),
-                               layout="constrained")
-    for axis, (name, values) in zip(axes.flat, maps.items()):
-        grid = np.where(active[0], values[0], np.nan)
-        limit = np.nanmax(np.abs(grid))
-        image = axis.imshow(grid, cmap="RdBu_r", vmin=-limit, vmax=limit)
-        axis.set_title(name)
-        figure.colorbar(image, ax=axis, shrink=.7)
-    for axis in axes.flat[len(maps):]:
-        axis.set_visible(False)
-    figure.savefig(output / f"{label}_maps.png", dpi=160)
-    plt.close(figure)
+    for layer in range(active.shape[0]):
+        figure, axes = plt.subplots(nrows=(len(maps)+1)//2, ncols=2, figsize=(11, 12),
+                                   layout="constrained", squeeze=False)
+        for axis, (name, values) in zip(axes.flat, maps.items()):
+            grid = np.where(active[layer], values[layer], np.nan)
+            finite = grid[np.isfinite(grid)]
+            limit = float(np.max(np.abs(finite), initial=0.)) or 1.
+            image = axis.imshow(grid, cmap="RdBu_r", vmin=-limit, vmax=limit)
+            axis.set_title(name)
+            figure.colorbar(image, ax=axis, shrink=.7)
+        for axis in axes.flat[len(maps):]:
+            axis.set_visible(False)
+        suffix = "" if active.shape[0] == 1 else f"_layer_{layer+1:03d}"
+        figure.savefig(output / f"{label}_maps{suffix}.png", dpi=160)
+        plt.close(figure)
 
 
 def benchmark_table(*, cases, output):
@@ -378,6 +517,11 @@ def benchmark_table(*, cases, output):
         native = json.loads((native_dir / "native_run.json").read_text())
         run = json.loads((run_dir / "darcywarp_report.json").read_text())
         comparison = json.loads((run_dir / "solution.json").read_text())
+        native_audit = json.loads((run_dir / "native_heads.json").read_text())
+        if not comparison.get("gates_passed") or not native_audit.get("gates_passed"):
+            raise RuntimeError(f"{label}: missing or failed equation/solution parity gates")
+        if not run["steps"] or not run["steps"][-1].get("converged"):
+            raise RuntimeError(f"{label}: no accepted DarcyWarp endpoint")
         step = run["steps"][-1]
         rows.append(dict(model=label, cells=int(np.prod(run["shape"])), active=run["active_cells"],
             native_version=native["version"], native_seconds=native["seconds"],
@@ -420,6 +564,10 @@ if __name__ == "__main__":
     run_darcywarp = False
     compare_solution = False
     save_saturation = True
+    # Set stricter values for a tightly converged native reference.
+    audit_tolerances = dict(head_gate=0.005, head_rmse_gate=1e-4,
+                            saturation_head_gate=0.1, flow_atol=1e-6,
+                            flow_rtol=1e-10, budget_rtol=1e-3)
     solver_options = {}
     table_cases = {}
 
@@ -428,7 +576,7 @@ if __name__ == "__main__":
                          save_saturation=save_saturation))
     if run_audit:
         audit(archive=archive, directory=native_directory, output=output_directory, device=device,
-              translation_only=translation_only)
+              translation_only=translation_only, **audit_tolerances)
     if run_darcywarp:
         from DARCY_WARP_PACKAGE.mf6_import import run_mf6_model
 
@@ -436,6 +584,6 @@ if __name__ == "__main__":
                       solver_options=solver_options, overwrite=True)
     if compare_solution:
         audit(archive=archive, directory=native_directory, output=output_directory, device=device,
-              use_darcywarp_heads=True)
+              use_darcywarp_heads=True, **audit_tolerances)
     if table_cases:
         benchmark_table(cases=table_cases, output=output_directory)

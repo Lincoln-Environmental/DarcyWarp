@@ -20,7 +20,18 @@ The current-coefficient preconditioner previously omitted the diagonal from the 
 
 A second failure came from source-free cells approaching the exact dry endpoint. Several rows had sub-$10^{-16}$ m³/day imbalance but reported tens of metres of head-equivalent error when divided by a vanishing conductance. Even the tight native solution exceeded 0.23 m RMS on this metric. Candidate heads within the existing head tolerance can be evaluated at the exact cell bottom. Both evaluators still check the original balance. The independent topology check recognises a dry singleton only when its derivative, residual, source and package exchange are all exactly zero. Wet floating components and dry rows with nonzero forcing still fail.
 
-The importer enables the qualified controls for CUDA workspaces with at least 100,000 active cells, all convertible, in one steady layer with GHB and DRN. This uses the existing five-level hierarchy, a restart of 16, and the current-coefficient Newton diagonal. The initial shift is 8% of median full-thickness $K_x b$, and the head-step cap is five median layer thicknesses. Mixed-fast still uses FP32 K-cycle state and FP64 heads, physical fluxes, Krylov reductions and acceptance. Explicit solver controls take precedence. FloPy also needs a compatibility step for the other two workspaces: a temporary copy moves the native-valid trailing MXITER option before IMS6 and then restores external-array resolution to the archived path.
+At the recorded regional qualification revision, the importer enabled the qualified controls for CUDA workspaces with at least 100,000 active cells, all convertible, in one steady layer with GHB and DRN. This uses the existing five-level hierarchy, a restart of 16, and the current-coefficient Newton diagonal. The initial shift is 8% of median full-thickness $K_x b$, and the head-step cap is five median layer thicknesses. Mixed-fast still uses FP32 K-cycle state and FP64 heads, physical fluxes, Krylov reductions and acceptance. Explicit solver controls take precedence. FloPy also needs a compatibility step for the other two workspaces: a temporary copy moves the native-valid trailing MXITER option before IMS6 and then restores external-array resolution to the archived path.
+
+The subsequent layered implementation generalises the same steady numerical
+starting profile to convertible steady structured DIS models, without a
+cell-count, device, package or layer-count restriction. The diagonal of the
+current-coefficient Newton preconditioner is corrected by default, including
+transient NPF. The continuation shift is scaled from median convertible-cell
+horizontal conductance in both directions; it remains a steady-only correction,
+not a physical storage term. Vertical connections are retained in drying
+safeguards. See [MF6 import](MF6_IMPORT.md) for effective controls and audit
+gates. The large-model timing results below describe the recorded one-layer
+qualification revision; do not treat them as new multilayer benchmarks.
 
 ## Canterbury evidence
 
@@ -32,7 +43,7 @@ Canterbury's fixed transmissivity and linear GHB produce a symmetric, repeatedly
 
 ## Reproducing and interpreting the benchmarks
 
-Run [the regional benchmark](../working_tests/benchmark_regional_mf6.py) from the DarcyWarp root with `python -m working_tests.benchmark_regional_mf6`. Set the paths and stage switches in its main block. Native execution retains the listing and binary files in a fresh directory. The translation-only, native-head audit, importer solve, accepted-head comparison and results table can run independently. The audit writes numeric differences, mapped fields and PNGs. Failed importer steps retain `darcywarp_rejected.npz` with heads and residuals, and the JSON report contains their solver history.
+Run [the regional benchmark](../working_tests/benchmark_regional_mf6.py) from the DarcyWarp root with `python -m working_tests.benchmark_regional_mf6`. Set the paths and stage switches in its main block. Native execution retains the listing and binary files in a fresh directory. The translation-only, native-head audit, importer solve, accepted-head comparison and results table can run independently. The audit writes numeric differences, mapped fields and per-layer PNGs, and rejects failed translation, physical equation and solution comparison gates. Retain native_heads.json and solution.json with the original native run receipt to support the benchmark table. Failed importer steps retain `darcywarp_rejected.npz` with heads and residuals, and the JSON report contains their solver history.
 
 The tested inputs are all part of the one-layer Zell–Sanford model family. The initial linear sweep is a bounded comparison at the same original head state. It measures the preconditioner mismatch and the effect of the Newton diagonal at the starting state. The native production runs also reach different accuracy from DarcyWarp. Numerical solve time, cached end-to-end time and fresh kernel compilation are reported separately.
 

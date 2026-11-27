@@ -470,3 +470,148 @@ def test_failed_import_writes_solver_diagnostics(tmp_path, solver_device):
     assert report["failed_step"]["kper"] == 1
     assert "final_metrics" in report["failed_step"]
     assert not (output / "darcywarp.hds").exists()
+
+
+def test_multilayer_convertible_newton_matches_native_mf6(tmp_path, solver_device, pinned_mf6):
+    """Verify the full 3D correction operator and the independent MF6 endpoint."""
+    import json
+    import warp as wp
+
+    from DARCY_WARP_PACKAGE.warped_darcy_3d import WarpDarcySolver3D
+    from DARCY_WARP_PACKAGE.solvers.npf662_3d import case_from_model, independent_reference
+    from DARCY_WARP_PACKAGE.solvers.npf662_newton import NPF662Workspace
+    from DARCY_WARP_PACKAGE.solvers.npf662_kcycle import NPF662KCycleWorkspace
+    from working_tests.benchmark_regional_mf6 import audit
+
+    # A genuinely layered problem: nonparallel interfaces, anisotropic K,
+    # two convertible layers, one confined layer, irregular active domain,
+    # vertical exchange and head-dependent boundary conditions.
+    shape = (3, 5, 9)
+    nz, ny, nx = shape
+    j, i = np.indices((ny, nx))
+    top = 35. + 0.2 * i + 0.1 * j
+    bottom = np.stack((top - 14. - 0.05 * j,
+                       top - 28. - 0.1 * i,
+                       top - 46. - 0.1 * j))
+    active = np.ones(shape, dtype=int)
+    active[:, 2, 4] = 0
+    active[2, 0, 5] = 0
+    types = np.ones(shape, dtype=int)
+    types[2] = 0
+    k = np.stack((2. + 0.7 * i + 0.1 * j,
+                  1. + 0.4 * j + 0.2 * i,
+                  5. + 0.3 * i + 0.2 * j))
+    initial = np.stack((top - 5. - 0.3 * i,
+                        top - 17. - 0.2 * j,
+                        top - 23. - 0.1 * i))
+    directory = tmp_path / "mf6_layered"
+    sim = flopy.mf6.MFSimulation(sim_name="layered", sim_ws=str(directory),
+                                 exe_name=str(pinned_mf6))
+    flopy.mf6.ModflowTdis(sim, time_units="DAYS", nper=1, perioddata=[(1., 1, 1.)])
+    gwf = flopy.mf6.ModflowGwf(sim, modelname="aquifer", save_flows=True,
+                              newtonoptions="UNDER_RELAXATION")
+    flopy.mf6.ModflowIms(sim, complexity="COMPLEX", outer_maximum=200,
+        inner_maximum=500, outer_dvclose=1e-10, inner_dvclose=1e-12,
+        rcloserecord=[1e-9, "STRICT"], linear_acceleration="BICGSTAB")
+    flopy.mf6.ModflowGwfdis(gwf, nlay=nz, nrow=ny, ncol=nx,
+        top=top, botm=bottom, idomain=active, delr=20., delc=15., length_units="METERS")
+    flopy.mf6.ModflowGwfic(gwf, strt=initial)
+    flopy.mf6.ModflowGwfnpf(gwf, icelltype=types, k=k, k22=0.6*k,
+                            k33=0.05*k, save_flows=True, save_saturation=True)
+    chd = [((layer, row, col), float(value))
+           for layer, heads in enumerate(((30., 27.), (23., 19.), (20., 17.)))
+           for row in range(ny) for col, value in zip((0, nx-1), heads)]
+    flopy.mf6.ModflowGwfchd(gwf, stress_period_data=chd, save_flows=True)
+    flopy.mf6.ModflowGwfghb(gwf, stress_period_data=[
+        ((0, 1, 4), 26., 3.), ((2, 3, 6), 18., 5.)], save_flows=True)
+    flopy.mf6.ModflowGwfdrn(gwf, stress_period_data=[
+        ((0, 1, 3), 27., 1.), ((0, 3, 5), 28., 2.)], save_flows=True)
+    irch = np.zeros((ny, nx), dtype=int)
+    irch[1, 1] = 1
+    flopy.mf6.ModflowGwfrcha(gwf, fixed_cell=True, irch=irch,
+                            recharge=0.001, save_flows=True)
+    flopy.mf6.ModflowGwfoc(gwf, head_filerecord="aquifer.hds",
+        budget_filerecord="aquifer.cbc", saverecord=[("HEAD", "ALL"), ("BUDGET", "ALL")])
+    sim.write_simulation(silent=True)
+    success, messages = sim.run_simulation(silent=True, report=True)
+    assert success, messages
+
+    # Inspect the real correction operator at the original heads, where the
+    # saturation derivative is nonzero, rather than at an already converged
+    # or confined linear solution.
+    model = import_simulation(simulation=load_mf6_workspace(directory=directory))
+    profile, options = _import_solver_options(model=model, device=solver_device,
+                                              precision="mixed_fast", solver_options=None)
+    shift = options["npf_newton_controls"].steady_initial_shift
+    assert shift > 0.
+    forcing = _stress_period(model=model, schedules=_schedules(model=model), kper=0)
+    with WarpDarcySolver3D(nx=nx, ny=ny, nz=nz, dx=model.dx, dy=model.dy,
+                           device=solver_device, formulation="mf6_6_6_2_npf",
+                           implementation="fast", solver="kcycle") as solver:
+        solver.build_from_layers(z_interfaces=model.interfaces, kx_field=model.kx,
+            ky_field=model.ky, kz_field=model.kz, active=model.active,
+            initial_head=model.initial, **forcing)
+        case = case_from_model(model=solver, top=0., cell_type=model.cell_type)
+        reference, unused = independent_reference(model=solver, case=case)
+        state = NPF662Workspace(model=solver, case=case, restart=16,
+                                krylov_budget=500, reference=reference)
+        hierarchy = None
+        try:
+            start = state.head.numpy().reshape(shape).copy()
+            jacobian = reference.jacobian(head=start)
+            free = reference.free.ravel()
+            diagonal = jacobian.diagonal()
+            _, physical = reference.evaluate(head=start)
+            # Prove the case exercises the missing Newton derivative.
+            assert np.max(np.abs(diagonal[free] -
+                          physical["principal_diagonal"].ravel()[free])) > 0.1
+            original_residual = state.residual.numpy().copy()
+            hierarchy = NPF662KCycleWorkspace(faces=solver._session.faces,
+                active=case.active, fixed=case.fixed, device=solver_device,
+                controls=options["npf_kcycle_controls"],
+                storage_diag=state.operator_tangent.numpy().reshape(shape))
+            direction = np.where(free, np.linspace(-0.4, 0.7, state.n), 0.)
+            x = wp.array(direction, dtype=wp.float64, device=solver_device)
+            y = wp.zeros_like(x)
+            state.mode.fill_(1)
+            # Check both the regularised correction and its removal.
+            for value in (shift, 0.):
+                state.set_linear_shift(value=value)
+                hierarchy.refresh_current_operator(workspace=state, mode=1)
+                actual = hierarchy.levels[0]["diag"].numpy().ravel()
+                np.testing.assert_allclose(actual[free], diagonal[free]+value,
+                                           rtol=1e-12, atol=1e-10)
+                state.matvec(x, y, y, 1., 0.)
+                expected = (jacobian @ direction + value*direction)/state.scale.numpy()
+                np.testing.assert_allclose(y.numpy()[free], expected[free],
+                                           rtol=1e-12, atol=1e-12)
+                np.testing.assert_array_equal(state.residual.numpy(), original_residual)
+            # A dry but vertically connected convertible cell has a physical
+            # head, not an arbitrary zero row. The damping must not clip it.
+            cell = (0, 1, 2)
+            delta = np.zeros(shape)
+            target = case.bottoms[cell] - 1.
+            delta[cell] = target - start[cell]
+            state.delta.assign(delta.ravel())
+            state.damp_drying = True
+            state.candidate(alpha=1.)
+            assert state.trial.numpy().reshape(shape)[cell] == pytest.approx(target)
+        finally:
+            if hierarchy is not None:
+                hierarchy.close()
+            state.close()
+
+    output = tmp_path / "layered_dw"
+    # Native equation parity must pass before attempting the DarcyWarp solve.
+    tolerances = dict(head_gate=1e-6, head_rmse_gate=1e-7,
+                      saturation_head_gate=1e-6, flow_atol=1e-6, write_maps=False)
+    audit(archive=directory, directory=directory, output=output,
+          device=solver_device, **tolerances)
+    report = run_mf6_model(directory, output, device=solver_device,
+                           reference_head_file=directory / "aquifer.hds", verbose=False)
+    assert report["accepted_steps"] == 1
+    assert report["head_comparison"][0]["max_abs"] < 1e-6
+    audit(archive=directory, directory=directory, output=output,
+          device=solver_device, use_darcywarp_heads=True, **tolerances)
+    receipt = json.loads((output / "solution.json").read_text())
+    assert receipt["gates_passed"] and receipt["cpu"]["independent_accepted"]

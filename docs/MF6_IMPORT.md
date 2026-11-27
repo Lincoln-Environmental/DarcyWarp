@@ -12,8 +12,8 @@ The original files are not rewritten and MF6 is not executed. An optional
 reference_head_file points to an existing native MF6 binary head file.
 
 Existing output directories are allowed. The example passes overwrite=True,
-which replaces only darcywarp.hds, darcywarp.hds.partial and
-darcywarp_report.json; all unrelated files are retained. The library
+which replaces only darcywarp.hds, darcywarp.hds.partial,
+darcywarp_report.json and darcywarp_rejected.npz; all unrelated files are retained. The library
 defaults to overwrite=False to protect previous run results.
 
 The default precision profile is mixed_fast: FP64 geometry, physical
@@ -27,8 +27,9 @@ precision; no DARCY_FLOAT environment override or process restart is required,
 even if a legacy FP32 solver has already been imported. Physical acceptance
 thresholds use the selected checked-in benchmark profile, including its
 relative cell-imbalance criterion. The importer reads the actual
-working_tests/npf_ghb_five_level_controls.json for GHB/DRN/RIV and confined
-WEL models, npf_runtime_controls.json for other convertible models, or
+working_tests/npf_ghb_five_level_controls.json for steady convertible,
+GHB/DRN/RIV and confined WEL models, npf_runtime_controls.json for other
+convertible models, or
 npf_confined_runtime_controls.json otherwise. The package profile uses
 80 Newton iterations, 4000 shared Krylov iterations per outer iteration,
 restart 8, five multigrid levels, current coefficients and the qualified
@@ -36,6 +37,24 @@ restart 8, five multigrid levels, current coefficients and the qualified
 1e-6 in model length units. CUDA transient acceptance is enabled only for
 transient steps; the CPU/steady endpoint uses the independent physical audit.
 Explicit solver_options take precedence.
+
+For steady convertible imports (including mixed confined/convertible layers),
+the numerical starting profile uses restart 16, 500 shared Krylov iterations
+per outer iteration and a current-coefficient K-cycle with the upstream
+saturation derivative on its diagonal. The continuation shift starts at 8%
+of the median of the direction-averaged full-thickness horizontal conductance
+scales, Kx*b*dy/dx and Ky*b*dx/dy, over convertible active cells. The initial
+head-step cap is five median convertible cell thicknesses. These are the
+empirically qualified regional defaults, not universal optimum controls;
+both are explicitly overridable. The diagonal shift is on the numerical
+correction only and decays to zero. Physical fluxes, storage, residuals and
+acceptance always use the original equations. No transient storage term is
+regularised. The Newton diagonal is enabled for current-coefficient
+preconditioners in both steady and transient NPF; set newton_diagonal=False
+for diagnostic comparison. Drying damping and projection cannot suppress
+default NPF vertical exchange, and dry projection is committed only after
+independent physical acceptance. An exact dry zero row is distinguished from
+a wet floating or forced component and from a transient cell releasing storage.
 
 Progress is printed and flushed by default: model and grid summary, profile
 and resolved settings, stress-period translation, operator setup, reference
@@ -58,7 +77,8 @@ K-cycle stagnates. Existing Picard and full-saturated correction directions
 remain available. These are numerical recovery paths, not changes to the
 accepted physical equations or convergence criteria. Progress reports
 the preconditioner, residual reduction and line-search damping. A rejected
-timestep retains a JSON failure report with nonlinear history; no rejected
+timestep retains a JSON failure report with nonlinear history and
+darcywarp_rejected.npz with rejected heads and residuals; no rejected
 head is written to the accepted output.
 
 ## Initial supported contract
@@ -108,13 +128,34 @@ between stress periods and rebuilds when CHD membership changes. It does
 not yet group steps into a GPU-resident history. A failed timestep is not
 written as an accepted head; an incomplete run leaves a .partial file.
 
+## Independent regional and layered audit
+
+Run working_tests/benchmark_regional_mf6.py with the explicit stage and
+tolerance settings in its main block. It supports single-step steady
+structured DIS grids with CHD/GHB/DRN/RCHA, including multilayer models.
+The native-head audit verifies translation, both directions of face flows,
+vertical and horizontal conductance, recharge receiving layers, individual
+package entries, native residual reassembly and agreement of the CPU and
+production device evaluators. The accepted-head audit additionally checks
+maximum/RMS head differences, gross package budgets and independent physical
+acceptance. The default archive comparison gates are 0.005 m maximum head
+difference, 0.0001 m RMS and 0.1 m lagged native saturated thickness difference;
+select stricter gates for tightly converged native outputs. Flux checks use
+1e-6 absolute and 1e-10 relative tolerance; gross package budgets use 1e-3 of
+native package throughput. These comparison tolerances do not modify the
+solver's acceptance criteria. Failed gates retain the JSON receipt and
+spatial fields, but raise an error and cannot enter the benchmark table.
+
 ## Regression tests
 
     pytest -q tests/test_mf6_import.py
 
 Tests cover translation from native input files, stress-period reuse and
 clear, geometric timesteps, unsupported input, binary head round-trip and
-native MF6 parity when the pinned reference executable is available. CUDA
+native MF6 parity when the pinned reference executable is available. A single
+integrated multilayer regression checks the actual Newton preconditioner
+diagonal, Jacobian action, removal of the correction shift, vertically
+connected drying and the native/accepted-head audits. CUDA
 and CPU use the existing test device selection. This development adapter
 must be qualified against independent regional workspaces before being
 advertised as a general MODFLOW replacement.
