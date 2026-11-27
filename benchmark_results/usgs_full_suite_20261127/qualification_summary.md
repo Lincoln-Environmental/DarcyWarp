@@ -24,7 +24,7 @@ Failure groups:
 
 ## Native tolerance check
 
-Seven saved tighter MF6 references were re-audited on CUDA against the DarcyWarp solutions. All passed the existing head, face-flow, and package gates. This establishes that the original head-only misses in these seven cases came from the looser original MF6 solution, not a relaxed DarcyWarp criterion:
+22 of the 25 original head-only gate misses were re-audited against separate MF6 references at tighter IMS head closure (1e-6; 0308 used 1e-10). All 22 passed the existing head, face-flow, package and physical acceptance gates. DarcyWarp used its original-input initial heads; native converged heads were used only in these comparison audits. The original 74-case status and gates remain unchanged.
 
 | Model | Tight MF6 seconds | Datum-aligned head RMSE (m) | Maximum absolute difference (m) | Tight comparison |
 |---|---:|---:|---:|---|
@@ -33,16 +33,36 @@ Seven saved tighter MF6 references were re-audited on CUDA against the DarcyWarp
 | 0405_0409_0410_MF6_SS_Unconfined_250 | 227.4 | 1.31e-06 | 4.81e-05 | passed |
 | 0406_0407_0408_0416_MF6_SS_Unconfined_250 | 262.8 | 1.45e-07 | 4.52e-06 | passed |
 | 0414_0415_MF6_SS_Unconfined_250 | 792.7 | 3.96e-08 | 2.65e-05 | passed |
-| 1201_1202_1203_1204_MF6_SS_Unconfined_250 | 109.7 | 1.90e-10 | 1.39e-08 | passed |
+| 0501_0502_0503_MF6_SS_Unconfined_250 | 96.7 | 8.66e-10 | 1.76e-07 | passed |
+| 0504_0506_0508_0509_MF6_SS_Unconfined_250 | 96.8 | 2.83e-08 | 2.3e-06 | passed |
+| 0511_0513_0514_MF6_SS_Unconfined_250 | 131.6 | 2.66e-09 | 4.16e-07 | passed |
+| 0512_MF6_SS_Unconfined_250 | 121.4 | 9.97e-08 | 4.77e-06 | passed |
+| 0711_0713_0714_MF6_SS_Unconfined_250 | 282.7 | 9.5e-09 | 6.25e-07 | passed |
+| 0804_0805_0808_MF6_SS_Unconfined_250 | 118.8 | 2.62e-10 | 1.83e-08 | passed |
+| 0901_0902_0903_MF6_SS_Unconfined_250 | 215.0 | 6.88e-08 | 1.5e-05 | passed |
+| 0904_1002_1003_1004_1005_1007_MF6_SS_Unconfined_250 | 210.4 | 5.5e-09 | 1.18e-06 | passed |
+| 1006_1010_1011_MF6_SS_Unconfined_250 | 343.0 | 2.11e-07 | 9.85e-06 | passed |
+| 1008_1009_1012_MF6_SS_Unconfined_250 | 802.8 | 5.48e-09 | 2.05e-06 | passed |
+| 1016_1017_MF6_SS_Unconfined_250 | 125.5 | 5.55e-08 | 2.72e-06 | passed |
+| 1201_1202_1203_1204_MF6_SS_Unconfined_250 | 109.7 | 1.9e-10 | 1.39e-08 | passed |
+| 1403_MF6_SS_Unconfined_250 | 54.9 | 1.51e-08 | 1.51e-06 | passed |
 | 1408_MF6_SS_Unconfined_250 | 228.5 | 1.03e-06 | 1.96e-05 | passed |
+| 1701_1702_1703_MF6_SS_Unconfined_250 | 718.2 | 3.55e-06 | 0.00433 | passed |
+| 1708_1711_1713_MF6_SS_Unconfined_250 | 59.8 | 3.31e-08 | 3.17e-06 | passed |
+| 1712_MF6_SS_Unconfined_250 | 223.4 | 8.02e-08 | 3.46e-06 | passed |
 
-The other 18 head-parity misses have not yet been checked against a tighter native reference. Their saved native-head equation audits passed, but the head mismatches remain unresolved until tighter references are evaluated.
+Three tighter runs remain unresolved because MF6 made insufficient progress under the archived iteration limits. These are diagnostic-only runs; they do not invalidate the original-settings native reference or change the qualification result:
 
+- `1109_1110_1112_1113_MF6_SS_Unconfined_250`: stopped after 9 outer iterations; each step used 200 linear iterations and residual fell only from 4.58e6 to 4.44e6.
+- `1501_MF6_SS_Unconfined_250`: stopped after 29 outer iterations when residual contraction stalled and reversed near 1.25e6.
+- `1803_1804_MF6_SS_Unconfined_250`: stopped after 38 outer iterations with residual 4.08e5 and very slow contraction.
+
+The interrupted logs and explicit status are retained under `darcywarp_qualification/tight_references/`. No maximum iteration limit or physical tolerance was changed.
 ## Physical audit failures and solver failures
 
 Two native-head audits stop before a DarcyWarp solve because an individual DRN entry differs from the native budget by 1.4833e-6 and 1.2065e-6 m³/day, respectively, just above the unchanged 1e-6 absolute gate. Independent FloPy reconstruction shows the discrepancy is one HDS double-precision ULP at the worst high-conductance entries: cell (0, 1146, 828), conductance 3.3125e6, in 1301/1302; and cell (0, 1099, 1378), conductance 5.4612e6, in 1303/1305/1306. The native CBC flux implies a head 4.55e-13 m and 2.27e-13 m from the saved head, respectively. CPU and GPU DRN calculations agree exactly at the saved heads, the imported arrays match, and aggregate DRN budgets pass. The per-entry gate failures remain open; no tolerance was raised.
 
-The remaining 19 failures are solver failures: 14 reach the Newton outer limit, four end with ungrounded saturation components, and one fails line search. A few are close but still fail physical balance (1015/1020/1021/1022/1023 ends at 0.0448 m head-equivalent RMS and 0.00582 relative cell imbalance; 1103/1104/1105/1106 at 0.0188 m and 0.00317; 1308/1309 at 0.000692 m and 0.00234). Several others diverge severely, with head-equivalent residuals from thousands to 1e14 m. Rejected states and solver histories are retained under each model directory.
+The remaining 19 failures are solver failures: 14 reach the Newton outer limit, four end with ungrounded saturation components, and one fails line search. The four component labels occur on rejected nonlinear states with relative cell imbalances of 0.00350, 2.009, 1.859, and 0.445; these are not balanced floating components and accepting them by datum would suppress real residual. A few are close but still fail physical balance (1015/1020/1021/1022/1023 ends at 0.0448 m head-equivalent RMS and 0.00582 relative cell imbalance; 1103/1104/1105/1106 at 0.0188 m and 0.00317; 1308/1309 at 0.000692 m and 0.00234). Several others diverge severely, with head-equivalent residuals from thousands to 1e14 m. Rejected states and solver histories are retained under each model directory.
 
 The 1602/1603 IndexError from the first batch did not reproduce. A fresh run under the same defaults ended at the Newton outer limit with a very large head residual; its official receipt now records that reproducible outcome.
 
@@ -52,4 +72,4 @@ Dry-state active-set seeding previously rebuilt full-grid component masks and re
 
 ## Retained diagnostics
 
-Each case directory retains the native-head audit JSON, raw spatial arrays and maps, solver report, and rejected head/residual output when a solve failed. Seven tighter-reference audits and their solution maps are under `darcywarp_qualification/tight_reference_audit/`. The summary plot is `darcywarp_qualification/qualification_summary_plots.png`. Selected maps and the seven tight-reference audit JSON reports are committed under `qualification_evidence/`.
+Each case directory retains the native-head audit JSON, raw spatial arrays and maps, solver report, and rejected head/residual output when a solve failed. Twenty-two tighter-reference audits and their solution maps are retained under `darcywarp_qualification/tight_references/`. The summary plot is `darcywarp_qualification/qualification_summary_plots.png`. Selected head and saturated-thickness maps, all 22 compact tight-reference audit records, and the three interrupted-run logs are committed under `qualification_evidence/`.

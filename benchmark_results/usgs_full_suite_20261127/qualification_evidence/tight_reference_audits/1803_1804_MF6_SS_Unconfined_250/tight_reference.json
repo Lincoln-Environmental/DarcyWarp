@@ -1,0 +1,12 @@
+{
+  "model": "1803_1804_MF6_SS_Unconfined_250",
+  "ims_dvclose": 1e-06,
+  "stages": {
+    "native": "RuntimeError: Native MF6 failed. See /home/patrickdurney/PycharmProjects/DarcyWarp/benchmark_results/usgs_full_suite_20261127/native_tight_1e-06/1803_1804_MF6_SS_Unconfined_250/native.log"
+  },
+  "diagnostic_status": "interrupted_by_operator",
+  "diagnostic_note": "Stopped manually after 38 outer iterations because the residual was contracting too slowly for this supplemental diagnostic.",
+  "iterations_observed": 38,
+  "last_residual_reported": 408180.19,
+  "native_log": "/home/patrickdurney/PycharmProjects/DarcyWarp/benchmark_results/usgs_full_suite_20261127/native_tight_1e-06/1803_1804_MF6_SS_Unconfined_250/native.log"
+}
