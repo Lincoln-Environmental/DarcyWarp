@@ -245,5 +245,9 @@ Only head parity failed against the archived MF6 result, with 0.0014470 m
 RMS and 0.0295536 m maximum difference. The last native head change was
 0.09367 m. The original-start receipt is under
 `remaining_20d4381/ims_head_limit_original_01/1807_1810_MF6_SS_Unconfined_250/`.
-This brings the tally to 66 physically accepted, 59 fully qualified and
-eight solver failures pending further comparisons.
+The tight MF6 6.6.2 reference at `dvclose=1e-6` finished in 800.37 s.
+Both the native-head audit and the saved DarcyWarp solution passed every
+gate. Head RMSE was 1.69e-7 m and the maximum difference was 5.30e-6 m.
+The comparison receipts are under `remaining_20d4381/regional_tight_comparison/`.
+The tally is 60 fully qualified, six more physically accepted awaiting
+reference comparison, and eight solver failures.
