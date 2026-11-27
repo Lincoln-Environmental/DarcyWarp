@@ -990,6 +990,28 @@ def backtrack_head(head: wp.array(dtype=wp.float64), trial: wp.array(dtype=wp.fl
 
 
 @wp.kernel
+def hold_disconnected_dry_head(head: wp.array(dtype=wp.float64), bottom: wp.array(dtype=wp.float64),
+                               types: wp.array(dtype=wp.int32), free: wp.array(dtype=wp.int32),
+                               source: wp.array(dtype=wp.float64), residual: wp.array(dtype=wp.float64),
+                               tangent: wp.array(dtype=wp.float64), left: wp.array2d(dtype=wp.int32),
+                               dl: wp.array2d(dtype=wp.float64), dr: wp.array2d(dtype=wp.float64),
+                               delta: wp.array(dtype=wp.float64)):
+    i = wp.tid()
+    if (delta[i] == wp.float64(0.) or free[i] == 0 or types[i] == 0 or head[i] != bottom[i]
+            or source[i] != wp.float64(0.) or residual[i] != wp.float64(0.) or tangent[i] != wp.float64(0.)):
+        return
+    for axis in range(3):
+        if dl[i, axis] != wp.float64(0.) or dr[i, axis] != wp.float64(0.):
+            return
+        neighbour = left[i, axis]
+        if neighbour >= 0 and (dl[neighbour, axis] != wp.float64(0.) or dr[neighbour, axis] != wp.float64(0.)):
+            return
+    # The physical equation and its Jacobian row and column vanish here.
+    # Keep the dry head until forcing or a neighbouring face reconnects it.
+    delta[i] = wp.float64(0.)
+
+
+@wp.kernel
 def correction_max(delta:wp.array(dtype=wp.float64),maximum:wp.array(dtype=wp.float64)):
     i=wp.tid()
     wp.atomic_max(maximum,0,wp.abs(delta[i]))

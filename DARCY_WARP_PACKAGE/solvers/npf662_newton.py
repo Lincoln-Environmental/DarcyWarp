@@ -816,6 +816,11 @@ def residual_merit(*,candidate,current):
 
 
 def search_direction(*,workspace,current,controls,physical_tolerance=1e-12,relative_tolerance=1e-8):
+    if controls.steady_initial_shift > 0. and not workspace.transient:
+        wp.launch(kernel=kernels.hold_disconnected_dry_head, dim=workspace.n, device=workspace.device,
+                  inputs=[workspace.head, workspace.bottom, workspace.types, workspace.free, workspace.source,
+                          workspace.residual, workspace.operator_tangent, workspace.left, workspace.dl,
+                          workspace.dr, workspace.delta])
     workspace.maximum.zero_()
     wp.launch(kernel=kernels.correction_max,dim=workspace.n,inputs=[workspace.delta,workspace.maximum],device=workspace.device)
     maximum=float(workspace.maximum.numpy()[0])

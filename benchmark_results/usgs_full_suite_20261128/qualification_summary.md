@@ -314,3 +314,25 @@ the previous endpoint and its saved shift of 0.0003515478833. Through
 terminated with SIGSEGV during the linear solve at update 67. The last
 accepted metrics come from the progress log. The most recent saved heads
 are still those at the end of `adaptive_backtrack_continuation_01`.
+
+### Dry-cell correction from the original 1303 heads
+
+The steady solver now holds an exactly dry convertible head in place when
+its unforced equation and every incident face derivative are zero. The
+original-head CUDA run reached 240 outers in 611.6 s with 48,503 Krylov
+iterations. Head-equivalent RMS fell from 0.01709 m in the previous run to
+4.57e-8 m. Relative imbalance fell from 4.26e-8 to 4.81e-9. Both device
+and independent calculations still rejected local water balance. Maximum
+cell flow error was 0.001906 m³/day, and 100 of 2,164,867 cells accounted
+for 98.54% of the squared flow error. The receipt is under
+`remaining_20d4381/hold_dry_zero_original_01`.
+
+For 1301, 48 further updates from the previous checkpoint used square-root
+diagonal scaling for Newton and measured the true linear defect in flow
+units. Flow RMS fell from 1.72e-4 to 2.64e-5 m³/day, and relative
+imbalance fell from 3.47e-7 to 5.85e-8. The first scaled Newton solve
+reduced its weighted defect by 13.7% but increased its physical defect by
+2.0%. The existing physical check rejected that direction. The receipt is
+under `remaining_20d4381/equilibrated_refinement_01`. These two runs leave
+the qualification tally at 60 full passes, six awaiting comparison and eight
+solver failures.
