@@ -25,7 +25,27 @@ supply explicit native solver_options. Actual per-step head and preconditioner
 precision are recorded in the JSON report. The fast NPF backend owns its
 precision; no DARCY_FLOAT environment override or process restart is required,
 even if a legacy FP32 solver has already been imported. Physical acceptance
-thresholds are unchanged.
+thresholds use the selected checked-in benchmark profile, including its
+relative cell-imbalance criterion. The importer reads the actual
+working_tests/npf_ghb_five_level_controls.json for GHB/DRN/RIV and confined
+WEL models, npf_runtime_controls.json for other convertible models, or
+npf_confined_runtime_controls.json otherwise. The package profile uses
+80 Newton iterations, 4000 shared Krylov iterations per outer iteration,
+restart 8, five multigrid levels, current coefficients and the qualified
+1e-7 relative cell-imbalance limit. The head-equivalent RMS gate remains
+1e-6 in model length units. CUDA transient acceptance is enabled only for
+transient steps; the CPU/steady endpoint uses the independent physical audit.
+Explicit solver_options take precedence.
+
+Progress is printed and flushed by default: model and grid summary, profile
+and resolved settings, stress-period translation, operator setup, reference
+and component preparation, multigrid setup, Newton and FGMRES progress,
+physical acceptance and elapsed times. Inner Krylov progress uses existing
+residual readbacks at restart boundaries, throttled to approximately five
+seconds after the first block; it adds no GPU synchronisation.
+Pass verbose=False to suppress these messages. The JSON report records the
+selected profile, resolved options, per-step effective solver settings,
+iteration counts and final physical metrics.
 
 ## Initial supported contract
 

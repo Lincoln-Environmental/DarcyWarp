@@ -13,7 +13,7 @@ flopy = pytest.importorskip("flopy")
 from DARCY_WARP_PACKAGE.mf6_import import (
     UnsupportedMF6Model, import_simulation, run_mf6_model,
     timestep_lengths, _schedules, _stress_period, _add_array_recharge,
-    _prepare_interfaces, _prepare_run_outputs,
+    _prepare_interfaces, _prepare_run_outputs, _import_solver_options,
 )
 
 
@@ -379,3 +379,56 @@ def test_overwrite_replaces_only_run_files(tmp_path, solver_device):
         _prepare_run_outputs(output, overwrite=True,
                              reference_head_file=output / "darcywarp.hds")
     assert (output / "darcywarp.hds").is_file()
+
+
+
+def test_import_benchmark_profile_and_overrides(tmp_path):
+    """The importer must use the checked-in qualification settings, not ad hoc defaults."""
+    import json
+    from pathlib import Path
+    from dataclasses import asdict
+
+    model = import_simulation(make_simulation(tmp_path))
+    profile, options = _import_solver_options(model=model, device="cuda:0",
+                                             precision="mixed_fast", solver_options=None)
+    assert profile == "npf_ghb_five_level_controls.json"
+    root = Path(__file__).resolve().parents[1]
+    expected = json.loads((root / "working_tests" / profile).read_text())
+    for name, value in expected["solve"].items():
+        assert options[name] == value
+    for name, value in expected["newton"].items():
+        assert asdict(options["npf_newton_controls"])[name] == value
+    for name, value in expected["multigrid"].items():
+        assert asdict(options["npf_kcycle_controls"])[name] == value
+    _, overridden = _import_solver_options(
+        model=model, device="cpu", precision="float64",
+        solver_options={"max_outer": 100, "krylov_restart": 16})
+    assert overridden["max_outer"] == 100
+    assert overridden["krylov_restart"] == 16
+    assert not overridden["npf_device_native"]
+    assert overridden["npf_kcycle_controls"].preconditioner_precision == "float64"
+
+
+def test_import_progress_and_effective_controls(tmp_path, solver_device, capsys):
+    """Expose progress and actual native settings without altering acceptance."""
+    workspace = tmp_path / "mf6"
+    make_simulation(workspace)
+    report = run_mf6_model(workspace, tmp_path / "dw", device=solver_device, verbose=True)
+    output = capsys.readouterr().out
+    for phrase in ("Reading MF6 workspace", "Imported model", "Benchmark profile",
+                   "Operator ready", "Solving step", "Preparing Newton workspace",
+                   "Preparing K-cycle hierarchy", "Solver setup complete",
+                   "Final physical acceptance", "Step accepted", "Run complete"):
+        assert phrase in output
+    assert report["benchmark_profile"] == "npf_ghb_five_level_controls.json"
+    assert report["resolved_solver_controls"]["max_outer"] == 80
+    for step in report["steps"]:
+        effective = step["effective_solver_settings"]
+        assert effective["restart"] == 8
+        assert effective["krylov_budget_per_outer"] == 4000
+        assert effective["max_outer"] == 80
+        assert effective["convergence"]["relative_cell_imbalance"] == 1e-7
+    quiet = run_mf6_model(workspace, tmp_path / "quiet", device=solver_device,
+                          verbose=False)
+    assert quiet["accepted_steps"] == report["accepted_steps"]
+    assert "[DarcyWarp MF6" not in capsys.readouterr().out

@@ -6,7 +6,7 @@ original model's consistent length and time units. This initial adapter is
 deliberately strict about unsupported physical options.
 """
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, is_dataclass
 from pathlib import Path
 import json
 import math
@@ -602,41 +602,82 @@ def _numeric_summary(values):
 
 
 def _import_solver_options(*, model, device, precision, solver_options):
-    """Build the fast NPF profile without changing physical acceptance gates.
+    """Read the same checked-in controls as the production qualification.
 
-    :param model: Imported model, including its cell types and packages.
+    :param model: Imported model, including cell types and packages.
     :param device: Requested Warp device.
-    :param precision: Mixed-fast or full FP64 execution profile.
-    :param solver_options: Explicit overrides for the native NPF solve API.
-    :return: Solver options, with explicit overrides taking precedence.
+    :param precision: Mixed-fast or full FP64 preconditioner.
+    :param solver_options: Explicit overrides for the native solve API.
+    :return: Benchmark profile filename and resolved solver options.
     """
     from DARCY_WARP_PACKAGE.solvers.npf662_kcycle import NPF662KCycleControls
     from DARCY_WARP_PACKAGE.solvers.npf662_newton import NPF662NewtonControls
 
     if precision not in ("mixed_fast", "float64"):
         raise ValueError("precision must be 'mixed_fast' or 'float64'")
-    options = dict(solver_options or {})
-    if options.get("npf_preconditioner", "kcycle") in (None, "kcycle"):
+    convertible = bool(model.cell_type.any())
+    kinds = {package.package_type for package in model.packages}
+    if kinds.intersection({"ghb", "drn", "riv"}) or ("wel" in kinds and not convertible):
+        profile = "npf_ghb_five_level_controls.json"
+    elif convertible:
+        profile = "npf_runtime_controls.json"
+    else:
+        profile = "npf_confined_runtime_controls.json"
+    path = Path(__file__).resolve().parents[1] / "working_tests" / profile
+    saved = json.loads(path.read_text())
+    overrides = dict(solver_options or {})
+    options = dict(saved["solve"], npf_preconditioner="kcycle", npf_krylov_method="fgmres")
+    # The saved runtime profiles are for CUDA transient histories. Steady
+    # solves use the independent endpoint audit; CPU uses host acceptance.
+    options["npf_device_native"] = bool(
+        options["npf_device_native"] and str(device).startswith("cuda")
+    )
+    if "final_budget_relative_tol" in overrides and "npf_final_relative_tolerance" not in overrides:
+        options.pop("npf_final_relative_tolerance", None)
+    options.update(overrides)
+    if options.get("npf_preconditioner") in (None, "kcycle"):
         if options.get("npf_kcycle_controls") is None:
-            convertible = bool(model.cell_type.any())
-            nonlinear_boundaries = any(
-                package.package_type in ("drn", "riv") for package in model.packages
-            )
-            options["npf_kcycle_controls"] = NPF662KCycleControls(
-                levels=3 if convertible else 5,
-                coarse_sweeps=2,
-                cached_line_factors=True,
+            multigrid = dict(saved["multigrid"],
                 preconditioner_precision="float32" if precision == "mixed_fast" else "float64",
-                coefficient_state="current" if convertible or nonlinear_boundaries else "saturated",
-                device_hierarchy_build=True,
-                use_cuda_graph=True,
-            )
+                use_cuda_graph=True)
+            options["npf_kcycle_controls"] = NPF662KCycleControls(**multigrid)
     if options.get("npf_newton_controls") is None:
-        options["npf_newton_controls"] = NPF662NewtonControls(
-            reuse_trial_state=True, tiled_reductions=True,
-        )
-    options.setdefault("npf_device_native", str(device).startswith("cuda"))
-    return options
+        options["npf_newton_controls"] = NPF662NewtonControls(**saved["newton"])
+    return profile, options
+
+
+def _serialisable_controls(value):
+    """Convert resolved controls and small scalar diagnostic records to JSON.
+
+    :param value: Native solver options or effective solver settings.
+    """
+    if is_dataclass(value):
+        return _serialisable_controls(asdict(value))
+    if isinstance(value, dict):
+        return {key: _serialisable_controls(item) for key, item in value.items()}
+    if isinstance(value, (tuple, list)):
+        return [_serialisable_controls(item) for item in value]
+    if isinstance(value, np.generic):
+        return _serialisable_controls(value.item())
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    return value
+
+
+class _ImportProgress:
+    """Flushed, concise wall-time progress without additional GPU readbacks."""
+
+    def __init__(self, *, enabled):
+        self.enabled = enabled
+        self.started = perf_counter()
+
+    def __call__(self, event, **details):
+        if not self.enabled:
+            return
+        suffix = " ".join(f"{key}={value:.6g}" if isinstance(value, float)
+                          else f"{key}={value}" for key, value in details.items())
+        print(f"[DarcyWarp MF6 +{perf_counter() - self.started:8.2f}s] "
+              f"{event}{': ' + suffix if suffix else ''}", flush=True)
 
 
 def _prepare_run_outputs(output, *, overwrite, reference_head_file=None):
@@ -669,7 +710,7 @@ def _prepare_run_outputs(output, *, overwrite, reference_head_file=None):
 
 def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
                   precision="mixed_fast", solver_options=None, reference_head_file=None,
-                  overwrite=False, ignore_inactive_boundaries=False):
+                  overwrite=False, ignore_inactive_boundaries=False, verbose=True):
     """Run an existing MF6 workspace without invoking or modifying MF6.
 
     :param model_directory: Directory containing mfsim.nam.
@@ -686,12 +727,15 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
     :param ignore_inactive_boundaries: Explicitly omit non-CHD list stress
         entries on excluded IDOMAIN cells; default is strict MF6 validation.
         Counts are reported by period and package.
+    :param verbose: Print flushed import, setup, iteration and acceptance progress.
+        False disables progress without changing numerical controls.
     :return: Report containing run metadata and accepted-step diagnostics.
     """
+    started = perf_counter()
+    progress = _ImportProgress(enabled=verbose)
+    progress("Initialising FloPy and Warp", device=device)
     import flopy
     from DARCY_WARP_PACKAGE.warped_darcy_3d import WarpDarcySolver3D
-
-    started = perf_counter()
     source = Path(model_directory).expanduser().resolve()
     output = Path(output_directory).expanduser().resolve()
     if source == output:
@@ -700,15 +744,29 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
         raise FileNotFoundError(source / "mfsim.nam")
     options = dict(solver_options or {})
     reserved = {"unconfined", "npf_cell_type", "transient", "dt", "head_prev",
-                "ss", "sy", "return_info", "top_elevation"}
+                "ss", "sy", "return_info", "top_elevation", "progress_callback"}
     if reserved.intersection(options):
         raise ValueError("Physical solver controls belong to the imported MF6 model")
+    progress("Reading MF6 workspace", path=source)
     simulation = flopy.mf6.MFSimulation.load(sim_ws=str(source), strict=True,
                                               verbosity_level=0)
+    progress("Translating static grid and properties")
     model = import_simulation(simulation)
-    options = _import_solver_options(model=model, device=device,
-                                     precision=precision, solver_options=options)
+    total_steps = sum(len(lengths) for transient, lengths in model.periods)
+    progress("Imported model", name=model.name, shape=model.shape,
+             cells=int(np.prod(model.shape)), active=int(model.active.sum()),
+             convertible=int(model.cell_type.sum()), spacing=(model.dx, model.dy),
+             periods=len(model.periods), steps=total_steps,
+             units=f"{model.length_units}/{model.time_units}",
+             packages=",".join(sorted({p.package_type.upper() for p in model.packages})))
+    profile, options = _import_solver_options(model=model, device=device,
+                                              precision=precision, solver_options=options)
+    resolved = _serialisable_controls(options)
+    progress("Benchmark profile", file=profile, precision=precision)
+    progress("Resolved solver controls", controls=json.dumps(resolved, sort_keys=True))
+    progress("Reading stress-period schedules")
     schedules = _schedules(model)
+    progress("Stress-period schedules ready")
     head_path, partial_path, report_path = _prepare_run_outputs(
         output, overwrite=overwrite, reference_head_file=reference_head_file
     )
@@ -725,6 +783,8 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
                                device=device, formulation="mf6_6_6_2_npf",
                                implementation="fast", solver="kcycle") as solver:
             for kper, (transient, lengths) in enumerate(model.periods):
+                progress("Translating stress period", period=f"{kper + 1}/{len(model.periods)}",
+                         mode="transient" if transient else "steady", steps=len(lengths))
                 diagnostics = {}
                 forcing = _stress_period(
                     model, schedules, kper,
@@ -734,7 +794,17 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
                 if diagnostics:
                     excluded_boundaries.append(dict(kper=kper + 1, packages=diagnostics))
                 has_ghb = forcing["ghb_conductance"] is not None
-                if current_mask is None or not np.array_equal(current_mask, forcing["bc_mask"]):
+                progress("Boundary translation complete",
+                         chd=int(np.count_nonzero(forcing["bc_mask"])),
+                         ghb=int(np.count_nonzero(forcing["ghb_conductance"])) if has_ghb else 0,
+                         wel=len(forcing["wel_entries"] or ()),
+                         drn=len(forcing["drn_entries"] or ()),
+                         riv=len(forcing["riv_entries"] or ()),
+                         excluded=diagnostics)
+                build_started = perf_counter()
+                rebuild = current_mask is None or not np.array_equal(current_mask, forcing["bc_mask"])
+                progress("Building layered operator" if rebuild else "Updating boundary/source fields")
+                if rebuild:
                     solver.build_from_layers(z_interfaces=model.interfaces,
                         kx_field=model.kx, ky_field=model.ky, kz_field=model.kz,
                         active=model.active, initial_head=previous, **forcing)
@@ -753,6 +823,7 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
                     solver.update_drn_entries(forcing["drn_entries"])
                     solver.update_riv_entries(forcing["riv_entries"])
                 previous_ghb = has_ghb
+                progress("Operator ready", seconds=perf_counter() - build_started)
                 pertim = 0.0
                 for kstp, dt in enumerate(lengths):
                     solver.update_initial_head(previous)
@@ -764,7 +835,23 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
                     else:
                         controls.update(transient=False)
                         controls.pop("npf_device_native", None)
+                    if verbose:
+                        controls["progress_callback"] = progress
+                    progress("Solving step", period=kper + 1, step=kstp + 1,
+                             global_step=f"{len(steps) + 1}/{total_steps}",
+                             dt=float(dt), totim=elapsed + float(dt),
+                             device_native=controls.get("npf_device_native", False))
                     head, info = solver.solve(**controls)
+                    metrics = info.get("device_final_metrics", {})
+                    progress("Step accepted" if info["converged"] else "Step FAILED",
+                             reason=info.get("stop_reason"),
+                             outer=info.get("outer_iterations"),
+                             krylov=info.get("krylov_iterations"),
+                             head_rms=metrics.get("head_residual_rms"),
+                             relative_imbalance=metrics.get("relative_cell_imbalance"),
+                             setup_seconds=info.get("setup_seconds"),
+                             solve_seconds=info.get("seconds"),
+                             total_seconds=info.get("public_total_seconds"))
                     if not info["converged"]:
                         raise RuntimeError(f"DarcyWarp failed at period {kper + 1}, "
                                            f"step {kstp + 1}: {info.get('stop_reason')}")
@@ -780,6 +867,11 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
                                       converged=True, seconds=info.get("public_total_seconds"),
                                       head_precision=info.get("precision"),
                                       preconditioner_precision=info.get("multigrid", {}).get("precision"),
+                                      effective_solver_settings=_serialisable_controls(
+                                          info.get("effective_solver_settings", {})),
+                                      final_metrics=_numeric_summary(metrics),
+                                      outer_iterations=info.get("outer_iterations"),
+                                      krylov_iterations=info.get("krylov_iterations"),
                                       budget=_numeric_summary(info.get("budget")),
                                       sources=_numeric_summary(info.get("source_budgets")),
                                       drn=_numeric_summary(info.get("drn_budget")),
@@ -788,6 +880,7 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
     partial_path.rename(head_path)
     report = dict(model=model.name, shape=list(model.shape), device=device,
                   precision_profile=precision,
+                  benchmark_profile=profile, resolved_solver_controls=resolved,
                   ignore_inactive_boundaries=bool(ignore_inactive_boundaries),
                   excluded_boundary_entries=excluded_boundaries,
                   length_units=model.length_units, time_units=model.time_units,
@@ -795,6 +888,7 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
                   run_seconds=perf_counter() - started,
                   output_scope="all accepted heads; scalar budget diagnostics, not MF6 CBC")
     if reference_head_file is not None:
+        progress("Comparing native MF6 heads", path=reference_head_file)
         reference = flopy.utils.HeadFile(str(reference_head_file))
         actual = flopy.utils.HeadFile(str(head_path), precision="double")
         try:
@@ -824,7 +918,10 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
         finally:
             reference.close()
             actual.close()
-    report_path.write_text(json.dumps(report, indent=2, allow_nan=False) + "\n")
+    report["run_seconds"] = perf_counter() - started
+    report_path.write_text(json.dumps(_serialisable_controls(report), indent=2, allow_nan=False) + "\n")
+    progress("Run complete", accepted_steps=len(steps), seconds=report["run_seconds"],
+             head_file=head_path, report=report_path)
     return report
 
 

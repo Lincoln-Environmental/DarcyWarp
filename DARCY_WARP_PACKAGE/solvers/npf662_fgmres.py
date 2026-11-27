@@ -175,7 +175,8 @@ class RestartedFGMRES3D:
     def _matvec(self, *, x, out):
         self.owner.matvec(x=x, y=out, z=out, alpha=1., beta=0.)
 
-    def solve(self, *, preconditioner, max_iterations, absolute_tolerance):
+    def solve(self, *, preconditioner, max_iterations, absolute_tolerance,
+              progress_callback=None):
         if self.closed:
             raise RuntimeError('FGMRES workspace is closed')
         self.readbacks = 0
@@ -187,6 +188,9 @@ class RestartedFGMRES3D:
         used = blocks = 0
         mg_device_start = preconditioner.device_seconds
         reason = 'budget'
+        last_progress = perf_counter()
+        if progress_callback is not None:
+            progress_callback("FGMRES started", residual=beta, target=absolute_tolerance)
         while np.isfinite(beta) and beta > absolute_tolerance and used < max_iterations:
             count = min(self.restart, max_iterations - used)
             self._copy(src=self.r, dst=self.V[0], scale=1. / beta)
@@ -258,6 +262,13 @@ class RestartedFGMRES3D:
             beta = self._norm(x=self.r)
             blocks += 1
             history.append(dict(iterations=used, true_residual=beta))
+            if progress_callback is not None:
+                now = perf_counter()
+                if blocks == 1 or now - last_progress >= 5.0:
+                    progress_callback("FGMRES progress", iterations=used,
+                                      budget=max_iterations, residual=beta,
+                                      target=absolute_tolerance)
+                    last_progress = now
             if breakdown or not columns:
                 break
         if not np.isfinite(beta):

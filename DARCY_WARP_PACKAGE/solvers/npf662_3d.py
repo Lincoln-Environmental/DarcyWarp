@@ -59,8 +59,10 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
     return_info=True,max_outer=None,krylov_restart=None,npf_newton_controls=None,
     npf_preconditioner=None,npf_kcycle_controls=None,npf_krylov_method=None,
     transient=False,dt=None,head_prev=None,ss=None,sy=None,npf_final_relative_tolerance=None,
-    npf_device_native=False,npf_roundoff_acceptance=False,**unsupported):
+    npf_device_native=False,npf_roundoff_acceptance=False,progress_callback=None,**unsupported):
     started = perf_counter()
+    if progress_callback is not None and not callable(progress_callback):
+        raise ValueError("progress_callback must be callable")
     # Omitted controls stay with their numerical backend. Explicit selections must
     # either reach their backend or be rejected, even when equal to a former
     # signature default (e.g. max_levels=6 with a two-level NPF hierarchy).
@@ -110,9 +112,13 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
     if layered and top_elevation is not None:raise ValueError('Layered interfaces are authoritative; top_elevation override is unsupported')
     if unconfined and top_elevation is None and not layered:raise ValueError('Matched unconfined mode requires explicit flat top_elevation')
     types=int(unconfined) if npf_cell_type is None else npf_cell_type
+    if progress_callback is not None:
+        progress_callback("Preparing NPF physical inputs")
     case=case_from_model(model=model,top=0. if top_elevation is None else top_elevation,cell_type=types)
     has_drn_riv = (case.drn_conductance is not None or case.riv_conductance is not None
         or case.drn_entries is not None or case.riv_entries is not None)
+    if progress_callback is not None:
+        progress_callback("Preparing NPF reference/state", device_native=npf_device_native)
     if transient:
         if npf_device_native:
             from .npf662_state import NPF662TransientState
@@ -133,7 +139,12 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
     else:
         reference, reference_reused = independent_reference(model=model, case=case)
     reference_seconds = perf_counter()-started
+    if progress_callback is not None:
+        progress_callback("Checking hydraulic components", reference_seconds=reference_seconds,
+                          reference_reused=reference_reused)
     reference.check_components()
+    if progress_callback is not None:
+        progress_callback("Preparing active-set initial guess")
     active_set_seeds = []
     if hasattr(reference, 'seed_unanchored_boundary_components'):
         seeded_head, active_set_seeds = reference.seed_unanchored_boundary_components(head=case.initial)
@@ -155,7 +166,8 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
             physical_tolerance=abs_tol_min,relative_tolerance=relative_tolerance,
             npf_preconditioner=npf_preconditioner,npf_kcycle_controls=npf_kcycle_controls,
             npf_krylov_method=npf_krylov_method,device_native=npf_device_native,
-            roundoff_acceptance=npf_roundoff_acceptance, retain_accepted_state=return_info)
+            roundoff_acceptance=npf_roundoff_acceptance, retain_accepted_state=return_info,
+            progress_callback=progress_callback)
         info.update(formulation='mf6_6_6_2_npf',geometry=case.geometry,
             device=model.device,precision='float64',
             implementation='device_newton_fgmres' if info['krylov_method']=='FGMRES' else 'device_newton_gmres',session_backend='npf662_newton',

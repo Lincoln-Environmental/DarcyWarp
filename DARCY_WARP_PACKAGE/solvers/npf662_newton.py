@@ -786,7 +786,7 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
                         physical_tolerance=1e-12,relative_tolerance=1e-8,
                         npf_preconditioner='diagonal',npf_kcycle_controls=None,npf_krylov_method=None,
                         device_native=False,prepared_workspace=None,device_sequence=False,roundoff_acceptance=False,
-                        retain_accepted_state=True):
+                        retain_accepted_state=True,progress_callback=None):
     controls.validate()
     setup_start=perf_counter()
     if max_outer<0 or krylov_budget<0 or restart<2:raise ValueError('Nonnegative budgets and restart>=2 required')
@@ -803,6 +803,9 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
         reused=True
     else:
         reused=workspace is not None and workspace.compatible(model=model,case=case,restart=restart)
+    if progress_callback is not None:
+        progress_callback("Preparing Newton workspace", reused=reused, method=method.upper(),
+                          restart=restart, max_outer=max_outer, krylov_per_outer=krylov_budget)
     if not reused:
         if workspace is not None:workspace.close()
         workspace=NPF662Workspace(model=model,case=case,restart=restart,krylov_budget=krylov_budget,reference=reference)
@@ -827,6 +830,10 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
         mg_controls=NPF662KCycleControls() if npf_kcycle_controls is None else npf_kcycle_controls
         if not isinstance(mg_controls,NPF662KCycleControls):raise ValueError('npf_kcycle_controls must be NPF662KCycleControls')
         mg_controls.validate()
+        if progress_callback is not None:
+            progress_callback("Preparing K-cycle hierarchy", levels=mg_controls.levels,
+                              precision=mg_controls.preconditioner_precision,
+                              coefficient_state=mg_controls.coefficient_state)
         direct_refresh = (device_native and workspace.multigrid is not None
             and not workspace.multigrid.closed and workspace.multigrid.controls == mg_controls
             and not workspace.faces_changed)
@@ -875,6 +882,9 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
     if wp.get_device(ident=model.device).is_cuda:wp.synchronize_device(device=model.device)
     start=perf_counter();total=0;fallbacks=0;saturated=0;backtracks=0;history=[];reason='outer_budget'
     setup_seconds=start-setup_start
+    if progress_callback is not None:
+        progress_callback("Solver setup complete", seconds=setup_seconds, hierarchy_reused=mg_reused)
+        progress_callback("Evaluating initial residual")
     current=workspace.evaluate(trial=False,linearize=True)
     predictor_used=False
     predictor_continuation=False
@@ -895,6 +905,11 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
     forcing_previous=current['scaled_l2']
     for outer in range(max_outer):
         if device_accepted(metrics=current,physical_tolerance=physical_tolerance,relative_tolerance=relative_tolerance):reason='converged';break
+        if progress_callback is not None:
+            progress_callback("Newton outer", outer=outer+1, max_outer=max_outer,
+                              head_rms=current["head_residual_rms"],
+                              relative_imbalance=current["relative_cell_imbalance"],
+                              scaled_l2=current["scaled_l2"])
         forcing=controls.inner_forcing
         if controls.adaptive_forcing and outer:
             forcing=float(np.clip((current['scaled_l2']/max(forcing_previous,np.finfo(float).tiny))**controls.forcing_power,
@@ -916,6 +931,9 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
             if mode==2:saturated+=1
             allowance=min(remaining,max(1,int(controls.newton_budget_fraction*krylov_budget))) if mode==1 else max(1,remaining//2) if mode==0 else remaining
             workspace.mode.fill_(mode);workspace.delta.zero_()
+            if progress_callback is not None:
+                progress_callback("Linear solve", direction=direction, budget=allowance,
+                                  target=max(forcing*current['scaled_l2'],np.finfo(float).tiny))
             if npf_preconditioner == 'kcycle' and workspace.multigrid.controls.coefficient_state == 'current':
                 workspace.multigrid.refresh_current_operator(workspace=workspace, mode=mode)
             if method=='gmres':
@@ -924,9 +942,13 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
                 used,error,target=workspace.krylov()
             else:
                 used,error,target=workspace.flexible.solve(preconditioner=flex_preconditioner,max_iterations=allowance,
-                    absolute_tolerance=max(forcing*current['scaled_l2'],np.finfo(float).tiny))
+                    absolute_tolerance=max(forcing*current['scaled_l2'],np.finfo(float).tiny),
+                    progress_callback=progress_callback)
                 linear_history.append(dict(outer=outer+1,direction=direction,**workspace.flexible.last_info))
             total+=int(used);remaining-=int(used)
+            if progress_callback is not None:
+                progress_callback("Linear solve complete", krylov=int(used), residual=float(error),
+                                  target=float(target))
             search=search_direction(workspace=workspace,current=current,controls=controls,
                 physical_tolerance=physical_tolerance,relative_tolerance=relative_tolerance)
             backtracks+=max(len(search['trials'])-1,0)
@@ -937,6 +959,10 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
                 current=workspace.accept_trial(metrics=search['metrics'])
                 accepted=True;break
         history.append(dict(outer=outer+1,accepted=accepted,krylov=krylov_budget-remaining,attempts=attempts,metrics=current,inner_forcing=forcing))
+        if progress_callback is not None:
+            progress_callback("Newton update", outer=outer+1, accepted=accepted,
+                              krylov_total=total, head_rms=current["head_residual_rms"],
+                              relative_imbalance=current["relative_cell_imbalance"])
         if not accepted:
             if hasattr(reference, 'seed_unanchored_boundary_components'):
                 numerical_head = workspace.head.numpy().reshape(case.active.shape)
@@ -968,6 +994,9 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
     if not controls.reuse_trial_state:current=workspace.evaluate(trial=False,linearize=True)
     if wp.get_device(ident=model.device).is_cuda:wp.synchronize_device(device=model.device)
     seconds=perf_counter()-start
+    if progress_callback is not None:
+        progress_callback("Final physical acceptance", seconds=seconds,
+                          outer=len(history), krylov=total)
     head=None if device_sequence else workspace.head.numpy().reshape(case.active.shape).copy()
     datum_refined = False
     if not workspace.transient and case.ghb_conductance is not None:
