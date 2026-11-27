@@ -5,8 +5,12 @@
     "native": "RuntimeError: Native MF6 failed. See /home/patrickdurney/PycharmProjects/DarcyWarp/benchmark_results/usgs_full_suite_20261127/native_tight_1e-06/1109_1110_1112_1113_MF6_SS_Unconfined_250/native.log"
   },
   "diagnostic_status": "interrupted_by_operator",
-  "diagnostic_note": "Stopped manually after nine outer iterations with 200 linear iterations per step and negligible residual contraction.",
-  "iterations_observed": 9,
-  "last_residual_reported": 4444856.4,
-  "native_log": "/home/patrickdurney/PycharmProjects/DarcyWarp/benchmark_results/usgs_full_suite_20261127/native_tight_1e-06/1109_1110_1112_1113_MF6_SS_Unconfined_250/native.log"
+  "diagnostic_note": "Manual stop requested after 9 complete model iterations. The flushed MF6 log contains 9 model iterations and the following Backtracking 10 residual record; this was not a natural MF6 termination.",
+  "last_residual_reported": 4401018.0,
+  "native_log": "/home/patrickdurney/PycharmProjects/DarcyWarp/benchmark_results/usgs_full_suite_20261127/native_tight_1e-06/1109_1110_1112_1113_MF6_SS_Unconfined_250/native.log",
+  "stop_requested_after_outer": 9,
+  "final_logged_model_outer": 9,
+  "final_logged_backtracking_outer": 10,
+  "initial_residual_reported": 4755014.3,
+  "mf6_listing": "/home/patrickdurney/PycharmProjects/DarcyWarp/benchmark_results/usgs_full_suite_20261127/native_tight_1e-06/1109_1110_1112_1113_MF6_SS_Unconfined_250/mfsim.lst"
 }

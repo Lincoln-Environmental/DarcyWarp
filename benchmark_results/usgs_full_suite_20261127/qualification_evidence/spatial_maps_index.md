@@ -1,6 +1,6 @@
 # Selected spatial difference plots
 
-The tight-reference head and saturated-thickness maps below compare the original-input DarcyWarp solution against independent tighter MF6 references. Three tight reference runs were interrupted for poor convergence; their outputs are not presented as comparisons. The two DRN entry-audit maps show the unchanged per-entry gate misses. Full per-model maps remain in the benchmark workspace.
+The tight-reference head and saturated-thickness maps below compare the original-input DarcyWarp solution against independent tighter MF6 references. Two tight reference runs were interrupted for poor convergence; their outputs are not presented as comparisons. The two DRN entry-audit maps show the unchanged per-entry gate misses. Full per-model maps remain in the benchmark workspace.
 
 - `0308_0309_0310_MF6_SS_Unconfined_250`: [head difference](spatial/0308_0309_0310_MF6_SS_Unconfined_250_solution_head_difference_m.png)
 - `0403_0404_0707_0709_0712_MF6_SS_Unconfined_250`: [head difference](spatial/0403_0404_0707_0709_0712_MF6_SS_Unconfined_250_solution_head_difference_m.png)
@@ -24,5 +24,6 @@ The tight-reference head and saturated-thickness maps below compare the original
 - `1701_1702_1703_MF6_SS_Unconfined_250`: [head difference](spatial/1701_1702_1703_MF6_SS_Unconfined_250_tight_solution_head_difference_m.png), [saturated-thickness difference](spatial/1701_1702_1703_MF6_SS_Unconfined_250_tight_solution_saturated_thickness_difference_m.png)
 - `1708_1711_1713_MF6_SS_Unconfined_250`: [head difference](spatial/1708_1711_1713_MF6_SS_Unconfined_250_tight_solution_head_difference_m.png), [saturated-thickness difference](spatial/1708_1711_1713_MF6_SS_Unconfined_250_tight_solution_saturated_thickness_difference_m.png)
 - `1712_MF6_SS_Unconfined_250`: [head difference](spatial/1712_MF6_SS_Unconfined_250_tight_solution_head_difference_m.png), [saturated-thickness difference](spatial/1712_MF6_SS_Unconfined_250_tight_solution_saturated_thickness_difference_m.png)
+- `1803_1804_MF6_SS_Unconfined_250`: [head difference](spatial/1803_1804_MF6_SS_Unconfined_250_tight_solution_head_difference_m.png), [saturated-thickness difference](spatial/1803_1804_MF6_SS_Unconfined_250_tight_solution_saturated_thickness_difference_m.png)
 - `1301_1302_MF6_SS_Unconfined_250`: [DRN entry difference](spatial/1301_1302_MF6_SS_Unconfined_250_native_heads_drn_difference_m_day.png)
 - `1303_1305_1306_MF6_SS_Unconfined_250`: [DRN entry difference](spatial/1303_1305_1306_MF6_SS_Unconfined_250_native_heads_drn_difference_m_day.png)

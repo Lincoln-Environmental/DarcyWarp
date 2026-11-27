@@ -24,7 +24,7 @@ Failure groups:
 
 ## Native tolerance check
 
-22 of the 25 original head-only gate misses were re-audited against separate MF6 references at tighter IMS head closure (1e-6; 0308 used 1e-10). All 22 passed the existing head, face-flow, package and physical acceptance gates. DarcyWarp used its original-input initial heads; native converged heads were used only in these comparison audits. The original 74-case status and gates remain unchanged.
+23 of the 25 original head-only gate misses were re-audited against separate MF6 references at tighter IMS head closure (1e-6; 0308 used 1e-10). All 23 passed the existing head, face-flow, package and physical acceptance gates. DarcyWarp used its original-input initial heads; native converged heads were used only in these comparison audits. The original 74-case status and gates remain unchanged.
 
 | Model | Tight MF6 seconds | Datum-aligned head RMSE (m) | Maximum absolute difference (m) | Tight comparison |
 |---|---:|---:|---:|---|
@@ -50,14 +50,14 @@ Failure groups:
 | 1701_1702_1703_MF6_SS_Unconfined_250 | 718.2 | 3.55e-06 | 0.00433 | passed |
 | 1708_1711_1713_MF6_SS_Unconfined_250 | 59.8 | 3.31e-08 | 3.17e-06 | passed |
 | 1712_MF6_SS_Unconfined_250 | 223.4 | 8.02e-08 | 3.46e-06 | passed |
+| 1803_1804_MF6_SS_Unconfined_250 | 592.9 | 6.29e-07 | 0.000317 | passed |
 
-Three tighter runs remain unresolved because MF6 made insufficient progress under the archived iteration limits. These are diagnostic-only runs; they do not invalidate the original-settings native reference or change the qualification result:
+Two supplemental tight runs remain unresolved because they showed poor contraction under the archived IMS iteration limits. These are diagnostic-only runs; they do not invalidate the original-settings native references or change the qualification result:
 
-- `1109_1110_1112_1113_MF6_SS_Unconfined_250`: stopped after 9 outer iterations; each step used 200 linear iterations and residual fell only from 4.58e6 to 4.44e6.
-- `1501_MF6_SS_Unconfined_250`: stopped after 29 outer iterations when residual contraction stalled and reversed near 1.25e6.
-- `1803_1804_MF6_SS_Unconfined_250`: stopped after 38 outer iterations with residual 4.08e5 and very slow contraction.
+- `1109_1110_1112_1113_MF6_SS_Unconfined_250`: manual stop requested after observing model iteration 9; the flushed log records 9 model iterations and a final Backtracking 10 residual of 4.401e6, down from 4.755e6. Linear solves used up to 200 iterations.
+- `1501_MF6_SS_Unconfined_250`: manual stop requested after observing iteration 29 due to poor contraction; the flushed log records model iteration 30 and a final Backtracking 31 residual of 1.263e6, down from 2.261e6.
 
-The interrupted logs and explicit status are retained under `darcywarp_qualification/tight_references/`. No maximum iteration limit or physical tolerance was changed.
+Both were manually interrupted diagnostic copies, not natural MF6 failures. Their final logs and explicit status are retained under `darcywarp_qualification/tight_references/`; no maximum iteration limit or physical tolerance was changed.
 ## Physical audit failures and solver failures
 
 Two native-head audits stop before a DarcyWarp solve because an individual DRN entry differs from the native budget by 1.4833e-6 and 1.2065e-6 m³/day, respectively, just above the unchanged 1e-6 absolute gate. Independent FloPy reconstruction shows the discrepancy is one HDS double-precision ULP at the worst high-conductance entries: cell (0, 1146, 828), conductance 3.3125e6, in 1301/1302; and cell (0, 1099, 1378), conductance 5.4612e6, in 1303/1305/1306. The native CBC flux implies a head 4.55e-13 m and 2.27e-13 m from the saved head, respectively. CPU and GPU DRN calculations agree exactly at the saved heads, the imported arrays match, and aggregate DRN budgets pass. The per-entry gate failures remain open; no tolerance was raised.
@@ -72,4 +72,4 @@ Dry-state active-set seeding previously rebuilt full-grid component masks and re
 
 ## Retained diagnostics
 
-Each case directory retains the native-head audit JSON, raw spatial arrays and maps, solver report, and rejected head/residual output when a solve failed. Twenty-two tighter-reference audits and their solution maps are retained under `darcywarp_qualification/tight_references/`. The summary plot is `darcywarp_qualification/qualification_summary_plots.png`. Selected head and saturated-thickness maps, all 22 compact tight-reference audit records, and the three interrupted-run logs are committed under `qualification_evidence/`.
+Each case directory retains the native-head audit JSON, raw spatial arrays and maps, solver report, and rejected head/residual output when a solve failed. Twenty-three tighter-reference audits and their solution maps are retained under `darcywarp_qualification/tight_references/`. The summary plot is `darcywarp_qualification/qualification_summary_plots.png`. Selected head and saturated-thickness maps, all 23 compact passing tight-reference audit records and the two interrupted-run receipts are committed under `qualification_evidence/`.
