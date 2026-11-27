@@ -972,6 +972,7 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
     forcing_previous=current['scaled_l2']
     initial_physical_rms = current['physical_rms']
     dry_projection_used = False
+    dry_balance_unscaled = False
     stalled_linear_solves = 0
     saturated_preconditioner_retries = 0
     diagonal_preconditioner_retries = 0
@@ -1000,6 +1001,23 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
                         if progress_callback is not None:
                             progress_callback("Accepted dry-cell projection", head_rms=current["head_residual_rms"])
                         break
+                elif (projected['finite']
+                        and projected['head_residual_rms'] < current['head_residual_rms']
+                        and projected['relative_cell_imbalance'] <= relative_tolerance):
+                    # Remove near-zero dry rows before finishing the local
+                    # flow balances. Use the line search's physical norm for
+                    # the remaining corrections so high-conductance rows
+                    # are still visible to Krylov.
+                    current = workspace.accept_trial(metrics=projected)
+                    dry_projection_used = True
+                    if not dry_balance_unscaled:
+                        workspace.scale.fill_(1.)
+                        current = workspace.evaluate(trial=False, linearize=True)
+                        forcing_previous = current['scaled_l2']
+                        dry_balance_unscaled = True
+                    if progress_callback is not None:
+                        progress_callback("Dry-cell projection before local balance",
+                                          head_rms=current["head_residual_rms"])
         workspace.set_linear_shift(value=shift)
         if progress_callback is not None:
             progress_callback("Newton outer", outer=outer+1, max_outer=max_outer,
@@ -1145,6 +1163,8 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
                             workspace.scale, workspace.maximum], device=workspace.device)
                     if workspace.maximum.numpy()[0] != 0.:
                         raise ValueError('Invalid active-set recovery restraint diagonal')
+                    if dry_balance_unscaled:
+                        workspace.scale.fill_(1.)
                     if workspace.multigrid is not None:
                         wp.copy(dest=workspace.multigrid.levels[0]['storage'].flatten(),
                             src=workspace.previous_operator_tangent)
@@ -1244,7 +1264,9 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
         device_final_metrics=current,workspace_reused=reused,seconds=seconds,setup_seconds=setup_seconds,controls=asdict(controls),
         linear_budget_units='Krylov iterations shared across Newton and Picard per outer',
         max_krylov_per_outer=krylov_budget,max_outer=max_outer,krylov_restart=restart,
-        scaling='fixed full-saturated principal diagonal; S*J and S*R',preconditioner='fixed diagonal within each GMRES solve')
+        scaling=('fixed full-saturated principal diagonal until dry projection, then physical residual'
+                 if dry_balance_unscaled else 'fixed full-saturated principal diagonal; S*J and S*R'),
+        preconditioner='fixed diagonal within each GMRES solve')
     result['balanced_nullspace_datum'] = nullspace_datum
     result['component_datum_refined'] = datum_refined
     result['component_connectivity'] = dict(
