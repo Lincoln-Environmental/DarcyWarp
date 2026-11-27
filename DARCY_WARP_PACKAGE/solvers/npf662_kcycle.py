@@ -5,7 +5,6 @@ from time import perf_counter
 import numpy as np
 import warp as wp
 
-from DARCY_WARP_PACKAGE.config import WP_FLOAT
 from DARCY_WARP_PACKAGE.kernels_3d import (
     vertical_line_relaxation_7point_kernel, copy_field_3d_kernel,
     restrict_blockavg_axes_3d_kernel, prolong_bilinear_axes_3d_kernel,
@@ -211,8 +210,6 @@ def build_hierarchy_topology(*, faces, active, fixed, storage, controls):
 class NPF662KCycleWorkspace:
     def __init__(self, *, faces, active, fixed, device, controls, storage_diag=None):
         controls.validate()
-        if WP_FLOAT != wp.float64:
-            raise ValueError('NPF K-cycle requires DARCY_FLOAT=float64')
         start = perf_counter()
         self.device = str(device)
         self.controls = controls

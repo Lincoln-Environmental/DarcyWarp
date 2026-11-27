@@ -137,7 +137,7 @@ def _build_levels(
         free_f = (previous["active"] != 0) & (previous["bc_mask"] == 0)
         face_c, springs_c = _coarsen_faces_consistent_axes(
             previous["faces"], previous["active"], previous["bc_mask"],
-            coarsen_y=coarsen_y, coarsen_x=coarsen_x,
+            coarsen_y=coarsen_y, coarsen_x=coarsen_x, dtype=np.float64,
         )
         # Aggregated Dirichlet springs ride on the coarse storage diagonal slot
         # (diagonal-only, non-negative); see solvers_3d._coarsen_faces_consistent_axes.
@@ -526,7 +526,7 @@ def _run_kcycles(
         "n_isolated_cells_excluded": n_isolated,
         "irregular_correction_energy_projection": bool(fine["project_correction"]),
     }
-    head = np.array(fine["x"].numpy(), dtype=NP_FLOAT, copy=True)
+    head = np.array(fine["x"].numpy(), dtype=np.float64, copy=True)
     if n_isolated and isolated is not None:
         # Excluded singular cells carry no flux and no residual; report their
         # initial head rather than the zero the working mask leaves behind.
@@ -590,8 +590,6 @@ def solve_fast_confined_kcycle_3d(
         if not isinstance(linear_kcycle_controls,NPF662KCycleControls):
             raise ValueError('linear_kcycle_controls must be NPF662KCycleControls')
         linear_kcycle_controls.validate()
-    if WP_FLOAT is not wp.float64:
-        raise ValueError("implementation='fast' requires DARCY_FLOAT=float64.")
     workspace_holder = unsupported.pop("_workspace_holder", None)
     for name in ("diag_preconditioner_backend",):
         unsupported.pop(name, None)
@@ -642,6 +640,7 @@ def solve_fast_confined_kcycle_3d(
         dx=float(dx),
         dy=dy,
         dz=float(dz),
+        dtype=np.float64,
     )
     # Detect physically singular rows (zero conductance AND zero storage)
     # before any smoothing: a nonzero source there is incompatible (raise);

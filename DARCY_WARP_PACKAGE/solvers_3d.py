@@ -66,6 +66,8 @@ def build_7point_face_conductance_from_k(
     dx: float,
     dy: float | None = None,
     dz: float = 1.0,
+    *,
+    dtype=NP_FLOAT,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Build 3D 7-point face conductances from cell-centered K fields.
@@ -115,7 +117,7 @@ def build_7point_face_conductance_from_k(
         conn = act[:, :, :-1] & act[:, :, 1:] & (KL > 0.0) & (KR > 0.0)
         cond = np.zeros_like(KL, dtype=np.float64)
         cond[conn] = _stable_harmonic_mean(left=KL[conn], right=KR[conn]) * fac_x
-        cond = _representable_face_conductance(values=cond, connected=conn, dtype=NP_FLOAT, axis="x")
+        cond = _representable_face_conductance(values=cond, connected=conn, dtype=dtype, axis="x")
         tx_p[:, :, :-1] = cond
         tx_m[:, :, 1:] = cond
 
@@ -125,7 +127,7 @@ def build_7point_face_conductance_from_k(
         conn = act[:, :-1, :] & act[:, 1:, :] & (KT > 0.0) & (KB > 0.0)
         cond = np.zeros_like(KT, dtype=np.float64)
         cond[conn] = _stable_harmonic_mean(left=KT[conn], right=KB[conn]) * fac_y
-        cond = _representable_face_conductance(values=cond, connected=conn, dtype=NP_FLOAT, axis="y")
+        cond = _representable_face_conductance(values=cond, connected=conn, dtype=dtype, axis="y")
         ty_p[:, :-1, :] = cond
         ty_m[:, 1:, :] = cond
 
@@ -135,17 +137,17 @@ def build_7point_face_conductance_from_k(
         conn = act[:-1, :, :] & act[1:, :, :] & (KU > 0.0) & (KD > 0.0)
         cond = np.zeros_like(KU, dtype=np.float64)
         cond[conn] = _stable_harmonic_mean(left=KU[conn], right=KD[conn]) * fac_z
-        cond = _representable_face_conductance(values=cond, connected=conn, dtype=NP_FLOAT, axis="z")
+        cond = _representable_face_conductance(values=cond, connected=conn, dtype=dtype, axis="z")
         tz_p[:-1, :, :] = cond
         tz_m[1:, :, :] = cond
 
     return (
-        tx_p.astype(NP_FLOAT, copy=False),
-        tx_m.astype(NP_FLOAT, copy=False),
-        ty_p.astype(NP_FLOAT, copy=False),
-        ty_m.astype(NP_FLOAT, copy=False),
-        tz_p.astype(NP_FLOAT, copy=False),
-        tz_m.astype(NP_FLOAT, copy=False),
+        tx_p.astype(dtype, copy=False),
+        tx_m.astype(dtype, copy=False),
+        ty_p.astype(dtype, copy=False),
+        ty_m.astype(dtype, copy=False),
+        tz_p.astype(dtype, copy=False),
+        tz_m.astype(dtype, copy=False),
     )
 
 
@@ -490,6 +492,8 @@ def _prepare_7point_transient_terms(
     dx: float,
     dy: float | None,
     dz: float,
+    *,
+    dtype=NP_FLOAT,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray | None, float]:
     """
     Prepare RHS and storage diagonal for an optional confined 3D transient step.
@@ -504,26 +508,26 @@ def _prepare_7point_transient_terms(
     transient storage term. The returned arrays are host-side copies suitable
     for upload to the Warp kernels.
     """
-    b = np.asarray(rhs, dtype=NP_FLOAT).copy()
+    b = np.asarray(rhs, dtype=dtype).copy()
     act = binary_mask(value=active, name="active")
     bcm = binary_mask(value=bc_mask, name="bc_mask")
-    bcv = np.asarray(bc_values, dtype=NP_FLOAT)
+    bcv = np.asarray(bc_values, dtype=dtype)
 
     shape = b.shape
     free = (act != 0) & (bcm == 0)
 
     if storage_diag is None:
-        sdiag = np.zeros(shape, dtype=NP_FLOAT)
+        sdiag = np.zeros(shape, dtype=dtype)
     else:
-        sdiag = np.asarray(storage_diag, dtype=NP_FLOAT).copy()
+        sdiag = np.asarray(storage_diag, dtype=dtype).copy()
         if sdiag.shape != shape:
             raise ValueError(f"storage_diag shape {sdiag.shape} expected {shape}")
         if not np.all(np.isfinite(sdiag)):
             raise ValueError("storage_diag must be finite.")
-        if np.any(sdiag < NP_FLOAT(0.0)):
+        if np.any(sdiag < dtype(0.0)):
             raise ValueError("storage_diag must be >= 0.")
 
-    sdiag[~free] = NP_FLOAT(0.0)
+    sdiag[~free] = dtype(0.0)
 
     if not bool(transient):
         if any(value is not None for value in (storage_coeff, dt, head_prev)):
@@ -543,37 +547,37 @@ def _prepare_7point_transient_terms(
         raise ValueError("dx, dy, dz must be positive for transient terms.")
     vol = np.float64(dx_f * dy_f * dz_f)
 
-    s_in = np.asarray(storage_coeff, dtype=NP_FLOAT)
+    s_in = np.asarray(storage_coeff, dtype=dtype)
     if s_in.shape == ():
-        Scoeff = np.full(shape, NP_FLOAT(s_in.reshape(()).item()), dtype=NP_FLOAT)
+        Scoeff = np.full(shape, dtype(s_in.reshape(()).item()), dtype=dtype)
     else:
         if s_in.shape != shape:
             raise ValueError(f"storage_coeff shape {s_in.shape} expected {shape}")
-        Scoeff = np.asarray(s_in, dtype=NP_FLOAT)
+        Scoeff = np.asarray(s_in, dtype=dtype)
 
     if not np.all(np.isfinite(Scoeff)):
         raise ValueError("storage_coeff must contain finite values.")
-    if np.any(Scoeff < NP_FLOAT(0.0)):
+    if np.any(Scoeff < dtype(0.0)):
         raise ValueError("storage_coeff must be >= 0.")
 
     sdiag_add = (
         Scoeff.astype(np.float64, copy=False) * vol / np.float64(dt_f)
-    ).astype(NP_FLOAT, copy=False)
-    sdiag_add[~free] = NP_FLOAT(0.0)
+    ).astype(dtype, copy=False)
+    sdiag_add[~free] = dtype(0.0)
 
     if head_prev is not None:
-        h_prev = np.asarray(head_prev, dtype=NP_FLOAT).copy()
+        h_prev = np.asarray(head_prev, dtype=dtype).copy()
         if h_prev.shape != shape:
             raise ValueError(f"head_prev shape {h_prev.shape} expected {shape}")
     elif initial_head is not None:
-        h_prev = np.asarray(initial_head, dtype=NP_FLOAT).copy()
+        h_prev = np.asarray(initial_head, dtype=dtype).copy()
         if h_prev.shape != shape:
             raise ValueError(f"initial_head shape {h_prev.shape} expected {shape}")
     else:
-        h_prev = np.zeros(shape, dtype=NP_FLOAT)
+        h_prev = np.zeros(shape, dtype=dtype)
 
     h_prev[bcm != 0] = bcv[bcm != 0]
-    h_prev[act == 0] = NP_FLOAT(0.0)
+    h_prev[act == 0] = dtype(0.0)
     if np.any(invalid_head_values(head=h_prev[free & (Scoeff > 0.0)])):
         raise ValueError("Invalid head_prev on active free storage cells.")
     if not np.all(np.isfinite(h_prev)):
@@ -582,10 +586,10 @@ def _prepare_7point_transient_terms(
     b[free] = (
         b[free].astype(np.float64, copy=False)
         + sdiag_add[free].astype(np.float64, copy=False) * h_prev[free].astype(np.float64, copy=False)
-    ).astype(NP_FLOAT, copy=False)
+    ).astype(dtype, copy=False)
     sdiag[free] = (
         sdiag[free].astype(np.float64, copy=False) + sdiag_add[free].astype(np.float64, copy=False)
-    ).astype(NP_FLOAT, copy=False)
+    ).astype(dtype, copy=False)
 
     return b, sdiag, h_prev, float(dt_f)
 
@@ -745,6 +749,7 @@ def _coarsen_faces_consistent_axes(
     *,
     coarsen_y: int,
     coarsen_x: int,
+    dtype=NP_FLOAT,
 ) -> tuple[
     tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray],
     np.ndarray,
@@ -863,10 +868,10 @@ def _coarsen_faces_consistent_axes(
     )
 
     faces_c = tuple(
-        value.astype(NP_FLOAT, copy=False)
+        value.astype(dtype, copy=False)
         for value in (tx_p_c, tx_m_c, ty_p_c, ty_m_c, tz_p_c, tz_m_c)
     )
-    return faces_c, spring_c.astype(NP_FLOAT, copy=False)
+    return faces_c, spring_c.astype(dtype, copy=False)
 
 
 def _coarsen_max_edge_axes(mask_f: np.ndarray, *, coarsen_y: int, coarsen_x: int) -> np.ndarray:

@@ -94,8 +94,12 @@ class WarpDarcySolver3D:
         if formulation == "mf6_6_6_2_npf" and self.solver != "kcycle":
             raise ValueError("mf6_6_6_2_npf requires solver='kcycle'.")
         self.formulation=formulation
-        if formulation=='mf6_6_6_2_npf' and np.dtype(NP_FLOAT)!=np.dtype(np.float64):
-            raise ValueError('mf6_6_6_2_npf requires DARCY_FLOAT=float64 before imports')
+        # The NPF equations and acceptance own their FP64 physical fields;
+        # legacy models retain the configured precision.
+        self._np_dtype = np.float64 if formulation == 'mf6_6_6_2_npf' else NP_FLOAT
+        if (formulation == 'mf6_6_6_2_npf' and implementation_mode == 'classic'
+                and np.dtype(NP_FLOAT) != np.dtype(np.float64)):
+            raise ValueError("Classic NPF uses globally typed kernels; use implementation='fast'")
         self._tx_p: np.ndarray | None = None
         self._tx_m: np.ndarray | None = None
         self._ty_p: np.ndarray | None = None
@@ -189,9 +193,9 @@ class WarpDarcySolver3D:
         if self.formulation == 'mf6_6_6_2_npf':
             from DARCY_WARP_PACKAGE.validation.npf662_reference import NPF662Case
             case = NPF662Case(kx=fields[0], ky=fields[1], kz=fields[2], active=active,
-                fixed=np.asarray(bc_mask), values=floating_field(value=bc_values, name="bc_values", dtype=NP_FLOAT),
+                fixed=np.asarray(bc_mask), values=floating_field(value=bc_values, name="bc_values", dtype=self._np_dtype),
                 source=source,
-                initial=np.zeros(self.shape) if initial_head is None else floating_field(value=initial_head, name="initial_head", dtype=NP_FLOAT),
+                initial=np.zeros(self.shape) if initial_head is None else floating_field(value=initial_head, name="initial_head", dtype=self._np_dtype),
                 dx=self.dx, dy=self.dy, dz=self.dz,
                 drn_conductance=drn_conductance, drn_elevation=drn_elevation,
                 drn_mask=drn_mask, riv_conductance=riv_conductance, riv_stage=riv_stage,
@@ -206,6 +210,7 @@ class WarpDarcySolver3D:
             dx=self.dx,
             dy=self.dy,
             dz=self.dz,
+            dtype=self._np_dtype,
         )
         self._build_from_face_conductance(
             tx_p=tx_p,
@@ -307,10 +312,11 @@ class WarpDarcySolver3D:
 
         input_active = binary_mask(value=active, name="active", shape=shape)
         input_bc_mask = binary_mask(value=bc_mask, name="bc_mask", shape=shape)
-        input_bc_values = floating_field(value=bc_values, name="bc_values", dtype=NP_FLOAT)
-        input_initial = None if initial_head is None else floating_field(value=initial_head, name="initial_head", dtype=NP_FLOAT)
+        input_bc_values = floating_field(value=bc_values, name="bc_values", dtype=self._np_dtype)
+        input_initial = None if initial_head is None else floating_field(value=initial_head, name="initial_head", dtype=self._np_dtype)
         session = ThreeDOperatorSession(
             faces=(tx_p, tx_m, ty_p, ty_m, tz_p, tz_m),
+            face_dtype=self._np_dtype,
             active=input_active,
             bc_mask=input_bc_mask,
             bc_values=input_bc_values,
@@ -371,11 +377,11 @@ class WarpDarcySolver3D:
         volumetric, rate, entries, source = self._prepare_sources(
             rhs=rhs, R_field=R_field, wel_entries=wel_entries, active=active, bc_mask=bc_mask,
         )
-        initial=np.zeros(self.shape) if initial_head is None else np.asarray(initial_head,dtype=NP_FLOAT)
-        case=NPF662LayeredCase(kx=np.asarray(kx_field,dtype=NP_FLOAT),ky=np.asarray(ky_field,dtype=NP_FLOAT),
-            kz=np.asarray(kz_field,dtype=NP_FLOAT),active=np.asarray(active),fixed=np.asarray(bc_mask),
-            values=np.asarray(bc_values,dtype=NP_FLOAT),source=source,initial=initial,
-            dx=self.dx,dy=self.dy,z_interfaces=np.asarray(z_interfaces,dtype=NP_FLOAT),
+        initial=np.zeros(self.shape) if initial_head is None else np.asarray(initial_head,dtype=self._np_dtype)
+        case=NPF662LayeredCase(kx=np.asarray(kx_field,dtype=self._np_dtype),ky=np.asarray(ky_field,dtype=self._np_dtype),
+            kz=np.asarray(kz_field,dtype=self._np_dtype),active=np.asarray(active),fixed=np.asarray(bc_mask),
+            values=np.asarray(bc_values,dtype=self._np_dtype),source=source,initial=initial,
+            dx=self.dx,dy=self.dy,z_interfaces=np.asarray(z_interfaces,dtype=self._np_dtype),
             drn_conductance=drn_conductance,drn_elevation=drn_elevation,
             drn_mask=drn_mask,riv_conductance=riv_conductance,riv_stage=riv_stage,
             riv_bottom=riv_bottom,riv_mask=riv_mask,
@@ -384,7 +390,7 @@ class WarpDarcySolver3D:
         case.validate()
         faces,unused=build_layered_dis_faces(z_interfaces=case.z_interfaces,kx=case.kx,ky=case.ky,kz=case.kz,
             active=case.active,dx=self.dx,dy=self.dy)
-        session=ThreeDOperatorSession(faces=faces,active=case.active,bc_mask=case.fixed,bc_values=case.values,
+        session=ThreeDOperatorSession(faces=faces,face_dtype=self._np_dtype,active=case.active,bc_mask=case.fixed,bc_values=case.values,
             rhs=case.source,initial_head=case.initial,dx=self.dx,dy=self.dy,dz=self.dz,z_interfaces=case.z_interfaces,
             ghb_conductance=ghb_conductance,ghb_head=ghb_head,ghb_mask=ghb_mask,
             drn_conductance=drn_conductance,drn_elevation=drn_elevation,drn_mask=drn_mask,
@@ -583,7 +589,8 @@ class WarpDarcySolver3D:
                 kx=fields[0], ky=fields[1], kz=fields[2], active=self._active, dx=self.dx, dy=self.dy)
         else:
             faces = build_7point_face_conductance_from_k(kx_field=fields[0], ky_field=fields[1],
-                kz_field=fields[2], active=self._active, dx=self.dx, dy=self.dy, dz=self.dz)
+                kz_field=fields[2], active=self._active, dx=self.dx, dy=self.dy, dz=self.dz,
+                dtype=self._np_dtype)
         self._session.update_face_conductance(faces=faces)
         self._kx_field, self._ky_field, self._kz_field = fields
         self._tx_p, self._tx_m, self._ty_p, self._ty_m, self._tz_p, self._tz_m = self._session.faces
@@ -728,14 +735,14 @@ class WarpDarcySolver3D:
         fixed = np.asarray(bc_mask)
         if active.shape != self.shape or fixed.shape != self.shape:
             raise ValueError(f"active and bc_mask must have shape {self.shape}")
-        volumetric = None if rhs is None else floating_field(value=rhs, name="rhs", dtype=NP_FLOAT)
+        volumetric = None if rhs is None else floating_field(value=rhs, name="rhs", dtype=self._np_dtype)
         rate = recharge_depth_rate(R_field=R_field, horizontal_shape=self.shape[1:])
         entries = validate_well_entries(entries=wel_entries, shape=self.shape, active=active)
         if rate is None and entries is None and volumetric is not None:
             source = volumetric
         else:
             source = self._assemble_source(rhs=volumetric, R_field=rate, entries=entries,
-                                           active=active, fixed=fixed, dtype=NP_FLOAT)
+                                           active=active, fixed=fixed, dtype=self._np_dtype)
         return volumetric, rate, entries, source
 
     def _assemble_source(self, *, rhs, R_field, entries, active, fixed, dtype):
@@ -764,7 +771,7 @@ class WarpDarcySolver3D:
     def _source_with_recharge(self, R_field, dtype=None):
         """Assemble a replacement recharge rate with the current other sources."""
         if dtype is None:
-            dtype = NP_FLOAT if R_field is not None else self._session.rhs.dtype
+            dtype = self._np_dtype if R_field is not None else self._session.rhs.dtype
         return self._assemble_source(rhs=self._volumetric_source, R_field=R_field,
             entries=self._wel_entries, active=self._active, fixed=self._bc_mask, dtype=dtype)
 
@@ -883,7 +890,7 @@ class WarpDarcySolver3D:
         validated = validate_well_entries(entries=entries, shape=self.shape, active=self._active)
         source = self._assemble_source(rhs=self._volumetric_source, R_field=self._recharge_rate,
             entries=validated, active=self._active, fixed=self._bc_mask,
-            dtype=NP_FLOAT if self._recharge_rate is not None else self._session.rhs.dtype)
+            dtype=self._np_dtype if self._recharge_rate is not None else self._session.rhs.dtype)
         volumetric = self._volumetric_source
         if volumetric is self._rhs and validated is not None:
             # The session upload overwrites its owned RHS in place. Separate
@@ -921,7 +928,7 @@ class WarpDarcySolver3D:
             return
         volumetric = floating_field(value=rhs, name="rhs", dtype=self._session.rhs.dtype)
         source = self._assemble_source(rhs=volumetric, R_field=self._recharge_rate,
-            entries=self._wel_entries, active=self._active, fixed=self._bc_mask, dtype=NP_FLOAT)
+            entries=self._wel_entries, active=self._active, fixed=self._bc_mask, dtype=self._np_dtype)
         self._session.update_rhs(source)
         self._volumetric_source = volumetric
 

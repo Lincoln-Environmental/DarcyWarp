@@ -130,25 +130,25 @@ def apply_A_7point_kernel(
 
 @wp.kernel
 def vertical_line_relaxation_7point_kernel(
-    tx_p: wp.array(dtype=WP_FLOAT, ndim=3),
-    tx_m: wp.array(dtype=WP_FLOAT, ndim=3),
-    ty_p: wp.array(dtype=WP_FLOAT, ndim=3),
-    ty_m: wp.array(dtype=WP_FLOAT, ndim=3),
-    tz_p: wp.array(dtype=WP_FLOAT, ndim=3),
-    tz_m: wp.array(dtype=WP_FLOAT, ndim=3),
+    tx_p: wp.array(ndim=3),
+    tx_m: wp.array(ndim=3),
+    ty_p: wp.array(ndim=3),
+    ty_m: wp.array(ndim=3),
+    tz_p: wp.array(ndim=3),
+    tz_m: wp.array(ndim=3),
     active: wp.array(dtype=wp.int32, ndim=3),
     bc_mask: wp.array(dtype=wp.int32, ndim=3),
-    storage_diag: wp.array(dtype=WP_FLOAT, ndim=3),
-    rhs: wp.array(dtype=WP_FLOAT, ndim=3),
-    x_old: wp.array(dtype=WP_FLOAT, ndim=3),
-    bc_values: wp.array(dtype=WP_FLOAT, ndim=3),
+    storage_diag: wp.array(ndim=3),
+    rhs: wp.array(ndim=3),
+    x_old: wp.array(ndim=3),
+    bc_values: wp.array(ndim=3),
     omega: float,
-    c_prime: wp.array(dtype=WP_FLOAT, ndim=3),
-    d_prime: wp.array(dtype=WP_FLOAT, ndim=3),
+    c_prime: wp.array(ndim=3),
+    d_prime: wp.array(ndim=3),
     nx: int,
     ny: int,
     nz: int,
-    x_new: wp.array(dtype=WP_FLOAT, ndim=3),
+    x_new: wp.array(ndim=3),
 ):
     xy_idx = wp.tid()
     i = xy_idx % nx
@@ -266,18 +266,18 @@ def vertical_line_relaxation_7point_kernel(
             d_k = wp.float64(x_old[k, j, i])
 
         if k == 0:
-            c_prime[k, j, i] = WP_FLOAT(c_k / b_k)
-            d_prime[k, j, i] = WP_FLOAT(d_k / b_k)
+            c_prime[k, j, i] = type(x_old[0, 0, 0])(c_k / b_k)
+            d_prime[k, j, i] = type(x_old[0, 0, 0])(d_k / b_k)
         else:
             c_prev = wp.float64(c_prime[k - 1, j, i])
             d_prev = wp.float64(d_prime[k - 1, j, i])
             denom = b_k - a_k * c_prev
             if wp.abs(denom) > wp.float64(0.0):
-                c_prime[k, j, i] = WP_FLOAT(c_k / denom)
-                d_prime[k, j, i] = WP_FLOAT((d_k - a_k * d_prev) / denom)
+                c_prime[k, j, i] = type(x_old[0, 0, 0])(c_k / denom)
+                d_prime[k, j, i] = type(x_old[0, 0, 0])((d_k - a_k * d_prev) / denom)
             else:
-                c_prime[k, j, i] = WP_FLOAT(0.0)
-                d_prime[k, j, i] = WP_FLOAT(0.0)
+                c_prime[k, j, i] = type(x_old[0, 0, 0])(0.0)
+                d_prime[k, j, i] = type(x_old[0, 0, 0])(0.0)
 
     # Backward sweep
     x_new_val_prev = wp.float64(0.0)
@@ -298,11 +298,11 @@ def vertical_line_relaxation_7point_kernel(
         bcm = bc_mask[k, j, i]
         if act > 0 and bcm == 0:
             x_old_val = wp.float64(x_old[k, j, i])
-            x_new[k, j, i] = WP_FLOAT(x_old_val + wp.float64(omega) * (x_new_val - x_old_val))
+            x_new[k, j, i] = type(x_old[0, 0, 0])(x_old_val + wp.float64(omega) * (x_new_val - x_old_val))
         elif act > 0 and bcm > 0:
             x_new[k, j, i] = bc_values[k, j, i]
         else:
-            x_new[k, j, i] = WP_FLOAT(0.0)
+            x_new[k, j, i] = type(x_old[0, 0, 0])(0.0)
 
 
 @wp.kernel
@@ -490,8 +490,8 @@ def compute_residual_7point_kernel(
 
 @wp.kernel
 def copy_field_3d_kernel(
-    src: wp.array(dtype=WP_FLOAT, ndim=3),
-    dst: wp.array(dtype=WP_FLOAT, ndim=3),
+    src: wp.array(ndim=3),
+    dst: wp.array(ndim=3),
     nx: int,
     ny: int,
     nz: int,
@@ -504,8 +504,8 @@ def copy_field_3d_kernel(
 
 @wp.kernel
 def dh_change_reduce_3d_kernel(
-    x: wp.array(dtype=WP_FLOAT, ndim=3),
-    x_prev: wp.array(dtype=WP_FLOAT, ndim=3),
+    x: wp.array(ndim=3),
+    x_prev: wp.array(ndim=3),
     active: wp.array(dtype=wp.int32, ndim=3),
     bc_mask: wp.array(dtype=wp.int32, ndim=3),
     dh2_buf: wp.array(dtype=wp.float64, ndim=1),
@@ -533,11 +533,11 @@ def dh_change_reduce_3d_kernel(
 
 @wp.kernel
 def add_correction_3d_kernel(
-    x_f: wp.array(dtype=WP_FLOAT, ndim=3),
-    e_f: wp.array(dtype=WP_FLOAT, ndim=3),
+    x_f: wp.array(ndim=3),
+    e_f: wp.array(ndim=3),
     active: wp.array(dtype=wp.int32, ndim=3),
     bc_mask: wp.array(dtype=wp.int32, ndim=3),
-    bc_values: wp.array(dtype=WP_FLOAT, ndim=3),
+    bc_values: wp.array(ndim=3),
     nx: int,
     ny: int,
     nz: int,
@@ -546,7 +546,7 @@ def add_correction_3d_kernel(
     if k >= nz or j >= ny or i >= nx:
         return
     if active[k, j, i] == 0:
-        x_f[k, j, i] = WP_FLOAT(0.0)
+        x_f[k, j, i] = type(x_f[0, 0, 0])(0.0)
         return
     if bc_mask[k, j, i] != 0:
         x_f[k, j, i] = bc_values[k, j, i]
@@ -556,10 +556,10 @@ def add_correction_3d_kernel(
 
 @wp.kernel
 def restrict_blockavg_axes_3d_kernel(
-    r_f: wp.array(dtype=WP_FLOAT, ndim=3),
+    r_f: wp.array(ndim=3),
     active_f: wp.array(dtype=wp.int32, ndim=3),
     bc_mask_f: wp.array(dtype=wp.int32, ndim=3),
-    b_c: wp.array(dtype=WP_FLOAT, ndim=3),
+    b_c: wp.array(ndim=3),
     nx_f: int,
     ny_f: int,
     nz_f: int,
@@ -576,8 +576,8 @@ def restrict_blockavg_axes_3d_kernel(
 
     j0 = coarsen_y * jc
     i0 = coarsen_x * ic
-    s = WP_FLOAT(0.0)
-    n = WP_FLOAT(0.0)
+    s = type(r_f[0, 0, 0])(0.0)
+    n = type(r_f[0, 0, 0])(0.0)
     for dj in range(2):
         if coarsen_y == 1 and dj != 0:
             continue
@@ -592,17 +592,17 @@ def restrict_blockavg_axes_3d_kernel(
                 continue
             if active_f[kc, jf, i_f] != 0 and bc_mask_f[kc, jf, i_f] == 0:
                 s = s + r_f[kc, jf, i_f]
-                n = n + WP_FLOAT(1.0)
-    if n > WP_FLOAT(0.0):
+                n = n + type(r_f[0, 0, 0])(1.0)
+    if n > type(r_f[0, 0, 0])(0.0):
         b_c[kc, jc, ic] = s / n
     else:
-        b_c[kc, jc, ic] = WP_FLOAT(0.0)
+        b_c[kc, jc, ic] = type(r_f[0, 0, 0])(0.0)
 
 
 @wp.kernel
 def prolong_bilinear_axes_3d_kernel(
-    x_c: wp.array(dtype=WP_FLOAT, ndim=3),
-    e_f: wp.array(dtype=WP_FLOAT, ndim=3),
+    x_c: wp.array(ndim=3),
+    e_f: wp.array(ndim=3),
     nx_f: int,
     ny_f: int,
     nz_f: int,
@@ -619,12 +619,12 @@ def prolong_bilinear_axes_3d_kernel(
 
     jc = j // coarsen_y
     ic = i // coarsen_x
-    fy = WP_FLOAT(0.0)
-    fx = WP_FLOAT(0.0)
+    fy = type(x_c[0, 0, 0])(0.0)
+    fx = type(x_c[0, 0, 0])(0.0)
     if coarsen_y == 2 and (j & 1) == 1:
-        fy = WP_FLOAT(0.5)
+        fy = type(x_c[0, 0, 0])(0.5)
     if coarsen_x == 2 and (i & 1) == 1:
-        fx = WP_FLOAT(0.5)
+        fx = type(x_c[0, 0, 0])(0.5)
     jc1 = jc + 1
     ic1 = ic + 1
     if jc1 >= ny_c:
@@ -637,9 +637,9 @@ def prolong_bilinear_axes_3d_kernel(
     c10 = x_c[k, jc1, ic]
     c11 = x_c[k, jc1, ic1]
     e_f[k, j, i] = (
-        c00 * (WP_FLOAT(1.0) - fx) * (WP_FLOAT(1.0) - fy)
-        + c01 * fx * (WP_FLOAT(1.0) - fy)
-        + c10 * (WP_FLOAT(1.0) - fx) * fy
+        c00 * (type(x_c[0, 0, 0])(1.0) - fx) * (type(x_c[0, 0, 0])(1.0) - fy)
+        + c01 * fx * (type(x_c[0, 0, 0])(1.0) - fy)
+        + c10 * (type(x_c[0, 0, 0])(1.0) - fx) * fy
         + c11 * fx * fy
     )
 

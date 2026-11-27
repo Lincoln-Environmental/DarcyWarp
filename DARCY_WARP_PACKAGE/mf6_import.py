@@ -10,9 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import json
 import math
-import os
 import struct
-import sys
 from time import perf_counter
 
 import numpy as np
@@ -560,39 +558,59 @@ def _numeric_summary(values):
     return result
 
 
-def _initialise_npf_precision():
-    """Select required FP64 precision before the first solver import.
+def _import_solver_options(*, model, device, precision, solver_options):
+    """Build the fast NPF profile without changing physical acceptance gates.
 
-    DarcyWarp fixes its shared precision when config is imported. The MF6
-    adapter always uses the FP64 NPF/STO formulation, irrespective of the
-    default precision for other formulations. Never reload a configured
-    process or change already-imported Warp kernels.
+    :param model: Imported model, including its cell types and packages.
+    :param device: Requested Warp device.
+    :param precision: Mixed-fast or full FP64 execution profile.
+    :param solver_options: Explicit overrides for the native NPF solve API.
+    :return: Solver options, with explicit overrides taking precedence.
     """
-    config_name = "DARCY_WARP_PACKAGE.config"
-    if config_name not in sys.modules:
-        os.environ["DARCY_FLOAT"] = "float64"
-    from DARCY_WARP_PACKAGE.config import NP_FLOAT
-    if np.dtype(NP_FLOAT) != np.dtype(np.float64):
-        raise RuntimeError(
-            "MF6 import requires FP64, but DarcyWarp is already initialised "
-            "in FP32. Restart Python with DARCY_FLOAT=float64 before any "
-            "DarcyWarp solver or config imports."
+    from DARCY_WARP_PACKAGE.solvers.npf662_kcycle import NPF662KCycleControls
+    from DARCY_WARP_PACKAGE.solvers.npf662_newton import NPF662NewtonControls
+
+    if precision not in ("mixed_fast", "float64"):
+        raise ValueError("precision must be 'mixed_fast' or 'float64'")
+    options = dict(solver_options or {})
+    if options.get("npf_preconditioner", "kcycle") in (None, "kcycle"):
+        if options.get("npf_kcycle_controls") is None:
+            convertible = bool(model.cell_type.any())
+            nonlinear_boundaries = any(
+                package.package_type in ("drn", "riv") for package in model.packages
+            )
+            options["npf_kcycle_controls"] = NPF662KCycleControls(
+                levels=3 if convertible else 5,
+                coarse_sweeps=2,
+                cached_line_factors=True,
+                preconditioner_precision="float32" if precision == "mixed_fast" else "float64",
+                coefficient_state="current" if convertible or nonlinear_boundaries else "saturated",
+                device_hierarchy_build=True,
+                use_cuda_graph=True,
+            )
+    if options.get("npf_newton_controls") is None:
+        options["npf_newton_controls"] = NPF662NewtonControls(
+            reuse_trial_state=True, tiled_reductions=True,
         )
+    options.setdefault("npf_device_native", str(device).startswith("cuda"))
+    return options
 
 
 def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
-                  solver_options=None, reference_head_file=None):
+                  precision="mixed_fast", solver_options=None, reference_head_file=None):
     """Run an existing MF6 workspace without invoking or modifying MF6.
 
     :param model_directory: Directory containing mfsim.nam.
     :param output_directory: Separate directory for DarcyWarp outputs.
     :param device: Warp CPU or CUDA device.
+    :param precision: 'mixed_fast' (FP32 K-cycle, FP64 physical state) or
+        'float64' (FP64 K-cycle and physical state). Explicit solver options
+        override the corresponding profile controls.
     :param solver_options: Optional native NPF solver controls, not MF6 IMS controls.
     :param reference_head_file: Optional existing MF6 binary head file for
         comparison at common (kstp, kper) records.
     :return: Report containing run metadata and accepted-step diagnostics.
     """
-    _initialise_npf_precision()
     import flopy
     from DARCY_WARP_PACKAGE.warped_darcy_3d import WarpDarcySolver3D
 
@@ -611,6 +629,8 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
     simulation = flopy.mf6.MFSimulation.load(sim_ws=str(source), strict=True,
                                               verbosity_level=0)
     model = import_simulation(simulation)
+    options = _import_solver_options(model=model, device=device,
+                                     precision=precision, solver_options=options)
     schedules = _schedules(model)
     output.mkdir(parents=True, exist_ok=True)
     head_path = output / "darcywarp.hds"
@@ -668,6 +688,8 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
                     steps.append(dict(kstp=kstp + 1, kper=kper + 1, dt=float(dt),
                                       totim=elapsed, transient=transient,
                                       converged=True, seconds=info.get("public_total_seconds"),
+                                      head_precision=info.get("precision"),
+                                      preconditioner_precision=info.get("multigrid", {}).get("precision"),
                                       budget=_numeric_summary(info.get("budget")),
                                       sources=_numeric_summary(info.get("source_budgets")),
                                       drn=_numeric_summary(info.get("drn_budget")),
@@ -675,6 +697,7 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
                     previous = head.copy()
     partial_path.rename(head_path)
     report = dict(model=model.name, shape=list(model.shape), device=device,
+                  precision_profile=precision,
                   length_units=model.length_units, time_units=model.time_units,
                   head_file=str(head_path), accepted_steps=len(steps), steps=steps,
                   run_seconds=perf_counter() - started,

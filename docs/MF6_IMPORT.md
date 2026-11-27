@@ -11,11 +11,16 @@ including external array files, and DarcyWarp solves the imported model.
 The original files are not rewritten and MF6 is not executed. An optional
 reference_head_file points to an existing native MF6 binary head file.
 
-The adapter automatically selects FP64 before importing the solver when
-DarcyWarp precision has not yet been initialised. For a process that has
-already loaded FP32 configuration or kernels, restart Python with
-DARCY_FLOAT=float64. The adapter never reloads kernels or changes an
-initialised solver's precision.
+The default precision profile is mixed_fast: FP64 geometry, physical
+coefficients, heads, outer FGMRES, residuals and acceptance, with a fast FP32
+K-cycle preconditioner, cached line factors and CUDA graphs where supported.
+CUDA transient solves use device-native acceptance by default. Pass
+precision="float64" to run_mf6_model for a full FP64 preconditioner, or
+supply explicit native solver_options. Actual per-step head and preconditioner
+precision are recorded in the JSON report. The fast NPF backend owns its
+precision; no DARCY_FLOAT environment override or process restart is required,
+even if a legacy FP32 solver has already been imported. Physical acceptance
+thresholds are unchanged.
 
 ## Initial supported contract
 

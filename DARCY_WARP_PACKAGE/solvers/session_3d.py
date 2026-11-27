@@ -37,6 +37,7 @@ class ThreeDOperatorSession:
         dy: float,
         dz: float,
         z_interfaces: np.ndarray | None = None,
+        face_dtype=None,
         ghb_conductance=None,
         ghb_head=None,
         ghb_mask=None,
@@ -63,6 +64,7 @@ class ThreeDOperatorSession:
         self.active = binary_mask(value=active, name="active")
         if self.active.ndim != 3:
             raise ValueError("3D session fields must have shape (nz, ny, nx).")
+        self.face_dtype = NP_FLOAT if face_dtype is None else np.dtype(face_dtype).type
         self.faces = self._validated_faces(faces)
         self.bc_mask = binary_mask(value=bc_mask, name="bc_mask")
         self.bc_values = floating_field(value=bc_values, name="bc_values")
@@ -100,7 +102,7 @@ class ThreeDOperatorSession:
         if len(faces) != 6 or any(np.asarray(face).dtype.kind not in 'biuf' for face in faces):
             raise ValueError("faces must contain six real numeric arrays")
         values = validate_reciprocal_faces(faces=faces, active=self.active, canonicalize=True, copy_arrays=False)
-        stored = tuple(floating_field(value=face, name="face", dtype=NP_FLOAT) for face in values)
+        stored = tuple(floating_field(value=face, name="face", dtype=self.face_dtype) for face in values)
         if any(np.any((face > 0.0) & (narrowed == 0.0)) for face, narrowed in zip(values, stored)):
             raise ValueError("positive face conductances must remain representable in the model dtype.")
         return stored
@@ -362,6 +364,8 @@ class ThreeDOperatorSession:
         if implementation_mode not in {"classic", "fast"}:
             raise ValueError("implementation must be 'classic' or 'fast'.")
         if implementation_mode == "fast":
+            if np.dtype(self.face_dtype) != np.dtype(np.float64):
+                raise ValueError("Legacy fast 3D requires FP64 face fields")
             if solver_name != "kcycle":
                 raise ValueError("implementation='fast' currently supports solver='kcycle' only.")
             if bool(solve_kwargs.pop("unconfined", False)):

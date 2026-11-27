@@ -233,40 +233,68 @@ def test_excluded_geometry_native_parity(tmp_path, solver_device, pinned_mf6):
         assert comparison["max_abs"] < 1e-6, comparison
 
 
-@pytest.mark.parametrize("precision", [None, "float32", "float64"])
-def test_mf6_import_initialises_fp64_in_fresh_process(precision):
-    """The standalone adapter must not depend on the pytest FP64 environment."""
+@pytest.mark.parametrize("configured_precision", [None, "float32", "float64"])
+def test_mf6_import_precision_independent(tmp_path, configured_precision):
+    """Run an actual imported model after the process precision is initialised."""
+    workspace = tmp_path / "mf6"
+    make_simulation(workspace)
     env = os.environ.copy()
-    if precision is None:
+    if configured_precision is None:
         env.pop("DARCY_FLOAT", None)
     else:
-        env["DARCY_FLOAT"] = precision
+        env["DARCY_FLOAT"] = configured_precision
     code = (
-        "import numpy as np\n"
-        "from DARCY_WARP_PACKAGE.mf6_import import _initialise_npf_precision\n"
-        "_initialise_npf_precision()\n"
-        "from DARCY_WARP_PACKAGE.config import NP_FLOAT\n"
-        "assert np.dtype(NP_FLOAT) == np.dtype(np.float64)\n"
-    )
-    subprocess.run([sys.executable, "-c", code], env=env, check=True)
-
-
-def test_mf6_import_rejects_already_initialised_fp32():
-    """Do not change precision after solver configuration has been imported."""
-    env = dict(os.environ, DARCY_FLOAT="float32")
-    code = (
-        "from pathlib import Path\n"
-        "from tempfile import TemporaryDirectory\n"
+        "import os, sys, numpy as np\n"
         "from DARCY_WARP_PACKAGE.config import NP_FLOAT\n"
         "from DARCY_WARP_PACKAGE.mf6_import import run_mf6_model\n"
-        "with TemporaryDirectory() as root:\n"
-        "    output = Path(root) / 'output'\n"
-        "    try:\n"
-        "        run_mf6_model(root, output, device='cpu')\n"
-        "    except RuntimeError as error:\n"
-        "        assert 'Restart Python' in str(error)\n"
-        "    else:\n"
-        "        raise AssertionError('Expected an initialised FP32 error')\n"
-        "    assert not output.exists()\n"
+        "configured = os.environ.get('DARCY_FLOAT')\n"
+        "dtype = np.dtype(NP_FLOAT)\n"
+        "report = run_mf6_model(sys.argv[1], sys.argv[2], device='cpu')\n"
+        "assert report['accepted_steps'] == 4\n"
+        "assert report['precision_profile'] == 'mixed_fast'\n"
+        "assert all(s['head_precision'] == 'float64' and "
+        "s['preconditioner_precision'] == 'float32' for s in report['steps'])\n"
+        "assert os.environ.get('DARCY_FLOAT') == configured\n"
+        "assert np.dtype(NP_FLOAT) == dtype\n"
+    )
+    subprocess.run([sys.executable, "-c", code, str(workspace),
+                    str(tmp_path / "dw")], env=env, check=True)
+
+
+def test_mf6_import_full_precision_override(tmp_path, solver_device):
+    """An explicit full-FP64 profile retains the same accepted physical solution."""
+    workspace = tmp_path / "mf6"
+    make_simulation(workspace)
+    mixed = run_mf6_model(workspace, tmp_path / "mixed", device=solver_device)
+    full = run_mf6_model(workspace, tmp_path / "full", device=solver_device,
+                         precision="float64", reference_head_file=mixed["head_file"])
+    assert full["precision_profile"] == "float64"
+    assert all(step["preconditioner_precision"] == "float64" for step in full["steps"])
+    assert all(step["head_precision"] == "float64" for step in full["steps"])
+    assert all(row["max_abs"] < 1e-6 for row in full["head_comparison"])
+
+
+def test_uniform_fast_npf_in_fp32_process():
+    """The direct confined fast path also owns its FP64 face and head fields."""
+    env = dict(os.environ, DARCY_FLOAT="float32")
+    code = (
+        "import numpy as np\n"
+        "from DARCY_WARP_PACKAGE.config import NP_FLOAT\n"
+        "from DARCY_WARP_PACKAGE import WarpDarcySolver3D\n"
+        "shape = (1, 3, 5)\n"
+        "ones = np.ones(shape)\n"
+        "fixed = np.zeros(shape, dtype=bool)\n"
+        "fixed[:, :, 0] = fixed[:, :, -1] = True\n"
+        "expected = np.broadcast_to(np.linspace(10., 6., 5), shape).copy()\n"
+        "with WarpDarcySolver3D(nx=5, ny=3, nz=1, dx=10., dz=2., "
+        "device='cpu', formulation='mf6_6_6_2_npf', implementation='fast') as model:\n"
+        "    model.build_from_K_fields(kx_field=ones, ky_field=ones, kz_field=ones, "
+        "active=ones, bc_mask=fixed, bc_values=expected, initial_head=ones*8.)\n"
+        "    assert all(face.dtype == np.float64 for face in model._session.faces)\n"
+        "    head, info = model.solve()\n"
+        "    assert info['converged'], info\n"
+        "    assert head.dtype == np.float64\n"
+        "    np.testing.assert_allclose(head, expected, atol=1e-6, rtol=0)\n"
+        "assert np.dtype(NP_FLOAT) == np.dtype(np.float32)\n"
     )
     subprocess.run([sys.executable, "-c", code], env=env, check=True)
