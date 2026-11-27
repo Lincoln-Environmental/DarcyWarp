@@ -66,6 +66,21 @@ The remaining 19 failures are solver failures: 14 reach the Newton outer limit, 
 
 The 1602/1603 IndexError from the first batch did not reproduce. A fresh run under the same defaults ended at the Newton outer limit with a very large head residual; its official receipt now records that reproducible outcome.
 
+### Controlled 1304 solver diagnostics
+
+The original-input 1304 case was rerun with the same initial heads and physical acceptance gates to isolate precision and multigrid depth. These are diagnostics only; qualification remains on mixed-fast defaults.
+
+| Precision | K-cycle levels | DarcyWarp wall seconds | Newton steps | Krylov iterations | Physical RMS (m³/day) | Relative cell imbalance | Result |
+|---|---:|---:|---:|---:|---:|---:|---|
+| mixed-fast | 5 | 89.7 | 80 | 695 | 3454.2 | 2.0094 | failed |
+| FP64 | 5 | 47.0 | 80 | 722 | 3032.8 | 2.0541 | failed |
+| mixed-fast | 7 | 47.3 | 80 | 733 | 2750.4 | 1.7951 | failed |
+| mixed-fast | 9 | 56.2 | 80 | 711 | 2915.3 | 1.8632 | failed |
+
+FP64 preconditioning did not restore balance. Seven levels improved the endpoint, while nine levels regressed slightly; neither approached acceptance. The five-level hierarchy contributes to convergence quality, but depth alone does not explain the failure. These runs preserve their full iteration histories under `solver_diagnostics/`.
+
+The largest rejected residual rows inspected in 1018 and 1304 lie on listed high-conductance drains, but the rejected heads there are respectively 96.8 m and 68.2 m below drain elevation. Those entries are inactive at those heads, so their drain discharge does not explain the large local residuals. The residual is concentrated in the regional flow field; its nonlinear cause remains unresolved.
+
 ## Setup cost correction
 
 Dry-state active-set seeding previously rebuilt full-grid component masks and rescanned all boundary entries for every component. On model 1606 this stage exceeded 17 minutes without entering Newton. The revised CPU reference groups cells and package entries by component once; the same case reached Newton in about 114 seconds. Its solver then failed on physical convergence, which remains a separate issue. A regression now exercises three disconnected components with separate drain activation thresholds.
