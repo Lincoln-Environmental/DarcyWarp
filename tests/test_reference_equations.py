@@ -61,6 +61,66 @@ def test_exact_dry_zero_row_checks_the_unmodified_equation():
     assert rejected["exact_dry_zero_rows"] == 0
 
 
+    # A saturated singleton with no active face, source, boundary, or storage
+    # term is also an exact zero equation and needs no hydraulic datum.
+    isolated_shape = (1, 1, 2)
+    isolated = NPF662LayeredCase(
+        kx=np.ones(isolated_shape), ky=np.ones(isolated_shape),
+        kz=np.ones(isolated_shape), active=np.array([[[1, 0]]]),
+        fixed=np.zeros(isolated_shape, dtype=int), values=np.zeros(isolated_shape),
+        source=np.zeros(isolated_shape), initial=np.array([[[1.5, 0.]]]),
+        dx=1., dy=1., z_interfaces=np.array([[[2., 2.]], [[0., 0.]]]),
+        cell_type=1)
+    isolated_head = isolated.initial.copy()
+    for evaluator in (NPF662Reference(case=isolated),
+                      NPF662MatrixFreeReference(case=isolated),
+                      NPF662TransientReference(case=isolated, previous=isolated_head,
+                          dt=1., ss=0., sy=0.)):
+        checks, unused = evaluator.evaluate(head=isolated_head)
+        assert checks['independent_accepted']
+        assert checks['exact_dry_zero_rows'] == 1
+
+
+def test_balanced_ungrounded_component_uses_initial_mean_as_head_datum():
+    case = layered_column()
+    case.fixed[:] = 0
+    case.initial[:] = 10.
+    head = np.full(case.active.shape, 20.)
+    evaluators = (NPF662Reference(case=case), NPF662MatrixFreeReference(case=case))
+    for evaluator in evaluators:
+        checks, unused = evaluator.evaluate(head=head)
+        assert checks['independent_accepted']
+        assert checks['ungrounded_current_components'] == 0
+        assert checks['balanced_nullspace_components'] == 1
+    gauged, records = evaluators[0].apply_nullspace_datum(head=head)
+    np.testing.assert_array_equal(gauged, case.initial)
+    assert len(records) == 1
+    assert records[0]['applied_shift_m'] == -10.
+
+    balanced_case = layered_column()
+    balanced_case.fixed[:] = 0
+    balanced_case.source[:, 0, 0] = [3., -3.]
+    balanced_head = np.array([[[10.5]], [[9.5]]])
+    for evaluator in (NPF662Reference(case=balanced_case),
+                      NPF662MatrixFreeReference(case=balanced_case)):
+        checks, unused = evaluator.evaluate(head=balanced_head)
+        assert checks['independent_accepted']
+        assert checks['balanced_nullspace_components'] == 1
+
+    transient = NPF662TransientReference(case=case, previous=case.initial,
+        dt=1., ss=0., sy=0.)
+    checks, unused = transient.evaluate(head=head)
+    assert checks['independent_accepted']
+    assert checks['balanced_nullspace_components'] == 1
+
+    stored = NPF662TransientReference(case=case, previous=case.initial,
+        dt=1., ss=0.1, sy=0.2)
+    checks, unused = stored.evaluate(head=head)
+    assert checks['balanced_nullspace_components'] == 0
+    assert checks['ungrounded_current_components'] == 0
+    assert checks['storage_accumulation_m3_day'] != 0.
+
+
 def test_legacy_archives_replay_the_confined_gradient_and_reservoir_exchange():
     archived = Path(__file__).parent / 'fixtures' / 'npf662'
     implicit = load_npf662_case(path=archived / 'experiments_v1.npz')

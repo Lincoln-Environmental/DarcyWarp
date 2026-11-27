@@ -4,7 +4,8 @@ from scipy import sparse
 from scipy.sparse.csgraph import connected_components
 from DARCY_WARP_PACKAGE.validation.npf662_reference import NPF662Reference, quadratic_saturation_derivative
 from DARCY_WARP_PACKAGE.validation.npf662_metrics import (
-    exact_dry_zero_rows, stable_rms, stable_sum, local_balance_valid,
+    balanced_nullspace_components, exact_zero_equation_rows, stable_rms,
+    stable_sum, local_balance_valid,
 )
 from DARCY_WARP_PACKAGE.validation.head_checks import invalid_head_values
 
@@ -93,15 +94,26 @@ class NPF662TransientReference(NPF662Reference):
         graph = sparse.coo_matrix((np.ones(int(edges.sum())), (self.left[edges], self.right[edges])),
             shape=(self.case.active.size, self.case.active.size)).tocsr()
         unused, labels = connected_components(csgraph=graph, directed=False)
-        dry_zero = exact_dry_zero_rows(case=self.case, head=head, free=self.free,
+        dry_zero = exact_zero_equation_rows(case=self.case, head=head, free=self.free,
             diagonal=diagonal, residual=residual,
             boundary_throughput=fields['boundary_throughput'], storage=storage)
         active_labels = set(labels[(self.case.active.ravel() != 0) & ~dry_zero.ravel()])
         unused_drain_entries, drain, unused_river_entries, river = self.boundary_terms(head=head)
         boundary_tangent = self.ghb_conductance + drain.diagonal + river.diagonal
         anchors = (self.case.fixed != 0)|(boundary_tangent > 0.)|((tangent > 0.)&self.free)
-        grounded = set(labels[anchors.ravel()&(self.case.active.ravel() != 0)])
-        ungrounded = len(active_labels-grounded)
+        grounded_mask = anchors.ravel() & (self.case.active.ravel() != 0)
+        grounded = set(labels[grounded_mask])
+        ungrounded_labels = active_labels-grounded
+        boundary_throughput = fields['boundary_throughput']
+        nullspaces = balanced_nullspace_components(labels=labels, active=self.case.active,
+            grounded=grounded_mask, source=self.case.source, residual=residual,
+            left=self.left, right=self.right,
+            face_left_derivative=fields['dflux_left'],
+            face_right_derivative=fields['dflux_right'],
+            boundary_tangent=boundary_tangent, boundary_throughput=boundary_throughput,
+            storage=storage, storage_tangent=tangent)
+        balanced_labels = ungrounded_labels & set(nullspaces)
+        ungrounded = len(ungrounded_labels-balanced_labels)
         valid = bool(all(np.isfinite(fields[name]).all() for name in
             ('flux', 'conductance', 'dflux_left', 'dflux_right', 'saturation'))
             and np.isfinite(storage).all() and np.isfinite(tangent).all() and np.all(tangent >= 0.)
@@ -110,7 +122,11 @@ class NPF662TransientReference(NPF662Reference):
         checks.update(physical_rms=rms, physical_max=float(np.max(np.abs(residual))),
             head_residual_rms=hrms, residual_l1=l1, relative_cell_imbalance=relative,
             gross_throughput=throughput, equation_throughput=equation_throughput, signed_imbalance=stable_sum(values=residual[self.free]),
-            ungrounded_current_components=ungrounded, exact_dry_zero_rows=int(dry_zero.sum()),
+            ungrounded_current_components=ungrounded,
+            balanced_nullspace_components=len(balanced_labels),
+            balanced_nullspace_cells=int(sum(nullspaces[label].size for label in balanced_labels)),
+            exact_zero_equation_rows=int(dry_zero.sum()),
+            exact_dry_zero_rows=int(dry_zero.sum()),
             physical_metrics_valid=valid,
             storage_accumulation_m3_day=stable_sum(values=storage[self.free]))
         limits = checks['final_acceptance_thresholds']

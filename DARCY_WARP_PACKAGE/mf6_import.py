@@ -965,6 +965,10 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
                                 saturated_preconditioner_retries=info.get("saturated_preconditioner_retries"),
                                 diagonal_preconditioner_retries=info.get("diagonal_preconditioner_retries"),
                                 outer_history=info.get("outer_history"),
+                                physical_acceptance=_numeric_summary(
+                                    info.get("physical_acceptance")),
+                                balanced_nullspace_datum=_serialisable_controls(
+                                    info.get("balanced_nullspace_datum", [])),
                                 effective_solver_settings=info.get("effective_solver_settings")),
                             run_seconds=perf_counter()-started)
                         report_path.write_text(json.dumps(_serialisable_controls(failed),
@@ -987,6 +991,10 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
                                       solver_setup_seconds=info.get("setup_seconds"),
                                       solve_seconds=info.get("seconds"),
                                       dry_projection_used=info.get("dry_projection_used", False),
+                                      physical_acceptance=_numeric_summary(
+                                          info.get("physical_acceptance")),
+                                      balanced_nullspace_datum=_serialisable_controls(
+                                          info.get("balanced_nullspace_datum", [])),
                                       head_precision=info.get("precision"),
                                       preconditioner_precision=info.get("multigrid", {}).get("precision"),
                                       effective_solver_settings=_serialisable_controls(

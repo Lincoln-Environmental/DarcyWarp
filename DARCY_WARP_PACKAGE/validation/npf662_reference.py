@@ -12,7 +12,8 @@ from scipy.sparse.csgraph import connected_components
 from scipy.sparse.linalg import spsolve
 from DARCY_WARP_PACKAGE.validation.head_checks import inspect_heads
 from DARCY_WARP_PACKAGE.validation.npf662_metrics import (
-    exact_dry_zero_rows, final_tolerances, stable_rms, stable_sum, local_balance_valid,
+    balanced_nullspace_components, exact_zero_equation_rows, final_tolerances,
+    stable_rms, stable_sum, local_balance_valid,
 )
 from DARCY_WARP_PACKAGE.physics.ghb_3d import npf_ghb_component_anchor
 
@@ -717,14 +718,23 @@ class NPF662Reference:
         edges=conductance>0.
         graph=sparse.coo_matrix((np.ones(int(edges.sum())),(self.left[edges],self.right[edges])),shape=self.matrix.shape).tocsr()
         unused,labels=connected_components(csgraph=graph,directed=False)
-        # A fully dry isolated convertible cell with an exact zero equation
-        # has no head to solve for. A wet floating component or any dry row
-        # with nonzero flux or forcing still requires a hydraulic restraint.
-        dry_zero = exact_dry_zero_rows(case=c, head=head, free=self.free,
+        # Exact zero-equation rows are independent of saturation. Larger
+        # floating components are excluded only after the balanced nullspace
+        # check below proves their physical Jacobian has a constant-head mode.
+        dry_zero = exact_zero_equation_rows(case=c, head=head, free=self.free,
             diagonal=diagonal, residual=residual, boundary_throughput=boundary_gross)
         active_labels=set(labels[active.ravel() & ~dry_zero.ravel()])
-        grounded_labels=set(labels[(c.active.ravel()!=0)&((c.fixed.ravel()!=0)|(boundary_tangent.ravel()>0.))])
-        ungrounded=len(active_labels-grounded_labels)
+        grounded_mask=(c.active.ravel()!=0)&((c.fixed.ravel()!=0)|(boundary_tangent.ravel()>0.))
+        grounded_labels=set(labels[grounded_mask])
+        ungrounded_labels=active_labels-grounded_labels
+        nullspaces=balanced_nullspace_components(labels=labels,active=c.active,
+            grounded=grounded_mask,source=c.source,residual=residual,
+            left=self.left,right=self.right,
+            face_left_derivative=dl,face_right_derivative=dr,
+            boundary_tangent=boundary_tangent,
+            boundary_throughput=boundary_gross)
+        balanced_labels=ungrounded_labels & set(nullspaces)
+        ungrounded=len(ungrounded_labels-balanced_labels)
         result=dict(**checks,head_residual_rms=hrms,physical_rms=rms,
             physical_max=float(np.abs(residual).max()),residual_l1=l1,relative_cell_imbalance=relative,
             gross_throughput=throughput,equation_throughput=equation_throughput,signed_imbalance=stable_sum(values=residual[self.free]),boundary_inflow=inflow,boundary_outflow=outflow,
@@ -734,7 +744,11 @@ class NPF662Reference:
             chd_inflow=chd_in,chd_outflow=chd_out,
             fixed_cell_source_total=stable_sum(values=c.source[c.fixed!=0]),free_cells=int(self.free.sum()),
             fixed_reservoir_required_inflow=stable_sum(values=(divergence-c.source)[c.fixed!=0]),
-            ungrounded_current_components=ungrounded,exact_dry_zero_rows=int(dry_zero.sum()),
+            ungrounded_current_components=ungrounded,
+            balanced_nullspace_components=len(balanced_labels),
+            balanced_nullspace_cells=int(sum(nullspaces[label].size for label in balanced_labels)),
+            exact_zero_equation_rows=int(dry_zero.sum()),
+            exact_dry_zero_rows=int(dry_zero.sum()),
             physical_metrics_valid=metrics_valid,
             final_acceptance_thresholds=thresholds)
         result['physical_metrics_valid']=bool(metrics_valid and np.all(np.isfinite([
@@ -761,6 +775,71 @@ class NPF662Reference:
             principal_diagonal=diagonal,saturation=saturation,ghb_outflow=ghb_exchange,
             drn_outflow=drain.discharge,riv_outflow=river.discharge,boundary_throughput=boundary_gross,
             conductance=conductance,dflux_left=dl,dflux_right=dr)
+
+    def apply_nullspace_datum(self, *, head):
+        """Retain the original mean head on eligible balanced components.
+
+        Only balanced components with an exact constant-head Jacobian mode
+        are shifted to their original mean head. Components containing a
+        DRN/RIV entry keep the existing head because a datum shift could change
+        that package's active branch. The final state is independently
+        re-evaluated before it is returned.
+
+        :param head: Converged total-head grid.
+        :return: Candidate heads and a record of applied datum shifts.
+        """
+        candidate = np.array(head, dtype=np.float64, copy=True, order='C')
+        checks, fields = self.evaluate(head=candidate)
+        if checks['balanced_nullspace_components'] == 0:
+            return candidate, []
+        active = np.asarray(self.case.active).ravel() != 0
+        conducting = np.asarray(fields['conductance']) > 0.
+        graph = sparse.coo_matrix((np.ones(int(conducting.sum())),
+            (self.left[conducting], self.right[conducting])),
+            shape=(self.case.active.size, self.case.active.size)).tocsr()
+        unused, labels = connected_components(csgraph=graph, directed=False)
+        unused_drn, drain, unused_riv, river = self.boundary_terms(head=candidate)
+        boundary_tangent = self.ghb_conductance + drain.diagonal + river.diagonal
+        storage = storage_tangent = None
+        if hasattr(self, 'storage'):
+            storage, storage_tangent = self.storage(head=candidate)
+        physical_residual = fields['residual']
+        if storage is not None:
+            physical_residual = physical_residual - storage
+        grounded = ((self.case.fixed != 0) | (boundary_tangent > 0.)).ravel()
+        if storage_tangent is not None:
+            grounded |= (storage_tangent > 0.).ravel()
+        nullspaces = balanced_nullspace_components(labels=labels, active=self.case.active,
+            grounded=grounded, source=self.case.source, residual=physical_residual,
+            left=self.left, right=self.right,
+            face_left_derivative=fields['dflux_left'],
+            face_right_derivative=fields['dflux_right'],
+            boundary_tangent=boundary_tangent,
+            boundary_throughput=fields['boundary_throughput'],
+            storage=storage,
+            storage_tangent=storage_tangent)
+        drn_occupied, riv_occupied = self.boundary_occupancy()
+        initial = np.asarray(self.case.initial, dtype=np.float64).ravel()
+        flat = candidate.ravel()
+        records = []
+        for label, cells in nullspaces.items():
+            if np.any(drn_occupied.ravel()[cells] | riv_occupied.ravel()[cells]):
+                continue
+            current_mean = stable_sum(values=flat[cells]) / cells.size
+            initial_mean = stable_sum(values=initial[cells]) / cells.size
+            shift = initial_mean - current_mean
+            if shift != 0.:
+                flat[cells] += shift
+            records.append(dict(component=int(label), cells=int(cells.size),
+                initial_mean_head_m=float(initial_mean),
+                previous_mean_head_m=float(current_mean),
+                applied_shift_m=float(shift)))
+        if not records:
+            return candidate, []
+        final_checks, unused_fields = self.evaluate(head=candidate)
+        if not final_checks['independent_accepted']:
+            return np.array(head, dtype=np.float64, copy=True), []
+        return candidate, records
 
     def solve(self,*,max_outer=200):
         self.check_components()

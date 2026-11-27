@@ -9,7 +9,8 @@ from scipy.sparse.csgraph import connected_components
 
 from DARCY_WARP_PACKAGE.validation.head_checks import inspect_heads
 from DARCY_WARP_PACKAGE.validation.npf662_metrics import (
-    exact_dry_zero_rows, final_tolerances, stable_rms, stable_sum, local_balance_valid,
+    balanced_nullspace_components, exact_zero_equation_rows, final_tolerances,
+    stable_rms, stable_sum, local_balance_valid,
 )
 from DARCY_WARP_PACKAGE.physics.ghb_3d import npf_ghb_component_anchor
 from DARCY_WARP_PACKAGE.validation.npf662_reference import quadratic_saturation_derivative
@@ -132,12 +133,21 @@ class NPF662MatrixFreeReference:
         graph = sparse.coo_matrix((np.ones(shape=int(edges.sum())), (self.left[edges], self.right[edges])), shape=(n, n)).tocsr()
         unused, labels = connected_components(csgraph=graph, directed=False)
         boundary_gross = np.abs(ghb_exchange) + drain[2] + river[2]
-        dry_zero = exact_dry_zero_rows(case=case, head=head, free=self.free,
+        dry_zero = exact_zero_equation_rows(case=case, head=head, free=self.free,
             diagonal=diagonal, residual=residual, boundary_throughput=boundary_gross)
         active_labels = set(labels[(case.active.ravel() != 0) & ~dry_zero.ravel()])
         boundary_tangent = self.ghb_conductance + drain[1] + river[1]
-        grounded_labels = set(labels[(case.active.ravel() != 0)&((case.fixed.ravel() != 0)|(boundary_tangent.ravel()>0.))])
-        ungrounded = len(active_labels-grounded_labels)
+        grounded_mask = (case.active.ravel() != 0) & ((case.fixed.ravel() != 0) | (boundary_tangent.ravel() > 0.))
+        grounded_labels = set(labels[grounded_mask])
+        ungrounded_labels = active_labels-grounded_labels
+        nullspaces = balanced_nullspace_components(labels=labels, active=case.active,
+            grounded=grounded_mask, source=case.source, residual=residual,
+            left=self.left, right=self.right, face_left_derivative=dl,
+            face_right_derivative=dr,
+            boundary_tangent=boundary_tangent,
+            boundary_throughput=boundary_gross)
+        balanced_labels = ungrounded_labels & set(nullspaces)
+        ungrounded = len(ungrounded_labels-balanced_labels)
         active = case.active != 0
         valid = all(np.all(np.isfinite(value)) for value in (flux, conductance, dl, dr, saturation[active],
             derivative[active], diagonal[active], divergence[active], residual[self.free], scaled[self.free]))
@@ -154,7 +164,11 @@ class NPF662MatrixFreeReference:
             riv_outflow=stable_sum(values=np.maximum(river_rates,0.)),
             fixed_cell_source_total=stable_sum(values=case.source[case.fixed != 0]), free_cells=int(self.free.sum()),
             fixed_reservoir_required_inflow=stable_sum(values=(divergence-case.source)[case.fixed != 0]),
-            ungrounded_current_components=ungrounded, exact_dry_zero_rows=int(dry_zero.sum()),
+            ungrounded_current_components=ungrounded,
+            balanced_nullspace_components=len(balanced_labels),
+            balanced_nullspace_cells=int(sum(nullspaces[label].size for label in balanced_labels)),
+            exact_zero_equation_rows=int(dry_zero.sum()),
+            exact_dry_zero_rows=int(dry_zero.sum()),
             physical_metrics_valid=valid, final_acceptance_thresholds=thresholds,
             evaluator='matrix-free physical incidence; connectivity graph only')
         result['physical_metrics_valid'] = bool(valid and np.all(np.isfinite([

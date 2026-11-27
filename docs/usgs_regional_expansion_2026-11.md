@@ -32,22 +32,24 @@ Separate copies of those three workspaces were run with `OUTER_DVCLOSE` and `INN
 
 This explains the three comparison misses: native MF6 accepted its archived stopping point, which was too loose for the requested cross-solver head limits. DarcyWarp's final physical residual RMS values were 1.30e-9, 1.74e-5 and 3.35e-6 m³/day respectively; CPU/GPU physical evaluations agreed. The tight-reference audits are in `tight_references/<model>/`.
 
-### Rejected ungrounded components
+### Zero equations and balanced nullspaces: 0403 and 0414
 
-`0403_0404_0707_0709_0712` and `0414_0415` remain unresolved. DarcyWarp returned rejected states and did not write them as accepted heads. The default solve stopped with `ungrounded_saturation_components`; tolerances were not relaxed.
+The original DarcyWarp runs for `0403_0404_0707_0709_0712` and `0414_0415` were rejected as `ungrounded_saturation_components`. The rejection was too broad: a free cell with an exactly zero equation was rejected based on its saturation state, and valid unforced floating components were treated as failed equations. Both workspaces now converge through the mixed-fast CUDA solver from their archived initial heads.
 
-Here, a component is a set of active cells joined by positive current face conductances. It is called ungrounded when none of its cells has a fixed-head condition or a positive head-dependent boundary tangent from GHB, DRN or RIV. Such a component has no external head anchor. This check is distinct from global mass balance: an unanchored group can have zero net source and zero local residual while its absolute head remains undetermined.
+The exact-zero-row check now accepts a free row only when its diagonal, residual, source and boundary throughput are exactly zero (and, for transient problems, its storage contribution is zero). Saturation does not determine whether a zero equation is valid. For a multi-cell component, the solver confirms exact local balance and an actual constant-head null vector before accepting the component. It then retains the original initial-head mean as a datum. This shifts only an unconstrained nullspace; it adds no boundary, conductance or source. A transient storage term anchors head and prevents this treatment. The final physical residual is reevaluated after datum selection.
 
-The saved native and rejected states identify the specific groups:
+| Model | Accepted floating cells | CUDA solve | Independent physical acceptance | Tight MF6 head comparison |
+| --- | ---: | --- | --- | --- |
+| 0403 | 1 saturated isolated cell `(0,935,962)` | 38 Newton, 187 Krylov; 2.90 s | Passed; relative cell imbalance 8.19e-10 | Passed raw: 1.06e-7 m RMSE, 1.81e-5 m maximum |
+| 0414 | 24 components / 28 cells | 27 Newton, 152 Krylov; 3.39 s | Passed; relative cell imbalance 3.50e-11 | Passed after datum alignment; raw MF6 heads drift in nullspace components |
 
-| Model | Native-head groups | DarcyWarp rejected-state groups | Component structure |
-| --- | ---: | ---: | --- |
-| 0403 | 1 | 1 | One isolated active cell at zero-based `(layer=0, row=935, column=962)` |
-| 0414 | 24 | 25 | 21 native / 22 rejected singletons, two pairs and one three-cell group |
+For 0414, the approximately 0.024 m head-equivalent residual at the rejected state came from three near-dry cells at `(0,579,2083)`, `(0,578,2087)` and `(0,578,2088)`. Their saturation was about 4e-17 and their diagonal derivatives were about 7e-15 m³/day/m. Dry projection snaps these cells to the bottom; it was previously rejected because the independent checker also rejected the other balanced floating components. After those components were handled, the existing dry projection was accepted, reducing the head-equivalent residual to 9.63e-9 m without changing the physical model.
 
-All listed groups have zero recharge/source, no GHB or active drain tangent, and zero physical residual within the group. The 0403 singleton is saturated, so it is not covered by the existing exact-dry-zero-row exception. In 0414 the rejected state has physical residual RMS 1.14e-10 m³/day and relative imbalance 1.07e-13, but its head-equivalent residual RMS is about 0.024 m. The topology rejection is therefore not the only unresolved acceptance issue for 0414. Detailed coordinates, heads and component fields are in each `component_diagnostic.json` and `ungrounded_components.npz`; rejected head and residual arrays remain in `darcywarp_rejected.npz`.
+The 0414 tight MF6 copy used `OUTER_DVCLOSE=INNER_DVCLOSE=1e-6` m and completed in 792.69 s. Independent input translation, native-head face-law, package and residual audits passed. The raw head comparison is 2.16e-4 m RMSE and 0.12135 m maximum because native MF6 drifted the datum in 24 unforced components (28 cells); the original starting-head datum was retained by DarcyWarp. Aligning MF6 by a constant per-component shift back to each original initial-head mean gives 2.50e-6 m RMSE and 0.00171 m maximum over all active cells, within the unchanged 1e-4 m / 0.005 m limits. On the 956,350 physically determined active cells, RMSE is 1.01e-8 m and maximum difference is 1.12e-6 m. The raw metric remains in the evidence and is not overwritten by the datum-aware metric.
 
-These findings show that the affected regions are tiny, zero-forcing floating pieces of the active grid, rather than a broad region with incorrect boundary exchange. They do **not** yet establish whether to handle them as mathematically irrelevant zero equations or whether additional model/topology semantics are needed. No production acceptance change has been made.
+At the tight 0414 reference, maximum face-flow difference is 0.00127 m³/day (RMS 1.52e-6); gross DRN, GHB and recharge budget comparisons pass. Absolute aggregate budget deltas are 7.72e-4 m³/day DRN outflow, 2.65e-4 m³/day GHB outflow and zero recharge. DarcyWarp physical acceptance reports 6.66e-7 m³/day residual RMS and 3.50e-11 relative cell imbalance. The detailed raw and datum-aligned fields are retained in `tight_references_1e6/0414_0415_MF6_SS_Unconfined_250/solution/`.
+
+The component audit includes zero-based coordinates and original/native/rejected states under each model's `component_diagnostic.json`. The change is covered by the existing reference-equation tests, including a vertically connected multilayer nullspace and transient storage anchoring.
 
 ## Audit and benchmark changes
 
@@ -59,4 +61,4 @@ The complete local native workspaces, HDS/CBC/GRB outputs, rejected arrays and f
 
 ## Current limitations
 
-The 0308/0405/0406 rows remain marked as failed against their original native outputs in the results table, even though each passes against a tighter MF6 diagnostic reference. 0403 and 0414 remain rejected by DarcyWarp and need a justified treatment of their zero-forcing ungrounded regions. All cases in this campaign are one layer, so generalized multilayer Newton behavior remains unqualified. The user-provided `USGS_examples` model inputs are local and were not added to the commit.
+The 0308/0405/0406 rows remain marked as failed against their original native outputs in the baseline results table, even though each passes against a tighter MF6 diagnostic reference. For 0414, raw native heads in mathematically undetermined cells do not pass the head gate; the datum-aligned comparison does. The 74 currently available USGS workspaces are all one layer, so this regional campaign does not qualify generalized multilayer behavior. The user-provided `USGS_examples` model inputs are local and are not included in the commit.

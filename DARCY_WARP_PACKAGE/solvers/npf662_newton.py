@@ -1170,6 +1170,13 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
         progress_callback("Final physical acceptance", seconds=seconds,
                           outer=len(history), krylov=total)
     head=None if device_sequence else workspace.head.numpy().reshape(case.active.shape).copy()
+    nullspace_datum = []
+    if head is not None and hasattr(reference, 'apply_nullspace_datum'):
+        datum_head, nullspace_datum = reference.apply_nullspace_datum(head=head)
+        if nullspace_datum:
+            workspace.head.assign(datum_head.ravel())
+            current = workspace.evaluate(trial=False, linearize=True)
+            head = workspace.head.numpy().reshape(case.active.shape).copy()
     datum_refined = False
     if not workspace.transient and case.ghb_conductance is not None:
         corrected = refine_confined_component_datum(case=case, reference=reference, head=head)
@@ -1236,6 +1243,7 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
         linear_budget_units='Krylov iterations shared across Newton and Picard per outer',
         max_krylov_per_outer=krylov_budget,max_outer=max_outer,krylov_restart=restart,
         scaling='fixed full-saturated principal diagonal; S*J and S*R',preconditioner='fixed diagonal within each GMRES solve')
+    result['balanced_nullspace_datum'] = nullspace_datum
     result['component_datum_refined'] = datum_refined
     result['component_connectivity'] = dict(
         static=bool(workspace._component_layout_static),

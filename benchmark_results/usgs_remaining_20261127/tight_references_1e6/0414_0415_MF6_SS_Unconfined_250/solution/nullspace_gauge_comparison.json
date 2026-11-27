@@ -1,0 +1,464 @@
+{
+  "model": "0414_0415_MF6_SS_Unconfined_250",
+  "native_version": "MODFLOW 6.6.2",
+  "native_ims_dvclose_m": 1e-06,
+  "native_seconds": 792.6904699399893,
+  "darcywarp_run_source": "original archived initial heads; no native converged head initialization",
+  "native_input_translation_and_physical_audit_passed": true,
+  "darcywarp_independent_physical_acceptance": true,
+  "darcywarp_physical_rms_m3_day": 6.664551788732537e-07,
+  "darcywarp_head_equivalent_rms_m": 9.632794927742748e-09,
+  "darcywarp_relative_cell_imbalance": 3.495860226920431e-11,
+  "raw_head_comparison": {
+    "count": 956378,
+    "rmse_m": 0.00021599155162067745,
+    "mae_m": 4.1255231253322587e-07,
+    "max_abs_m": 0.12134764109941898,
+    "p95_abs_m": 1.4143211046757642e-09,
+    "p99_abs_m": 1.1347577242304393e-08
+  },
+  "raw_head_gate": {
+    "max_abs_limit_m": 0.005,
+    "rmse_limit_m": 0.0001,
+    "passed": false
+  },
+  "initial_datum_aligned_head_comparison": {
+    "count": 956378,
+    "rmse_m": 2.4990047786507452e-06,
+    "mae_m": 7.814506543722887e-09,
+    "max_abs_m": 0.001710000005459733,
+    "p95_abs_m": 1.4149463822832331e-09,
+    "p99_abs_m": 1.1364096792476573e-08
+  },
+  "initial_datum_aligned_head_gate": {
+    "max_abs_limit_m": 0.005,
+    "rmse_limit_m": 0.0001,
+    "passed": true
+  },
+  "physically_determined_head_comparison": {
+    "count": 956350,
+    "rmse_m": 1.0148509312603185e-08,
+    "mae_m": 7.757786392898205e-10,
+    "max_abs_m": 1.1144847036348438e-06,
+    "p95_abs_m": 1.4137967241367713e-09,
+    "p99_abs_m": 1.1340646892676901e-08
+  },
+  "balanced_nullspace_component_count": 24,
+  "balanced_nullspace_cell_count": 28,
+  "datum_method": "Shift only MF6 heads within independently identified balanced, ungrounded components so each component mean equals the original starting-head mean. The shift is a constant nullspace datum and leaves its internal face flows and residuals unchanged.",
+  "balanced_nullspace_components": [
+    {
+      "label": 4882,
+      "cells": [
+        [
+          0,
+          1,
+          2425
+        ]
+      ],
+      "native_mean_m": 584.0779999999999,
+      "initial_mean_datum_m": 584.078,
+      "darcywarp_mean_m": 584.077999729145,
+      "native_gauge_shift_m": 1.1368683772161603e-13
+    },
+    {
+      "label": 83520,
+      "cells": [
+        [
+          0,
+          33,
+          2439
+        ]
+      ],
+      "native_mean_m": 523.468628,
+      "initial_mean_datum_m": 523.469,
+      "darcywarp_mean_m": 523.4686279999988,
+      "native_gauge_shift_m": 0.0003720000000839718
+    },
+    {
+      "label": 93345,
+      "cells": [
+        [
+          0,
+          37,
+          2436
+        ]
+      ],
+      "native_mean_m": 539.9349999999996,
+      "initial_mean_datum_m": 539.935,
+      "darcywarp_mean_m": 539.935,
+      "native_gauge_shift_m": 3.410605131648481e-13
+    },
+    {
+      "label": 103183,
+      "cells": [
+        [
+          0,
+          41,
+          2446
+        ]
+      ],
+      "native_mean_m": 580.271,
+      "initial_mean_datum_m": 580.271,
+      "darcywarp_mean_m": 580.271,
+      "native_gauge_shift_m": 0.0
+    },
+    {
+      "label": 103187,
+      "cells": [
+        [
+          0,
+          41,
+          2450
+        ]
+      ],
+      "native_mean_m": 561.2440000000003,
+      "initial_mean_datum_m": 561.244,
+      "darcywarp_mean_m": 561.244,
+      "native_gauge_shift_m": -2.2737367544323206e-13
+    },
+    {
+      "label": 113002,
+      "cells": [
+        [
+          0,
+          45,
+          2437
+        ]
+      ],
+      "native_mean_m": 569.90863,
+      "initial_mean_datum_m": 569.909,
+      "darcywarp_mean_m": 569.9086299999989,
+      "native_gauge_shift_m": 0.0003699999999753345
+    },
+    {
+      "label": 147419,
+      "cells": [
+        [
+          0,
+          59,
+          2456
+        ]
+      ],
+      "native_mean_m": 548.306519,
+      "initial_mean_datum_m": 548.307,
+      "darcywarp_mean_m": 548.3065189999948,
+      "native_gauge_shift_m": 0.00048100000003614696
+    },
+    {
+      "label": 316922,
+      "cells": [
+        [
+          0,
+          128,
+          2426
+        ]
+      ],
+      "native_mean_m": 638.0890000000009,
+      "initial_mean_datum_m": 638.089,
+      "darcywarp_mean_m": 638.0890000000002,
+      "native_gauge_shift_m": -7.958078640513122e-13
+    },
+    {
+      "label": 334126,
+      "cells": [
+        [
+          0,
+          135,
+          2431
+        ]
+      ],
+      "native_mean_m": 613.3905639999999,
+      "initial_mean_datum_m": 613.391,
+      "darcywarp_mean_m": 613.3905639999987,
+      "native_gauge_shift_m": 0.0004360000000360742
+    },
+    {
+      "label": 348873,
+      "cells": [
+        [
+          0,
+          141,
+          2436
+        ]
+      ],
+      "native_mean_m": 917.969543,
+      "initial_mean_datum_m": 917.97,
+      "darcywarp_mean_m": 917.969542999995,
+      "native_gauge_shift_m": 0.0004569999999830543
+    },
+    {
+      "label": 373448,
+      "cells": [
+        [
+          0,
+          151,
+          2441
+        ]
+      ],
+      "native_mean_m": 594.7030000000008,
+      "initial_mean_datum_m": 594.703,
+      "darcywarp_mean_m": 594.703,
+      "native_gauge_shift_m": -7.958078640513122e-13
+    },
+    {
+      "label": 454498,
+      "cells": [
+        [
+          0,
+          184,
+          2410
+        ]
+      ],
+      "native_mean_m": 743.696533,
+      "initial_mean_datum_m": 743.697,
+      "darcywarp_mean_m": 743.696532999981,
+      "native_gauge_shift_m": 0.0004669999999578067
+    },
+    {
+      "label": 628907,
+      "cells": [
+        [
+          0,
+          255,
+          2372
+        ]
+      ],
+      "native_mean_m": 568.618896,
+      "initial_mean_datum_m": 568.619,
+      "darcywarp_mean_m": 568.6188959999987,
+      "native_gauge_shift_m": 0.00010400000007848575
+    },
+    {
+      "label": 692786,
+      "cells": [
+        [
+          0,
+          281,
+          2370
+        ]
+      ],
+      "native_mean_m": 692.274902,
+      "initial_mean_datum_m": 692.275,
+      "darcywarp_mean_m": 692.274901999999,
+      "native_gauge_shift_m": 9.799999997994746e-05
+    },
+    {
+      "label": 707538,
+      "cells": [
+        [
+          0,
+          287,
+          2380
+        ]
+      ],
+      "native_mean_m": 887.0340000000007,
+      "initial_mean_datum_m": 887.034,
+      "darcywarp_mean_m": 887.034,
+      "native_gauge_shift_m": -6.821210263296962e-13
+    },
+    {
+      "label": 746875,
+      "cells": [
+        [
+          0,
+          303,
+          2405
+        ]
+      ],
+      "native_mean_m": 1024.36829,
+      "initial_mean_datum_m": 1024.37,
+      "darcywarp_mean_m": 1024.3682899999944,
+      "native_gauge_shift_m": 0.0017100000000027649
+    },
+    {
+      "label": 768992,
+      "cells": [
+        [
+          0,
+          312,
+          2409
+        ]
+      ],
+      "native_mean_m": 1066.55872,
+      "initial_mean_datum_m": 1066.56,
+      "darcywarp_mean_m": 1066.558719999986,
+      "native_gauge_shift_m": 0.0012799999999515421
+    },
+    {
+      "label": 904016,
+      "cells": [
+        [
+          0,
+          367,
+          2298
+        ],
+        [
+          0,
+          368,
+          2298
+        ]
+      ],
+      "native_mean_m": 882.7658425035432,
+      "initial_mean_datum_m": 882.766,
+      "darcywarp_mean_m": 882.7658689999868,
+      "native_gauge_shift_m": 0.0001574964567225834
+    },
+    {
+      "label": 962965,
+      "cells": [
+        [
+          0,
+          391,
+          2280
+        ]
+      ],
+      "native_mean_m": 772.564575,
+      "initial_mean_datum_m": 772.565,
+      "darcywarp_mean_m": 772.5645749999953,
+      "native_gauge_shift_m": 0.00042500000006384653
+    },
+    {
+      "label": 975329,
+      "cells": [
+        [
+          0,
+          396,
+          2359
+        ],
+        [
+          0,
+          397,
+          2359
+        ],
+        [
+          0,
+          397,
+          2360
+        ]
+      ],
+      "native_mean_m": 871.5246523589007,
+      "initial_mean_datum_m": 871.6460000000001,
+      "darcywarp_mean_m": 871.6460000000001,
+      "native_gauge_shift_m": 0.12134764109941898
+    },
+    {
+      "label": 1014496,
+      "cells": [
+        [
+          0,
+          412,
+          2216
+        ],
+        [
+          0,
+          413,
+          2216
+        ]
+      ],
+      "native_mean_m": 619.2501422913722,
+      "initial_mean_datum_m": 619.265,
+      "darcywarp_mean_m": 619.2650004547412,
+      "native_gauge_shift_m": 0.014857708627801003
+    },
+    {
+      "label": 1031685,
+      "cells": [
+        [
+          0,
+          419,
+          2212
+        ]
+      ],
+      "native_mean_m": 567.48,
+      "initial_mean_datum_m": 567.48,
+      "darcywarp_mean_m": 567.4800015258132,
+      "native_gauge_shift_m": 0.0
+    },
+    {
+      "label": 1093089,
+      "cells": [
+        [
+          0,
+          444,
+          2191
+        ]
+      ],
+      "native_mean_m": 563.4029539999998,
+      "initial_mean_datum_m": 563.403,
+      "darcywarp_mean_m": 563.4029539999996,
+      "native_gauge_shift_m": 4.600000022492168e-05
+    },
+    {
+      "label": 1095545,
+      "cells": [
+        [
+          0,
+          445,
+          2190
+        ]
+      ],
+      "native_mean_m": 549.985779,
+      "initial_mean_datum_m": 549.986,
+      "darcywarp_mean_m": 549.9857789999995,
+      "native_gauge_shift_m": 0.00022100000001046283
+    }
+  ],
+  "face_flow_difference": {
+    "count": 1906051,
+    "min": -0.0012652192021960218,
+    "max": 0.0006076825945910969,
+    "mean": -1.2247369492229475e-09,
+    "mae": 1.3848191195001275e-08,
+    "rms": 1.5184399430685164e-06,
+    "percentiles": {
+      "p01": -4.513543672146625e-08,
+      "p50": 0.0,
+      "p95": 5.287731141834229e-09,
+      "p99": 4.927444763325184e-08
+    },
+    "abs_p95": 1.453418008168228e-08,
+    "abs_p99": 1.0365477010054747e-07,
+    "max_abs": 0.0012652192021960218
+  },
+  "native_residual": {
+    "count": 956378,
+    "min": -5.179572326596826e-08,
+    "max": 4.6240984374890104e-08,
+    "mean": 3.961260255122176e-12,
+    "mae": 7.053283431945717e-11,
+    "rms": 3.795712896690873e-10,
+    "percentiles": {
+      "p01": -5.93312172725291e-10,
+      "p50": 5.684341886080802e-14,
+      "p95": 1.4028955774847418e-10,
+      "p99": 6.364091101707728e-10
+    },
+    "abs_p95": 2.8319391276454553e-10,
+    "abs_p99": 1.1285254686299584e-09,
+    "max_abs": 5.179572326596826e-08
+  },
+  "package_comparison": {
+    "DRN": {
+      "inflow_m3_day": 0.0,
+      "outflow_m3_day": 61639259.50313261,
+      "entry_max_abs_difference_m3_day": 0.00018919354261015542,
+      "entry_rmse_m3_day": 2.370978898199551e-07,
+      "aggregate_budget_passed": true
+    },
+    "GHB": {
+      "inflow_m3_day": 68156580.11410779,
+      "outflow_m3_day": 65941136.0179306,
+      "entry_max_abs_difference_m3_day": 0.0002388456996413879,
+      "entry_rmse_m3_day": 1.4026988516938766e-06,
+      "aggregate_budget_passed": true
+    },
+    "RCHA": {
+      "inflow_m3_day": 59423815.406959206,
+      "outflow_m3_day": -0.0,
+      "entry_max_abs_difference_m3_day": 2.842170943040401e-14,
+      "entry_rmse_m3_day": 5.597985700282691e-15,
+      "aggregate_budget_passed": true
+    }
+  }
+}

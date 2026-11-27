@@ -3,9 +3,9 @@ import math
 import numpy as np
 
 
-def exact_dry_zero_rows(*, case, head, free, diagonal, residual,
-                        boundary_throughput, storage=None):
-    """Identify only indeterminate, fully dry, exactly zero physical equations.
+def exact_zero_equation_rows(*, case, head, free, diagonal, residual,
+                             boundary_throughput, storage=None):
+    """Identify hydraulically isolated, unforced, exact zero equations.
 
     :param case: Canonical NPF physical inputs.
     :param head: Evaluated total heads, not a numerical trial surrogate.
@@ -15,16 +15,102 @@ def exact_dry_zero_rows(*, case, head, free, diagonal, residual,
     :param boundary_throughput: Gross physical package exchange by cell.
     :param storage: Optional actual accumulation rate; a dry transient cell
         that is still releasing stored water is not a zero equation.
-    :return: Boolean mask of dry zero rows; no tolerances or physical floors.
+    :return: Boolean mask of exact zero rows; no tolerances or physical floors.
     """
-    dry = (free & (case.cell_types > 0) & (head <= case.bottoms)
-           & (diagonal == 0.) & (residual == 0.) & (case.source == 0.)
-           & (boundary_throughput == 0.))
+    zero_rows = (free & (diagonal == 0.) & (residual == 0.)
+                 & (case.source == 0.) & (boundary_throughput == 0.))
     if case.source_gross is not None:
-        dry &= np.asarray(case.source_gross) == 0.
+        zero_rows &= np.asarray(case.source_gross) == 0.
     if storage is not None:
-        dry &= storage == 0.
-    return dry
+        zero_rows &= storage == 0.
+    return zero_rows
+
+
+# Compatibility name retained for existing internal callers.
+exact_dry_zero_rows = exact_zero_equation_rows
+
+
+def balanced_nullspace_components(*, labels, active, grounded, source, residual,
+                                  left, right, face_left_derivative,
+                                  face_right_derivative,
+                                  boundary_tangent, boundary_throughput,
+                                  storage=None, storage_tangent=None):
+    """Find balanced ungrounded components with an exact constant-head mode.
+
+    A qualifying component has no fixed or head-dependent restraint or
+    external exchange, and its physical Jacobian annihilates a uniform head
+    increment. Its total source plus storage rate is exactly balanced and its
+    cell residuals are exactly zero. This is a true Jacobian datum nullspace,
+    not a tolerance-based residual exemption. A shifted candidate is checked
+    again against the full nonlinear equations before it can be accepted.
+
+    :param labels: Connected-component labels from positive physical face
+        conductances.
+    :param active: Active-cell mask.
+    :param grounded: Cells with a fixed head or positive external tangent.
+    :param source: Signed source rate by cell.
+    :param residual: Unmodified physical balance residual by cell.
+    :param left: First cell index for each conducting face.
+    :param right: Second cell index for each conducting face.
+    :param face_left_derivative: Face-flow derivative with respect to its
+        first cell head.
+    :param face_right_derivative: Face-flow derivative with respect to its
+        second cell head.
+    :param boundary_tangent: Head-dependent boundary tangent by cell.
+    :param boundary_throughput: Absolute external exchange by cell.
+    :param storage: Optional actual storage rate by cell.
+    :param storage_tangent: Optional storage derivative by cell.
+    :return: Mapping from component label to its active flat cell indices.
+    """
+    labels = np.asarray(labels).ravel()
+    active = np.asarray(active).ravel() != 0
+    grounded = np.asarray(grounded).ravel() != 0
+    source = np.asarray(source, dtype=np.float64).ravel()
+    residual = np.asarray(residual, dtype=np.float64).ravel()
+    boundary_tangent = np.asarray(boundary_tangent, dtype=np.float64).ravel()
+    boundary_throughput = np.asarray(boundary_throughput, dtype=np.float64).ravel()
+    storage = None if storage is None else np.asarray(storage).ravel()
+    storage_tangent = (None if storage_tangent is None
+                       else np.asarray(storage_tangent).ravel())
+    left = np.asarray(left, dtype=np.int64).ravel()
+    right = np.asarray(right, dtype=np.int64).ravel()
+    face_left_derivative = np.asarray(face_left_derivative, dtype=np.float64).ravel()
+    face_right_derivative = np.asarray(face_right_derivative, dtype=np.float64).ravel()
+
+    active_labels = set(np.unique(labels[active]))
+    grounded_labels = set(np.unique(labels[active & grounded]))
+    candidates = active_labels - grounded_labels
+    bad_cells = (grounded | (boundary_tangent != 0.)
+                 | (residual != 0.) | (boundary_throughput != 0.))
+    if storage is not None:
+        bad_cells |= storage != 0.
+    if storage_tangent is not None:
+        bad_cells |= storage_tangent != 0.
+    bad_labels = set(np.unique(labels[active & bad_cells]))
+    left_labels = labels[left]
+    right_labels = labels[right]
+    same_component = left_labels == right_labels
+    bad_left = ((same_component &
+                 ((face_left_derivative + face_right_derivative) != 0.))
+                | (~same_component & (face_left_derivative != 0.)))
+    bad_right = ((same_component &
+                  ((face_left_derivative + face_right_derivative) != 0.))
+                 | (~same_component & (face_right_derivative != 0.)))
+    bad_labels.update(np.unique(left_labels[bad_left]))
+    bad_labels.update(np.unique(right_labels[bad_right]))
+    eligible_labels = candidates - bad_labels
+    if not eligible_labels:
+        return {}
+    eligible_cells = np.flatnonzero(active & np.isin(labels, list(eligible_labels)))
+    eligible_cell_labels = labels[eligible_cells]
+    eligible = {}
+    for label in np.unique(eligible_cell_labels):
+        cells = eligible_cells[eligible_cell_labels == label]
+        balanced_rate = stable_sum(values=source[cells] +
+            (0. if storage is None else storage[cells]))
+        if balanced_rate == 0.:
+            eligible[int(label)] = cells
+    return eligible
 
 
 def local_balance_valid(*, case, free, left, right, head, residual, flux, conductance, ghb_conductance,
