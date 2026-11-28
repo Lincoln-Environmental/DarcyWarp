@@ -675,3 +675,17 @@ The continuation restores the archived-input run's accepted heads, scaling, cond
 Independent reconstruction from the archived hydraulic inputs exactly reproduced the recorded adjusted-start residual to printed precision. The old startup rule opened 49,135 drain branches by shifting 50,667 heads. The median drain-target shift was 100.003 m and the maximum was 150.005 m. It opened 171,028 previously dry lateral faces and raised flow RMS from 944.387 to 263,535 m³/day. The newly opened faces had a flow norm of 1.804e8 m³/day. The drain discharge change had a norm of only 1.044e-5 m³/day. The largest new flow was 7.454e6 m³/day from (0, 1595, 814) to (0, 1594, 814), where the startup adjustment increased the higher head from 2,157.11 to 2,307.1106 m. The unchanged-start run's first accepted update opened 364,934 faces with a much smaller 1,529 m³/day norm on those faces and reduced unanchored components from 49,135 to 986.
 
 The first accepted Newton trials used alpha 0.0316533 on the adjusted path and 0.125 on the unchanged path. By update 32 the continuation shifts were 0.01471 and 0.25771 respectively, and by update 128 the adjusted path had reached zero shift while the unchanged path still used 0.08651. The shift depends on contraction relative to each run's own starting residual, so the startup difference also changes how fast numerical regularisation falls. This locates the first hydraulic divergence and identifies a difference in the continuation trajectories. It does not establish that the shift alone explains their different endpoints.
+
+### Later deferred recoveries on 1502
+
+Times are measured from immediately before each spike to the first accepted endpoint at or below that spike's starting flow RMS. The update-172 interval is inside the update-145 interval. The archived deferred run ended at update 240.
+
+| Recovery update | Flow RMS before | Flow RMS after | Increase | Update recovering prior RMS | Elapsed s |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 145 | 0.341149 | 41.30863 | 121.1× | 184 | 75.40 |
+| 172 | 2.530648 | 862.72534 | 340.9× | 177 | 11.40 |
+| 188 | 0.177044 | 27.50078 | 155.3× | 204 | 28.76 |
+| 205 | 0.160967 | 25.43252 | 158.0× | 225 | 27.26 |
+| 226 | 0.157877 | 23.51031 | 148.9× | Beyond update 240 | At least 20.97 |
+
+The largest later spike, at update 172, was replayed from accepted update 168. It reproduced the archived accepted RMS. At (0, 1255, 345), the full-saturated recovery opened a drain whose outflow rose from zero to 1,117,988.44 m³/day. The physical Newton prediction for the actual accepted head displacement kept that drain at zero. No lateral face opened. Whole-grid face flow changes had norm 12,867 m³/day, versus 1,117,988 m³/day for drain flow changes. The drain term accounted for 99.98% of the projection onto the observed residual. This later spike differs from update 124, when a nearly dry lateral outlet carried the dominant flow error. The captured heads and independent flux comparison are in `trial_terms_1502_172_01`.
