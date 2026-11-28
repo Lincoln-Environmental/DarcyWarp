@@ -637,3 +637,18 @@ The extra hierarchy levels gave little change in the physical trajectory. Eight 
 ### 1809 qualifies against tight MF6
 
 The MF6 6.6.2 reference at `dvclose=1e-6` completed in 576.44 s. Both independent audits passed using the saved unchanged-start DarcyWarp solution. Tight datum-aligned head differences were 0.002812 mm RMS and 0.917190 mm maximum. The tally is **63 fully qualified, six physically accepted awaiting adequate native comparison, and five solver failures**. The five are 1301, 1303, 1502, 1503 and 1504. The unchanged-start reproduction of the previously qualified 1606 remains outstanding. [Native heads audit](remaining_20d4381/regional_tight_comparison/1809_MF6_SS_Unconfined_250/native_heads.json) · [Solution comparison](remaining_20d4381/regional_tight_comparison/1809_MF6_SS_Unconfined_250/solution.json)
+
+#### 1301 matched K-cycle depths
+
+The first Newton solve started at true residual 3,133.79 with forcing target 31.3379. Each depth reached the common measured residual of 89.2979 at the end of its 375-iteration allocation. Starting flow RMS was 2.612262 m³/day, with 173,670 cells over allowance. The shared physical target was 1.916958 m³/day flow RMS. The eight-level trial hit a Warp CUDA Arnoldi readback segmentation fault after its first accepted update. Its first linear timing comes from that attempt. The 12-update trajectory comes from the debugger replay in `kcycle_depth_matched_208_level8_02`, which reproduced the initial true residual curve and completed.
+
+| Actual levels | Coarsest grid | First correction s | First correction final residual | Update reaching shared flow RMS | Solve s to shared flow RMS | Cells over allowance at crossing | Flow RMS at 220 m³/day | Cells over allowance at 220 |
+| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 5 | 1 × 147 × 88 | 2.387 | 86.4713 | 220 | 26.91 | 133,220 | 1.916958 | 133,220 |
+| 6 | 1 × 74 × 44 | 2.789 | 87.2195 | 219 | 29.58 | 128,143 | 1.852049 | 127,287 |
+| 7 | 1 × 37 × 22 | 3.591 | 89.2979 | 218 | 33.90 | 133,006 | 1.839784 | 131,161 |
+| 8 | 1 × 19 × 11 | 5.098 | 89.1073 | 219 | 54.67 | 141,028 | 1.838547 | 137,210 |
+
+Five levels also reached the common relative water imbalance of 0.00365342 fastest. The times were 26.91, 29.58, 33.90 and 59.04 s for five through eight. Six levels closed about 6,000 more cells by update 220, at a solve cost of 32.40 s for the 12 updates versus 26.91 s at five levels. Seven and eight gave smaller flow RMS at equal outer counts but needed more elapsed time to reach the same error. These checkpoints remain well outside late local-balance refinement.
+
+Five levels give the best measured time to the same physical error on both models. The existing unchanged-start runs already use this configuration. Both 1301 and 1303 stopped at the existing outer limit. The 1303 five-level continuation reproduced the original run's update-240 heads bit for bit. The existing five-level 1807 unchanged-start control passed independent physical acceptance and cached tight MF6 parity in 204 updates and 180.81 s of solver time.
