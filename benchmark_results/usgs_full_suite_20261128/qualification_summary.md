@@ -512,3 +512,30 @@ to 0.983 times the allowance. All eight previously failing cell IDs and
 their individual ratios are in `restart_refinement_continuation_01`.
 Independent physical acceptance took 1.16 s of solve time and 40.31 s
 including setup. The archived MF6 comparison missed only the two head gates.
+
+### 1502 matched replay before the first uphill step
+
+The accepted head at outer 123 was reconstructed once from original heads.
+Both paths produced the same Picard trial, bit for bit, at outer 124,
+with 114 Krylov iterations left in the 500-iteration budget. Immediate
+acceptance used that trial. Deferral used those 114 iterations to try
+the full-saturated direction and retained its smaller uphill trial.
+The pre-step flow RMS was 0.38045246 m³/day.
+
+| Measured result | Immediate acceptance | Deferred acceptance |
+| --- | ---: | ---: |
+| Flow RMS at outer 124 (m³/day) | 52.21758 | 44.87190 |
+| Cells over their local allowance at outer 124 | 236,007 | 226,722 |
+| First outer below pre-spike flow RMS | 153 | 143 |
+| Time from the start of outer 124 to recovery, excluding restart setup | 48.2 s | 31.2 s |
+| Flow RMS at outer 240 (m³/day) | 0.29369 | 0.15815 |
+| Relative water imbalance at outer 240 | 9.835e-5 | 5.350e-5 |
+| Cells over their local allowance at outer 240 | 31,033 | 22,210 |
+| Cumulative Krylov iterations | 44,791 | 47,951 |
+
+Neither path reached physical acceptance. The immediate replay stopped
+during a CUDA stream synchronization at outer 134 and resumed from the
+saved outer 128 state. Its final history reproduced the archived endpoint.
+A pinned Arnoldi readback buffer did not prevent the crash and was removed.
+The two paths and their trial heads are in `fallback_immediate_pair_01`,
+`fallback_immediate_resume128_01` and `fallback_deferred_pair_01`.
