@@ -803,3 +803,18 @@ The six pending comparisons used the original MF6 6.6.2 outputs as the starting 
 The archived 1504 run used 138 outer updates and 16,488 inner iterations in 4,203.29 seconds. Fifty-three of those updates exhausted the 200-iteration inner budget. Initial attempted head changes reached 89,916 m and triggered repeated backtracking. Archived outer and inner DVCLOSE were both 0.1 m. The tight refinement needed four outer updates and 166 inner iterations. Its result accepted the saved DarcyWarp continuation at update 380.
 
 Qualification now stands at **71 of 74**. The remaining full qualifications are 1502, 1503 and 1504. Case 1504 passed physical acceptance and tight parity on its continuation, with the independent original-head run in progress. Case 1606 is included in the historical passes under its earlier adjusted-start run. Its unchanged-start reproduction remains outstanding.
+
+### Model-top starting-head diagnostics
+
+These runs set the free cells to the top elevation of their layer. Fixed and inactive heads, stresses and physical coefficients were preserved. Model-top results are diagnostic and are identified separately from qualification using the supplied initial heads.
+
+| Case | Final observed update | Solver s | Flow RMS m³/day | Cells over 10 µm regional allowance | Worst local ratio |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 1502 | 43 | 17.59 | 3.51146e-7 | 0 | 0.03150 |
+| 1503 | 64 | 58.01 | 0.17109 | 282,933 | 3174.66 |
+| 1504 | 56 | 68.46 | 5.73056e-6 | 0 | 0.35904 |
+| 1606 | 64 | 127.42 | 0.0021624 | 1,507 | 52.82 |
+
+1502 and 1504 passed independent physical acceptance and tight MF6 parity. The 1502 archived comparison had 0.36434 mm RMS and 7.33456 mm maximum differences. Refinement of its saved native heads at DVCLOSE 1e-6 m took 15.43 s. The resulting 1502 model-top head differences were 0.0004211 mm RMS and 0.0720715 mm maximum. The 1504 model-top differences against the existing tight native refinement were 0.0039141 mm RMS and 1.97615 mm maximum. The 71/74 supplied-head tally is unchanged.
+
+[1502 tight comparison](remaining_20d4381/regional_tight_warm_native_comparison/1502_1506_MF6_SS_Unconfined_250/solution.json) · [1504 model-top comparison](remaining_20d4381/model_top_tight_audit_01/1504_1505_1508_MF6_SS_Unconfined_250/solution.json)
