@@ -370,6 +370,39 @@ def test_trial_correction_accounts_for_newly_active_drain(solver_device):
             workspace.close()
 
 
+def test_wetting_trial_balances_both_cells_on_a_face(solver_device):
+    from DARCY_WARP_PACKAGE.solvers.npf662_3d import case_from_model, independent_reference
+    from DARCY_WARP_PACKAGE.solvers.npf662_newton import NPF662Workspace
+
+    shape = (1, 1, 2)
+    interfaces = np.broadcast_to(np.array([1., 0.])[:, None, None], (2, 1, 2)).copy()
+    head = np.array([[[.11, .10]]])
+    source = np.array([[[.05, 0.]]])
+    neighbour_head = .20
+    with groundwater_model(device=solver_device, shape=shape, interfaces=interfaces, initial_head=head,
+                            rhs=source, ghb_conductance=np.array([[[0., .1]]]),
+                            ghb_head=np.array([[[0., neighbour_head]]])) as model:
+        case = case_from_model(model=model, top=1., cell_type=1)
+        reference, _ = independent_reference(model=model, case=case)
+        workspace = NPF662Workspace(model=model, case=case, restart=2, krylov_budget=0, reference=reference)
+        try:
+            current = workspace.evaluate(trial=False, linearize=True)
+            workspace.trial.assign(np.array([.8, neighbour_head]))
+            proposed = workspace.evaluate(trial=True)
+            corrected, changed = workspace.rebalance_wetting_trial(current=current, trial=proposed,
+                physical_tolerance=1.e-12, relative_tolerance=1.e-8)
+            assert changed and corrected['physical_rms'] < proposed['physical_rms']
+            candidate = workspace.trial.numpy().reshape(shape)
+            assert head[0, 0, 0] < candidate[0, 0, 0] < .8
+            assert candidate[0, 0, 1] == neighbour_head
+            # For fixed trial neighbour heads the norm minimiser splits the
+            # .05 source equally between the donor residual and the receiver.
+            _, fields = reference.evaluate(head=candidate)
+            np.testing.assert_allclose(fields['residual'], np.array([[[.025, .025]]]), atol=2.e-9)
+        finally:
+            workspace.close()
+
+
 def test_closed_component_with_inactive_drain_opens_only_at_its_threshold(solver_device):
     shape = (1, 1, 5)
     active = np.array([[[1, 0, 1, 0, 1]]], dtype=np.int32)

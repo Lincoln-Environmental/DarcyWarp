@@ -340,10 +340,12 @@ def trial_row_residual(i: int, row_head: wp.float64, trial: wp.array(dtype=wp.fl
         neighbour = left[i, axis]
         if neighbour >= 0:
             r -= trial_face_flow(i, neighbour, axis, c0[neighbour, axis], row_head, trial, bottom, thickness, types)
-    for entry in range(drn_offsets[i], drn_offsets[i+1]):
-        r -= drn_flow_pair(row_head, drn_c[entry], elevation[entry])[0]
-    for entry in range(riv_offsets[i], riv_offsets[i + 1]):
-        r -= riv_flow_pair(row_head, riv_c[entry], stage[entry], bed[entry])[0]
+    if drn_offsets.shape[0] != 0:
+        for entry in range(drn_offsets[i], drn_offsets[i + 1]):
+            r -= drn_flow_pair(row_head, drn_c[entry], elevation[entry])[0]
+    if riv_offsets.shape[0] != 0:
+        for entry in range(riv_offsets[i], riv_offsets[i + 1]):
+            r -= riv_flow_pair(row_head, riv_c[entry], stage[entry], bed[entry])[0]
     return r
 
 
@@ -390,6 +392,125 @@ def rebalance_drain_trial(head: wp.array(dtype=wp.float64), trial: wp.array(dtyp
             low = middle
     corrected[i] = low + wp.float64(.5) * (high - low)
     if corrected[i] != trial[i]:
+        wp.atomic_add(changed, 0, 1)
+
+
+@wp.func
+def wetting_neighbourhood_merit(i: int, row_head: wp.float64, trial: wp.array(dtype=wp.float64),
+                trial_residual: wp.array(dtype=wp.float64), free: wp.array(dtype=wp.int32),
+                bottom: wp.array(dtype=wp.float64), thickness: wp.array(dtype=wp.float64),
+                types: wp.array(dtype=wp.int32), left: wp.array2d(dtype=wp.int32),
+                right: wp.array2d(dtype=wp.int32), c0: wp.array2d(dtype=wp.float64),
+                trial_flux: wp.array2d(dtype=wp.float64), source: wp.array(dtype=wp.float64),
+                ghb_c: wp.array(dtype=wp.float64), ghb_h: wp.array(dtype=wp.float64),
+                drn_offsets: wp.array(dtype=wp.int32), drn_c: wp.array(dtype=wp.float64),
+                elevation: wp.array(dtype=wp.float64),
+                riv_offsets: wp.array(dtype=wp.int32), riv_c: wp.array(dtype=wp.float64),
+                stage: wp.array(dtype=wp.float64), bed: wp.array(dtype=wp.float64)):
+    """Measure the squared residual of the cell and its free neighbours.
+
+    :param row_head: Proposed replacement for the owning cell's trial head.
+    :param trial_residual: Residuals at the unmodified trial heads.
+    :param trial_flux: Face flows at the unmodified trial heads.
+    """
+    r = trial_row_residual(i, row_head, trial, bottom, thickness, types, left, right,
+        c0, source, ghb_c, ghb_h, drn_offsets, drn_c, elevation, riv_offsets, riv_c, stage, bed)
+    value = r * r
+    for axis in range(3):
+        neighbour = right[i, axis]
+        if neighbour >= 0 and free[neighbour] != 0:
+            flux = trial_face_flow(i, neighbour, axis, c0[i, axis], row_head, trial, bottom, thickness, types)
+            # Replace the old inward flux in the neighbour's balance.
+            adjusted = trial_residual[neighbour] + flux - trial_flux[i, axis]
+            value += adjusted * adjusted
+        neighbour = left[i, axis]
+        if neighbour >= 0 and free[neighbour] != 0:
+            flux = trial_face_flow(i, neighbour, axis, c0[neighbour, axis], row_head, trial, bottom, thickness, types)
+            adjusted = trial_residual[neighbour] + flux + trial_flux[neighbour, axis]
+            value += adjusted * adjusted
+    return value
+
+
+@wp.kernel
+def rebalance_wetting_trial(head: wp.array(dtype=wp.float64), trial: wp.array(dtype=wp.float64),
+                         residual: wp.array(dtype=wp.float64), trial_residual: wp.array(dtype=wp.float64),
+                         free: wp.array(dtype=wp.int32), bottom: wp.array(dtype=wp.float64),
+                         thickness: wp.array(dtype=wp.float64), types: wp.array(dtype=wp.int32),
+                         left: wp.array2d(dtype=wp.int32), right: wp.array2d(dtype=wp.int32),
+                         c0: wp.array2d(dtype=wp.float64), c: wp.array2d(dtype=wp.float64),
+                         trial_c: wp.array2d(dtype=wp.float64), flux: wp.array2d(dtype=wp.float64),
+                         trial_flux: wp.array2d(dtype=wp.float64), dl: wp.array2d(dtype=wp.float64),
+                         dr: wp.array2d(dtype=wp.float64), source: wp.array(dtype=wp.float64),
+                         ghb_c: wp.array(dtype=wp.float64), ghb_h: wp.array(dtype=wp.float64),
+                         drn_offsets: wp.array(dtype=wp.int32), drn_c: wp.array(dtype=wp.float64),
+                         elevation: wp.array(dtype=wp.float64), riv_offsets: wp.array(dtype=wp.int32),
+                         riv_c: wp.array(dtype=wp.float64), stage: wp.array(dtype=wp.float64),
+                         bed: wp.array(dtype=wp.float64), flow_scale: wp.float64,
+                         out: wp.array(dtype=wp.float64), changed: wp.array(dtype=wp.int32)):
+    """Bound excessive trial wetting while retaining the trial gradients.
+
+    :param dl: Derivative of the accepted outward flux in the owning cell head.
+    :param dr: Derivative of the accepted outward flux in the neighbour head.
+    :param flow_scale: Physical residual scale for selecting adverse rows.
+    """
+    i = wp.tid()
+    out[i] = trial[i]
+    if free[i] == 0 or trial[i] <= head[i] or -trial_residual[i] <= wp.max(wp.abs(residual[i]), flow_scale):
+        return
+    transitioned = bool(False)
+    change = trial[i] - head[i]
+    for axis in range(2):
+        neighbour = right[i, axis]
+        if neighbour >= 0 and trial_c[i, axis] > c[i, axis] and trial[i] > trial[neighbour]:
+            neighbour_change = trial[neighbour] - head[neighbour]
+            predicted = flux[i, axis] + dl[i, axis] * change + dr[i, axis] * neighbour_change
+            if trial_flux[i, axis] > wp.max(predicted, wp.float64(0.)):
+                transitioned = True
+        neighbour = left[i, axis]
+        if neighbour >= 0 and trial_c[neighbour, axis] > c[neighbour, axis] and trial[i] > trial[neighbour]:
+            neighbour_change = trial[neighbour] - head[neighbour]
+            predicted = -(flux[neighbour, axis] + dl[neighbour, axis] * neighbour_change
+                          + dr[neighbour, axis] * change)
+            if -trial_flux[neighbour, axis] > wp.max(predicted, wp.float64(0.)):
+                transitioned = True
+    if not transitioned:
+        return
+    # Search on the proposed segment with all other trial heads held.
+    # Rechecking the original head and the unmodified trial covers endpoints
+    # when the wetting kink lies outside the selected interior interval.
+    low = head[i]
+    high = trial[i]
+    for iteration in range(72):
+        left_head = low + (high - low)/wp.float64(3.)
+        right_head = high - (high - low)/wp.float64(3.)
+        if left_head == low or right_head == high:
+            break
+        left_value = wetting_neighbourhood_merit(i, left_head, trial, trial_residual, free, bottom, thickness,
+                                 types, left, right, c0, trial_flux, source, ghb_c, ghb_h,
+                                 drn_offsets, drn_c, elevation, riv_offsets, riv_c, stage, bed)
+        right_value = wetting_neighbourhood_merit(i, right_head, trial, trial_residual, free, bottom, thickness,
+                                  types, left, right, c0, trial_flux, source, ghb_c, ghb_h,
+                                  drn_offsets, drn_c, elevation, riv_offsets, riv_c, stage, bed)
+        if left_value <= right_value:
+            high = right_head
+        else:
+            low = left_head
+    bounded = low + wp.float64(.5)*(high-low)
+    initial_value = wetting_neighbourhood_merit(i, trial[i], trial, trial_residual, free, bottom, thickness,
+                                types, left, right, c0, trial_flux, source, ghb_c, ghb_h,
+                                drn_offsets, drn_c, elevation, riv_offsets, riv_c, stage, bed)
+    final_value = wetting_neighbourhood_merit(i, bounded, trial, trial_residual, free, bottom, thickness,
+                              types, left, right, c0, trial_flux, source, ghb_c, ghb_h,
+                              drn_offsets, drn_c, elevation, riv_offsets, riv_c, stage, bed)
+    start_value = wetting_neighbourhood_merit(i, head[i], trial, trial_residual, free, bottom, thickness,
+        types, left, right, c0, trial_flux, source, ghb_c, ghb_h,
+        drn_offsets, drn_c, elevation, riv_offsets, riv_c, stage, bed)
+    if start_value < final_value:
+        bounded = head[i]
+        final_value = start_value
+    if final_value < initial_value:
+        out[i] = bounded
+    if out[i] != trial[i]:
         wp.atomic_add(changed, 0, 1)
 
 
