@@ -13,13 +13,15 @@ def case_from_model(*,model,top,cell_type=0):
     s=model._session
     initial = np.zeros(s.shape) if s.initial_head is None else s.initial_head
     if model.geometry=='structured_dis_layered':
-        return NPF662LayeredCase(kx=model._kx_field,ky=model._ky_field,kz=model._kz_field,active=s.active,fixed=s.bc_mask,
+        case = NPF662LayeredCase(kx=model._kx_field,ky=model._ky_field,kz=model._kz_field,active=s.active,fixed=s.bc_mask,
             values=s.bc_values,source=s.rhs,source_gross=model._gross_source_field(),initial=initial,dx=model.dx,dy=model.dy,
             z_interfaces=s.z_interfaces,cell_type=cell_type,
             drn_conductance=s.drn_conductance,drn_elevation=s.drn_elevation,
             riv_conductance=s.riv_conductance,riv_stage=s.riv_stage,riv_bottom=s.riv_bottom,
             drn_entries=getattr(s,'drn_entries',None),riv_entries=getattr(s,'riv_entries',None),
             ghb_conductance=s.ghb_conductance,ghb_head=s.ghb_head)
+        case._anchored_cell_head_tolerance_m = getattr(model, '_anchored_cell_head_tolerance_m', None)
+        return case
     return NPF662Case(kx=model._kx_field,ky=model._ky_field,kz=model._kz_field,active=s.active,fixed=s.bc_mask,
         values=s.bc_values,source=s.rhs,source_gross=model._gross_source_field(),initial=initial,
         dx=model.dx,dy=model.dy,dz=model.dz,top=top,cell_type=cell_type,
@@ -115,6 +117,9 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
     if progress_callback is not None:
         progress_callback("Preparing NPF physical inputs")
     case=case_from_model(model=model,top=0. if top_elevation is None else top_elevation,cell_type=types)
+    anchored_head_tolerance = getattr(case, '_anchored_cell_head_tolerance_m', None)
+    if anchored_head_tolerance is not None:
+        thresholds['anchored_cell_head_error_m'] = anchored_head_tolerance
     has_drn_riv = (case.drn_conductance is not None or case.riv_conductance is not None
         or case.drn_entries is not None or case.riv_entries is not None)
     if progress_callback is not None:

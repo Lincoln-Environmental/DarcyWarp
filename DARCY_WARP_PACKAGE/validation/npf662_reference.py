@@ -794,6 +794,9 @@ class NPF662Reference:
         c=self.case
         thresholds=final_tolerances(physical_tolerance=physical_tolerance,relative_tolerance=relative_tolerance,
             head_tolerance_m=head_tolerance_m,boundary_tolerance_m=boundary_tolerance_m)
+        anchored_head_tolerance = getattr(c, '_anchored_cell_head_tolerance_m', None)
+        if anchored_head_tolerance is not None:
+            thresholds['anchored_cell_head_error_m'] = anchored_head_tolerance
         checks=inspect_heads(head=head,active=c.active,fixed=c.fixed,values=c.values,
             boundary_tolerance_m=boundary_tolerance_m)
         h=np.where(c.active,head,0.).ravel()

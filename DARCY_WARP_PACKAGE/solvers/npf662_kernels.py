@@ -305,7 +305,7 @@ def check_local_balance(head: wp.array(dtype=wp.float64), free: wp.array(dtype=w
                         ghb_c: wp.array(dtype=wp.float64), ghb_head: wp.array(dtype=wp.float64),
                         component_anchor: wp.array(dtype=wp.float64), has_component_anchor: int,
                         absolute_tolerance: wp.float64, relative_tolerance: wp.float64,
-                        failed: wp.array(dtype=wp.float64)):
+                        anchored_head_tolerance: wp.float64, failed: wp.array(dtype=wp.float64)):
     i = wp.tid()
     if free[i] == 0:
         return
@@ -335,7 +335,7 @@ def check_local_balance(head: wp.array(dtype=wp.float64), free: wp.array(dtype=w
         anchor = component_anchor[i]
     allowance = wp.max(absolute_tolerance, relative_tolerance * throughput)
     if anchor > wp.float64(0.0):
-        allowance = anchor * wp.float64(1.0e-6)
+        allowance = anchor * anchored_head_tolerance
     allowance += roundoff
     if not wp.isfinite(allowance) or wp.abs(residual[i]) > allowance:
         wp.atomic_max(failed, 0, wp.float64(1.0))
@@ -550,7 +550,7 @@ def check_local_balance_drn_riv(head: wp.array(dtype=wp.float64), free: wp.array
     storage: wp.array(dtype=wp.float64), storage_tangent: wp.array(dtype=wp.float64),
     residual: wp.array(dtype=wp.float64), boundary_throughput: wp.array(dtype=wp.float64),
     boundary_tangent: wp.array(dtype=wp.float64), component_anchor: wp.array(dtype=wp.float64), absolute_tolerance: wp.float64,
-    relative_tolerance: wp.float64, failed: wp.array(dtype=wp.float64)):
+    relative_tolerance: wp.float64, anchored_head_tolerance: wp.float64, failed: wp.array(dtype=wp.float64)):
     """Check independently assembled cell balances including package flow.
 
     :param head: Accepted or trial groundwater heads.
@@ -568,6 +568,7 @@ def check_local_balance_drn_riv(head: wp.array(dtype=wp.float64), free: wp.array
     :param boundary_tangent: Combined active boundary tangent.
     :param absolute_tolerance: Absolute cell balance tolerance.
     :param relative_tolerance: Throughput-relative balance tolerance.
+    :param anchored_head_tolerance: Head-equivalent allowance for hydraulically anchored cells.
     :param failed: Scalar failure flag, updated in place.
     :return: None; ``failed`` is set when any free-cell balance fails.
     """
@@ -597,7 +598,7 @@ def check_local_balance_drn_riv(head: wp.array(dtype=wp.float64), free: wp.array
     if component_anchor[i] > wp.float64(0.0):
         anchor = component_anchor[i]
     if anchor > wp.float64(0.0):
-        allowance = anchor * wp.float64(1.0e-6)
+        allowance = anchor * anchored_head_tolerance
     allowance += roundoff
     if not wp.isfinite(allowance) or wp.abs(residual[i]) > allowance:
         wp.atomic_max(failed, 0, wp.float64(1.0))

@@ -653,6 +653,14 @@ def _numeric_summary(values):
     return result
 
 
+def _regional_anchored_cell_head_tolerance(*, model):
+    """Return the regional local head allowance for steady convertible imports in metres."""
+    if model.length_units.lower() == 'meters' and model.cell_type.any() and all(
+            not transient for transient, _ in model.periods):
+        return 10.e-6
+    return None
+
+
 def _import_solver_options(*, model, device, precision, solver_options):
     """Read the same checked-in controls as the production qualification.
 
@@ -875,6 +883,7 @@ def run_mf6_model(model_directory, output_directory, *, device="cuda:0",
                                device=device, formulation="mf6_6_6_2_npf",
                                implementation="fast", solver="kcycle") as solver:
             solver._mf6_newton_under_relaxation = model.newton_under_relaxation
+            solver._anchored_cell_head_tolerance_m = _regional_anchored_cell_head_tolerance(model=model)
             ims = simulation.get_package("ims")
             if (str(_data(ims, "complexity", "")).upper() == "COMPLEX"
                     and str(_data(ims, "under_relaxation", "DBD")).upper() != "NONE"):

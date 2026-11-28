@@ -351,7 +351,8 @@ def audit(*, archive, directory, output, device, use_darcywarp_heads=False,
     :param write_maps: Write full spatial diagnostics and per-layer figures.
     """
     from DARCY_WARP_PACKAGE.mf6_import import (
-        _schedules, _stress_period, import_simulation, load_mf6_workspace,
+        _regional_anchored_cell_head_tolerance, _schedules, _stress_period,
+        import_simulation, load_mf6_workspace,
     )
     from DARCY_WARP_PACKAGE.solvers.npf662_3d import case_from_model, independent_reference
     from DARCY_WARP_PACKAGE.solvers.npf662_newton import NPF662Workspace
@@ -372,6 +373,7 @@ def audit(*, archive, directory, output, device, use_darcywarp_heads=False,
     imported_seconds = perf_counter()-started
     with WarpDarcySolver3D(nx=nx, ny=ny, nz=nz, dx=model.dx, dy=model.dy, device=device,
                            formulation="mf6_6_6_2_npf", implementation="fast", solver="kcycle") as solver:
+        solver._anchored_cell_head_tolerance_m = _regional_anchored_cell_head_tolerance(model=model)
         started = perf_counter()
         solver.build_from_layers(z_interfaces=model.interfaces, kx_field=model.kx,
                                  ky_field=model.ky, kz_field=model.kz, active=model.active,
@@ -451,6 +453,7 @@ def audit(*, archive, directory, output, device, use_darcywarp_heads=False,
                       spacing_m=[case.dx, case.dy], translation_seconds=imported_seconds,
                       operator_seconds=build_seconds, translation=translation, packages=packages,
                       cpu=physical, gpu=gpu_metrics, gpu_package_totals=gpu_packages,
+                      physical_acceptance_thresholds=metrics["final_acceptance_thresholds"],
                       native_residual=describe(values=native_residual[free]),
                       native_residual_reassembly=describe(values=(reassembled_native-native_residual)[free]),
                       head_difference=describe(values=(head-native_head)[raw["active"]]),

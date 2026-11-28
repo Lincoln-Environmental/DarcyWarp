@@ -169,7 +169,8 @@ def local_balance_valid(*, case, free, left, right, head, residual, flux, conduc
         roundoff += np.bincount(owner, weights=np.where(flux != 0.0, allowance, 0.0), minlength=head.size)
     flow_allowance = np.maximum(thresholds['physical_rms_m3_day'],
                                 throughput * thresholds['relative_cell_imbalance'])
-    allowance = np.where(anchor > 0.0, anchor * thresholds['head_equivalent_rms_m'], flow_allowance) + roundoff
+    anchored_head_tolerance = thresholds.get('anchored_cell_head_error_m', thresholds['head_equivalent_rms_m'])
+    allowance = np.where(anchor > 0.0, anchor * anchored_head_tolerance, flow_allowance) + roundoff
     free = free.ravel()
     return bool(np.isfinite(allowance[free]).all() and
                 np.all(np.abs(residual.ravel()[free]) <= allowance[free]))

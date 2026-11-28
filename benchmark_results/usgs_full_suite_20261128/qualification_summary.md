@@ -655,7 +655,7 @@ Five levels give the best measured time to the same physical error on both model
 
 ### Five-level unchanged-start continuation beyond update 240
 
-The continuation restores the archived-input run's accepted heads, scaling, conductance scale, previous operator tangent, nonlinear and linear histories, forcing state and continuation state. Each diagnostic block allows further updates on the same five-level regional configuration. The acceptance rule remains 1 µm. Checkpoints include full continuation state and are saved every 32 updates. Solve times below exclude setup, diagnostic counts and checkpoint writes.
+The continuation restores the archived-input run's accepted heads, scaling, conductance scale, previous operator tangent, nonlinear and linear histories, forcing state and continuation state. Each diagnostic block allows further updates on the same five-level regional configuration. The table records local balance against the original 1 µm allowance. Checkpoints include full continuation state and are saved every 32 updates. Solve times below exclude setup, diagnostic counts and checkpoint writes.
 
 | Model | Accepted update | Additional solve s from update 240 | Flow RMS m³/day | Relative water imbalance | Cells over allowance | Worst error / allowance |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -676,6 +676,8 @@ The continuation restores the archived-input run's accepted heads, scaling, cond
 | 1303 | 432 | 725.22 | 0.626283 | 0.00177227 | 164,482 | 418,782 |
 | 1303 | 464 | 813.92 | 0.388343 | 0.00023321 | 58,323 | 550,376 |
 | 1303 | 496 | 901.38 | 0.006420 | 6.4891e-6 | 11,628 | 3,994 |
+| 1303 | 528 | 980.94 | 0.000814908 | 1.0267e-06 | 1,603 | 160.34 |
+| 1303 | 560 | 1057.15 | 0.000162308 | 2.0174e-07 | 959 | 29.96 |
 
 1301 continued to improve over both blocks despite four uphill recoveries and a small increase in the worst local ratio during the second block. The continuation state and trajectories are under `unchanged_240_through304_01`.
 
@@ -727,3 +729,5 @@ The 1 µm column in the continuation table above gives the original local allowa
 The same independent calculation on tight MF6 heads gave unweighted head-equivalent RMS of 13.175 mm on 1303 and 5.785 mm on 1807. The largest contribution on 1303 was the unforced cell (0, 1927, 7), with an absolute flow residual of 2.074e-19 m³/day and a hydraulic diagonal of 1.070e-20 m²/day. On 1807 the unforced cell (0, 1166, 667) had an absolute residual of 3.461e-24 m³/day and diagonal 5.654e-25 m²/day. Each row accounts for essentially all the squared head-equivalent error in its model. Both tight native relative imbalances were under 1.2e-9. The conductance-weighted RMS calculation gave 5.58e-11 m and 7.86e-12 m, respectively. It was evaluated as a diagnostic. The regional threshold change applies to anchored local balance. The grid-wide physical RMS and independent head parity gates retain their settings.
 
 The normal regional audit reproduced the 1301 result with the revised local rule. The native and solution audits both passed. The resulting tally is **64 qualified, six physically accepted awaiting adequate native comparison, and four solver failures** (1303, 1502, 1503 and 1504). The unchanged-start reproduction of the previously qualified 1606 is separately outstanding. [1301 tight solution comparison](remaining_20d4381/anchored_10um_production_tight_audit_01/1301_1302_MF6_SS_Unconfined_250/solution.json)
+
+The regional importer and independent audit now use a 10 µm head-equivalent allowance for hydraulically anchored cells in steady convertible models in metres. The normal 1807 control started with all 1,119,702 free heads unchanged, independently passed physical acceptance in 204 updates and 42,654 FGMRES iterations, and took 181.53 s in the solver. Its output head file was byte-identical to the previous five-level control. Both cached tight-reference comparisons passed. Three focused MF6 importer tests passed on CPU. [1807 control comparison](remaining_20d4381/anchored_10um_original_control_tight_01/1807_1810_MF6_SS_Unconfined_250/solution.json)

@@ -534,7 +534,14 @@ def test_newton_only_import_reaches_supported_below_bottom_head(tmp_path, solver
     controls = report["resolved_solver_controls"]
     assert controls["npf_newton_controls"]["steady_initial_shift"] > 0.
     assert controls["mf6_newton_under_relaxation"] is False
-    assert report["steps"][0]["physical_acceptance"]["independent_accepted"]
+    step = report["steps"][0]
+    acceptance = step["physical_acceptance"]
+    assert acceptance["independent_accepted"]
+    for thresholds in (step["effective_solver_settings"]["convergence"],
+                       acceptance["final_acceptance_thresholds"]):
+        assert thresholds["anchored_cell_head_error_m"] == 10e-6
+        assert thresholds["head_equivalent_rms_m"] == 1e-6
+        assert thresholds["relative_cell_imbalance"] == 1e-7
     with flopy.utils.HeadFile(report["head_file"], precision="double") as reader:
         assert reader.get_data().item() == pytest.approx(-1., abs=1e-8)
 

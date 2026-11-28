@@ -227,6 +227,7 @@ class NPF662Workspace:
 
     def load(self,*,model,case,reference=None):
         self._accepted_static_fields = None
+        self.anchored_head_tolerance_m = getattr(case, '_anchored_cell_head_tolerance_m', None) or 1.e-6
         native = getattr(reference, 'device_storage_state', False)
         static_reused = native and getattr(self, '_native_state', None) is reference
         conductance, boundary_head = validate_ghb_fields(conductance=case.ghb_conductance,
@@ -589,7 +590,8 @@ class NPF662Workspace:
                         self.trial_boundary_throughput if trial else self.boundary_throughput,
                         self.trial_boundary_tangent if trial else self.boundary_tangent,
                         self.active_component_anchor,
-                        self.physical_tolerance, self.relative_tolerance, self.maximum], device=self.device)
+                        self.physical_tolerance, self.relative_tolerance,
+                        self.anchored_head_tolerance_m, self.maximum], device=self.device)
             else:
                 wp.launch(kernel=kernels.check_local_balance, dim=self.n,
                     inputs=[head, self.free, self.fixed,
@@ -597,7 +599,7 @@ class NPF662Workspace:
                             storage, tangent, r, int(self.ghb_conductance is not None),
                             self.ghb_conductance, self.ghb_head, self.active_component_anchor, 1,
                             self.physical_tolerance, self.relative_tolerance,
-                            self.maximum], device=self.device)
+                            self.anchored_head_tolerance_m, self.maximum], device=self.device)
             result['local_balance_valid'] = bool(self.maximum.numpy()[0] == 0.0)
         if self.roundoff_acceptance:
             result.update(roundoff_mode=True, roundoff_accepted=False, roundoff_bound_ratio_max=None)
