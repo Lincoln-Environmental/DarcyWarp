@@ -759,3 +759,15 @@ The trial correction holds proposed neighbouring heads fixed and solves the sele
 | 1504 | 232 | 1.53267 | 18.47 | 16.15 | Flow RMS fell to 0.56785 at update 264 in 73.10 s. Relative imbalance fell to 0.001700. |
 
 Captured trial replays isolated the mechanisms before the CUDA continuations. On 1502, the wetting correction reduced the selected update-145 spike from 41.31 to 26.44 m³/day. A separate predicted-outflow cap gave the same result to measured precision at that checkpoint. On 1503 the corrected last rejected step descended at alpha 1/65,536. On 1504 the corrected last rejected step still increased the norm, from a starting 1.7023 to 5.7783 m³/day. Without correction that trial reached 186.7247 m³/day. These runs support further continuation and expose a remaining fallback issue on 1502. They do not qualify any of the three cases.
+
+### Continued transition correction
+
+On 1502 the wetting correction continued from update 184 to 248. Flow RMS fell from 0.38169 to 0.14612 m³/day in 87.11 solver seconds. The historical 1 µm diagnostic fell from 44,321 to 11,255 cells over allowance. Update 236 still took an uphill full-saturated step after the Newton attempts stalled. Minimising the exact trial residual over the changed cell and its free neighbours reduced the captured update-145 spike to 22.49 m³/day and the update-226 spike to 19.98 m³/day. The corresponding untreated errors were 41.31 and 23.51 m³/day. The calculation kept the proposed neighbouring heads and included the change in flow received by each neighbour.
+
+On 1503 the drain correction continued through update 328. Flow RMS fell from 1.77736 to 0.55212 m³/day in 73.72 additional solver seconds. Relative imbalance fell from 0.019926 to 0.003857. The historical 1 µm diagnostic fell from 1,205,310 to 901,222 cells over allowance, with the worst ratio falling from 235,499 to 31,053.
+
+### 1606 unchanged-start continuation shift
+
+Both schedules used the supplied initial heads and the same spatial correction weights. At update 240, the original schedule reached 8.53787 m³/day flow RMS and 13.2431% relative imbalance in approximately 312 solver seconds. The adaptive schedule reached 2.57631 m³/day and 1.17898% at the same update, using approximately 503 solver seconds across the saved continuation. The adaptive schedule first reached 1.49996 m³/day at update 217. At the next update, each of the three Newton attempts reduced the linear residual by less than 0.71%, and deferred Picard recovery raised flow RMS to 61.1273 m³/day.
+
+From the saved update-192 state, reducing the shift in proportion to physical RMS alone retained a larger shift and passed update 218 at 3.45695 m³/day. Similar linear stagnation and uphill recoveries recurred at updates 226, 241 and 256. This run reached 1.25623 m³/day at update 240 and 51.6693 m³/day at update 256. The slower decay delayed the first spill and did not remove it. Numerical closure and head parity from the supplied initial heads remain outstanding.
