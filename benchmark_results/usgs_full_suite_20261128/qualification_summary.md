@@ -600,3 +600,19 @@ The [experiment records](holdout_experiment_records.csv) index the retained solv
 For 1301 the last eight failing cell IDs were 2153030, 2153031, 2154433, 2154434, 2154435, 2155838, 2155839 and 2157242. For 1303 the earlier startup adjustment raised 1,550 dry-cell heads by a median of 65 m and a maximum of 150 m. It increased the initial flow norm from about 2.75 million to 389.88 million m³/day. The startup change in `1aef06b` preserves the supplied steady heads. The change in `4b17878` preserves the actual uphill trial while the solver checks the remaining directions. FGMRES and the multigrid K-cycle remain the inner solver and its usual preconditioner throughout these changes.
 
 The 1502 diagnostic retaining weak Newton directions completed through outer 240 under the debugger. From the same pre-spike state it finished at 0.357886 m³/day flow RMS and relative imbalance 3.2518e-4. Deferred fallback alone reached 0.15815 m³/day and 5.350e-5 at the same outer. The weak-direction rule was withdrawn. The accepted-state trace is in `physical_stalled_recovery_debug_01`.
+
+### Unchanged-start CUDA results before the hierarchy comparison
+
+All five runs below verified every free starting head against the archived input on the device. Times in the table include import and setup. They use five K-cycle levels, mixed-fast precision, CUDA graphs and the deferred fallback ordering.
+
+| Model | Result | Newton updates | FGMRES iterations | DarcyWarp wall s | Relative water imbalance |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 1809 | Independent physical pass | 73 | 15,826 | 110.36 | 8.60e-10 |
+| 1502 | Outer budget | 240 | 44,923 | 317.21 | 5.82e-5 |
+| 1503 | Outer budget, no readback crash under debugger | 240 | 40,061 | 257.86 | 0.03406 |
+| 1504 | Outer budget | 240 | 52,208 | 361.38 | 0.00723 |
+| 1606 | Outer budget | 240 | 30,166 | 367.65 | 0.13243 |
+
+1809 passed every archived comparison gate except head RMS and maximum. The datum-aligned differences were 1.711 mm RMS and 27.441 mm maximum. Independent head-equivalent RMS was 0.190 µm. The recorded tally is now 62 fully qualified, seven physically accepted awaiting adequate native comparison and five solver failures, with the unchanged-start reproduction of the previously qualified 1606 separately outstanding.
+
+The 1301 strict checkpoint also passed the native-head audit and every parity gate against its tight MF6 reference. Head differences were 0.00524 mm RMS and 0.242 mm maximum. The native solve took 2,862.14 s. The checkpoint result does not change the original-start tally. [1301 tight comparison](remaining_20d4381/regional_tight_comparison/1301_1302_MF6_SS_Unconfined_250/solution.json)
