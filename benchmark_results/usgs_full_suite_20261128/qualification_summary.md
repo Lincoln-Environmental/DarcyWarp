@@ -462,3 +462,31 @@ outer 124. From outer 123's flow RMS of 0.38045246 m³/day it increased
 flow error by a factor of 137.25, with 114 Krylov iterations left. Across
 the six uphill steps, five increases were between 130 and 157 times.
 Outer 157 had a smaller increase of 18.83 times.
+
+### Original-head continuation and local closure
+
+The uniform adaptive shift used for the successful 45-update 1606
+continuation was also tested from the archived initial heads. Both models
+used physical Krylov weighting, mixed-fast CUDA, deferred backtracking and
+the existing 240-update limit.
+
+| Model | Krylov iterations | Solve time | Final relative water imbalance |
+| --- | ---: | ---: | ---: |
+| 1303 | 25,206 | 291.86 s | 4.35e-4 |
+| 1606 | 9,642 | 100.44 s | 0.708 |
+
+Both runs missed physical acceptance. Their accepted head fields and
+continuation states are under `remaining_20d4381/uniform_adaptive_original_01`.
+The spatial shift produced better original-head results for both cases.
+
+An independent CPU audit applied a proposed 3 µm local head-equivalent
+allowance to hydraulically anchored cells. With all other gates held at
+their qualification settings, the saved 1303 original-head endpoint and
+the saved 1301 continuation both passed physical acceptance. At the
+existing 1 µm allowance they missed in 65 and eight cells, respectively.
+The 1303 original-head field differed from its strictly accepted continuation
+by 3.19e-6 m RMS and 4.62e-4 m maximum over 2,164,867 active cells.
+Relative water imbalance was 4.81e-9 for 1303 and 1.32e-8 for 1301,
+compared with 2.12e-6 and 2.03e-6 at the archived MF6 heads. Adoption of
+the new regional allowance awaits tight MF6 parity. The 1301 continuation
+is diagnostic. The qualification count is unchanged.
