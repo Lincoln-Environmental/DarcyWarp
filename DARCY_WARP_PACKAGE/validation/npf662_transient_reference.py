@@ -5,7 +5,7 @@ from scipy.sparse.csgraph import connected_components
 from DARCY_WARP_PACKAGE.validation.npf662_reference import NPF662Reference, quadratic_saturation_derivative
 from DARCY_WARP_PACKAGE.validation.npf662_metrics import (
     balanced_nullspace_components, exact_zero_equation_rows, stable_rms,
-    stable_sum, local_balance_valid, unbalanced_ungrounded_components,
+    stable_sum, acceptance_head_rms, local_balance_valid, unbalanced_ungrounded_components,
 )
 from DARCY_WARP_PACKAGE.validation.head_checks import invalid_head_values
 
@@ -109,6 +109,12 @@ class NPF662TransientReference(NPF662Reference):
         grounded = set(labels[grounded_mask])
         ungrounded_labels = active_labels-grounded
         boundary_throughput = fields['boundary_throughput']
+        limits = checks['final_acceptance_thresholds']
+        acceptance_rms = acceptance_head_rms(case=self.case, free=self.free, residual=residual,
+            diagonal=diagonal, equivalent=equivalent, left=self.left, right=self.right,
+            conductance=fields['conductance'], boundary_tangent=boundary_tangent,
+            boundary_throughput=boundary_throughput, physical_tolerance=limits['physical_rms_m3_day'],
+            storage=storage, storage_tangent=tangent)
         nullspaces = balanced_nullspace_components(labels=labels, active=self.case.active,
             grounded=grounded_mask, source=self.case.source,
             left=self.left, right=self.right,
@@ -122,9 +128,9 @@ class NPF662TransientReference(NPF662Reference):
             ('flux', 'conductance', 'dflux_left', 'dflux_right', 'saturation'))
             and np.isfinite(storage).all() and np.isfinite(tangent).all() and np.all(tangent >= 0.)
             and np.isfinite(residual).all() and np.isfinite(diagonal).all()
-            and np.isfinite([rms, hrms, l1, relative, throughput]).all())
+            and np.isfinite([rms, acceptance_rms, l1, relative, throughput]).all())
         checks.update(physical_rms=rms, physical_max=float(np.max(np.abs(residual))),
-            head_residual_rms=hrms, residual_l1=l1, relative_cell_imbalance=relative,
+            head_residual_rms=hrms, acceptance_head_residual_rms=acceptance_rms, residual_l1=l1, relative_cell_imbalance=relative,
             gross_throughput=throughput, equation_throughput=equation_throughput, signed_imbalance=stable_sum(values=residual[self.free]),
             ungrounded_current_components=ungrounded,
             balanced_nullspace_components=len(balanced_labels),
@@ -133,9 +139,8 @@ class NPF662TransientReference(NPF662Reference):
             exact_dry_zero_rows=int(dry_zero.sum()),
             physical_metrics_valid=valid,
             storage_accumulation_m3_day=stable_sum(values=storage[self.free]))
-        limits = checks['final_acceptance_thresholds']
         checks['independent_accepted'] = bool(checks['input_valid'] and checks['boundary_condition_valid']
-            and valid and ungrounded == 0 and hrms <= limits['head_equivalent_rms_m']
+            and valid and ungrounded == 0 and acceptance_rms <= limits['head_equivalent_rms_m']
             and (rms <= limits['physical_rms_m3_day'] or relative <= limits['relative_cell_imbalance']))
         checks['local_balance_valid'] = None
         if checks['independent_accepted'] or roundoff_acceptance:

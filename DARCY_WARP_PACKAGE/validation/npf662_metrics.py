@@ -136,6 +136,56 @@ def unbalanced_ungrounded_components(*, labels, active, grounded, source):
     return unbalanced
 
 
+def acceptance_head_rms(*, case, free, residual, diagonal, equivalent,
+                        left, right, conductance, boundary_tangent, boundary_throughput,
+                        physical_tolerance, storage=None, storage_tangent=None):
+    """Measure head closure after removing physically negligible unforced errors.
+
+    The absolute water-balance allowance supplies the bound in flow units.
+    Dividing a residual within that allowance by a vanishing diagonal can
+    otherwise create an arbitrarily large head-equivalent error. Preserve all
+    rows with active forcing, fixed-head links or storage, and all nonzero
+    residuals on exact zero diagonals. Retain every row in the physical checks.
+    """
+    source_gross = case.source if case.source_gross is None else case.source_gross
+    negligible = ((case.source == 0.) & (source_gross == 0.) &
+                  (boundary_tangent == 0.) & (boundary_throughput == 0.) &
+                  (diagonal > 0.) & (np.abs(residual) <= physical_tolerance))
+    if storage is not None:
+        negligible &= (storage == 0.) & (storage_tangent == 0.)
+    fixed = case.fixed.ravel() != 0
+    if fixed.any():
+        positive = conductance > 0.
+        negligible.flat[left[positive & fixed[right]]] = False
+        negligible.flat[right[positive & fixed[left]]] = False
+    return stable_rms(values=np.where(negligible[free], 0., equivalent[free]))
+
+
+def acceptance_head_rms(*, case, free, residual, diagonal, equivalent,
+                        left, right, conductance, boundary_tangent, boundary_throughput,
+                        physical_tolerance, storage=None, storage_tangent=None):
+    """Measure head closure after removing physically negligible unforced errors.
+
+    The absolute water-balance allowance supplies the bound in flow units.
+    Dividing a residual within that allowance by a vanishing diagonal can
+    otherwise create an arbitrarily large head-equivalent error. Preserve all
+    rows with active forcing, fixed-head links or storage, and all nonzero
+    residuals on exact zero diagonals. Retain every row in the physical checks.
+    """
+    source_gross = case.source if case.source_gross is None else case.source_gross
+    negligible = ((case.source == 0.) & (source_gross == 0.) &
+                  (boundary_tangent == 0.) & (boundary_throughput == 0.) &
+                  (diagonal > 0.) & (np.abs(residual) <= physical_tolerance))
+    if storage is not None:
+        negligible &= (storage == 0.) & (storage_tangent == 0.)
+    fixed = case.fixed.ravel() != 0
+    if fixed.any():
+        positive = conductance > 0.
+        negligible.flat[left[positive & fixed[right]]] = False
+        negligible.flat[right[positive & fixed[left]]] = False
+    return stable_rms(values=np.where(negligible[free], 0., equivalent[free]))
+
+
 def local_balance_valid(*, case, free, left, right, head, residual, flux, conductance, ghb_conductance,
                         ghb_exchange, component_anchor, thresholds, storage=None, tangent=None,
                         boundary_throughput=None):
@@ -220,7 +270,7 @@ def apply_roundoff_acceptance(*, checks, certificate):
     conservation = checks['physical_rms'] <= 1e-12 or checks['relative_cell_imbalance'] <= 1e-8
     accepted = bool(checks['input_valid'] and checks['boundary_condition_valid']
         and checks['physical_metrics_valid'] and checks['ungrounded_current_components'] == 0
-        and checks['head_residual_rms'] <= min(1e-12, checks['final_acceptance_thresholds']['head_equivalent_rms_m'])
+        and checks['acceptance_head_residual_rms'] <= min(1e-12, checks['final_acceptance_thresholds']['head_equivalent_rms_m'])
         and conservation and certificate['roundoff_rows_valid'] and checks.get('local_balance_valid', True))
     checks.update(roundoff_accepted=accepted, independent_accepted=accepted,
         precision_limited=bool(accepted and not checks['requested_thresholds_met']))

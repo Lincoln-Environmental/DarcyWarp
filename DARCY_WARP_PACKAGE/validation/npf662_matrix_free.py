@@ -10,7 +10,7 @@ from scipy.sparse.csgraph import connected_components
 from DARCY_WARP_PACKAGE.validation.head_checks import inspect_heads
 from DARCY_WARP_PACKAGE.validation.npf662_metrics import (
     balanced_nullspace_components, exact_zero_equation_rows, final_tolerances,
-    stable_rms, stable_sum, local_balance_valid,
+    stable_rms, stable_sum, acceptance_head_rms, local_balance_valid,
 )
 from DARCY_WARP_PACKAGE.physics.ghb_3d import npf_ghb_component_anchor
 from DARCY_WARP_PACKAGE.validation.npf662_reference import quadratic_saturation_derivative
@@ -148,11 +148,19 @@ class NPF662MatrixFreeReference:
             boundary_throughput=boundary_gross)
         balanced_labels = ungrounded_labels & set(nullspaces)
         ungrounded = len(ungrounded_labels-balanced_labels)
+        acceptance_rms = acceptance_head_rms(case=case, free=self.free, residual=residual,
+            diagonal=diagonal, equivalent=scaled, left=self.left, right=self.right,
+            conductance=conductance, boundary_tangent=boundary_tangent,
+            boundary_throughput=boundary_gross, physical_tolerance=physical_tolerance)
+        acceptance_rms = acceptance_head_rms(case=case, free=self.free, residual=residual,
+            diagonal=diagonal, equivalent=scaled, left=self.left, right=self.right,
+            conductance=conductance, boundary_tangent=boundary_tangent,
+            boundary_throughput=boundary_gross, physical_tolerance=physical_tolerance)
         active = case.active != 0
         valid = all(np.all(np.isfinite(value)) for value in (flux, conductance, dl, dr, saturation[active],
-            derivative[active], diagonal[active], divergence[active], residual[self.free], scaled[self.free]))
-        valid = bool(valid and np.all(np.isfinite([inflow, outflow, throughput, rms, hrms, l1, relative])))
-        result = dict(**checks, head_residual_rms=hrms, physical_rms=rms,
+            derivative[active], diagonal[active], divergence[active], residual[self.free]))
+        valid = bool(valid and np.all(np.isfinite([inflow, outflow, throughput, rms, acceptance_rms, l1, relative])))
+        result = dict(**checks, head_residual_rms=hrms, acceptance_head_residual_rms=acceptance_rms, physical_rms=rms,
             physical_max=float(np.max(np.abs(residual))), residual_l1=l1, relative_cell_imbalance=relative,
             gross_throughput=throughput, signed_imbalance=stable_sum(values=residual[self.free]),
             boundary_inflow=inflow, boundary_outflow=outflow,
@@ -174,7 +182,7 @@ class NPF662MatrixFreeReference:
         result['physical_metrics_valid'] = bool(valid and np.all(np.isfinite([
             result['signed_imbalance'], result['fixed_cell_source_total'], result['fixed_reservoir_required_inflow']])))
         result['independent_accepted'] = bool(checks['input_valid'] and checks['boundary_condition_valid'] and
-            result['physical_metrics_valid'] and ungrounded == 0 and hrms <= head_tolerance_m and
+            result['physical_metrics_valid'] and ungrounded == 0 and acceptance_rms <= head_tolerance_m and
             (rms <= physical_tolerance or relative <= relative_tolerance))
         result['local_balance_valid'] = None
         if result['independent_accepted'] or roundoff_acceptance:

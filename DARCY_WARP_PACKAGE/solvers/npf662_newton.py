@@ -86,9 +86,9 @@ class NPF662Workspace:
             right[i,a]=j;left[j,a]=i
         self.left=wp.array(data=left,dtype=wp.int32,device=self.device)
         self.right=wp.array(data=right,dtype=wp.int32,device=self.device)
-        self.metrics=wp.zeros(shape=9,dtype=wp.float64,device=self.device)
+        self.metrics=wp.zeros(shape=kernels.PHYSICAL_METRIC_COUNT,dtype=wp.float64,device=self.device)
         self.metric_block_size=256
-        self.metric_partials=wp.zeros(shape=((self.n+self.metric_block_size-1)//self.metric_block_size,9),
+        self.metric_partials=wp.zeros(shape=((self.n+self.metric_block_size-1)//self.metric_block_size,kernels.PHYSICAL_METRIC_COUNT),
             dtype=wp.float64,device=self.device)
         self.certificate=wp.zeros(shape=3,dtype=wp.float64,device=self.device)
         self.maximum=wp.zeros(shape=1,dtype=wp.float64,device=self.device)
@@ -529,7 +529,8 @@ class NPF662Workspace:
             getattr(self,'device_tiled',False)) else self.n
         tiled = getattr(self,'device_tiled',False)
         row_inputs=[head,self.source,self.free,self.fixed,self.left,self.right,q,c,self.scale,r,rhs,
-            self.metric_partials.flatten() if tiled else self.metric_partials,storage,tangent,block_size]
+            self.metric_partials.flatten() if tiled else self.metric_partials,storage,tangent,block_size,
+            self.source if self.source_gross is None else self.source_gross,self.physical_tolerance]
         if self.has_drn_riv:
             row_kernel = kernels.physical_rows_drn_riv_tiled if tiled else kernels.physical_rows_drn_riv
             row_inputs.extend((
@@ -548,7 +549,9 @@ class NPF662Workspace:
             row_inputs.extend((self.ghb_conductance,self.ghb_head))
         wp.launch(kernel=row_kernel,dim=self.n,inputs=row_inputs,
             device=self.device,block_dim=self.metric_block_size)
-        wp.launch(kernel=kernels.combine_metrics_tiled if tiled else kernels.combine_physical_metrics,dim=2304 if tiled else 9,
+        metric_count = kernels.PHYSICAL_METRIC_COUNT
+        wp.launch(kernel=kernels.combine_metrics_tiled if tiled else kernels.combine_physical_metrics,
+            dim=256*metric_count if tiled else metric_count,
             inputs=[self.metric_partials,self.metrics,(self.n+block_size-1)//block_size],device=self.device,block_dim=256)
         self.residual_evaluations+=1
         if trial:self.candidate_evaluations+=1
@@ -561,12 +564,13 @@ class NPF662Workspace:
             gross_correction = float(self.source_gross_correction.numpy()[0])
         count=max(self.free_count,1)
         result=dict(physical_rms=float(np.sqrt(m[0]/count)),head_residual_rms=float(np.sqrt(m[2]/count)),
+            acceptance_head_residual_rms=float(np.sqrt(m[9]/count)),
             relative_cell_imbalance=float(m[1]/max(m[3],np.finfo(float).tiny)),gross_throughput=float(m[3] + gross_correction),
             equation_throughput=float(m[3]),
             residual_l1=float(m[1]),signed_imbalance=float(m[8]),boundary_inflow=float(m[4]),boundary_outflow=float(m[5]),
             scaled_l2=float(np.sqrt(m[7])),finite=bool(m[6]==0 and np.all(np.isfinite(m[[0,1,3,4,5,7,8]]))))
         roundoff_candidate = (self.roundoff_acceptance and result['finite'] and
-            result['head_residual_rms'] <= 1e-12 and
+            result['acceptance_head_residual_rms'] <= 1e-12 and
             (result['physical_rms'] <= 1e-12 or result['relative_cell_imbalance'] <= 1e-8))
         if roundoff_candidate or device_accepted(metrics=result, physical_tolerance=self.physical_tolerance,
                                                  relative_tolerance=self.relative_tolerance):
@@ -736,11 +740,11 @@ class NPF662Workspace:
 
 def device_accepted(*,metrics,physical_tolerance=1e-12,relative_tolerance=1e-8):
     valid=metrics.get('local_balance_valid', True) and all(np.isfinite(metrics[name]) and metrics[name]>=0. for name in
-        ('head_residual_rms','physical_rms','relative_cell_imbalance','gross_throughput'))
+        ('acceptance_head_residual_rms','physical_rms','relative_cell_imbalance','gross_throughput'))
     if metrics.get('roundoff_mode',False):
-        return bool(metrics['finite'] and valid and metrics['head_residual_rms']<=1e-12 and
+        return bool(metrics['finite'] and valid and metrics['acceptance_head_residual_rms']<=1e-12 and
             (metrics['physical_rms']<=1e-12 or metrics['relative_cell_imbalance']<=1e-8) and metrics['roundoff_accepted'])
-    return metrics['finite'] and valid and metrics['head_residual_rms']<=1e-6 and (
+    return metrics['finite'] and valid and metrics['acceptance_head_residual_rms']<=1e-6 and (
         metrics['physical_rms']<=physical_tolerance or metrics['relative_cell_imbalance']<=relative_tolerance)
 
 
@@ -1335,7 +1339,7 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
         checks=dict(**current,**certificate,ungrounded_current_components=0,
             accepted=accepted,acceptance_source='device physical reductions and positive storage grounding certificate')
     converged=bool(accepted and device_passed)
-    requested_met=bool(current['finite'] and current['head_residual_rms']<=1e-6 and
+    requested_met=bool(current['finite'] and current['acceptance_head_residual_rms']<=1e-6 and
         (current['physical_rms']<=physical_tolerance or current['relative_cell_imbalance']<=relative_tolerance))
     if roundoff_acceptance:
         if independent_performed:requested_met=bool(requested_met and checks['requested_thresholds_met'])

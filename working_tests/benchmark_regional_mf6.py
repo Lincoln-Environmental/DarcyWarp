@@ -436,6 +436,7 @@ def audit(*, archive, directory, output, device, use_darcywarp_heads=False,
             else reference_divergence.reshape(head.shape))
         reassembled_native = sum(package_cells.values()) - reference_divergence.reshape(head.shape)
         physical = {name: metrics[name] for name in ("physical_rms", "head_residual_rms",
+                  "acceptance_head_residual_rms",
                   "relative_cell_imbalance", "signed_imbalance", "independent_accepted",
                   "ungrounded_current_components", "exact_dry_zero_rows")}
         active = raw["active"]

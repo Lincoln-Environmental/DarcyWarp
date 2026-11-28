@@ -546,6 +546,59 @@ def test_newton_only_import_reaches_supported_below_bottom_head(tmp_path, solver
         assert reader.get_data().item() == pytest.approx(-1., abs=1e-8)
 
 
+@pytest.mark.parametrize("transient", [False, True])
+def test_head_closure_respects_absolute_flow_allowance_on_unforced_rows(solver_device, transient):
+    from DARCY_WARP_PACKAGE.solvers.npf662_3d import case_from_model
+    from DARCY_WARP_PACKAGE.solvers.npf662_newton import NPF662Workspace, device_accepted
+    from DARCY_WARP_PACKAGE.validation.npf662_reference import NPF662Reference
+    from DARCY_WARP_PACKAGE.validation.npf662_transient_reference import NPF662TransientReference
+    from DARCY_WARP_PACKAGE.warped_darcy_3d import WarpDarcySolver3D
+
+    head = np.array([[[1.75, 1.25, 0., 1.75]], [[0.75, 0.25, 0., 0.]]])
+    active = head > 0.
+    interfaces = np.broadcast_to(np.array([2., 1., 0.])[:, None, None], (3, 1, 4)).copy()
+    conductivity = np.full_like(head, 1e-15)
+    ghb = np.zeros_like(head)
+    ghb[0, 0, 0] = 1.
+    with WarpDarcySolver3D(nx=4, ny=1, nz=2, dx=1., dy=1., device=solver_device,
+                           formulation="mf6_6_6_2_npf", implementation="fast", solver="kcycle") as solver:
+        solver.build_from_layers(z_interfaces=interfaces, kx_field=conductivity, ky_field=conductivity,
+                                 kz_field=conductivity, active=active, initial_head=head,
+                                 bc_mask=np.zeros_like(active), bc_values=np.zeros_like(head),
+                                 ghb_conductance=ghb, ghb_head=head)
+        case = case_from_model(model=solver, top=0., cell_type=1)
+        if transient:
+            reference = NPF662TransientReference(case=case, previous=head.copy(), dt=1.,
+                                                  ss=ghb*.01, sy=np.zeros_like(head))
+        else:
+            reference = NPF662Reference(case=case)
+        workspace = NPF662Workspace(model=solver, case=case, reference=reference, restart=2, krylov_budget=0)
+        try:
+            def assess(*, candidate, expected):
+                workspace.head.assign(candidate.ravel())
+                device = workspace.evaluate(trial=False, linearize=True)
+                cpu, _ = reference.evaluate(head=candidate)
+                for key in ("physical_rms", "head_residual_rms", "acceptance_head_residual_rms"):
+                    assert device[key] == pytest.approx(cpu[key], rel=1e-9, abs=1e-20)
+                assert device_accepted(metrics=device) == expected
+                assert cpu["independent_accepted"] == expected
+                return cpu
+
+            weak = assess(candidate=head, expected=True)
+            assert weak["head_residual_rms"] > 0.1
+            assert weak["acceptance_head_residual_rms"] < 1e-12
+            material_head = head.copy()
+            material_head[1, 0, 1] += 10_000.
+            assert assess(candidate=material_head, expected=False)["acceptance_head_residual_rms"] > 1.
+            case.source[0, 0, 3] = 5e-13
+            workspace.source.assign(case.source.ravel())
+            assessed = assess(candidate=head, expected=False)
+            assert np.isinf(assessed["acceptance_head_residual_rms"])
+            assert assessed["ungrounded_current_components"] == 1
+        finally:
+            workspace.close()
+
+
 def test_disconnected_recharge_starts_at_imported_head(tmp_path, solver_device, monkeypatch):
     from DARCY_WARP_PACKAGE.solvers.npf662_newton import NPF662Workspace
 

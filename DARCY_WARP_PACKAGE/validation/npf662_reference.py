@@ -13,7 +13,7 @@ from scipy.sparse.linalg import spsolve
 from DARCY_WARP_PACKAGE.validation.head_checks import inspect_heads
 from DARCY_WARP_PACKAGE.validation.npf662_metrics import (
     balanced_nullspace_components, exact_zero_equation_rows, final_tolerances,
-    stable_rms, stable_sum, local_balance_valid, unbalanced_ungrounded_components,
+    stable_rms, stable_sum, acceptance_head_rms, local_balance_valid, unbalanced_ungrounded_components,
 )
 from DARCY_WARP_PACKAGE.physics.ghb_3d import npf_ghb_component_anchor
 
@@ -848,10 +848,18 @@ class NPF662Reference:
         equation_throughput=stable_sum(values=np.concatenate([np.abs(c.source[self.free]),np.abs(free_exchange)]))
         rms=stable_rms(values=residual[self.free]);hrms=stable_rms(values=scaled[self.free])
         l1=stable_sum(values=np.abs(residual[self.free]));relative=l1/max(equation_throughput,np.finfo(float).tiny)
+        acceptance_rms = acceptance_head_rms(case=c, free=self.free, residual=residual,
+            diagonal=diagonal, equivalent=scaled, left=self.left, right=self.right,
+            conductance=conductance, boundary_tangent=boundary_tangent,
+            boundary_throughput=boundary_gross, physical_tolerance=physical_tolerance)
+        acceptance_rms = acceptance_head_rms(case=c, free=self.free, residual=residual,
+            diagonal=diagonal, equivalent=scaled, left=self.left, right=self.right,
+            conductance=conductance, boundary_tangent=boundary_tangent,
+            boundary_throughput=boundary_gross, physical_tolerance=physical_tolerance)
         active=c.active!=0
         metrics_valid=all(np.all(np.isfinite(value)) for value in
-            (flux,conductance,dl,dr,saturation[active],diagonal[active],divergence[active],residual[self.free],scaled[self.free]))
-        metrics_valid=bool(metrics_valid and np.all(np.isfinite([inflow,outflow,throughput,rms,hrms,l1,relative])))
+            (flux,conductance,dl,dr,saturation[active],diagonal[active],divergence[active],residual[self.free]))
+        metrics_valid=bool(metrics_valid and np.all(np.isfinite([inflow,outflow,throughput,rms,acceptance_rms,l1,relative])))
         edges=conductance>0.
         graph=sparse.coo_matrix((np.ones(int(edges.sum())),(self.left[edges],self.right[edges])),shape=self.matrix.shape).tocsr()
         unused,labels=connected_components(csgraph=graph,directed=False)
@@ -872,7 +880,7 @@ class NPF662Reference:
             boundary_throughput=boundary_gross)
         balanced_labels=ungrounded_labels & set(nullspaces)
         ungrounded=len(ungrounded_labels-balanced_labels)
-        result=dict(**checks,head_residual_rms=hrms,physical_rms=rms,
+        result=dict(**checks,head_residual_rms=hrms,acceptance_head_residual_rms=acceptance_rms,physical_rms=rms,
             physical_max=float(np.abs(residual).max()),residual_l1=l1,relative_cell_imbalance=relative,
             gross_throughput=throughput,equation_throughput=equation_throughput,signed_imbalance=stable_sum(values=residual[self.free]),boundary_inflow=inflow,boundary_outflow=outflow,
             free_boundary_inflow=free_in,free_boundary_outflow=free_out,
@@ -891,7 +899,7 @@ class NPF662Reference:
         result['physical_metrics_valid']=bool(metrics_valid and np.all(np.isfinite([
             result['signed_imbalance'],result['fixed_cell_source_total'],result['fixed_reservoir_required_inflow']])))
         result['independent_accepted']=bool(checks['input_valid'] and checks['boundary_condition_valid'] and
-            result['physical_metrics_valid'] and ungrounded==0 and hrms<=head_tolerance_m and
+            result['physical_metrics_valid'] and ungrounded==0 and acceptance_rms<=head_tolerance_m and
             (rms<=physical_tolerance or relative<=relative_tolerance))
         result['local_balance_valid'] = None
         if result['independent_accepted'] or roundoff_acceptance:

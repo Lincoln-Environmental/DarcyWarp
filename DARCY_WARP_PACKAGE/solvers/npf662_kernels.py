@@ -2,7 +2,8 @@
 import warp as wp
 
 
-NPFRowMetrics = wp.types.vector(length=9, dtype=wp.float64)
+PHYSICAL_METRIC_COUNT = 10
+NPFRowMetrics = wp.types.vector(length=PHYSICAL_METRIC_COUNT, dtype=wp.float64)
 
 
 @wp.func
@@ -190,7 +191,8 @@ def physical_row_metrics_base(i:int,head:wp.array(dtype=wp.float64),source:wp.ar
     right:wp.array2d(dtype=wp.int32),flux:wp.array2d(dtype=wp.float64),conductance:wp.array2d(dtype=wp.float64),
     scale:wp.array(dtype=wp.float64),residual:wp.array(dtype=wp.float64),rhs:wp.array(dtype=wp.float64),
     storage:wp.array(dtype=wp.float64),storage_tangent:wp.array(dtype=wp.float64),
-    q_ghb:wp.float64,q_drn:wp.float64,q_riv:wp.float64,boundary_c:wp.float64):
+    q_ghb:wp.float64,q_drn:wp.float64,q_riv:wp.float64,boundary_c:wp.float64,
+    boundary_gross:wp.float64,source_gross:wp.float64,physical_tolerance:wp.float64):
     """Assemble one physical row with per-package gross exchange accounting.
 
     The residual uses the signed boundary sum while inflow and outflow keep
@@ -211,16 +213,19 @@ def physical_row_metrics_base(i:int,head:wp.array(dtype=wp.float64),source:wp.ar
         residual[i]=wp.float64(0.);rhs[i]=wp.float64(0.)
         return metrics
     divergence=wp.float64(0.);diagonal=wp.float64(0.);inflow=wp.float64(0.);outflow=wp.float64(0.)
+    fixed_link = False
     for axis in range(3):
         j=right[i,axis]
         if j>=0:
             q=flux[i,axis];divergence+=q;diagonal+=conductance[i,axis]
             if fixed[j]!=0:
+                fixed_link = fixed_link or conductance[i,axis] > wp.float64(0.)
                 inflow+=wp.max(-q,wp.float64(0.));outflow+=wp.max(q,wp.float64(0.))
         j=left[i,axis]
         if j>=0:
             q=-flux[j,axis];divergence+=q;diagonal+=conductance[j,axis]
             if fixed[j]!=0:
+                fixed_link = fixed_link or conductance[j,axis] > wp.float64(0.)
                 inflow+=wp.max(-q,wp.float64(0.));outflow+=wp.max(q,wp.float64(0.))
     diagonal+=storage_tangent[i]+boundary_c
     r=source[i]-divergence-storage[i]-q_ghb-q_drn-q_riv
@@ -232,6 +237,12 @@ def physical_row_metrics_base(i:int,head:wp.array(dtype=wp.float64),source:wp.ar
     residual[i]=r;rhs[i]=r/scale[i]
     metrics[0]=r*r;metrics[1]=wp.abs(r)
     metrics[2]=equivalent*equivalent
+    negligible = (source[i] == wp.float64(0.) and source_gross == wp.float64(0.)
+                  and boundary_gross == wp.float64(0.) and boundary_c == wp.float64(0.)
+                  and storage[i] == wp.float64(0.) and storage_tangent[i] == wp.float64(0.)
+                  and not fixed_link and diagonal > wp.float64(0.) and wp.abs(r) <= physical_tolerance)
+    if not negligible:
+        metrics[9] = metrics[2]
     metrics[3]=wp.abs(source[i])+inflow+outflow+wp.abs(storage[i])
     metrics[4]=inflow;metrics[5]=outflow
     if not wp.isfinite(r) or not wp.isfinite(diagonal):metrics[6]+=wp.float64(1.)
@@ -244,9 +255,11 @@ def physical_row_metrics(i:int,head:wp.array(dtype=wp.float64),source:wp.array(d
     free:wp.array(dtype=wp.int32),fixed:wp.array(dtype=wp.int32),left:wp.array2d(dtype=wp.int32),
     right:wp.array2d(dtype=wp.int32),flux:wp.array2d(dtype=wp.float64),conductance:wp.array2d(dtype=wp.float64),
     scale:wp.array(dtype=wp.float64),residual:wp.array(dtype=wp.float64),rhs:wp.array(dtype=wp.float64),
-    storage:wp.array(dtype=wp.float64),storage_tangent:wp.array(dtype=wp.float64)):
+    storage:wp.array(dtype=wp.float64),storage_tangent:wp.array(dtype=wp.float64),
+    source_gross:wp.float64,physical_tolerance:wp.float64):
     return physical_row_metrics_base(i,head,source,free,fixed,left,right,flux,conductance,
-        scale,residual,rhs,storage,storage_tangent,wp.float64(0.),wp.float64(0.),wp.float64(0.),wp.float64(0.))
+        scale,residual,rhs,storage,storage_tangent,wp.float64(0.),wp.float64(0.),wp.float64(0.),wp.float64(0.),
+        wp.float64(0.),source_gross,physical_tolerance)
 
 
 @wp.func
@@ -347,12 +360,12 @@ def physical_rows_ghb(head:wp.array(dtype=wp.float64),source:wp.array(dtype=wp.f
     right:wp.array2d(dtype=wp.int32),flux:wp.array2d(dtype=wp.float64),conductance:wp.array2d(dtype=wp.float64),
     scale:wp.array(dtype=wp.float64),residual:wp.array(dtype=wp.float64),rhs:wp.array(dtype=wp.float64),
     metrics:wp.array2d(dtype=wp.float64),storage:wp.array(dtype=wp.float64),storage_tangent:wp.array(dtype=wp.float64),
-    block_size:int,ghb_conductance:wp.array(dtype=wp.float64),ghb_head:wp.array(dtype=wp.float64)):
+    block_size:int, source_gross:wp.array(dtype=wp.float64), physical_tolerance:wp.float64,ghb_conductance:wp.array(dtype=wp.float64),ghb_head:wp.array(dtype=wp.float64)):
     i=wp.tid()
     q=ghb_flow_at(i,head,ghb_conductance,ghb_head)
     values=physical_row_metrics_base(i,head,source,free,fixed,left,right,flux,conductance,
-        scale,residual,rhs,storage,storage_tangent,q,wp.float64(0.),wp.float64(0.),ghb_conductance[i])
-    for metric in range(9):
+        scale,residual,rhs,storage,storage_tangent,q,wp.float64(0.),wp.float64(0.),ghb_conductance[i],wp.abs(q),source_gross[i],physical_tolerance)
+    for metric in range(PHYSICAL_METRIC_COUNT):
         if values[metric]!=wp.float64(0.):wp.atomic_add(metrics,i/block_size,metric,values[metric])
 
 
@@ -398,7 +411,7 @@ def physical_rows_drn_riv(head:wp.array(dtype=wp.float64), source:wp.array(dtype
     flux:wp.array2d(dtype=wp.float64), conductance:wp.array2d(dtype=wp.float64),
     scale:wp.array(dtype=wp.float64), residual:wp.array(dtype=wp.float64), rhs:wp.array(dtype=wp.float64),
     metrics:wp.array2d(dtype=wp.float64), storage:wp.array(dtype=wp.float64),
-    storage_tangent:wp.array(dtype=wp.float64), block_size:int,
+    storage_tangent:wp.array(dtype=wp.float64), block_size:int, source_gross:wp.array(dtype=wp.float64), physical_tolerance:wp.float64,
     ghb_c:wp.array(dtype=wp.float64), ghb_head:wp.array(dtype=wp.float64),
     drn_offsets:wp.array(dtype=wp.int32), drn_c:wp.array(dtype=wp.float64),
     drn_elevation:wp.array(dtype=wp.float64),
@@ -457,14 +470,14 @@ def physical_rows_drn_riv(head:wp.array(dtype=wp.float64), source:wp.array(dtype
     operator_tangent[i] = storage_tangent[i] + combined_tangent
     values = physical_row_metrics_base(i, head, source, free, fixed, left, right, flux, conductance,
         scale, residual, rhs, storage, storage_tangent,
-        ghb_flow, drain[0], river[0], combined_tangent)
+        ghb_flow, drain[0], river[0], combined_tangent, boundary_throughput[i], source_gross[i], physical_tolerance)
     if free[i] != 0:
         extra_in = drain[2] + river[2] - wp.max(-drain[0], wp.float64(0.0)) - wp.max(-river[0], wp.float64(0.0))
         extra_out = drain[3] + river[3] - wp.max(drain[0], wp.float64(0.0)) - wp.max(river[0], wp.float64(0.0))
         values[3] += extra_in + extra_out
         values[4] += extra_in
         values[5] += extra_out
-    for metric in range(9):
+    for metric in range(PHYSICAL_METRIC_COUNT):
         if values[metric] != wp.float64(0.0):
             wp.atomic_add(metrics, i / block_size, metric, values[metric])
 
@@ -476,7 +489,7 @@ def physical_rows_drn_riv_tiled(head:wp.array(dtype=wp.float64), source:wp.array
     flux:wp.array2d(dtype=wp.float64), conductance:wp.array2d(dtype=wp.float64),
     scale:wp.array(dtype=wp.float64), residual:wp.array(dtype=wp.float64), rhs:wp.array(dtype=wp.float64),
     metrics:wp.array(dtype=wp.float64), storage:wp.array(dtype=wp.float64),
-    storage_tangent:wp.array(dtype=wp.float64), block_size:int,
+    storage_tangent:wp.array(dtype=wp.float64), block_size:int, source_gross:wp.array(dtype=wp.float64), physical_tolerance:wp.float64,
     ghb_c:wp.array(dtype=wp.float64), ghb_head:wp.array(dtype=wp.float64),
     drn_offsets:wp.array(dtype=wp.int32), drn_c:wp.array(dtype=wp.float64),
     drn_elevation:wp.array(dtype=wp.float64),
@@ -531,15 +544,15 @@ def physical_rows_drn_riv_tiled(head:wp.array(dtype=wp.float64), source:wp.array
     operator_tangent[i] = storage_tangent[i] + combined_tangent
     values = physical_row_metrics_base(i, head, source, free, fixed, left, right, flux, conductance,
         scale, residual, rhs, storage, storage_tangent,
-        ghb_flow, drain[0], river[0], combined_tangent)
+        ghb_flow, drain[0], river[0], combined_tangent, boundary_throughput[i], source_gross[i], physical_tolerance)
     if free[i] != 0:
         extra_in = drain[2] + river[2] - wp.max(-drain[0], wp.float64(0.0)) - wp.max(-river[0], wp.float64(0.0))
         extra_out = drain[3] + river[3] - wp.max(drain[0], wp.float64(0.0)) - wp.max(river[0], wp.float64(0.0))
         values[3] += extra_in + extra_out
         values[4] += extra_in
         values[5] += extra_out
-    for metric in range(9):
-        wp.tile_store(metrics, wp.tile_sum(wp.tile(values[metric])), offset=(i / block_size) * 9 + metric)
+    for metric in range(PHYSICAL_METRIC_COUNT):
+        wp.tile_store(metrics, wp.tile_sum(wp.tile(values[metric])), offset=(i / block_size) * PHYSICAL_METRIC_COUNT + metric)
 
 
 @wp.kernel
@@ -683,13 +696,13 @@ def physical_rows_ghb_tiled(head:wp.array(dtype=wp.float64),source:wp.array(dtyp
     right:wp.array2d(dtype=wp.int32),flux:wp.array2d(dtype=wp.float64),conductance:wp.array2d(dtype=wp.float64),
     scale:wp.array(dtype=wp.float64),residual:wp.array(dtype=wp.float64),rhs:wp.array(dtype=wp.float64),
     metrics:wp.array(dtype=wp.float64),storage:wp.array(dtype=wp.float64),storage_tangent:wp.array(dtype=wp.float64),
-    block_size:int,ghb_conductance:wp.array(dtype=wp.float64),ghb_head:wp.array(dtype=wp.float64)):
+    block_size:int, source_gross:wp.array(dtype=wp.float64), physical_tolerance:wp.float64,ghb_conductance:wp.array(dtype=wp.float64),ghb_head:wp.array(dtype=wp.float64)):
     i=wp.tid()
     q=ghb_flow_at(i,head,ghb_conductance,ghb_head)
     values=physical_row_metrics_base(i,head,source,free,fixed,left,right,flux,conductance,
-        scale,residual,rhs,storage,storage_tangent,q,wp.float64(0.),wp.float64(0.),ghb_conductance[i])
-    for metric in range(9):
-        wp.tile_store(metrics,wp.tile_sum(wp.tile(values[metric])),offset=(i/block_size)*9+metric)
+        scale,residual,rhs,storage,storage_tangent,q,wp.float64(0.),wp.float64(0.),ghb_conductance[i],wp.abs(q),source_gross[i],physical_tolerance)
+    for metric in range(PHYSICAL_METRIC_COUNT):
+        wp.tile_store(metrics,wp.tile_sum(wp.tile(values[metric])),offset=(i/block_size)*PHYSICAL_METRIC_COUNT+metric)
 
 
 @wp.kernel
@@ -790,10 +803,10 @@ def physical_rows(head:wp.array(dtype=wp.float64),source:wp.array(dtype=wp.float
     free:wp.array(dtype=wp.int32),fixed:wp.array(dtype=wp.int32),left:wp.array2d(dtype=wp.int32),
     right:wp.array2d(dtype=wp.int32),flux:wp.array2d(dtype=wp.float64),conductance:wp.array2d(dtype=wp.float64),
     scale:wp.array(dtype=wp.float64),residual:wp.array(dtype=wp.float64),rhs:wp.array(dtype=wp.float64),
-    metrics:wp.array2d(dtype=wp.float64),storage:wp.array(dtype=wp.float64),storage_tangent:wp.array(dtype=wp.float64),block_size:int):
+    metrics:wp.array2d(dtype=wp.float64),storage:wp.array(dtype=wp.float64),storage_tangent:wp.array(dtype=wp.float64),block_size:int, source_gross:wp.array(dtype=wp.float64), physical_tolerance:wp.float64):
     i=wp.tid()
-    values=physical_row_metrics(i,head,source,free,fixed,left,right,flux,conductance,scale,residual,rhs,storage,storage_tangent)
-    for metric in range(9):
+    values=physical_row_metrics(i,head,source,free,fixed,left,right,flux,conductance,scale,residual,rhs,storage,storage_tangent,source_gross[i],physical_tolerance)
+    for metric in range(PHYSICAL_METRIC_COUNT):
         if values[metric] != wp.float64(0.):
             wp.atomic_add(metrics,i/block_size,metric,values[metric])
 
@@ -803,11 +816,11 @@ def physical_rows_tiled(head:wp.array(dtype=wp.float64),source:wp.array(dtype=wp
     free:wp.array(dtype=wp.int32),fixed:wp.array(dtype=wp.int32),left:wp.array2d(dtype=wp.int32),
     right:wp.array2d(dtype=wp.int32),flux:wp.array2d(dtype=wp.float64),conductance:wp.array2d(dtype=wp.float64),
     scale:wp.array(dtype=wp.float64),residual:wp.array(dtype=wp.float64),rhs:wp.array(dtype=wp.float64),
-    metrics:wp.array(dtype=wp.float64),storage:wp.array(dtype=wp.float64),storage_tangent:wp.array(dtype=wp.float64),block_size:int):
+    metrics:wp.array(dtype=wp.float64),storage:wp.array(dtype=wp.float64),storage_tangent:wp.array(dtype=wp.float64),block_size:int, source_gross:wp.array(dtype=wp.float64), physical_tolerance:wp.float64):
     i=wp.tid()
-    values=physical_row_metrics(i,head,source,free,fixed,left,right,flux,conductance,scale,residual,rhs,storage,storage_tangent)
-    for metric in range(9):
-        wp.tile_store(metrics,wp.tile_sum(wp.tile(values[metric])),offset=(i/block_size)*9+metric)
+    values=physical_row_metrics(i,head,source,free,fixed,left,right,flux,conductance,scale,residual,rhs,storage,storage_tangent,source_gross[i],physical_tolerance)
+    for metric in range(PHYSICAL_METRIC_COUNT):
+        wp.tile_store(metrics,wp.tile_sum(wp.tile(values[metric])),offset=(i/block_size)*PHYSICAL_METRIC_COUNT+metric)
 
 
 @wp.kernel
