@@ -818,3 +818,11 @@ These runs set the free cells to the top elevation of their layer. Fixed and ina
 1502 and 1504 passed independent physical acceptance and tight MF6 parity. The 1502 archived comparison had 0.36434 mm RMS and 7.33456 mm maximum differences. Refinement of its saved native heads at DVCLOSE 1e-6 m took 15.43 s. The resulting 1502 model-top head differences were 0.0004211 mm RMS and 0.0720715 mm maximum. The 1504 model-top differences against the existing tight native refinement were 0.0039141 mm RMS and 1.97615 mm maximum. The 71/74 supplied-head tally is unchanged.
 
 [1502 tight comparison](remaining_20d4381/regional_tight_warm_native_comparison/1502_1506_MF6_SS_Unconfined_250/solution.json) · [1504 model-top comparison](remaining_20d4381/model_top_tight_audit_01/1504_1505_1508_MF6_SS_Unconfined_250/solution.json)
+
+### 1504 qualifies from its supplied initial heads
+
+All 1,536,322 initial free heads were unchanged. The drain correction was enabled from the first update. The integrated drain and wetting corrections were enabled for the saved continuations after update 240. Physical acceptance and tight MF6 parity passed at update 310 and 85,912 cumulative FGMRES iterations. The three segments used 520.25 s of measured numerical solve time, excluding observer and checkpoint overhead, and 644.65 s of combined wall time. Import and operator preparation before entering the step totalled 76.54 s across the segments. Solver hierarchy setup totalled 2.81 s.
+
+Final physical flow RMS was 3.56613e-6 m³/day, relative imbalance was 3.78125e-10, and no cell exceeded its local allowance. The worst local ratio was 0.2275. The raw head RMS was 72.891 mm and the acceptance head RMS was 0.70271 µm. The independent tight comparison gave 0.0026306 mm RMS and 1.3600 mm maximum datum-aligned head difference. GHB inflow and outflow were 15,670,341.74 and 1,175,724.12 m³/day, and DRN outflow was 23,592,172.09 m³/day.
+
+The qualification tally is **72 of 74**. The remaining cases are 1502 and 1503. The historical qualification for 1606 still includes the earlier adjusted-start result, and unchanged-start reproduction remains open. [1504 supplied-head tight audit](remaining_20d4381/integrated_1504_original_tight_01/1504_1505_1508_MF6_SS_Unconfined_250/solution.json)
