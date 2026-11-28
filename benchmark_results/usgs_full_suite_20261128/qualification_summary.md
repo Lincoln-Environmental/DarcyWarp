@@ -616,3 +616,20 @@ All five runs below verified every free starting head against the archived input
 1809 passed every archived comparison gate except head RMS and maximum. The datum-aligned differences were 1.711 mm RMS and 27.441 mm maximum. Independent head-equivalent RMS was 0.190 µm. The recorded tally is now 62 fully qualified, seven physically accepted awaiting adequate native comparison and five solver failures, with the unchanged-start reproduction of the previously qualified 1606 separately outstanding.
 
 The 1301 strict checkpoint also passed the native-head audit and every parity gate against its tight MF6 reference. Head differences were 0.00524 mm RMS and 0.242 mm maximum. The native solve took 2,862.14 s. The checkpoint result does not change the original-start tally. [1301 tight comparison](remaining_20d4381/regional_tight_comparison/1301_1302_MF6_SS_Unconfined_250/solution.json)
+
+### Matched K-cycle depth on unchanged-start checkpoints
+
+Each trial restored accepted update 208 from the unchanged-start run, including heads, scaling, previous operator tangent, correction history and continuation controls. The trials resolved the standard regional profile and changed only `npf_kcycle_controls.levels`. The profile used mixed-fast precision, CUDA graphs, two coarse sweeps, FGMRES restart 16, 500 Krylov iterations per outer update, and the existing 1 µm rule. The first Newton solve used its usual 375-iteration allocation. Level counts include the fine grid. Grid dimensions are layer, row, column. Linear times are measured at the first recomputed FP64 residual at or below the shared target, without interpolation. Nonlinear times exclude import, initial hierarchy construction, diagnostic cell counts and checkpoint writes. Local counts use the device acceptance allowance. Trial measurements and checkpoints are under `remaining_20d4381/kcycle_depth_matched_208_level{5,6,7,8}_01`.
+
+#### 1303
+
+The matched first Newton correction started with true linear residual 8,348.79 and a configured target of 83.4879. The four runs first reached the common measured residual threshold of 83.0687 at the iterations below. All reached the configured linear target. Starting flow RMS was 5.674244 m³/day and 633,358 cells exceeded their local allowance. All four first reached 4.715304 m³/day flow RMS and relative imbalance 0.0348565 or better at accepted update 220.
+
+| Actual levels | Coarsest grid | First correction iterations | First correction s | K-cycle device s in first correction | Solve s to common flow RMS | Flow RMS at 220 m³/day | Cells over allowance at 220 | FGMRES iterations over 12 updates |
+| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 5 | 1 × 168 × 129 | 262 | 2.993 | 1.463 | 41.16 | 4.715304 | 578,917 | 3,567 |
+| 6 | 1 × 84 × 65 | 252 | 3.172 | 1.697 | 46.86 | 4.713581 | 578,959 | 3,697 |
+| 7 | 1 × 42 × 33 | 253 | 3.711 | 2.229 | 52.85 | 4.714570 | 578,895 | 3,580 |
+| 8 | 1 × 21 × 17 | 253 | 4.754 | 3.266 | 67.95 | 4.715285 | 578,982 | 3,601 |
+
+The extra hierarchy levels gave little change in the physical trajectory. Eight levels took 65% longer than five to reach the common error. The five-level continuation reproduced the prior terminal heads' reported residuals at update 240, with flow RMS 3.841182 m³/day, relative imbalance 0.0278588 and 526,300 cells over allowance. The 32-update replay took 121.65 s excluding diagnostics, import and setup.
