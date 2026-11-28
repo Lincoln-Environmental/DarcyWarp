@@ -539,3 +539,21 @@ saved outer 128 state. Its final history reproduced the archived endpoint.
 A pinned Arnoldi readback buffer did not prevent the crash and was removed.
 The two paths and their trial heads are in `fallback_immediate_pair_01`,
 `fallback_immediate_resume128_01` and `fallback_deferred_pair_01`.
+
+The 1502 spike was caused by lateral face flow at (0, 1489, 1082).
+The Picard trial raised wet thickness from 0.174 mm to 363.603 mm.
+The archived MF6 thickness there is 0.273 mm. Outflow through two
+downhill faces rose from 4.65 and 3.86 to 13,636 and 11,327 m³/day.
+The drain stayed closed. The full-saturated trial had the same worst
+cell. Only one drain opened in each trial, accounting for less than
+0.00003% of its squared physical residual. At this step all three
+Newton directions were discarded on the linear residual before a
+nonlinear trial was made.
+
+With the startup correction in `1aef06b`, 1303's CUDA initial field
+matched all free input heads bit for bit. The spatial-shift original
+run took 357.01 s of solver time and 29,993 Krylov iterations. Flow
+RMS fell from 1,871.71 to 3.84 m³/day over 240 damped Newton steps.
+Final relative imbalance was 0.02786. The MF6 6.6.2 initial reciprocal
+pseudo-time calculated at the supplied heads is 0.050313, compared
+with the importer's starting shift of 5.44764.
