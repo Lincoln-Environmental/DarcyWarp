@@ -678,6 +678,8 @@ The continuation restores the archived-input run's accepted heads, scaling, cond
 | 1303 | 496 | 901.38 | 0.006420 | 6.4891e-6 | 11,628 | 3,994 |
 | 1303 | 528 | 980.94 | 0.000814908 | 1.0267e-06 | 1,603 | 160.34 |
 | 1303 | 560 | 1057.15 | 0.000162308 | 2.0174e-07 | 959 | 29.96 |
+| 1303 | 592 | 1125.04 | 0.000959951 | 5.7732e-7 | 1,489 | 378.98 |
+| 1303 | 623 | 1208.49 | 0.000025777 | 1.5731e-8 | 97 | 9.83 |
 
 1301 continued to improve over both blocks despite four uphill recoveries and a small increase in the worst local ratio during the second block. The continuation state and trajectories are under `unchanged_240_through304_01`.
 
@@ -731,3 +733,11 @@ The same independent calculation on tight MF6 heads gave unweighted head-equival
 The normal regional audit reproduced the 1301 result with the revised local rule. The native and solution audits both passed. The resulting tally is **64 qualified, six physically accepted awaiting adequate native comparison, and four solver failures** (1303, 1502, 1503 and 1504). The unchanged-start reproduction of the previously qualified 1606 is separately outstanding. [1301 tight solution comparison](remaining_20d4381/anchored_10um_production_tight_audit_01/1301_1302_MF6_SS_Unconfined_250/solution.json)
 
 The regional importer and independent audit now use a 10 µm head-equivalent allowance for hydraulically anchored cells in steady convertible models in metres. The normal 1807 control started with all 1,119,702 free heads unchanged, independently passed physical acceptance in 204 updates and 42,654 FGMRES iterations, and took 181.53 s in the solver. Its output head file was byte-identical to the previous five-level control. Both cached tight-reference comparisons passed. Three focused MF6 importer tests passed on CPU. [1807 control comparison](remaining_20d4381/anchored_10um_original_control_tight_01/1807_1810_MF6_SS_Unconfined_250/solution.json)
+
+### 1303 qualifies from unchanged initial heads
+
+The five-level continuation passed independent physical acceptance at update 623 and 137,330 cumulative FGMRES iterations. The two late uphill recoveries at updates 580 and 588 temporarily raised flow error, but the following blocks resumed contraction. Shortly before update 576, the existing dry-cell projection reduced the head-equivalent RMS from about 32 mm to 0.655 µm once the global water balance was within allowance. Final head-equivalent RMS was 0.239 µm. The strict 1 µm diagnostic still flagged 97 rows at update 623. All rows met the 10 µm anchored allowance or their applicable flow allowance. The continuation took 1,208.49 additional seconds from update 240, excluding setup and diagnostic work.
+
+The saved full continuation state and accepted heads are in `unchanged_560_through624_01`. The original MF6 6.6.2 tight reference was reused. Its native-head audit and the solution comparison passed every gate. Datum-aligned head differences were 0.015052 mm RMS and 2.182800 mm maximum. [1303 tight solution comparison](remaining_20d4381/anchored_10um_1303_unchanged_tight_audit_01/1303_1305_1306_MF6_SS_Unconfined_250/solution.json)
+
+The recorded tally is **65 qualified, six physically accepted awaiting adequate native comparison, and three solver failures** (1502, 1503 and 1504). The unchanged-start reproduction of 1606, whose earlier adjusted-start solution qualified, remains separately outstanding.
