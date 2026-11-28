@@ -442,3 +442,23 @@ On 1303, the trial that deferred uphill fallback steps stopped during a
 Warp CUDA-to-host Arnoldi column readback at outer 213. The last accepted
 update had relative imbalance 3.53e-5. The same readback stopped 1503 at
 outer 205. No new endpoint was recorded for either interrupted run.
+
+### 1606 passes physical acceptance from original heads
+
+Using the normal importer with deferred fallback ordering, 1606 passed
+the independent physical checks from archived initial heads in 164 outers
+and 35,403 Krylov iterations. The mixed-fast CUDA solve took 351.24 s,
+or 585.87 s including import and setup. Head-equivalent RMS was 3.79e-7 m
+and relative imbalance was 4.11e-9. Only the two head gates failed against
+archived MF6, with 0.0001976 m RMS and 0.01567 m maximum difference.
+The receipt is in `remaining_20d4381/deferred_backtrack_original_01`.
+This run used the importer's spatial shift. The earlier 45-step checkpoint
+used a uniform adaptive shift. The tally is 61 fully qualified, seven
+physically accepted awaiting comparison and six original-head solver
+failures (1301, 1303, 1502, 1503, 1504 and 1809).
+
+The 1502 history under `97b95e4` records its first uphill Picard step at
+outer 124. From outer 123's flow RMS of 0.38045246 m³/day it increased
+flow error by a factor of 137.25, with 114 Krylov iterations left. Across
+the six uphill steps, five increases were between 130 and 157 times.
+Outer 157 had a smaller increase of 18.83 times.
