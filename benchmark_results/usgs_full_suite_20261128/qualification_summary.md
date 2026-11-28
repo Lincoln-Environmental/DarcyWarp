@@ -633,3 +633,7 @@ The matched first Newton correction started with true linear residual 8,348.79 a
 | 8 | 1 × 21 × 17 | 253 | 4.754 | 3.266 | 67.95 | 4.715285 | 578,982 | 3,601 |
 
 The extra hierarchy levels gave little change in the physical trajectory. Eight levels took 65% longer than five to reach the common error. The five-level continuation reproduced the prior terminal heads' reported residuals at update 240, with flow RMS 3.841182 m³/day, relative imbalance 0.0278588 and 526,300 cells over allowance. The 32-update replay took 121.65 s excluding diagnostics, import and setup.
+
+### 1809 qualifies against tight MF6
+
+The MF6 6.6.2 reference at `dvclose=1e-6` completed in 576.44 s. Both independent audits passed using the saved unchanged-start DarcyWarp solution. Tight datum-aligned head differences were 0.002812 mm RMS and 0.917190 mm maximum. The tally is **63 fully qualified, six physically accepted awaiting adequate native comparison, and five solver failures**. The five are 1301, 1303, 1502, 1503 and 1504. The unchanged-start reproduction of the previously qualified 1606 remains outstanding. [Native heads audit](remaining_20d4381/regional_tight_comparison/1809_MF6_SS_Unconfined_250/native_heads.json) · [Solution comparison](remaining_20d4381/regional_tight_comparison/1809_MF6_SS_Unconfined_250/solution.json)
