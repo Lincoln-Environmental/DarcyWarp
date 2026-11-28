@@ -336,3 +336,39 @@ reduced its weighted defect by 13.7% but increased its physical defect by
 under `remaining_20d4381/equilibrated_refinement_01`. These two runs leave
 the qualification tally at 60 full passes, six awaiting comparison and eight
 solver failures.
+
+### 1404 passes the physical solve from original heads
+
+With `97b95e4`, 1404 passed independent physical acceptance in 98 Newton
+updates and 10,477 Krylov iterations. Every accepted update reduced the
+physical flow norm. Solve time was 97.32 s and total time including import
+was 148.48 s. Head-equivalent RMS was 1.05e-8 m and relative cell
+imbalance was 4.94e-11. Only the two head gates failed against the archived
+MF6 output, with RMS difference 0.0005307 m and maximum 0.02089 m. The
+archived MF6 final change was 0.09531 m. The saved DarcyWarp endpoint and
+comparison are in `remaining_20d4381/97b95e4_original/1404_1405_1406_MF6_SS_Unconfined_250/`.
+Pending the tighter comparison, the tally is 60 fully qualified, seven
+physically accepted awaiting comparison, and seven solver failures.
+
+### Linear and nonlinear limits at the saved heads
+
+- In 1303, the 16-by-16 block containing the largest flow residual has an
+  aggregate Newton diagonal of 167,059 m²/day. The symmetric approximation
+  gives 1,032,549 m²/day because 865,491 m²/day of internal saturation
+  derivatives are counted as restraint. Removing this term only on the
+  coarse levels gave independent physical acceptance after 25 checkpoint
+  steps (6,147 Krylov iterations, 126.18 s including import). Including
+  directed transfers on the fine grid as well ended at 4.05% relative
+  imbalance after 32 steps. A sub-millimetre Picard recovery in the first
+  replay increased the physical norm from 0.0110 to 129.0 m³/day.
+- The unshifted, accurately solved 1303 Newton direction at the original
+  run's rejected endpoint had relative linear defect 6.02e-12 and maximum
+  displacement 0.640 mm. Taking the full step reduced the nonlinear flow
+  norm by 97.45%. In 1301 the coarse diagonal at the largest residual
+  was only 6.29% above the aggregate Newton diagonal.
+- On 1606, cellwise DBD with adaptive continuation reduced the largest
+  individual recovery spike. At update 64 it had used 49 backtracking
+  recoveries and reached 0.373% relative imbalance. Continuation alone
+  from the same initial heads and shift used three recoveries and reached
+  0.144% at the same update. The DBD receipt is under
+  `remaining_20d4381/adaptive_backtrack_dbd_saved_01`.
