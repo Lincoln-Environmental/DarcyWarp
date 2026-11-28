@@ -1,0 +1,94 @@
+{
+  "outer": 226,
+  "initial_rms": 0.15787675557281677,
+  "searches": [
+    [],
+    []
+  ],
+  "accepted": {
+    "alpha": null,
+    "actual_rms": 23.510308472482063,
+    "predicted_rms": 23.510308637788853,
+    "newly_open_faces": 0,
+    "newly_open_drains": 0,
+    "actual_face_change_l2": 30462.589213524214,
+    "predicted_face_change_l2": 30462.58939644071,
+    "conductance_change_face_l2": 30462.555937011835,
+    "actual_drain_change_l2": 4.480647334266435,
+    "predicted_drain_change_l2": 4.480647334266821,
+    "face_prediction_error_l2": 0.008791926651815883,
+    "drain_prediction_error_l2": 2.0873573290071535e-10,
+    "wet_face_residual_projection": 0.9997835218238975,
+    "drain_change_residual_projection": 2.206714394528312e-09,
+    "worst_cell": [
+      0,
+      1489,
+      1082
+    ],
+    "worst_residual": -21173.11569603192,
+    "worst_predicted_residual": -21173.11577932561,
+    "worst_wet_thickness_before": 0.00016926164471442462,
+    "worst_wet_thickness_after": 0.3080187359598767,
+    "worst_drain_outflow_before": 0.0,
+    "worst_drain_outflow_predicted": 0.0,
+    "worst_drain_outflow_actual": 0.0,
+    "faces": [
+      {
+        "neighbour": [
+          0,
+          1489,
+          1081
+        ],
+        "start_outflow": -3.6263540308420863,
+        "predicted_outflow": -4.3600148124384095,
+        "actual_outflow": -4.359407525013039,
+        "start_conductance": 0.12995001368264325,
+        "actual_conductance": 0.1563477998425826,
+        "donor_wet_thickness_before": 1.402270316031263,
+        "donor_wet_thickness_after": 1.6871145496156714
+      },
+      {
+        "neighbour": [
+          0,
+          1489,
+          1083
+        ],
+        "start_outflow": 4.478296394056446,
+        "predicted_outflow": 11564.281903181156,
+        "actual_outflow": 11564.281473485642,
+        "start_conductance": 0.11926176397590692,
+        "actual_conductance": 307.96904392892037,
+        "donor_wet_thickness_before": 0.00016926164471442462,
+        "donor_wet_thickness_after": 0.3080187359598767
+      },
+      {
+        "neighbour": [
+          0,
+          1488,
+          1082
+        ],
+        "start_outflow": 3.7246047853587063,
+        "predicted_outflow": 9618.027911845204,
+        "actual_outflow": 9618.02739595756,
+        "start_conductance": 0.11926176397590692,
+        "actual_conductance": 307.96904392892037,
+        "donor_wet_thickness_before": 0.00016926164471442462,
+        "donor_wet_thickness_after": 0.3080187359598767
+      },
+      {
+        "neighbour": [
+          0,
+          1490,
+          1082
+        ],
+        "start_outflow": -0.8621246435774845,
+        "predicted_outflow": -1.1258077195620033,
+        "actual_outflow": -1.125552717521536,
+        "start_conductance": 0.09020336378792622,
+        "actual_conductance": 0.11787925798347743,
+        "donor_wet_thickness_before": 0.9733857134281152,
+        "donor_wet_thickness_after": 1.2720213195782435
+      }
+    ]
+  }
+}

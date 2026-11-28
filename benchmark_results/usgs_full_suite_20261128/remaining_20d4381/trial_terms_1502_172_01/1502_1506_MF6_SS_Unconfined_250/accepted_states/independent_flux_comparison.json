@@ -1,0 +1,67 @@
+{
+  "outer": 172,
+  "initial_rms": 2.5306479078416766,
+  "searches": [
+    [],
+    [],
+    []
+  ],
+  "accepted": {
+    "alpha": null,
+    "actual_rms": 862.7253417570357,
+    "predicted_rms": 11.686195952818732,
+    "newly_open_faces": 0,
+    "newly_open_drains": 1,
+    "actual_face_change_l2": 12866.665897575656,
+    "predicted_face_change_l2": 12866.689026637601,
+    "conductance_change_face_l2": 12866.801371571932,
+    "actual_drain_change_l2": 1117988.4399803625,
+    "predicted_drain_change_l2": 4.7625110346375426,
+    "face_prediction_error_l2": 0.04064142301582728,
+    "drain_prediction_error_l2": 1117988.4399702188,
+    "wet_face_residual_projection": 0.00015350782430446647,
+    "drain_change_residual_projection": 0.9998447712194639,
+    "worst_cell": [
+      0,
+      1255,
+      345
+    ],
+    "worst_residual": -1117956.8463401198,
+    "worst_predicted_residual": 31.586945211099582,
+    "worst_wet_thickness_before": 99.99999651284713,
+    "worst_wet_thickness_after": 100.17887815039524,
+    "worst_drain_outflow_before": 0.0,
+    "worst_drain_outflow_predicted": 0.0,
+    "worst_drain_outflow_actual": 1117988.4399702188,
+    "faces": [
+      {
+        "neighbour": [
+          0,
+          1255,
+          346
+        ],
+        "start_outflow": -93.31479938795623,
+        "predicted_outflow": -94.85923510691158,
+        "actual_outflow": -94.86173950245998,
+        "start_conductance": 98177.14216376896,
+        "actual_conductance": 98356.03797939749,
+        "donor_wet_thickness_before": 98.1770939866268,
+        "donor_wet_thickness_after": 98.3559896233595
+      },
+      {
+        "neighbour": [
+          0,
+          1256,
+          345
+        ],
+        "start_outflow": 67.0184832062598,
+        "predicted_outflow": 68.651449014562,
+        "actual_outflow": 68.6472685221364,
+        "start_conductance": 9.26743694752752,
+        "actual_conductance": 9.267436953162237,
+        "donor_wet_thickness_before": 99.99999651284713,
+        "donor_wet_thickness_after": 100.17887815039524
+      }
+    ]
+  }
+}
