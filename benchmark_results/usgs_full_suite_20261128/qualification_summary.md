@@ -664,11 +664,18 @@ The continuation restores the archived-input run's accepted heads, scaling, cond
 | 1301 | 304 | 110.61 | 0.286978 | 0.00031970 | 53,448 | 202,673 |
 | 1301 | 336 | 146.22 | 0.063071 | 0.00012525 | 37,942 | 12,877 |
 | 1301 | 368 | 193.97 | 0.008267 | 0.00002219 | 25,163 | 991 |
+| 1301 | 400 | 231.79 | 0.000357 | 8.7891e-7 | 10,343 | 71.28 |
+| 1301 | 432 | 268.61 | 0.000112 | 2.4032e-7 | 2,531 | 23.07 |
+| 1301 | 462 | 307.81 | 0.0000597 | 7.9221e-8 | 1,054 | 7.86 |
 | 1303 | 240 | 0 | 3.841182 | 0.02785877 | 526,300 | 1,057,325 |
 | 1303 | 272 | 138.99 | 3.087060 | 0.02151298 | 476,853 | 877,437 |
 | 1303 | 304 | 277.68 | 2.041715 | 0.01331524 | 412,093 | 661,100 |
 | 1303 | 336 | 392.88 | 1.833629 | 0.00700154 | 288,371 | 947,040 |
 | 1303 | 368 | 527.90 | 0.942826 | 0.00427045 | 240,922 | 344,497 |
+| 1303 | 400 | 646.27 | 0.671380 | 0.00302458 | 208,582 | 165,047 |
+| 1303 | 432 | 725.22 | 0.626283 | 0.00177227 | 164,482 | 418,782 |
+| 1303 | 464 | 813.92 | 0.388343 | 0.00023321 | 58,323 | 550,376 |
+| 1303 | 496 | 901.38 | 0.006420 | 6.4891e-6 | 11,628 | 3,994 |
 
 1301 continued to improve over both blocks despite four uphill recoveries and a small increase in the worst local ratio during the second block. The continuation state and trajectories are under `unchanged_240_through304_01`.
 
@@ -712,3 +719,11 @@ For 1503, the largest newly activated drain at full step was (0, 495, 877). The 
 The longest later recovery and the final one were also replayed from the nearest accepted states. Updates 145 and 226 both revisited the face-flow mechanism at (0, 1489, 1082). The cell was already wet by 0.171 mm and 0.169 mm respectively. Its wet thickness jumped to 304.6 and 308.0 mm. The two downhill outflows rose from about 4.5 and 3.7 to 11,436 and 9,511 m³/day at update 145, and to 11,564 and 9,618 m³/day at update 226. No drain opened in either trial. Conductance changes projected onto more than 99.95% of the observed flow residual at each spike.
 
 Of the 155.38 seconds from update 144 through 240, 152.38 seconds fell in a recovery window, measured from just before the spike until flow RMS regained its prior value or the run ended. The two verified face-driven windows account for 84.96 seconds, after removing the 11.40-second drain-driven window nested inside the update-145 recovery. Thus the verified face-driven windows account for over half the time spent in later recoveries, with the largest individual spike attributable to a drain. The detailed comparisons are in `trial_terms_1502_{145,172,226}_01`.
+
+### Anchored local allowance and comparison of closure metrics
+
+The 1 µm column in the continuation table above gives the original local allowance for comparison. At unchanged-start update 462, 1301 had 1,054 cells over 1 µm and 155 over 3 µm. No cell exceeded the trial 10 µm anchored allowance. The worst ratio at 10 µm was 0.7863. Whole-grid head-equivalent RMS was 2.42e-9 m and relative imbalance was 7.922e-8. The independent audit applied the 10 µm rule only to anchored cells. Against the cached tight MF6 reference, every gate passed and the head differences were 0.03280 mm RMS and 1.52816 mm maximum. Accepted heads and continuation state are under `unchanged_432_through496_01`. The continuation used 307.81 s of solve time after update 240, excluding setup and diagnostics.
+
+The same independent calculation on tight MF6 heads gave unweighted head-equivalent RMS of 13.175 mm on 1303 and 5.785 mm on 1807. The largest contribution on 1303 was the unforced cell (0, 1927, 7), with an absolute flow residual of 2.074e-19 m³/day and a hydraulic diagonal of 1.070e-20 m²/day. On 1807 the unforced cell (0, 1166, 667) had an absolute residual of 3.461e-24 m³/day and diagonal 5.654e-25 m²/day. Each row accounts for essentially all the squared head-equivalent error in its model. Both tight native relative imbalances were under 1.2e-9. The conductance-weighted RMS calculation gave 5.58e-11 m and 7.86e-12 m, respectively. It was evaluated as a diagnostic. The regional threshold change applies to anchored local balance. The grid-wide physical RMS and independent head parity gates retain their settings.
+
+The normal regional audit reproduced the 1301 result with the revised local rule. The native and solution audits both passed. The resulting tally is **64 qualified, six physically accepted awaiting adequate native comparison, and four solver failures** (1303, 1502, 1503 and 1504). The unchanged-start reproduction of the previously qualified 1606 is separately outstanding. [1301 tight solution comparison](remaining_20d4381/anchored_10um_production_tight_audit_01/1301_1302_MF6_SS_Unconfined_250/solution.json)
