@@ -372,3 +372,39 @@ physically accepted awaiting comparison, and seven solver failures.
   from the same initial heads and shift used three recoveries and reached
   0.144% at the same update. The DBD receipt is under
   `remaining_20d4381/adaptive_backtrack_dbd_saved_01`.
+
+### Local water balance and fallback steps
+
+At the original 1303 endpoint under `97b95e4`, 65 cells failed local
+water balance. They accounted for 94.4% of the squared flow residual. The
+worst error was 0.0019064 m³/day against its 0.0006449 m³/day allowance.
+Continuing from those heads passed the independent check after 14 full
+Newton steps and 3,376 Krylov iterations (36.82 s solve, 101.02 s total).
+Every step reduced flow error, so this replay provides a baseline for
+testing changes to the preconditioner. Including directed Newton face
+transfers on every multigrid level reproduced the independently calculated
+coarse diagonal of 167,059 m²/day. On the same heads the resulting
+preconditioner missed acceptance after 32 updates and 10,698 Krylov
+iterations. The receipts are in `deferred_backtrack_01` and
+`conservative_hierarchy_01` under `remaining_20d4381`.
+
+On 1301, retaining the previous restart correction within the existing
+Krylov budget reduced flow RMS from 2.64e-5 to 9.61e-6 m³/day over 48
+additional checkpoint updates. Eight cells still failed local balance.
+The worst had an error of 0.001022 m³/day against 0.0008974 m³/day
+allowed. The receipt is in `restart_refinement_02`.
+
+On 1606, starting from the same heads and continuation shift,
+trying the remaining fallback directions before accepting an uphill
+head-limited step reduced the relative imbalance at update 64 from
+0.001622 to 3.95e-6 (146.98 s solve, 198.37 s total for the latter).
+Neither endpoint passed. At the improved endpoint, an independent solve
+of the unshifted Newton equation had relative linear defect 3.36e-12.
+The full step increased the flow norm by a factor of 7.74. The cell with
+the largest resulting flow error started 0.2354 m above bottom and its
+head fell 0.2068 m. The original heads were used for the 1502 run under
+`97b95e4`, which reached 240 outers and 44,791 Krylov iterations in
+315.67 s with relative imbalance 9.84e-5. The subsequent 1503 run
+stopped during a Warp CUDA readback at outer 205. The last accepted
+update had relative imbalance 0.04053. These results leave seven
+original-start solver failures.
