@@ -557,3 +557,25 @@ RMS fell from 1,871.71 to 3.84 m³/day over 240 damped Newton steps.
 Final relative imbalance was 0.02786. The MF6 6.6.2 initial reciprocal
 pseudo-time calculated at the supplied heads is 0.050313, compared
 with the importer's starting shift of 5.44764.
+
+### Deferred fallback ordering and the 1807 regression control
+
+1807 started with all 1,119,702 free heads unchanged and passed independent
+physical acceptance in 204 updates and 42,654 Krylov iterations. The prior
+qualified run used 204 updates and 43,989 Krylov iterations. Solver time
+was 180.81 s, compared with 177.71 s previously. The new native-head audit
+and solution comparison both passed against the cached tight reference.
+The raw head difference was 1.54e-7 m RMS and 5.30e-6 m maximum. Receipts
+are under `imported_head_tight_comparison_01`. 1807 remains qualified.
+
+The common steady solver retains the best uphill trial head while trying
+remaining directions within the original Krylov budget. It restores and
+evaluates that head when the alternatives fail. The matched 1502 replay
+above and the 1807 control were run with this ordering.
+
+Reducing the spatial shift on 1303 to the MF6 residual-based starting
+scale was less effective on identical saved update-96 heads. Over the
+next 32 updates the original shift reached flow RMS 20.97 m³/day using
+2,477 Krylov iterations. The smaller shift reached 24.01 using 11,468.
+The latter's update-128 continuation state is saved under
+`spatial_mf6_start_scale_pair_01`.

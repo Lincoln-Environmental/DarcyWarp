@@ -1024,6 +1024,7 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
     stalled_linear_solves = 0
     saturated_preconditioner_retries = 0
     diagonal_preconditioner_retries = 0
+    recovery_head = None
     for outer in range(max_outer):
         if device_accepted(metrics=current,physical_tolerance=physical_tolerance,relative_tolerance=relative_tolerance):reason='converged';break
         shift = 0.
@@ -1089,6 +1090,7 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
                 controls.forcing_min,controls.forcing_max))
         forcing_previous=current['scaled_l2']
         remaining=krylov_budget;accepted=False;attempts=[]
+        recovery_attempt = None
         # Keep the benchmarked direction/preconditioner first. Retry the same
         # physical Newton Jacobian with alternative preconditioners only when
         # the primary linear solve fails to make useful progress. A saturated
@@ -1200,6 +1202,21 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
             attempts.append(dict(direction=direction,preconditioner=pc_label,krylov=int(used),remaining=remaining,
                 achieved_scaled_l2=float(error),requested_scaled_l2=float(target),target_reached=bool(error<=target),
                 stopping=stopping,relative_reduction=float(reduction),search=search))
+            if (initial_shift and search['accepted']
+                    and search['metrics']['physical_rms'] > current['physical_rms']
+                    and (recovery_attempt is not None or (remaining > 0 and mode != 2))
+                    and not device_accepted(metrics=search['metrics'], physical_tolerance=physical_tolerance,
+                                            relative_tolerance=relative_tolerance)):
+                # IMS can accept a growing flow residual on its head-change
+                # exit. Try the remaining directions before using that exit.
+                if (recovery_attempt is None or search['metrics']['physical_rms']
+                        < recovery_attempt['search']['metrics']['physical_rms']):
+                    if recovery_head is None:
+                        recovery_head = wp.empty_like(workspace.head)
+                    wp.copy(dest=recovery_head, src=workspace.trial)
+                    recovery_attempt = dict(direction=direction, preconditioner=pc_label,
+                                            krylov=0, reused_candidate=True, search=search.copy())
+                search.update(accepted=False, deferred=True)
             if progress_callback is not None:
                 progress_callback("Line search", direction=direction, accepted=search['accepted'],
                                   mode=search['mode'], alpha=search['alpha'],
@@ -1211,6 +1228,16 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
             if search['accepted']:
                 current=workspace.accept_trial(metrics=search['metrics'])
                 accepted=True;break
+        if not accepted and recovery_attempt is not None:
+            wp.copy(dest=workspace.trial, src=recovery_head)
+            recovery_metrics = workspace.evaluate(trial=True)
+            current = workspace.accept_trial(metrics=recovery_metrics)
+            recovery_attempt['remaining'] = remaining
+            attempts.append(recovery_attempt)
+            accepted = True
+            if progress_callback is not None:
+                progress_callback("Accepted deferred backtracking step", direction=recovery_attempt['direction'],
+                                  physical_rms=recovery_metrics['physical_rms'], remaining=remaining)
         history.append(dict(outer=outer+1,accepted=accepted,krylov=krylov_budget-remaining,attempts=attempts,
                             metrics=current,inner_forcing=forcing,linear_shift=shift))
         if progress_callback is not None:
