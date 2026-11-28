@@ -852,10 +852,6 @@ class NPF662Reference:
             diagonal=diagonal, equivalent=scaled, left=self.left, right=self.right,
             conductance=conductance, boundary_tangent=boundary_tangent,
             boundary_throughput=boundary_gross, physical_tolerance=physical_tolerance)
-        acceptance_rms = acceptance_head_rms(case=c, free=self.free, residual=residual,
-            diagonal=diagonal, equivalent=scaled, left=self.left, right=self.right,
-            conductance=conductance, boundary_tangent=boundary_tangent,
-            boundary_throughput=boundary_gross, physical_tolerance=physical_tolerance)
         active=c.active!=0
         metrics_valid=all(np.all(np.isfinite(value)) for value in
             (flux,conductance,dl,dr,saturation[active],diagonal[active],divergence[active],residual[self.free]))

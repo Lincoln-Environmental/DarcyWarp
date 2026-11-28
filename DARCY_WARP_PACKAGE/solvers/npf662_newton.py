@@ -649,8 +649,16 @@ class NPF662Workspace:
         return self.evaluate(trial=True)
 
     def rebalance_drain_trial(self, *, current, trial, physical_tolerance, relative_tolerance):
-        """Evaluate a bounded drain-branch correction to an adverse steady trial."""
-        if (self.transient or not self.drn_entry_c.shape[0] or not trial['finite']
+        """Evaluate a bounded drain-branch correction to an adverse steady trial.
+
+        :param current: Metrics at the accepted heads.
+        :param trial: Metrics at the proposed heads.
+        :param physical_tolerance: Absolute flow balance allowance.
+        :param relative_tolerance: Relative flow balance allowance.
+        :return: Trial metrics and whether a correction was retained.
+        """
+        if (self.transient or self.drn_entry_c is None or not self.drn_entry_c.shape[0]
+                or not trial['finite']
                 or trial['physical_rms'] <= current['physical_rms']
                 or device_accepted(metrics=trial, physical_tolerance=physical_tolerance,
                                    relative_tolerance=relative_tolerance)):
@@ -848,10 +856,20 @@ def refine_confined_component_datum(*, case, reference, head):
 
 
 def residual_merit(*,candidate,current):
-    if not candidate['finite']:return np.inf
-    flow=candidate['physical_rms']/max(current['physical_rms'],1e-12)
-    head=0. if not np.isfinite(current['head_residual_rms']) else candidate['head_residual_rms']/max(current['head_residual_rms'],1e-6)
-    return max(flow,head)**2
+    """Compare trial flow and head closure on the existing acceptance scales.
+
+    :param candidate: Metrics at the trial heads.
+    :param current: Metrics at the accepted heads.
+    :return: The squared maximum of the normalised errors.
+    """
+    if not candidate['finite']:
+        return np.inf
+    flow = candidate['physical_rms'] / max(current['physical_rms'], 1.e-12)
+    current_head = current['acceptance_head_residual_rms']
+    head = 0.
+    if np.isfinite(current_head):
+        head = candidate['acceptance_head_residual_rms'] / max(current_head, 1.e-6)
+    return max(flow, head)**2
 
 
 def search_direction(*,workspace,current,controls,physical_tolerance=1e-12,relative_tolerance=1e-8):
@@ -1102,7 +1120,7 @@ def solve_newton_device(*,model,case,reference,max_outer,krylov_budget,restart,c
                             progress_callback("Accepted dry-cell projection", head_rms=current["head_residual_rms"])
                         break
                 elif (projected['finite']
-                        and projected['head_residual_rms'] < current['head_residual_rms']
+                        and projected['acceptance_head_residual_rms'] < current['acceptance_head_residual_rms']
                         and projected['relative_cell_imbalance'] <= relative_tolerance):
                     # Remove near-zero dry rows before finishing local balance.
                     current = workspace.accept_trial(metrics=projected)

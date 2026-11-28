@@ -152,10 +152,6 @@ class NPF662MatrixFreeReference:
             diagonal=diagonal, equivalent=scaled, left=self.left, right=self.right,
             conductance=conductance, boundary_tangent=boundary_tangent,
             boundary_throughput=boundary_gross, physical_tolerance=physical_tolerance)
-        acceptance_rms = acceptance_head_rms(case=case, free=self.free, residual=residual,
-            diagonal=diagonal, equivalent=scaled, left=self.left, right=self.right,
-            conductance=conductance, boundary_tangent=boundary_tangent,
-            boundary_throughput=boundary_gross, physical_tolerance=physical_tolerance)
         active = case.active != 0
         valid = all(np.all(np.isfinite(value)) for value in (flux, conductance, dl, dr, saturation[active],
             derivative[active], diagonal[active], divergence[active], residual[self.free]))

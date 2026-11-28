@@ -549,7 +549,8 @@ def test_newton_only_import_reaches_supported_below_bottom_head(tmp_path, solver
 @pytest.mark.parametrize("transient", [False, True])
 def test_head_closure_respects_absolute_flow_allowance_on_unforced_rows(solver_device, transient):
     from DARCY_WARP_PACKAGE.solvers.npf662_3d import case_from_model
-    from DARCY_WARP_PACKAGE.solvers.npf662_newton import NPF662Workspace, device_accepted
+    from DARCY_WARP_PACKAGE.solvers.npf662_newton import NPF662Workspace, device_accepted, residual_merit
+    from DARCY_WARP_PACKAGE.validation.npf662_matrix_free import NPF662MatrixFreeReference
     from DARCY_WARP_PACKAGE.validation.npf662_reference import NPF662Reference
     from DARCY_WARP_PACKAGE.validation.npf662_transient_reference import NPF662TransientReference
     from DARCY_WARP_PACKAGE.warped_darcy_3d import WarpDarcySolver3D
@@ -572,6 +573,7 @@ def test_head_closure_respects_absolute_flow_allowance_on_unforced_rows(solver_d
                                                   ss=ghb*.01, sy=np.zeros_like(head))
         else:
             reference = NPF662Reference(case=case)
+        matrix_free = None if transient else NPF662MatrixFreeReference(case=case)
         workspace = NPF662Workspace(model=solver, case=case, reference=reference, restart=2, krylov_budget=0)
         try:
             def assess(*, candidate, expected):
@@ -580,6 +582,10 @@ def test_head_closure_respects_absolute_flow_allowance_on_unforced_rows(solver_d
                 cpu, _ = reference.evaluate(head=candidate)
                 for key in ("physical_rms", "head_residual_rms", "acceptance_head_residual_rms"):
                     assert device[key] == pytest.approx(cpu[key], rel=1e-9, abs=1e-20)
+                if matrix_free is not None:
+                    matrix_free_metrics, _ = matrix_free.evaluate(head=candidate)
+                    assert matrix_free_metrics["acceptance_head_residual_rms"] == pytest.approx(
+                        cpu["acceptance_head_residual_rms"], rel=1e-9, abs=1e-20)
                 assert device_accepted(metrics=device) == expected
                 assert cpu["independent_accepted"] == expected
                 return cpu
@@ -587,6 +593,11 @@ def test_head_closure_respects_absolute_flow_allowance_on_unforced_rows(solver_d
             weak = assess(candidate=head, expected=True)
             assert weak["head_residual_rms"] > 0.1
             assert weak["acceptance_head_residual_rms"] < 1e-12
+            trial = dict(weak, finite=True, head_residual_rms=10. * weak["head_residual_rms"])
+            assert residual_merit(candidate=trial, current=dict(weak, finite=True)) < 1.
+            metrics, corrected = workspace.rebalance_drain_trial(current=weak, trial=trial,
+                physical_tolerance=1.e-12, relative_tolerance=1.e-8)
+            assert metrics is trial and not corrected
             material_head = head.copy()
             material_head[1, 0, 1] += 10_000.
             assert assess(candidate=material_head, expected=False)["acceptance_head_residual_rms"] > 1.
