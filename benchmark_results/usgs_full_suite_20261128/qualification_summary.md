@@ -785,3 +785,21 @@ The integrated 1504 continuation from update 264 to 328 reduced flow RMS from 0.
 Starting from the saved unchanged-start update 328, the integrated drain correction reached independent physical acceptance at update 380. The continuation used 88.06 solver seconds, with 91,594 cumulative Krylov iterations. All local rows passed from update 378. The final worst local ratio was 0.1802, flow RMS was 2.81555e-6 m³/day, relative imbalance was 4.13019e-10, and acceptance head RMS was 0.5811 µm. The global 1 µm head gate required two further updates after the local gate passed.
 
 The archived MF6 comparison missed only the two datum-aligned head gates, with 0.36062 mm RMS and 5.91734 mm maximum against allowances of 0.1 and 5 mm. DarcyWarp passed its independent physical audit. The archived native flow RMS was 0.00581909 m³/day. A fresh tight MF6 reference with IMS head closure 1e-6 m was launched because the archived head differences exceeded parity and no tight endpoint was cached. The final original-head run with the integrated drain correction remains part of qualification. [Archived MF6 comparison](remaining_20d4381/production_drn_1504_archived_parity_01/1504_1505_1508_MF6_SS_Unconfined_250/solution.json)
+
+### Tight MF6 refinement from completed native solutions
+
+The six pending comparisons used the original MF6 6.6.2 outputs as the starting heads of separate native runs. Every archived stress, package and physical coefficient was copied unchanged. The tighter native runs used inner and outer DVCLOSE of 1e-6 m. The DarcyWarp endpoints were reused. The native and DarcyWarp physical audits and solution parity passed for each row.
+
+| Case | Tight MF6 solve s | Datum-aligned head RMS mm | Datum-aligned head maximum mm |
+| --- | ---: | ---: | ---: |
+| 1103 | 30.61 | 0.003623527 | 0.03729793 |
+| 1109 | 35.62 | 0.0009505884 | 0.01754929 |
+| 1205 | 30.78 | 0.007533854 | 0.03927626 |
+| 1501 | 29.12 | 0.0003904009 | 0.00705811 |
+| 1602 | 41.56 | 0.0009070829 | 0.03726217 |
+| 1805 | 10.60 | 5.558388e-05 | 0.002241873 |
+| 1504 | 32.07 | 0.002205611 | 1.36 |
+
+The archived 1504 run used 138 outer updates and 16,488 inner iterations in 4,203.29 seconds. Fifty-three of those updates exhausted the 200-iteration inner budget. Initial attempted head changes reached 89,916 m and triggered repeated backtracking. Archived outer and inner DVCLOSE were both 0.1 m. The tight refinement needed four outer updates and 166 inner iterations. Its result accepted the saved DarcyWarp continuation at update 380.
+
+Qualification now stands at **71 of 74**. The remaining full qualifications are 1502, 1503 and 1504. Case 1504 passed physical acceptance and tight parity on its continuation, with the independent original-head run in progress. Case 1606 is included in the historical passes under its earlier adjusted-start run. Its unchanged-start reproduction remains outstanding.
