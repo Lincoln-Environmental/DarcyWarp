@@ -539,6 +539,42 @@ def test_newton_only_import_reaches_supported_below_bottom_head(tmp_path, solver
         assert reader.get_data().item() == pytest.approx(-1., abs=1e-8)
 
 
+def test_disconnected_recharge_starts_at_imported_head(tmp_path, solver_device, monkeypatch):
+    from DARCY_WARP_PACKAGE.solvers.npf662_newton import NPF662Workspace
+
+    directory = tmp_path / "source"
+    simulation = flopy.mf6.MFSimulation(sim_name="recharge", sim_ws=directory)
+    flopy.mf6.ModflowTdis(simulation=simulation, time_units="DAYS", perioddata=[(1., 1, 1.)])
+    gwf = flopy.mf6.ModflowGwf(simulation=simulation, modelname="aquifer", newtonoptions="NEWTON")
+    flopy.mf6.ModflowIms(simulation=simulation)
+    flopy.mf6.ModflowGwfdis(model=gwf, nlay=1, nrow=1, ncol=2, top=10., botm=0.,
+                            length_units="METERS", delr=1., delc=1.)
+    flopy.mf6.ModflowGwfic(model=gwf, strt=[[-1., 0.]])
+    flopy.mf6.ModflowGwfnpf(model=gwf, icelltype=1, k=1.)
+    flopy.mf6.ModflowGwfrcha(model=gwf, recharge=[[1., 0.]])
+    flopy.mf6.ModflowGwfdrn(model=gwf, stress_period_data=[((0, 0, 0), 8., 10.)])
+    flopy.mf6.ModflowGwfchd(model=gwf, stress_period_data=[((0, 0, 1), 0.)])
+    simulation.write_simulation(silent=True)
+
+    first_heads = []
+    evaluate = NPF662Workspace.evaluate
+
+    def record_initial(self, *, trial, linearize=False):
+        if not first_heads and not trial:
+            first_heads.append(self.head.numpy().copy())
+        return evaluate(self, trial=trial, linearize=linearize)
+
+    monkeypatch.setattr(NPF662Workspace, "evaluate", record_initial)
+    report = run_mf6_model(model_directory=directory, output_directory=tmp_path / "darcywarp",
+                           device=solver_device, verbose=False)
+    np.testing.assert_array_equal(first_heads[0], [-1., 0.])
+    assert report["steps"][0]["physical_acceptance"]["independent_accepted"]
+    with flopy.utils.HeadFile(filename=report["head_file"], precision="double") as reader:
+        # The recharged cell passes its source to the fixed head through its wet face.
+        # At unit K and unit spacing the face law gives h² = 1.
+        assert reader.get_data()[0, 0, 0] == pytest.approx(1., abs=6.e-6)
+
+
 @pytest.mark.parametrize("under_relaxation", [False, True])
 def test_recharge_trial_preserves_representable_wet_head(solver_device, under_relaxation):
     import warp as wp

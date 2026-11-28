@@ -490,3 +490,25 @@ Relative water imbalance was 4.81e-9 for 1303 and 1.32e-8 for 1301,
 compared with 2.12e-6 and 2.03e-6 at the archived MF6 heads. Adoption of
 the new regional allowance awaits tight MF6 parity. The 1301 continuation
 is diagnostic. The qualification count is unchanged.
+
+### Preserve the archived heads at Newton startup
+
+For 1303 the old startup moved 1,550 disconnected cells to their drain
+elevations. The median shift was 65.0 m and the largest was 150.0 m.
+The physical flow-error norm rose from 2.754e6 to 3.899e8 m³/day.
+At cell (0, 1747, 612), a lift from 1445.14 to 1595.14026 m produced
+a residual of −1.117e8 m³/day and a drain flow of only 2.13e-6 m³/day.
+
+Steady convertible solves using a continuation shift now enter Newton at
+the supplied heads. Checking the actual normal-importer Newton inputs on
+1303 found zero differences across all 2,164,867 free cells. The initial
+flow-error norm was 2,753,937.04 m³/day, matching the archived-head
+calculation. A two-cell regression checks that recharge leaves through
+the lateral face while the overhead drain stays closed.
+
+The strict 1301 checkpoint continued with the same restarted Krylov method.
+One update with 112 iterations brought its worst local error from 1.139
+to 0.983 times the allowance. All eight previously failing cell IDs and
+their individual ratios are in `restart_refinement_continuation_01`.
+Independent physical acceptance took 1.16 s of solve time and 40.31 s
+including setup. The archived MF6 comparison missed only the two head gates.

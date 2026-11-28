@@ -143,12 +143,16 @@ def solve_npf662(*,model,unconfined=False,top_elevation=None,npf_cell_type=None,
         progress_callback("Checking hydraulic components", reference_seconds=reference_seconds,
                           reference_reused=reference_reused)
     reference.check_components()
-    if progress_callback is not None:
-        progress_callback("Preparing active-set initial guess")
     active_set_seeds = []
-    if hasattr(reference, 'seed_unanchored_boundary_components'):
-        seeded_head, active_set_seeds = reference.seed_unanchored_boundary_components(head=case.initial)
-        case.initial = seeded_head
+    # A steady continuation shift already supplies a correction diagonal
+    # for disconnected convertible cells. Start Newton at the supplied
+    # heads so recharge can open a lateral outlet before reaching a drain.
+    steady_continuation = (unconfined and not transient
+                           and getattr(npf_newton_controls, "steady_initial_shift", 0.) > 0.)
+    if not steady_continuation and hasattr(reference, 'seed_unanchored_boundary_components'):
+        if progress_callback is not None:
+            progress_callback("Preparing active-set initial guess")
+        case.initial, active_set_seeds = reference.seed_unanchored_boundary_components(head=case.initial)
     if not unconfined and np.any(case.cell_types):raise ValueError('Convertible cell types require unconfined=True')
     if transient or unconfined or layered or has_drn_riv or preconditioner_selected or npf_krylov_method is not None or npf_newton_controls is not None or npf_final_relative_tolerance is not None or npf_roundoff_acceptance:
         if model.implementation!='fast' or model.solver!='kcycle':
