@@ -691,3 +691,20 @@ Times are measured from immediately before each spike to the first accepted endp
 | 226 | 0.157877 | 23.51031 | 148.9× | Beyond update 240 | At least 20.97 |
 
 The largest later spike, at update 172, was replayed from accepted update 168. It reproduced the archived accepted RMS. At (0, 1255, 345), the full-saturated recovery opened a drain whose outflow rose from zero to 1,117,988.44 m³/day. The physical Newton prediction for the actual accepted head displacement kept that drain at zero. No lateral face opened. Whole-grid face flow changes had norm 12,867 m³/day, versus 1,117,988 m³/day for drain flow changes. The drain term accounted for 99.98% of the projection onto the observed residual. This later spike differs from update 124, when a nearly dry lateral outlet carried the dominant flow error. The captured heads and independent flux comparison are in `trial_terms_1502_172_01`.
+
+### Predicted and actual flows on 1503 and 1504
+
+Update 233 was replayed from the unchanged-start update-232 checkpoint for each model. Every captured candidate matched the archived step length and flow RMS. Predictions use the physical Newton face and drain derivatives at the starting heads, applied to the actual head displacement after any bottom safeguard. The independent reconstruction compares those predictions with the nonlinear physical flows at each captured head.
+
+| Model | Trial alpha | Predicted flow RMS m³/day | Actual flow RMS m³/day | Face prediction error norm m³/day | Drain prediction error norm m³/day |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 1503 | 1 | 32.8700 | 14,387.07 | 342,690.9 | 16,634,420 |
+| 1503 | 1/8 | 3.000821 | 1,732.405 | 1,304.5 | 2,003,452 |
+| 1503 | 1/65,536, rejected | 3.139818 | 3.139903 | 0.000105 | 51.533 |
+| 1503 | 1/131,072, accepted | 3.139827 | 3.139827 | 0.000027 | 3.93e-11 |
+| 1504 | 1 | 48.1515 | 32,107.06 | 444,681.9 | 39,793,822 |
+| 1504 | 1/8 | 1.590488 | 940.8206 | 542.27 | 1,166,145 |
+| 1504 | 1/16, rejected | 1.627792 | 186.7247 | 76.37 | 231,444 |
+| 1504 | 1/32, accepted | 1.664779 | 1.666681 | 16.52 | 21.37 |
+
+For 1503, the largest newly activated drain at full step was (0, 495, 877). The predicted discharge was zero and the actual discharge was 16.024 million m³/day. At the last rejected step this was the only newly opened drain. At the accepted step it stayed closed, and physical RMS moved from 3.139836 to 3.139827 m³/day. For 1504, a drain at (0, 492, 646) discharged 231,284 m³/day at the last rejected step, versus zero predicted. The accepted half-length step lowered RMS from 1.702281 to 1.666681 m³/day. The cited iterations were limited by drain activation. The term data give all 18 actual trial lengths for [1503](remaining_20d4381/trial_terms_1503_233_01/1503_1507_MF6_SS_Unconfined_250/accepted_states/independent_flux_comparison.json) and all six for [1504](remaining_20d4381/trial_terms_1504_233_01/1504_1505_1508_MF6_SS_Unconfined_250/accepted_states/independent_flux_comparison.json).
