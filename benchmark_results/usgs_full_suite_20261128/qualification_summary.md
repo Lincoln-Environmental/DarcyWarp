@@ -408,3 +408,37 @@ head fell 0.2068 m. The original heads were used for the 1502 run under
 stopped during a Warp CUDA readback at outer 205. The last accepted
 update had relative imbalance 0.04053. These results leave seven
 original-start solver failures.
+
+### 1404 qualifies against tight MF6
+
+Both the native audit and the original-head DarcyWarp solution passed
+all gates against MF6 6.6.2 at `dvclose=1e-6`. The tight reference took
+1,887.52 s. Head RMSE was 1.79e-7 m and maximum difference was 1.17e-5 m.
+The comparison reused the 148.48 s DarcyWarp run. The receipts are in
+`remaining_20d4381/regional_tight_comparison/1404_1405_1406_MF6_SS_Unconfined_250`.
+This brings the tally to **61 fully qualified, six physically accepted
+awaiting comparison, and seven original-head solver failures**.
+
+1606 passed independent physical acceptance from the saved head in
+`deferred_backtrack_01` after 45 further updates and 12,026 Krylov
+iterations (119.54 s solve, 171.50 s including import). Head-equivalent
+RMS was 9.95e-7 m and relative imbalance was 4.23e-9. Only the head
+comparisons failed against the archived MF6 output, with RMS difference
+0.0001970 m and maximum 0.01565 m. The last archived MF6 head change was
+0.09557 m. The saved-head receipt is in `deferred_backtrack_continuation_01`.
+An original-head run is still required for qualification.
+
+On 1503, an accurate unshifted Newton solve at the saved
+`physical_mf6_drain_damping` endpoint had relative linear defect 3.30e-10.
+Cell (0, 568, 931) was 8.882 m below a drain of conductance 4.875e6 m²/day.
+Its proposed 347.72 m rise generated 1.652e9 m³/day of drain outflow.
+Archived MF6 had the water table just 2.022 mm above that drain.
+A diagnostic using only the archived open/closed drain flags changed 83
+branches and cut the maximum correction from 347.8 m to 44.15 m. The full
+step still increased the flow norm by a factor of 2,848. Neither the
+diagnostic flags nor MF6 heads were used to initialise a DarcyWarp run.
+
+On 1303, the trial that deferred uphill fallback steps stopped during a
+Warp CUDA-to-host Arnoldi column readback at outer 213. The last accepted
+update had relative imbalance 3.53e-5. The same readback stopped 1503 at
+outer 205. No new endpoint was recorded for either interrupted run.
