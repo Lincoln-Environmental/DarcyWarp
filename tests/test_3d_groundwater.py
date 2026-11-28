@@ -341,6 +341,35 @@ def test_canonical_archive_restores_cell_and_threshold_of_each_sparse_reach(tmp_
     assert sorted(recovered.riv_entries) == sorted(entries)
 
 
+def test_trial_correction_accounts_for_newly_active_drain(solver_device):
+    from DARCY_WARP_PACKAGE.solvers.npf662_3d import case_from_model, independent_reference
+    from DARCY_WARP_PACKAGE.solvers.npf662_newton import NPF662Workspace
+
+    shape = (2, 1, 1)
+    fixed = np.array([0, 1], dtype=np.int32).reshape(shape)
+    head = np.array([1., 6.]).reshape(shape)
+    with groundwater_model(device=solver_device, shape=shape, bc_mask=fixed,
+                            bc_values=head, initial_head=head,
+                            drn_entries=[(CELL, 9., 4.)], riv_entries=[(CELL, 2., 5., 3.)]) as model:
+        case = case_from_model(model=model, top=1., cell_type=0)
+        reference, _ = independent_reference(model=model, case=case)
+        workspace = NPF662Workspace(model=model, case=case, restart=2, krylov_budget=0, reference=reference)
+        try:
+            current = workspace.evaluate(trial=False, linearize=True)
+            workspace.trial.assign(np.array([10., 6.]))
+            proposed = workspace.evaluate(trial=True)
+            assert proposed['physical_rms'] > current['physical_rms']
+            corrected, changed = workspace.rebalance_drain_trial(current=current, trial=proposed,
+                physical_tolerance=1.e-12, relative_tolerance=1.e-8)
+            assert changed
+            # (6 - h) = 9 * (h - 4) + 2 * (h - 5) on the active branches.
+            np.testing.assert_allclose(workspace.trial.numpy(), [52. / 12., 6.], rtol=0., atol=1.e-10)
+            np.testing.assert_array_equal(workspace.head.numpy().reshape(shape), head)
+            assert corrected['physical_rms'] < 1.e-9
+        finally:
+            workspace.close()
+
+
 def test_closed_component_with_inactive_drain_opens_only_at_its_threshold(solver_device):
     shape = (1, 1, 5)
     active = np.array([[[1, 0, 1, 0, 1]]], dtype=np.int32)

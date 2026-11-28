@@ -92,6 +92,7 @@ class NPF662Workspace:
             dtype=wp.float64,device=self.device)
         self.certificate=wp.zeros(shape=3,dtype=wp.float64,device=self.device)
         self.maximum=wp.zeros(shape=1,dtype=wp.float64,device=self.device)
+        self.drain_trial_head = self.drain_trial_original = self.drain_trial_count = None
         self.mode=wp.ones(shape=1,dtype=wp.int32,device=self.device)
         self.jv_counter=wp.zeros(shape=1,dtype=wp.int64,device=self.device)
         self.preconditioner_counter=wp.zeros(shape=1,dtype=wp.int64,device=self.device)
@@ -647,6 +648,37 @@ class NPF662Workspace:
             device=self.device)
         return self.evaluate(trial=True)
 
+    def rebalance_drain_trial(self, *, current, trial, physical_tolerance, relative_tolerance):
+        """Evaluate a bounded drain-branch correction to an adverse steady trial."""
+        if (self.transient or not self.drn_entry_c.shape[0] or not trial['finite']
+                or trial['physical_rms'] <= current['physical_rms']
+                or device_accepted(metrics=trial, physical_tolerance=physical_tolerance,
+                                   relative_tolerance=relative_tolerance)):
+            return trial, False
+        if self.drain_trial_head is None:
+            self.drain_trial_head = wp.empty_like(self.head)
+            self.drain_trial_original = wp.empty_like(self.head)
+            self.drain_trial_count = wp.zeros(1, dtype=wp.int32, device=self.device)
+        self.drain_trial_count.zero_()
+        wp.launch(kernel=kernels.rebalance_drain_trial, dim=self.n, device=self.device,
+            inputs=[self.head, self.trial, self.residual, self.trial_residual, self.free,
+                self.bottom, self.thickness, self.types, self.left, self.right, self.c0, self.source,
+                self.zero if self.ghb_conductance is None else self.ghb_conductance,
+                self.zero if self.ghb_head is None else self.ghb_head,
+                self.drn_offsets, self.drn_entry_c, self.drn_entry_elev,
+                self.riv_offsets, self.riv_entry_c, self.riv_entry_stage, self.riv_entry_bottom,
+                max(current['physical_rms'], physical_tolerance),
+                self.drain_trial_head, self.drain_trial_count])
+        if not self.drain_trial_count.numpy()[0]:
+            return trial, False
+        wp.copy(dest=self.drain_trial_original, src=self.trial)
+        wp.copy(dest=self.trial, src=self.drain_trial_head)
+        corrected = self.evaluate(trial=True)
+        if corrected['finite'] and corrected['physical_rms'] < trial['physical_rms']:
+            return corrected, True
+        wp.copy(dest=self.trial, src=self.drain_trial_original)
+        return self.evaluate(trial=True), False
+
     def dry_projection(self, *, head_tolerance):
         """Try exact dry endpoints for nearly dry, unforced free cells.
 
@@ -708,6 +740,7 @@ class NPF662Workspace:
         if self.diagonal_flexible is not None:self.diagonal_flexible.close()
         self.flexible=None;self.multigrid=None;self.diagonal_flexible=None
         self.closed=True;self.krylov=None
+        self.drain_trial_head = self.drain_trial_original = self.drain_trial_count = None
         self.commit_graph=None
         self._native_state = self._faces_snapshot = self._types_snapshot = None
         self.principal = self.previous_storage_tangent = None
@@ -839,6 +872,10 @@ def search_direction(*,workspace,current,controls,physical_tolerance=1e-12,relat
     for attempt in range(controls.line_search_steps):
         alpha=first*2.**(-attempt)
         trial=workspace.candidate(alpha=alpha)
+        drain_corrected = False
+        if continuation:
+            trial, drain_corrected = workspace.rebalance_drain_trial(current=current, trial=trial,
+                physical_tolerance=physical_tolerance, relative_tolerance=relative_tolerance)
         value=residual_merit(candidate=trial,current=current)
         threshold = old
         if continuation:
@@ -847,7 +884,10 @@ def search_direction(*,workspace,current,controls,physical_tolerance=1e-12,relat
         rows.append(dict(alpha=alpha,merit=value if np.isfinite(value) else None,metrics=trial))
         if value<best_value:best=(alpha,trial);best_value=value
         if device_accepted(metrics=trial,physical_tolerance=physical_tolerance,relative_tolerance=relative_tolerance) or value<threshold:
-            return dict(accepted=True,alpha=alpha,mode='physical_descent' if continuation else 'dual_descent',
+            mode = 'physical_descent' if continuation else 'dual_descent'
+            if drain_corrected:
+                mode = 'physical_descent_after_drain_correction'
+            return dict(accepted=True,alpha=alpha,mode=mode,
                         metrics=trial,trials=rows,raw_max=maximum)
     if not continuation and best is not None and best_value<=controls.recovery_growth**2*old:
         alpha,unused=best
@@ -860,6 +900,8 @@ def search_direction(*,workspace,current,controls,physical_tolerance=1e-12,relat
         count, tolerance, reduction, head_limit = workspace.backtracking
         alpha = first
         trial = workspace.candidate(alpha=alpha)
+        trial, unused = workspace.rebalance_drain_trial(current=current, trial=trial,
+            physical_tolerance=physical_tolerance, relative_tolerance=relative_tolerance)
         for index in range(count + 1):
             factor = 1. if index == 0 else reduction
             workspace.maximum.zero_()
@@ -869,6 +911,8 @@ def search_direction(*,workspace,current,controls,physical_tolerance=1e-12,relat
             if index:
                 alpha *= reduction
                 trial = workspace.evaluate(trial=True)
+                trial, unused = workspace.rebalance_drain_trial(current=current, trial=trial,
+                    physical_tolerance=physical_tolerance, relative_tolerance=relative_tolerance)
             ratio = trial['physical_rms'] / max(current['physical_rms'], physical_tolerance)
             rows.append(dict(alpha=alpha, merit=ratio**2 if np.isfinite(ratio) else None, metrics=trial))
             if displacement == 0.:

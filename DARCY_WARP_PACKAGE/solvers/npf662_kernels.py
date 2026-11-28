@@ -308,6 +308,91 @@ def riv_flow_pair(head: wp.float64, conductance: wp.float64, stage: wp.float64,
     return wp.vec2d(flow, tangent)
 
 
+@wp.func
+def trial_face_flow(i: int, j: int, axis: int, saturated: wp.float64, row_head: wp.float64,
+                  trial: wp.array(dtype=wp.float64), bottom: wp.array(dtype=wp.float64),
+                  thickness: wp.array(dtype=wp.float64), types: wp.array(dtype=wp.int32)):
+    neighbour_head = trial[j]
+    coefficient = saturated
+    if axis != 2 and (types[i] != 0 or types[j] != 0):
+        if row_head >= neighbour_head:
+            coefficient *= saturation_pair(row_head, bottom[i], thickness[i], types[i])[0]
+        else:
+            coefficient *= saturation_pair(neighbour_head, bottom[j], thickness[j], types[j])[0]
+    return coefficient*(row_head-neighbour_head)
+
+
+@wp.func
+def trial_row_residual(i: int, row_head: wp.float64, trial: wp.array(dtype=wp.float64),
+                 bottom: wp.array(dtype=wp.float64), thickness: wp.array(dtype=wp.float64),
+                 types: wp.array(dtype=wp.int32), left: wp.array2d(dtype=wp.int32),
+                 right: wp.array2d(dtype=wp.int32), c0: wp.array2d(dtype=wp.float64),
+                 source: wp.array(dtype=wp.float64), ghb_c: wp.array(dtype=wp.float64),
+                 ghb_h: wp.array(dtype=wp.float64), drn_offsets: wp.array(dtype=wp.int32),
+                 drn_c: wp.array(dtype=wp.float64), elevation: wp.array(dtype=wp.float64),
+                 riv_offsets: wp.array(dtype=wp.int32), riv_c: wp.array(dtype=wp.float64),
+                 stage: wp.array(dtype=wp.float64), bed: wp.array(dtype=wp.float64)):
+    r = source[i] - ghb_c[i]*(row_head-ghb_h[i])
+    for axis in range(3):
+        neighbour = right[i, axis]
+        if neighbour >= 0:
+            r -= trial_face_flow(i, neighbour, axis, c0[i, axis], row_head, trial, bottom, thickness, types)
+        neighbour = left[i, axis]
+        if neighbour >= 0:
+            r -= trial_face_flow(i, neighbour, axis, c0[neighbour, axis], row_head, trial, bottom, thickness, types)
+    for entry in range(drn_offsets[i], drn_offsets[i+1]):
+        r -= drn_flow_pair(row_head, drn_c[entry], elevation[entry])[0]
+    for entry in range(riv_offsets[i], riv_offsets[i + 1]):
+        r -= riv_flow_pair(row_head, riv_c[entry], stage[entry], bed[entry])[0]
+    return r
+
+
+@wp.kernel
+def rebalance_drain_trial(head: wp.array(dtype=wp.float64), trial: wp.array(dtype=wp.float64),
+    residual: wp.array(dtype=wp.float64), trial_residual: wp.array(dtype=wp.float64),
+    free: wp.array(dtype=wp.int32), bottom: wp.array(dtype=wp.float64),
+    thickness: wp.array(dtype=wp.float64), types: wp.array(dtype=wp.int32),
+    left: wp.array2d(dtype=wp.int32), right: wp.array2d(dtype=wp.int32),
+    c0: wp.array2d(dtype=wp.float64), source: wp.array(dtype=wp.float64),
+    ghb_c: wp.array(dtype=wp.float64), ghb_h: wp.array(dtype=wp.float64),
+    drn_offsets: wp.array(dtype=wp.int32), drn_c: wp.array(dtype=wp.float64),
+    elevation: wp.array(dtype=wp.float64), riv_offsets: wp.array(dtype=wp.int32),
+    riv_c: wp.array(dtype=wp.float64), stage: wp.array(dtype=wp.float64),
+    bed: wp.array(dtype=wp.float64), flow_scale: wp.float64,
+    corrected: wp.array(dtype=wp.float64), changed: wp.array(dtype=wp.int32)):
+    """Resolve the newly active drain branches with trial neighbour heads held."""
+    i = wp.tid()
+    corrected[i] = trial[i]
+    if free[i] == 0 or trial[i] <= head[i]:
+        return
+    if -trial_residual[i] <= wp.max(wp.abs(residual[i]), flow_scale):
+        return
+    opened = bool(False)
+    for entry in range(drn_offsets[i], drn_offsets[i + 1]):
+        if drn_c[entry] > wp.float64(0.) and head[i] <= elevation[entry] and trial[i] > elevation[entry]:
+            opened = True
+    if not opened:
+        return
+
+    # With neighbours held, face, drain and river outflows are monotone
+    # in the cell head. Search only within the proposed head displacement.
+    low = head[i]
+    high = trial[i]
+    for iteration in range(40):
+        middle = low + wp.float64(.5) * (high - low)
+        if middle == low or middle == high:
+            break
+        r = trial_row_residual(i, middle, trial, bottom, thickness, types, left, right,
+            c0, source, ghb_c, ghb_h, drn_offsets, drn_c, elevation, riv_offsets, riv_c, stage, bed)
+        if r < wp.float64(0.):
+            high = middle
+        else:
+            low = middle
+    corrected[i] = low + wp.float64(.5) * (high - low)
+    if corrected[i] != trial[i]:
+        wp.atomic_add(changed, 0, 1)
+
+
 @wp.kernel
 def check_local_balance(head: wp.array(dtype=wp.float64), free: wp.array(dtype=wp.int32),
                         fixed: wp.array(dtype=wp.int32), source: wp.array(dtype=wp.float64),
