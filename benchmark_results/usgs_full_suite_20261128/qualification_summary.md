@@ -662,6 +662,11 @@ The continuation restores the archived-input run's accepted heads, scaling, cond
 | 1301 | 240 | 0 | 1.119775 | 0.00208391 | 96,291 | 413,277 |
 | 1301 | 272 | 58.49 | 0.600766 | 0.00094508 | 104,766 | 177,628 |
 | 1301 | 304 | 110.61 | 0.286978 | 0.00031970 | 53,448 | 202,673 |
+| 1301 | 336 | 146.22 | 0.063071 | 0.00012525 | 37,942 | 12,877 |
+| 1301 | 368 | 193.97 | 0.008267 | 0.00002219 | 25,163 | 991 |
+| 1303 | 240 | 0 | 3.841182 | 0.02785877 | 526,300 | 1,057,325 |
+| 1303 | 272 | 138.99 | 3.087060 | 0.02151298 | 476,853 | 877,437 |
+| 1303 | 304 | 277.68 | 2.041715 | 0.01331524 | 412,093 | 661,100 |
 
 1301 continued to improve over both blocks despite four uphill recoveries and a small increase in the worst local ratio during the second block. The continuation state and trajectories are under `unchanged_240_through304_01`.
 
