@@ -652,3 +652,21 @@ The first Newton solve started at true residual 3,133.79 with forcing target 31.
 Five levels also reached the common relative water imbalance of 0.00365342 fastest. The times were 26.91, 29.58, 33.90 and 59.04 s for five through eight. Six levels closed about 6,000 more cells by update 220, at a solve cost of 32.40 s for the 12 updates versus 26.91 s at five levels. Seven and eight gave smaller flow RMS at equal outer counts but needed more elapsed time to reach the same error. These checkpoints remain well outside late local-balance refinement.
 
 Five levels give the best measured time to the same physical error on both models. The existing unchanged-start runs already use this configuration. Both 1301 and 1303 stopped at the existing outer limit. The 1303 five-level continuation reproduced the original run's update-240 heads bit for bit. The existing five-level 1807 unchanged-start control passed independent physical acceptance and cached tight MF6 parity in 204 updates and 180.81 s of solver time.
+
+### Five-level unchanged-start continuation beyond update 240
+
+The continuation restores the archived-input run's accepted heads, scaling, conductance scale, previous operator tangent, nonlinear and linear histories, forcing state and continuation state. Each diagnostic block allows further updates on the same five-level regional configuration. The acceptance rule remains 1 µm. Checkpoints include full continuation state and are saved every 32 updates. Solve times below exclude setup, diagnostic counts and checkpoint writes.
+
+| Model | Accepted update | Additional solve s from update 240 | Flow RMS m³/day | Relative water imbalance | Cells over allowance | Worst error / allowance |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1301 | 240 | 0 | 1.119775 | 0.00208391 | 96,291 | 413,277 |
+| 1301 | 272 | 58.49 | 0.600766 | 0.00094508 | 104,766 | 177,628 |
+| 1301 | 304 | 110.61 | 0.286978 | 0.00031970 | 53,448 | 202,673 |
+
+1301 continued to improve over both blocks despite four uphill recoveries and a small increase in the worst local ratio during the second block. The continuation state and trajectories are under `unchanged_240_through304_01`.
+
+### First adjusted-start divergence in 1606
+
+Independent reconstruction from the archived hydraulic inputs exactly reproduced the recorded adjusted-start residual to printed precision. The old startup rule opened 49,135 drain branches by shifting 50,667 heads. The median drain-target shift was 100.003 m and the maximum was 150.005 m. It opened 171,028 previously dry lateral faces and raised flow RMS from 944.387 to 263,535 m³/day. The newly opened faces had a flow norm of 1.804e8 m³/day. The drain discharge change had a norm of only 1.044e-5 m³/day. The largest new flow was 7.454e6 m³/day from (0, 1595, 814) to (0, 1594, 814), where the startup adjustment increased the higher head from 2,157.11 to 2,307.1106 m. The unchanged-start run's first accepted update opened 364,934 faces with a much smaller 1,529 m³/day norm on those faces and reduced unanchored components from 49,135 to 986.
+
+The first accepted Newton trials used alpha 0.0316533 on the adjusted path and 0.125 on the unchanged path. By update 32 the continuation shifts were 0.01471 and 0.25771 respectively, and by update 128 the adjusted path had reached zero shift while the unchanged path still used 0.08651. The shift depends on contraction relative to each run's own starting residual, so the startup difference also changes how fast numerical regularisation falls. This locates the first hydraulic divergence and identifies a difference in the continuation trajectories. It does not establish that the shift alone explains their different endpoints.
